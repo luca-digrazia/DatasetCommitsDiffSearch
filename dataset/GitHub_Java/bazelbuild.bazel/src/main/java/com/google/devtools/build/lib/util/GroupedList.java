@@ -24,14 +24,13 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Target;
-import java.util.AbstractCollection;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import org.checkerframework.framework.qual.DefaultQualifierInHierarchy;
+import org.checkerframework.framework.qual.ImplicitFor;
 import org.checkerframework.framework.qual.LiteralKind;
-import org.checkerframework.framework.qual.QualifierForLiterals;
 import org.checkerframework.framework.qual.SubtypeOf;
 
 /**
@@ -46,7 +45,7 @@ import org.checkerframework.framework.qual.SubtypeOf;
  * <p>Groups are implemented as lists to minimize memory use. However, {@link #equals} is defined to
  * treat groups as unordered.
  */
-public final class GroupedList<T> implements Iterable<List<T>> {
+public class GroupedList<T> implements Iterable<List<T>> {
 
   /**
    * Indicates that the annotated element is a compressed {@link GroupedList}, so that it can be
@@ -54,7 +53,7 @@ public final class GroupedList<T> implements Iterable<List<T>> {
    */
   @SubtypeOf(DefaultObject.class)
   @Target({ElementType.TYPE_USE, ElementType.TYPE_PARAMETER})
-  @QualifierForLiterals(LiteralKind.NULL)
+  @ImplicitFor(literals = LiteralKind.NULL)
   public @interface Compressed {}
 
   /** Default annotation for type-safety checks of {@link Compressed}. */
@@ -69,8 +68,6 @@ public final class GroupedList<T> implements Iterable<List<T>> {
   // Items in this GroupedList. Each element is either of type T or List<T>.
   // Non-final only for #remove.
   private List<Object> elements;
-
-  private final CollectionView collectionView = new CollectionView();
 
   public GroupedList() {
     // We optimize for small lists.
@@ -408,27 +405,8 @@ public final class GroupedList<T> implements Iterable<List<T>> {
     return first.equals(second) || CompactHashSet.create(first).containsAll(second);
   }
 
-  /**
-   * A grouping-unaware view of a {@code GroupedList} which does not support modifications.
-   *
-   * <p>This is implemented as a {@code Collection} so that calling {@link Iterables#size} on the
-   * return value of {@link #getAllElementsAsIterable} will take constant time.
-   */
-  private final class CollectionView extends AbstractCollection<T> {
-
-    @Override
-    public Iterator<T> iterator() {
-      return new UngroupedIterator();
-    }
-
-    @Override
-    public int size() {
-      return size;
-    }
-  }
-
   /** An iterator that loops through every element in each group. */
-  private final class UngroupedIterator implements Iterator<T> {
+  private class UngroupedIterator implements Iterator<T> {
     private final Iterator<Object> iter = elements.iterator();
     int counter = 0;
     List<T> currentGroup;
@@ -461,7 +439,7 @@ public final class GroupedList<T> implements Iterable<List<T>> {
 
   @ThreadHostile
   public Iterable<T> getAllElementsAsIterable() {
-    return collectionView;
+    return UngroupedIterator::new;
   }
 
   @Override
