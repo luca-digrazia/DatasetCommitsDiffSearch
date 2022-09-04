@@ -65,15 +65,11 @@ import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
-import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
-import io.quarkus.deployment.metrics.MetricsFactoryConsumerBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
-import io.quarkus.runtime.metrics.MetricsFactory;
 import io.quarkus.smallrye.metrics.deployment.jandex.JandexBeanInfoAdapter;
 import io.quarkus.smallrye.metrics.deployment.jandex.JandexMemberInfoAdapter;
 import io.quarkus.smallrye.metrics.deployment.spi.MetricBuildItem;
-import io.quarkus.smallrye.metrics.deployment.spi.MetricsConfigurationBuildItem;
 import io.quarkus.smallrye.metrics.runtime.MetadataHolder;
 import io.quarkus.smallrye.metrics.runtime.SmallRyeMetricsRecorder;
 import io.quarkus.smallrye.metrics.runtime.TagHolder;
@@ -126,20 +122,6 @@ public class SmallRyeMetricsProcessor {
     }
 
     SmallRyeMetricsConfig metrics;
-
-    @BuildStep
-    MetricsConfigurationBuildItem metricsConfigurationBuildItem() {
-        return new MetricsConfigurationBuildItem(metrics.path);
-    }
-
-    @BuildStep
-    MetricsCapabilityBuildItem metricsCapabilityBuildItem() {
-        if (metrics.extensionsEnabled) {
-            return new MetricsCapabilityBuildItem(x -> MetricsFactory.MP_METRICS.equals(x),
-                    metrics.path);
-        }
-        return null;
-    }
 
     @BuildStep
     @Record(STATIC_INIT)
@@ -464,9 +446,8 @@ public class SmallRyeMetricsProcessor {
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    void registerRuntimeExtensionMetrics(
+    void registerMetricsFromProducers(
             SmallRyeMetricsRecorder recorder,
-            List<MetricsFactoryConsumerBuildItem> metricsFactoryConsumerBuildItems,
             ValidationPhaseBuildItem validationPhase,
             BeanArchiveIndexBuildItem beanArchiveIndex) {
         IndexView index = beanArchiveIndex.getIndex();
@@ -508,11 +489,6 @@ public class SmallRyeMetricsProcessor {
                 }
             }
         }
-        for (MetricsFactoryConsumerBuildItem item : metricsFactoryConsumerBuildItems) {
-            if (item.executionTime() == RUNTIME_INIT) {
-                recorder.registerMetrics(item.getConsumer());
-            }
-        }
     }
 
     /**
@@ -522,7 +498,6 @@ public class SmallRyeMetricsProcessor {
     @Record(STATIC_INIT)
     void extensionMetrics(SmallRyeMetricsRecorder recorder,
             List<MetricBuildItem> additionalMetrics,
-            List<MetricsFactoryConsumerBuildItem> metricsFactoryConsumerBuildItems,
             BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
         if (metrics.extensionsEnabled) {
             if (!additionalMetrics.isEmpty()) {
@@ -540,12 +515,6 @@ public class SmallRyeMetricsProcessor {
                             MetadataHolder.from(additionalMetric.getMetadata()),
                             tags,
                             additionalMetric.getImplementor());
-                }
-            }
-
-            for (MetricsFactoryConsumerBuildItem item : metricsFactoryConsumerBuildItems) {
-                if (item.executionTime() == STATIC_INIT) {
-                    recorder.registerMetrics(item.getConsumer());
                 }
             }
         }
