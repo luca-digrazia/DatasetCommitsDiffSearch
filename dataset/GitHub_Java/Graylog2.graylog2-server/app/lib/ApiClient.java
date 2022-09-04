@@ -1,21 +1,3 @@
-/*
- * Copyright 2013 TORCH UG
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
 package lib;
 
 import com.google.common.base.Joiner;
@@ -23,12 +5,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
 import com.ning.http.client.*;
 import models.Node;
 import models.User;
-import models.UserService;
 import models.api.requests.ApiRequest;
 import models.api.responses.EmptyResponse;
 import org.slf4j.Logger;
@@ -44,38 +23,25 @@ import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
-@Singleton
 public class ApiClient {
     private static final Logger log = LoggerFactory.getLogger(ApiClient.class);
 
     public static final String ERROR_MSG_IO = "Could not connect to graylog2-server. Please make sure that it is running and you configured the correct REST URI.";
 
     private static AsyncHttpClient client;
-    private final ServerNodes serverNodes;
-    private Thread shutdownHook;
 
-    @Inject
-    private ApiClient(ServerNodes serverNodes) {
-        this.serverNodes = serverNodes;
-    }
-
-    public void start() {
+    // explicitly called so we can override it in tests, until we have dependency injection
+    public static void initialize() {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
         builder.setAllowPoolingConnection(false);
         client = new AsyncHttpClient(builder.build());
 
-        shutdownHook = new Thread(new Runnable() {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
                 client.close();
             }
-        });
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
-    }
-
-    public void stop() {
-        Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        client.close();
+        }));
     }
 
     // default visibility for access from tests (overrides the effects of initialize())
@@ -83,30 +49,30 @@ public class ApiClient {
         ApiClient.client = client;
     }
 
-    public <T> ApiRequestBuilder<T> get(Class<T> responseClass) {
+    public static <T> ApiRequestBuilder<T> get(Class<T> responseClass) {
         return new ApiRequestBuilder<>(ApiRequestBuilder.Method.GET, responseClass);
     }
-    public <T> ApiRequestBuilder<T> post(Class<T> responseClass) {
+    public static <T> ApiRequestBuilder<T> post(Class<T> responseClass) {
         return new ApiRequestBuilder<>(ApiRequestBuilder.Method.POST, responseClass);
     }
 
-    public ApiRequestBuilder<EmptyResponse> post() {
+    public static ApiRequestBuilder<EmptyResponse> post() {
         return post(EmptyResponse.class);
     }
 
-    public <T> ApiRequestBuilder<T> put(Class<T> responseClass) {
+    public static <T> ApiRequestBuilder<T> put(Class<T> responseClass) {
         return new ApiRequestBuilder<>(ApiRequestBuilder.Method.PUT, responseClass);
     }
 
-    public ApiRequestBuilder<EmptyResponse> put() {
+    public static ApiRequestBuilder<EmptyResponse> put() {
         return put(EmptyResponse.class);
     }
 
-    public <T> ApiRequestBuilder<T> delete(Class<T> responseClass) {
+    public static <T> ApiRequestBuilder<T> delete(Class<T> responseClass) {
         return new ApiRequestBuilder<>(ApiRequestBuilder.Method.DELETE, responseClass);
     }
 
-    public ApiRequestBuilder<EmptyResponse> delete() {
+    public static ApiRequestBuilder<EmptyResponse> delete() {
         return delete(EmptyResponse.class);
     }
 
@@ -129,7 +95,7 @@ public class ApiClient {
     }
 
     private static URL buildTarget(Node node, String resource, String query) throws MalformedURLException {
-        final User user = UserService.current();
+        final User user = User.current();
         String name = null;
         String passwordHash = null;
         if (user != null) {
@@ -237,14 +203,6 @@ public class ApiClient {
 
         public ApiRequestBuilder<T> queryParam(String name, int value) {
             return queryParam(name, Integer.toString(value));
-        }
-
-        public ApiRequestBuilder<T> queryParams(Map<String, String> params) {
-            for(Map.Entry<String, String> p : params.entrySet()) {
-                queryParam(p.getKey(), p.getValue());
-            }
-
-            return this;
         }
 
         public ApiRequestBuilder<T> credentials(String username, String password) {
