@@ -25,8 +25,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
 
 import javax.inject.Singleton;
@@ -41,7 +42,6 @@ import io.quarkus.security.identity.IdentityProviderManager;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.request.AuthenticationRequest;
 import io.quarkus.security.identity.request.UsernamePasswordAuthenticationRequest;
-import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -114,7 +114,7 @@ public class BasicAuthenticationMechanism implements HttpAuthenticationMechanism
     }
 
     @Override
-    public Uni<SecurityIdentity> authenticate(RoutingContext context,
+    public CompletionStage<SecurityIdentity> authenticate(RoutingContext context,
             IdentityProviderManager identityProviderManager) {
         List<String> authHeaders = context.request().headers().getAll(HttpHeaderNames.AUTHORIZATION);
         if (authHeaders != null) {
@@ -139,11 +139,11 @@ public class BasicAuthenticationMechanism implements HttpAuthenticationMechanism
                     }
 
                     plainChallenge = new String(decode, charset);
+                    log.debugf("Found basic auth header %s (decoded using charset %s)", plainChallenge, charset);
                     int colonPos;
                     if ((colonPos = plainChallenge.indexOf(COLON)) > -1) {
                         String userName = plainChallenge.substring(0, colonPos);
                         char[] password = plainChallenge.substring(colonPos + 1).toCharArray();
-                        log.debugf("Found basic auth header %s:***** (decoded using charset %s)", userName, charset);
 
                         UsernamePasswordAuthenticationRequest credential = new UsernamePasswordAuthenticationRequest(userName,
                                 new PasswordCredential(password));
@@ -152,30 +152,32 @@ public class BasicAuthenticationMechanism implements HttpAuthenticationMechanism
 
                     // By this point we had a header we should have been able to verify but for some reason
                     // it was not correctly structured.
-                    return Uni.createFrom().failure(new AuthenticationFailedException());
+                    CompletableFuture<SecurityIdentity> cf = new CompletableFuture<>();
+                    cf.completeExceptionally(new AuthenticationFailedException());
+                    return cf;
                 }
             }
         }
 
         // No suitable header has been found in this request,
-        return Uni.createFrom().optional(Optional.empty());
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
-    public Uni<ChallengeData> getChallenge(RoutingContext context) {
+    public CompletionStage<ChallengeData> getChallenge(RoutingContext context) {
         if (silent) {
             //if this is silent we only send a challenge if the request contained auth headers
             //otherwise we assume another method will send the challenge
             String authHeader = context.request().headers().get(HttpHeaderNames.AUTHORIZATION);
             if (authHeader == null) {
-                return Uni.createFrom().optional(Optional.empty());
+                return CompletableFuture.completedFuture(null);
             }
         }
         ChallengeData result = new ChallengeData(
                 HttpResponseStatus.UNAUTHORIZED.code(),
                 HttpHeaderNames.WWW_AUTHENTICATE,
                 challenge);
-        return Uni.createFrom().item(result);
+        return CompletableFuture.completedFuture(result);
     }
 
     @Override

@@ -3,15 +3,20 @@ package io.quarkus.smallrye.jwt.runtime.auth;
 import static io.vertx.core.http.HttpHeaders.COOKIE;
 
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.spi.CDI;
 import javax.inject.Inject;
+
+import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
+import io.quarkus.security.credential.TokenCredential;
 import io.quarkus.security.identity.IdentityProviderManager;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.request.AuthenticationRequest;
@@ -20,9 +25,9 @@ import io.quarkus.vertx.http.runtime.security.ChallengeData;
 import io.quarkus.vertx.http.runtime.security.HttpAuthenticationMechanism;
 import io.quarkus.vertx.http.runtime.security.HttpCredentialTransport;
 import io.smallrye.jwt.auth.AbstractBearerTokenExtractor;
+import io.smallrye.jwt.auth.cdi.PrincipalProducer;
 import io.smallrye.jwt.auth.principal.JWTAuthContextInfo;
-import io.smallrye.mutiny.Uni;
-import io.vertx.core.http.Cookie;
+import io.vertx.ext.web.Cookie;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -37,24 +42,29 @@ public class JWTAuthMechanism implements HttpAuthenticationMechanism {
     @Inject
     private JWTAuthContextInfo authContextInfo;
 
+    private void preparePrincipalProducer(JsonWebToken jwtPrincipal) {
+        PrincipalProducer principalProducer = CDI.current().select(PrincipalProducer.class).get();
+        principalProducer.setJsonWebToken(jwtPrincipal);
+    }
+
     @Override
-    public Uni<SecurityIdentity> authenticate(RoutingContext context,
+    public CompletionStage<SecurityIdentity> authenticate(RoutingContext context,
             IdentityProviderManager identityProviderManager) {
         String jwtToken = new VertxBearerTokenExtractor(authContextInfo, context).getBearerToken();
         if (jwtToken != null) {
             return identityProviderManager
-                    .authenticate(new TokenAuthenticationRequest(new JsonWebTokenCredential(jwtToken)));
+                    .authenticate(new TokenAuthenticationRequest(new TokenCredential(jwtToken, "bearer")));
         }
-        return Uni.createFrom().optional(Optional.empty());
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
-    public Uni<ChallengeData> getChallenge(RoutingContext context) {
+    public CompletionStage<ChallengeData> getChallenge(RoutingContext context) {
         ChallengeData result = new ChallengeData(
                 HttpResponseStatus.UNAUTHORIZED.code(),
                 HttpHeaderNames.WWW_AUTHENTICATE,
-                "Bearer");
-        return Uni.createFrom().item(result);
+                "Bearer {token}");
+        return CompletableFuture.completedFuture(result);
     }
 
     private static class VertxBearerTokenExtractor extends AbstractBearerTokenExtractor {

@@ -39,11 +39,7 @@ public class HttpCredentialTransport {
         /**
          * A post request, target is the POST URI
          */
-        POST,
-        /**
-         * X509
-         */
-        X509
+        POST
     }
 
     @Override
@@ -57,13 +53,13 @@ public class HttpCredentialTransport {
 
         if (transportType != that.transportType)
             return false;
-        return typeTarget.equals(that.typeTarget);
+        return typeTarget != null ? typeTarget.equals(that.typeTarget) : that.typeTarget == null;
     }
 
     @Override
     public int hashCode() {
-        int result = transportType.hashCode();
-        result = 31 * result + typeTarget.hashCode();
+        int result = transportType != null ? transportType.hashCode() : 0;
+        result = 31 * result + (typeTarget != null ? typeTarget.hashCode() : 0);
         return result;
     }
 
@@ -73,13 +69,5 @@ public class HttpCredentialTransport {
                 "transportType=" + transportType +
                 ", typeTarget='" + typeTarget + '\'' +
                 '}';
-    }
-
-    public Type getTransportType() {
-        return transportType;
-    }
-
-    public String getTypeTarget() {
-        return typeTarget;
     }
 }

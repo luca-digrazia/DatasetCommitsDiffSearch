@@ -5,8 +5,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -19,7 +20,6 @@ import io.quarkus.security.identity.IdentityProviderManager;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.request.AnonymousAuthenticationRequest;
 import io.quarkus.security.identity.request.AuthenticationRequest;
-import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -28,9 +28,10 @@ import io.vertx.ext.web.RoutingContext;
 @ApplicationScoped
 public class HttpAuthenticator {
 
-    final HttpAuthenticationMechanism[] mechanisms;
     @Inject
     IdentityProviderManager identityProviderManager;
+
+    final HttpAuthenticationMechanism[] mechanisms;
 
     public HttpAuthenticator() {
         mechanisms = null;
@@ -81,30 +82,25 @@ public class HttpAuthenticator {
         }
     }
 
-    IdentityProviderManager getIdentityProviderManager() {
-        return identityProviderManager;
-    }
-
     /**
-     * Attempts authentication with the contents of the request. If this is possible the Uni
-     * will resolve to a valid SecurityIdentity when it is subscribed to. Note that Uni is lazy,
-     * so this may not happen until the Uni is subscribed to.
-     * <p>
+     * Attempts authentication with the contents of the request. If this is possible the CompletionStage
+     * will resolve to a valid SecurityIdentity.
+     *
      * If invalid credentials are present then the completion stage will resolve to a
      * {@link io.quarkus.security.AuthenticationFailedException}
-     * <p>
+     *
      * If no credentials are present it will resolve to null.
      */
-    public Uni<SecurityIdentity> attemptAuthentication(RoutingContext routingContext) {
+    public CompletionStage<SecurityIdentity> attemptAuthentication(RoutingContext routingContext) {
 
-        Uni<SecurityIdentity> result = mechanisms[0].authenticate(routingContext, identityProviderManager);
+        CompletionStage<SecurityIdentity> result = mechanisms[0].authenticate(routingContext, identityProviderManager);
         for (int i = 1; i < mechanisms.length; ++i) {
             HttpAuthenticationMechanism mech = mechanisms[i];
-            result = result.onItem().produceUni(new Function<SecurityIdentity, Uni<SecurityIdentity>>() {
+            result = result.thenCompose(new Function<SecurityIdentity, CompletionStage<SecurityIdentity>>() {
                 @Override
-                public Uni<SecurityIdentity> apply(SecurityIdentity data) {
+                public CompletionStage<SecurityIdentity> apply(SecurityIdentity data) {
                     if (data != null) {
-                        return Uni.createFrom().item(data);
+                        return CompletableFuture.completedFuture(data);
                     }
                     return mech.authenticate(routingContext, identityProviderManager);
                 }
@@ -115,48 +111,43 @@ public class HttpAuthenticator {
     }
 
     /**
+     *
+     * @param closeTask The task that should be run to finalize the HTTP exchange.
      * @return
      */
-    public Uni<Boolean> sendChallenge(RoutingContext routingContext) {
-        Uni<Boolean> result = mechanisms[0].sendChallenge(routingContext);
+    public CompletionStage<Void> sendChallenge(RoutingContext routingContext, Runnable closeTask) {
+        if (closeTask == null) {
+            closeTask = NoopCloseTask.INSTANCE;
+        }
+        CompletionStage<Boolean> result = mechanisms[0].sendChallenge(routingContext);
         for (int i = 1; i < mechanisms.length; ++i) {
             HttpAuthenticationMechanism mech = mechanisms[i];
-            result = result.onItem().produceUni(new Function<Boolean, Uni<? extends Boolean>>() {
+            result = result.thenCompose(new Function<Boolean, CompletionStage<Boolean>>() {
                 @Override
-                public Uni<? extends Boolean> apply(Boolean authDone) {
-                    if (authDone) {
-                        return Uni.createFrom().item(authDone);
+                public CompletionStage<Boolean> apply(Boolean aBoolean) {
+                    if (aBoolean) {
+                        return CompletableFuture.completedFuture(true);
                     }
                     return mech.sendChallenge(routingContext);
                 }
             });
         }
-        return result.onItem().produceUni(new Function<Boolean, Uni<? extends Boolean>>() {
-            @Override
-            public Uni<? extends Boolean> apply(Boolean authDone) {
-                if (!authDone) {
-                    routingContext.response().setStatusCode(401);
-                    routingContext.response().end();
-                }
-                return Uni.createFrom().item(authDone);
-            }
-        });
+        return result.thenRun(closeTask);
     }
 
-    public Uni<ChallengeData> getChallenge(RoutingContext routingContext) {
-        Uni<ChallengeData> result = mechanisms[0].getChallenge(routingContext);
+    public CompletionStage<ChallengeData> getChallenge(RoutingContext routingContext) {
+        CompletionStage<ChallengeData> result = mechanisms[0].getChallenge(routingContext);
         for (int i = 1; i < mechanisms.length; ++i) {
             HttpAuthenticationMechanism mech = mechanisms[i];
-            result = result.onItem().produceUni(new Function<ChallengeData, Uni<? extends ChallengeData>>() {
+            result = result.thenCompose(new Function<ChallengeData, CompletionStage<ChallengeData>>() {
                 @Override
-                public Uni<? extends ChallengeData> apply(ChallengeData data) {
+                public CompletionStage<ChallengeData> apply(ChallengeData data) {
                     if (data != null) {
-                        return Uni.createFrom().item(data);
+                        return CompletableFuture.completedFuture(data);
                     }
                     return mech.getChallenge(routingContext);
                 }
             });
-
         }
         return result;
     }
@@ -164,15 +155,15 @@ public class HttpAuthenticator {
     static class NoAuthenticationMechanism implements HttpAuthenticationMechanism {
 
         @Override
-        public Uni<SecurityIdentity> authenticate(RoutingContext context,
+        public CompletionStage<SecurityIdentity> authenticate(RoutingContext context,
                 IdentityProviderManager identityProviderManager) {
-            return Uni.createFrom().optional(Optional.empty());
+            return CompletableFuture.completedFuture(null);
         }
 
         @Override
-        public Uni<ChallengeData> getChallenge(RoutingContext context) {
+        public CompletionStage<ChallengeData> getChallenge(RoutingContext context) {
             ChallengeData challengeData = new ChallengeData(HttpResponseStatus.FORBIDDEN.code(), null, null);
-            return Uni.createFrom().item(challengeData);
+            return CompletableFuture.completedFuture(challengeData);
         }
 
         @Override
