@@ -56,9 +56,9 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationContext.HeaderInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext.Reply;
-import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import com.google.devtools.build.lib.skyframe.ActionExecutionValue;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -166,14 +166,14 @@ public class CppCompileAction extends AbstractAction
    *   <li><i>Action caching.</i> It is set when restoring from the action cache. It is queried
    *       immediately after restoration to populate the {@link
    *       com.google.devtools.build.lib.skyframe.ActionExecutionValue}.
-   *   <li><i>Input discovery</i>It is set by {@link #discoverInputsStage2}. It is queried to
+   *   <li><i>Input discovery</i>It is set by {@link discoverInputsStage2}. It is queried to
    *       populate the {@link com.google.devtools.build.lib.skyframe.ActionExecutionValue}.
    *   <li><i>Compilation</i>Compilation reads this field to know what needs to be staged.
    * </ul>
    */
   // TODO(djasper): investigate releasing memory used by this field as early as possible, for
   // example, by including these values in additionalInputs.
-  private ImmutableList<Artifact> discoveredModules = null;
+  private ImmutableSet<Artifact> discoveredModules = null;
 
   /**
    * Creates a new action to compile C/C++ source files.
@@ -302,12 +302,6 @@ public class CppCompileAction extends AbstractAction
     return shouldScanIncludes;
   }
 
-  private boolean shouldScanDotdFiles() {
-    return !cppConfiguration.getNoDotdScanningWithModules()
-        || !useHeaderModules
-        || !shouldPruneModules;
-  }
-
   @Override
   public List<PathFragment> getBuiltInIncludeDirectories() {
     return builtInIncludeDirectories;
@@ -393,46 +387,59 @@ public class CppCompileAction extends AbstractAction
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    additionalInputs = findUsedHeaders(actionExecutionContext);
+    Iterable<Artifact> foundHeaders = findUsedHeaders(actionExecutionContext);
     if (!shouldPruneModules) {
+      additionalInputs = foundHeaders;
       return additionalInputs;
     }
 
+    Set<Artifact> usedHeadersAndModules = Sets.newLinkedHashSet(foundHeaders);
     if (sourceFile.isFileType(CppFileTypes.CPP_MODULE)) {
       // If we are generating code from a module, the module is all we need.
       // TODO(djasper): Do we really need the source files?
       usedModules = ImmutableSet.of(sourceFile);
-      additionalInputs =
-          new ImmutableList.Builder<Artifact>().addAll(additionalInputs).add(sourceFile).build();
-      return additionalInputs;
+      usedHeadersAndModules.add(sourceFile);
+    } else {
+      usedModules = Sets.newLinkedHashSet();
+      // usedHeadersAndModules only contains headers now, so we can pass it to getUsedModules()
+      // (and even if it contained other things, it's only used to check for the presence of headers
+      // so it would not matter)
+      for (HeaderInfo usedModule :
+          ccCompilationContext.getUsedModules(usePic, usedHeadersAndModules)) {
+        usedModules.add(usedModule.getModule(usePic));
+      }
+      usedHeadersAndModules.addAll(usedModules);
     }
-
-    usedModules =
-        ccCompilationContext.getUsedModules(usePic, ImmutableSet.copyOf(additionalInputs));
-    return Iterables.concat(additionalInputs, usedModules);
+    additionalInputs = usedHeadersAndModules;
+    return additionalInputs;
   }
 
-  /** @return null when either {@link #usedModules} was null or on Skyframe lookup failure */
+  /** @return null when either {@link usedModules} was null or on Skyframe lookup failure */
   @Nullable
   @Override
   public Iterable<Artifact> discoverInputsStage2(SkyFunction.Environment env)
       throws InterruptedException {
-    if (usedModules == null) {
-      // No modules were used in this compilation, no need to do any work.
+    if (this.usedModules == null) {
       return null;
     }
 
-    Set<Artifact> transitivelyUsedModules = computeTransitivelyUsedModules(env, usedModules);
-    if (transitivelyUsedModules == null) {
-      // Not all used modules available yet. ActionExecutionValues have been requested. Return so
-      // that this function can be re-executed when ready.
+    Set<Artifact> additionalModules = computeTransitivelyUsedModules(env, usedModules);
+    if (additionalModules == null) {
       return null;
     }
 
-    discoveredModules = ImmutableList.copyOf(Sets.union(usedModules, transitivelyUsedModules));
-    topLevelModules = ImmutableList.copyOf(Sets.difference(usedModules, transitivelyUsedModules));
-    usedModules = null;
-    return transitivelyUsedModules;
+    this.discoveredModules =
+        new ImmutableSet.Builder<Artifact>().addAll(usedModules).addAll(additionalModules).build();
+
+    ImmutableSet.Builder<Artifact> topLevelModules = ImmutableSet.builder();
+    for (Artifact artifact : this.usedModules) {
+      if (!additionalModules.contains(artifact)) {
+        topLevelModules.add(artifact);
+      }
+    }
+    this.usedModules = null;
+    this.topLevelModules = topLevelModules.build();
+    return additionalModules;
   }
 
   @Override
@@ -459,9 +466,17 @@ public class CppCompileAction extends AbstractAction
     return outputFile;
   }
 
-  public IncludeScanningHeaderData getIncludeScanningHeaderData() {
-    return ccCompilationContext.createIncludeScanningHeaderData(
-        usePic, useHeaderModules && cppConfiguration.getPruneCppInputDiscovery());
+  @Override
+  public Map<Artifact, Artifact> getLegalGeneratedScannerFileMap() {
+    return ccCompilationContext.createLegalGeneratedScannerFileMap();
+  }
+
+  @Override
+  @Nullable
+  public Set<Artifact> getModularHeaders() {
+    return useHeaderModules && cppConfiguration.getPruneCppInputDiscovery()
+        ? ccCompilationContext.getModularHeaders(usePic)
+        : null;
   }
 
   @Override
@@ -470,10 +485,10 @@ public class CppCompileAction extends AbstractAction
     return grepIncludes;
   }
 
-  /** Set by {@link #discoverInputsStage2} */
+  /** Set by {@link discoverInputsStage2} */
   @Override
   @Nullable
-  public ImmutableList<Artifact> getDiscoveredModules() {
+  public ImmutableSet<Artifact> getDiscoveredModules() {
     return discoveredModules;
   }
 
@@ -881,13 +896,13 @@ public class CppCompileAction extends AbstractAction
   /**
    * Called by {@link com.google.devtools.build.lib.actions.ActionCacheChecker}
    *
-   * <p>Restores the value of {@link #discoveredModules}, which is used to create the {@link
+   * <p>Restores the value of {@link discoveredModules}, which is used to create the {@link
    * com.google.devtools.build.lib.skyframe.ActionExecutionValue} after an action cache hit.
    */
   @Override
   public synchronized void updateInputs(Iterable<Artifact> inputs) {
     super.updateInputs(inputs);
-    ImmutableList.Builder<Artifact> discoveredModules = ImmutableList.builder();
+    ImmutableSet.Builder<Artifact> discoveredModules = ImmutableSet.builder();
     for (Artifact input : inputs) {
       if (input.isFileType(CppFileTypes.CPP_MODULE)) {
         discoveredModules.add(input);
@@ -957,23 +972,21 @@ public class CppCompileAction extends AbstractAction
     // A better long-term solution would be to make the compiler to find them automatically and
     // never hand in the .pcm files explicitly on the command line in the first place.
     fp.addStrings(compileCommandLine.getArguments(/* overwrittenVariables= */ null));
+
+    /*
+     * getArguments() above captures all changes which affect the compilation
+     * command and hence the contents of the object file.  But we need to
+     * also make sure that we reexecute the action if any of the fields
+     * that affect whether validateIncludes() will report an error or warning
+     * have changed, otherwise we might miss some errors.
+     */
+    fp.addPaths(ccCompilationContext.getDeclaredIncludeDirs());
+    fp.addPaths(ccCompilationContext.getDeclaredIncludeWarnDirs());
     actionKeyContext.addNestedSetToFingerprint(fp, ccCompilationContext.getDeclaredIncludeSrcs());
     fp.addInt(0); // mark the boundary between input types
     actionKeyContext.addNestedSetToFingerprint(fp, getMandatoryInputs());
     fp.addInt(0);
     actionKeyContext.addNestedSetToFingerprint(fp, additionalPrunableHeaders);
-
-    fp.addBoolean(shouldScanDotdFiles());
-    if (shouldScanDotdFiles()) {
-      /**
-       * getArguments() above captures all changes which affect the compilation command and hence
-       * the contents of the object file. But we need to also make sure that we re-execute the
-       * action if any of the fields that affect whether {@link #validateInclusions} will report an
-       * error or warning have changed, otherwise we might miss some errors.
-       */
-      fp.addPaths(ccCompilationContext.getDeclaredIncludeDirs());
-      fp.addPaths(ccCompilationContext.getDeclaredIncludeWarnDirs());
-    }
   }
 
   @Override
@@ -993,7 +1006,7 @@ public class CppCompileAction extends AbstractAction
       actionExecutionContext.getFileOutErr().setErrorFilter(showIncludesFilterForStderr);
     }
 
-    if (!shouldScanDotdFiles()) {
+    if (cppConfiguration.getNoDotdScanningWithModules() && useHeaderModules && shouldPruneModules) {
       updateActionInputs(
           NestedSetBuilder.wrap(
               Order.STABLE_ORDER, Iterables.concat(discoveredModules, additionalInputs)));
@@ -1017,7 +1030,7 @@ public class CppCompileAction extends AbstractAction
     }
     ensureCoverageNotesFilesExist(actionExecutionContext);
 
-    if (!shouldScanDotdFiles()) {
+    if (cppConfiguration.getNoDotdScanningWithModules() && useHeaderModules && shouldPruneModules) {
       return ActionResult.create(spawnResults);
     }
 
@@ -1243,8 +1256,7 @@ public class CppCompileAction extends AbstractAction
   /**
    * For the given {@code usedModules}, looks up modules discovered by their generating actions.
    *
-   * <p>The returned value only contains elements of {@code usedModules} if they happen to be
-   * transitively used from other elements of {@code usedModules}. It can be null when skyframe
+   * <p>The returned value contains elements of {@code usedModules}. It can be null when skyframe
    * lookups return null.
    */
   @Nullable

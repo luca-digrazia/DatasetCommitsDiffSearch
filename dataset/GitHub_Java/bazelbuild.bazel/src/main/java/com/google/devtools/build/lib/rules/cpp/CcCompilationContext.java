@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -236,8 +237,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     return Collections.unmodifiableSet(result);
   }
 
-  public ImmutableSet<Artifact> getUsedModules(boolean usePic, Set<Artifact> usedHeaders) {
-    ImmutableSet.Builder<Artifact> result = ImmutableSet.builder();
+  public Collection<HeaderInfo> getUsedModules(boolean usePic, Set<Artifact> usedHeaders) {
+    List<HeaderInfo> result = new ArrayList<>();
     for (HeaderInfo transitiveHeaderInfo : transitiveHeaderInfos) {
       // Do not add the module of the current rule for both:
       // 1. the module compile itself
@@ -248,12 +249,12 @@ public final class CcCompilationContext implements CcCompilationContextApi {
       }
       for (Artifact header : transitiveHeaderInfo.modularHeaders) {
         if (usedHeaders.contains(header)) {
-          result.add(transitiveHeaderInfo.getModule(usePic));
+          result.add(transitiveHeaderInfo);
           break;
         }
       }
     }
-    return result.build();
+    return result;
   }
 
   /**
@@ -483,6 +484,19 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     }
 
     /**
+     * Add multiple include directories to be added with "-I". These can be
+     * either relative to the exec root (see {@link
+     * com.google.devtools.build.lib.analysis.BlazeDirectories#getExecRoot}) or absolute. The
+     * entries are normalized before they are stored.
+     */
+    public Builder addIncludeDirs(Iterable<PathFragment> includeDirs) {
+      for (PathFragment includeDir : includeDirs) {
+        addIncludeDir(includeDir);
+      }
+      return this;
+    }
+
+    /**
      * Add a single include directory to be added with "-iquote". It can be
      * either relative to the exec root (see {@link
      * com.google.devtools.build.lib.analysis.BlazeDirectories#getExecRoot}) or absolute. Before it
@@ -494,12 +508,13 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     }
 
     /**
-     * Add a single include directory to be added with "-isystem". It can be either relative to the
-     * exec root (see {@link com.google.devtools.build.lib.analysis.BlazeDirectories#getExecRoot})
-     * or absolute. Before it is stored, the include directory is normalized.
+     * Add a single include directory to be added with "-isystem". It can be
+     * either relative to the exec root (see {@link
+     * com.google.devtools.build.lib.analysis.BlazeDirectories#getExecRoot}) or absolute. Before it
+     * is stored, the include directory is normalized.
      */
-    public Builder addSystemIncludeDirs(Iterable<PathFragment> systemIncludeDirs) {
-      Iterables.addAll(this.systemIncludeDirs, systemIncludeDirs);
+    public Builder addSystemIncludeDir(PathFragment systemIncludeDir) {
+      systemIncludeDirs.add(systemIncludeDir);
       return this;
     }
 
