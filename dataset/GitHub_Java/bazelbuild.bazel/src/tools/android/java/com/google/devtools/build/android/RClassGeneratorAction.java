@@ -93,16 +93,17 @@ public class RClassGeneratorAction {
     public String packageForR;
 
     @Option(
-        name = "library",
-        allowMultiple = true,
-        defaultValue = "null",
-        converter = DependencySymbolFileProviderConverter.class,
-        category = "input",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "R.txt and manifests for the libraries in this binary's deps. We will write "
-                + "class files for the libraries as well. Expected format: lib1/R.txt[:lib2/R.txt]")
+      name = "library",
+      allowMultiple = true,
+      defaultValue = "",
+      converter = DependencySymbolFileProviderConverter.class,
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "R.txt and manifests for the libraries in this binary's deps. We will write "
+              + "class files for the libraries as well. Expected format: lib1/R.txt[:lib2/R.txt]"
+    )
     public List<DependencySymbolFileProvider> libraries;
 
     @Option(
@@ -149,7 +150,7 @@ public class RClassGeneratorAction {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser =
         OptionsParser.builder()
-            .optionsClasses(Options.class, ResourceProcessorCommonOptions.class)
+            .optionsClasses(Options.class)
             .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
             .build();
     optionsParser.parseAndExitUponError(args);
