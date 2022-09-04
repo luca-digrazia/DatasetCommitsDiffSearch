@@ -342,8 +342,7 @@ public class BuildViewForTesting {
    */
   private ImmutableMap<Label, ConfigMatchingProvider> getConfigurableAttributeKeysForTesting(
       ExtendedEventHandler eventHandler, TargetAndConfiguration ctg)
-      throws StarlarkTransition.TransitionException, InvalidConfigurationException,
-          InterruptedException {
+      throws StarlarkTransition.TransitionException, InvalidConfigurationException {
     if (!(ctg.getTarget() instanceof Rule)) {
       return ImmutableMap.of();
     }
@@ -420,8 +419,7 @@ public class BuildViewForTesting {
   @VisibleForTesting
   public ConfiguredTarget getConfiguredTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config)
-      throws StarlarkTransition.TransitionException, InvalidConfigurationException,
-          InterruptedException {
+      throws StarlarkTransition.TransitionException, InvalidConfigurationException {
     ConfigurationTransition transition =
         getTopLevelTransitionForTarget(label, config, eventHandler);
     if (transition == null) {
@@ -431,10 +429,9 @@ public class BuildViewForTesting {
   }
 
   @VisibleForTesting
-  ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
+  public ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config)
-      throws StarlarkTransition.TransitionException, InvalidConfigurationException,
-          InterruptedException {
+      throws StarlarkTransition.TransitionException, InvalidConfigurationException {
     ConfigurationTransition transition =
         getTopLevelTransitionForTarget(label, config, eventHandler);
     if (transition == null) {

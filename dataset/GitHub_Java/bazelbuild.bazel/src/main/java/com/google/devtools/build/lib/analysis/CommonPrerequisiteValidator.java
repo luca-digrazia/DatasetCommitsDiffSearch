@@ -256,7 +256,7 @@ public abstract class CommonPrerequisiteValidator implements PrerequisiteValidat
   }
 
   /** Check that the dependency is not test-only, or the current rule is test-only. */
-  private void validateDirectPrerequisiteForTestOnly(
+  private static void validateDirectPrerequisiteForTestOnly(
       RuleContext.Builder context, ConfiguredTargetAndData prerequisite) {
     Rule rule = context.getRule();
 
@@ -267,7 +267,7 @@ public abstract class CommonPrerequisiteValidator implements PrerequisiteValidat
     }
 
     Target prerequisiteTarget = prerequisite.getTarget();
-    PackageIdentifier thisPackage = rule.getLabel().getPackageIdentifier();
+    String thisPackage = rule.getLabel().getPackageName();
 
     if (isTestOnlyRule(prerequisiteTarget) && !isTestOnlyRule(rule)) {
       String message =
@@ -276,7 +276,7 @@ public abstract class CommonPrerequisiteValidator implements PrerequisiteValidat
               + "' depends on testonly "
               + AliasProvider.describeTargetWithAliases(prerequisite, TargetMode.WITHOUT_KIND)
               + " and doesn't have testonly attribute set";
-      if (packageUnderExperimental(thisPackage)) {
+      if (thisPackage.startsWith("experimental/")) {
         context.ruleWarning(message);
       } else {
         context.ruleError(message);
