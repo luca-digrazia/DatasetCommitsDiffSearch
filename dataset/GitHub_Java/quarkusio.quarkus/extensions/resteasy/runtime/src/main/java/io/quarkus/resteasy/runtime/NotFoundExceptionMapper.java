@@ -147,24 +147,24 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
     private Response respond() {
         if (headers.getAcceptableMediaTypes().contains(MediaType.APPLICATION_JSON_TYPE)) {
             ErrorMessage errorMessage = new ErrorMessage();
-            errorMessage.errorMessage = "404 - Resource Not Found";
+            errorMessage.errorMessage = "Resource Not Found";
             return Response.status(Status.NOT_FOUND).entity(errorMessage).type(MediaType.APPLICATION_JSON_TYPE).build();
         }
 
-        TemplateHtmlBuilder sb = new TemplateHtmlBuilder("404 - Resource Not Found", "", "No resources discovered");
+        TemplateHtmlBuilder sb = new TemplateHtmlBuilder();
         return Response.status(Status.NOT_FOUND).entity(sb.toString()).build();
     }
 
     private Response respond(List<ResourceDescription> descriptions) {
         if (headers.getAcceptableMediaTypes().contains(MediaType.APPLICATION_JSON_TYPE)) {
             ErrorMessage errorMessage = new ErrorMessage();
-            errorMessage.errorMessage = "404 - Resource Not Found";
+            errorMessage.errorMessage = "Resource Not Found";
             errorMessage.existingResourcesDetails = descriptions;
             return Response.status(Status.NOT_FOUND).entity(errorMessage).type(MediaType.APPLICATION_JSON_TYPE).build();
         }
 
-        TemplateHtmlBuilder sb = new TemplateHtmlBuilder("404 - Resource Not Found", "", "REST interface overview");
-        sb.resourcesStart();
+        TemplateHtmlBuilder sb = new TemplateHtmlBuilder();
+        sb.header("Resource Not Found", "REST interface overview");
         for (ResourceDescription resource : descriptions) {
             sb.resourcePath(resource.basePath);
             for (MethodDescription method : resource.calls) {
@@ -182,7 +182,6 @@ public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundExceptio
         if (descriptions.isEmpty()) {
             sb.noResourcesFound();
         }
-        sb.resourcesEnd();
 
         return Response.status(Status.NOT_FOUND).entity(sb.toString()).build();
     }
