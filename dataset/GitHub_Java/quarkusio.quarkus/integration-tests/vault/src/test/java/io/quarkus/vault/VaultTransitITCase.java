@@ -1,6 +1,5 @@
 package io.quarkus.vault;
 
-import static io.quarkus.vault.VaultTransitExportKeyType.encryption;
 import static io.quarkus.vault.test.VaultTestExtension.ENCRYPTION_DERIVED_KEY_NAME;
 import static io.quarkus.vault.test.VaultTestExtension.ENCRYPTION_KEY2_NAME;
 import static io.quarkus.vault.test.VaultTestExtension.ENCRYPTION_KEY_NAME;
@@ -11,9 +10,6 @@ import static io.quarkus.vault.transit.VaultTransitSecretEngineConstants.INVALID
 import static java.util.Collections.singletonList;
 import static java.util.stream.Collectors.toList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -27,26 +23,24 @@ import javax.inject.Inject;
 import org.jboss.logging.Logger;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.quarkus.vault.runtime.VaultAuthManager;
+import io.quarkus.vault.runtime.VaultManager;
 import io.quarkus.vault.test.client.TestVaultClient;
 import io.quarkus.vault.transit.ClearData;
 import io.quarkus.vault.transit.DecryptionRequest;
 import io.quarkus.vault.transit.EncryptionRequest;
-import io.quarkus.vault.transit.KeyConfigRequestDetail;
-import io.quarkus.vault.transit.KeyCreationRequestDetail;
 import io.quarkus.vault.transit.RewrappingRequest;
-import io.quarkus.vault.transit.SignVerifyOptions;
 import io.quarkus.vault.transit.SigningInput;
 import io.quarkus.vault.transit.SigningRequest;
 import io.quarkus.vault.transit.TransitContext;
-import io.quarkus.vault.transit.VaultTransitKeyExportDetail;
 import io.quarkus.vault.transit.VaultVerificationBatchException;
 import io.quarkus.vault.transit.VerificationRequest;
 
+@Disabled("https://github.com/quarkusio/quarkus/issues/11879")
 public class VaultTransitITCase {
 
     private static final Logger log = Logger.getLogger(VaultTransitITCase.class);
@@ -58,7 +52,6 @@ public class VaultTransitITCase {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addAsResource("application-vault.properties", "application.properties"));
-    public static final String KEY_NAME = "mykey";
 
     private TransitContext context = TransitContext.fromContext("my context");
     private ClearData data = new ClearData(COUCOU);
@@ -66,9 +59,6 @@ public class VaultTransitITCase {
 
     @Inject
     VaultTransitSecretEngine transitSecretEngine;
-
-    @Inject
-    VaultAuthManager vaultAuthManager;
 
     @Test
     public void encryptionString() {
@@ -131,66 +121,6 @@ public class VaultTransitITCase {
     }
 
     @Test
-    public void signStringExplicitHashAlgorithmSha256() {
-        SignVerifyOptions options = new SignVerifyOptions().setHashAlgorithm("sha2-256");
-        String signature = transitSecretEngine.sign(SIGN_KEY_NAME, input, options, null);
-        transitSecretEngine.verifySignature(SIGN_KEY_NAME, signature, input, options, null);
-    }
-
-    @Test
-    public void signStringExplicitHashAlgorithmSha512() {
-        SignVerifyOptions options = new SignVerifyOptions().setHashAlgorithm("sha2-512");
-        String signature = transitSecretEngine.sign(SIGN_KEY_NAME, input, options, null);
-        transitSecretEngine.verifySignature(SIGN_KEY_NAME, signature, input, options, null);
-    }
-
-    @Test
-    public void signStringExplicitHashAlgorithmMismatched() {
-        SignVerifyOptions options = new SignVerifyOptions().setHashAlgorithm("sha2-256");
-        String signature = transitSecretEngine.sign(SIGN_KEY_NAME, input, options, null);
-        assertThrows(VaultException.class,
-                () -> transitSecretEngine.verifySignature(SIGN_KEY_NAME, signature, input,
-                        options.setHashAlgorithm("sha1"), null));
-    }
-
-    @Test
-    public void signStringExplicitMarshalingAlgorithmASN1() {
-        SignVerifyOptions options = new SignVerifyOptions().setMarshalingAlgorithm("asn1");
-        String signature = transitSecretEngine.sign(SIGN_KEY_NAME, input, options, null);
-        transitSecretEngine.verifySignature(SIGN_KEY_NAME, signature, input, options, null);
-    }
-
-    @Test
-    public void signStringExplicitMarshalingAlgorithmJWS() {
-        SignVerifyOptions options = new SignVerifyOptions().setMarshalingAlgorithm("jws");
-        String signature = transitSecretEngine.sign(SIGN_KEY_NAME, input, options, null);
-        transitSecretEngine.verifySignature(SIGN_KEY_NAME, signature, input, options, null);
-    }
-
-    @Test
-    public void signStringExplicitMarshalingAlgorithmMismatched() {
-        SignVerifyOptions options = new SignVerifyOptions().setMarshalingAlgorithm("jws");
-        String signature = transitSecretEngine.sign(SIGN_KEY_NAME, input, options, null);
-        assertThrows(VaultException.class,
-                () -> transitSecretEngine.verifySignature(SIGN_KEY_NAME, signature, input,
-                        options.setMarshalingAlgorithm("asn1"), null));
-    }
-
-    @Test
-    public void signStringExplicitSignatureAlgorithmPKCS1() {
-        SignVerifyOptions options = new SignVerifyOptions().setSignatureAlgorithm("pkcs1v15");
-        String signature = transitSecretEngine.sign(SIGN_KEY2_NAME, input, options, null);
-        transitSecretEngine.verifySignature(SIGN_KEY2_NAME, signature, input, options, null);
-    }
-
-    @Test
-    public void signStringExplicitSignatureAlgorithmPSS() {
-        SignVerifyOptions options = new SignVerifyOptions().setSignatureAlgorithm("pss");
-        String signature = transitSecretEngine.sign(SIGN_KEY2_NAME, input, options, null);
-        transitSecretEngine.verifySignature(SIGN_KEY2_NAME, signature, input, options, null);
-    }
-
-    @Test
     public void signJws() {
         String signature = transitSecretEngine.sign("jws", input, null);
         transitSecretEngine.verifySignature("jws", signature, input, null);
@@ -237,7 +167,8 @@ public class VaultTransitITCase {
     }
 
     private void rotate(String keyName) {
-        String clientToken = vaultAuthManager.getClientToken();
+        VaultManager vaultManager = VaultManager.getInstance();
+        String clientToken = vaultManager.getVaultAuthManager().getClientToken();
         new TestVaultClient().rotate(clientToken, keyName);
     }
 
@@ -342,38 +273,6 @@ public class VaultTransitITCase {
     private <K, V> V getSingleValue(Map<K, V> map) {
         assertEquals(1, map.size());
         return map.values().stream().findFirst().get();
-    }
-
-    @Test
-    public void adminKey() {
-
-        assertFalse(transitSecretEngine.listKeys().contains(KEY_NAME));
-        transitSecretEngine.createKey(KEY_NAME, new KeyCreationRequestDetail().setExportable(true));
-        assertTrue(transitSecretEngine.listKeys().contains(KEY_NAME));
-
-        VaultTransitKeyDetail mykey = transitSecretEngine.readKey(KEY_NAME);
-        assertEquals(KEY_NAME, mykey.getName());
-        assertTrue(mykey.isExportable());
-        assertFalse(mykey.isDeletionAllowed());
-        assertTrue(mykey.isSupportsDecryption());
-        assertTrue(mykey.isSupportsEncryption());
-        assertTrue(mykey.isSupportsDerivation());
-        assertEquals(1, mykey.getKeys().size());
-        assertTrue(mykey.getKeys().containsKey("1"));
-        assertEquals(1, mykey.getMinDecryptionVersion());
-        assertEquals(0, mykey.getMinEncryptionVersion());
-
-        VaultTransitKeyExportDetail exportDetail = transitSecretEngine.exportKey(KEY_NAME, encryption, "1");
-        assertEquals(KEY_NAME, exportDetail.getName());
-        assertEquals(1, exportDetail.getKeys().size());
-        assertTrue(exportDetail.getKeys().containsKey("1"));
-
-        transitSecretEngine.updateKeyConfiguration(KEY_NAME, new KeyConfigRequestDetail().setDeletionAllowed(true));
-        mykey = transitSecretEngine.readKey(KEY_NAME);
-        assertTrue(mykey.isDeletionAllowed());
-
-        transitSecretEngine.deleteKey(KEY_NAME);
-        assertNull(transitSecretEngine.readKey(KEY_NAME));
     }
 
 }
