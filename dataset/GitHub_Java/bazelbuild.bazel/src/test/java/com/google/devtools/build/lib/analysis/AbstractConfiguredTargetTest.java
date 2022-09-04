@@ -47,7 +47,6 @@ public class AbstractConfiguredTargetTest extends BuildViewTestCase {
                 new TopLevelArtifactContext(
                     /*runTestsExclusively=*/ false,
                     /*expandFilesets=*/ false,
-                    /*fullyResolveFilesetSymlinks=*/ false,
                     /*outputGroups=*/ ImmutableSortedSet.<String>of(
                         OutputGroupInfo.DEFAULT, OutputGroupInfo.HIDDEN_TOP_LEVEL)))
             .getImportantArtifacts()
