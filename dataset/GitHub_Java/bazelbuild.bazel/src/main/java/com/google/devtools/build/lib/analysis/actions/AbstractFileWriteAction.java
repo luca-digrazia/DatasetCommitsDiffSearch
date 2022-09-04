@@ -76,12 +76,23 @@ public abstract class AbstractFileWriteAction extends AbstractAction {
 
       FileWriteActionContext context = getStrategy(actionExecutionContext);
       SpawnContinuation first =
-          context.beginWriteOutputToFile(
-              AbstractFileWriteAction.this,
-              actionExecutionContext,
-              deterministicWriter,
-              makeExecutable,
-              isRemotable());
+          new SpawnContinuation() {
+            @Override
+            public ListenableFuture<?> getFuture() {
+              return null;
+            }
+
+            @Override
+            public SpawnContinuation execute() throws ExecException, InterruptedException {
+              return context.beginWriteOutputToFile(
+                  AbstractFileWriteAction.this,
+                  actionExecutionContext,
+                  deterministicWriter,
+                  makeExecutable,
+                  isRemotable());
+            }
+          };
+
       return new ActionContinuationOrResult() {
         private SpawnContinuation spawnContinuation = first;
 
@@ -94,11 +105,11 @@ public abstract class AbstractFileWriteAction extends AbstractAction {
         @Override
         public ActionContinuationOrResult execute()
             throws ActionExecutionException, InterruptedException {
-          SpawnContinuation nextContinuation;
+          SpawnContinuation next;
           try {
-            nextContinuation = spawnContinuation.execute();
-            if (!nextContinuation.isDone()) {
-              spawnContinuation = nextContinuation;
+            next = spawnContinuation.execute();
+            if (!next.isDone()) {
+              spawnContinuation = next;
               return this;
             }
           } catch (ExecException e) {
@@ -108,9 +119,9 @@ public abstract class AbstractFileWriteAction extends AbstractAction {
                 AbstractFileWriteAction.this);
           }
           afterWrite(actionExecutionContext);
-          return ActionContinuationOrResult.of(ActionResult.create(nextContinuation.get()));
+          return ActionContinuationOrResult.of(ActionResult.create(next.get()));
         }
-      };
+      }.execute();
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "Writing file for rule '" + Label.print(getOwner().getLabel()) + "'",
