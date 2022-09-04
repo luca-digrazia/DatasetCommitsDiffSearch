@@ -11,7 +11,6 @@
 
 package com.facebook.stetho;
 
-import com.facebook.stetho.dumpapp.plugins.CrashDumperPlugin;
 import com.facebook.stetho.inspector.database.DefaultDatabaseFilesProvider;
 import javax.annotation.Nullable;
 
@@ -106,7 +105,6 @@ public class Stetho {
       public Iterable<DumperPlugin> get() {
         ArrayList<DumperPlugin> plugins = new ArrayList<DumperPlugin>();
         plugins.add(new SharedPreferencesDumperPlugin(context));
-        plugins.add(new CrashDumperPlugin());
         return plugins;
       }
     };

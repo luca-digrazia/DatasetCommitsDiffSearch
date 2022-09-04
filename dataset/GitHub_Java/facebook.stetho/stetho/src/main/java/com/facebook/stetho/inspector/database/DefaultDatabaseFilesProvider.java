@@ -12,7 +12,6 @@ package com.facebook.stetho.inspector.database;
 import android.content.Context;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**

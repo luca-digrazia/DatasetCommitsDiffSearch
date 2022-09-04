@@ -18,5 +18,5 @@ import java.io.OutputStream;
  * also using an intercepted stream for POST bodies as we do with responses.
  */
 public interface SimpleRequestEntity {
-  void writeTo(OutputStream out) throws IOException;
+  public void writeTo(OutputStream out) throws IOException;
 }

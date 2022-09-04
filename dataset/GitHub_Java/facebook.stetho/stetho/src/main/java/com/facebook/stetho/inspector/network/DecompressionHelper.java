@@ -20,8 +20,8 @@ import java.util.zip.InflaterOutputStream;
 
 // @VisibleForTest
 public class DecompressionHelper {
-  static final String GZIP_ENCODING = "gzip";
-  static final String DEFLATE_ENCODING = "deflate";
+  private static final String GZIP_ENCODING = "gzip";
+  private static final String DEFLATE_ENCODING = "deflate";
 
   public static InputStream teeInputWithDecompression(
       NetworkPeerManager peerManager,

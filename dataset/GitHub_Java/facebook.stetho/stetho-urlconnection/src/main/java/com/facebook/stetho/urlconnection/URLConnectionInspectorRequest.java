@@ -10,12 +10,10 @@
 package com.facebook.stetho.urlconnection;
 
 import com.facebook.stetho.inspector.network.NetworkEventReporter;
-import com.facebook.stetho.inspector.network.RequestBodyHelper;
 
 import javax.annotation.Nullable;
-
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 
 class URLConnectionInspectorRequest
@@ -24,21 +22,21 @@ class URLConnectionInspectorRequest
   private final String mRequestId;
   private final String mFriendlyName;
   @Nullable private final SimpleRequestEntity mRequestEntity;
-  private final RequestBodyHelper mRequestBodyHelper;
   private final String mUrl;
   private final String mMethod;
+
+  private boolean mBodyRead;
+  @Nullable private byte[] mBody;
 
   public URLConnectionInspectorRequest(
       String requestId,
       String friendlyName,
       HttpURLConnection configuredRequest,
-      @Nullable SimpleRequestEntity requestEntity,
-      RequestBodyHelper requestBodyHelper) {
+      @Nullable SimpleRequestEntity requestEntity) {
     super(Util.convertHeaders(configuredRequest.getRequestProperties()));
     mRequestId = requestId;
     mFriendlyName = friendlyName;
     mRequestEntity = requestEntity;
-    mRequestBodyHelper = requestBodyHelper;
     mUrl = configuredRequest.getURL().toString();
     mMethod = configuredRequest.getRequestMethod();
   }
@@ -72,13 +70,13 @@ class URLConnectionInspectorRequest
   @Override
   public byte[] body() throws IOException {
     if (mRequestEntity != null) {
-      OutputStream out = mRequestBodyHelper.createBodySink(firstHeaderValue("Content-Encoding"));
-      try {
+      if (!mBodyRead) {
+        mBodyRead = true;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         mRequestEntity.writeTo(out);
-      } finally {
-        out.close();
+        mBody = out.toByteArray();
       }
-      return mRequestBodyHelper.getDisplayBody();
+      return mBody;
     } else {
       return null;
     }

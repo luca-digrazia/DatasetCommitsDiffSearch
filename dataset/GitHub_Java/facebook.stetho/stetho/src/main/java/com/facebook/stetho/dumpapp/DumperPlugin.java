@@ -1,3 +1,4 @@
+// Copyright 2004-present Facebook. All Rights Reserved.
 /*
  * Copyright (c) 2014-present, Facebook, Inc.
  * All rights reserved.
@@ -6,6 +7,7 @@
  * LICENSE file in the root directory of this source tree. An additional grant
  * of patent rights can be found in the PATENTS file in the same directory.
  */
+
 
 package com.facebook.stetho.dumpapp;
 

@@ -22,7 +22,7 @@ public interface ResponseHandler {
    * @param numBytes Bytes read from the network stack's stream as established by
    *     {@link NetworkEventReporter#interpretResponseStream}.
    */
-  void onRead(int numBytes);
+  public void onRead(int numBytes);
 
   /**
    * Signal that data has been decoded (reversing the response's {@code Content-Encoding}) while
@@ -33,16 +33,16 @@ public interface ResponseHandler {
    * @param numBytes Bytes yielded after decoding bytes received from the network stack's
    *     stream.
    */
-  void onReadDecoded(int numBytes);
+  public void onReadDecoded(int numBytes);
 
   /**
    * Signals that EOF has been reached reading the response stream from the network
    * stack.
    */
-  void onEOF();
+  public void onEOF();
 
   /**
    * Signals that an error occurred while reading the response stream.
    */
-  void onError(IOException e);
+  public void onError(IOException e);
 }

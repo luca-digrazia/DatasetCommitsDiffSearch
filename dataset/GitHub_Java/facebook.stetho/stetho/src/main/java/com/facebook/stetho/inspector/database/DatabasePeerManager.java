@@ -38,9 +38,7 @@ import com.facebook.stetho.inspector.protocol.module.DatabaseConstants;
 public class DatabasePeerManager extends ChromePeerManager {
   private static final String[] UNINTERESTING_FILENAME_SUFFIXES = new String[]{
       "-journal",
-      "-shm",
-      "-uid",
-      "-wal"
+      "-uid"
   };
 
   private final Context mContext;

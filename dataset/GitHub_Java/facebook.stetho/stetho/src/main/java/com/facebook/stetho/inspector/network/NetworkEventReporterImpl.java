@@ -280,15 +280,8 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
   private static JSONObject formatHeadersAsJSON(InspectorHeaders headers) {
     JSONObject json = new JSONObject();
     for (int i = 0; i < headers.headerCount(); i++) {
-      String name = headers.headerName(i);
-      String value = headers.headerValue(i);
       try {
-        if (json.has(name)) {
-          // Multiple headers are separated with a new line.
-          json.put(name, json.getString(name) + "\n" + value);
-        } else {
-          json.put(name, value);
-        }
+        json.put(headers.headerName(i), headers.headerValue(i));
       } catch (JSONException e) {
         throw new RuntimeException(e);
       }
