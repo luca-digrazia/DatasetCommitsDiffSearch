@@ -260,9 +260,7 @@ public abstract class DependencyResolver {
       visitTargetVisibility(node, outgoingLabels);
     } else if (target instanceof Rule) {
       fromRule = (Rule) target;
-      attributeMap =
-          ConfiguredAttributeMapper.of(
-              fromRule, configConditions, node.getConfiguration().checksum());
+      attributeMap = ConfiguredAttributeMapper.of(fromRule, configConditions);
       visitRule(node, hostConfig, aspects, attributeMap, toolchainContexts, outgoingLabels);
     } else if (target instanceof PackageGroup) {
       outgoingLabels.putAll(VISIBILITY_DEPENDENCY, ((PackageGroup) target).getIncludes());
