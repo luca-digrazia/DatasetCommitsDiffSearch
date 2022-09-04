@@ -8,7 +8,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import io.dropwizard.views.View;
-import io.dropwizard.views.ViewRenderException;
 import io.dropwizard.views.ViewRenderer;
 
 import java.io.IOException;
@@ -53,7 +52,7 @@ public class MustacheViewRenderer implements ViewRenderer {
                 template.execute(writer, view);
             }
         } catch (Throwable e) {
-            throw new ViewRenderException("Mustache template error: " + view.getTemplateName(), e);
+            throw new RuntimeException("Mustache template error: " + view.getTemplateName(), e);
         }
     }
 
