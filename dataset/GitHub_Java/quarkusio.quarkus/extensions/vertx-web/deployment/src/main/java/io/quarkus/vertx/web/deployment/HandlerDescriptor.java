@@ -1,6 +1,7 @@
 package io.quarkus.vertx.web.deployment;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
@@ -100,7 +101,8 @@ class HandlerDescriptor {
         if (type == null) {
             return false;
         }
-        return type.name().equals(DotNames.RX_BUFFER);
+        return type.name()
+                .equals(DotName.createSimple(io.vertx.reactivex.core.buffer.Buffer.class.getName()));
     }
 
     boolean isContentTypeMutinyBuffer() {
@@ -108,7 +110,7 @@ class HandlerDescriptor {
         if (type == null) {
             return false;
         }
-        return type.name().equals(DotNames.MUTINY_BUFFER);
+        return type.name().equals(DotName.createSimple(io.vertx.mutiny.core.buffer.Buffer.class.getName()));
     }
 
 }
