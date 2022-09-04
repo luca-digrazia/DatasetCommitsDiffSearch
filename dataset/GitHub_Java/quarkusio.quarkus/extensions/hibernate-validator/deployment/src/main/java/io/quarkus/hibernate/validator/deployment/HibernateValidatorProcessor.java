@@ -7,10 +7,8 @@ import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Predicate;
 
 import javax.validation.Constraint;
-import javax.validation.ConstraintValidator;
 import javax.validation.Valid;
 import javax.validation.executable.ValidateOnExecution;
 
@@ -26,8 +24,6 @@ import org.jboss.jandex.Type;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
-import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -46,8 +42,6 @@ import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterc
 
 class HibernateValidatorProcessor {
 
-    private static final DotName CONSTRAINT_VALIDATOR = DotName.createSimple(ConstraintValidator.class.getName());
-
     private static final DotName VALIDATE_ON_EXECUTION = DotName.createSimple(ValidateOnExecution.class.getName());
 
     private static final DotName VALID = DotName.createSimple(Valid.class.getName());
@@ -63,8 +57,7 @@ class HibernateValidatorProcessor {
     }
 
     @BuildStep
-    void registerAdditionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBean) {
+    void registerAdditionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
         // The bean encapsulating the Validator and ValidatorFactory
         additionalBeans.produce(new AdditionalBeanBuildItem(ValidatorProvider.class));
 
@@ -76,14 +69,6 @@ class HibernateValidatorProcessor {
             additionalBeans.produce(new AdditionalBeanBuildItem(
                     "io.quarkus.hibernate.validator.runtime.jaxrs.JaxrsEndPointValidationInterceptor"));
         }
-
-        // Do not remove the ConstraintValidator beans
-        unremovableBean.produce(new UnremovableBeanBuildItem(new Predicate<BeanInfo>() {
-            @Override
-            public boolean test(BeanInfo beanInfo) {
-                return beanInfo.hasType(CONSTRAINT_VALIDATOR);
-            }
-        }));
     }
 
     @BuildStep
@@ -159,8 +144,7 @@ class HibernateValidatorProcessor {
         }
 
         beanContainerListener
-                .produce(new BeanContainerListenerBuildItem(
-                        recorder.initializeValidatorFactory(classesToBeValidated, shutdownContext)));
+                .produce(new BeanContainerListenerBuildItem(recorder.initializeValidatorFactory(classesToBeValidated, shutdownContext)));
     }
 
     @BuildStep
