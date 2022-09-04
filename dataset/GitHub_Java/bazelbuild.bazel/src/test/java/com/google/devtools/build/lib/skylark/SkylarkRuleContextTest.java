@@ -632,8 +632,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "executable",
         "stamp",
         "heuristic_label_expansion",
-        "kind",
-        "exec_compatible_with");
+        "kind");
   }
 
   @Test
@@ -1631,7 +1630,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
     Object provider = evalRuleContextCode(ruleContext, "ruleContext.attr.dep[Actions]");
     assertThat(provider).isInstanceOf(Info.class);
-    assertThat(((Info) provider).getProvider()).isEqualTo(ActionsProvider.INSTANCE);
+    assertThat(((Info) provider).getProvider()).isEqualTo(ActionsProvider.SKYLARK_CONSTRUCTOR);
     update("actions", provider);
 
     Object mapping = eval("actions.by_file");

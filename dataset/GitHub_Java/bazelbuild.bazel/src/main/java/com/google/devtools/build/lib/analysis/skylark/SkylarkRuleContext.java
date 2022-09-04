@@ -656,7 +656,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
   @Override
   public SkylarkIndexable toolchains() throws EvalException {
     checkMutable("toolchains");
-    return ruleContext.getToolchainContext();
+    return ruleContext.getToolchainContext().getResolvedToolchainProviders();
   }
 
   @Override
