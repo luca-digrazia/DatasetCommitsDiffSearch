@@ -26,7 +26,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
@@ -91,7 +91,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private final boolean mandatoryMinimumVersion;
   private final boolean objcProviderFromLinked;
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   AppleConfiguration(AppleCommandLineOptions options, String iosCpu) {
     this.options = options;
     this.iosCpu = iosCpu;

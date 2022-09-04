@@ -166,7 +166,6 @@ public final class JavaConfiguration extends Fragment {
   private final JavaOptimizationMode javaOptimizationMode;
   private final ImmutableMap<String, Optional<Label>> bytecodeOptimizers;
   private final Label toolchainLabel;
-  private final Label runtimeLabel;
   private final boolean explicitJavaTestDeps;
   private final boolean experimentalTestRunner;
   private final boolean jplPropagateCcLinkParamsStore;
@@ -176,7 +175,10 @@ public final class JavaConfiguration extends Fragment {
   private final boolean useLegacyBazelJavaTest;
 
   JavaConfiguration(
-      JavaOptions javaOptions)
+      boolean generateJavaDeps,
+      List<String> defaultJvmFlags,
+      JavaOptions javaOptions,
+      Label toolchainLabel)
       throws InvalidConfigurationException {
     this.commandLineJavacFlags =
         ImmutableList.copyOf(JavaHelper.tokenizeJavaOptions(javaOptions.javacOpts));
@@ -184,17 +186,15 @@ public final class JavaConfiguration extends Fragment {
     this.useIjars = javaOptions.useIjars;
     this.useHeaderCompilation = javaOptions.headerCompilation;
     this.headerCompilationDisableJavacFallback = javaOptions.headerCompilationDisableJavacFallback;
-    this.generateJavaDeps =
-        javaOptions.javaDeps || javaOptions.javaClasspath != JavaClasspathMode.OFF;
+    this.generateJavaDeps = generateJavaDeps;
     this.javaClasspath = javaOptions.javaClasspath;
-    this.defaultJvmFlags = ImmutableList.copyOf(javaOptions.jvmOpts);
+    this.defaultJvmFlags = ImmutableList.copyOf(defaultJvmFlags);
     this.checkedConstraints = ImmutableList.copyOf(javaOptions.checkedConstraints);
     this.strictJavaDeps = javaOptions.strictJavaDeps;
     this.proguardBinary = javaOptions.proguard;
     this.extraProguardSpecs = ImmutableList.copyOf(javaOptions.extraProguardSpecs);
     this.bundleTranslations = javaOptions.bundleTranslations;
-    this.toolchainLabel = javaOptions.javaToolchain;
-    this.runtimeLabel = javaOptions.javaBase;
+    this.toolchainLabel = toolchainLabel;
     this.javaOptimizationMode = javaOptions.javaOptimizationMode;
     this.useLegacyBazelJavaTest = javaOptions.legacyBazelJavaTest;
     this.strictDepsJavaProtos = javaOptions.strictDepsJavaProtos;
@@ -252,7 +252,6 @@ public final class JavaConfiguration extends Fragment {
       JavaOptimizationMode javaOptimizationMode,
       ImmutableMap<String, Optional<Label>> bytecodeOptimizers,
       Label toolchainLabel,
-      Label runtimeLabel,
       boolean explicitJavaTestDeps,
       boolean experimentalTestRunner,
       boolean jplPropagateCcLinkParamsStore,
@@ -279,7 +278,6 @@ public final class JavaConfiguration extends Fragment {
     this.javaOptimizationMode = javaOptimizationMode;
     this.bytecodeOptimizers = bytecodeOptimizers;
     this.toolchainLabel = toolchainLabel;
-    this.runtimeLabel = runtimeLabel;
     this.explicitJavaTestDeps = explicitJavaTestDeps;
     this.experimentalTestRunner = experimentalTestRunner;
     this.jplPropagateCcLinkParamsStore = jplPropagateCcLinkParamsStore;
@@ -427,13 +425,6 @@ public final class JavaConfiguration extends Fragment {
    */
   public Label getToolchainLabel() {
     return toolchainLabel;
-  }
-
-  /**
-   * Returns the label of the {@code java_runtime} rule representing the JVM in use.
-   */
-  public Label getRuntimeLabel() {
-    return runtimeLabel;
   }
 
   /**

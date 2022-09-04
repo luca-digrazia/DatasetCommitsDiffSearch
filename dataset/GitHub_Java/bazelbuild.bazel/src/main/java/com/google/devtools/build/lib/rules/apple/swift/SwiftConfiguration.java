@@ -50,7 +50,7 @@ public class SwiftConfiguration extends BuildConfiguration.Fragment {
     this(options.enableWholeModuleOptimization, ImmutableList.copyOf(options.copts));
   }
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   SwiftConfiguration(boolean enableWholeModuleOptimization, ImmutableList<String> copts) {
     this.enableWholeModuleOptimization = enableWholeModuleOptimization;
     this.copts = copts;

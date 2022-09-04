@@ -164,7 +164,7 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
 
   private final Options options;
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   BazelPythonConfiguration(Options options) {
     this.options = options;
   }
