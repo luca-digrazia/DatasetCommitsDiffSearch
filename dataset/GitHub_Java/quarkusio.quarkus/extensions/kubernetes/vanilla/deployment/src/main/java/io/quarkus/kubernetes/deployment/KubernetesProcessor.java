@@ -8,9 +8,6 @@ import static io.quarkus.kubernetes.deployment.Constants.KUBERNETES;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT;
 import static io.quarkus.kubernetes.deployment.Constants.OPENSHIFT_APP_RUNTIME;
 import static io.quarkus.kubernetes.deployment.Constants.QUARKUS;
-import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_BUILD_TIMESTAMP;
-import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_COMMIT_ID;
-import static io.quarkus.kubernetes.deployment.Constants.QUARKUS_ANNOTATIONS_VCS_URL;
 import static io.quarkus.kubernetes.deployment.Constants.SERVICE;
 
 import java.io.File;
@@ -34,6 +31,7 @@ import org.jboss.logging.Logger;
 import io.dekorate.Session;
 import io.dekorate.SessionWriter;
 import io.dekorate.kubernetes.config.Annotation;
+import io.dekorate.kubernetes.config.EnvBuilder;
 import io.dekorate.kubernetes.config.Label;
 import io.dekorate.kubernetes.config.PortBuilder;
 import io.dekorate.kubernetes.config.ProbeBuilder;
@@ -61,16 +59,13 @@ import io.dekorate.kubernetes.decorator.ApplyImageDecorator;
 import io.dekorate.kubernetes.decorator.ApplyImagePullPolicyDecorator;
 import io.dekorate.kubernetes.decorator.ApplyServiceAccountNamedDecorator;
 import io.dekorate.kubernetes.decorator.ApplyWorkingDirDecorator;
-import io.dekorate.kubernetes.decorator.RemoveAnnotationDecorator;
 import io.dekorate.processor.SimpleFileWriter;
 import io.dekorate.project.BuildInfo;
 import io.dekorate.project.FileProjectFactory;
 import io.dekorate.project.Project;
-import io.dekorate.project.ScmInfo;
 import io.dekorate.s2i.config.S2iBuildConfig;
 import io.dekorate.s2i.config.S2iBuildConfigBuilder;
 import io.dekorate.s2i.decorator.AddBuilderImageStreamResourceDecorator;
-import io.dekorate.utils.Annotations;
 import io.dekorate.utils.Maps;
 import io.quarkus.container.spi.BaseImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
@@ -86,6 +81,7 @@ import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem;
+import io.quarkus.kubernetes.spi.KubernetesEnvVarBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
@@ -93,7 +89,7 @@ import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
 
 class KubernetesProcessor {
 
-    private static final Logger log = Logger.getLogger(KubernetesDeployer.class);
+    private static final Logger LOG = Logger.getLogger(KubernetesDeployer.class);
 
     private static final String PROPERTY_PREFIX = "dekorate.";
     private static final String DOCKER_REGISTRY_PROPERTY = PROPERTY_PREFIX + "docker.registry";
@@ -129,6 +125,7 @@ class KubernetesProcessor {
             KubernetesConfig kubernetesConfig,
             OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
+            List<KubernetesEnvVarBuildItem> kubernetesEnvBuildItems,
             List<KubernetesRoleBuildItem> kubernetesRoleBuildItems,
             List<KubernetesPortBuildItem> kubernetesPortBuildItems,
             List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargetBuildItems,
@@ -141,7 +138,7 @@ class KubernetesProcessor {
             BuildProducer<FeatureBuildItem> featureProducer) {
 
         if (kubernetesPortBuildItems.isEmpty()) {
-            log.debug("The service is not an HTTP service so no Kubernetes manifests will be generated");
+            LOG.debug("The service is not an HTTP service so no Kubernetes manifests will be generated");
             return;
         }
 
@@ -178,14 +175,13 @@ class KubernetesProcessor {
 
             session.feed(Maps.fromProperties(config));
 
+            session.resources().decorate(OPENSHIFT, new AddLabelDecorator(new Label(OPENSHIFT_APP_RUNTIME, QUARKUS)));
             //Apply configuration
             applyGlobalConfig(session, kubernetesConfig);
             ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
-            applyConfig(session, project, KUBERNETES, kubernetesConfig.name.orElse(applicationInfo.getName()), kubernetesConfig,
-                    now);
-            applyConfig(session, project, OPENSHIFT, openshiftConfig.name.orElse(applicationInfo.getName()), openshiftConfig,
-                    now);
-            applyConfig(session, project, KNATIVE, knativeConfig.name.orElse(applicationInfo.getName()), knativeConfig, now);
+            applyConfig(session, KUBERNETES, kubernetesConfig.name.orElse(applicationInfo.getName()), kubernetesConfig, now);
+            applyConfig(session, OPENSHIFT, openshiftConfig.name.orElse(applicationInfo.getName()), openshiftConfig, now);
+            applyConfig(session, KNATIVE, knativeConfig.name.orElse(applicationInfo.getName()), knativeConfig, now);
 
             //apply build item configurations to the dekorate session.
             applyBuildItems(session,
@@ -194,6 +190,7 @@ class KubernetesProcessor {
                     openshiftConfig,
                     knativeConfig,
                     deploymentTargets,
+                    kubernetesEnvBuildItems,
                     kubernetesRoleBuildItems,
                     kubernetesPortBuildItems,
                     baseImageBuildItem,
@@ -241,7 +238,7 @@ class KubernetesProcessor {
                 FileUtil.deleteDirectory(root);
             }
         } catch (IOException e) {
-            log.debug("Unable to delete temporary directory " + root, e);
+            LOG.debug("Unable to delete temporary directory " + root, e);
         }
         featureProducer.produce(new FeatureBuildItem(FeatureBuildItem.KUBERNETES));
     }
@@ -266,36 +263,20 @@ class KubernetesProcessor {
      * @param config The {@link PlatformConfiguration} instance
      * @param now
      */
-    private void applyConfig(Session session, Project project, String target, String name, PlatformConfiguration config,
-            ZonedDateTime now) {
+    private void applyConfig(Session session, String target, String name, PlatformConfiguration config, ZonedDateTime now) {
         //Labels
         config.getLabels().forEach((key, value) -> {
             session.resources().decorate(target, new AddLabelDecorator(new Label(key, value)));
         });
 
-        if (OPENSHIFT.equals(target)) {
-            session.resources().decorate(OPENSHIFT, new AddLabelDecorator(new Label(OPENSHIFT_APP_RUNTIME, QUARKUS)));
-        }
-
         //Annotations
         config.getAnnotations().forEach((key, value) -> {
             session.resources().decorate(target, new AddAnnotationDecorator(new Annotation(key, value)));
         });
-
-        ScmInfo scm = project.getScmInfo();
-        String vcsUrl = scm != null ? scm.getUrl() : Annotations.UNKNOWN;
-        String commitId = scm != null ? scm.getCommit() : Annotations.UNKNOWN;
-
-        session.resources().decorate(target, new RemoveAnnotationDecorator(Annotations.VCS_URL));
-        session.resources().decorate(target, new RemoveAnnotationDecorator(Annotations.COMMIT_ID));
-        //Add quarkus vcs annotations
-        session.resources().decorate(target,
-                new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_COMMIT_ID, commitId)));
-        session.resources().decorate(target, new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_VCS_URL, vcsUrl)));
-
         if (config.isAddBuildTimestamp()) {
-            session.resources().decorate(target, new AddAnnotationDecorator(new Annotation(QUARKUS_ANNOTATIONS_BUILD_TIMESTAMP,
-                    now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd - HH:mm:ss Z")))));
+            session.resources().decorate(target,
+                    new AddAnnotationDecorator(new Annotation("build-timestamp",
+                            now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd - HH:mm:ss Z")))));
         }
 
         //EnvVars
@@ -381,6 +362,7 @@ class KubernetesProcessor {
             OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
             Set<String> deploymentTargets,
+            List<KubernetesEnvVarBuildItem> kubernetesEnvBuildItems,
             List<KubernetesRoleBuildItem> kubernetesRoleBuildItems,
             List<KubernetesPortBuildItem> kubernetesPortBuildItems,
             Optional<BaseImageInfoBuildItem> baseImageBuildItem,
@@ -403,6 +385,10 @@ class KubernetesProcessor {
                 .ifPresent(c -> session.resources().decorate(OPENSHIFT, new ApplyImageDecorator(openshiftName, c.getImage())));
         containerImageBuildItem
                 .ifPresent(c -> session.resources().decorate(KNATIVE, new ApplyImageDecorator(knativeName, c.getImage())));
+
+        //Handle env variables
+        kubernetesEnvBuildItems.forEach(e -> session.resources()
+                .decorate(new AddEnvVarDecorator(new EnvBuilder().withName(e.getName()).withValue(e.getValue()).build())));
 
         //Handle Command and arguments
         commandBuildItem.ifPresent(c -> {

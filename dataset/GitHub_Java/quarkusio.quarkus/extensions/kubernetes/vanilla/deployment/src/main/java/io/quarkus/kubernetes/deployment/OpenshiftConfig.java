@@ -105,7 +105,7 @@ public class OpenshiftConfig implements PlatformConfiguration {
     /**
      * Image pull policy
      */
-    @ConfigItem(defaultValue = "Always")
+    @ConfigItem(defaultValue = "IfNotPresent")
     ImagePullPolicy imagePullPolicy;
 
     /**
