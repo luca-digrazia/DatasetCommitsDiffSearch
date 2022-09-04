@@ -18,7 +18,6 @@ package org.graylog2.users;
 
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -287,12 +286,10 @@ public class UserImpl extends PersistedImpl implements User {
 
     public static class LocalAdminUser extends UserImpl {
         private final Configuration configuration;
-        private final Set<String> roles;
 
-        public LocalAdminUser(Configuration configuration, String adminRoleObjectId) {
+        public LocalAdminUser(Configuration configuration) {
             super(null, Collections.<String, Object>emptyMap());
             this.configuration = configuration;
-            this.roles = ImmutableSet.of(adminRoleObjectId);
         }
 
         @Override
@@ -352,7 +349,7 @@ public class UserImpl extends PersistedImpl implements User {
         @Nonnull
         @Override
         public Set<String> getRoleIds() {
-            return roles;
+            return Collections.emptySet();
         }
 
         @Override
