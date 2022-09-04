@@ -110,7 +110,8 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create("/platforms/WORKSPACE", "workspace(name = 'platforms')");
     config.create("/bazel_tools_workspace/WORKSPACE", "workspace(name = 'bazel_tools')");
     Runfiles runfiles = Runfiles.create();
-    for (String filename : Arrays.asList("tools/jdk/java_toolchain_alias.bzl")) {
+    for (String filename :
+        Arrays.asList("tools/jdk/toolchain_utils.bzl", "tools/jdk/java_toolchain_alias.bzl")) {
       java.nio.file.Path path = Paths.get(runfiles.rlocation("io_bazel/" + filename));
       if (!Files.exists(path)) {
         continue; // the io_bazel workspace root only exists for Bazel
@@ -174,6 +175,10 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "  name = 'TestRunner',",
         "  jars = ['TestRunner.jar'],",
         ")",
+        "java_import(",
+        "  name = 'ExperimentalTestRunner',",
+        "  jars = ['ExperimentalTestRunner.jar'],",
+        ")",
         "java_runtime(name = 'jdk', srcs = [])",
         "java_runtime(name = 'host_jdk', srcs = [])",
         "java_runtime(name = 'remote_jdk', srcs = [])",
@@ -191,7 +196,8 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "filegroup(name='JacocoCoverage', srcs = [])",
         "exports_files(['JavaBuilder_deploy.jar','SingleJar_deploy.jar','TestRunner_deploy.jar',",
         "               'JavaBuilderCanary_deploy.jar', 'ijar', 'GenClass_deploy.jar',",
-        "               'turbine_deploy.jar', 'TurbineDirect_deploy.jar'])",
+        "               'turbine_deploy.jar', 'TurbineDirect_deploy.jar',"
+            + " 'ExperimentalTestRunner_deploy.jar'])",
         "sh_binary(name = 'proguard_whitelister', srcs = ['empty.sh'])",
         "toolchain_type(name = 'toolchain_type')",
         "toolchain_type(name = 'runtime_toolchain_type')",
@@ -227,8 +233,12 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "filegroup(name = 'collect_coverage', srcs = ['collect_coverage.sh'])",
         "filegroup(name = 'collect_cc_coverage', srcs = ['collect_cc_coverage.sh'])",
         "filegroup(name='coverage_support', srcs=['collect_coverage.sh'])",
-        "filegroup(name = 'coverage_report_generator', srcs = ['coverage_report_generator.sh'])",
-        "filegroup(name = 'lcov_merger', srcs = ['lcov_merger.sh'])");
+        "filegroup(name = 'coverage_report_generator', srcs = ['coverage_report_generator.sh'])");
+
+    config.create(
+        "/bazel_tools_workspace/tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator/BUILD",
+        "filegroup(name='srcs', srcs = glob(['**']))",
+        "filegroup(name='Main', srcs = ['Main.java'])");
 
     // Use an alias package group to allow for modification at the simpler path
     config.create(
@@ -338,7 +348,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "android_sdk(",
         "    name = 'sdk',",
         "    aapt = ':static_aapt_tool',",
-        "    aapt2 = ':static_aapt2_tool',",
         "    adb = ':static_adb_tool',",
         "    aidl = ':static_aidl_tool',",
         "    android_jar = ':android_runtime_jar',",
