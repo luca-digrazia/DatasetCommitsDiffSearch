@@ -9,8 +9,9 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
+import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.video.DanmakuVideoPlayer;
-import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
+import com.example.gsyvideoplayer.video.SampleControlVideo;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
@@ -53,7 +54,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         danmakuVideoPlayer.setShrinkImageRes(R.drawable.custom_shrink);
         danmakuVideoPlayer.setEnlargeImageRes(R.drawable.custom_enlarge);
 
-        String url = "https://res.exexm.com/cw_145225549855002";
+        String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
         //String url = "https://res.exexm.com/cw_145225549855002";
         danmakuVideoPlayer.setUp(url, true, null, "测试视频");
 
@@ -89,7 +90,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             }
         });
 
-        danmakuVideoPlayer.setStandardVideoAllCallBack(new GSYSampleCallBack() {
+        danmakuVideoPlayer.setStandardVideoAllCallBack(new SampleListener() {
             @Override
             public void onPrepared(String url, Object... objects) {
                 super.onPrepared(url, objects);

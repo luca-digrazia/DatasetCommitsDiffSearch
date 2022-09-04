@@ -11,10 +11,10 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
+import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.video.LandLayoutVideo;
 import com.example.gsyvideoplayer.view.CustomInputDialog;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
-import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
@@ -55,7 +55,7 @@ public class InputUrlDetailActivity extends AppCompatActivity {
         setContentView(R.layout.activity_input_url_detail);
         ButterKnife.bind(this);
 
-        url = "https://res.exexm.com/cw_145225549855002";
+        url = "http://baobab.wdjcdn.com/14564977406580.mp4";
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -80,7 +80,7 @@ public class InputUrlDetailActivity extends AppCompatActivity {
                 .setUrl(url)
                 .setCacheWithPlay(cache)
                 .setVideoTitle("测试视频")
-                .setStandardVideoAllCallBack(new GSYSampleCallBack() {
+                .setStandardVideoAllCallBack(new SampleListener() {
                     @Override
                     public void onPrepared(String url, Object... objects) {
                         super.onPrepared(url, objects);
