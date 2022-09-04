@@ -165,7 +165,6 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       outErr.getErrorStream().write(("Action failed to execute: " + msg + "\n").getBytes(UTF_8));
       outErr.getErrorStream().flush();
       return new SpawnResult.Builder()
-          .setRunnerName(getName())
           .setStatus(Status.EXECUTION_FAILED)
           .setExitCode(LOCAL_EXEC_ERROR)
           .setFailureMessage(failureMessage)
@@ -186,7 +185,6 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
 
     SpawnResult.Builder spawnResultBuilder =
         new SpawnResult.Builder()
-            .setRunnerName(getName())
             .setStatus(status)
             .setExitCode(exitCode)
             .setWallTime(wallTime)
@@ -294,4 +292,6 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
   protected SandboxOptions getSandboxOptions() {
     return sandboxOptions;
   }
+
+  protected abstract String getName();
 }

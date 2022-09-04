@@ -85,12 +85,66 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   private final Path inaccessibleHelperDir;
   private final LocalEnvProvider localEnvProvider;
   private final Optional<Duration> timeoutKillDelay;
+  private final String productName;
+
+  /**
+   * Creates a sandboxed spawn runner that uses the {@code linux-sandbox} tool. If a spawn exceeds
+   * its timeout, then it will be killed instantly.
+   *
+   * @param cmdEnv the command environment to use
+   * @param sandboxBase path to the sandbox base directory
+   * @param productName the product name to use
+   * @param inaccessibleHelperFile path to a file that is (already) inaccessible
+   * @param inaccessibleHelperDir path to a directory that is (already) inaccessible
+   */
+  LinuxSandboxedSpawnRunner(
+      CommandEnvironment cmdEnv,
+      Path sandboxBase,
+      String productName,
+      Path inaccessibleHelperFile,
+      Path inaccessibleHelperDir) {
+    this(
+        cmdEnv,
+        sandboxBase,
+        productName,
+        inaccessibleHelperFile,
+        inaccessibleHelperDir,
+        Optional.empty());
+  }
+
+  /**
+   * Creates a sandboxed spawn runner that uses the {@code linux-sandbox} tool. If a spawn exceeds
+   * its timeout, then it will be killed after the specified delay.
+   *
+   * @param cmdEnv the command environment to use
+   * @param sandboxBase path to the sandbox base directory
+   * @param productName the product name to use
+   * @param inaccessibleHelperFile path to a file that is (already) inaccessible
+   * @param inaccessibleHelperDir path to a directory that is (already) inaccessible
+   * @param timeoutKillDelay an additional grace period before killing timing out commands
+   */
+  LinuxSandboxedSpawnRunner(
+      CommandEnvironment cmdEnv,
+      Path sandboxBase,
+      String productName,
+      Path inaccessibleHelperFile,
+      Path inaccessibleHelperDir,
+      Duration timeoutKillDelay) {
+    this(
+        cmdEnv,
+        sandboxBase,
+        productName,
+        inaccessibleHelperFile,
+        inaccessibleHelperDir,
+        Optional.of(timeoutKillDelay));
+  }
 
   /**
    * Creates a sandboxed spawn runner that uses the {@code linux-sandbox} tool.
    *
    * @param cmdEnv the command environment to use
    * @param sandboxBase path to the sandbox base directory
+   * @param productName the product name to use
    * @param inaccessibleHelperFile path to a file that is (already) inaccessible
    * @param inaccessibleHelperDir path to a directory that is (already) inaccessible
    * @param timeoutKillDelay an optional, additional grace period before killing timing out
@@ -99,6 +153,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   LinuxSandboxedSpawnRunner(
       CommandEnvironment cmdEnv,
       Path sandboxBase,
+      String productName,
       Path inaccessibleHelperFile,
       Path inaccessibleHelperDir,
       Optional<Duration> timeoutKillDelay) {
@@ -106,12 +161,13 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     this.fileSystem = cmdEnv.getRuntime().getFileSystem();
     this.blazeDirs = cmdEnv.getDirectories();
     this.execRoot = cmdEnv.getExecRoot();
+    this.productName = productName;
     this.allowNetwork = SandboxHelpers.shouldAllowNetwork(cmdEnv.getOptions());
     this.linuxSandbox = LinuxSandboxUtil.getLinuxSandbox(cmdEnv);
     this.inaccessibleHelperFile = inaccessibleHelperFile;
     this.inaccessibleHelperDir = inaccessibleHelperDir;
     this.timeoutKillDelay = timeoutKillDelay;
-    this.localEnvProvider = new PosixLocalEnvProvider(cmdEnv.getClientEnv());
+    this.localEnvProvider = PosixLocalEnvProvider.INSTANCE;
   }
 
   @Override
@@ -126,7 +182,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
     Path tmpDir = sandboxExecRoot.getRelative("tmp");
 
     Map<String, String> environment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir.getPathString());
+        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, tmpDir, productName);
 
     Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, environment);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
