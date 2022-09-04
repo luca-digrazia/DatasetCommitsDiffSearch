@@ -1,6 +1,21 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.maven;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -16,38 +31,28 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.project.MavenProject;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.collection.DependencyCollectionException;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.repository.RemoteRepository;
-
-import com.fasterxml.jackson.core.util.DefaultIndenter;
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.eclipse.aether.resolution.ArtifactDescriptorException;
+import org.eclipse.aether.resolution.ArtifactDescriptorRequest;
+import org.eclipse.aether.resolution.ArtifactDescriptorResult;
 
 import io.quarkus.bootstrap.BootstrapConstants;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.quarkus.bootstrap.resolver.maven.DependencyGraphParser;
 
 /**
- * Generates Quarkus extension descriptor for the runtime artifact.
- *
- * <p/>
- * Also generates META-INF/quarkus-extension.json which includes properties of
- * the extension such as name, labels, maven coordinates, etc that are used by
- * the tools.
  *
  * @author Alexey Loubyansky
  */
-@Mojo(name = "extension-descriptor", defaultPhase = LifecyclePhase.PROCESS_RESOURCES, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
+@Mojo(name = "extension-descriptor", defaultPhase = LifecyclePhase.COMPILE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class ExtensionDescriptorMojo extends AbstractMojo {
 
-    private static final String GROUP_ID = "group-id";
-    private static final String ARTIFACT_ID = "artifact-id";
-
-    private static DefaultPrettyPrinter prettyPrinter = null;
     /**
      * The entry point to Aether, i.e. the component doing all the work.
      *
@@ -66,13 +71,12 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
     private RepositorySystemSession repoSession;
 
     /**
-     * The project's remote repositories to use for the resolution of artifacts and
-     * their dependencies.
+     * The project's remote repositories to use for the resolution of artifacts and their dependencies.
      *
      * @parameter default-value="${project.remoteProjectRepositories}"
      * @readonly
      */
-    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true)
+    @Parameter( defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true )
     private List<RemoteRepository> repos;
 
     /**
@@ -81,174 +85,86 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
     @Parameter(readonly = true, required = true, defaultValue = "${project.build.outputDirectory}")
     private File outputDirectory;
 
-    @Parameter(required = true, defaultValue = "${project.groupId}:${project.artifactId}-deployment:${project.version}")
+    @Parameter(required = true)
     private String deployment;
-
-    @Parameter(required = true, defaultValue = "${project.build.outputDirectory}/META-INF/quarkus-extension.json")
-    private File extensionJson;
-
-    @Parameter(defaultValue = "${project}")
-    protected MavenProject project;
 
     @Override
     public void execute() throws MojoExecutionException {
 
-        prettyPrinter = new DefaultPrettyPrinter();
-        prettyPrinter.indentArraysWith(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
-
         final Properties props = new Properties();
         props.setProperty(BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT, deployment);
+
         final Path output = outputDirectory.toPath().resolve(BootstrapConstants.META_INF);
         try {
             Files.createDirectories(output);
-            try (BufferedWriter writer = Files
-                    .newBufferedWriter(output.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME))) {
+            try (BufferedWriter writer = Files.newBufferedWriter(output.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME))) {
                 props.store(writer, "Generated by extension-descriptor");
             }
+        } catch(IOException e) {
+            throw new MojoExecutionException("Failed to persist extension descriptor " + output.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME), e);
+        }
+
+        persistDependencyGraph(output);
+    }
+
+    private void persistDependencyGraph(Path output) throws MojoExecutionException {
+
+        final Artifact artifact = DependencyGraphParser.toArtifact(deployment);
+
+        final ArtifactDescriptorRequest descrReq = new ArtifactDescriptorRequest();
+        descrReq.setArtifact(artifact);
+        final ArtifactDescriptorResult artDescr;
+        try {
+            artDescr = repoSystem.readArtifactDescriptor(repoSession, descrReq);
+        } catch (ArtifactDescriptorException e) {
+            throw new MojoExecutionException("Failed to read descriptor of " + artifact, e);
+        }
+
+        final CollectRequest collectRequest = new CollectRequest();
+        collectRequest.setRoot(new Dependency(artifact, "runtime"));
+        collectRequest.setRepositories(artDescr.getRepositories());
+        final DependencyNode root;
+        try {
+            root = repoSystem.collectDependencies(repoSession, collectRequest).getRoot();
+        } catch (DependencyCollectionException e) {
+            throw new MojoExecutionException("Failed to collect dependencies for " + artifact, e);
+        }
+
+        try(BufferedWriter writer = Files.newBufferedWriter(output.resolve(BootstrapConstants.DEPLOYMENT_DEPENDENCY_GRAPH))) {
+            persistNode(root, writer, 0);
         } catch (IOException e) {
-            throw new MojoExecutionException(
-                    "Failed to persist extension descriptor " + output.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME),
-                    e);
-        }
-
-        // extension.json
-        ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-        ObjectNode extObject;
-        if (extensionJson == null) {
-            extensionJson = new File(outputDirectory,
-                    "META-INF" + File.separator + BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME);
-        }
-
-        if (extensionJson.exists()) {
-            try (BufferedReader reader = Files.newBufferedReader(extensionJson.toPath())) {
-                extObject = (ObjectNode) mapper.readTree(reader);
-            } catch (IOException e) {
-                throw new MojoExecutionException("Failed to parse " + extensionJson, e);
-            }
-        } else {
-            extObject = mapper.createObjectNode();
-        }
-
-        transformLegacyToNew(output, extObject, mapper);
-
-        if (extObject.get("groupId") == null) {
-            extObject.put(GROUP_ID, project.getGroupId());
-        }
-        if (extObject.get("artifactId") == null) {
-            extObject.put(ARTIFACT_ID, project.getArtifactId());
-        }
-        if (extObject.get("version") == null) {
-            extObject.put("version", project.getVersion());
-        }
-        if (extObject.get("name") == null) {
-            if (project.getName() != null) {
-                extObject.put("name", project.getName());
-            } else {
-                JsonNode node = extObject.get(ARTIFACT_ID);
-                String defaultName = node.asText();
-                int i = 0;
-                if (defaultName.startsWith("quarkus-")) {
-                    i = "quarkus-".length();
-                }
-                final StringBuilder buf = new StringBuilder();
-                boolean startWord = true;
-                while (i < defaultName.length()) {
-                    final char c = defaultName.charAt(i++);
-                    if (c == '-') {
-                        if (!startWord) {
-                            buf.append(' ');
-                            startWord = true;
-                        }
-                    } else if (startWord) {
-                        buf.append(Character.toUpperCase(c));
-                        startWord = false;
-                    } else {
-                        buf.append(c);
-                    }
-                }
-                defaultName = buf.toString();
-                getLog().warn("Extension name has not been provided for " + extObject.get(GROUP_ID).asText("") + ":"
-                        + extObject.get("artifact-id").asText("") + "! Using '" + defaultName
-                        + "' as the default one.");
-                extObject.put("name", defaultName);
-            }
-        }
-        if (extObject.has("description") && project.getDescription() != null) {
-            extObject.put("description", project.getDescription());
-        }
-
-        try (BufferedWriter bw = Files
-                .newBufferedWriter(output.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME))) {
-            bw.write(mapper.writer(prettyPrinter).writeValueAsString(extObject));
-        } catch (IOException e) {
-            throw new MojoExecutionException(
-                    "Failed to persist " + output.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME), e);
+            throw new MojoExecutionException("Failed to persist " + BootstrapConstants.DEPLOYMENT_DEPENDENCY_GRAPH, e);
         }
     }
 
-    private void transformLegacyToNew(final Path output, ObjectNode extObject, ObjectMapper mapper)
-            throws MojoExecutionException {
-        ObjectNode metadata = null;
-
-        // Note: groupId and artifactId shouldn't normally be in the source json but
-        // just putting it
-        // here for completenes
-        if (extObject.get("groupId") != null) {
-            extObject.set(GROUP_ID, extObject.get("groupId"));
-            extObject.remove("groupId");
+    private static void persistNode(DependencyNode node, BufferedWriter writer, int depth) throws IOException {
+        for(int i = 0; i < depth; ++i) {
+            writer.append(' ');
         }
-
-        if (extObject.get("artifactId") != null) {
-            extObject.set(ARTIFACT_ID, extObject.get("artifactId"));
-            extObject.remove("artifactId");
+        final Artifact artifact= node.getArtifact();
+        writer.write(artifact.getGroupId());
+        writer.write(':');
+        writer.write(artifact.getArtifactId());
+        writer.write(':');
+        final String classifier = artifact.getClassifier();
+        if(classifier != null && !classifier.isEmpty()) {
+            writer.write(classifier);
+            writer.write(':');
         }
-
-        JsonNode mvalue = extObject.get("metadata");
-        if (mvalue != null && mvalue.isObject()) {
-            metadata = (ObjectNode) mvalue;
-        } else {
-            metadata = mapper.createObjectNode();
+        writer.write(artifact.getExtension());
+        writer.write(':');
+        writer.write(artifact.getVersion());
+        writer.write('(');
+        writer.write(node.getDependency().getScope());
+        writer.write(')');
+        writer.newLine();
+        final List<DependencyNode> children = node.getChildren();
+        if(children.isEmpty()) {
+            return;
         }
-
-        if (extObject.get("labels") != null) {
-            metadata.set("keywords", extObject.get("labels"));
-            extObject.remove("labels");
+        ++depth;
+        for(DependencyNode child : children) {
+            persistNode(child, writer, depth);
         }
-
-        if (extObject.get("guide") != null) {
-            metadata.set("guide", extObject.get("guide"));
-            extObject.remove("guide");
-        }
-
-        if (extObject.get("shortName") != null) {
-            metadata.set("short-name", extObject.get("shortName"));
-            extObject.remove("shortName");
-        }
-
-        extObject.set("metadata", metadata);
-
-        // TODO: remove before going to master
-        Path source = output
-                .resolve("../../../src/main/resources/META-INF/");
-        System.out.println("Try to save " + source);
-        if (source.toFile().exists()) {
-            try (BufferedWriter bw = Files
-                    .newBufferedWriter(source.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME));
-                    BufferedWriter by = Files.newBufferedWriter(source.resolve("quarkus-descriptor.yaml"))) {
-                String json = mapper.writer(prettyPrinter).writeValueAsString(extObject);
-                bw.write(json);
-
-                YAMLFactory yf = new YAMLFactory();
-                ObjectMapper ym = new ObjectMapper(yf).enable(SerializationFeature.INDENT_OUTPUT);
-                by.write(ym.writer(prettyPrinter).writeValueAsString(extObject));
-
-                //source.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME).toFile().delete();
-            } catch (IOException e) {
-                throw new MojoExecutionException(
-                        "Failed to persist " + output.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME), e);
-            }
-        }
-
     }
-
 }
