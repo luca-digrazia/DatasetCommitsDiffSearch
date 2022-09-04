@@ -93,9 +93,9 @@ final class Eval {
     EvalUtils.addIterator(o);
     try {
       for (Object it : seq) {
-        assign(fr, node.getVars(), it);
+        assign(fr, node.getLHS(), it);
 
-        switch (execStatements(fr, node.getBody(), /*indented=*/ true)) {
+        switch (execStatements(fr, node.getBlock(), /*indented=*/ true)) {
           case PASS:
           case CONTINUE:
             // Stay in loop.
@@ -127,9 +127,9 @@ final class Eval {
     // They may be discontinuous:
     // def f(a, b=1, *, c, d=2) has a defaults tuple of (1, 2).
     // TODO(adonovan): record the gaps (e.g. c) with a sentinel
-    // to simplify StarlarkFunction.matchSignature.
+    // to simplify Starlark.matchSignature.
     Tuple<Object> defaults = Tuple.empty();
-    int ndefaults = sig.numOptionals();
+    int ndefaults = node.getSignature().numOptionals();
     if (ndefaults > 0) {
       Object[] array = new Object[ndefaults];
       for (int i = sig.numMandatoryPositionals(), j = 0; i < sig.numParameters(); i++) {
@@ -149,7 +149,7 @@ final class Eval {
             node.getIdentifier().getStartLocation(),
             sig,
             defaults,
-            node.getBody(),
+            node.getStatements(),
             fn(fr).getModule()));
   }
 
@@ -209,9 +209,9 @@ final class Eval {
 
   private static TokenKind execReturn(StarlarkThread.Frame fr, ReturnStatement node)
       throws EvalException, InterruptedException {
-    Expression result = node.getResult();
-    if (result != null) {
-      fr.result = eval(fr, result);
+    Expression ret = node.getReturnExpression();
+    if (ret != null) {
+      fr.result = eval(fr, ret);
     }
     return TokenKind.RETURN;
   }
@@ -289,14 +289,14 @@ final class Eval {
       assignSequence(fr, list.getElements(), value);
 
     } else {
-      // Not possible for resolved ASTs.
+      // Not possible for validated ASTs.
       throw Starlark.errorf("cannot assign to '%s'", lhs);
     }
   }
 
   private static void assignIdentifier(StarlarkThread.Frame fr, Identifier id, Object value)
       throws EvalException {
-    Resolver.Scope scope = id.getScope();
+    ValidationEnvironment.Scope scope = id.getScope();
     // Legacy hack for incomplete identifier resolution.
     // In a <toplevel> function, assignments to unresolved identifiers
     // update the module, except for load statements and comprehensions,
@@ -307,8 +307,8 @@ final class Eval {
     if (scope == null) {
       scope =
           fn(fr).isToplevel && fr.compcount == 0
-              ? Resolver.Scope.Module //
-              : Resolver.Scope.Local;
+              ? ValidationEnvironment.Scope.Module //
+              : ValidationEnvironment.Scope.Local;
     }
 
     String name = id.getName();
@@ -393,7 +393,7 @@ final class Eval {
           stmt.getOperatorLocation(), "cannot perform augmented assignment on a list literal");
 
     } else {
-      // Not possible for resolved ASTs.
+      // Not possible for validated ASTs.
       throw new EvalException(
           stmt.getOperatorLocation(), "cannot perform augmented assignment on '" + lhs + "'");
     }
@@ -621,7 +621,7 @@ final class Eval {
         return result;
       }
 
-      // Assuming resolution was successfully applied before execution
+      // Assuming validation was successfully applied before execution
       // (which is not yet true for copybara, but will be soon),
       // then the identifier must have been resolved but the
       // resolution was not annotated onto the syntax tree---because
@@ -651,7 +651,7 @@ final class Eval {
     if (result == null) {
       // Since Scope was set, we know that the variable is defined in the scope.
       // However, the assignment was not yet executed.
-      String error = Resolver.getErrorForObsoleteThreadLocalVars(id.getName());
+      String error = ValidationEnvironment.getErrorForObsoleteThreadLocalVars(id.getName());
       if (error == null) {
         error =
             id.getScope().getQualifier()
