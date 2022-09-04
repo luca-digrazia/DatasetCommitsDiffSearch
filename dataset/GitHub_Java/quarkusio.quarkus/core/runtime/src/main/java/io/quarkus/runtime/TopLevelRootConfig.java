@@ -1,7 +1,5 @@
 package io.quarkus.runtime;
 
-import java.util.Optional;
-
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -17,9 +15,7 @@ public class TopLevelRootConfig {
 
     /**
      * Profile that will be active when Quarkus launches
-     *
-     * Default value is 'prod'
      */
-    @ConfigItem
-    Optional<String> profile;
+    @ConfigItem(defaultValue = "prod")
+    String profile;
 }
