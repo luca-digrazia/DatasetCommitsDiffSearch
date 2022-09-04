@@ -103,8 +103,8 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
    * SandboxedSpawnStrategy.StopConcurrentSpawns} lambda passed to the spawn runners. Each strategy
    * may call this at most once.
    *
-   * @param branch the future of the branch running the spawn
-   * @param branchDone semaphore that is expected to receive a permit once {@code branch} terminates
+   * @param branch the future running the spawn
+   * @param branchDone semaphore that is expected to receive a permit once the future terminates
    *     (after {@link InterruptedException} bubbles up through its call stack)
    * @param cancellingStrategy identifier of the strategy that is performing the cancellation. Used
    *     to prevent cross-cancellations and to sanity-check that the same strategy doesn't issue the
@@ -126,7 +126,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     // value of "cancellingStrategy", we do not expect concurrent calls to this method. (If there
     // are, we are in big trouble.)
     String current = strategyThatCancelled.get();
-    if (cancellingStrategy.equals(current)) {
+    if (current != null && current.equals(cancellingStrategy)) {
       throw new AssertionError("stopBranch called more than once by " + cancellingStrategy);
     } else {
       // Protect against the two branches from cancelling each other. The first branch to set the
@@ -242,8 +242,8 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     AtomicReference<String> strategyThatCancelled = new AtomicReference<>(null);
     SettableFuture<ImmutableList<SpawnResult>> remoteBranch = SettableFuture.create();
 
-    AtomicBoolean localStarting = new AtomicBoolean(true);
-    AtomicBoolean remoteStarting = new AtomicBoolean(true);
+    AtomicBoolean localCanReportDone = new AtomicBoolean(false);
+    AtomicBoolean remoteCanReportDone = new AtomicBoolean(false);
 
     ListenableFuture<ImmutableList<SpawnResult>> localBranch =
         executorService.submit(
@@ -252,9 +252,9 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
               ImmutableList<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
                 try {
-                  if (!localStarting.compareAndSet(true, false)) {
-                    // If we ever get here, it's because we were cancelled early and the listener
-                    // ran first. Just make sure that's the case.
+                  if (!localCanReportDone.compareAndSet(false, true)) {
+                    // If we ever get here, it's because we were cancelled and the listener ran
+                    // first. Just make sure that's the case.
                     checkState(Thread.interrupted());
                     throw new InterruptedException();
                   }
@@ -272,9 +272,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
             });
     localBranch.addListener(
         () -> {
-          if (localStarting.compareAndSet(true, false)) {
-            // If the local branch got cancelled before even starting, we release its semaphore for
-            // it.
+          if (localCanReportDone.compareAndSet(false, true)) {
             localDone.release();
           }
           if (!localBranch.isCancelled()) {
@@ -290,9 +288,9 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
               public ImmutableList<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
                 try {
-                  if (!remoteStarting.compareAndSet(true, false)) {
-                    // If we ever get here, it's because we were cancelled early and the listener
-                    // ran first. Just make sure that's the case.
+                  if (!remoteCanReportDone.compareAndSet(false, true)) {
+                    // If we ever get here, it's because we were cancelled and the listener ran
+                    // first. Just make sure that's the case.
                     checkState(Thread.interrupted());
                     throw new InterruptedException();
                   }
@@ -311,9 +309,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
             }));
     remoteBranch.addListener(
         () -> {
-          if (remoteStarting.compareAndSet(true, false)) {
-            // If the remote branch got cancelled before even starting, we release its semaphore for
-            // it.
+          if (remoteCanReportDone.compareAndSet(false, true)) {
             remoteDone.release();
           }
           if (!remoteBranch.isCancelled()) {

@@ -88,6 +88,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private final ExtendedEventHandler reporter;
   private final SpawnRunner fallbackRunner;
   private final LocalEnvProvider localEnvProvider;
+  private final boolean sandboxUsesExpandedTreeArtifactsInRunfiles;
   private final BinTools binTools;
   private final ResourceManager resourceManager;
   private final RunfilesTreeUpdater runfilesTreeUpdater;
@@ -100,6 +101,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
       ExtendedEventHandler reporter,
       SpawnRunner fallbackRunner,
       LocalEnvProvider localEnvProvider,
+      boolean sandboxUsesExpandedTreeArtifactsInRunfiles,
       BinTools binTools,
       ResourceManager resourceManager,
       RunfilesTreeUpdater runfilesTreeUpdater) {
@@ -110,6 +112,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     this.reporter = reporter;
     this.fallbackRunner = fallbackRunner;
     this.localEnvProvider = localEnvProvider;
+    this.sandboxUsesExpandedTreeArtifactsInRunfiles = sandboxUsesExpandedTreeArtifactsInRunfiles;
     this.binTools = binTools;
     this.resourceManager = resourceManager;
     this.runfilesTreeUpdater = runfilesTreeUpdater;
@@ -190,7 +193,10 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     SandboxInputs inputFiles =
         helpers.processInputFiles(
-            context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
+            context.getInputMapping(sandboxUsesExpandedTreeArtifactsInRunfiles),
+            spawn,
+            context.getArtifactExpander(),
+            execRoot);
     SandboxOutputs outputs = helpers.getOutputs(spawn);
 
     WorkerKey key =
