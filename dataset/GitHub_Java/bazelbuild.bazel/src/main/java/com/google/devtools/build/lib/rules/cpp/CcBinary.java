@@ -108,7 +108,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     Runfiles.Builder builder = new Runfiles.Builder(
         context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
     Function<TransitiveInfoCollection, Runfiles> runfilesMapping =
-        CcRunfilesInfo.runfilesFunction(linkStaticness != LinkStaticness.DYNAMIC);
+        CppRunfilesProvider.runfilesFunction(linkStaticness != LinkStaticness.DYNAMIC);
     builder.addTransitiveArtifacts(filesToBuild);
     // Add the shared libraries to the runfiles. This adds any shared libraries that are in the
     // srcs of this target.
@@ -896,8 +896,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(ccCompilationContextInfo)
         .addProvider(TransitiveLipoInfoProvider.class, transitiveLipoInfo)
-        .addNativeDeclaredProvider(
-            new CcExecutionDynamicLibrariesInfo(
+        .addProvider(
+            CcExecutionDynamicLibrariesProvider.class,
+            new CcExecutionDynamicLibrariesProvider(
                 collectExecutionDynamicLibraryArtifacts(
                     ruleContext, linkingOutputs.getExecutionDynamicLibraries())))
         .addProvider(
@@ -932,11 +933,11 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       return NestedSetBuilder.wrap(Order.STABLE_ORDER, artifacts);
     }
 
-    Iterable<CcExecutionDynamicLibrariesInfo> deps =
-        ruleContext.getPrerequisites("deps", Mode.TARGET, CcExecutionDynamicLibrariesInfo.PROVIDER);
+    Iterable<CcExecutionDynamicLibrariesProvider> deps = ruleContext
+        .getPrerequisites("deps", Mode.TARGET, CcExecutionDynamicLibrariesProvider.class);
 
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
-    for (CcExecutionDynamicLibrariesInfo dep : deps) {
+    for (CcExecutionDynamicLibrariesProvider dep : deps) {
       builder.addTransitive(dep.getExecutionDynamicLibraryArtifacts());
     }
     return builder.build();

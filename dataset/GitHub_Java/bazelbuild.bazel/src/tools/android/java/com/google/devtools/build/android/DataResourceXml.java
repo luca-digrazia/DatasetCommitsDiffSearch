@@ -22,7 +22,6 @@ import com.android.resources.ResourceType;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.android.AndroidCompiledDataDeserializer.ReferenceResolver;
 import com.google.devtools.build.android.FullyQualifiedName.Factory;
 import com.google.devtools.build.android.FullyQualifiedName.VirtualType;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
@@ -46,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Objects;
 import javax.xml.stream.FactoryConfigurationError;
 import javax.xml.stream.XMLEventReader;
@@ -173,11 +173,13 @@ public class DataResourceXml implements DataResource {
       Value protoValue,
       DataSource source,
       ResourceType resourceType,
-      ReferenceResolver packageResolver)
+      Map<String, Boolean> fullyQualifiedNames)
       throws InvalidProtocolBufferException {
     DataResourceXml dataResourceXml =
         createWithNamespaces(
-            source, valueFromProto(protoValue, resourceType, packageResolver), Namespaces.empty());
+            source,
+            valueFromProto(protoValue, resourceType, fullyQualifiedNames),
+            Namespaces.empty());
     return dataResourceXml;
   }
 
@@ -209,7 +211,7 @@ public class DataResourceXml implements DataResource {
   }
 
   private static XmlResourceValue valueFromProto(
-      Value proto, ResourceType resourceType, ReferenceResolver packageResolver)
+      Value proto, ResourceType resourceType, Map<String, Boolean> qualifiedReferenceToInlineStatus)
       throws InvalidProtocolBufferException {
     switch (resourceType) {
       case STYLE:
@@ -221,7 +223,7 @@ public class DataResourceXml implements DataResource {
       case ATTR:
         return AttrXmlResourceValue.from(proto);
       case STYLEABLE:
-        return StyleableXmlResourceValue.from(proto, packageResolver);
+        return StyleableXmlResourceValue.from(proto, qualifiedReferenceToInlineStatus);
       case ID:
         return IdXmlResourceValue.of();
       case DIMEN:

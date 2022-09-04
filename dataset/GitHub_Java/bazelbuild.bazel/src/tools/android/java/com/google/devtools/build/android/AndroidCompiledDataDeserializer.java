@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Predicates.not;
 import static java.util.stream.Collectors.toList;
 
 import android.aapt.pb.internal.ResourcesInternal.CompiledFile;
@@ -30,7 +28,6 @@ import com.android.aapt.ConfigurationOuterClass.Configuration.UiModeNight;
 import com.android.aapt.ConfigurationOuterClass.Configuration.UiModeType;
 import com.android.aapt.Resources;
 import com.android.aapt.Resources.ConfigValue;
-import com.android.aapt.Resources.Entry;
 import com.android.aapt.Resources.Package;
 import com.android.aapt.Resources.ResourceTable;
 import com.android.aapt.Resources.Type;
@@ -83,7 +80,6 @@ import com.google.devtools.build.android.FullyQualifiedName.Factory;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.Header;
 import com.google.devtools.build.android.xml.ResourcesAttribute.AttributeType;
-import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -101,12 +97,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import javax.annotation.concurrent.NotThreadSafe;
 
 /** Deserializes {@link DataKey}, {@link DataValue} entries from compiled resource files. */
 public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer {
@@ -253,20 +247,14 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     resourceTableStream.read(tableBytes, 0, (int) alignedSize);
     ResourceTable resourceTable = ResourceTable.parseFrom(tableBytes);
 
-    readPackages(consumers, resourceTable);
-  }
-
-  private void readPackages(KeyValueConsumers consumers, ResourceTable resourceTable)
-      throws UnsupportedEncodingException, InvalidProtocolBufferException {
     List<String> sourcePool =
         decodeSourcePool(resourceTable.getSourcePool().getData().toByteArray());
-    ReferenceResolver resolver = ReferenceResolver.asRoot();
+
+    Map<String, Boolean> qualifiedReferenceInlineStatus = new HashMap<>();
 
     for (int i = resourceTable.getPackageCount() - 1; i >= 0; i--) {
       Package resourceTablePackage = resourceTable.getPackage(i);
 
-      ReferenceResolver packageResolver =
-          resolver.resolveFor(resourceTablePackage.getPackageName());
       String packageName = resourceTablePackage.getPackageName();
 
       for (Type resourceFormatType : resourceTablePackage.getTypeList()) {
@@ -276,7 +264,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
           if (resource.getConfigValueList().isEmpty()
               && resource.getVisibility().getLevel() == Level.PUBLIC) {
 
-            // This is a public resource definition.
+            // Public resource definition.
             int sourceIndex = resource.getVisibility().getSource().getPathIdx();
 
             String source = sourcePool.get(sourceIndex);
@@ -286,14 +274,18 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
                 DataResourceXml.fromPublic(dataSource, resourceType, resource.getEntryId().getId());
             final FullyQualifiedName fqn =
                 createAndRecordFqn(
-                    packageResolver, packageName, resourceType, resource, ImmutableList.of());
+                    qualifiedReferenceInlineStatus,
+                    packageName,
+                    resourceType,
+                    resource,
+                    ImmutableList.of());
             consumers.combiningConsumer.accept(fqn, dataResourceXml);
           } else if (!"android".equals(packageName)) {
             // This means this resource is not in the android sdk, add it to the set.
             for (ConfigValue configValue : resource.getConfigValueList()) {
               FullyQualifiedName fqn =
                   createAndRecordFqn(
-                      packageResolver,
+                      qualifiedReferenceInlineStatus,
                       packageName,
                       resourceType,
                       resource,
@@ -305,23 +297,24 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
               DataSource dataSource = DataSource.of(Paths.get(source));
 
               Value resourceValue = resource.getConfigValue(0).getValue();
-
-              DataResource dataResource =
-                  resourceValue.getItem().hasFile()
-                      ? DataValueFile.of(dataSource)
-                      : DataResourceXml.from(
-                          resourceValue, dataSource, resourceType, packageResolver);
+              DataResourceXml dataResourceXml =
+                  DataResourceXml.from(
+                      resourceValue, dataSource, resourceType, qualifiedReferenceInlineStatus);
 
               if (!fqn.isOverwritable()) {
-                consumers.combiningConsumer.accept(fqn, dataResource);
+                consumers.combiningConsumer.accept(fqn, dataResourceXml);
               } else {
-                consumers.overwritingConsumer.accept(fqn, dataResource);
+                consumers.overwritingConsumer.accept(fqn, dataResourceXml);
               }
             }
           } else {
             // In the sdk, just add the fqn for styleables
             createAndRecordFqn(
-                    packageResolver, packageName, resourceType, resource, ImmutableList.of())
+                    qualifiedReferenceInlineStatus,
+                    packageName,
+                    resourceType,
+                    resource,
+                    ImmutableList.of())
                 .toPrettyString();
           }
         }
@@ -329,76 +322,22 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     }
   }
 
-  /** Maintains state for all references in each package of a resource table. */
-  @NotThreadSafe
-  public static class ReferenceResolver {
-
-    enum InlineStatus {
-      INLINEABLE,
-      INLINED,
-    }
-
-    private final Optional<String> packageName;
-    private final Map<FullyQualifiedName, InlineStatus> qualifiedReferenceInlineStatus;
-
-    private ReferenceResolver(
-        Optional<String> packageName,
-        Map<FullyQualifiedName, InlineStatus> qualifiedReferenceInlineStatus) {
-      this.packageName = packageName;
-      this.qualifiedReferenceInlineStatus = qualifiedReferenceInlineStatus;
-    }
-
-    static ReferenceResolver asRoot() {
-      return new ReferenceResolver(Optional.empty(), new HashMap<>());
-    }
-
-    public ReferenceResolver resolveFor(String packageName) {
-      return new ReferenceResolver(
-          Optional.of(packageName).filter(not(String::isEmpty)), qualifiedReferenceInlineStatus);
-    }
-
-    public FullyQualifiedName parse(String reference) {
-      return FullyQualifiedName.fromReference(reference, packageName);
-    }
-
-    public FullyQualifiedName register(FullyQualifiedName fullyQualifiedName) {
-      // The default is that the name can be inlined.
-      qualifiedReferenceInlineStatus.put(fullyQualifiedName, InlineStatus.INLINEABLE);
-      return fullyQualifiedName;
-    }
-
-    /** Indicates if a reference can be inlined in a styleable. */
-    public boolean shouldInline(FullyQualifiedName reference) {
-      return checkNotNull(
-                  qualifiedReferenceInlineStatus.get(reference),
-                  "%s reference is unsatisfied. Available names: %s",
-                  reference,
-                  qualifiedReferenceInlineStatus.keySet())
-              .equals(InlineStatus.INLINEABLE)
-          // Only inline if it's in the current package.
-          && reference.isInPackage(packageName.orElse(FullyQualifiedName.DEFAULT_PACKAGE));
-    }
-
-    /** Update the reference's inline state. */
-    public FullyQualifiedName markInlined(FullyQualifiedName reference) {
-      qualifiedReferenceInlineStatus.put(reference, InlineStatus.INLINED);
-      return reference;
-    }
-  }
-
   private FullyQualifiedName createAndRecordFqn(
-      ReferenceResolver packageResolver,
+      Map<String, Boolean> qualifiedReferenceInlineStatus,
       String packageName,
       ResourceType resourceType,
-      Entry resource,
-      List<String> qualifiers) {
+      Resources.Entry resource,
+      List<String> of) {
+    Preconditions.checkArgument(!packageName.contains(":"));
     final FullyQualifiedName fqn =
         FullyQualifiedName.of(
             packageName.isEmpty() ? FullyQualifiedName.DEFAULT_PACKAGE : packageName,
-            qualifiers,
+            of,
             resourceType,
             resource.getName());
-    packageResolver.register(fqn);
+    // Record if the definition of the attr is defined in styleable.
+    // Currently, we consider any reference without a package as being defined inline.
+    qualifiedReferenceInlineStatus.put(fqn.asQualifiedReference(), packageName.isEmpty());
     return fqn;
   }
 
@@ -419,11 +358,9 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
                   protoConfig.getMnc() == 0xffff ? 0 : protoConfig.getMnc())));
     }
 
+    // locales are the wild, wild west: no enums.
     if (!protoConfig.getLocale().isEmpty()) {
-      // The proto stores it in a BCP-47 format, but the parser requires a b+ and all the - as +.
-      // It's a nice a little impedance mismatch.
-      new LocaleQualifier()
-          .checkAndSet("b+" + protoConfig.getLocale().replaceAll("-", "+"), configuration);
+      new LocaleQualifier().checkAndSet(protoConfig.getLocale(), configuration);
     }
 
     if (LAYOUT_DIRECTION_MAP.containsKey(protoConfig.getLayoutDirection())) {
@@ -602,11 +539,6 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
         consumers.overwritingConsumer.accept(fullyQualifiedName, dataResourceXml);
       }
     }
-  }
-
-  public void readTable(InputStream in, KeyValueConsumers consumers) throws IOException {
-    final ResourceTable resourceTable = ResourceTable.parseFrom(in);
-    readPackages(consumers, resourceTable);
   }
 
   @Override
