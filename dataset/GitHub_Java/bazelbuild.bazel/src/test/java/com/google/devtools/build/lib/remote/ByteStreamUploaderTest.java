@@ -205,7 +205,6 @@ public class ByteStreamUploaderTest {
     withEmptyMetadata.detach(prevContext);
   }
 
-  @Ignore
   @Test(timeout = 20000)
   public void multipleBlobsUploadShouldWork() throws Exception {
     Context prevContext = withEmptyMetadata.attach();
