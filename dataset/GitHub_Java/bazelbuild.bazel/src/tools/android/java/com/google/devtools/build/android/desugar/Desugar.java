@@ -33,8 +33,8 @@ import com.google.devtools.build.android.desugar.CoreLibraryRewriter.Unprefixing
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser;
 import com.google.errorprone.annotations.MustBeClosed;
 import java.io.IOError;
 import java.io.IOException;
@@ -65,7 +65,7 @@ import org.objectweb.asm.tree.ClassNode;
 class Desugar {
 
   /** Commandline options for {@link Desugar}. */
-  public static class DesugarOptions extends OptionsBase {
+  public static class Options extends OptionsBase {
     @Option(
       name = "input",
       allowMultiple = true,
@@ -229,22 +229,9 @@ class Desugar {
       help = "Enables rewriting to desugar java.* classes."
     )
     public boolean coreLibrary;
-
-    /** Set to work around b/62623509 with JaCoCo versions prior to 0.7.9. */
-    // TODO(kmb): Remove when Android Studio doesn't need it anymore (see b/37116789)
-    @Option(
-      name = "legacy_jacoco_fix",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Consider setting this flag if you're using JaCoCo versions prior to 0.7.9 to work "
-          + "around issues with coverage instrumentation in default and static interface methods. "
-          + "This flag may be removed when no longer needed."
-    )
-    public boolean legacyJacocoFix;
   }
 
-  private final DesugarOptions options;
+  private final Options options;
   private final CoreLibraryRewriter rewriter;
   private final LambdaClassMaker lambdas;
   private final GeneratedClassStore store;
@@ -260,7 +247,7 @@ class Desugar {
   /** An instance of Desugar is expected to be used ONLY ONCE */
   private boolean used;
 
-  private Desugar(DesugarOptions options, Path dumpDirectory) {
+  private Desugar(Options options, Path dumpDirectory) {
     this.options = options;
     this.rewriter = new CoreLibraryRewriter(options.coreLibrary ? "__desugar__/" : "");
     this.lambdas = new LambdaClassMaker(dumpDirectory);
@@ -524,8 +511,7 @@ class Desugar {
       if (options.desugarInterfaceMethodBodiesIfNeeded) {
         visitor =
             new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader, loader);
-        visitor =
-            new InterfaceDesugaring(visitor, bootclasspathReader, store, options.legacyJacocoFix);
+        visitor = new InterfaceDesugaring(visitor, bootclasspathReader, store);
       }
     }
     visitor =
@@ -575,8 +561,7 @@ class Desugar {
         if (options.desugarInterfaceMethodBodiesIfNeeded) {
           visitor =
               new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader, loader);
-          visitor =
-              new InterfaceDesugaring(visitor, bootclasspathReader, store, options.legacyJacocoFix);
+          visitor = new InterfaceDesugaring(visitor, bootclasspathReader, store);
         }
       }
       // LambdaDesugaring is relatively expensive, so check first whether we need it.  Additionally,
@@ -605,7 +590,7 @@ class Desugar {
     Path dumpDirectory = createAndRegisterLambdaDumpDirectory();
     verifyLambdaDumpDirectoryRegistered(dumpDirectory);
 
-    DesugarOptions options = parseCommandLineOptions(args);
+    Options options = parseCommandLineOptions(args);
     if (options.verbose) {
       System.out.printf("Lambda classes will be written under %s%n", dumpDirectory);
     }
@@ -661,13 +646,16 @@ class Desugar {
     return dumpDirectory;
   }
 
-  private static DesugarOptions parseCommandLineOptions(String[] args) throws IOException {
+  private static Options parseCommandLineOptions(String[] args) throws IOException {
     if (args.length == 1 && args[0].startsWith("@")) {
       args = Files.readAllLines(Paths.get(args[0].substring(1)), ISO_8859_1).toArray(new String[0]);
     }
-    DesugarOptions options =
-        Options.parseAndExitUponError(DesugarOptions.class, /*allowResidue=*/ false, args)
-            .getOptions();
+
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
+    optionsParser.setAllowResidue(false);
+    optionsParser.parseAndExitUponError(args);
+
+    Options options = optionsParser.getOptions(Options.class);
 
     checkArgument(!options.inputJars.isEmpty(), "--input is required");
     checkArgument(
@@ -684,7 +672,7 @@ class Desugar {
     return options;
   }
 
-  private static ImmutableList<InputOutputPair> toInputOutputPairs(DesugarOptions options) {
+  private static ImmutableList<InputOutputPair> toInputOutputPairs(Options options) {
     final ImmutableList.Builder<InputOutputPair> ioPairListbuilder = ImmutableList.builder();
     for (Iterator<Path> inputIt = options.inputJars.iterator(),
             outputIt = options.outputJars.iterator();
