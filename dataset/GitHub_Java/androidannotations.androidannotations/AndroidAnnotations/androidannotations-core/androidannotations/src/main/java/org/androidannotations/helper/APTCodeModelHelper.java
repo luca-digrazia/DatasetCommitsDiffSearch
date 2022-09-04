@@ -79,6 +79,10 @@ public class APTCodeModelHelper {
 		this.environment = environment;
 	}
 
+	public APTCodeModelHelper() {
+
+	}
+
 	public JClass typeMirrorToJClass(TypeMirror type) {
 		return typeMirrorToJClass(type, Collections.<String, TypeMirror> emptyMap());
 	}
@@ -164,7 +168,7 @@ public class APTCodeModelHelper {
 	}
 
 	public JClass typeBoundsToJClass(List<? extends TypeMirror> bounds) {
-		return typeBoundsToJClass(bounds, Collections.<String, TypeMirror>emptyMap());
+		return typeBoundsToJClass(bounds, Collections.<String, TypeMirror> emptyMap());
 	}
 
 	private JClass typeBoundsToJClass(List<? extends TypeMirror> bounds, Map<String, TypeMirror> actualTypes) {
@@ -201,7 +205,7 @@ public class APTCodeModelHelper {
 		String methodName = executableElement.getSimpleName().toString();
 		JClass returnType = typeMirrorToJClass(executableElement.getReturnType(), actualTypes);
 		JMethod method = holder.getGeneratedClass().method(JMod.PUBLIC, returnType, methodName);
-		copyNonAAAnnotations(method, executableElement.getAnnotationMirrors());
+		addNonAAAnnotations(method, executableElement.getAnnotationMirrors());
 
 		if (!hasAnnotation(method, Override.class)) {
 			method.annotate(Override.class);
@@ -269,21 +273,21 @@ public class APTCodeModelHelper {
 		String parameterName = parameter.getSimpleName().toString();
 		JClass parameterClass = typeMirrorToJClass(parameter.asType(), actualTypes);
 		JVar param = method.param(mod, parameterClass, parameterName);
-		copyNonAAAnnotations(param, parameter.getAnnotationMirrors());
+		addNonAAAnnotations(param, parameter.getAnnotationMirrors());
 	}
 
-	public void copyNonAAAnnotations(JAnnotatable annotatable, List<? extends AnnotationMirror> annotationMirrors) {
+	public void addNonAAAnnotations(JAnnotatable annotatable, List<? extends AnnotationMirror> annotationMirrors) {
 		for (AnnotationMirror annotationMirror : annotationMirrors) {
 			if (annotationMirror.getAnnotationType().asElement().getAnnotation(Inherited.class) == null) {
 				JClass annotationClass = typeMirrorToJClass(annotationMirror.getAnnotationType());
 				if (!environment.isAndroidAnnotation(annotationClass.fullName())) {
-					copyAnnotation(annotatable, annotationMirror);
+					addAnnotation(annotatable, annotationMirror);
 				}
 			}
 		}
 	}
 
-	public void copyAnnotation(JAnnotatable annotatable, AnnotationMirror annotationMirror) {
+	public void addAnnotation(JAnnotatable annotatable, AnnotationMirror annotationMirror) {
 		Map<? extends ExecutableElement, ? extends AnnotationValue> parameters = annotationMirror.getElementValues();
 
 		if (!hasAnnotation(annotatable, annotationMirror)) {
@@ -366,19 +370,6 @@ public class APTCodeModelHelper {
 			} else {
 				newBody.add((JStatement) statement);
 			}
-		}
-	}
-
-	public void removeBraces(JBlock block) {
-		try {
-			Field bracesRequiredField = JBlock.class.getDeclaredField("bracesRequired");
-			bracesRequiredField.setAccessible(true);
-			bracesRequiredField.set(block, false);
-			Field indentRequiredField = JBlock.class.getDeclaredField("indentRequired");
-			indentRequiredField.setAccessible(true);
-			indentRequiredField.set(block, false);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
 		}
 	}
 
