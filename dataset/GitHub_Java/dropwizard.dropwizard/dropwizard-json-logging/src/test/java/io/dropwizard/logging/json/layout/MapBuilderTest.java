@@ -1,6 +1,6 @@
 package io.dropwizard.logging.json.layout;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.time.ZoneId;
 import java.util.Collections;
@@ -16,53 +16,53 @@ public class MapBuilderTest {
     private String message = "Since the dawn of time...";
 
     @Test
-    void testIncludeStringValue() {
+    public void testIncludeStringValue() {
         assertThat(mapBuilder.add("message", true, message).build())
             .containsOnly(entry("message", message));
     }
 
     @Test
-    void testDoNotIncludeStringValue() {
+    public void testDoNotIncludeStringValue() {
         assertThat(mapBuilder.add("message", false, message).build()).isEmpty();
     }
 
     @Test
-    void testDoNotIncludeNullStringValue() {
+    public void testDoNotIncludeNullStringValue() {
         String value = null;
         assertThat(mapBuilder.add("message", true, value).build()).isEmpty();
     }
 
     @Test
-    void testIncludeNumberValue() {
+    public void testIncludeNumberValue() {
         assertThat(mapBuilder.addNumber("status", true, 200)
             .build()).containsOnly(entry("status", 200));
     }
 
     @Test
-    void testIncludeMapValue() {
+    public void testIncludeMapValue() {
         assertThat(mapBuilder.add("headers", true, Collections.singletonMap("userAgent", "Lynx/2.8.7"))
             .build()).containsOnly(entry("headers", Collections.singletonMap("userAgent", "Lynx/2.8.7")));
     }
 
     @Test
-    void testDoNotIncludeEmptyMapValue() {
+    public void testDoNotIncludeEmptyMapValue() {
         assertThat(mapBuilder.add("headers", true, Collections.emptyMap()).build()).isEmpty();
     }
 
     @Test
-    void testDoNotIncludeNullNumberValue() {
+    public void testDoNotIncludeNullNumberValue() {
         Double value = null;
         assertThat(mapBuilder.addNumber("status", true, value).build()).isEmpty();
     }
 
     @Test
-    void testIncludeFormattedTimestamp() {
+    public void testIncludeFormattedTimestamp() {
         assertThat(mapBuilder.addTimestamp("timestamp", true, 1514906361000L).build())
             .containsOnly(entry("timestamp", "2018-01-02T15:19:21.000+0000"));
     }
 
     @Test
-    void testIncludeNotFormattedTimestamp() {
+    public void testIncludeNotFormattedTimestamp() {
         assertThat(new MapBuilder(new TimestampFormatter(null, ZoneId.of("UTC")), Collections.emptyMap(),
             Collections.emptyMap(), size)
             .addTimestamp("timestamp", true, 1514906361000L)
@@ -70,52 +70,52 @@ public class MapBuilderTest {
     }
 
     @Test
-    void testReplaceStringFieldName() {
+    public void testReplaceStringFieldName() {
         assertThat(new MapBuilder(timestampFormatter, Collections.singletonMap("message", "@message"), Collections.emptyMap(), size)
             .add("message", true, message)
             .build()).containsOnly(entry("@message", message));
     }
 
     @Test
-    void testReplaceNumberFieldName() {
+    public void testReplaceNumberFieldName() {
         assertThat(new MapBuilder(timestampFormatter, Collections.singletonMap("status", "@status"), Collections.emptyMap(), size)
             .addNumber("status", true, 200)
             .build()).containsOnly(entry("@status", 200));
     }
 
     @Test
-    void testAddAdditionalField() {
+    public void testAddAdditionalField() {
         assertThat(new MapBuilder(timestampFormatter, Collections.emptyMap(), Collections.singletonMap("version", "1.8.3"), size)
             .add("message", true, message).build())
             .containsOnly(entry("message", message), entry("version", "1.8.3"));
     }
 
     @Test
-    void testAddSupplier() {
+    public void testAddSupplier() {
         assertThat(mapBuilder.add("message", true, () -> message).build())
             .containsOnly(entry("message", message));
     }
     @Test
-    void testAddNumberSupplier() {
+    public void testAddNumberSupplier() {
         assertThat(mapBuilder.addNumber("status", true, () -> 200)
             .build()).containsOnly(entry("status", 200));
     }
     @Test
-    void testAddMapSupplier() {
+    public void testAddMapSupplier() {
         assertThat(mapBuilder.addMap("headers", true, () -> Collections.singletonMap("userAgent", "Lynx/2.8.7"))
             .build()).containsOnly(entry("headers", Collections.singletonMap("userAgent", "Lynx/2.8.7")));
     }
 
     @Test
-    void testAddSupplierNotInvoked() {
+    public void testAddSupplierNotInvoked() {
         assertThat(mapBuilder.add("status", false, () -> {throw new RuntimeException();}).build()).isEmpty();
     }
     @Test
-    void testAddNumberSupplierNotInvoked() {
+    public void testAddNumberSupplierNotInvoked() {
         assertThat(mapBuilder.addNumber("status", false, () -> {throw new RuntimeException();}).build()).isEmpty();
     }
     @Test
-    void testAddMapSupplierNotInvoked() {
+    public void testAddMapSupplierNotInvoked() {
         assertThat(mapBuilder.addMap("status", false, () -> {throw new RuntimeException();}).build()).isEmpty();
     }
 }
