@@ -6,6 +6,7 @@ import java.util.List;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
@@ -52,11 +53,8 @@ public abstract class QuarkusBootstrapMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.finalName}")
     private String finalName;
 
-    @Parameter(property = "uberJar", defaultValue = "false")
-    private boolean uberJar;
-
     /**
-     * When using the uberJar option, this array specifies entries that should
+     * When building an uber-jar, this array specifies entries that should
      * be excluded from the final jar. The entries are relative to the root of
      * the file. An example of this configuration could be:
      * <code><pre>
@@ -74,30 +72,44 @@ public abstract class QuarkusBootstrapMojo extends AbstractMojo {
     @Parameter(property = "ignoredEntries")
     private String[] ignoredEntries;
 
-    private AppArtifactKey projectId;
-    private boolean clearUberJarProp;
+    /**
+     * Coordinates of the Maven artifact containing the original Java application to build the native image for.
+     * If not provided, the current project is assumed to be the original Java application.
+     * <p>
+     * The coordinates are expected to be expressed in the following format:
+     * <p>
+     * groupId:artifactId:classifier:type:version
+     * <p>
+     * With the classifier, type and version being optional.
+     * <p>
+     * If the type is missing, the artifact is assumed to be of type JAR.
+     * <p>
+     * If the version is missing, the artifact is going to be looked up among the project dependencies using the provided
+     * coordinates.
+     *
+     * <p>
+     * However, if the expression consists of only three parts, it is assumed to be groupId:artifactId:version.
+     *
+     * <p>
+     * If the expression consists of only four parts, it is assumed to be groupId:artifactId:classifier:type.
+     */
+    @Parameter(required = false, property = "appArtifact")
+    private String appArtifact;
 
-    protected QuarkusBootstrapMojo() {
-        MojoLogger.logSupplier = this::getLog;
-    }
+    private AppArtifactKey projectId;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         if (!beforeExecute()) {
             return;
         }
-        try {
-            doExecute();
-        } finally {
-            if (clearUberJarProp) {
-                System.clearProperty(BuildMojo.QUARKUS_PACKAGE_UBER_JAR);
-                clearUberJarProp = false;
-            }
-        }
+        doExecute();
     }
 
-    protected void clearUberJarProp() {
-        this.clearUberJarProp = true;
+    @Override
+    public void setLog(Log log) {
+        super.setLog(log);
+        MojoLogger.delegate = log;
     }
 
     /**
@@ -116,6 +128,10 @@ public abstract class QuarkusBootstrapMojo extends AbstractMojo {
      * @throws MojoFailureException in case of a failure
      */
     protected abstract void doExecute() throws MojoExecutionException, MojoFailureException;
+
+    protected String appArtifactCoords() {
+        return appArtifact;
+    }
 
     protected RepositorySystem repositorySystem() {
         return bootstrapProvider.repositorySystem();
@@ -153,14 +169,12 @@ public abstract class QuarkusBootstrapMojo extends AbstractMojo {
         return ignoredEntries;
     }
 
-    protected boolean uberJar() {
-        return uberJar;
-    }
-
     protected AppArtifactKey projectId() {
         return projectId == null ? projectId = new AppArtifactKey(project.getGroupId(), project.getArtifactId()) : projectId;
     }
 
+    // @deprecated in 1.14.0.Final
+    @Deprecated
     protected AppArtifact projectArtifact() throws MojoExecutionException {
         return bootstrapProvider.projectArtifact(this);
     }
