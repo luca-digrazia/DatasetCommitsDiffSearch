@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2019 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,9 +29,9 @@ import org.androidannotations.ElementValidation;
 import org.androidannotations.annotations.HttpsClient;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.handler.MethodInjectionHandler;
-import org.androidannotations.helper.ClassesHolder;
 import org.androidannotations.helper.InjectHelper;
 import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.internal.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
 import org.androidannotations.rclass.IRInnerClass;
 
@@ -49,7 +48,7 @@ import com.helger.jcodemodel.JTryBlock;
 import com.helger.jcodemodel.JVar;
 
 @SuppressWarnings("deprecation")
-public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder> implements MethodInjectionHandler<EComponentHolder> {
+public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder>implements MethodInjectionHandler<EComponentHolder> {
 
 	private final InjectHelper<EComponentHolder> injectHelper;
 
@@ -94,7 +93,7 @@ public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder> 
 		boolean useCustomTrustStore = trustStoreRawIdRef != null;
 		boolean useCustomKeyStore = keyStoreRawIdRef != null;
 
-		ClassesHolder.Classes classes = getClasses();
+		ProcessHolder.Classes classes = getClasses();
 
 		JDefinedClass jAnonClass = getCodeModel().anonymousClass(classes.DEFAULT_HTTP_CLIENT);
 
