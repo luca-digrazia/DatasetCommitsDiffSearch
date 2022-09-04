@@ -18,6 +18,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.docgen.skylark.SkylarkBuiltinMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkJavaMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkModuleDoc;
@@ -86,8 +87,9 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
     Map<String, SkylarkModuleDoc> modules = SkylarkDocumentationCollector.collectModules();
     SkylarkModuleDoc topLevel =
         modules.remove(SkylarkDocumentationCollector.getTopLevelModule().name());
-    for (SkylarkMethodDoc method : topLevel.getMethods()) {
-      docMap.put(method.getName(), method.getDocumentation());
+    for (Map.Entry<String, SkylarkBuiltinMethodDoc> entry :
+        topLevel.getBuiltinMethods().entrySet()) {
+      docMap.put(entry.getKey(), entry.getValue().getDocumentation());
     }
     for (Map.Entry<String, SkylarkModuleDoc> entry : modules.entrySet()) {
       docMap.put(entry.getKey(), entry.getValue().getDocumentation());
