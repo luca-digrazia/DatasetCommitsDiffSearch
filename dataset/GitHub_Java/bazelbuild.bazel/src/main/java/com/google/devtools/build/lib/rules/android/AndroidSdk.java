@@ -46,7 +46,6 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
         .get("build_tools_version", Type.STRING);
     FilesToRunProvider aidl = ruleContext.getExecutablePrerequisite("aidl", Mode.HOST);
     FilesToRunProvider aapt = ruleContext.getExecutablePrerequisite("aapt", Mode.HOST);
-    FilesToRunProvider aapt2 = ruleContext.getExecutablePrerequisite("aapt2", Mode.HOST);
     FilesToRunProvider apkBuilder = ruleContext.getExecutablePrerequisite(
         "apkbuilder", Mode.HOST);
     FilesToRunProvider apkSigner = ruleContext.getExecutablePrerequisite("apksigner", Mode.HOST);
@@ -86,7 +85,6 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
                 mainDexListCreator,
                 aidl,
                 aapt,
-                aapt2,
                 apkBuilder,
                 apkSigner,
                 proguard,

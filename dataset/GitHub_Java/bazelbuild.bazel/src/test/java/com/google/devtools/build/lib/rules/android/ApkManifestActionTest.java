@@ -61,7 +61,7 @@ public class ApkManifestActionTest {
             createFilesToRunProvider("mainDexListCreator"),
             createFilesToRunProvider("aidl"),
             createFilesToRunProvider("aapt"),
-            /* apkBuilder = */ null,
+            createFilesToRunProvider("apkBuilder"),
             createFilesToRunProvider("apkSigner"),
             createFilesToRunProvider("proguard"),
             createFilesToRunProvider("zipalign"),
