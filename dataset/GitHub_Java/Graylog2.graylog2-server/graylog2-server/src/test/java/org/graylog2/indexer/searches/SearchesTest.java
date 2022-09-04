@@ -16,21 +16,18 @@
  */
 package org.graylog2.indexer.searches;
 
-import com.google.common.collect.ImmutableSortedSet;
-
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.collect.ImmutableSortedSet;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule;
 import com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
-
 import org.elasticsearch.client.Client;
 import org.graylog2.Configuration;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.TestIndexSet;
-import org.graylog2.indexer.indexset.IndexSetConfig;
+import org.graylog2.configuration.ElasticsearchConfiguration;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.nosqlunit.IndexCreatingLoadStrategyFactory;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeComparator;
@@ -41,12 +38,7 @@ import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.results.HistogramResult;
 import org.graylog2.indexer.results.TermsResult;
 import org.graylog2.indexer.results.TermsStatsResult;
-import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy;
-import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig;
-import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
-import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
-import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
@@ -57,12 +49,10 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import java.time.ZonedDateTime;
+import javax.inject.Inject;
 import java.util.Collections;
 import java.util.Map;
 import java.util.SortedSet;
-
-import javax.inject.Inject;
 
 import static com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
 import static com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
@@ -111,14 +101,27 @@ public class SearchesTest {
                 }
             }).build();
 
-    private final IndexSetConfig indexSetConfig;
-    private final IndexSet indexSet;
+    private static final ElasticsearchConfiguration CONFIG = new ElasticsearchConfiguration() {
+        @Override
+        public String getIndexPrefix() {
+            return "graylog";
+        }
 
+        @Override
+        public int getShards() {
+            return 1;
+        }
+
+        @Override
+        public int getReplicas() {
+            return 0;
+        }
+    };
+
+    @Mock
+    private Deflector deflector;
     @Mock
     private IndexRangeService indexRangeService;
-
-    @Mock
-    private StreamService streamService;
 
     private MetricRegistry metricRegistry;
     private Searches searches;
@@ -127,30 +130,15 @@ public class SearchesTest {
     private Client client;
 
     public SearchesTest() {
-        this.indexSetConfig = IndexSetConfig.builder()
-                .id("index-set-1")
-                .title("Index set 1")
-                .description("For testing")
-                .isDefault(true)
-                .indexPrefix("graylog")
-                .creationDate(ZonedDateTime.now())
-                .shards(1)
-                .replicas(0)
-                .rotationStrategyClass(MessageCountRotationStrategy.class.getCanonicalName())
-                .rotationStrategy(MessageCountRotationStrategyConfig.createDefault())
-                .retentionStrategyClass(DeletionRetentionStrategy.class.getCanonicalName())
-                .retentionStrategy(DeletionRetentionStrategyConfig.createDefault())
-                .build();
-        this.indexSet = new TestIndexSet(indexSetConfig);
         this.elasticsearchRule = newElasticsearchRule().defaultEmbeddedElasticsearch();
-        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(indexSet, Collections.singleton(INDEX_NAME)));
+        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(CONFIG, Collections.singleton(INDEX_NAME)));
     }
 
     @Before
     public void setUp() throws Exception {
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(INDEX_RANGES);
         metricRegistry = new MetricRegistry();
-        searches = new Searches(new Configuration(), indexRangeService, client, metricRegistry, streamService);
+        searches = new Searches(new Configuration(), indexRangeService, client, metricRegistry);
     }
 
     @Test
@@ -248,9 +236,9 @@ public class SearchesTest {
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testTermsStats() throws Exception {
         TermsStatsResult r = searches.termsStats("message", "n", Searches.TermsStatsOrder.COUNT, 25, "*",
-                AbsoluteRange.create(
-                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
-                        new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC))
+                                                 AbsoluteRange.create(
+                                                         new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                                                         new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC))
         );
 
         assertThat(r.getResults()).hasSize(2);
@@ -263,9 +251,9 @@ public class SearchesTest {
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void termsStatsRecordsMetrics() throws Exception {
         TermsStatsResult r = searches.termsStats("message", "n", Searches.TermsStatsOrder.COUNT, 25, "*",
-                AbsoluteRange.create(
-                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
-                        new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC))
+                                                 AbsoluteRange.create(
+                                                         new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
+                                                         new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC))
         );
 
         assertThat(metricRegistry.getTimers()).containsKey(REQUEST_TIMER_NAME);
@@ -368,6 +356,7 @@ public class SearchesTest {
 
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
     public void histogramRecordsMetrics() throws Exception {
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC));
         HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.MINUTE, range);
@@ -404,6 +393,7 @@ public class SearchesTest {
 
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @SuppressWarnings("unchecked")
     public void fieldHistogramRecordsMetrics() throws Exception {
         final AbsoluteRange range = AbsoluteRange.create(new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC));
         HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.MINUTE, null, range, false);
