@@ -54,13 +54,14 @@ public class MessagesResource extends RestResource {
     ResourceConfig rc;
 
     @GET @Timed
+    @Path("/")
     @Produces(MediaType.APPLICATION_JSON)
     public String all(@QueryParam("page") int page, @QueryParam("pretty") boolean prettyPrint) {
         Core core = (Core) rc.getProperty("core");
 
         List<Map<String, Object>> messages = Lists.newArrayList();
 
-        for (SystemMessage sm : SystemMessage.all(core, page(page))) {
+        for (SystemMessage sm : SystemMessage.all(core, page)) {
             Map<String, Object> message = Maps.newHashMap();
             message.put("caller", sm.getCaller());
             message.put("content", sm.getContent());
