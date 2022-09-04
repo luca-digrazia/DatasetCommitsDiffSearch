@@ -17,13 +17,8 @@ package com.google.devtools.build.lib.runtime;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
-import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.time.Duration;
 import java.util.List;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -31,12 +26,7 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link ProcessWrapperUtil}. */
 @RunWith(JUnit4.class)
 public final class ProcessWrapperUtilTest {
-  private FileSystem testFS;
 
-  @Before
-  public final void createFileSystem() {
-    testFS = new InMemoryFileSystem(DigestHashFunction.MD5);
-  }
 
   @Test
   public void testProcessWrapperCommandLineBuilder_BuildsWithoutOptionalArguments() {
@@ -61,9 +51,9 @@ public final class ProcessWrapperUtilTest {
 
     Duration timeout = Duration.ofSeconds(10);
     Duration killDelay = Duration.ofSeconds(2);
-    Path stdoutPath = testFS.getPath("/stdout.txt");
-    Path stderrPath = testFS.getPath("/stderr.txt");
-    Path statisticsPath = testFS.getPath("/stats.out");
+    String stdoutPath = "stdout.txt";
+    String stderrPath = "stderr.txt";
+    String statisticsPath = "stats.out";
 
     ImmutableList<String> expectedCommandLine =
         ImmutableList.<String>builder()
