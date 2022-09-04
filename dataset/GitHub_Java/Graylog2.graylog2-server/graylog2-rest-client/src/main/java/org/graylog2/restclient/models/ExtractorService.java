@@ -17,15 +17,14 @@
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Lists;
-import org.graylog2.rest.models.system.inputs.extractors.requests.CreateExtractorRequest;
-import org.graylog2.rest.models.system.inputs.extractors.requests.OrderExtractorsRequest;
-import org.graylog2.rest.models.system.inputs.extractors.responses.ExtractorSummary;
-import org.graylog2.rest.models.system.inputs.extractors.responses.ExtractorSummaryList;
-import org.graylog2.rest.models.system.responses.GrokPatternSummary;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
+import org.graylog2.restclient.models.api.requests.CreateExtractorRequest;
+import org.graylog2.restclient.models.api.requests.ExtractorOrderRequest;
 import org.graylog2.restclient.models.api.requests.GrokPatternUpdateRequest;
 import org.graylog2.restclient.models.api.responses.system.CreateExtractorResponse;
+import org.graylog2.restclient.models.api.responses.system.ExtractorSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.ExtractorsResponse;
 import org.graylog2.restclient.models.api.responses.system.GrokPatternResponse;
 import org.graylog2.restroutes.generated.ExtractorsResource;
 import org.graylog2.restroutes.generated.routes;
@@ -74,7 +73,7 @@ public class ExtractorService {
     }
 
     public Extractor load(Node node, Input input, String extractorId) throws IOException, APIException {
-        final ExtractorSummary extractorSummaryResponse = api.path(resource.single(input.getId(), extractorId), ExtractorSummary.class)
+        final ExtractorSummaryResponse extractorSummaryResponse = api.path(resource.single(input.getId(), extractorId), ExtractorSummaryResponse.class)
                 .node(node)
                 .execute();
 
@@ -84,10 +83,10 @@ public class ExtractorService {
     public List<Extractor> all(Node node, Input input) throws IOException, APIException {
         List<Extractor> extractors = Lists.newArrayList();
 
-        final ExtractorSummaryList extractorsList = api.path(resource.list(input.getId()), ExtractorSummaryList.class)
+        final ExtractorsResponse extractorsResponse = api.path(resource.list(input.getId()), ExtractorsResponse.class)
                 .node(node)
                 .execute();
-        for (ExtractorSummary ex : extractorsList.extractors()) {
+        for (ExtractorSummaryResponse ex : extractorsResponse.extractors) {
             extractors.add(extractorFactory.fromResponse(ex));
         }
 
@@ -95,7 +94,8 @@ public class ExtractorService {
     }
 
     public void order(String inputId, SortedMap<Integer, String> order) throws APIException, IOException {
-        final OrderExtractorsRequest req = OrderExtractorsRequest.create(order);
+        ExtractorOrderRequest req = new ExtractorOrderRequest();
+        req.order = order;
 
         api.path(resource.order(inputId))
                 .body(req)
@@ -103,7 +103,7 @@ public class ExtractorService {
                 .execute();
     }
     
-    public Collection<GrokPatternSummary> allGrokPatterns() throws APIException, IOException {
+    public Collection<GrokPattern> allGrokPatterns() throws APIException, IOException {
         final GrokPatternResponse response = 
                 api.path(routes.GrokResource().listGrokPatterns(), GrokPatternResponse.class)
                 .expect(Http.Status.OK)
@@ -112,25 +112,25 @@ public class ExtractorService {
         return response.patterns;
     }
     
-    public GrokPatternSummary createGrokPattern(GrokPatternSummary pattern) throws APIException, IOException {
-        final GrokPatternSummary grokPattern = api.path(routes.GrokResource().createPattern(), GrokPatternSummary.class)
+    public GrokPattern createGrokPattern(GrokPattern pattern) throws APIException, IOException {
+        final GrokPattern grokPattern = api.path(routes.GrokResource().createPattern(), GrokPattern.class)
                 .body(pattern)
                 .expect(Http.Status.CREATED)
                 .execute();
         return grokPattern;
     }
 
-    public void updateGrokPattern(GrokPatternSummary pattern) throws APIException, IOException {
+    public void updateGrokPattern(GrokPattern pattern) throws APIException, IOException {
         api.path(routes.GrokResource().updatePattern(pattern.id))
                 .body(pattern)
                 .execute();
     }
     
-    public void deleteGrokPattern(GrokPatternSummary pattern) throws APIException, IOException {
+    public void deleteGrokPattern(GrokPattern pattern) throws APIException, IOException {
         api.path(routes.GrokResource().removePattern(pattern.id)).execute();
     }
     
-    public void bulkLoadGrokPatterns(Collection<GrokPatternSummary> patterns, boolean replace) throws APIException, IOException {
+    public void bulkLoadGrokPatterns(Collection<GrokPattern> patterns, boolean replace) throws APIException, IOException {
         api.path(routes.GrokResource().bulkUpdatePatterns())
                 .queryParam("replace", String.valueOf(replace))
                 .body(new GrokPatternUpdateRequest(patterns))

@@ -24,12 +24,10 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.grok.GrokPattern;
 import org.graylog2.grok.GrokPatternService;
-import org.graylog2.grok.GrokPatterns;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.rest.models.system.responses.GrokPatternList;
-import org.graylog2.rest.models.system.responses.GrokPatternSummary;
+import org.graylog2.rest.resources.system.responses.GrokPatternList;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
@@ -45,6 +43,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 
 
@@ -68,7 +67,7 @@ public class GrokResource extends RestResource {
     public GrokPatternList listGrokPatterns() {
         checkPermission(RestPermissions.INPUTS_READ);
 
-        return GrokPatternList.create(GrokPatterns.toSummarySet(grokPatternService.loadAll()));
+        return GrokPatternList.create(grokPatternService.loadAll());
     }
     
     @GET
@@ -84,14 +83,14 @@ public class GrokResource extends RestResource {
     
     @POST
     @Timed
-    @ApiOperation(value = "Add a new named pattern", response = GrokPatternSummary.class)
+    @ApiOperation("Add a new named pattern")
     public Response createPattern(@ApiParam(name = "pattern", required = true)
-                                      @Valid @NotNull GrokPatternSummary pattern) throws ValidationException {
+                                      @Valid @NotNull GrokPattern pattern) throws ValidationException {
         checkPermission(RestPermissions.INPUTS_CREATE);
 
-        final GrokPattern newPattern = grokPatternService.save(GrokPatterns.fromSummary(pattern));
+        final GrokPattern newPattern = grokPatternService.save(pattern);
 
-        final URI patternUri = getUriBuilderToSelf().path(GrokResource.class, "listPattern").build(newPattern.id);
+        final URI patternUri = UriBuilder.fromMethod(GrokResource.class, "listPattern").build(newPattern.id);
         
         return Response.created(patternUri).entity(newPattern).build();
     }
@@ -104,13 +103,13 @@ public class GrokResource extends RestResource {
                                        @QueryParam("replace") @DefaultValue("false") boolean replace) throws ValidationException {
         checkPermission(RestPermissions.INPUTS_CREATE);
 
-        for (final GrokPatternSummary pattern : patternList.patterns()) {
-            if (!grokPatternService.validate(GrokPatterns.fromSummary(pattern))) {
+        for (final GrokPattern pattern : patternList.patterns()) {
+            if (!grokPatternService.validate(pattern)) {
                 throw new ValidationException("Invalid pattern " + pattern + ". Did not save any patterns.");
             }
         }
 
-        grokPatternService.saveAll(GrokPatterns.fromSummarySet(patternList.patterns()), replace);
+        grokPatternService.saveAll(patternList.patterns(), replace);
 
         return Response.accepted().build();
     }
@@ -122,7 +121,7 @@ public class GrokResource extends RestResource {
     public GrokPattern updatePattern(@ApiParam(name = "patternId", required = true)
                                      @PathParam("patternId") String patternId,
                                      @ApiParam(name = "pattern", required = true)
-                                     GrokPatternSummary pattern) throws NotFoundException, ValidationException {
+                                     GrokPattern pattern) throws NotFoundException, ValidationException {
         checkPermission(RestPermissions.INPUTS_EDIT);
         
         final GrokPattern oldPattern = grokPatternService.load(patternId);
