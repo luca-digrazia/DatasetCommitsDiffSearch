@@ -14,6 +14,10 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableSet;
@@ -48,19 +52,18 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     BuildConfiguration config = create("--cpu=piii");
     String outputDirPrefix = outputBase
-        + "/" + config.getMainRepositoryName()
-        + "/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-piii-fastbuild";
+        + "/workspace/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-piii-fastbuild";
 
-    assertThat(config.getOutputDirectory(RepositoryName.MAIN).getPath().toString())
-        .isEqualTo(outputDirPrefix);
-    assertThat(config.getBinDirectory(RepositoryName.MAIN).getPath().toString())
-        .isEqualTo(outputDirPrefix + "/bin");
-    assertThat(config.getIncludeDirectory(RepositoryName.MAIN).getPath().toString())
-        .isEqualTo(outputDirPrefix + "/include");
-    assertThat(config.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString())
-        .isEqualTo(outputDirPrefix + "/genfiles");
-    assertThat(config.getTestLogsDirectory(RepositoryName.MAIN).getPath().toString())
-        .isEqualTo(outputDirPrefix + "/testlogs");
+    assertEquals(outputDirPrefix,
+                 config.getOutputDirectory(RepositoryName.MAIN).getPath().toString());
+    assertEquals(outputDirPrefix + "/bin",
+                 config.getBinDirectory(RepositoryName.MAIN).getPath().toString());
+    assertEquals(outputDirPrefix + "/include",
+                 config.getIncludeDirectory(RepositoryName.MAIN).getPath().toString());
+    assertEquals(outputDirPrefix + "/genfiles",
+                 config.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString());
+    assertEquals(outputDirPrefix + "/testlogs",
+                 config.getTestLogsDirectory(RepositoryName.MAIN).getPath().toString());
   }
 
   @Test
@@ -70,12 +73,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     }
 
     BuildConfiguration config = create("--platform_suffix=-test");
-    assertThat(config.getOutputDirectory(RepositoryName.MAIN).getPath().toString())
-        .isEqualTo(
-            outputBase
-                + "/"
-                + config.getMainRepositoryName()
-                + "/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-k8-fastbuild-test");
+    assertEquals(outputBase + "/workspace/blaze-out/gcc-4.4.0-glibc-2.3.6-grte-k8-fastbuild-test",
+        config.getOutputDirectory(RepositoryName.MAIN).getPath().toString());
   }
 
   @Test
@@ -100,7 +99,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   public void testHostCpu() throws Exception {
     for (String cpu : new String[] { "piii", "k8" }) {
       BuildConfiguration hostConfig = createHost("--host_cpu=" + cpu);
-      assertThat(hostConfig.getFragment(CppConfiguration.class).getTargetCpu()).isEqualTo(cpu);
+      assertEquals(cpu, hostConfig.getFragment(CppConfiguration.class).getTargetCpu());
     }
   }
 
@@ -112,12 +111,12 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     BuildConfigurationCollection configs = createCollection("--cpu=piii");
     BuildConfiguration config = Iterables.getOnlyElement(configs.getTargetConfigurations());
-    assertThat(config.getFragment(CppConfiguration.class).getCcToolchainRuleLabel())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-piii"));
+    assertEquals(Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-piii"),
+        config.getFragment(CppConfiguration.class).getCcToolchainRuleLabel());
 
     BuildConfiguration hostConfig = configs.getHostConfiguration();
-    assertThat(hostConfig.getFragment(CppConfiguration.class).getCcToolchainRuleLabel())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-k8"));
+    assertEquals(Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-k8"),
+        hostConfig.getFragment(CppConfiguration.class).getCcToolchainRuleLabel());
   }
 
   @Test
@@ -132,8 +131,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     BuildConfiguration.Options b = Options.getDefaults(BuildConfiguration.Options.class);
     // The String representations of the BuildConfiguration.Options must be equal even if these are
     // different objects, if they were created with the same options (no options in this case).
-    assertThat(b.toString()).isEqualTo(a.toString());
-    assertThat(b.cacheKey()).isEqualTo(a.cacheKey());
+    assertEquals(a.toString(), b.toString());
+    assertEquals(a.cacheKey(), b.cacheKey());
   }
 
   @Test
@@ -144,11 +143,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
       create("--cpu=bogus", "--experimental_disable_jvm");
       fail();
     } catch (InvalidConfigurationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .matches(
-              Pattern.compile(
-                  "No toolchain found for cpu 'bogus'. Valid cpus are: \\[\n(  [\\w-]+,\n)+]"));
+      assertThat(e.getMessage()).matches(Pattern.compile(
+              "No toolchain found for cpu 'bogus'. Valid cpus are: \\[\n(  [\\w-]+,\n)+]"));
     }
   }
 
@@ -167,8 +163,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     BuildConfigurationCollection master = createCollection("--multi_cpu=k8", "--multi_cpu=piii");
     assertThat(master.getTargetConfigurations()).hasSize(2);
     // Note: the cpus are sorted alphabetically.
-    assertThat(master.getTargetConfigurations().get(0).getCpu()).isEqualTo("k8");
-    assertThat(master.getTargetConfigurations().get(1).getCpu()).isEqualTo("piii");
+    assertEquals("k8", master.getTargetConfigurations().get(0).getCpu());
+    assertEquals("piii", master.getTargetConfigurations().get(1).getCpu());
   }
 
   /**
@@ -189,8 +185,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
         master = createCollection("--multi_cpu=piii", "--multi_cpu=k8");
       }
       assertThat(master.getTargetConfigurations()).hasSize(2);
-      assertThat(master.getTargetConfigurations().get(0).getCpu()).isEqualTo("k8");
-      assertThat(master.getTargetConfigurations().get(1).getCpu()).isEqualTo("piii");
+      assertEquals("k8", master.getTargetConfigurations().get(0).getCpu());
+      assertEquals("piii", master.getTargetConfigurations().get(1).getCpu());
     }
   }
 
@@ -274,24 +270,29 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   @Test
   public void testGetTransitiveOptionDetails() throws Exception {
     // Directly defined options:
-    assertThat(create("-c", "dbg").getTransitiveOptionDetails().getOptionValue("compilation_mode"))
-        .isEqualTo(CompilationMode.DBG);
-    assertThat(create("-c", "opt").getTransitiveOptionDetails().getOptionValue("compilation_mode"))
-        .isEqualTo(CompilationMode.OPT);
+    assertEquals(
+        CompilationMode.DBG,
+        create("-c", "dbg").getTransitiveOptionDetails().getOptionValue("compilation_mode"));
+    assertEquals(
+        CompilationMode.OPT,
+        create("-c", "opt").getTransitiveOptionDetails().getOptionValue("compilation_mode"));
 
     // Options defined in a fragment:
-    assertThat(create("--force_pic").getTransitiveOptionDetails().getOptionValue("force_pic"))
-        .isEqualTo(Boolean.TRUE);
-    assertThat(create("--noforce_pic").getTransitiveOptionDetails().getOptionValue("force_pic"))
-        .isEqualTo(Boolean.FALSE);
+    assertEquals(
+        Boolean.TRUE,
+        create("--force_pic").getTransitiveOptionDetails().getOptionValue("force_pic"));
+    assertEquals(
+        Boolean.FALSE,
+        create("--noforce_pic").getTransitiveOptionDetails().getOptionValue("force_pic"));
 
     // Late-bound default option:
     BuildConfiguration config = create();
-    assertThat(config.getFragment(CppConfiguration.class).getCompiler())
-        .isEqualTo(config.getTransitiveOptionDetails().getOptionValue("compiler"));
+    assertEquals(
+        config.getTransitiveOptionDetails().getOptionValue("compiler"),
+        config.getFragment(CppConfiguration.class).getCompiler());
 
     // Legitimately null option:
-    assertThat(create().getTransitiveOptionDetails().getOptionValue("test_filter")).isNull();
+    assertNull(create().getTransitiveOptionDetails().getOptionValue("test_filter"));
   }
 
   @Test
@@ -312,9 +313,9 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
             analysisMock.createRuleClassProvider());
     BuildConfiguration hostConfig = createHost();
 
-    assertThat(config.equalsOrIsSupersetOf(trimmedConfig)).isTrue();
-    assertThat(config.equalsOrIsSupersetOf(hostConfig)).isFalse();
-    assertThat(trimmedConfig.equalsOrIsSupersetOf(config)).isFalse();
+    assertTrue(config.equalsOrIsSupersetOf(trimmedConfig));
+    assertFalse(config.equalsOrIsSupersetOf(hostConfig));
+    assertFalse(trimmedConfig.equalsOrIsSupersetOf(config));
   }
 
   @Test
@@ -428,15 +429,5 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
         ".-> //skylark:one.bzl",
         "|   //skylark:two.bzl",
         "`-- //skylark:one.bzl"));
-  }
-
-  @Test
-  public void testNoSeparateGenfilesDirectory() throws Exception {
-    BuildConfiguration target = create("--noexperimental_separate_genfiles_directory");
-    BuildConfiguration host = createHost("--noexperimental_separate_genfiles_directory");
-    assertThat(target.getGenfilesDirectory(RepositoryName.MAIN))
-        .isEqualTo(target.getBinDirectory(RepositoryName.MAIN));
-    assertThat(host.getGenfilesDirectory(RepositoryName.MAIN))
-        .isEqualTo(host.getBinDirectory(RepositoryName.MAIN));
   }
 }
