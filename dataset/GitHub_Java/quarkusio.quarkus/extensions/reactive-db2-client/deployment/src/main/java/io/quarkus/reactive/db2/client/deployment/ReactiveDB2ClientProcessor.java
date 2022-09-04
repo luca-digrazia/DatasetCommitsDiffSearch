@@ -1,13 +1,10 @@
 package io.quarkus.reactive.db2.client.deployment;
 
-import javax.inject.Singleton;
-
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -40,13 +37,13 @@ class ReactiveDB2ClientProcessor {
             BuildProducer<VertxPoolBuildItem> vertxPool,
             DB2PoolRecorder recorder,
             VertxBuildItem vertx,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeans, ShutdownContextBuildItem shutdown,
+            BeanContainerBuildItem beanContainer, ShutdownContextBuildItem shutdown,
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig, DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
             DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
             DataSourceReactiveDB2Config dataSourceReactiveDB2Config) {
 
-        feature.produce(new FeatureBuildItem(Feature.REACTIVE_DB2_CLIENT));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.REACTIVE_DB2_CLIENT));
         // Make sure the DB2PoolProducer is initialized before the StartupEvent is fired
         ServiceStartBuildItem serviceStart = new ServiceStartBuildItem("reactive-db2-client");
 
@@ -57,17 +54,11 @@ class ReactiveDB2ClientProcessor {
             return serviceStart;
         }
 
-        RuntimeValue<DB2Pool> db2PoolValue = recorder.configureDB2Pool(vertx.getVertx(),
+        RuntimeValue<DB2Pool> db2PoolValue = recorder.configureDB2Pool(vertx.getVertx(), beanContainer.getValue(),
                 dataSourcesRuntimeConfig, dataSourceReactiveRuntimeConfig, dataSourceReactiveDB2Config,
                 shutdown);
         db2Pool.produce(new DB2PoolBuildItem(db2PoolValue));
-
-        // Synthetic bean for MySQLPool
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(DB2Pool.class).scope(Singleton.class).runtimeValue(db2PoolValue)
-                .setRuntimeInit().done());
-
-        boolean isDefault = true; // assume always the default pool for now
-        vertxPool.produce(new VertxPoolBuildItem(db2PoolValue, DatabaseKind.DB2, isDefault));
+        vertxPool.produce(new VertxPoolBuildItem(db2PoolValue));
 
         return serviceStart;
     }
