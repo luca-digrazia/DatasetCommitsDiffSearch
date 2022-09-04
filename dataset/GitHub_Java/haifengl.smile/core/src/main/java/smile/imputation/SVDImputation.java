@@ -1,23 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.imputation;
 
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.QRDecomposition;
+import smile.math.matrix.SingularValueDecomposition;
 
 /**
  * Missing value imputation with singular value decomposition. Given SVD
@@ -102,7 +103,7 @@ public class SVDImputation implements MissingValueImputation {
             full[i] = data[i].clone();
         }
 
-        MissingValueImputation.imputeWithColumnAverage(full);
+        KMeansImputation.columnAverageImpute(full);
 
         for (int iter = 0; iter < maxIter; iter++) {
             svdImpute(data, full);
@@ -119,7 +120,7 @@ public class SVDImputation implements MissingValueImputation {
      * @param data the data with current imputations.
      */
     private void svdImpute(double[][] raw, double[][] data) {
-        Matrix.SVD svd = new Matrix(data).svd();
+        SingularValueDecomposition svd = new SingularValueDecomposition(data);
 
         int d = data[0].length;
 
@@ -137,26 +138,27 @@ public class SVDImputation implements MissingValueImputation {
                 continue;
             }
 
-            Matrix A = new Matrix(d - missing, k);
+            DenseMatrix A = new ColumnMajorMatrix(d - missing, k);
             double[] b = new double[d - missing];
 
             for (int j = 0, m = 0; j < d; j++) {
                 if (!Double.isNaN(raw[i][j])) {
                     for (int l = 0; l < k; l++) {
-                        A.set(m, l, svd.V.get(j, l));
+                        A.set(m, l, svd.getV().get(j, l));
                     }
                     b[m++] = raw[i][j];
                 }
             }
 
-            Matrix.QR qr = A.qr();
-            double[] s = qr.solve(b);
+            double[] s = new double[k];
+            QRDecomposition qr = new QRDecomposition(A);
+            qr.solve(b, s);
 
             for (int j = 0; j < d; j++) {
                 if (Double.isNaN(raw[i][j])) {
                     data[i][j] = 0;
                     for (int l = 0; l < k; l++) {
-                        data[i][j] += s[l] * svd.V.get(j, l);
+                        data[i][j] += s[l] * svd.getV().get(j, l);
                     }
                 }
             }

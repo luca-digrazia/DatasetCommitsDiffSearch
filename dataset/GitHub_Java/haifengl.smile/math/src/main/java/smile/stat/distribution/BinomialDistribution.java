@@ -51,8 +51,6 @@ import smile.math.special.Beta;
  * @author Haifeng Li
  */
 public class BinomialDistribution extends DiscreteDistribution {
-    private static final long serialVersionUID = 1L;
-
     private double p;
     private int n;
     private double entropy;

@@ -16,10 +16,8 @@
 package smile.mds;
 
 import smile.math.Math;
-import smile.math.matrix.Lanczos;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.EVD;
+import smile.math.matrix.ColumnMajorMatrix;
+import smile.math.matrix.EigenValueDecomposition;
 
 /**
  * Classical multidimensional scaling, also known as principal coordinates
@@ -125,33 +123,31 @@ public class MDS {
             throw new IllegalArgumentException("Invalid k = " + k);
         }
 
-        DenseMatrix A = Matrix.zeros(n, n);
-        DenseMatrix B = Matrix.zeros(n, n);
+        double[][] A = new double[n][n];
+        double[][] B = new double[n][n];
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < i; j++) {
-                double x = -0.5 * Math.sqr(proximity[i][j]);
-                A.set(i, j, x);
-                A.set(j, i, x);
+                A[i][j] = -0.5 * Math.sqr(proximity[i][j]);
+                A[j][i] = A[i][j];
             }
         }
 
-        double[] mean = A.rowMeans();
+        double[] mean = Math.rowMean(A);
         double mu = Math.mean(mean);
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j <= i; j++) {
-                double x = A.get(i, j) - mean[i] - mean[j] + mu;
-                B.set(i, j, x);
-                B.set(j, i, x);;
+                B[i][j] = A[i][j] - mean[i] - mean[j] + mu;
+                B[j][i] = B[i][j];
             }
         }
 
         if (add) {
-            DenseMatrix Z = Matrix.zeros(2 * n, 2 * n);
+            ColumnMajorMatrix Z = new ColumnMajorMatrix(2 * n, 2 * n);
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
-                    Z.set(i, n + j, 2 * B.get(i, j));
+                    Z.set(i, n + j, 2 * B[i][j]);
                 }
             }
 
@@ -159,7 +155,7 @@ public class MDS {
                 Z.set(n + i, i, -1);
             }
 
-            mean = Math.rowMeans(proximity);
+            mean = Math.rowMean(proximity);
             mu = Math.mean(mean);
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
@@ -167,20 +163,19 @@ public class MDS {
                 }
             }
 
-            double[] evalues = Z.eig();
-            double c = Math.max(evalues);
+            EigenValueDecomposition eigen = new EigenValueDecomposition(Z, false, true);
+            double c = Math.max(eigen.getEigenValues());
 
             for (int i = 0; i < n; i++) {
-                B.set(i, i, 0.0);
+                B[i][i] = 0.0;
                 for (int j = 0; j < i; j++) {
-                    double x = -0.5 * Math.sqr(proximity[i][j] + c);
-                    B.set(i, j, x);
-                    B.set(j, i, x);
+                    B[i][j] = -0.5 * Math.sqr(proximity[i][j] + c);
+                    B[j][i] = B[i][j];
                 }
             }
         }
 
-        EVD eigen = Lanczos.eigen(B, k);
+        EigenValueDecomposition eigen = Math.eigen(B, k);
         
         coordinates = new double[n][k];
         for (int j = 0; j < k; j++) {

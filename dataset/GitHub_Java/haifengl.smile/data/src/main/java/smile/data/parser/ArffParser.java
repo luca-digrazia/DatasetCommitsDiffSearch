@@ -31,6 +31,7 @@ import java.util.List;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.DateAttribute;
+import smile.data.Datum;
 import smile.data.NominalAttribute;
 import smile.data.NumericAttribute;
 import smile.data.StringAttribute;
@@ -426,9 +427,9 @@ public class ArffParser {
 
                 // Parse instance
                 if (tokenizer.ttype == '{') {
-                    readSparseInstance(tokenizer, data, attr);
+                    data.add(getSparseInstance(tokenizer, attr));
                 } else {
-                    readInstance(tokenizer, data, attr);
+                    data.add(getInstance(tokenizer, attr));
                 }
             }
         
@@ -452,7 +453,7 @@ public class ArffParser {
      * Reads a single instance.
      * @throws ParseException if the information is not read successfully
      */
-    private void readInstance(StreamTokenizer tokenizer, AttributeDataset data, Attribute[] attributes) throws IOException, ParseException {
+    private Datum<double[]> getInstance(StreamTokenizer tokenizer, Attribute[] attributes) throws IOException, ParseException {
         double[] x = responseIndex >= 0 ? new double[attributes.length - 1] : new double[attributes.length];
         double y = Double.NaN;
         
@@ -478,14 +479,14 @@ public class ArffParser {
             }
         }
         
-        data.add(x, y);
+        return new Datum<>(x, y);
     }
 
     /**
      * Reads a sparse instance using the tokenizer.
      * @throws ParseException if the information is not read successfully
      */
-    private void readSparseInstance(StreamTokenizer tokenizer, AttributeDataset data, Attribute[] attributes) throws IOException, ParseException {
+    private Datum<double[]> getSparseInstance(StreamTokenizer tokenizer, Attribute[] attributes) throws IOException, ParseException {
         double[] x = responseIndex >= 0 ? new double[attributes.length - 1] : new double[attributes.length];
         double y = Double.NaN;
         int index = -1;
@@ -528,6 +529,6 @@ public class ArffParser {
             
         } while (tokenizer.ttype == StreamTokenizer.TT_WORD);
         
-        data.add(x, y);
+        return new Datum<>(x, y);
     }
 }
