@@ -1,45 +1,53 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.maven;
 
+import static java.util.stream.Collectors.joining;
+
 import java.io.File;
-import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.logging.Log;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import io.quarkus.creator.AppCreator;
-import io.quarkus.creator.AppCreatorException;
-import io.quarkus.creator.AppDependency;
-import io.quarkus.creator.phase.augment.AugmentOutcome;
-import io.quarkus.creator.phase.nativeimage.NativeImageOutcome;
-import io.quarkus.creator.phase.nativeimage.NativeImagePhase;
-import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.repository.RemoteRepository;
 
+import io.quarkus.bootstrap.app.AugmentAction;
+import io.quarkus.bootstrap.app.AugmentResult;
+import io.quarkus.bootstrap.app.CuratedApplication;
+import io.quarkus.bootstrap.app.QuarkusBootstrap;
+import io.quarkus.bootstrap.model.AppArtifact;
+import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+
+/**
+ * Legacy mojo for backwards compatibility reasons. This should not be used in new projects
+ *
+ * This has been replaced by setting quarkus.package.type=native in the configuration.
+ *
+ * @deprecated
+ */
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME)
+@Deprecated
 public class NativeImageMojo extends AbstractMojo {
 
+    protected static final String QUARKUS_PACKAGE_TYPE = "quarkus.package.type";
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
+
+    @Parameter
+    public File javaHome;
 
     @Parameter(defaultValue = "${project.build.directory}")
     private File buildDir;
@@ -47,59 +55,57 @@ public class NativeImageMojo extends AbstractMojo {
     /**
      * The directory for compiled classes.
      */
-    @Parameter(readonly = true, required = true, defaultValue = "${project.build.directory}")
+    @Parameter(readonly = true, required = true, defaultValue = "${project.build.outputDirectory}")
     private File outputDirectory;
 
-    @Parameter(defaultValue = "${project.build.directory}/wiring-classes")
-    private File wiringClassesDirectory;
+    @Parameter
+    private Boolean reportErrorsAtRuntime;
 
     @Parameter(defaultValue = "false")
-    private boolean reportErrorsAtRuntime;
-
-    @Parameter(defaultValue = "false")
-    private boolean debugSymbols;
+    private Boolean debugSymbols;
 
     @Parameter(defaultValue = "${native-image.debug-build-process}")
-    private boolean debugBuildProcess;
+    private Boolean debugBuildProcess;
+
+    @Parameter(defaultValue = "true")
+    private boolean publishDebugBuildProcessPort;
 
     @Parameter(readonly = true, required = true, defaultValue = "${project.build.finalName}")
     private String finalName;
 
     @Parameter(defaultValue = "${native-image.new-server}")
-    private boolean cleanupServer;
+    private Boolean cleanupServer;
 
     @Parameter
-    private boolean enableHttpUrlHandler;
+    private Boolean enableHttpUrlHandler;
 
     @Parameter
-    private boolean enableHttpsUrlHandler;
+    private Boolean enableHttpsUrlHandler;
 
     @Parameter
-    private boolean enableAllSecurityServices;
+    private Boolean enableAllSecurityServices;
 
     @Parameter
-    private boolean enableRetainedHeapReporting;
-
-    @Parameter
-    private boolean enableIsolates;
-
-    @Parameter
-    private boolean enableCodeSizeReporting;
+    private Boolean enableIsolates;
 
     @Parameter(defaultValue = "${env.GRAALVM_HOME}")
     private String graalvmHome;
 
     @Parameter(defaultValue = "false")
-    private boolean enableServer;
+    private Boolean enableServer;
+
+    /**
+     * @deprecated JNI is always enabled starting from GraalVM 19.3.1.
+     */
+    @Deprecated
+    @Parameter(defaultValue = "true")
+    private Boolean enableJni;
 
     @Parameter(defaultValue = "false")
-    private boolean enableJni;
+    private Boolean autoServiceLoaderRegistration;
 
     @Parameter(defaultValue = "false")
-    private boolean autoServiceLoaderRegistration;
-
-    @Parameter(defaultValue = "false")
-    private boolean dumpProxies;
+    private Boolean dumpProxies;
 
     @Parameter(defaultValue = "${native-image.xmx}")
     private String nativeImageXmx;
@@ -107,100 +113,311 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${native-image.docker-build}")
     private String dockerBuild;
 
+    @Parameter(defaultValue = "${native-image.container-runtime}")
+    private String containerRuntime;
+
+    @Parameter(defaultValue = "${native-image.container-runtime-options}")
+    private String containerRuntimeOptions;
+
     @Parameter(defaultValue = "false")
-    private boolean enableVMInspection;
+    private Boolean enableVMInspection;
 
     @Parameter(defaultValue = "true")
-    private boolean fullStackTraces;
+    private Boolean fullStackTraces;
 
+    @Deprecated
     @Parameter(defaultValue = "${native-image.disable-reports}")
-    private boolean disableReports;
+    private Boolean disableReports;
+
+    @Parameter(defaultValue = "${native-image.enable-reports}")
+    private Boolean enableReports;
 
     @Parameter
     private List<String> additionalBuildArgs;
 
-    public NativeImageMojo() {
-        MojoLogger.logSupplier = this::getLog;
-    }
+    @Parameter
+    private Boolean addAllCharsets;
+
+    @Parameter
+    private Boolean enableFallbackImages;
+
+    @Parameter
+    private Boolean reportExceptionStackTraces;
+
+    /**
+     * Coordinates of the Maven artifact containing the original Java application to build the native image for.
+     * If not provided, the current project is assumed to be the original Java application.
+     * <p>
+     * The coordinates are expected to be expressed in the following format:
+     * <p>
+     * groupId:artifactId:classifier:type:version
+     * <p>
+     * With the classifier, type and version being optional.
+     * <p>
+     * If the type is missing, the artifact is assumed to be of type JAR.
+     * <p>
+     * If the version is missing, the artifact is going to be looked up among the project dependencies using the provided
+     * coordinates.
+     *
+     * <p>
+     * However, if the expression consists of only three parts, it is assumed to be groupId:artifactId:version.
+     *
+     * <p>
+     * If the expression consists of only four parts, it is assumed to be groupId:artifactId:classifier:type.
+     */
+    @Parameter(required = false, property = "quarkus.appArtifact")
+    private String appArtifact;
+
+    @Component
+    private RepositorySystem repoSystem;
+
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
+    private RepositorySystemSession repoSession;
+
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true)
+    private List<RemoteRepository> repos;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        getLog().warn(
+                "The quarkus:native-image goal is deprecated, and will be removed in a future version. To build a native executable set the config property quarkus.package.type=native. For more info see https://quarkus.io/guides/building-native-image");
 
-        if (! buildDir.isDirectory()  || ! new File(buildDir, "lib").isDirectory()) {
-            throw new MojoFailureException("Unable to find the required build output. " +
-                    "Please ensure that the 'build' goal has been properly configured for the project - since it is a prerequisite of the 'native-image' goal");
+        if (project.getPackaging().equals("pom") && appArtifact == null) {
+            getLog().info("Type of the artifact is POM and appArtifact parameter has not been set, skipping native-image goal");
+            return;
         }
 
-        try(AppCreator appCreator = AppCreator.builder()
-                // configure the build phase we want the app to go through
-                .addPhase(new NativeImagePhase()
-                        .setAdditionalBuildArgs(additionalBuildArgs)
-                        .setAutoServiceLoaderRegistration(autoServiceLoaderRegistration)
-                        .setOutputDir(buildDir.toPath())
-                        .setCleanupServer(cleanupServer)
-                        .setDebugBuildProcess(debugBuildProcess)
-                        .setDebugSymbols(debugSymbols)
-                        .setDisableReports(disableReports)
-                        .setDockerBuild(dockerBuild)
-                        .setDumpProxies(dumpProxies)
-                        .setEnableAllSecurityServices(enableAllSecurityServices)
-                        .setEnableCodeSizeReporting(enableCodeSizeReporting)
-                        .setEnableHttpsUrlHandler(enableHttpsUrlHandler)
-                        .setEnableHttpUrlHandler(enableHttpUrlHandler)
-                        .setEnableIsolates(enableIsolates)
-                        .setEnableJni(enableJni)
-                        .setEnableRetainedHeapReporting(enableRetainedHeapReporting)
-                        .setEnableServer(enableServer)
-                        .setEnableVMInspection(enableVMInspection)
-                        .setFullStackTraces(fullStackTraces)
-                        .setGraalvmHome(graalvmHome)
-                        .setNativeImageXmx(nativeImageXmx)
-                        .setReportErrorsAtRuntime(reportErrorsAtRuntime)
-                        )
-
-                .build()) {
-
-            appCreator
-            // this mojo runs on the assumption that the outcomes of the augmentation and runner jar building phases
-            // are already available
-            .pushOutcome(AugmentOutcome.class, new AugmentOutcome() {
-                final Path classesDir = new File(outputDirectory, "classes").toPath();
-                @Override
-                public Path getAppClassesDir() {
-                    return classesDir;
+        // The runner JAR has not been built yet, so we are going to build it
+        final AppArtifact appCoords;
+        AppArtifact managingProject = null;
+        DefaultArtifact appMvnArtifact = null;
+        if (appArtifact == null) {
+            appMvnArtifact = new DefaultArtifact(project.getArtifact().getGroupId(),
+                    project.getArtifact().getArtifactId(),
+                    project.getArtifact().getClassifier(),
+                    project.getArtifact().getArtifactHandler().getExtension(),
+                    project.getArtifact().getVersion());
+            appCoords = new AppArtifact(appMvnArtifact.getGroupId(), appMvnArtifact.getArtifactId(),
+                    appMvnArtifact.getClassifier(), appMvnArtifact.getExtension(),
+                    appMvnArtifact.getVersion());
+        } else {
+            final String[] coordsArr = appArtifact.split(":");
+            if (coordsArr.length < 2 || coordsArr.length > 5) {
+                throw new MojoExecutionException(
+                        "appArtifact expression " + appArtifact
+                                + " does not follow format groupId:artifactId:classifier:type:version");
+            }
+            final String groupId = coordsArr[0];
+            final String artifactId = coordsArr[1];
+            String classifier = "";
+            String type = "jar";
+            String version = null;
+            if (coordsArr.length == 3) {
+                version = coordsArr[2];
+            } else if (coordsArr.length > 3) {
+                classifier = coordsArr[2] == null ? "" : coordsArr[2];
+                type = coordsArr[3] == null ? "jar" : coordsArr[3];
+                if (coordsArr.length > 4) {
+                    version = coordsArr[4];
                 }
-                @Override
-                public Path getTransformedClassesDir() {
-                    // not relevant for this mojo
-                    throw new UnsupportedOperationException();
+            }
+            if (version == null) {
+                for (Artifact dep : project.getArtifacts()) {
+                    if (dep.getArtifactId().equals(artifactId)
+                            && dep.getGroupId().equals(groupId)
+                            && dep.getClassifier().equals(classifier)
+                            && dep.getType().equals(type)) {
+                        appMvnArtifact = new DefaultArtifact(dep.getGroupId(),
+                                dep.getArtifactId(),
+                                dep.getClassifier(),
+                                dep.getArtifactHandler().getExtension(),
+                                dep.getVersion());
+                        break;
+                    }
                 }
-                @Override
-                public Path getWiringClassesDir() {
-                    // not relevant for this mojo
-                    throw new UnsupportedOperationException();
+                if (appMvnArtifact == null) {
+                    throw new MojoExecutionException(
+                            "Failed to locate " + appArtifact + " among the project dependencies");
                 }
-                @Override
-                public boolean isWhitelisted(AppDependency dep) {
-                    // not relevant for this mojo
-                    throw new UnsupportedOperationException();
-                }
-            })
-            .pushOutcome(RunnerJarOutcome.class, new RunnerJarOutcome() {
-                final Path runnerJar = buildDir.toPath().resolve(finalName + "-runner.jar");
-                @Override
-                public Path getRunnerJar() {
-                    return runnerJar;
-                }
-                @Override
-                public Path getLibDir() {
-                    return runnerJar.getParent().resolve("lib");
-                }
-            })
-            // resolve the outcome of the native image phase
-            .resolveOutcome(NativeImageOutcome.class);
-
-        } catch (AppCreatorException e) {
-            throw new MojoExecutionException("Failed to generate a native image", e);
+                appCoords = new AppArtifact(appMvnArtifact.getGroupId(), appMvnArtifact.getArtifactId(),
+                        appMvnArtifact.getClassifier(), appMvnArtifact.getExtension(),
+                        appMvnArtifact.getVersion());
+            } else {
+                appCoords = new AppArtifact(groupId, artifactId, classifier, type, version);
+                appMvnArtifact = new DefaultArtifact(groupId, artifactId, classifier, type, version);
+            }
+            managingProject = new AppArtifact(project.getArtifact().getGroupId(),
+                    project.getArtifact().getArtifactId(),
+                    project.getArtifact().getClassifier(),
+                    project.getArtifact().getArtifactHandler().getExtension(),
+                    project.getArtifact().getVersion());
         }
+        try {
+
+            final Properties projectProperties = project.getProperties();
+            final Properties realProperties = new Properties();
+            for (String name : projectProperties.stringPropertyNames()) {
+                if (name.startsWith("quarkus.")) {
+                    realProperties.setProperty(name, projectProperties.getProperty(name));
+                }
+            }
+            realProperties.putIfAbsent("quarkus.application.name", project.getArtifactId());
+            realProperties.putIfAbsent("quarkus.application.version", project.getVersion());
+
+            Map<String, String> config = createCustomConfig();
+            Map<String, String> old = new HashMap<>();
+            for (Map.Entry<String, String> e : config.entrySet()) {
+                old.put(e.getKey(), System.getProperty(e.getKey()));
+                System.setProperty(e.getKey(), e.getValue());
+            }
+
+            MavenArtifactResolver resolver = MavenArtifactResolver.builder()
+                    .setRepositorySystem(repoSystem)
+                    .setRepositorySystemSession(repoSession)
+                    .setRemoteRepositories(repos)
+                    .build();
+            appCoords.setPath(resolver.resolve(appMvnArtifact).getArtifact().getFile().toPath());
+
+            try (CuratedApplication curatedApplication = QuarkusBootstrap.builder()
+                    .setBuildSystemProperties(realProperties)
+                    .setAppArtifact(appCoords)
+                    .setBaseName(finalName)
+                    .setManagingProject(managingProject)
+                    .setMavenArtifactResolver(resolver)
+                    .setLocalProjectDiscovery(false)
+                    .setBaseClassLoader(BuildMojo.class.getClassLoader())
+                    .setTargetDirectory(buildDir.toPath())
+                    .build().bootstrap()) {
+
+                AugmentAction action = curatedApplication.createAugmentor();
+                AugmentResult result = action.createProductionApplication();
+            } finally {
+
+                for (Map.Entry<String, String> e : old.entrySet()) {
+                    if (e.getValue() == null) {
+                        System.clearProperty(e.getKey());
+                    } else {
+                        System.setProperty(e.getKey(), e.getValue());
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            throw new MojoExecutionException("Failed to generate native image", e);
+        }
+
     }
+
+    private Map<String, String> createCustomConfig() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(QUARKUS_PACKAGE_TYPE, "native");
+        if (addAllCharsets != null) {
+            configs.put("quarkus.native.add-all-charsets", addAllCharsets.toString());
+        }
+        if (additionalBuildArgs != null && !additionalBuildArgs.isEmpty()) {
+            getLog().warn("Your application is setting the deprecated 'additionalBuildArgs' Maven option."
+                    + " This option overrides any value passed to the 'quarkus.native.additional-build-args'"
+                    + " property and will be removed in the future."
+                    + " Please consider using 'quarkus.native.additional-build-args' instead of 'additionalBuildArgs'.");
+            configs.put("quarkus.native.additional-build-args",
+                    additionalBuildArgs.stream()
+                            .map(val -> val.replace("\\", "\\\\"))
+                            .map(val -> val.replace(",", "\\,"))
+                            .collect(joining(",")));
+        }
+        if (autoServiceLoaderRegistration != null) {
+            configs.put("quarkus.native.auto-service-loader-registration", autoServiceLoaderRegistration.toString());
+        }
+        if (cleanupServer != null) {
+            configs.put("quarkus.native.cleanup-server", cleanupServer.toString());
+        }
+        if (debugBuildProcess != null) {
+            configs.put("quarkus.native.debug-build-process", debugBuildProcess.toString());
+        }
+        if (debugSymbols != null) {
+            configs.put("quarkus.native.debug-symbols", debugSymbols.toString());
+        }
+        if (disableReports != null) {
+            configs.put("quarkus.native.enable-reports", Boolean.toString(!disableReports));
+        }
+        if (enableReports != null) {
+            configs.put("quarkus.native.enable-reports", enableReports.toString());
+        }
+        if (containerRuntime != null && !containerRuntime.trim().isEmpty()) {
+            configs.put("quarkus.native.container-runtime", containerRuntime);
+        } else if (dockerBuild != null && !dockerBuild.trim().isEmpty()) {
+            if (!dockerBuild.toLowerCase().equals("false")) {
+                if (dockerBuild.toLowerCase().equals("true")) {
+                    configs.put("quarkus.native.container-runtime", "docker");
+                } else {
+                    configs.put("quarkus.native.container-runtime", dockerBuild);
+                }
+            }
+        }
+        if (containerRuntimeOptions != null && !containerRuntimeOptions.trim().isEmpty()) {
+            configs.put("quarkus.native.container-runtime-options", containerRuntimeOptions);
+        }
+        if (dumpProxies != null) {
+            configs.put("quarkus.native.dump-proxies", dumpProxies.toString());
+        }
+        if (enableAllSecurityServices != null) {
+            configs.put("quarkus.native.enable-all-security-services", enableAllSecurityServices.toString());
+        }
+        if (enableFallbackImages != null) {
+            configs.put("quarkus.native.enable-fallback-images", enableFallbackImages.toString());
+        }
+        if (enableHttpsUrlHandler != null) {
+            configs.put("quarkus.native.enable-https-url-handler", enableHttpsUrlHandler.toString());
+        }
+        if (enableHttpUrlHandler != null) {
+            configs.put("quarkus.native.enable-http-url-handler", enableHttpUrlHandler.toString());
+        }
+        if (enableIsolates != null) {
+            configs.put("quarkus.native.enable-isolates", enableIsolates.toString());
+        }
+        if (Boolean.FALSE.equals(enableJni)) {
+            getLog().warn("Your application is setting the deprecated 'enableJni' Maven option to false. Please"
+                    + " consider removing this option as it is ignored (JNI is always enabled) and it will be removed"
+                    + " in a future Quarkus version.");
+        }
+
+        if (enableServer != null) {
+            configs.put("quarkus.native.enable-server", enableServer.toString());
+        }
+
+        if (enableVMInspection != null) {
+            configs.put("quarkus.native.enable-vm-inspection", enableVMInspection.toString());
+        }
+        if (fullStackTraces != null) {
+            configs.put("quarkus.native.full-stack-traces", fullStackTraces.toString());
+        }
+        if (graalvmHome != null && !graalvmHome.trim().isEmpty()) {
+            configs.put("quarkus.native.graalvm-home", graalvmHome);
+        }
+        if (javaHome != null && !javaHome.toString().isEmpty()) {
+            configs.put("quarkus.native.java-home", javaHome.toString());
+        }
+        if (nativeImageXmx != null && !nativeImageXmx.trim().isEmpty()) {
+            configs.put("quarkus.native.native-image-xmx", nativeImageXmx);
+        }
+        if (reportErrorsAtRuntime != null) {
+            configs.put("quarkus.native.report-errors-at-runtime", reportErrorsAtRuntime.toString());
+        }
+        if (reportExceptionStackTraces != null) {
+            configs.put("quarkus.native.report-exception-stack-traces", reportExceptionStackTraces.toString());
+        }
+        if (publishDebugBuildProcessPort) {
+            configs.put("quarkus.native.publish-debug-build-process-port",
+                    Boolean.toString(publishDebugBuildProcessPort));
+        }
+        return configs;
+
+    }
+
+    @Override
+    public void setLog(Log log) {
+        super.setLog(log);
+        MojoLogger.delegate = log;
+    }
+
 }
