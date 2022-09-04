@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
@@ -27,6 +26,7 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.util.Preconditions;
 
 /**
  * Tool for evaluating which {@link Attribute.Transition}(s) should be applied to given targets.
@@ -168,7 +168,7 @@ public final class TransitionResolver {
     } else if (transition2 == Attribute.ConfigurationTransition.NULL) {
       // A NULL transition can just replace earlier transitions: no need to compose them.
       return Attribute.ConfigurationTransition.NULL;
-    } else if (transition2.isHostTransition()) {
+    } else if (transition2 == Attribute.ConfigurationTransition.HOST) {
       // A HOST transition can just replace earlier transitions: no need to compose them.
       // But it also improves performance: host transitions are common, and
       // ConfiguredTargetFunction has special optimized logic to handle them. If they were buried

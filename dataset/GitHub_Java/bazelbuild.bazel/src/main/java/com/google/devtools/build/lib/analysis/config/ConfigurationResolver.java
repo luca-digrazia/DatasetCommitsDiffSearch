@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.TransitiveTargetKey;
 import com.google.devtools.build.lib.skyframe.TransitiveTargetValue;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -387,7 +386,7 @@ public final class ConfigurationResolver {
     if (!parentConfig.trimConfigurations()) {
       return parentConfig.getAllFragments().keySet();
     }
-    SkyKey fragmentsKey = TransitiveTargetKey.of(dep);
+    SkyKey fragmentsKey = TransitiveTargetValue.key(dep);
     TransitiveTargetValue transitiveDepInfo = (TransitiveTargetValue) env.getValue(fragmentsKey);
     if (transitiveDepInfo == null) {
       // This should only be possible for tests. In actual runs, this was already called

@@ -18,7 +18,6 @@ import static com.google.common.collect.Iterables.concat;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
@@ -69,7 +68,6 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.PackageSpecification;
-import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
@@ -92,6 +90,7 @@ import com.google.devtools.build.lib.syntax.SkylarkImports;
 import com.google.devtools.build.lib.syntax.SkylarkImports.SkylarkImportSyntaxException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -1137,9 +1136,8 @@ public class BuildView {
             ruleClassProvider.getPrerequisiteValidator(),
             ((Rule) target.getTarget()).getRuleClassObject().getConfigurationFragmentPolicy())
         .setVisibility(
-            NestedSetBuilder.create(
-                Order.STABLE_ORDER,
-                PackageGroupContents.create(ImmutableList.of(PackageSpecification.everything()))))
+            NestedSetBuilder.<PackageSpecification>create(
+                Order.STABLE_ORDER, PackageSpecification.everything()))
         .setPrerequisites(
             getPrerequisiteMapForTesting(eventHandler, target, configurations, toolchainContext))
         .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
