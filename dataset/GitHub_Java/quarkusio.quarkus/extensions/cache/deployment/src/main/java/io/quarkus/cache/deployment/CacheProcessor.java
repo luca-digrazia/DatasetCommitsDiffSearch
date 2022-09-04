@@ -3,7 +3,7 @@ package io.quarkus.cache.deployment;
 import static io.quarkus.cache.deployment.CacheDeploymentConstants.API_METHODS_ANNOTATIONS;
 import static io.quarkus.cache.deployment.CacheDeploymentConstants.API_METHODS_ANNOTATIONS_LISTS;
 import static io.quarkus.cache.deployment.CacheDeploymentConstants.CACHE_NAME_PARAM;
-import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
+import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 import static org.jboss.jandex.AnnotationTarget.Kind.METHOD;
 
 import java.util.ArrayList;
@@ -32,7 +32,6 @@ import io.quarkus.cache.runtime.CacheInvalidateInterceptor;
 import io.quarkus.cache.runtime.CacheResultInterceptor;
 import io.quarkus.cache.runtime.caffeine.CaffeineCacheBuildRecorder;
 import io.quarkus.cache.runtime.caffeine.CaffeineCacheInfo;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
@@ -42,7 +41,7 @@ class CacheProcessor {
 
     @BuildStep
     FeatureBuildItem feature() {
-        return new FeatureBuildItem(Feature.CACHE);
+        return new FeatureBuildItem(FeatureBuildItem.CACHE);
     }
 
     @BuildStep
@@ -75,14 +74,10 @@ class CacheProcessor {
     }
 
     @BuildStep
-    @Record(RUNTIME_INIT)
+    @Record(STATIC_INIT)
     void recordCachesBuild(CombinedIndexBuildItem combinedIndex, BeanContainerBuildItem beanContainer, CacheConfig config,
-            CaffeineCacheBuildRecorder caffeineRecorder,
-            List<AdditionalCacheNameBuildItem> additionalCacheNames) {
+            CaffeineCacheBuildRecorder caffeineRecorder) {
         Set<String> cacheNames = getCacheNames(combinedIndex.getIndex());
-        for (AdditionalCacheNameBuildItem additionalCacheName : additionalCacheNames) {
-            cacheNames.add(additionalCacheName.getName());
-        }
         switch (config.type) {
             case CacheDeploymentConstants.CAFFEINE_CACHE_TYPE:
                 Set<CaffeineCacheInfo> cacheInfos = CaffeineCacheInfoBuilder.build(cacheNames, config);
