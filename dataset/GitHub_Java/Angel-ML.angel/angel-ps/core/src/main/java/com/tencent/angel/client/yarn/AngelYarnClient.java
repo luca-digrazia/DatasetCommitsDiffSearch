@@ -25,7 +25,7 @@ package com.tencent.angel.client.yarn;
 
 import com.google.protobuf.ServiceException;
 import com.tencent.angel.client.AngelClient;
-import com.tencent.angel.common.location.Location;
+import com.tencent.angel.common.Location;
 import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.exception.AngelException;
 import com.tencent.angel.ipc.TConnection;
@@ -138,7 +138,6 @@ public class AngelYarnClient extends AngelClient {
       conf.set(AngelConf.ANGEL_JOB_DIR, submitJobDir.toString());
       conf.set(AngelConf.ANGEL_JOB_ID, jobId.toString());
 
-      setInputDirectory();
       setOutputDirectory();
 
       // Credentials credentials = new Credentials();
@@ -177,7 +176,6 @@ public class AngelYarnClient extends AngelClient {
 
   @Override
   public void stop() throws AngelException{
-    super.stop();
     if (yarnClient != null) {
       try {
         yarnClient.killApplication(appId);
@@ -191,20 +189,14 @@ public class AngelYarnClient extends AngelClient {
 
   @Override
   public void stop(int stateCode) throws AngelException{
-    LOG.info("stop the application");
-    super.stop();
     if(master != null) {
       try {
-        LOG.info("master is not null, send stop command to Master, stateCode=" + stateCode);
         master.stop(null, ClientMasterServiceProtos.StopRequest.newBuilder().setExitStatus(stateCode).build());
       } catch (ServiceException e) {
-        LOG.error("send stop command to Master failed ", e);
-        stop();
         throw new AngelException(e);
       }
       close();
     } else {
-      LOG.info("master is null, just kill the application");
       stop();
     }
   }
@@ -396,7 +388,6 @@ public class AngelYarnClient extends AngelClient {
     DataOutputBuffer dob = new DataOutputBuffer();
     ts.writeTokenStorageToStream(dob);
     ByteBuffer securityTokens = ByteBuffer.wrap(dob.getData(), 0, dob.getLength());
-    dob.close();
 
     // Setup the command to run the AM
     List<String> vargs = new ArrayList<String>(8);
@@ -487,10 +478,7 @@ public class AngelYarnClient extends AngelClient {
 
     int heapMax = masterMemoryMB - 512;
     return new StringBuilder().append(" -Xmx").append(heapMax).append("M").append(" -Xms")
-      .append(heapMax).append("M").append(" -XX:PermSize=100M -XX:MaxPermSize=200M")
-      .append(" -XX:+PrintGCDateStamps").append(" -XX:+PrintGCDetails")
-      .append(" -XX:+PrintCommandLineFlags").append(" -XX:+PrintTenuringDistribution")
-      .append(" -XX:+PrintAdaptiveSizePolicy").append(" -Xloggc:<LOG_DIR>/gc.log").toString();
+      .append(heapMax).append("M").append(" -XX:PermSize=100M -XX:MaxPermSize=200M").toString();
   }
 
   private LocalResource createApplicationResource(FileContext fs, Path p, LocalResourceType type)
@@ -537,15 +525,14 @@ public class AngelYarnClient extends AngelClient {
         Thread.sleep(1000);
         tryTime++;
       } else {
-        LOG.info("appMaster getTrackingUrl = " + appMaster.getTrackingUrl().replace("proxy", "cluster/app"));
+        LOG.info("appMaster getTrackingUrl = " + appMaster.getTrackingUrl());
         LOG.info("master host=" + host + ", port=" + port);
         try {
           masterLocation = new Location(host, port);
           LOG.info("start to create rpc client to am");         
           master = connection.getMasterService(masterLocation.getIp(), masterLocation.getPort());
-          startHeartbeat();
+          master.ping(null, PingRequest.newBuilder().build());
         } catch (ServiceException e) {
-          LOG.error("Register to Master failed, ", e);
           Thread.sleep(1000);
           tryTime++;
           continue;
