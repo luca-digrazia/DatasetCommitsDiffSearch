@@ -32,7 +32,6 @@ import io.quarkus.qrs.runtime.model.ResourceWriter;
 import io.quarkus.qrs.runtime.spi.QrsMessageBodyWriter;
 import io.quarkus.qrs.runtime.util.MediaTypeHelper;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.http.HttpServerResponse;
 
 public class Serialisers {
 
@@ -89,7 +88,6 @@ public class Serialisers {
         if (writer instanceof QrsMessageBodyWriter) {
             QrsMessageBodyWriter<Object> qrsWriter = (QrsMessageBodyWriter<Object>) writer;
             RuntimeResource target = context.getTarget();
-            Serialisers.encodeResponseHeaders(context);
             if (qrsWriter.isWriteable(entity.getClass(), target == null ? null : target.getLazyMethod(),
                     context.getProducesMediaType())) {
                 if (mediaType != null) {
@@ -109,7 +107,6 @@ public class Serialisers {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 writer.writeTo(entity, entity.getClass(), context.getGenericReturnType(),
                         context.getAnnotations(), response.getMediaType(), response.getHeaders(), baos);
-                Serialisers.encodeResponseHeaders(context);
                 context.getContext().response().end(Buffer.buffer(baos.toByteArray()));
                 return true;
             } else {
@@ -291,23 +288,6 @@ public class Serialisers {
 
         public EntityWriter getEntityWriter() {
             return entityWriter;
-        }
-    }
-
-    public static void encodeResponseHeaders(QrsRequestContext requestContext) {
-        HttpServerResponse vertxResponse = requestContext.getContext().response();
-        Response response = requestContext.getResponse();
-        vertxResponse.setStatusCode(response.getStatus());
-        if (response.getStatusInfo().getReasonPhrase() != null) {
-            vertxResponse.setStatusMessage(response.getStatusInfo().getReasonPhrase());
-        }
-        MultivaluedMap<String, String> headers = response.getStringHeaders();
-        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-            if (entry.getValue().size() == 1) {
-                vertxResponse.putHeader(entry.getKey(), entry.getValue().get(0));
-            } else {
-                vertxResponse.putHeader(entry.getKey(), entry.getValue());
-            }
         }
     }
 }
