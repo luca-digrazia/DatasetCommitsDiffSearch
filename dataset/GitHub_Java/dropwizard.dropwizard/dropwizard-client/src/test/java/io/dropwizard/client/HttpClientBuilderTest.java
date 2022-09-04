@@ -6,25 +6,23 @@ import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
 import com.codahale.metrics.httpclient.InstrumentedHttpRequestExecutor;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
-import io.dropwizard.client.proxy.AuthConfiguration;
-import io.dropwizard.client.proxy.ProxyConfiguration;
 import io.dropwizard.util.Duration;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.apache.http.*;
+import org.apache.http.Header;
+import org.apache.http.HeaderIterator;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.Credentials;
-import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.config.SocketConfig;
 import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.routing.HttpRoutePlanner;
-import org.apache.http.conn.routing.HttpRoute;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
@@ -33,13 +31,11 @@ import org.apache.http.impl.NoConnectionReuseStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.http.impl.conn.DefaultRoutePlanner;
-import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicListHeaderIterator;
-import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HTTP;
 import org.apache.http.protocol.HttpContext;
 import org.junit.Before;
@@ -55,7 +51,10 @@ import java.lang.reflect.Field;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
 public class HttpClientBuilderTest {
@@ -89,7 +88,7 @@ public class HttpClientBuilderTest {
     @Test
     public void setsTheMaximumConnectionPoolSize() throws Exception {
         configuration.setMaxConnections(412);
-        final ConfiguredCloseableHttpClient client = builder.using(configuration)
+        final CloseableHttpClient client = builder.using(configuration)
                 .createClient(apacheBuilder, builder.configureConnectionManager(connectionManager), "test");
 
         assertThat(client).isNotNull();
@@ -101,7 +100,7 @@ public class HttpClientBuilderTest {
     @Test
     public void setsTheMaximumRoutePoolSize() throws Exception {
         configuration.setMaxConnectionsPerRoute(413);
-        final ConfiguredCloseableHttpClient client = builder.using(configuration)
+        final CloseableHttpClient client = builder.using(configuration)
                 .createClient(apacheBuilder, builder.configureConnectionManager(connectionManager), "test");
 
         assertThat(client).isNotNull();
@@ -230,14 +229,14 @@ public class HttpClientBuilderTest {
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getConnectTimeout())
                 .isEqualTo(500);
     }
-
+    
     @Test
     public void setsTheConnectionRequestTimeout() throws Exception {
-        configuration.setConnectionRequestTimeout(Duration.milliseconds(123));
-
-        assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
-        assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getConnectionRequestTimeout())
-                .isEqualTo(123);
+    	configuration.setConnectionRequestTimeout(Duration.milliseconds(123));
+    	
+    	assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
+    	assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getConnectionRequestTimeout())
+        		.isEqualTo(123);
     }
 
     @Test
@@ -258,7 +257,7 @@ public class HttpClientBuilderTest {
     @Test
     public void usesTheDefaultRoutePlanner() throws Exception {
         final CloseableHttpClient httpClient = builder.using(configuration)
-                .createClient(apacheBuilder, connectionManager, "test").getClient();
+                .createClient(apacheBuilder, connectionManager, "test");
 
         assertThat(httpClient).isNotNull();
         assertThat(spyHttpClientBuilderField("routePlanner", apacheBuilder)).isNull();
@@ -279,7 +278,7 @@ public class HttpClientBuilderTest {
             }
         });
         final CloseableHttpClient httpClient = builder.using(configuration).using(routePlanner)
-                .createClient(apacheBuilder, connectionManager, "test").getClient();
+                .createClient(apacheBuilder, connectionManager, "test");
 
         assertThat(httpClient).isNotNull();
         assertThat(spyHttpClientBuilderField("routePlanner", apacheBuilder)).isSameAs(routePlanner);
@@ -326,55 +325,6 @@ public class HttpClientBuilderTest {
     }
 
     @Test
-    public void usesProxy() throws Exception {
-        HttpClientConfiguration config = new HttpClientConfiguration();
-        ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080);
-        config.setProxyConfiguration(proxy);
-
-        checkProxy(config, new HttpHost("192.168.52.11", 8080, "http"));
-    }
-
-    @Test
-    public void usesProxyWithoutPort() throws Exception {
-        HttpClientConfiguration config = new HttpClientConfiguration();
-        ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11");
-        config.setProxyConfiguration(proxy);
-
-        checkProxy(config, new HttpHost("192.168.52.11"));
-    }
-
-    @Test
-    public void usesProxyWithAuth() throws Exception {
-        HttpClientConfiguration config = new HttpClientConfiguration();
-        AuthConfiguration auth = new AuthConfiguration("secret", "stuff");
-        ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080, "http", auth);
-        config.setProxyConfiguration(proxy);
-
-        DefaultHttpClient httpClient = checkProxy(config, new HttpHost("192.168.52.11", 8080, "http"));
-
-        assertThat(httpClient.getCredentialsProvider().getCredentials(new AuthScope("192.168.52.11", 8080)))
-                .isEqualTo(new UsernamePasswordCredentials("secret", "stuff"));
-    }
-
-    @Test
-    public void usesNoProxy() throws Exception {
-        checkProxy(new HttpClientConfiguration(), null);
-    }
-
-    private DefaultHttpClient checkProxy(HttpClientConfiguration config, HttpHost proxyHost) throws HttpException {
-        DefaultHttpClient httpClient = (DefaultHttpClient) builder.using(config).build("test");
-
-        HttpHost target = new HttpHost("dropwizard.io", 80);
-        HttpRoute route = httpClient.getRoutePlanner().determineRoute(target, new HttpGet(target.toURI()),
-                new BasicHttpContext());
-        assertThat(route.getProxyHost()).isEqualTo(proxyHost);
-        assertThat(route.getTargetHost()).isEqualTo(new HttpHost("dropwizard.io", 80, "http"));
-        assertThat(route.getHopCount()).isEqualTo(proxyHost != null ? 2 : 1);
-
-        return httpClient;
-    }
-
-    @Test
     public void usesACustomHttpClientMetricNameStrategy() throws Exception {
         assertThat(builder.using(HttpClientMetricNameStrategies.HOST_AND_METHOD)
                 .createClient(apacheBuilder, connectionManager, "test"))
@@ -393,14 +343,6 @@ public class HttpClientBuilderTest {
                 "metricNameStrategy", true)
                 .get(spyHttpClientBuilderField("requestExec", apacheBuilder)))
                 .isSameAs(HttpClientMetricNameStrategies.METHOD_ONLY);
-    }
-
-    @Test
-    public void exposedConfigIsTheSameAsInternalToTheWrappedHttpClient() throws Exception {
-        ConfiguredCloseableHttpClient client = builder.createClient(apacheBuilder, connectionManager, "test");
-        assertThat(client).isNotNull();
-
-        assertThat(spyHttpClientField("defaultConfig", client.getClient())).isEqualTo(client.getDefaultRequestConfig());
     }
 
     private Object spyHttpClientBuilderField(final String fieldName, final Object obj) throws Exception {
