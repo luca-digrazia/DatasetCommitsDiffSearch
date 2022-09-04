@@ -431,7 +431,8 @@ public class CppCompileActionBuilder {
       RuleErrorConsumer ruleErrorConsumer,
       Label label,
       ArtifactCategory outputCategory,
-      String outputName)
+      String outputName,
+      boolean generateDotd)
       throws RuleErrorException {
     this.outputFile =
         CppHelper.getCompileOutputArtifact(
@@ -440,9 +441,7 @@ public class CppCompileActionBuilder {
             CppHelper.getArtifactNameForCategory(
                 ruleErrorConsumer, ccToolchain, outputCategory, outputName),
             configuration);
-    if (CppFileTypes.headerDiscoveryRequired(sourceFile)
-        && !useHeaderModules()
-        && !featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
+    if (generateDotd && !useHeaderModules()) {
       String dotdFileName =
           CppHelper.getDotdFileName(ruleErrorConsumer, ccToolchain, outputCategory, outputName);
       dotdFile =
