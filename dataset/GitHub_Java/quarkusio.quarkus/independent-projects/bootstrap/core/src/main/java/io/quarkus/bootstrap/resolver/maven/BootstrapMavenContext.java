@@ -142,10 +142,8 @@ public class BootstrapMavenContext {
         this.repoSystem = config.repoSystem;
         this.repoSession = config.repoSession;
         this.remoteRepos = config.remoteRepos;
-        if (config.currentProject != null) {
-            this.currentProject = config.currentProject;
-            this.currentPom = currentProject.getRawModel().getPomFile().toPath();
-            this.workspace = config.currentProject.getWorkspace();
+        if (config.workspace != null) {
+            this.workspace = config.workspace;
         } else if (config.workspaceDiscovery) {
             currentProject = resolveCurrentProject();
             this.workspace = currentProject == null ? null : currentProject.getWorkspace();
@@ -689,6 +687,7 @@ public class BootstrapMavenContext {
 
         // trying the current dir as the basedir
         final Path basedir = Paths.get("").normalize().toAbsolutePath();
+
         if (alternatePom != null) {
             Path pom = basedir.resolve(alternatePom);
             if (Files.exists(pom)) {
@@ -705,9 +704,6 @@ public class BootstrapMavenContext {
     }
 
     public Path getCurrentProjectBaseDir() {
-        if (currentProject != null) {
-            return currentProject.getDir();
-        }
         final String basedirProp = PropertyUtils.getProperty(BASEDIR);
         return basedirProp == null ? Paths.get("").normalize().toAbsolutePath() : Paths.get(basedirProp);
     }
