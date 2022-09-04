@@ -18,7 +18,6 @@ package org.graylog2.configuration;
 
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.util.Duration;
-import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import org.graylog2.configuration.converters.URIListConverter;
 import org.graylog2.configuration.validators.ListOfURIsWithHostAndSchemeValidator;
@@ -29,36 +28,30 @@ import java.util.Collections;
 import java.util.List;
 
 public class ElasticsearchClientConfiguration {
-    @Parameter(value = "elasticsearch_hosts", converter = URIListConverter.class, validators = {NonEmptyListValidator.class, ListOfURIsWithHostAndSchemeValidator.class})
-    List<URI> elasticsearchHosts = Collections.singletonList(URI.create("http://127.0.0.1:9200"));
+    @Parameter(value = "elasticsearch_hosts", converter = URIListConverter.class, validators = { NonEmptyListValidator.class, ListOfURIsWithHostAndSchemeValidator.class })
+    private List<URI> elasticsearchHosts = Collections.singletonList(URI.create("http://127.0.0.1:9200"));
 
     @Parameter(value = "elasticsearch_connect_timeout")
-    Duration elasticsearchConnectTimeout = Duration.seconds(10);
+    private Duration elasticsearchConnectTimeout = Duration.seconds(10);
 
-    @Parameter(value = "elasticsearch_socket_timeout", validators = {PositiveDurationValidator.class})
-    Duration elasticsearchSocketTimeout = Duration.seconds(60);
+    @Parameter(value = "elasticsearch_socket_timeout", validators = { PositiveIntegerValidator.class })
+    private Duration elasticsearchSocketTimeout = Duration.seconds(60);
 
     @Parameter(value = "elasticsearch_idle_timeout")
-    Duration elasticsearchIdleTimeout = Duration.seconds(-1L);
+    private Duration elasticsearchIdleTimeout = Duration.seconds(-1L);
 
-    @Parameter(value = "elasticsearch_max_total_connections", validators = {PositiveIntegerValidator.class})
-    int elasticsearchMaxTotalConnections = 20;
+    @Parameter(value = "elasticsearch_max_total_connections", validators = { PositiveIntegerValidator.class })
+    private int elasticsearchMaxTotalConnections = 20;
 
-    @Parameter(value = "elasticsearch_max_total_connections_per_route", validators = {PositiveIntegerValidator.class})
-    int elasticsearchMaxTotalConnectionsPerRoute = 2;
-
-    @Parameter(value = "elasticsearch_max_retries", validators = {PositiveIntegerValidator.class})
-    int elasticsearchMaxRetries = 2;
+    @Parameter(value = "elasticsearch_max_total_connections_per_route", validators = { PositiveIntegerValidator.class })
+    private int elasticsearchMaxTotalConnectionsPerRoute = 2;
 
     @Parameter(value = "elasticsearch_discovery_enabled")
-    boolean discoveryEnabled = false;
+    private boolean discoveryEnabled = false;
 
     @Parameter(value = "elasticsearch_discovery_filter")
-    String discoveryFilter = null;
+    private String discoveryFilter = null;
 
-    @Parameter(value = "elasticsearch_discovery_frequency", validator = PositiveDurationValidator.class)
-    Duration discoveryFrequency = Duration.seconds(30L);
-
-    @Parameter(value = "elasticsearch_compression_enabled")
-    boolean compressionEnabled = false;
+    @Parameter(value = "elasticsearch_discovery_frequency")
+    private Duration discoveryFrequency = Duration.seconds(30L);
 }
