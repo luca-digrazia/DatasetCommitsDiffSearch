@@ -24,8 +24,6 @@ public abstract class MethodInfo {
   }
 
   public abstract String owner();
-
   public abstract String name();
-
   public abstract String desc();
 }
