@@ -678,7 +678,8 @@ public final class CcCommon {
         ccToolchain.getSolibDirectory(),
         library,
         preserveName,
-        /* prefixConsumer= */ true);
+        true,
+        ruleContext.getConfiguration());
   }
 
   /**

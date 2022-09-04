@@ -986,9 +986,5 @@ public final class CcToolchainProvider extends ToolchainInfo
   public LicensesProvider getLicensesProvider() {
     return licensesProvider;
   }
-
-  public PathFragment getDefaultSysroot() {
-    return toolchainInfo.getDefaultSysroot();
-  }
 }
 
