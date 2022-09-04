@@ -8,7 +8,6 @@ import java.util.Set;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.DotName;
 
-import io.quarkus.arc.config.ConfigIgnore;
 import io.quarkus.arc.config.ConfigPrefix;
 import io.quarkus.arc.config.ConfigProperties;
 
@@ -26,6 +25,5 @@ final class DotNames {
     static final DotName ENUM = DotName.createSimple(Enum.class.getName());
     static final DotName CONFIG_PROPERTIES = DotName.createSimple(ConfigProperties.class.getName());
     static final DotName CONFIG_PREFIX = DotName.createSimple(ConfigPrefix.class.getName());
-    static final DotName CONFIG_IGNORE = DotName.createSimple(ConfigIgnore.class.getName());
     static final DotName CONFIG_PROPERTY = DotName.createSimple(ConfigProperty.class.getName());
 }
