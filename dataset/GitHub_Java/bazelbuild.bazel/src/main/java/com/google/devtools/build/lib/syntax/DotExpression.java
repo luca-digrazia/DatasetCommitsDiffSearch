@@ -15,14 +15,12 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.FuncallExpression.MethodDescriptor;
 import com.google.devtools.build.lib.util.SpellChecker;
 import java.io.IOException;
 import java.util.Optional;
 
 /** Syntax node for a dot expression. e.g. obj.field, but not obj.method() */
-@AutoCodec
 public final class DotExpression extends Expression {
 
   private final Expression object;
@@ -67,11 +65,11 @@ public final class DotExpression extends Expression {
     }
     String suffix = "";
     if (objValue instanceof ClassObject) {
-      String customErrorMessage = ((ClassObject) objValue).getErrorMessageForUnknownField(name);
+      String customErrorMessage = ((ClassObject) objValue).errorMessage(name);
       if (customErrorMessage != null) {
         throw new EvalException(loc, customErrorMessage);
       }
-      suffix = SpellChecker.didYouMean(name, ((ClassObject) objValue).getFieldNames());
+      suffix = SpellChecker.didYouMean(name, ((ClassObject) objValue).getKeys());
     }
     throw new EvalException(
         loc,
@@ -85,13 +83,7 @@ public final class DotExpression extends Expression {
    */
   public static Object eval(Object objValue, String name,
       Location loc, Environment env) throws EvalException {
-    if (objValue instanceof SkylarkClassObject) {
-      try {
-        return ((SkylarkClassObject) objValue).getValue(name);
-      } catch (IllegalArgumentException ex) {
-        throw new EvalException(loc, ex);
-      }
-    } else if (objValue instanceof ClassObject) {
+    if (objValue instanceof ClassObject) {
       Object result = null;
       try {
         result = ((ClassObject) objValue).getValue(name);

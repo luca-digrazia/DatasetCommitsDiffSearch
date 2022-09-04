@@ -16,86 +16,83 @@ package com.google.devtools.build.lib.syntax;
 import com.google.devtools.build.lib.events.Location;
 import java.io.IOException;
 
-/** A UnaryOperatorExpression represents a unary operator expression, 'op x'. */
+/** Syntax node for a unary operator expression. */
 public final class UnaryOperatorExpression extends Expression {
 
-  private final TokenKind op; // NOT, TILDE, MINUS or PLUS
-  private final Expression x;
+  private final UnaryOperator operator;
 
-  UnaryOperatorExpression(TokenKind op, Expression x) {
-    this.op = op;
-    this.x = x;
+  private final Expression operand;
+
+  public UnaryOperatorExpression(UnaryOperator operator, Expression operand) {
+    this.operator = operator;
+    this.operand = operand;
   }
 
-  /** Returns the operator. */
-  public TokenKind getOperator() {
-    return op;
+  public UnaryOperator getOperator() {
+    return operator;
   }
 
-  /** Returns the operand. */
-  public Expression getX() {
-    return x;
+  public Expression getOperand() {
+    return operand;
   }
 
   @Override
   public void prettyPrint(Appendable buffer) throws IOException {
-    // TODO(bazel-team): retain parentheses in the syntax tree so we needn't
-    // conservatively emit them here.
-    buffer.append(op == TokenKind.NOT ? "not " : op.toString());
+    // TODO(bazel-team): Possibly omit parentheses when they are not needed according to operator
+    // precedence rules. This requires passing down more contextual information.
+    buffer.append(operator.toString());
     buffer.append('(');
-    x.prettyPrint(buffer);
+    operand.prettyPrint(buffer);
     buffer.append(')');
   }
 
   @Override
   public String toString() {
+    // All current and planned unary operators happen to be prefix operators.
+    // Non-symbolic operators have trailing whitespace built into their name.
+    //
     // Note that this omits the parentheses for brevity, but is not correct in general due to
     // operator precedence rules. For example, "(not False) in mylist" prints as
     // "not False in mylist", which evaluates to opposite results in the case that mylist is empty.
-    // TODO(adonovan): record parentheses explicitly in syntax tree.
-    return (op == TokenKind.NOT ? "not " : op.toString()) + x;
+    return operator.toString() + operand;
   }
 
-  private static Object evaluate(TokenKind op, Object value, Location loc)
+  private static Object evaluate(
+      UnaryOperator operator,
+      Object value,
+      Environment env,
+      Location loc)
       throws EvalException, InterruptedException {
-    switch (op) {
+    switch (operator) {
       case NOT:
         return !EvalUtils.toBoolean(value);
 
       case MINUS:
-        if (value instanceof Integer) {
+        if (!(value instanceof Integer)) {
+          throw new EvalException(
+              loc,
+              String.format(
+                  "unsupported operand type for -: '%s'", EvalUtils.getDataTypeName(value)));
+        }
+        if (env.getSemantics().incompatibleCheckedArithmetic) {
           try {
             return Math.negateExact((Integer) value);
           } catch (ArithmeticException e) {
             // Fails for -MIN_INT.
             throw new EvalException(loc, e.getMessage());
           }
+        } else {
+          return -((Integer) value);
         }
-        break;
 
-      case PLUS:
-        if (value instanceof Integer) {
-          return value;
-        }
-        break;
-
-      case TILDE:
-        if (value instanceof Integer) {
-          return ~((Integer) value);
-        }
-        break;
-
-        // ignore any other operator and proceed to report an error
       default:
+        throw new AssertionError("Unsupported unary operator: " + operator);
     }
-    throw new EvalException(
-        loc,
-        String.format("unsupported unary operation: %s%s", op, EvalUtils.getDataTypeName(value)));
   }
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    return evaluate(op, x.eval(env), getLocation());
+    return evaluate(operator, operand.eval(env), env, getLocation());
   }
 
   @Override

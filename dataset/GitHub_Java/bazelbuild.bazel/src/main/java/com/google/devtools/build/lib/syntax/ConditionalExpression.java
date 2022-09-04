@@ -15,7 +15,9 @@ package com.google.devtools.build.lib.syntax;
 
 import java.io.IOException;
 
-/** Syntax node for an if/else expression. */
+/**
+ * Syntax node for an if/else expression.
+ */
 public final class ConditionalExpression extends Expression {
 
   // Python conditional expressions: $thenCase if $condition else $elseCase
@@ -28,8 +30,11 @@ public final class ConditionalExpression extends Expression {
   public Expression getCondition() { return condition; }
   public Expression getElseCase() { return elseCase; }
 
-  /** Constructor for a conditional expression */
-  ConditionalExpression(Expression thenCase, Expression condition, Expression elseCase) {
+  /**
+   * Constructor for a conditional expression
+   */
+  public ConditionalExpression(
+      Expression thenCase, Expression condition, Expression elseCase) {
     this.thenCase = thenCase;
     this.condition = condition;
     this.elseCase = elseCase;

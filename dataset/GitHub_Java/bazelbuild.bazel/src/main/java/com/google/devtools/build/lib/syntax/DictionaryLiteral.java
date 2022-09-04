@@ -18,7 +18,9 @@ import com.google.devtools.build.lib.events.Location;
 import java.io.IOException;
 import java.util.List;
 
-/** Syntax node for dictionary literals. */
+/**
+ * Syntax node for dictionary literals.
+ */
 public final class DictionaryLiteral extends Expression {
 
   /** Node for an individual key-value pair in a dictionary literal. */
@@ -55,8 +57,13 @@ public final class DictionaryLiteral extends Expression {
 
   private final ImmutableList<DictionaryEntryLiteral> entries;
 
-  DictionaryLiteral(List<DictionaryEntryLiteral> entries) {
-    this.entries = ImmutableList.copyOf(entries);
+  public DictionaryLiteral(List<DictionaryEntryLiteral> exprs) {
+    this.entries = ImmutableList.copyOf(exprs);
+  }
+
+  /** A new literal for an empty dictionary, onto which a new location can be specified */
+  public static DictionaryLiteral emptyDict() {
+    return new DictionaryLiteral(ImmutableList.of());
   }
 
   @Override
@@ -66,7 +73,7 @@ public final class DictionaryLiteral extends Expression {
     for (DictionaryEntryLiteral entry : entries) {
       Object key = entry.key.eval(env);
       Object val = entry.value.eval(env);
-      if (dict.containsKey(key)) {
+      if (env.getSemantics().incompatibleDictLiteralHasNoDuplicates && dict.containsKey(key)) {
         throw new EvalException(
             loc, "Duplicated key " + Printer.repr(key) + " when creating dictionary");
       }
