@@ -202,10 +202,6 @@ public class ServerFactory {
             factory.setKeyManagerPassword(password);
         }
 
-        for (String type : config.getSslConfiguration().getKeyStoreType().asSet()) {
-          factory.setKeyStoreType(type);
-        }
-
         factory.setIncludeProtocols(config.getSslConfiguration().getSupportedProtocols());
     }
 
@@ -270,10 +266,7 @@ public class ServerFactory {
     private Handler createExternalServlet(Environment env) {
         final ServletContextHandler handler = new ServletContextHandler();
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
-        handler.setBaseResource(env.getBaseResource());
-        if(env.getProtectedTargets().size() > 0) {
-            handler.setProtectedTargets(env.getProtectedTargets().toArray(new String[env.getProtectedTargets().size()]));
-        }
+        handler.setBaseResource(Resource.newClassPathResource("."));
 
         for (ImmutableMap.Entry<String, ServletHolder> entry : env.getServlets().entrySet()) {
             handler.addServlet(entry.getValue(), entry.getKey());

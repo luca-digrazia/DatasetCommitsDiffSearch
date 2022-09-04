@@ -15,6 +15,7 @@ import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.tasks.GarbageCollectionTask;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.metrics.core.HealthCheck;
+import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
@@ -55,6 +56,7 @@ public class Environment extends AbstractLifeCycle {
     private final ImmutableSet.Builder<EventListener> servletListeners;
     private final ImmutableSet.Builder<Task> tasks;
     private final AggregateLifeCycle lifeCycle;
+    private SessionHandler sessionHandler;
 
     /**
      * Creates a new environment.
@@ -253,6 +255,10 @@ public class Environment extends AbstractLifeCycle {
         tasks.add(checkNotNull(task));
     }
 
+    public void setSessionHandler(SessionHandler sessionHandler) {
+        this.sessionHandler = sessionHandler;
+    }
+
     /**
      * Enables the Jersey feature with the given name.
      *
@@ -315,7 +321,7 @@ public class Environment extends AbstractLifeCycle {
                                                                 unit,
                                                                 new LinkedBlockingQueue<Runnable>(),
                                                                 threadFactory);
-        manage(new ExecutorServiceManager(executor, 5, TimeUnit.SECONDS, nameFormat));
+        manage(new ExecutorServiceManager(executor, 5, TimeUnit.SECONDS));
         return executor;
     }
 
@@ -337,7 +343,7 @@ public class Environment extends AbstractLifeCycle {
                                                                       .build();
         final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(corePoolSize,
                                                                                   threadFactory);
-        manage(new ExecutorServiceManager(executor, 5, TimeUnit.SECONDS, nameFormat));
+        manage(new ExecutorServiceManager(executor, 5, TimeUnit.SECONDS));
         return executor;
     }
 
@@ -368,19 +374,7 @@ public class Environment extends AbstractLifeCycle {
     private void logManagedObjects() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
         for (Object bean : lifeCycle.getBeans()) {
-            if (bean instanceof JettyManaged) {
-                bean = ((JettyManaged)bean).getWrappedInstance();
-                String canonicalName = bean.getClass().getCanonicalName();
-                if (bean instanceof ExecutorServiceManager) {
-                    String poolName = ((ExecutorServiceManager)bean).getPoolName();
-                    canonicalName += "(" + poolName + ")";
-                }
-                builder.add(canonicalName);
-            }
-            else {
-                builder.add(bean.getClass().getCanonicalName());
-            }
-
+            builder.add(bean.getClass().getCanonicalName());
         }
         LOG.debug("managed objects = {}", builder.build());
     }
@@ -483,5 +477,9 @@ public class Environment extends AbstractLifeCycle {
 
     public AbstractService<?> getService() {
         return service;
+    }
+
+    public SessionHandler getSessionHandler() {
+        return sessionHandler;
     }
 }
