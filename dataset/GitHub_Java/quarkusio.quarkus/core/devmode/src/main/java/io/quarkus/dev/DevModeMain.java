@@ -28,11 +28,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.logging.Handler;
@@ -43,7 +40,6 @@ import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.runner.RuntimeRunner;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.Timing;
@@ -68,8 +64,6 @@ public class DevModeMain {
     private static Closeable runner;
     static volatile Throwable deploymentProblem;
     static RuntimeUpdatesProcessor runtimeUpdatesProcessor;
-
-    static final Map<Class<?>, Object> liveReloadContext = new ConcurrentHashMap<>();
 
     public static void main(String... args) throws Exception {
         Timing.staticInitStarted();
@@ -96,13 +90,7 @@ public class DevModeMain {
         }
         //TODO: we can't handle an exception on startup with hot replacement, as Undertow might not have started
 
-        doStart(false, Collections.emptySet());
-        if (deploymentProblem != null) {
-            log.error("Failed to start Quarkus, attempting to start hot replacement endpoint to recover");
-            if (runtimeUpdatesProcessor != null) {
-                runtimeUpdatesProcessor.startupFailed();
-            }
-        }
+        doStart();
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
@@ -128,7 +116,7 @@ public class DevModeMain {
         LockSupport.park();
     }
 
-    private static synchronized void doStart(boolean liveReload, Set<String> changedResources) {
+    private static synchronized void doStart() {
         try {
             runtimeCl = new URLClassLoader(new URL[] { classesRoot.toURL() }, ClassLoader.getSystemClassLoader());
             currentAppClassLoader = runtimeCl;
@@ -138,7 +126,6 @@ public class DevModeMain {
                 Thread.currentThread().setContextClassLoader(runtimeCl);
                 RuntimeRunner.Builder builder = RuntimeRunner.builder()
                         .setLaunchMode(LaunchMode.DEVELOPMENT)
-                        .setLiveReloadState(new LiveReloadBuildItem(liveReload, changedResources, liveReloadContext))
                         .setClassLoader(runtimeCl)
                         .setTarget(classesRoot.toPath())
                         .setFrameworkClassesPath(wiringDir.toPath())
@@ -186,7 +173,7 @@ public class DevModeMain {
         }
     }
 
-    public static synchronized void restartApp(Set<String> changedClasses) {
+    public static synchronized void restartApp() {
         if (runner != null) {
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(runtimeCl);
@@ -201,7 +188,7 @@ public class DevModeMain {
         SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
         DevModeMain.runner = null;
         Timing.restart();
-        doStart(true, changedClasses);
+        doStart();
     }
 
     public static ClassLoader getCurrentAppClassLoader() {
