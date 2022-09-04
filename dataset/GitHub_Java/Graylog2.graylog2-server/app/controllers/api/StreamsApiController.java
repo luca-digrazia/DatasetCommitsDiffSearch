@@ -32,10 +32,6 @@ public class StreamsApiController extends AuthenticatedController {
         return ok(Json.toJson(streams));
     }
 
-    public Result get(String streamId) throws IOException, APIException {
-        return ok(Json.toJson(streamService.get(streamId)));
-    }
-
     public Result delete(String streamId) throws APIException, IOException {
         this.streamService.delete(streamId);
         return ok();
@@ -74,18 +70,21 @@ public class StreamsApiController extends AuthenticatedController {
         return ok();
     }
 
+    @BodyParser.Of(BodyParser.Json.class)
     public Result testMatch(String stream_id) {
+
+        TestMatchResponse response = null;
         try {
-            final JsonNode jsonNode = request().body().asJson();
-            final TestMatchRequest tmr = Json.fromJson(jsonNode, TestMatchRequest.class);
-            final TestMatchResponse response = streamService.testMatch(stream_id, tmr);
-            return ok(Json.toJson(response));
+            TestMatchRequest tmr = Json.fromJson(request().body().asJson(), TestMatchRequest.class);
+            response = streamService.testMatch(stream_id, tmr);
         } catch (APIException e) {
             String message = "Could not test stream rule matching. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, message);
         } catch (IOException e) {
             return status(504, e.toString());
         }
+
+        return ok(Json.toJson(response));
     }
 
     public Result listStreams() {
