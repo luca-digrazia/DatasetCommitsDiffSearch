@@ -207,14 +207,13 @@ public class Retrier {
         throw e;  // Nested retries are always pass-through.
       } catch (StatusException | StatusRuntimeException e) {
         Status st = Status.fromThrowable(e);
-        int attempts = backoff.getRetryAttempts();
         long delay = backoff.nextDelayMillis();
         if (st.getCode() == Status.Code.CANCELLED && Thread.currentThread().isInterrupted()) {
           Thread.currentThread().interrupt();
           throw new InterruptedException();
         }
         if (delay < 0 || !isRetriable.apply(st)) {
-          throw new RetryException(st.asRuntimeException(), attempts);
+          throw new RetryException(st.asRuntimeException(), backoff.getRetryAttempts());
         }
         sleep(delay);
       } catch (Exception e) {
