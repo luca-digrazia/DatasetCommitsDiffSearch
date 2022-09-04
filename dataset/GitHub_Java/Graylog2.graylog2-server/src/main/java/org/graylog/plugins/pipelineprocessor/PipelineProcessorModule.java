@@ -16,21 +16,14 @@
  */
 package org.graylog.plugins.pipelineprocessor;
 
-import com.google.inject.Binder;
-import com.google.inject.TypeLiteral;
-import com.google.inject.multibindings.MapBinder;
-import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
-import org.graylog.plugins.pipelineprocessor.functions.BooleanCoercion;
-import org.graylog.plugins.pipelineprocessor.functions.DoubleCoercion;
-import org.graylog.plugins.pipelineprocessor.functions.DropMessageFunction;
-import org.graylog.plugins.pipelineprocessor.functions.HasField;
-import org.graylog.plugins.pipelineprocessor.functions.InputFunction;
-import org.graylog.plugins.pipelineprocessor.functions.LongCoercion;
-import org.graylog.plugins.pipelineprocessor.functions.SetField;
-import org.graylog.plugins.pipelineprocessor.functions.StringCoercion;
-import org.graylog.plugins.pipelineprocessor.processors.NaiveRuleProcessor;
+import org.graylog.plugins.pipelineprocessor.audit.PipelineProcessorAuditEventTypes;
+import org.graylog.plugins.pipelineprocessor.functions.ProcessorFunctionsModule;
+import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
+import org.graylog.plugins.pipelineprocessor.rest.PipelineConnectionsResource;
 import org.graylog.plugins.pipelineprocessor.rest.PipelineResource;
+import org.graylog.plugins.pipelineprocessor.rest.PipelineRestPermissions;
 import org.graylog.plugins.pipelineprocessor.rest.RuleResource;
+import org.graylog.plugins.pipelineprocessor.rest.SimulatorResource;
 import org.graylog2.plugin.PluginConfigBean;
 import org.graylog2.plugin.PluginModule;
 
@@ -46,32 +39,19 @@ public class PipelineProcessorModule extends PluginModule {
 
     @Override
     protected void configure() {
-        addMessageProcessor(NaiveRuleProcessor.class);
+        addMessageProcessor(PipelineInterpreter.class, PipelineInterpreter.Descriptor.class);
         addRestResource(RuleResource.class);
         addRestResource(PipelineResource.class);
+        addRestResource(PipelineConnectionsResource.class);
+        addRestResource(SimulatorResource.class);
+        addPermissions(PipelineRestPermissions.class);
 
-        // built-in functions
-        addMessageProcessorFunction(BooleanCoercion.NAME, BooleanCoercion.class);
-        addMessageProcessorFunction(DoubleCoercion.NAME, DoubleCoercion.class);
-        addMessageProcessorFunction(LongCoercion.NAME, LongCoercion.class);
-        addMessageProcessorFunction(StringCoercion.NAME, StringCoercion.class);
+        install(new ProcessorFunctionsModule());
 
-        addMessageProcessorFunction(HasField.NAME, HasField.class);
-        addMessageProcessorFunction(SetField.NAME, SetField.class);
-        addMessageProcessorFunction(DropMessageFunction.NAME, DropMessageFunction.class);
-        addMessageProcessorFunction(InputFunction.NAME, InputFunction.class);
-    }
+        installSearchResponseDecorator(searchResponseDecoratorBinder(),
+                PipelineProcessorMessageDecorator.class,
+                PipelineProcessorMessageDecorator.Factory.class);
 
-    protected void addMessageProcessorFunction(String name, Class<? extends Function<?>> functionClass) {
-        addMessageProcessorFunction(binder(), name, functionClass);
-    }
-
-    public static MapBinder<String, Function<?>> processorFunctionBinder(Binder binder) {
-        return MapBinder.newMapBinder(binder, TypeLiteral.get(String.class), new TypeLiteral<Function<?>>() {});
-    }
-
-    public static void addMessageProcessorFunction(Binder binder, String name, Class<? extends Function<?>> functionClass) {
-        processorFunctionBinder(binder).addBinding(name).to(functionClass);
-
+        addAuditEventTypes(PipelineProcessorAuditEventTypes.class);
     }
 }
