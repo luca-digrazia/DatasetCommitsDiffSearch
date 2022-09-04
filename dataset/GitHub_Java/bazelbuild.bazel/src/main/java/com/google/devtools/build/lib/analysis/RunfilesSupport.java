@@ -359,7 +359,7 @@ public final class RunfilesSupport {
                 inputManifest,
                 outputManifest,
                 /*filesetTree=*/ false,
-                config.getActionEnvironment(),
+                config.getLocalShellEnvironment(),
                 config.runfilesEnabled()));
     return outputManifest;
   }

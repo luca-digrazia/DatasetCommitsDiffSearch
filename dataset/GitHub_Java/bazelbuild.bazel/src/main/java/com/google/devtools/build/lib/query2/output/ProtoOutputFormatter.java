@@ -46,21 +46,25 @@ import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDependencyMode;
 import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.GeneratedFile;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult.Builder;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.SourceFile;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Type;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -210,15 +214,15 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
       postProcess(rule, rulePb, serializedAttributes);
 
-      String transitiveHashCode = rule.getRuleClassObject().getRuleDefinitionEnvironmentHashCode();
-      if (transitiveHashCode != null && includeRuleDefinitionEnvironment()) {
+      Environment env = rule.getRuleClassObject().getRuleDefinitionEnvironment();
+      if (env != null && includeRuleDefinitionEnvironment()) {
         // The RuleDefinitionEnvironment is always defined for Skylark rules and
         // always null for non Skylark rules.
         rulePb.addAttribute(
             Build.Attribute.newBuilder()
                 .setName(RULE_IMPLEMENTATION_HASH_ATTR_NAME)
                 .setType(ProtoUtils.getDiscriminatorFromType(Type.STRING))
-                .setStringValue(transitiveHashCode));
+                .setStringValue(env.getTransitiveContentHashCode()));
       }
 
       ImmutableMultimap<Attribute, Label> aspectsDependencies =
@@ -294,12 +298,18 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       }
 
       if (inputFile.getName().equals("BUILD")) {
-        Iterable<Label> skylarkLoadLabels = aspectResolver == null
+        Set<Label> subincludeLabels = new LinkedHashSet<>();
+        subincludeLabels.addAll(aspectResolver == null
+            ? inputFile.getPackage().getSubincludeLabels()
+            : aspectResolver.computeBuildFileDependencies(
+                inputFile.getPackage(), BuildFileDependencyMode.SUBINCLUDE));
+        subincludeLabels.addAll(aspectResolver == null
             ? inputFile.getPackage().getSkylarkFileDependencies()
-            : aspectResolver.computeBuildFileDependencies(inputFile.getPackage());
+            : aspectResolver.computeBuildFileDependencies(
+                inputFile.getPackage(), BuildFileDependencyMode.SKYLARK));
 
-        for (Label skylarkLoadLabel : skylarkLoadLabels) {
-          input.addSubinclude(skylarkLoadLabel.toString());
+        for (Label skylarkFileDep : subincludeLabels) {
+          input.addSubinclude(skylarkFileDep.toString());
         }
 
         for (String feature : inputFile.getPackage().getFeatures()) {

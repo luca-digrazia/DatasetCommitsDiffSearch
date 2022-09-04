@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -27,15 +26,13 @@ import com.google.devtools.build.skyframe.SkyKey;
 @AutoCodec
 public class ActionLookupData implements SkyKey {
   private static final Interner<ActionLookupData> INTERNER = BlazeInterners.newWeakInterner();
-  // Test actions are not shareable.
-  // Action execution can be nondeterministic, so is semi-hermetic.
-  public static final SkyFunctionName NAME = SkyFunctionName.createSemiHermetic("ACTION_EXECUTION");
+  public static final SkyFunctionName NAME = SkyFunctionName.create("ACTION_EXECUTION");
 
   private final ActionLookupKey actionLookupKey;
   private final int actionIndex;
 
   private ActionLookupData(ActionLookupKey actionLookupKey, int actionIndex) {
-    this.actionLookupKey = Preconditions.checkNotNull(actionLookupKey);
+    this.actionLookupKey = actionLookupKey;
     this.actionIndex = actionIndex;
   }
 
@@ -44,7 +41,7 @@ public class ActionLookupData implements SkyKey {
     return INTERNER.intern(new ActionLookupData(actionLookupKey, actionIndex));
   }
 
-  public ActionLookupKey getActionLookupKey() {
+  public SkyKey getActionLookupKey() {
     return actionLookupKey;
   }
 

@@ -125,11 +125,9 @@ public final class LanguageDependentFragment implements TransitiveInfoProvider {
     public static void depsSupportsLanguage(
         RuleContext context, LibraryLanguage language, Iterable<String> attrNames) {
       for (String attrName : attrNames) {
-        if (context.attributes().has(attrName)) {
-          for (LanguageDependentFragment dep :
-              context.getPrerequisites(attrName, Mode.TARGET, LanguageDependentFragment.class)) {
-            depSupportsLanguage(context, dep, language, attrName);
-          }
+        for (LanguageDependentFragment dep :
+            context.getPrerequisites(attrName, Mode.TARGET, LanguageDependentFragment.class)) {
+          depSupportsLanguage(context, dep, language, attrName);
         }
       }
     }

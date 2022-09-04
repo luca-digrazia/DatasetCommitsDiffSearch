@@ -25,18 +25,11 @@ import java.util.Set;
 @AutoCodec
 public final class TopLevelArtifactContext {
   private final boolean runTestsExclusively;
-  private final boolean expandFilesets;
-  private final boolean fullyResolveFilesetSymlinks;
   private final ImmutableSortedSet<String> outputGroups;
 
-  public TopLevelArtifactContext(
-      boolean runTestsExclusively,
-      boolean expandFilesets,
-      boolean fullyResolveFilesetSymlinks,
+  public TopLevelArtifactContext(boolean runTestsExclusively,
       ImmutableSortedSet<String> outputGroups) {
     this.runTestsExclusively = runTestsExclusively;
-    this.expandFilesets = expandFilesets;
-    this.fullyResolveFilesetSymlinks = fullyResolveFilesetSymlinks;
     this.outputGroups = outputGroups;
   }
 
@@ -45,19 +38,10 @@ public final class TopLevelArtifactContext {
     return runTestsExclusively;
   }
 
-  public boolean expandFilesets() {
-    return expandFilesets;
-  }
-
-  public boolean fullyResolveFilesetSymlinks() {
-    return fullyResolveFilesetSymlinks;
-  }
-
   /** Returns the value of the --output_groups flag. */
   public Set<String> outputGroups() {
     return outputGroups;
   }
-
 
   // TopLevelArtifactContexts are stored in maps in BuildView,
   // so equals() and hashCode() need to work.
@@ -66,8 +50,6 @@ public final class TopLevelArtifactContext {
     if (other instanceof TopLevelArtifactContext) {
       TopLevelArtifactContext otherContext = (TopLevelArtifactContext) other;
       return runTestsExclusively == otherContext.runTestsExclusively
-          && expandFilesets == otherContext.expandFilesets
-          && fullyResolveFilesetSymlinks == otherContext.fullyResolveFilesetSymlinks
           && outputGroups.equals(otherContext.outputGroups);
     } else {
       return false;
@@ -76,7 +58,6 @@ public final class TopLevelArtifactContext {
 
   @Override
   public int hashCode() {
-    return Objects.hash(
-        runTestsExclusively, expandFilesets, fullyResolveFilesetSymlinks, outputGroups);
+    return Objects.hash(runTestsExclusively, outputGroups);
   }
 }

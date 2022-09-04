@@ -86,6 +86,13 @@ public final class MiddlemanAction extends AbstractAction {
   }
 
   @Override
+  public boolean canRemoveAfterExecution() {
+    // Aggregating middleman actions' inputs are needed by their output artifacts, and the type of
+    // the middleman isn't known without having the action, so we just make sure it stays.
+    return false;
+  }
+
+  @Override
   protected String getRawProgressMessage() {
     return null; // users don't really want to know about Middlemen.
   }
@@ -98,11 +105,6 @@ public final class MiddlemanAction extends AbstractAction {
   @Override
   public String getMnemonic() {
     return MIDDLEMAN_MNEMONIC;
-  }
-
-  @Override
-  public boolean mayInsensitivelyPropagateInputs() {
-    return true;
   }
 
   /**

@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelLis
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -48,6 +47,7 @@ public class PlatformOptions extends FragmentOptions {
     name = "host_platform_remote_properties_override",
     oldName = "experimental_remote_platform_override",
     defaultValue = "null",
+    category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -58,17 +58,16 @@ public class PlatformOptions extends FragmentOptions {
 
   @Option(
     name = "extra_execution_platforms",
-    converter = CommaSeparatedOptionListConverter.class,
+    converter = LabelListConverter.class,
     defaultValue = "",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.EXECUTION},
     help =
-        "The platforms that are available as execution platforms to run actions. "
-            + "Platforms can be specified by exact target, or as a target pattern. "
+        "The labels of platforms that are available as execution platforms to run actions. "
             + "These platforms will be considered before those declared in the WORKSPACE file by "
             + "register_execution_platforms()."
   )
-  public List<String> extraExecutionPlatforms;
+  public List<Label> extraExecutionPlatforms;
 
   @Option(
     name = "platforms",
@@ -88,8 +87,8 @@ public class PlatformOptions extends FragmentOptions {
 
   @Option(
     name = "extra_toolchains",
+    converter = LabelListConverter.class,
     defaultValue = "",
-    converter = CommaSeparatedOptionListConverter.class,
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {
       OptionEffectTag.AFFECTS_OUTPUTS,
@@ -97,12 +96,11 @@ public class PlatformOptions extends FragmentOptions {
       OptionEffectTag.LOADING_AND_ANALYSIS
     },
     help =
-        "The toolchain rules to be considered during toolchain resolution. "
-            + "Toolchains can be specified by exact target, or as a target pattern. "
+        "The labels of toolchain rules to be considered during toolchain resolution. "
             + "These toolchains will be considered before those declared in the WORKSPACE file by "
             + "register_toolchains()."
   )
-  public List<String> extraToolchains;
+  public List<Label> extraToolchains;
 
   @Option(
     name = "toolchain_resolution_override",
@@ -139,6 +137,7 @@ public class PlatformOptions extends FragmentOptions {
     name = "enabled_toolchain_types",
     defaultValue = "",
     converter = LabelListConverter.class,
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
     help = "Signals that the given rule categories use platform-based toolchain resolution"

@@ -67,7 +67,7 @@ public final class ServerDirectories {
     return hash;
   }
 
-  /** Returns the installation base directory. */
+  /** Returns the installation base directory. Currently used by info command only. */
   public Path getInstallBase() {
     return installBase;
   }
