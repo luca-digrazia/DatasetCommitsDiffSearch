@@ -207,8 +207,8 @@ public class KafkaJournalTest extends Graylog2BaseTest {
             assertEquals(cleanedLogs, 0, "no segments should've been cleaned");
             assertEquals(countSegmentsInDir(messageJournalDir), 2, "two segments segment should remain");
 
-            // move clock beyond the retention period and clean again
-            clock.tick(Period.seconds(120));
+            // move clock just beyond the retention period and clean again
+            clock.tick(Period.seconds(40));
 
             cleanedLogs = journal.cleanupLogs();
             assertEquals(cleanedLogs, 2, "two segments should've been cleaned (only one will actually be removed...)");
