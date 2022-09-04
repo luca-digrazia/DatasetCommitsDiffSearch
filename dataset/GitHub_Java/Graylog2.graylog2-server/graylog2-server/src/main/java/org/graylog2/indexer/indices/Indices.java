@@ -247,19 +247,14 @@ public class Indices {
     }
 
     @Nullable
-    public String aliasTarget(String alias) throws TooManyAliasesException {
+    public String aliasTarget(String alias) {
         final IndicesAdminClient indicesAdminClient = c.admin().indices();
 
         final GetAliasesRequest request = indicesAdminClient.prepareGetAliases(alias).request();
         final GetAliasesResponse response = indicesAdminClient.getAliases(request).actionGet();
 
         // The ES return value of this has an awkward format: The first key of the hash is the target index. Thanks.
-        final ImmutableOpenMap<String, List<AliasMetaData>> aliases = response.getAliases();
-
-        if (aliases.size() > 1) {
-            throw new TooManyAliasesException(Sets.newHashSet(aliases.keysIt()));
-        }
-        return aliases.isEmpty() ? null : aliases.keysIt().next();
+        return response.getAliases().isEmpty() ? null : response.getAliases().keysIt().next();
     }
 
     private void ensureIndexTemplate() {
@@ -496,12 +491,6 @@ public class Indices {
         return c.admin().indices().prepareAliases()
                 .removeAlias(oldIndex, aliasName)
                 .addAlias(targetIndex, aliasName)
-                .execute().actionGet().isAcknowledged();
-    }
-
-    public boolean removeAliases(String alias, Set<String> indices) {
-        return c.admin().indices().prepareAliases()
-                .removeAlias(indices.toArray(new String[0]), alias)
                 .execute().actionGet().isAcknowledged();
     }
 
