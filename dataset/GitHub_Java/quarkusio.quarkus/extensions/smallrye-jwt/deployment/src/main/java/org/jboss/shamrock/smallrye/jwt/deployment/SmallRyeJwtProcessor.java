@@ -97,7 +97,6 @@ class SmallRyeJwtProcessor {
      */
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     AuthConfigBuildItem configureFileRealmAuthConfig(SmallRyeJwtTemplate template,
                                                      BuildProducer<ObjectSubstitutionBuildItem> objectSubstitution,
                                                      BuildProducer<SecurityRealmBuildItem> securityRealm,
