@@ -82,7 +82,7 @@ public abstract class FieldChartConfig implements WidgetConfig {
                         .config(
                                 AggregationConfig.builder()
                                         .rowPivots(Collections.singletonList(
-                                                Pivot.timeBuilder()
+                                                Pivot.builder()
                                                 .field(TIMESTAMP_FIELD)
                                                 .config(TimeHistogramConfig.builder().interval(timestampInterval()).build())
                                                 .build()

@@ -14,13 +14,22 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets;
+package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.auto.value.AutoValue;
 
-public interface Interval {
-    String TYPE_FIELD = "type";
+@AutoValue
+public abstract class ElasticsearchQueryString {
+    static final String NAME = "elasticsearch";
 
-    @JsonProperty(TYPE_FIELD)
-    String type();
+    @JsonProperty
+    abstract String type();
+
+    @JsonProperty
+    abstract String queryString();
+
+    public static ElasticsearchQueryString create(String query) {
+        return new AutoValue_ElasticsearchQueryString(NAME, query);
+    }
 }

@@ -63,17 +63,9 @@ public abstract class TimeUnitInterval implements Interval {
     @JsonProperty(FIELD_UNIT)
     public abstract IntervalUnit unit();
 
-    private static Builder builder() {
+    public static Builder builder() {
         return new AutoValue_TimeUnitInterval.Builder().type(type);
     }
-
-    public static TimeUnitInterval create(IntervalUnit unit, int value) {
-        return builder()
-                .unit(unit)
-                .value(value)
-                .build();
-    }
-
     @AutoValue.Builder
     public abstract static class Builder {
         public abstract Builder type(String type);

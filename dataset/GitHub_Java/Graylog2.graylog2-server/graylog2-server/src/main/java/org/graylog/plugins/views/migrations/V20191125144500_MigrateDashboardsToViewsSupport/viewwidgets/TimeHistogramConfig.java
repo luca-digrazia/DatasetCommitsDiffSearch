@@ -16,36 +16,26 @@
  */
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
 @AutoValue
-public abstract class BarVisualizationConfig implements VisualizationConfig {
-    public static final String NAME = "bar";
-    private static final String FIELD_BAR_MODE = "barmode";
+public abstract class TimeHistogramConfig implements PivotConfig {
+    public static final String NAME = "time";
+    static final String FIELD_INTERVAL = "interval";
 
-    public enum BarMode {
-        stack,
-        overlay,
-        group,
-        relative
-    };
+    @JsonProperty(FIELD_INTERVAL)
+    public abstract Interval interval();
 
-    @JsonProperty
-    public abstract BarMode barmode();
+    public static Builder builder() {
+        return new AutoValue_TimeHistogramConfig.Builder();
+    }
 
     @AutoValue.Builder
     public abstract static class Builder {
+        @JsonProperty(FIELD_INTERVAL)
+        public abstract Builder interval(Interval interval);
 
-        @JsonProperty(FIELD_BAR_MODE)
-        public abstract Builder barmode(BarMode barMode);
-
-        public abstract BarVisualizationConfig build();
-
-        @JsonCreator
-        public static Builder builder() {
-            return new AutoValue_BarVisualizationConfig.Builder();
-        }
+        public abstract TimeHistogramConfig build();
     }
 }

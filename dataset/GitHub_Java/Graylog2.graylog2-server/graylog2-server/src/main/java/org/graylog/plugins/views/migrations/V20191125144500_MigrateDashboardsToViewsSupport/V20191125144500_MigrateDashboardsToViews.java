@@ -100,7 +100,7 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
         final Search newSearch = Search.create(newId(), newQueries, dashboard.creatorUserId(), createdAt);
 
         final ViewState newViewState = ViewState.create(
-                Titles.ofWidgetTitles(newWidgetTitles).withQueryTitle(dashboard.title()),
+                Titles.ofWidgetTitles(newWidgetTitles),
                 newViewWidgets,
                 newWidgetMapping,
                 newViewWidgetPositions
