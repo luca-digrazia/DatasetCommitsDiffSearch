@@ -18,7 +18,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Splitter;
-import com.google.common.base.Suppliers;
 import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ClassToInstanceMap;
@@ -35,14 +34,16 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.BuildConfigurationEvent;
+import com.google.devtools.build.lib.actions.BuildConfigurationInterface;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.transitions.ComposingPatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
+import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -70,6 +71,7 @@ import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -80,7 +82,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -106,14 +107,13 @@ import javax.annotation.Nullable;
   name = "configuration",
   category = SkylarkModuleCategory.BUILTIN,
   doc =
-      "This object holds information about the environment in which the build is running. See "
-          + "the <a href='../rules.$DOC_EXT#configurations'>Rules page</a> for more on the general "
-          + "concept of configurations."
+      "Data required for the analysis of a target that comes from targets that "
+          + "depend on it and not targets that it depends on."
 )
 // TODO(janakr): If overhead of fragments class names is too high, add constructor that just takes
 // fragments and gets names from them.
 @AutoCodec
-public class BuildConfiguration {
+public class BuildConfiguration implements BuildConfigurationInterface {
   /**
    * Sorts fragments by class name. This produces a stable order which, e.g., facilitates consistent
    * output from buildMnemonic.
@@ -1180,8 +1180,6 @@ public class BuildConfiguration {
   /** Data for introspecting the options used by this configuration. */
   private final TransitiveOptionDetails transitiveOptionDetails;
 
-  private final Supplier<BuildConfigurationEvent> buildEventSupplier;
-
   /**
    * Returns true if this configuration is semantically equal to the other, with
    * the possible exception that the other has fewer fragments.
@@ -1408,7 +1406,6 @@ public class BuildConfiguration {
       reservedActionMnemonics.addAll(fragment.getReservedActionMnemonics());
     }
     this.reservedActionMnemonics = reservedActionMnemonics.build();
-    this.buildEventSupplier = Suppliers.memoize(this::createBuildEvent);
   }
 
   /**
@@ -2071,27 +2068,24 @@ public class BuildConfiguration {
     return currentTransition;
   }
 
+  @Override
   public BuildEventId getEventId() {
     return BuildEventId.configurationId(checksum());
   }
 
-  public BuildConfigurationEvent toBuildEvent() {
-    return buildEventSupplier.get();
+  @Override
+  public Collection<BuildEventId> getChildrenEvents() {
+    return ImmutableList.of();
   }
 
-  private BuildConfigurationEvent createBuildEvent() {
-    BuildEventId eventId = getEventId();
-    BuildEventStreamProtos.BuildEvent.Builder builder =
-        BuildEventStreamProtos.BuildEvent.newBuilder();
-    builder
-        .setId(eventId.asStreamProto())
-        .setConfiguration(
-            BuildEventStreamProtos.Configuration.newBuilder()
-                .setMnemonic(getMnemonic())
-                .setPlatformName(getCpu())
-                .putAllMakeVariable(getMakeEnvironment())
-                .setCpu(getCpu())
-                .build());
-    return new BuildConfigurationEvent(eventId, builder.build());
+  @Override
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
+    BuildEventStreamProtos.Configuration.Builder builder =
+        BuildEventStreamProtos.Configuration.newBuilder()
+            .setMnemonic(getMnemonic())
+            .setPlatformName(getCpu())
+            .putAllMakeVariable(getMakeEnvironment())
+            .setCpu(getCpu());
+    return GenericBuildEvent.protoChaining(this).setConfiguration(builder.build()).build();
   }
 }

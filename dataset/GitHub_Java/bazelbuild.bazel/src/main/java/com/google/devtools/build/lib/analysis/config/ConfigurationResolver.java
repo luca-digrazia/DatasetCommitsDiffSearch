@@ -94,6 +94,7 @@ public final class ConfigurationResolver {
    * @param originalDeps the transition requests for each dep under this target's attributes
    * @param hostConfiguration the host configuration
    * @param ruleClassProvider provider for determining the right configuration fragments for deps
+   *
    * @return a mapping from each attribute in the source target to the {@link BuildConfiguration}s
    *     and {@link Label}s for the deps under that attribute. Returns null if not all Skyframe
    *     dependencies are available.
@@ -104,8 +105,7 @@ public final class ConfigurationResolver {
       TargetAndConfiguration ctgValue,
       OrderedSetMultimap<Attribute, Dependency> originalDeps,
       BuildConfiguration hostConfiguration,
-      RuleClassProvider ruleClassProvider,
-      BuildOptions defaultBuildOptions)
+      RuleClassProvider ruleClassProvider)
       throws ConfiguredTargetFunction.DependencyEvaluationException, InterruptedException {
 
     // Maps each Skyframe-evaluated BuildConfiguration to the dependencies that need that
@@ -232,16 +232,10 @@ public final class ConfigurationResolver {
       // If we get here, we have to get the configuration from Skyframe.
       for (BuildOptions options : toOptions) {
         if (sameFragments) {
-          keysToEntries.put(
-              BuildConfigurationValue.key(
-                  ctgFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, options)),
-              depsEntry);
+          keysToEntries.put(BuildConfigurationValue.key(ctgFragments, options), depsEntry);
 
         } else {
-          keysToEntries.put(
-              BuildConfigurationValue.key(
-                  depFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, options)),
-              depsEntry);
+          keysToEntries.put(BuildConfigurationValue.key(depFragments, options), depsEntry);
         }
       }
     }
@@ -427,7 +421,7 @@ public final class ConfigurationResolver {
     List<BuildOptions> result;
     if (transition instanceof PatchTransition) {
       // TODO(bazel-team): safety-check that this never mutates fromOptions.
-      result = ImmutableList.of(((PatchTransition) transition).patch(fromOptions));
+      result = ImmutableList.of(((PatchTransition) transition).apply(fromOptions));
     } else if (transition instanceof SplitTransition) {
       List<BuildOptions> toOptions = ((SplitTransition) transition).split(fromOptions);
       if (toOptions.isEmpty()) {
