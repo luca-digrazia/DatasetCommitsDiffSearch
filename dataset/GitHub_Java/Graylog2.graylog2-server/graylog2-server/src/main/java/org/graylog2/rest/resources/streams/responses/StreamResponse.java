@@ -39,7 +39,6 @@ public abstract class StreamResponse {
     public abstract String matchingType();
 
     @JsonProperty("description")
-    @Nullable
     public abstract String description();
 
     @JsonProperty("created_at")
@@ -62,7 +61,7 @@ public abstract class StreamResponse {
     public static StreamResponse create(@JsonProperty("creator_user_id") String creatorUserId,
                                         @JsonProperty("outputs") Collection<OutputSummary> outputs,
                                         @JsonProperty("matching_type") String matchingType,
-                                        @JsonProperty("description") @Nullable String description,
+                                        @JsonProperty("description") String description,
                                         @JsonProperty("created_at") String createdAt,
                                         @JsonProperty("disabled") boolean disabled,
                                         @JsonProperty("rules") Collection<StreamRule> rules,
