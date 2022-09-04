@@ -422,7 +422,7 @@ public class JavaCommon {
   /** Computes javacopts for the current rule. */
   private ImmutableList<String> computeJavacOpts(Collection<String> extraRuleJavacOpts) {
     return ImmutableList.<String>builder()
-        .addAll(javaToolchain.getJavacOptions(ruleContext))
+        .addAll(javaToolchain.getJavacOptions())
         .addAll(extraRuleJavacOpts)
         .addAll(computePerPackageJavacOpts(ruleContext, javaToolchain))
         .addAll(ruleContext.getExpander().withDataLocations().tokenized("javacopts"))
