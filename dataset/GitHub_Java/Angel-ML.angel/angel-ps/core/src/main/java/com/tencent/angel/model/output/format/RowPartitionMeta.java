@@ -44,19 +44,39 @@ public class RowPartitionMeta {
   private int elementNum;
 
   /**
-   * Create meta for row split
-   * @param rowId row split
-   * @param offset data offset in the saved file
-   * @param elementNum save element number
+   * Save type: 0 dense, 1 sparse. just for SnapshotFormat now
    */
-  public RowPartitionMeta(int rowId, long offset, int elementNum) {
+  private int saveType;
+
+  /**
+   * Create meta for row split
+   *
+   * @param rowId      row split
+   * @param offset     data offset in the saved file
+   * @param elementNum save element number
+   * @param saveType   save type : 0 dense, 1 sparse
+   */
+  public RowPartitionMeta(int rowId, long offset, int elementNum, int saveType) {
     this.rowId = rowId;
     this.offset = offset;
     this.elementNum = elementNum;
+    this.saveType = saveType;
+  }
+
+  /**
+   * Create meta for row split
+   *
+   * @param rowId      row split
+   * @param offset     data offset in the saved file
+   * @param elementNum save element number
+   */
+  public RowPartitionMeta(int rowId, long offset, int elementNum) {
+    this(rowId, offset, elementNum, 0);
   }
 
   /**
    * Write row split meta to output stream use binary format
+   *
    * @param output output stream
    * @throws IOException
    */
@@ -64,10 +84,12 @@ public class RowPartitionMeta {
     output.writeInt(rowId);
     output.writeLong(offset);
     output.writeInt(elementNum);
+    output.writeInt(saveType);
   }
 
   /**
    * Read row split meta from input stream use binary format
+   *
    * @param input input stream
    * @throws IOException
    */
@@ -75,10 +97,12 @@ public class RowPartitionMeta {
     rowId = input.readInt();
     offset = input.readLong();
     elementNum = input.readInt();
+    saveType = input.readInt();
   }
 
   /**
    * Write row split meta to a Json object
+   *
    * @return json object
    * @throws IOException
    * @throws JSONException
@@ -87,10 +111,12 @@ public class RowPartitionMeta {
     rowJsonObject.put("rowId", rowId);
     rowJsonObject.put("offset", offset);
     rowJsonObject.put("elementNum", elementNum);
+    rowJsonObject.put("saveType", saveType);
   }
 
   /**
    * Read row split meta from a Json object
+   *
    * @param jsonObject json object
    * @throws IOException
    * @throws JSONException
@@ -99,10 +125,12 @@ public class RowPartitionMeta {
     rowId = jsonObject.getInt("rowId");
     offset = jsonObject.getInt("offset");
     elementNum = jsonObject.getInt("elementNum");
+    saveType = jsonObject.getInt("saveType");
   }
 
   /**
    * Get the row id for the row split
+   *
    * @return row id
    */
   public int getRowId() {
@@ -111,7 +139,8 @@ public class RowPartitionMeta {
 
   /**
    * Set the row id for the row split
-   * @param  rowId row id
+   *
+   * @param rowId row id
    */
   public void setRowId(int rowId) {
     this.rowId = rowId;
@@ -119,6 +148,7 @@ public class RowPartitionMeta {
 
   /**
    * Get the data offset in the saved file for this row split
+   *
    * @return the data offset in the saved file for this row split
    */
   public long getOffset() {
@@ -127,6 +157,7 @@ public class RowPartitionMeta {
 
   /**
    * Set the data offset in the saved file for this row split
+   *
    * @param offset the data offset in the saved file for this row split
    */
   public void setOffset(long offset) {
@@ -135,6 +166,7 @@ public class RowPartitionMeta {
 
   /**
    * Get save element number
+   *
    * @return save element number
    */
   public int getElementNum() {
@@ -143,11 +175,31 @@ public class RowPartitionMeta {
 
   /**
    * Set save element number
+   *
    * @param elementNum save element number
    */
   public void setElementNum(int elementNum) {
     this.elementNum = elementNum;
   }
+
+  /**
+   * Get save type
+   *
+   * @return save type
+   */
+  public int getSaveType() {
+    return saveType;
+  }
+
+  /**
+   * Set save type
+   *
+   * @param saveType save type
+   */
+  public void setSaveType(int saveType) {
+    this.saveType = saveType;
+  }
+
 
   @Override public String toString() {
     return "RowPartitionMeta{" + "rowId=" + rowId + ", offset=" + offset + ", elementNum="

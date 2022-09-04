@@ -17,9 +17,7 @@
 
 package com.tencent.angel.model.output.format;
 
-import com.tencent.angel.ml.math2.matrix.Matrix;
 import com.tencent.angel.ml.math2.vector.*;
-import com.tencent.angel.model.MatrixLoadContext;
 import com.tencent.angel.model.PSMatrixLoadContext;
 import com.tencent.angel.model.PSMatrixSaveContext;
 import com.tencent.angel.ps.storage.matrix.PartitionSource;
@@ -38,8 +36,6 @@ import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 
 import java.io.DataInputStream;
@@ -53,9 +49,6 @@ import java.util.*;
 public class SnapshotFormat extends MatrixFormatImpl {
   private final static Log LOG = LogFactory.getLog(RowFormat.class);
 
-  public SnapshotFormat(Configuration conf) {
-    super(conf);
-  }
 
   static enum SaveType {
     DENSE(0), SPARSE(1);
@@ -190,12 +183,6 @@ public class SnapshotFormat extends MatrixFormatImpl {
     } finally {
       part.setState(PartitionState.READ_AND_WRITE);
     }
-  }
-
-  @Override
-  public void load(Matrix matrix, MatrixPartitionMeta partMeta, MatrixLoadContext loadContext,
-    FSDataInputStream in) throws IOException {
-    throw new UnsupportedOperationException("Unsupport now");
   }
 
   /**

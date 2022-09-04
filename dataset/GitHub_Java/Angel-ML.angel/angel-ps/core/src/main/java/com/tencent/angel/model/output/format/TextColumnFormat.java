@@ -17,8 +17,6 @@
 
 package com.tencent.angel.model.output.format;
 
-import org.apache.hadoop.conf.Configuration;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -27,14 +25,7 @@ import java.io.IOException;
  * Text format: column id + sep + row1 element + sep + row2 element + sep + ...
  */
 public class TextColumnFormat extends ColumnFormat {
-  private final String defaultSet = ",";
-  public final static String sepParam =  "text.format.filed.sep";
-  private final String sep;
-
-  public TextColumnFormat(Configuration conf) {
-    super(conf);
-    sep = conf.get(sepParam, defaultSet);
-  }
+  public String sep = ",";
 
   @Override public void save(IntFloatsCol col, DataOutputStream output) throws IOException {
     StringBuilder sb = new StringBuilder();

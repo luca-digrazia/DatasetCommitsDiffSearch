@@ -225,20 +225,7 @@ public class MatrixFilesMeta {
         jsonMap.put(partEntry.getKey(), parJsonOnbect);
       }
       jsonObject.put("partMetas", jsonMap);
-      String jsos =  jsonObject.toString();
-      int bufferSize = 60000;
-      int i =0;
-      int sum = 0;
-
-      while(i < jsos.length()){
-          int endIdx = java.lang.Math.min(jsos.length(),i+bufferSize);
-          String jsosPart = jsos.substring(i,endIdx);
-          output.writeUTF(jsosPart);
-          sum += jsosPart.length();
-          i += bufferSize;
-      }
-      assert sum == jsos.length();
-//      output.writeUTF(jsonObject.toString());
+      output.writeUTF(jsonObject.toString());
     } catch (Throwable e) {
       throw new IOException(e);
     }

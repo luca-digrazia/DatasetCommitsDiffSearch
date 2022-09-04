@@ -18,10 +18,7 @@
 
 package com.tencent.angel.model.output.format;
 
-import org.apache.hadoop.conf.Configuration;
-
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -42,10 +39,9 @@ public class ModelFilesUtils {
     return String.valueOf(startPartId);
   }
 
-  public static MatrixFormat initFormat(String formatClass, Configuration conf) throws IOException {
+  public static MatrixFormat initFormat(String formatClass) throws IOException {
     try {
-      Constructor constructor = Class.forName(formatClass).getConstructor(Configuration.class);
-      return (MatrixFormat) constructor.newInstance(conf);
+      return (MatrixFormat) Class.forName(formatClass).newInstance();
     } catch (Throwable e) {
       throw new IOException(e);
     }
