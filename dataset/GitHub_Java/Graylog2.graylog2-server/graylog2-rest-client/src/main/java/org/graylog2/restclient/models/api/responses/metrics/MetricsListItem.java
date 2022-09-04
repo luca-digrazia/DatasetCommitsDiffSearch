@@ -45,7 +45,6 @@ public class MetricsListItem {
 
         try {
             switch (metricType) {
-                case HDRTIMER:
                 case TIMER:
                     String timerTimeUnit = (String) metric.get("duration_unit");
                     Map<String, Object> timing = (Map<String, Object>) metric.get("time");
@@ -55,7 +54,6 @@ public class MetricsListItem {
                     return new Meter(rate);
                 case GAUGE:
                     return new Gauge(metric.get("value"));
-                case HDRHISTOGRAM:
                 case HISTOGRAM:
                     Map<String, Object> histoTiming = (Map<String, Object>) metric.get("time");
                     double count = ((Number) metric.get("count")).doubleValue();
