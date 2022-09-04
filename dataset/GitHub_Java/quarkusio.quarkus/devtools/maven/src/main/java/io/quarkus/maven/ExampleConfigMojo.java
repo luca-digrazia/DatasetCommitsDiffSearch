@@ -38,9 +38,6 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
-/**
- * This goal helps in configuring Quarkus Maven project with quarkus-maven-plugin, with an example of configuration file
- */
 @Mojo(name = "create-example-config", defaultPhase = LifecyclePhase.NONE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class ExampleConfigMojo extends AbstractMojo {
 
@@ -54,7 +51,7 @@ public class ExampleConfigMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
-            File out = new File(project.getBasedir(), "src/main/resources/application.properties");
+            File out = new File(project.getBasedir(), "src/main/resources/META-INF/example-microprofile-config.properties");
             out.getParentFile().mkdirs();
 
             Properties properties = new Properties();

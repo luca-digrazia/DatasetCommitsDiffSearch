@@ -48,7 +48,6 @@ import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.hibernate.validator.runtime.HibernateValidatorTemplate;
 import io.quarkus.hibernate.validator.runtime.ValidatorProvider;
@@ -63,11 +62,6 @@ class HibernateValidatorProcessor {
     @BuildStep
     HotDeploymentConfigFileBuildItem configFile() {
         return new HotDeploymentConfigFileBuildItem("META-INF/validation.xml");
-    }
-
-    @BuildStep
-    LogCleanupFilterBuildItem logCleanup() {
-        return new LogCleanupFilterBuildItem("org.hibernate.validator.internal.util.Version", "HV000001:");
     }
 
     @BuildStep

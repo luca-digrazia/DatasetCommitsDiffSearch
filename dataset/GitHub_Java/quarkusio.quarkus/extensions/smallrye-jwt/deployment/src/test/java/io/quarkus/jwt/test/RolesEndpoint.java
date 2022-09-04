@@ -101,11 +101,8 @@ public class RolesEndpoint {
     @RolesAllowed("Group1MappedRole")
     public String needsGroup1Mapping(@Context SecurityContext sec) {
         Principal user = sec.getUserPrincipal();
-        if (sec.isUserInRole("group1")) {
-            return user.getName();
-        } else {
-            return "User not in role group1";
-        }
+        sec.isUserInRole("group1");
+        return user.getName();
     }
 
     /**

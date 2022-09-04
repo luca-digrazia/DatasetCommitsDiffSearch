@@ -21,7 +21,7 @@ public class QuarkusCommand implements Command<CommandInvocation> {
 
     public CommandResult execute(CommandInvocation commandInvocation) throws CommandException, InterruptedException {
         if (help)
-            commandInvocation.println(commandInvocation.getHelpInfo(COMMAND_NAME));
+            commandInvocation.println(commandInvocation.getHelpInfo("quarkus"));
 
         return CommandResult.SUCCESS;
     }

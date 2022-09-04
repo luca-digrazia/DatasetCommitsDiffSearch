@@ -16,7 +16,7 @@
 
 package io.quarkus.deployment.steps;
 
-import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
+import static org.jboss.protean.gizmo.MethodDescriptor.ofMethod;
 
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Constructor;
@@ -31,16 +31,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.jboss.protean.gizmo.CatchBlockCreator;
+import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.MethodCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
+import org.jboss.protean.gizmo.TryBlock;
+
 import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ClassOutputBuildItem;
 import io.quarkus.deployment.builditem.substrate.*;
-import io.quarkus.gizmo.CatchBlockCreator;
-import io.quarkus.gizmo.ClassCreator;
-import io.quarkus.gizmo.MethodCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.gizmo.TryBlock;
 import io.quarkus.runtime.ResourceHelper;
 
 public class SubstrateAutoFeatureStep {
@@ -192,8 +193,7 @@ public class SubstrateAutoFeatureStep {
 
         final Map<String, ReflectionInfo> reflectiveClasses = new LinkedHashMap<>();
         for (ReflectiveClassBuildItem i : reflectiveClassBuildItems) {
-            addReflectiveClass(reflectiveClasses, i.isConstructors(), i.isMethods(), i.isFields(), i.isFinalWritable(),
-                    i.getClassNames().toArray(new String[0]));
+            addReflectiveClass(reflectiveClasses, i.isMethods(), i.isFields(), i.getClassNames().toArray(new String[0]));
         }
         for (ReflectiveFieldBuildItem i : reflectiveFields) {
             addReflectiveField(reflectiveClasses, i);
@@ -203,8 +203,7 @@ public class SubstrateAutoFeatureStep {
         }
 
         for (ServiceProviderBuildItem i : serviceProviderBuildItems) {
-            addReflectiveClass(reflectiveClasses, true, false, false, false,
-                    i.providers().toArray(new String[] {}));
+            addReflectiveClass(reflectiveClasses, false, false, i.providers().toArray(new String[] {}));
         }
 
         for (Map.Entry<String, ReflectionInfo> entry : reflectiveClasses.entrySet()) {
@@ -272,8 +271,7 @@ public class SubstrateAutoFeatureStep {
             }
             if (entry.getValue().fields) {
                 tc.invokeStaticMethod(
-                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class,
-                                boolean.class, Field[].class), tc.load(entry.getValue().finalIsWritable), fields);
+                        ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), fields);
             } else if (!entry.getValue().fieldSet.isEmpty()) {
                 ResultHandle farray = tc.newArray(Field.class, tc.load(1));
                 for (String field : entry.getValue().fieldSet) {
@@ -303,7 +301,7 @@ public class SubstrateAutoFeatureStep {
         String cl = methodInfo.getDeclaringClass();
         ReflectionInfo existing = reflectiveClasses.get(cl);
         if (existing == null) {
-            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false, false));
+            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false));
         }
         if (methodInfo.getName().equals("<init>")) {
             existing.ctorSet.add(methodInfo);
@@ -312,17 +310,14 @@ public class SubstrateAutoFeatureStep {
         }
     }
 
-    public void addReflectiveClass(Map<String, ReflectionInfo> reflectiveClasses, boolean constructors, boolean method,
-            boolean fields, boolean finalIsWritable,
+    public void addReflectiveClass(Map<String, ReflectionInfo> reflectiveClasses, boolean method, boolean fields,
             String... className) {
         for (String cl : className) {
             ReflectionInfo existing = reflectiveClasses.get(cl);
             if (existing == null) {
-                reflectiveClasses.put(cl, new ReflectionInfo(constructors, method, fields, finalIsWritable));
+                reflectiveClasses.put(cl, new ReflectionInfo(true, method, fields));
             } else {
-                if (constructors) {
-                    existing.constructors = true;
-                }
+                existing.constructors = true;
                 if (method) {
                     existing.methods = true;
                 }
@@ -337,7 +332,7 @@ public class SubstrateAutoFeatureStep {
         String cl = fieldInfo.getDeclaringClass();
         ReflectionInfo existing = reflectiveClasses.get(cl);
         if (existing == null) {
-            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false, false));
+            reflectiveClasses.put(cl, existing = new ReflectionInfo(false, false, false));
         }
         existing.fieldSet.add(fieldInfo.getName());
     }
@@ -346,16 +341,14 @@ public class SubstrateAutoFeatureStep {
         boolean constructors;
         boolean methods;
         boolean fields;
-        boolean finalIsWritable;
         Set<String> fieldSet = new HashSet<>();
         Set<ReflectiveMethodBuildItem> methodSet = new HashSet<>();
         Set<ReflectiveMethodBuildItem> ctorSet = new HashSet<>();
 
-        private ReflectionInfo(boolean constructors, boolean methods, boolean fields, boolean finalIsWritable) {
+        private ReflectionInfo(boolean constructors, boolean methods, boolean fields) {
             this.methods = methods;
             this.fields = fields;
             this.constructors = constructors;
-            this.finalIsWritable = finalIsWritable;
         }
     }
 }

@@ -28,7 +28,6 @@ import javax.persistence.FlushModeType;
 import javax.persistence.LockModeType;
 import javax.persistence.Query;
 import javax.persistence.StoredProcedureQuery;
-import javax.persistence.TransactionRequiredException;
 import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaDelete;
@@ -44,7 +43,6 @@ import io.quarkus.hibernate.orm.runtime.RequestScopedEntityManagerHolder;
 
 public class TransactionScopedEntityManager implements EntityManager {
 
-    protected static final String TRANSACTION_IS_NOT_ACTIVE = "Transaction is not active, consider adding @Transactional to your method to automatically activate one.";
     private final TransactionManager transactionManager;
     private final TransactionSynchronizationRegistry tsr;
     private final EntityManagerFactory emf;
@@ -67,7 +65,7 @@ public class TransactionScopedEntityManager implements EntityManager {
         if (isInTransaction()) {
             EntityManager em = (EntityManager) tsr.getResource(transactionKey);
             if (em != null) {
-                return new EntityManagerResult(em, false, true);
+                return new EntityManagerResult(em, false);
             }
             EntityManager newEm = emf.createEntityManager();
             newEm.joinTransaction();
@@ -84,13 +82,13 @@ public class TransactionScopedEntityManager implements EntityManager {
                     newEm.close();
                 }
             });
-            return new EntityManagerResult(newEm, false, true);
+            return new EntityManagerResult(newEm, false);
         } else {
             //this will throw an exception if the request scope is not active
             //this is expected as either the request scope or an active transaction
             //is required to properly managed the EM lifecycle
             RequestScopedEntityManagerHolder requestScopedEms = this.requestScopedEms.get();
-            return new EntityManagerResult(requestScopedEms.getOrCreateEntityManager(unitName, emf), false, false);
+            return new EntityManagerResult(requestScopedEms.getOrCreateEntityManager(unitName, emf), false);
         }
     }
 
@@ -114,9 +112,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void persist(Object entity) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.persist(entity);
         }
     }
@@ -124,9 +119,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public <T> T merge(T entity) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             return emr.em.merge(entity);
         }
     }
@@ -134,9 +126,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void remove(Object entity) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.remove(entity);
         }
     }
@@ -179,9 +168,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void flush() {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.flush();
         }
     }
@@ -203,9 +189,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void lock(Object entity, LockModeType lockMode) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.lock(entity, lockMode);
         }
     }
@@ -213,9 +196,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void lock(Object entity, LockModeType lockMode, Map<String, Object> properties) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.lock(entity, lockMode, properties);
         }
     }
@@ -223,9 +203,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void refresh(Object entity) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.refresh(entity);
         }
     }
@@ -233,9 +210,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void refresh(Object entity, Map<String, Object> properties) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.refresh(entity, properties);
         }
     }
@@ -243,9 +217,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void refresh(Object entity, LockModeType lockMode) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.refresh(entity, lockMode);
         }
     }
@@ -253,9 +224,6 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public void refresh(Object entity, LockModeType lockMode, Map<String, Object> properties) {
         try (EntityManagerResult emr = getEntityManager()) {
-            if (!emr.allowModification) {
-                throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
-            }
             emr.em.refresh(entity, lockMode, properties);
         }
     }
@@ -495,14 +463,12 @@ public class TransactionScopedEntityManager implements EntityManager {
 
     static class EntityManagerResult implements AutoCloseable {
 
-        final EntityManager em;
-        final boolean closeOnEnd;
-        final boolean allowModification;
+        private final EntityManager em;
+        private final boolean closeOnEnd;
 
-        EntityManagerResult(EntityManager em, boolean closeOnEnd, boolean allowModification) {
+        EntityManagerResult(EntityManager em, boolean closeOnEnd) {
             this.em = em;
             this.closeOnEnd = closeOnEnd;
-            this.allowModification = allowModification;
         }
 
         @Override

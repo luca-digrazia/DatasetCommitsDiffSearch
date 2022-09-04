@@ -21,6 +21,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
 
 import org.graalvm.nativeimage.ImageInfo;
+import org.jboss.logging.Logger;
 import org.jboss.threads.Locks;
 import org.wildfly.common.Assert;
 
@@ -181,7 +182,7 @@ public abstract class Application {
                 final SignalHandler handler = new SignalHandler() {
                     @Override
                     public void handle(final Signal signal) {
-                        System.exit(signal.getNumber() + 0x80);
+                        System.exit(0);
                     }
                 };
                 Signal.handle(new Signal("INT"), handler);

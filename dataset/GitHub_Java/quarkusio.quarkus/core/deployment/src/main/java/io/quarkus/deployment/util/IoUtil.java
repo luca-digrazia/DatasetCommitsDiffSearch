@@ -1,5 +1,6 @@
 package io.quarkus.deployment.util;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -15,6 +16,12 @@ public class IoUtil {
     }
 
     public static byte[] readBytes(InputStream is) throws IOException {
-        return is.readAllBytes();
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int len;
+        while ((len = is.read(buffer)) != -1) {
+            os.write(buffer, 0, len);
+        }
+        return os.toByteArray();
     }
 }

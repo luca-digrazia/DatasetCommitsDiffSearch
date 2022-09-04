@@ -49,7 +49,7 @@ public class TestResourceManager {
             try {
                 testResource.start();
             } catch (Exception e) {
-                throw new RuntimeException("Unable to start Quarkus test resource " + testResource, e);
+                throw new RuntimeException("Unable to start Quarkus test resource " + testResource);
             }
         }
     }
@@ -59,7 +59,7 @@ public class TestResourceManager {
             try {
                 testResource.stop();
             } catch (Exception e) {
-                throw new RuntimeException("Unable to start Quarkus test resource " + testResource, e);
+                throw new RuntimeException("Unable to start Quarkus test resource " + testResource);
             }
         }
     }

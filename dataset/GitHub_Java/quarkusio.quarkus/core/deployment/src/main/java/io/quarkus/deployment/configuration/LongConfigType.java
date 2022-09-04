@@ -3,12 +3,12 @@ package io.quarkus.deployment.configuration;
 import java.lang.reflect.Field;
 import java.util.OptionalLong;
 
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 import org.wildfly.common.Assert;
 
 import io.quarkus.deployment.AccessorFinder;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.configuration.NameIterator;
 import io.smallrye.config.SmallRyeConfig;
 
@@ -75,10 +75,6 @@ public class LongConfigType extends LeafConfigType {
                 convertedDefault), Long.class);
         final ResultHandle longValue = body.invokeVirtualMethod(LONG_VALUE_METHOD, defaultedValue);
         body.invokeStaticMethod(setter, enclosing, longValue);
-    }
-
-    public String getDefaultValueString() {
-        return defaultValue;
     }
 
     public Class<?> getItemClass() {

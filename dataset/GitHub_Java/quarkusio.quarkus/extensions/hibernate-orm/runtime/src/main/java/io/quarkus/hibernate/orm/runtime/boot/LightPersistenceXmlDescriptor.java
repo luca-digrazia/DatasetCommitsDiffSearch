@@ -43,6 +43,7 @@ public final class LightPersistenceXmlDescriptor implements PersistenceUnitDescr
     private final SharedCacheMode sharedCachemode;
     private final List<String> managedClassNames;
     private final Properties properties;
+    private final Object jtaDataSource;
 
     public LightPersistenceXmlDescriptor(final PersistenceUnitDescriptor toClone) {
         this.name = toClone.getName();
@@ -51,6 +52,7 @@ public final class LightPersistenceXmlDescriptor implements PersistenceUnitDescr
         this.transactionType = toClone.getTransactionType();
         this.validationMode = toClone.getValidationMode();
         this.sharedCachemode = toClone.getSharedCacheMode();
+        this.jtaDataSource = toClone.getJtaDataSource();
         this.managedClassNames = Collections.unmodifiableList(toClone.getManagedClassNames());
         this.properties = filterNonStrings(toClone.getProperties());
         verifyIgnoredFields(toClone);
@@ -155,8 +157,7 @@ public final class LightPersistenceXmlDescriptor implements PersistenceUnitDescr
 
     @Override
     public Object getJtaDataSource() {
-        // TODO: we should include the name of the datasource
-        return null;
+        return jtaDataSource;
     }
 
     @Override

@@ -1,9 +1,24 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.undertow.test;
 
 import static org.hamcrest.Matchers.is;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.asset.EmptyAsset;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
@@ -30,20 +45,14 @@ public class ServletWebXmlTestCase {
             "  <servlet-mapping>\n" +
             "    <servlet-name>mapped</servlet-name>\n" +
             "    <url-pattern>/mapped</url-pattern>\n" +
-            "  </servlet-mapping>\n" +
-            "\n" +
-            "  <mime-mapping>\n" +
-            "    <extension>wasm</extension>\n" +
-            "    <mime-type>application/wasm</mime-type>\n" +
-            "  </mime-mapping>" +
+            "  </servlet-mapping>" +
             "</web-app>";
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(WebXmlServlet.class)
-                    .addAsManifestResource(new StringAsset(WEB_XML), "web.xml")
-                    .addAsManifestResource(EmptyAsset.INSTANCE, "resources/test.wasm"));
+                    .addAsManifestResource(new StringAsset(WEB_XML), "web.xml"));
 
     @Test
     public void testWebXmlServlet() {
@@ -52,10 +61,4 @@ public class ServletWebXmlTestCase {
                 .body(is("web xml servlet"));
     }
 
-    @Test
-    public void testMimeMapping() {
-        RestAssured.when().get("/test.wasm").then()
-                .statusCode(200)
-                .contentType(is("application/wasm"));
-    }
 }

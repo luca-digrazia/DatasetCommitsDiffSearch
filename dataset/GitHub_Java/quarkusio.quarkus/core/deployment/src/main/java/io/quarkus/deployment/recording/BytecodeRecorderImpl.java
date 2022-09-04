@@ -33,7 +33,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -509,20 +508,12 @@ public class BytecodeRecorderImpl implements RecorderContext {
             } else {
                 try {
                     param.getClass().getDeclaredConstructor();
-                    out = method.newInstance(ofConstructor(param.getClass()));
                 } catch (NoSuchMethodException e) {
-                    //fallback for collection types, such as unmodifiableMap
-                    if (expectedType == Map.class) {
-                        out = method.newInstance(ofConstructor(LinkedHashMap.class));
-                    } else if (expectedType == List.class) {
-                        out = method.newInstance(ofConstructor(ArrayList.class));
-                    } else if (expectedType == Set.class) {
-                        out = method.newInstance(ofConstructor(Set.class));
-                    } else {
-                        throw new RuntimeException("Unable to serialize objects of type " + param.getClass()
-                                + " to bytecode as it has no default constructor");
-                    }
+                    throw new RuntimeException("Unable to serialize objects of type " + param.getClass()
+                            + " to bytecode as it has no default constructor");
                 }
+
+                out = method.newInstance(ofConstructor(param.getClass()));
             }
             returnValueResults.put(param, out);
             if (param instanceof Collection) {

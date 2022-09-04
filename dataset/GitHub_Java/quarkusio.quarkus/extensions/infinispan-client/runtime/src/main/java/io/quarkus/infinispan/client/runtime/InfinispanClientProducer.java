@@ -1,9 +1,9 @@
 package io.quarkus.infinispan.client.runtime;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Scanner;
 import java.util.Set;
@@ -29,8 +29,8 @@ import org.infinispan.client.hotrod.marshall.ProtoStreamMarshaller;
 import org.infinispan.commons.marshall.Marshaller;
 import org.infinispan.commons.util.Util;
 import org.infinispan.counter.api.CounterManager;
-import org.infinispan.protostream.BaseMarshaller;
 import org.infinispan.protostream.FileDescriptorSource;
+import org.infinispan.protostream.MessageMarshaller;
 import org.infinispan.protostream.SerializationContext;
 import org.infinispan.query.remote.client.ProtobufMetadataManagerConstants;
 import org.infinispan.query.remote.client.impl.MarshallerRegistration;
@@ -44,16 +44,10 @@ public class InfinispanClientProducer {
 
     public static final String PROTOBUF_FILE_PREFIX = "infinispan.client.hotrod.protofile.";
 
-    @Inject
-    private BeanManager beanManager;
-
     private Properties properties;
     private RemoteCacheManager cacheManager;
-    private InfinispanClientRuntimeConfig infinispanClientRuntimeConfig;
-
-    public void setRuntimeConfig(InfinispanClientRuntimeConfig infinispanClientConfigRuntime) {
-        this.infinispanClientRuntimeConfig = infinispanClientConfigRuntime;
-    }
+    @Inject
+    private BeanManager beanManager;
 
     private void initialize() {
         log.debug("Initializing CacheManager");
@@ -88,7 +82,7 @@ public class InfinispanClientProducer {
     /**
      * This method is designed to be called during static initialization time. This is so we have access to the
      * classes, and thus we can use reflection to find and instantiate any instances we may need
-     *
+     * 
      * @param properties properties file read from hot rod
      * @throws ClassNotFoundException if a class is not actually found that should be present
      */
@@ -106,7 +100,7 @@ public class InfinispanClientProducer {
 
     /**
      * Sets up additional properties for use when proto stream marshaller is in use
-     *
+     * 
      * @param properties the properties to be updated for querying
      */
     public static void handleProtoStreamRequirements(Properties properties) {
@@ -122,21 +116,19 @@ public class InfinispanClientProducer {
 
     /**
      * Reads all the contents of the file as a single string using default charset
-     *
+     * 
      * @param fileName file on class path to read contents of
      * @return string containing the contents of the file
      */
     private static String getContents(String fileName) {
         InputStream stream = InfinispanClientProducer.class.getResourceAsStream(fileName);
-        try (Scanner scanner = new Scanner(stream, "UTF-8")) {
-            return scanner.useDelimiter("\\A").next();
-        }
+        return new Scanner(stream, "UTF-8").useDelimiter("\\A").next();
     }
 
     /**
      * The mirror side of {@link #replaceProperties(Properties)} so that we can take out any objects that were
      * instantiated during static init time and inject them properly
-     *
+     * 
      * @param properties the properties that was static constructed
      * @return the configuration builder based on the provided properties
      */
@@ -150,17 +142,7 @@ public class InfinispanClientProducer {
             }
             builder.marshaller((Marshaller) marshallerInstance);
         }
-
-        // Override serverList property value at runtime if such configuration exists
-        if (infinispanClientRuntimeConfig != null) {
-            Optional<String> runtimeServerList = infinispanClientRuntimeConfig.serverList;
-            if (runtimeServerList.isPresent()) {
-                properties.put(ConfigurationProperties.SERVER_LIST, runtimeServerList.get());
-            }
-        }
-
         builder.withProperties(properties);
-
         return builder;
     }
 
@@ -184,22 +166,27 @@ public class InfinispanClientProducer {
             }
         }
 
-        if (fileDescriptorSource != null) {
-            serializationContext.registerProtoFiles(fileDescriptorSource);
+        try {
+            if (fileDescriptorSource != null) {
+                serializationContext.registerProtoFiles(fileDescriptorSource);
+            }
+
+            Set<Bean<FileDescriptorSource>> protoFileBeans = (Set) beanManager.getBeans(FileDescriptorSource.class);
+            for (Bean<FileDescriptorSource> bean : protoFileBeans) {
+                CreationalContext<FileDescriptorSource> ctx = beanManager.createCreationalContext(bean);
+                FileDescriptorSource fds = (FileDescriptorSource) beanManager.getReference(bean, FileDescriptorSource.class,
+                        ctx);
+                serializationContext.registerProtoFiles(fds);
+            }
+        } catch (IOException e) {
+            // TODO: pick a better exception
+            throw new RuntimeException(e);
         }
 
-        Set<Bean<FileDescriptorSource>> protoFileBeans = (Set) beanManager.getBeans(FileDescriptorSource.class);
-        for (Bean<FileDescriptorSource> bean : protoFileBeans) {
-            CreationalContext<FileDescriptorSource> ctx = beanManager.createCreationalContext(bean);
-            FileDescriptorSource fds = (FileDescriptorSource) beanManager.getReference(bean, FileDescriptorSource.class,
-                    ctx);
-            serializationContext.registerProtoFiles(fds);
-        }
-
-        Set<Bean<BaseMarshaller>> beans = (Set) beanManager.getBeans(BaseMarshaller.class);
-        for (Bean<BaseMarshaller> bean : beans) {
-            CreationalContext<BaseMarshaller> ctx = beanManager.createCreationalContext(bean);
-            BaseMarshaller messageMarshaller = (BaseMarshaller) beanManager.getReference(bean, BaseMarshaller.class,
+        Set<Bean<MessageMarshaller>> beans = (Set) beanManager.getBeans(MessageMarshaller.class);
+        for (Bean<MessageMarshaller> bean : beans) {
+            CreationalContext<MessageMarshaller> ctx = beanManager.createCreationalContext(bean);
+            MessageMarshaller messageMarshaller = (MessageMarshaller) beanManager.getReference(bean, MessageMarshaller.class,
                     ctx);
             serializationContext.registerMarshaller(messageMarshaller);
         }
@@ -214,7 +201,8 @@ public class InfinispanClientProducer {
 
     @Remote
     @Produces
-    public <K, V> RemoteCache<K, V> getRemoteCache(InjectionPoint injectionPoint, RemoteCacheManager cacheManager) {
+    public <K, V> RemoteCache<K, V> getRemoteCache(InjectionPoint injectionPoint) {
+        final RemoteCacheManager cacheManager = remoteCacheManager();
         Set<Annotation> annotationSet = injectionPoint.getQualifiers();
         final Remote remote = getRemoteAnnotation(annotationSet);
 

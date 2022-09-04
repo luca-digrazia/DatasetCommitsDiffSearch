@@ -24,10 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -264,7 +262,7 @@ public final class BuildChainBuilder {
             }
         }
         // detect cycles
-        cycleCheck(included, new HashSet<>(), new HashSet<>(), dependencies, new ArrayDeque<>());
+        cycleCheck(included, new HashSet<>(), new HashSet<>(), dependencies);
         // recursively build all
         final Set<StepInfo> startSteps = new HashSet<>();
         final Set<StepInfo> endSteps = new HashSet<>();
@@ -351,50 +349,28 @@ public final class BuildChainBuilder {
     }
 
     private void cycleCheck(Set<BuildStepBuilder> builders, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked,
-            final Map<BuildStepBuilder, Set<Produce>> dependencies, final Deque<Produce> producedPath)
-            throws ChainBuildException {
+            final Map<BuildStepBuilder, Set<Produce>> dependencies) throws ChainBuildException {
         for (BuildStepBuilder builder : builders) {
-            cycleCheck(builder, visited, checked, dependencies, producedPath);
+            cycleCheck(builder, visited, checked, dependencies);
         }
     }
 
     private void cycleCheckProduce(Set<Produce> produceSet, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked,
-            final Map<BuildStepBuilder, Set<Produce>> dependencies, final Deque<Produce> producedPath)
-            throws ChainBuildException {
+            final Map<BuildStepBuilder, Set<Produce>> dependencies) throws ChainBuildException {
         for (Produce produce : produceSet) {
-            producedPath.add(produce);
-            cycleCheck(produce.getStepBuilder(), visited, checked, dependencies, producedPath);
-            producedPath.removeLast();
+            cycleCheck(produce.getStepBuilder(), visited, checked, dependencies);
         }
     }
 
     private void cycleCheck(BuildStepBuilder builder, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked,
-            final Map<BuildStepBuilder, Set<Produce>> dependencies, final Deque<Produce> producedPath)
-            throws ChainBuildException {
+            final Map<BuildStepBuilder, Set<Produce>> dependencies) throws ChainBuildException {
         if (!checked.contains(builder)) {
             if (!visited.add(builder)) {
-                final StringBuilder b = new StringBuilder("Cycle detected:\n\t\t   ");
-                final Iterator<Produce> itr = producedPath.descendingIterator();
-                if (itr.hasNext()) {
-                    Produce produce = itr.next();
-                    for (;;) {
-                        b.append(produce.getStepBuilder().getBuildStep());
-                        ItemId itemId = produce.getItemId();
-                        b.append(" produced ").append(itemId);
-                        b.append("\n\t\tto ");
-                        if (!itr.hasNext())
-                            break;
-                        produce = itr.next();
-                        if (produce.getStepBuilder() == builder)
-                            break;
-                    }
-                    b.append(builder.getBuildStep());
-                }
-                throw new ChainBuildException(b.toString());
+                throw new ChainBuildException("Cycle detected: " + visited);
             }
             try {
                 final Set<Produce> dependencySet = dependencies.getOrDefault(builder, Collections.emptySet());
-                cycleCheckProduce(dependencySet, visited, checked, dependencies, producedPath);
+                cycleCheckProduce(dependencySet, visited, checked, dependencies);
             } finally {
                 visited.remove(builder);
             }

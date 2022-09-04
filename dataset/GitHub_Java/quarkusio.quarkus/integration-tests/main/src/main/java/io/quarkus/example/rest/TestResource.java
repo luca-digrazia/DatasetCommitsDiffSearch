@@ -22,12 +22,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.inject.Inject;
 import javax.json.Json;
 import javax.json.JsonObject;
-import javax.json.bind.Jsonb;
-import javax.json.bind.JsonbBuilder;
-import javax.json.bind.JsonbConfig;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.CookieParam;
 import javax.ws.rs.FormParam;
@@ -51,20 +47,11 @@ public class TestResource {
     @Context
     HttpServletRequest request;
 
-    @Inject
-    ExternalService service;
-
     private final AtomicInteger count = new AtomicInteger(0);
 
     @GET
     public String getTest() {
         return "TEST";
-    }
-
-    @GET
-    @Path("/service")
-    public String service() {
-        return service.service();
     }
 
     @GET
@@ -176,22 +163,6 @@ public class TestResource {
     @Produces("application/foo")
     public String fooProvider() {
         return "hello";
-    }
-
-    @GET
-    @Path("/from-json")
-    @Produces("application/json")
-    public MyEntity fromJson() {
-        MyEntity entity = new MyEntity();
-        entity.name = "my entity name";
-        entity.value = "my entity value";
-
-        JsonbConfig config = new JsonbConfig();
-        Jsonb jsonb = JsonbBuilder.create(config);
-        String json = jsonb.toJson(entity);
-        MyEntity fromJsonEntity = jsonb.fromJson(json, MyEntity.class);
-
-        return fromJsonEntity;
     }
 
     @GET

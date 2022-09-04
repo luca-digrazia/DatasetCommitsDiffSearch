@@ -20,7 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-import io.quarkus.builder.item.MultiBuildItem;
+import org.jboss.builder.item.MultiBuildItem;
 
 /**
  * Represents a Service Provider registration.
@@ -35,12 +35,8 @@ public final class ServiceProviderBuildItem extends MultiBuildItem {
     private final List<String> providers;
 
     public ServiceProviderBuildItem(String serviceInterfaceClassName, String... providerClassNames) {
-        this(serviceInterfaceClassName, Arrays.asList(providerClassNames));
-    }
-
-    public ServiceProviderBuildItem(String serviceInterfaceClassName, List<String> providers) {
-        this.serviceInterface = Objects.requireNonNull(serviceInterfaceClassName, "The service interface must not be `null`");
-        this.providers = providers;
+        serviceInterface = Objects.requireNonNull(serviceInterfaceClassName, "The service interface must not be `null`");
+        providers = Arrays.asList(Objects.requireNonNull(providerClassNames));
 
         // Validation
         if (serviceInterface.length() == 0) {
@@ -49,7 +45,7 @@ public final class ServiceProviderBuildItem extends MultiBuildItem {
 
         providers.forEach(s -> {
             if (s == null || s.length() == 0) {
-                throw new IllegalArgumentException("The provider class name cannot be null or blank");
+                throw new IllegalArgumentException("The provider class name cannot be blank");
             }
         });
     }

@@ -93,7 +93,6 @@ public class ReplacementDebugPage {
             "</style>";
 
     public static void handleRequest(HttpServerExchange exchange, final Throwable exception) throws IOException {
-        exchange.setStatusCode(500);
         StringBuilder sb = new StringBuilder();
         //todo: make this good
         sb.append("<html><head><title>ERROR</title>");

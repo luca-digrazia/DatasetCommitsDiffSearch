@@ -16,6 +16,8 @@
 
 package io.quarkus.hibernate.orm.runtime.boot;
 
+import static org.hibernate.cfg.AvailableSettings.CLASS_CACHE_PREFIX;
+import static org.hibernate.cfg.AvailableSettings.COLLECTION_CACHE_PREFIX;
 import static org.hibernate.cfg.AvailableSettings.DATASOURCE;
 import static org.hibernate.cfg.AvailableSettings.DRIVER;
 import static org.hibernate.cfg.AvailableSettings.JACC_ENABLED;
@@ -24,9 +26,12 @@ import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_DRIVER;
 import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_PASSWORD;
 import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_URL;
 import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_USER;
+import static org.hibernate.cfg.AvailableSettings.JPA_JTA_DATASOURCE;
+import static org.hibernate.cfg.AvailableSettings.JPA_NON_JTA_DATASOURCE;
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_MODE;
 import static org.hibernate.cfg.AvailableSettings.JPA_TRANSACTION_TYPE;
 import static org.hibernate.cfg.AvailableSettings.PASS;
+import static org.hibernate.cfg.AvailableSettings.PERSISTENCE_UNIT_NAME;
 import static org.hibernate.cfg.AvailableSettings.TRANSACTION_COORDINATOR_STRATEGY;
 import static org.hibernate.cfg.AvailableSettings.URL;
 import static org.hibernate.cfg.AvailableSettings.USER;
@@ -36,9 +41,6 @@ import static org.hibernate.cfg.AvailableSettings.USE_SECOND_LEVEL_CACHE;
 import static org.hibernate.cfg.AvailableSettings.WRAP_RESULT_SETS;
 import static org.hibernate.cfg.AvailableSettings.XML_MAPPING_ENABLED;
 import static org.hibernate.internal.HEMLogging.messageLogger;
-import static org.hibernate.jpa.AvailableSettings.CLASS_CACHE_PREFIX;
-import static org.hibernate.jpa.AvailableSettings.COLLECTION_CACHE_PREFIX;
-import static org.hibernate.jpa.AvailableSettings.PERSISTENCE_UNIT_NAME;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -90,7 +92,6 @@ import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoo
 import org.hibernate.service.internal.AbstractServiceRegistryImpl;
 import org.infinispan.quarkus.hibernate.cache.QuarkusInfinispanRegionFactory;
 
-import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
 import io.quarkus.hibernate.orm.runtime.recording.RecordableBootstrap;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.orm.runtime.recording.RecordingDialectFactory;
@@ -105,7 +106,7 @@ public class FastBootMetadataBuilder {
     private static final EntityManagerMessageLogger LOG = messageLogger(FastBootMetadataBuilder.class);
 
     private final PersistenceUnitDescriptor persistenceUnit;
-    private final BuildTimeSettings buildTimeSettings;
+    private final Map configurationValues;
     private final StandardServiceRegistry standardServiceRegistry;
     private final ManagedResources managedResources;
     private final MetadataBuilderImplementor metamodelBuilder;
@@ -132,12 +133,13 @@ public class FastBootMetadataBuilder {
         insertStateRecorders(ssrBuilder);
 
         final MergedSettings mergedSettings = mergeSettings(persistenceUnit);
-        this.buildTimeSettings = new BuildTimeSettings(mergedSettings.getConfigurationValues());
+        this.configurationValues = mergedSettings.getConfigurationValues();
 
         // Build the "standard" service registry
-        ssrBuilder.applySettings(buildTimeSettings.getSettings());
+        ssrBuilder.applySettings(configurationValues);
+        configure(ssrBuilder);
         this.standardServiceRegistry = ssrBuilder.build();
-        registerIdentifierGenerators(standardServiceRegistry);
+        configure(standardServiceRegistry, mergedSettings);
 
         final MetadataSources metadataSources = new MetadataSources(bsr);
         addPUManagedClassNamesToMetadataSources(persistenceUnit, metadataSources);
@@ -147,7 +149,7 @@ public class FastBootMetadataBuilder {
         if (scanner != null) {
             this.metamodelBuilder.applyScanner(scanner);
         }
-        populate(metamodelBuilder, mergedSettings.cacheRegionDefinitions, standardServiceRegistry);
+        populate(metamodelBuilder, mergedSettings, standardServiceRegistry);
 
         this.managedResources = MetadataBuildingProcess.prepare(metadataSources,
                 metamodelBuilder.getBootstrapContext());
@@ -156,7 +158,7 @@ public class FastBootMetadataBuilder {
 
         // BVAL integration:
         this.validatorFactory = withValidatorFactory(
-                buildTimeSettings.get(org.hibernate.cfg.AvailableSettings.JPA_VALIDATION_FACTORY));
+                configurationValues.get(org.hibernate.cfg.AvailableSettings.JPA_VALIDATION_FACTORY));
 
         // Unable to automatically handle:
         // AvailableSettings.ENHANCER_ENABLE_DIRTY_TRACKING,
@@ -215,16 +217,6 @@ public class FastBootMetadataBuilder {
         }
 
         mergedSettings.configurationValues.put(PERSISTENCE_UNIT_NAME, persistenceUnit.getName());
-
-        applyTransactionProperties(persistenceUnit, mergedSettings.configurationValues);
-        applyJdbcConnectionProperties(mergedSettings.configurationValues);
-
-        // unsupported FLUSH_BEFORE_COMPLETION
-
-        if (readBooleanConfigurationValue(mergedSettings.configurationValues, Environment.FLUSH_BEFORE_COMPLETION)) {
-            mergedSettings.configurationValues.put(Environment.FLUSH_BEFORE_COMPLETION, "false");
-            LOG.definingFlushBeforeCompletionIgnoredInHem(Environment.FLUSH_BEFORE_COMPLETION);
-        }
 
         // Quarkus specific
 
@@ -308,7 +300,7 @@ public class FastBootMetadataBuilder {
         JtaPlatform jtaPlatform = extractJtaPlatform();
         destroyServiceRegistry(fullMeta);
         MetadataImplementor storeableMetadata = trimBootstrapMetadata(fullMeta);
-        return new RecordedState(dialect, jtaPlatform, storeableMetadata, buildTimeSettings);
+        return new RecordedState(dialect, jtaPlatform, storeableMetadata, configurationValues);
     }
 
     private void destroyServiceRegistry(MetadataImplementor fullMeta) {
@@ -425,56 +417,82 @@ public class FastBootMetadataBuilder {
         return "[PersistenceUnit: " + persistenceUnit.getName() + "] ";
     }
 
-    private static void applyJdbcConnectionProperties(Map<String, Object> configurationValues) {
-        final String driver = (String) configurationValues.get(JPA_JDBC_DRIVER);
-        if (StringHelper.isNotEmpty(driver)) {
-            configurationValues.put(DRIVER, driver);
-        }
-        final String url = (String) configurationValues.get(JPA_JDBC_URL);
-        if (StringHelper.isNotEmpty(url)) {
-            configurationValues.put(URL, url);
-        }
-        final String user = (String) configurationValues.get(JPA_JDBC_USER);
-        if (StringHelper.isNotEmpty(user)) {
-            configurationValues.put(USER, user);
-        }
-        final String pass = (String) configurationValues.get(JPA_JDBC_PASSWORD);
-        if (StringHelper.isNotEmpty(pass)) {
-            configurationValues.put(PASS, pass);
+    private void configure(StandardServiceRegistryBuilder ssrBuilder) {
+        applyJdbcConnectionProperties(ssrBuilder);
+        applyTransactionProperties(ssrBuilder);
+        // flush before completion validation
+        if ("true".equals(configurationValues.get(Environment.FLUSH_BEFORE_COMPLETION))) {
+            ssrBuilder.applySetting(Environment.FLUSH_BEFORE_COMPLETION, "false");
+            LOG.definingFlushBeforeCompletionIgnoredInHem(Environment.FLUSH_BEFORE_COMPLETION);
         }
     }
 
-    private static void applyTransactionProperties(PersistenceUnitDescriptor persistenceUnit,
-            Map<String, Object> configurationValues) {
-        PersistenceUnitTransactionType transactionType = PersistenceUnitTransactionTypeHelper
+    private void applyJdbcConnectionProperties(StandardServiceRegistryBuilder ssrBuilder) {
+        if (persistenceUnit.getJtaDataSource() != null) {
+            if (!ssrBuilder.getSettings().containsKey(DATASOURCE)) {
+                ssrBuilder.applySetting(DATASOURCE, persistenceUnit.getJtaDataSource());
+                // HHH-8121 : make the PU-defined value available to EMF.getProperties()
+                configurationValues.put(JPA_JTA_DATASOURCE, persistenceUnit.getJtaDataSource());
+            }
+        } else if (persistenceUnit.getNonJtaDataSource() != null) {
+            if (!ssrBuilder.getSettings().containsKey(DATASOURCE)) {
+                ssrBuilder.applySetting(DATASOURCE, persistenceUnit.getNonJtaDataSource());
+                // HHH-8121 : make the PU-defined value available to EMF.getProperties()
+                configurationValues.put(JPA_NON_JTA_DATASOURCE, persistenceUnit.getNonJtaDataSource());
+            }
+        } else {
+            final String driver = (String) configurationValues.get(JPA_JDBC_DRIVER);
+            if (StringHelper.isNotEmpty(driver)) {
+                ssrBuilder.applySetting(DRIVER, driver);
+            }
+            final String url = (String) configurationValues.get(JPA_JDBC_URL);
+            if (StringHelper.isNotEmpty(url)) {
+                ssrBuilder.applySetting(URL, url);
+            }
+            final String user = (String) configurationValues.get(JPA_JDBC_USER);
+            if (StringHelper.isNotEmpty(user)) {
+                ssrBuilder.applySetting(USER, user);
+            }
+            final String pass = (String) configurationValues.get(JPA_JDBC_PASSWORD);
+            if (StringHelper.isNotEmpty(pass)) {
+                ssrBuilder.applySetting(PASS, pass);
+            }
+        }
+    }
+
+    private void applyTransactionProperties(StandardServiceRegistryBuilder ssrBuilder) {
+        PersistenceUnitTransactionType txnType = PersistenceUnitTransactionTypeHelper
                 .interpretTransactionType(configurationValues.get(JPA_TRANSACTION_TYPE));
-        if (transactionType == null) {
-            transactionType = persistenceUnit.getTransactionType();
+        if (txnType == null) {
+            txnType = persistenceUnit.getTransactionType();
         }
-        if (transactionType == null) {
-            // is it more appropriate to have this be based on bootstrap entry point (EE vs SE)?
-            transactionType = PersistenceUnitTransactionType.RESOURCE_LOCAL;
+        if (txnType == null) {
+            // is it more appropriate to have this be based on bootstrap entry point (EE vs
+            // SE)?
+            txnType = PersistenceUnitTransactionType.RESOURCE_LOCAL;
         }
-        boolean hasTransactionStrategy = configurationValues.containsKey(TRANSACTION_COORDINATOR_STRATEGY);
-        if (hasTransactionStrategy) {
+        boolean hasTxStrategy = configurationValues.containsKey(TRANSACTION_COORDINATOR_STRATEGY);
+        if (hasTxStrategy) {
             LOG.overridingTransactionStrategyDangerous(TRANSACTION_COORDINATOR_STRATEGY);
         } else {
-            if (transactionType == PersistenceUnitTransactionType.JTA) {
-                configurationValues.put(TRANSACTION_COORDINATOR_STRATEGY,
-                        JtaTransactionCoordinatorBuilderImpl.class);
-            } else if (transactionType == PersistenceUnitTransactionType.RESOURCE_LOCAL) {
+            if (txnType == PersistenceUnitTransactionType.JTA) {
+                ssrBuilder.applySetting(TRANSACTION_COORDINATOR_STRATEGY, JtaTransactionCoordinatorBuilderImpl.class);
+                configurationValues.put(TRANSACTION_COORDINATOR_STRATEGY, JtaTransactionCoordinatorBuilderImpl.class);
+            } else if (txnType == PersistenceUnitTransactionType.RESOURCE_LOCAL) {
+                ssrBuilder.applySetting(TRANSACTION_COORDINATOR_STRATEGY,
+                        JdbcResourceLocalTransactionCoordinatorBuilderImpl.class);
                 configurationValues.put(TRANSACTION_COORDINATOR_STRATEGY,
                         JdbcResourceLocalTransactionCoordinatorBuilderImpl.class);
             }
         }
     }
 
-    private void registerIdentifierGenerators(StandardServiceRegistry ssr) {
+    private void configure(StandardServiceRegistry ssr, MergedSettings mergedSettings) {
         final StrategySelector strategySelector = ssr.getService(StrategySelector.class);
 
         // apply id generators
-        final Object idGeneratorStrategyProviderSetting = buildTimeSettings
-                .get(AvailableSettings.IDENTIFIER_GENERATOR_STRATEGY_PROVIDER);
+        final Object idGeneratorStrategyProviderSetting = configurationValues
+                .remove(AvailableSettings.IDENTIFIER_GENERATOR_STRATEGY_PROVIDER);
         if (idGeneratorStrategyProviderSetting != null) {
             final IdentifierGeneratorStrategyProvider idGeneratorStrategyProvider = strategySelector
                     .resolveStrategy(IdentifierGeneratorStrategyProvider.class, idGeneratorStrategyProviderSetting);
@@ -496,22 +514,22 @@ public class FastBootMetadataBuilder {
      * org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl.MergedSettings,
      * org.hibernate.boot.registry.StandardServiceRegistry, java.util.List)
      */
-    protected void populate(MetadataBuilder metamodelBuilder, List<CacheRegionDefinition> cacheRegionDefinitions,
+    protected void populate(MetadataBuilder metamodelBuilder, MergedSettings mergedSettings,
             StandardServiceRegistry ssr) {
 
         ((MetadataBuilderImplementor) metamodelBuilder).getBootstrapContext().markAsJpaBootstrap();
 
         metamodelBuilder.applyScanEnvironment(new StandardJpaScanEnvironmentImpl(persistenceUnit));
         metamodelBuilder.applyScanOptions(new StandardScanOptions(
-                (String) buildTimeSettings.get(org.hibernate.cfg.AvailableSettings.SCANNER_DISCOVERY),
+                (String) configurationValues.get(org.hibernate.cfg.AvailableSettings.SCANNER_DISCOVERY),
                 persistenceUnit.isExcludeUnlistedClasses()));
 
-        if (cacheRegionDefinitions != null) {
-            cacheRegionDefinitions.forEach(metamodelBuilder::applyCacheRegionDefinition);
+        if (mergedSettings.cacheRegionDefinitions != null) {
+            mergedSettings.cacheRegionDefinitions.forEach(metamodelBuilder::applyCacheRegionDefinition);
         }
 
-        final TypeContributorList typeContributorList = (TypeContributorList) buildTimeSettings
-                .get(EntityManagerFactoryBuilderImpl.TYPE_CONTRIBUTORS);
+        final TypeContributorList typeContributorList = (TypeContributorList) configurationValues
+                .remove(EntityManagerFactoryBuilderImpl.TYPE_CONTRIBUTORS);
         if (typeContributorList != null) {
             typeContributorList.getTypeContributors().forEach(metamodelBuilder::applyTypes);
         }
@@ -519,7 +537,7 @@ public class FastBootMetadataBuilder {
 
     private void applyMetadataBuilderContributor() {
 
-        Object metadataBuilderContributorSetting = buildTimeSettings
+        Object metadataBuilderContributorSetting = configurationValues
                 .get(EntityManagerFactoryBuilderImpl.METADATA_BUILDER_CONTRIBUTOR);
 
         if (metadataBuilderContributorSetting == null) {

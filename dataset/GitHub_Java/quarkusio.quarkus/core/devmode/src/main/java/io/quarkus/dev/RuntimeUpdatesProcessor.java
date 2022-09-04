@@ -16,8 +16,6 @@
 
 package io.quarkus.dev;
 
-import static java.util.stream.Collectors.groupingBy;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -25,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -36,7 +33,6 @@ import java.util.stream.Stream;
 import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.devmode.HotReplacementContext;
-import io.quarkus.runtime.Timing;
 
 public class RuntimeUpdatesProcessor implements HotReplacementContext {
 
@@ -79,13 +75,13 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
     }
 
     public void doScan() throws IOException {
-        final long startNanoseconds = System.nanoTime();
+        final long start = System.currentTimeMillis();
         final ConcurrentMap<String, byte[]> changedClasses = scanForChangedClasses();
         if (changedClasses == null)
             return;
 
         DevModeMain.restartApp();
-        log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
+        log.info("Hot replace total time: " + (System.currentTimeMillis() - start) + "ms");
     }
 
     ConcurrentMap<String, byte[]> scanForChangedClasses() throws IOException {
@@ -95,7 +91,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             try (final Stream<Path> sourcesStream = Files.walk(sourcesDir)) {
                 changedSourceFiles = sourcesStream
                         .parallel()
-                        .filter(p -> matchingHandledExtension(p).isPresent())
+                        .filter(p -> p.toString().endsWith(".java"))
                         .filter(p -> wasRecentlyModified(p))
                         .map(Path::toFile)
                         //Needing a concurrent Set, not many standard options:
@@ -108,8 +104,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             log.info("Changes source files detected, recompiling " + changedSourceFiles);
 
             try {
-                compiler.compile(changedSourceFiles.stream()
-                        .collect(groupingBy(this::getFileExtension, Collectors.toSet())));
+                compiler.compile(changedSourceFiles);
             } catch (Exception e) {
                 DevModeMain.deploymentProblem = e;
                 return null;
@@ -131,19 +126,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
 
         lastChange = System.currentTimeMillis();
         return changedClasses;
-    }
-
-    private Optional<String> matchingHandledExtension(Path p) {
-        return compiler.allHandledExtensions().stream().filter(e -> p.toString().endsWith(e)).findFirst();
-    }
-
-    private String getFileExtension(File file) {
-        String name = file.getName();
-        int lastIndexOf = name.lastIndexOf(".");
-        if (lastIndexOf == -1) {
-            return ""; // empty extension
-        }
-        return name.substring(lastIndexOf);
     }
 
     private boolean checkForConfigFileChange() {
@@ -185,10 +167,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
             if (recent) {
                 return true;
             }
-            Optional<String> matchingExtension = matchingHandledExtension(p);
-            if (matchingExtension.isPresent()) {
+            if (p.toString().endsWith(".java")) {
                 String pathName = sourcesDir.relativize(p).toString();
-                String classFileName = pathName.substring(0, pathName.length() - matchingExtension.get().length()) + ".class";
+                String classFileName = pathName.substring(0, pathName.length() - 5) + ".class";
                 Path classFile = classesDir.resolve(classFileName);
                 if (!Files.exists(classFile)) {
                     return true;

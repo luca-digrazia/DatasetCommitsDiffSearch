@@ -54,7 +54,6 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
-import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
@@ -74,11 +73,9 @@ class InfinispanClientProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<HotDeploymentConfigFileBuildItem> hotDeployment,
             BuildProducer<SystemPropertyBuildItem> systemProperties,
-            BuildProducer<FeatureBuildItem> feature,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             ApplicationIndexBuildItem applicationIndexBuildItem) throws ClassNotFoundException, IOException {
 
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.INFINISPAN_CLIENT));
         additionalBeans.produce(new AdditionalBeanBuildItem(InfinispanClientProducer.class));
         systemProperties.produce(new SystemPropertyBuildItem("io.netty.noUnsafe", "true"));
         hotDeployment.produce(new HotDeploymentConfigFileBuildItem(HOTROD_CLIENT_PROPERTIES));
@@ -154,7 +151,7 @@ class InfinispanClientProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
         // We use reflection to have continuous queries work
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
-                "org.infinispan.client.hotrod.event.impl.ContinuousQueryImpl$ClientEntryListener"));
+                "org.infinispan.client.hotrod.event.ContinuousQueryImpl$ClientEntryListener"));
         // We use reflection to allow for near cache invalidations
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
                 "org.infinispan.client.hotrod.near.NearCacheService$InvalidatedNearCacheListener"));

@@ -1,15 +1,13 @@
 package io.quarkus.deployment.configuration;
 
 import java.lang.reflect.Field;
-import java.util.Map;
 import java.util.Optional;
 
-import org.wildfly.common.Assert;
+import org.jboss.protean.gizmo.BytecodeCreator;
+import org.jboss.protean.gizmo.MethodDescriptor;
+import org.jboss.protean.gizmo.ResultHandle;
 
 import io.quarkus.deployment.AccessorFinder;
-import io.quarkus.gizmo.BytecodeCreator;
-import io.quarkus.gizmo.MethodDescriptor;
-import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.configuration.NameIterator;
 import io.smallrye.config.SmallRyeConfig;
 
@@ -84,16 +82,6 @@ public class OptionalObjectConfigType extends ObjectConfigType {
                         name),
                 body.loadClass(expectedType));
         body.invokeStaticMethod(setter, enclosing, optionalValue);
-    }
-
-    void acceptConfigurationValueIntoMap(final Map<String, Object> enclosing, final NameIterator name,
-            final SmallRyeConfig config) {
-        throw Assert.unsupported();
-    }
-
-    void generateAcceptConfigurationValueIntoMap(final BytecodeCreator body, final ResultHandle enclosing,
-            final ResultHandle name, final ResultHandle config) {
-        throw Assert.unsupported();
     }
 
     public ResultHandle writeInitialization(final BytecodeCreator body, final AccessorFinder accessorFinder,

@@ -1,31 +1,33 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.deployment.builditem;
 
 import java.util.function.BiFunction;
 
+import org.jboss.builder.item.MultiBuildItem;
 import org.objectweb.asm.ClassVisitor;
-
-import io.quarkus.builder.item.MultiBuildItem;
 
 public final class BytecodeTransformerBuildItem extends MultiBuildItem {
 
-    /**
-     * If this is true it means the class should be loaded eagerly by a thread pool in dev mode
-     * on multi threaded systems.
-     *
-     * Transformation is expensive, so doing it this way can speed up boot time.
-     */
-    final boolean eager;
     final String classToTransform;
     final BiFunction<String, ClassVisitor, ClassVisitor> visitorFunction;
 
     public BytecodeTransformerBuildItem(String classToTransform,
             BiFunction<String, ClassVisitor, ClassVisitor> visitorFunction) {
-        this(false, classToTransform, visitorFunction);
-    }
-
-    public BytecodeTransformerBuildItem(boolean eager, String classToTransform,
-            BiFunction<String, ClassVisitor, ClassVisitor> visitorFunction) {
-        this.eager = eager;
         this.classToTransform = classToTransform;
         this.visitorFunction = visitorFunction;
     }
@@ -36,9 +38,5 @@ public final class BytecodeTransformerBuildItem extends MultiBuildItem {
 
     public BiFunction<String, ClassVisitor, ClassVisitor> getVisitorFunction() {
         return visitorFunction;
-    }
-
-    public boolean isEager() {
-        return eager;
     }
 }

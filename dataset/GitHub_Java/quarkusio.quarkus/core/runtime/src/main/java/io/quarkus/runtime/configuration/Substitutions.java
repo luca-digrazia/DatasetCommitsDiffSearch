@@ -1,7 +1,6 @@
 package io.quarkus.runtime.configuration;
 
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
-import org.wildfly.common.Assert;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
@@ -49,21 +48,4 @@ final class Substitutions {
         private static volatile ConfigProviderResolver instance;
     }
 
-    @TargetClass(ExpandingConfigSource.class)
-    static final class Target_ExpandingConfigSource {
-        @Delete
-        private static ThreadLocal<Boolean> NO_EXPAND;
-
-        @Substitute
-        private static boolean isExpanding() {
-            return true;
-        }
-
-        @Substitute
-        public static boolean setExpanding(boolean newValue) {
-            if (!newValue)
-                throw Assert.unsupported();
-            return true;
-        }
-    }
 }

@@ -18,13 +18,10 @@ package io.quarkus.hibernate.orm.runtime;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.PreDestroy;
-import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.context.BeforeDestroyed;
 import javax.inject.Singleton;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
@@ -44,7 +41,7 @@ public class JPAConfig {
 
     public JPAConfig() {
         this.jtaEnabled = new AtomicBoolean();
-        this.persistenceUnits = new ConcurrentHashMap<>();
+        this.persistenceUnits = new HashMap<>();
         this.defaultPersistenceUnitName = new AtomicReference<String>();
     }
 
@@ -85,13 +82,8 @@ public class JPAConfig {
         return jtaEnabled.get();
     }
 
-    /**
-     * Need to shutdown all instances of Hibernate ORM before the actual destroy event,
-     * as it might need to use the datasources during shutdown.
-     *
-     * @param event ignored
-     */
-    void destroy(@BeforeDestroyed(ApplicationScoped.class) Object event) {
+    @PreDestroy
+    void destroy() {
         for (LazyPersistenceUnit factory : persistenceUnits.values()) {
             try {
                 factory.close();
@@ -99,10 +91,6 @@ public class JPAConfig {
                 LOGGER.warn("Unable to close the EntityManagerFactory: " + factory, e);
             }
         }
-    }
-
-    @PreDestroy
-    void destroy() {
         persistenceUnits.clear();
     }
 

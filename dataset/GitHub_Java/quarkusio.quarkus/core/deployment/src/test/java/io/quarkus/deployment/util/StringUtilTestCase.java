@@ -15,10 +15,10 @@ import org.junit.Test;
 public class StringUtilTestCase {
 
     /**
-     * Test word beginning with multiple uppercase letters
+     * Test word beginning with mulitiple uppercase letters
      */
     @Test
-    public void testHyphenateUppercaseBegin() {
+    public void testHypentateUppercaseBegin() {
         String hyphenated = StringUtil.hyphenate("SBVbt");
         Assert.assertEquals("sb-vbt", hyphenated);
     }
@@ -27,7 +27,7 @@ public class StringUtilTestCase {
      * Test word with only uppercase letters
      */
     @Test
-    public void testHyphenateAllUppercase() {
+    public void testHypentateAllUppercase() {
         String hyphenated = StringUtil.hyphenate("SHOUT");
         Assert.assertEquals("shout", hyphenated);
     }
@@ -36,7 +36,7 @@ public class StringUtilTestCase {
      * Test word with multiple uppercase letters in middle
      */
     @Test
-    public void testHyphenateUppercaseMiddle() {
+    public void testHypentateUppercaseMiddle() {
         String hyphenated = StringUtil.hyphenate("btSBVsuffix");
         Assert.assertEquals("bt-sb-vsuffix", hyphenated);
     }
@@ -45,7 +45,7 @@ public class StringUtilTestCase {
      * Test word with multiple uppercase letters at end
      */
     @Test
-    public void testHyphenateUppercaseEnd() {
+    public void testHypentateUppercaseEnd() {
         String hyphenated = StringUtil.hyphenate("btSBV");
         Assert.assertEquals("bt-sbv", hyphenated);
     }
@@ -54,7 +54,7 @@ public class StringUtilTestCase {
      * Test the special case of a word with JBoss in it as the JB are treated as one
      */
     @Test
-    public void testHyphenateJBossWord() {
+    public void testHypentateJBossWord() {
         String hyphenated = StringUtil.hyphenate("JBossHome");
         Assert.assertEquals("jboss-home", hyphenated);
     }
@@ -63,7 +63,7 @@ public class StringUtilTestCase {
      * Test the special case of a word with JBoss in it as the JB are treated as one
      */
     @Test
-    public void testHyphenateJBossWordAtEnd() {
+    public void testHypentateJBossWordAtEnd() {
         String hyphenated = StringUtil.hyphenate("HomeOfJBoss");
         Assert.assertEquals("home-of-jboss", hyphenated);
     }

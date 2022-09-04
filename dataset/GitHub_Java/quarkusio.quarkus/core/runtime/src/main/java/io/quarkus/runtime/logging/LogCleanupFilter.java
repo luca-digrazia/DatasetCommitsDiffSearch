@@ -25,11 +25,9 @@ public class LogCleanupFilter implements Filter {
             return true;
         LogCleanupFilterElement filterElement = filterElements.get(record.getLoggerName());
         if (filterElement != null) {
-            for (String messageStart : filterElement.getMessageStarts()) {
-                if (record.getMessage().startsWith(messageStart)) {
-                    record.setLevel(org.jboss.logmanager.Level.DEBUG);
-                    return Logger.getLogger(record.getLoggerName()).isDebugEnabled();
-                }
+            if (record.getMessage().startsWith(filterElement.getMessageStart())) {
+                record.setLevel(org.jboss.logmanager.Level.DEBUG);
+                return Logger.getLogger(record.getLoggerName()).isDebugEnabled();
             }
         }
         //            System.err.println("isLoggable: "+record.getLoggerName());

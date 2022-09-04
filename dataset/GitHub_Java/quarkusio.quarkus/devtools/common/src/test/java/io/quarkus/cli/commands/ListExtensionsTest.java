@@ -19,7 +19,6 @@ import org.apache.maven.model.Model;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.cli.commands.writer.FileWriter;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 
@@ -32,14 +31,13 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(new FileWriter(pom.getParentFile()))
+        new CreateProject(pom.getParentFile())
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
 
-        File pomFile = new File(pom.getAbsolutePath());
-        new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
+        new AddExtensions(pom)
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         Model model = readPom(pom);
@@ -48,7 +46,7 @@ public class ListExtensionsTest {
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
-        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-agroal"));
+        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-agroal-deployment"));
     }
 
     /**
@@ -64,14 +62,13 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(new FileWriter(pom.getParentFile()))
+        new CreateProject(pom.getParentFile())
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
 
-        File pomFile = new File(pom.getAbsolutePath());
-        new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
+        new AddExtensions(pom)
                 .addExtensions(new HashSet<>(asList("resteasy", " hibernate-validator ")));
 
         Model model = readPom(pom);
@@ -80,8 +77,8 @@ public class ListExtensionsTest {
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
-        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-resteasy"));
-        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-hibernate-validator"));
+        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-resteasy-deployment"));
+        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-hibernate-validator-deployment"));
     }
 
     @Test
@@ -91,7 +88,7 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(new FileWriter(pom.getParentFile()))
+        new CreateProject(pom.getParentFile())
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
@@ -106,8 +103,7 @@ public class ListExtensionsTest {
 
         MojoUtils.write(model, pom);
 
-        File pomFile = new File(pom.getAbsolutePath());
-        new AddExtensions(new FileWriter(pomFile.getParentFile()), pomFile.getName())
+        new AddExtensions(pom)
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         model = readPom(pom);
@@ -121,24 +117,29 @@ public class ListExtensionsTest {
         } finally {
             System.setOut(out);
         }
-        boolean agroal = false;
         boolean resteasy = false;
-        boolean hibernateValidator = false;
+        boolean arc = false;
+        boolean agroal = false;
+        boolean bean = false;
         final String output = baos.toString();
         for (String line : output.split("\r?\n")) {
             if (line.contains(" Agroal ")) {
                 assertTrue(line.startsWith("current"), "Agroal should list as current: " + line);
                 agroal = true;
+            } else if (line.contains(" Arc  ")) {
+                assertTrue(line.startsWith("update"), "Arc should list as having an update: " + line);
+                assertTrue(line.endsWith(getPluginVersion()), "Arc should list as having an update: " + line);
+                arc = true;
             } else if (line.contains(" RESTEasy  ")) {
                 assertTrue(line.startsWith("update"), "RESTEasy should list as having an update: " + line);
                 assertTrue(line.endsWith(getPluginVersion()), "RESTEasy should list as having an update: " + line);
                 resteasy = true;
             } else if (line.contains(" Hibernate Validator  ")) {
                 assertTrue(line.startsWith("   "), "Hibernate Validator should not list as anything: " + line);
-                hibernateValidator = true;
+                bean = true;
             }
         }
 
-        assertTrue(agroal && resteasy && hibernateValidator);
+        assertTrue(agroal && arc && resteasy && bean);
     }
 }

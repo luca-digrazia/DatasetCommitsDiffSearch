@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.undertow.runtime;
 
 import java.util.ArrayList;
@@ -14,7 +30,6 @@ public class ServletSecurityInfoProxy {
     private volatile SecurityInfo.EmptyRoleSemantic emptyRoleSemantic = SecurityInfo.EmptyRoleSemantic.DENY;
     private final Set<String> rolesAllowed = new HashSet<>();
     private volatile TransportGuaranteeType transportGuaranteeType = TransportGuaranteeType.NONE;
-    private String method;
 
     public List<ServletSecurityInfoProxy> getHttpMethodSecurityInfo() {
         return httpMethodSecurityInfo;
@@ -26,15 +41,6 @@ public class ServletSecurityInfoProxy {
 
     public ServletSecurityInfoProxy setEmptyRoleSemantic(SecurityInfo.EmptyRoleSemantic emptyRoleSemantic) {
         this.emptyRoleSemantic = emptyRoleSemantic;
-        return this;
-    }
-
-    public String getMethod() {
-        return method;
-    }
-
-    public ServletSecurityInfoProxy setMethod(String method) {
-        this.method = method;
         return this;
     }
 

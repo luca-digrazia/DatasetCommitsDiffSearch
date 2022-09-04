@@ -28,6 +28,7 @@ import org.hibernate.boot.registry.StandardServiceInitiator;
 import org.hibernate.boot.registry.internal.BootstrapServiceRegistryImpl;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.boot.registry.selector.internal.StrategySelectorImpl;
+import org.hibernate.cache.internal.RegionFactoryInitiator;
 import org.hibernate.engine.config.internal.ConfigurationServiceInitiator;
 import org.hibernate.engine.jdbc.batch.internal.BatchBuilderInitiator;
 import org.hibernate.engine.jdbc.connections.internal.ConnectionProviderInitiator;
@@ -40,6 +41,7 @@ import org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformInitiat
 import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
 import org.hibernate.event.internal.EntityCopyObserverFactoryInitiator;
 import org.hibernate.hql.internal.QueryTranslatorFactoryInitiator;
+import org.hibernate.id.factory.internal.MutableIdentifierGeneratorFactoryInitiator;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.internal.EntityManagerMessageLogger;
 import org.hibernate.internal.util.config.ConfigurationHelper;
@@ -56,12 +58,7 @@ import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
-import io.quarkus.hibernate.orm.runtime.service.CfgXmlAccessServiceInitiatorQuarkus;
-import io.quarkus.hibernate.orm.runtime.service.DisabledJMXInitiator;
-import io.quarkus.hibernate.orm.runtime.service.FlatClassLoaderService;
-import io.quarkus.hibernate.orm.runtime.service.QuarkusJdbcEnvironmentInitiator;
-import io.quarkus.hibernate.orm.runtime.service.QuarkusJtaPlatformResolver;
-import io.quarkus.hibernate.orm.runtime.service.QuarkusRegionFactoryInitiator;
+import io.quarkus.hibernate.orm.runtime.service.*;
 
 /**
  * Helps to instantiate a ServiceRegistryBuilder from a previous state. This
@@ -139,7 +136,8 @@ public class PreconfiguredServiceRegistryBuilder {
         // N.B. support for custom IntegratorProvider injected via Properties (as
         // instance) removed
 
-        // N.B. support for custom StrategySelector is not implemented yet
+        // N.B. support for custom StrategySelector is not implemented yet: see
+        // MirroringStrategySelector
 
         final StrategySelectorImpl strategySelector = new StrategySelectorImpl(FlatClassLoaderService.INSTANCE);
 
@@ -203,9 +201,7 @@ public class PreconfiguredServiceRegistryBuilder {
         serviceInitiators.add(RefCursorSupportInitiator.INSTANCE);
 
         serviceInitiators.add(QueryTranslatorFactoryInitiator.INSTANCE);
-
-        // Disabled: IdentifierGenerators are no longer initiated after Metadata was generated.
-        // serviceInitiators.add(MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
+        serviceInitiators.add(MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
 
         // Replaces JtaPlatformResolverInitiator.INSTANCE );
         serviceInitiators.add(new QuarkusJtaPlatformResolver(rs.getJtaPlatform()));

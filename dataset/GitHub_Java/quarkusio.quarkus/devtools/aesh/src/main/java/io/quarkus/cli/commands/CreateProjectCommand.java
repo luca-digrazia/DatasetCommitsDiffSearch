@@ -21,10 +21,10 @@ public class CreateProjectCommand implements Command<CommandInvocation> {
     @Option(shortName = 'h', hasValue = false)
     private boolean help;
 
-    @Option(shortName = 'g', defaultValue = "org.acme")
+    @Option(shortName = 'g', defaultValue = "com.acme")
     private String groupid;
 
-    @Option(shortName = 'a', defaultValue = "quarkus")
+    @Option(shortName = 'a', defaultValue = "quarkuss")
     private String artifactid;
 
     @Option(shortName = 'v', defaultValue = "1.0.0-SNAPSHOT")

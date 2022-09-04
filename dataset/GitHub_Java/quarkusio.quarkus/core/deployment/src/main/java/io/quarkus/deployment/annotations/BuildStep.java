@@ -6,15 +6,15 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import io.quarkus.builder.item.BuildItem;
-import io.quarkus.builder.item.MultiBuildItem;
-import io.quarkus.builder.item.SimpleBuildItem;
+import org.jboss.builder.item.BuildItem;
+import org.jboss.builder.item.MultiBuildItem;
+import org.jboss.builder.item.SimpleBuildItem;
+
 import io.quarkus.deployment.recording.BytecodeRecorderImpl;
-import io.quarkus.runtime.annotations.Recorder;
+import io.quarkus.runtime.annotations.Template;
 
 /**
  * Indicates that a given method is a build step that is run at deployment time to
@@ -33,7 +33,7 @@ import io.quarkus.runtime.annotations.Recorder;
  * <li>{@link Consumer} of any concrete subclass of {@link BuildItem}</li>
  * <li>{@link Supplier} of any concrete subclass of {@link SimpleBuildItem}</li>
  * <li>{@link Optional} instances whose value type is a subclass of {@link SimpleBuildItem}</li>
- * <li>Recorder classes, which are annotated with {@link Recorder} (method parameters only, if the method is annotated
+ * <li>Recorder template classes, which are annotated with {@link Template} (method parameters only, if the method is annotated
  * {@link Record})</li>
  * <li>{@link BytecodeRecorderImpl} (method parameters only, if the method is annotated {@link Record})</li>
  * </ul>
@@ -67,14 +67,8 @@ public @interface BuildStep {
      *
      * A list of capabilities that are provided by this build step.
      *
-     * This should not be used, {@link io.quarkus.deployment.builditem.CapabilityBuildItem} should just be produced
-     * directly instead.
-     *
-     * This method will be removed at some point post Quarkus 1.1.
-     *
      * @return The capabilities provided by this build step
      */
-    @Deprecated
     String[] providesCapabilities() default {};
 
     /**
@@ -83,25 +77,7 @@ public @interface BuildStep {
      * If these are present in library on the class path then the library will be indexed, and this index will be
      * used when evaluating application components.
      *
-     * This should not be used, {@link io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem}
-     * should just be produced directly instead.
-     *
-     * This method will be removed at some point post Quarkus 1.1.
+     * TODO: this should be a different annotation?
      */
-    @Deprecated
     String[] applicationArchiveMarkers() default {};
-
-    /**
-     * Only include this build step if the given supplier class(es) return {@code true}.
-     *
-     * @return the supplier class array
-     */
-    Class<? extends BooleanSupplier>[] onlyIf() default {};
-
-    /**
-     * Only include this build step if the given supplier class(es) return {@code false}.
-     *
-     * @return the supplier class array
-     */
-    Class<? extends BooleanSupplier>[] onlyIfNot() default {};
 }

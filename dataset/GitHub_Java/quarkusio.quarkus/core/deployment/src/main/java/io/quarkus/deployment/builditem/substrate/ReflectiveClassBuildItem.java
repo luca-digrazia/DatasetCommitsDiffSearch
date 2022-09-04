@@ -16,7 +16,6 @@
 
 package io.quarkus.deployment.builditem.substrate;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -30,43 +29,8 @@ public final class ReflectiveClassBuildItem extends MultiBuildItem {
     private final List<String> className;
     private final boolean methods;
     private final boolean fields;
-    private final boolean constructors;
-    private final boolean finalIsWritable;
-
-    public ReflectiveClassBuildItem(boolean methods, boolean fields, Class<?>... className) {
-        this(true, methods, fields, className);
-    }
-
-    public ReflectiveClassBuildItem(boolean constructors, boolean methods, boolean fields, Class<?>... className) {
-        this(constructors, methods, fields, false, className);
-    }
-
-    public ReflectiveClassBuildItem(boolean constructors, boolean methods, boolean fields, boolean finalIsWritable,
-            Class<?>... className) {
-        List<String> names = new ArrayList<>();
-        for (Class<?> i : className) {
-            if (i == null) {
-                throw new NullPointerException();
-            }
-            names.add(i.getName());
-        }
-        this.className = names;
-        this.methods = methods;
-        this.fields = fields;
-        this.constructors = constructors;
-        this.finalIsWritable = finalIsWritable;
-    }
 
     public ReflectiveClassBuildItem(boolean methods, boolean fields, String... className) {
-        this(true, methods, fields, className);
-    }
-
-    public ReflectiveClassBuildItem(boolean constructors, boolean methods, boolean fields, String... className) {
-        this(constructors, methods, fields, false, className);
-    }
-
-    public ReflectiveClassBuildItem(boolean constructors, boolean methods, boolean fields, boolean finalIsWritable,
-            String... className) {
         for (String i : className) {
             if (i == null) {
                 throw new NullPointerException();
@@ -75,8 +39,6 @@ public final class ReflectiveClassBuildItem extends MultiBuildItem {
         this.className = Arrays.asList(className);
         this.methods = methods;
         this.fields = fields;
-        this.constructors = constructors;
-        this.finalIsWritable = finalIsWritable;
     }
 
     public List<String> getClassNames() {
@@ -89,13 +51,5 @@ public final class ReflectiveClassBuildItem extends MultiBuildItem {
 
     public boolean isFields() {
         return fields;
-    }
-
-    public boolean isConstructors() {
-        return constructors;
-    }
-
-    public boolean isFinalWritable() {
-        return finalIsWritable;
     }
 }

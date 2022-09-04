@@ -84,12 +84,4 @@ public class TestTemplate {
     public void result(RuntimeValue<TestJavaBean> bean) {
         RESULT.add(bean.getValue());
     }
-
-    public void array(Object[] toArray) {
-        RESULT.add(toArray);
-    }
-
-    public void object(Object obj) {
-        RESULT.add(obj);
-    }
 }

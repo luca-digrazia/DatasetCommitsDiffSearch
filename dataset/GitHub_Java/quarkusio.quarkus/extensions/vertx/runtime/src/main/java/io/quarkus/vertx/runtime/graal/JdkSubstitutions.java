@@ -1,10 +1,25 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.vertx.runtime.graal;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.URL;
 import java.security.AccessControlContext;
-import java.util.function.BooleanSupplier;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Substitute;
@@ -65,20 +80,13 @@ final class Target_sun_misc_URLClassPath {
     }
 }
 
-@TargetClass(className = "sun.nio.ch.DatagramChannelImpl", onlyWith = GraalVersion19_0.class)
+@TargetClass(className = "sun.nio.ch.DatagramChannelImpl")
 final class Target_sun_nio_ch_DatagramChannelImpl {
 
     @Substitute
     private static void disconnect0(FileDescriptor fd, boolean isIPv6)
             throws IOException {
         throw new RuntimeException("Unimplemented: sun.nio.ch.DatagramChannelImpl.disconnect0(FileDescriptor, boolean)");
-    }
-}
-
-final class GraalVersion19_0 implements BooleanSupplier {
-    public boolean getAsBoolean() {
-        final String version = System.getProperty("org.graalvm.version");
-        return version.startsWith("19.0.");
     }
 }
 

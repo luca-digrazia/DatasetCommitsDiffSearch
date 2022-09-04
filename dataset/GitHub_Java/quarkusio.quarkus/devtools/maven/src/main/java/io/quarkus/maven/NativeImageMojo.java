@@ -121,9 +121,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter
     private List<String> additionalBuildArgs;
 
-    @Parameter(defaultValue = "false")
-    private boolean addAllCharsets;
-
     public NativeImageMojo() {
         MojoLogger.logSupplier = this::getLog;
     }
@@ -139,7 +136,6 @@ public class NativeImageMojo extends AbstractMojo {
         try (AppCreator appCreator = AppCreator.builder()
                 // configure the build phase we want the app to go through
                 .addPhase(new NativeImagePhase()
-                        .setAddAllCharsets(addAllCharsets)
                         .setAdditionalBuildArgs(additionalBuildArgs)
                         .setAutoServiceLoaderRegistration(autoServiceLoaderRegistration)
                         .setOutputDir(buildDir.toPath())

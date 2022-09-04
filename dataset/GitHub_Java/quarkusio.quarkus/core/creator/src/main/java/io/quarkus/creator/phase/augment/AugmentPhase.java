@@ -337,7 +337,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                 final ExecutorService executorPool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
                 final ConcurrentLinkedDeque<Future<FutureEntry>> transformed = new ConcurrentLinkedDeque<>();
                 try {
-                    ClassLoader transformCl = runnerClassLoader;
                     Files.walk(appClassesDir).forEach(new Consumer<Path>() {
                         @Override
                         public void accept(Path path) {
@@ -357,25 +356,19 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                             transformed.add(executorPool.submit(new Callable<FutureEntry>() {
                                 @Override
                                 public FutureEntry call() throws Exception {
-                                    ClassLoader old = Thread.currentThread().getContextClassLoader();
-                                    try {
-                                        Thread.currentThread().setContextClassLoader(transformCl);
-                                        if (Files.size(path) > Integer.MAX_VALUE) {
-                                            throw new RuntimeException(
-                                                    "Can't process class files larger than Integer.MAX_VALUE bytes");
-                                        }
-                                        ClassReader cr = new ClassReader(Files.readAllBytes(path));
-                                        ClassWriter writer = new QuarkusClassWriter(cr,
-                                                ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-                                        ClassVisitor visitor = writer;
-                                        for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
-                                            visitor = i.apply(className, visitor);
-                                        }
-                                        cr.accept(visitor, 0);
-                                        return new FutureEntry(writer.toByteArray(), pathName);
-                                    } finally {
-                                        Thread.currentThread().setContextClassLoader(old);
+                                    if (Files.size(path) > Integer.MAX_VALUE) {
+                                        throw new RuntimeException(
+                                                "Can't process class files larger than Integer.MAX_VALUE bytes");
                                     }
+                                    ClassReader cr = new ClassReader(Files.readAllBytes(path));
+                                    ClassWriter writer = new QuarkusClassWriter(cr,
+                                            ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+                                    ClassVisitor visitor = writer;
+                                    for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
+                                        visitor = i.apply(className, visitor);
+                                    }
+                                    cr.accept(visitor, 0);
+                                    return new FutureEntry(writer.toByteArray(), pathName);
                                 }
                             }));
                         }
@@ -428,7 +421,7 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
         try {
             return new ZipFile(p.toFile());
         } catch (IOException e) {
-            throw new RuntimeException("Error opening zip stream from artifact: " + p, e);
+            throw new RuntimeException("Error opening zip stream from artifact: " + p);
         }
     }
 

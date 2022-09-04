@@ -230,7 +230,7 @@ public class DevMojoIT extends MojoTestBase {
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
-                    String content = getHttpResponse("/app/hello", true);
+                    String content = getHttpResponse("/app/hello");
                     last.set(content);
                     return content.contains(uuid);
                 });

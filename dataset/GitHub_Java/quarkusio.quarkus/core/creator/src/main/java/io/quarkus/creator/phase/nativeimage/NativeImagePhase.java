@@ -20,7 +20,6 @@ package io.quarkus.creator.phase.nativeimage;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,7 +29,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
@@ -61,8 +59,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     private static final String GRAALVM_HOME = "GRAALVM_HOME";
 
     private static final String SHAMROCK_PREFIX = "quarkus.";
-
-    private static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("linux");
 
     private Path outputDir;
 
@@ -262,8 +258,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
         HashMap<String, String> env = new HashMap<>(System.getenv());
         List<String> nativeImage;
 
-        String noPIE = "";
-
         if (dockerBuild != null && !dockerBuild.toLowerCase().equals("false")) {
 
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm quarkus/graalvm-native-image"
@@ -278,10 +272,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             }
             Collections.addAll(nativeImage, "docker", "run", "-v", outputDir.toAbsolutePath() + ":/project:z", "--rm", image);
         } else {
-            if (IS_LINUX) {
-                noPIE = detectNoPIE();
-            }
-
             String graalvmHome = this.graalvmHome;
             if (graalvmHome != null) {
                 env.put(GRAALVM_HOME, graalvmHome);
@@ -384,9 +374,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             if (enableAllSecurityServices) {
                 command.add("--enable-all-security-services");
             }
-            if (!noPIE.isEmpty()) {
-                command.add("-H:NativeLinkerOption=" + noPIE);
-            }
             if (enableRetainedHeapReporting) {
                 command.add("-H:+PrintRetainedHeapHistogram");
             }
@@ -459,27 +446,6 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
             return true;
         }
         return false;
-    }
-
-    private static String detectNoPIE() {
-        String argument = testGCCArgument("-no-pie");
-
-        return argument.length() == 0 ? testGCCArgument("-nopie") : argument;
-    }
-
-    private static String testGCCArgument(String argument) {
-        try {
-            Process gcc = new ProcessBuilder("cc", "-v", "-E", argument, "-").start();
-            gcc.getOutputStream().close();
-            if (gcc.waitFor() == 0) {
-                return argument;
-            }
-
-        } catch (IOException | InterruptedException e) {
-            // eat
-        }
-
-        return "";
     }
 
     @Override

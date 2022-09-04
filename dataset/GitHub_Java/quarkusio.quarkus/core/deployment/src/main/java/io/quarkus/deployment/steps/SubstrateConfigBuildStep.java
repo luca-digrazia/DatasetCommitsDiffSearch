@@ -29,9 +29,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
-import io.quarkus.deployment.builditem.JavaLibraryPathAdditionalPathBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
-import io.quarkus.deployment.builditem.SslTrustStoreSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.RuntimeReinitializedClassBuildItem;
@@ -54,9 +52,7 @@ class SubstrateConfigBuildStep {
             BuildProducer<RuntimeInitializedClassBuildItem> runtimeInit,
             BuildProducer<RuntimeReinitializedClassBuildItem> runtimeReinit,
             BuildProducer<SubstrateSystemPropertyBuildItem> nativeImage,
-            BuildProducer<SystemPropertyBuildItem> systemProperty,
-            BuildProducer<JavaLibraryPathAdditionalPathBuildItem> javaLibraryPathAdditionalPath,
-            BuildProducer<SslTrustStoreSystemPropertyBuildItem> sslTrustStoreSystemProperty) {
+            BuildProducer<SystemPropertyBuildItem> systemProperty) {
         for (SubstrateConfigBuildItem substrateConfigBuildItem : substrateConfigBuildItems) {
             for (String i : substrateConfigBuildItem.getRuntimeInitializedClasses()) {
                 runtimeInit.produce(new RuntimeInitializedClassBuildItem(i));
@@ -90,30 +86,21 @@ class SubstrateConfigBuildStep {
                 Path graalVmLibDirectory = Paths.get(graalVmHome, "jre", "lib");
                 Path linuxLibDirectory = graalVmLibDirectory.resolve("amd64");
 
-                // We add . as it might be useful in a containerized world
-                // FIXME: it seems GraalVM does not support having multiple paths in java.library.path
-                //javaLibraryPathAdditionalPath.produce(new JavaLibraryPathAdditionalPathBuildItem("."));
                 if (Files.exists(linuxLibDirectory)) {
                     // On Linux, the SunEC library is in jre/lib/amd64/
-                    // This is useful for testing or if you have a similar environment in production
-                    javaLibraryPathAdditionalPath
-                            .produce(new JavaLibraryPathAdditionalPathBuildItem(linuxLibDirectory.toString()));
+                    systemProperty.produce(new SystemPropertyBuildItem("java.library.path", linuxLibDirectory.toString()));
                 } else {
                     // On MacOS, the SunEC library is directly in jre/lib/
-                    // This is useful for testing or if you have a similar environment in production
                     systemProperty.produce(new SystemPropertyBuildItem("java.library.path", graalVmLibDirectory.toString()));
                 }
-
-                // This is useful for testing but the user will have to override it.
-                sslTrustStoreSystemProperty.produce(
-                        new SslTrustStoreSystemPropertyBuildItem(
+                systemProperty.produce(
+                        new SystemPropertyBuildItem("javax.net.ssl.trustStore",
                                 graalVmLibDirectory.resolve(Paths.get("security", "cacerts")).toString()));
             } else {
                 // only warn if we're building a native image
-                if (ImageInfo.inImageBuildtimeCode()) {
+                if (ImageInfo.inImageBuildtimeCode())
                     log.warn(
                             "SSL is enabled but the GRAALVM_HOME environment variable is not set. The java.library.path property has not been set and will need to be set manually.");
-                }
             }
         }
 

@@ -2,7 +2,6 @@ package io.quarkus.hibernate.validator.runtime.jaxrs;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Priority;
@@ -39,12 +38,6 @@ public class JaxrsEndPointValidationInterceptor extends AbstractMethodValidation
     }
 
     private List<MediaType> getAccept(Method method) {
-        MediaType[] producedMediaTypes = MediaTypeHelper.getProduces(method.getDeclaringClass(), method);
-
-        if (producedMediaTypes == null) {
-            return Collections.emptyList();
-        }
-
-        return Arrays.asList(producedMediaTypes);
+        return Arrays.asList(MediaTypeHelper.getProduces(method.getDeclaringClass(), method));
     }
 }

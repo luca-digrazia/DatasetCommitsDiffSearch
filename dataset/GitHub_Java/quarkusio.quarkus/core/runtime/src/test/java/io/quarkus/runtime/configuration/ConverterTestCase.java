@@ -11,6 +11,10 @@ import org.junit.Test;
 import org.wildfly.common.net.CidrAddress;
 import org.wildfly.common.net.Inet;
 
+import io.quarkus.runtime.configuration.CidrAddressConverter;
+import io.quarkus.runtime.configuration.InetAddressConverter;
+import io.quarkus.runtime.configuration.InetSocketAddressConverter;
+
 /**
  */
 public class ConverterTestCase {

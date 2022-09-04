@@ -2,15 +2,11 @@ package io.quarkus.deployment.util;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -43,7 +39,20 @@ public final class ServiceUtil {
                 try (BufferedInputStream bis = new BufferedInputStream(is)) {
                     try (InputStreamReader isr = new InputStreamReader(bis, StandardCharsets.UTF_8)) {
                         try (BufferedReader br = new BufferedReader(isr)) {
-                            readStream(classNames, br);
+                            String line;
+                            while ((line = br.readLine()) != null) {
+                                int commentMarkerIndex = line.indexOf('#');
+                                if (commentMarkerIndex > 0) {
+                                    line = line.substring(commentMarkerIndex);
+                                }
+                                line = line.trim();
+
+                                if (line.isEmpty()) {
+                                    continue;
+                                }
+
+                                classNames.add(line);
+                            }
                         }
                     }
                 }
@@ -51,36 +60,5 @@ public final class ServiceUtil {
         }
 
         return Collections.unmodifiableSet(classNames);
-    }
-
-    public static Set<String> classNamesNamedIn(Path path) throws IOException {
-        final Set<String> set = new LinkedHashSet<>();
-        if (!Files.exists(path)) {
-            return Collections.emptySet();
-        }
-        try (BufferedReader br = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            readStream(set, br);
-        } catch (NoSuchFileException | FileNotFoundException e) {
-            // unlikely
-            return Collections.emptySet();
-        }
-        return set;
-    }
-
-    private static void readStream(final Set<String> classNames, final BufferedReader br) throws IOException {
-        String line;
-        while ((line = br.readLine()) != null) {
-            int commentMarkerIndex = line.indexOf('#');
-            if (commentMarkerIndex > 0) {
-                line = line.substring(commentMarkerIndex);
-            }
-            line = line.trim();
-
-            if (line.isEmpty()) {
-                continue;
-            }
-
-            classNames.add(line);
-        }
     }
 }

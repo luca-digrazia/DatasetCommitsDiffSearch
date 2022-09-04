@@ -26,9 +26,9 @@ public final class InitialConfigurator implements EmbeddedConfigurator {
 
     public Handler[] getHandlersOf(final String loggerName) {
         if (loggerName.isEmpty()) {
-            if (ImageInfo.inImageBuildtimeCode() || System.getProperty("quarkus.devMode") != null) {
+            if (ImageInfo.inImageBuildtimeCode()) {
                 final ConsoleHandler handler = new ConsoleHandler(new PatternFormatter(
-                        "%d{HH:mm:ss,SSS} %-5p [%c{3.}] %s%e%n"));
+                        "%d{HH:mm:ss,SSS} %-5p [%c{1.}] %s%e%n"));
                 handler.setLevel(Level.INFO);
                 // we can't set a cleanup filter without the build items ready
                 return new Handler[] {

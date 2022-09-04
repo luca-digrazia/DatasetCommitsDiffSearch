@@ -34,7 +34,7 @@ public class QuarkusJaegerTracer implements Tracer {
 
     @Override
     public String toString() {
-        return tracer().toString();
+        return "Jaeger Tracer";
     }
 
     Tracer tracer() {

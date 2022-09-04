@@ -38,12 +38,6 @@ public class JaxRSTestCase {
     }
 
     @Test
-    public void testAnnotatedInterface() {
-        RestAssured.when().get("/interface").then().body(is("interface endpoint"));
-
-    }
-
-    @Test
     public void testNonCdiBeansAreApplicationScoped() {
         RestAssured.when().get("/test/count").then().body(is("1"));
         RestAssured.when().get("/test/count").then().body(is("2"));

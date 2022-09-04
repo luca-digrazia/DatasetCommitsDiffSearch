@@ -158,26 +158,20 @@ final class FastBootHibernatePersistenceProvider implements PersistenceProvider 
 
             final MetadataImplementor metadata = recordedState.getMetadata();
 
-            final BuildTimeSettings buildTimeSettings = recordedState.getBuildTimeSettings();
+            final Map<String, Object> configurationValues = recordedState.getConfigurationProperties();
             // TODO:
             final Object validatorFactory = null;
             // TODO:
             final Object cdiBeanManager = null;
 
-            RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings);
-
-            // we will inject values here later
-
-            RuntimeSettings runtimeSettings = runtimeSettingsBuilder.build();
-
             StandardServiceRegistry standardServiceRegistry = rewireMetadataAndExtractServiceRegistry(
-                    runtimeSettings, recordedState);
+                    configurationValues, recordedState);
 
             return new FastBootEntityManagerFactoryBuilder(
                     metadata /* Uses the StandardServiceRegistry references by this! */,
                     persistenceUnitName,
                     standardServiceRegistry /* Mostly ignored! (yet needs to match) */,
-                    runtimeSettings,
+                    configurationValues,
                     validatorFactory, cdiBeanManager);
         }
 
@@ -185,11 +179,10 @@ final class FastBootHibernatePersistenceProvider implements PersistenceProvider 
         return null;
     }
 
-    private StandardServiceRegistry rewireMetadataAndExtractServiceRegistry(RuntimeSettings runtimeSettings,
+    private StandardServiceRegistry rewireMetadataAndExtractServiceRegistry(Map<String, Object> configurationValues,
             RecordedState rs) {
         PreconfiguredServiceRegistryBuilder serviceRegistryBuilder = new PreconfiguredServiceRegistryBuilder(rs);
-
-        runtimeSettings.getSettings().forEach((key, value) -> {
+        configurationValues.forEach((key, value) -> {
             serviceRegistryBuilder.applySetting(key, value);
         });
         // TODO serviceRegistryBuilder.addInitiator( )

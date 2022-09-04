@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.annotation.processor;
 
 import static javax.lang.model.util.ElementFilter.constructorsIn;
@@ -70,7 +86,6 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
     private static final String ANNOTATION_CONFIG_ITEM = "io.quarkus.runtime.annotations.ConfigItem";
     private static final String ANNOTATION_CONFIG_ROOT = "io.quarkus.runtime.annotations.ConfigRoot";
     private static final String ANNOTATION_TEMPLATE = "io.quarkus.runtime.annotations.Template";
-    private static final String ANNOTATION_RECORDER = "io.quarkus.runtime.annotations.Recorder";
     private static final String INSTANCE_SYM = "__instance";
 
     private final Set<String> generatedAccessors = new ConcurrentHashMap<String, Boolean>().keySet(Boolean.TRUE);
@@ -91,7 +106,6 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         ret.add(ANNOTATION_CONFIG_GROUP);
         ret.add(ANNOTATION_CONFIG_ROOT);
         ret.add(ANNOTATION_TEMPLATE);
-        ret.add(ANNOTATION_RECORDER);
         return ret;
     }
 
@@ -127,9 +141,8 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                 case ANNOTATION_CONFIG_ROOT:
                     processConfigRoot(roundEnv, annotation);
                     break;
-                case ANNOTATION_RECORDER:
                 case ANNOTATION_TEMPLATE:
-                    processRecorder(roundEnv, annotation);
+                    processTemplate(roundEnv, annotation);
                     break;
             }
         }
@@ -344,29 +357,28 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
     }
 
     private void recordConfigJavadoc(TypeElement clazz) {
-        String className = clazz.getQualifiedName().toString();
-        if (!generatedJavaDocs.add(className))
+        if (!generatedJavaDocs.add(clazz.getQualifiedName().toString()))
             return;
         final Properties javadocProps = new Properties();
         for (Element e : clazz.getEnclosedElements()) {
             switch (e.getKind()) {
                 case FIELD: {
                     if (isAnnotationPresent(e, ANNOTATION_CONFIG_ITEM)) {
-                        processFieldConfigItem((VariableElement) e, javadocProps, className);
+                        processFieldConfigItem((VariableElement) e, javadocProps);
                     }
                     break;
                 }
                 case CONSTRUCTOR: {
                     final ExecutableElement ex = (ExecutableElement) e;
                     if (hasParameterAnnotated(ex, ANNOTATION_CONFIG_ITEM)) {
-                        processCtorConfigItem(ex, javadocProps, className);
+                        processCtorConfigItem(ex, javadocProps);
                     }
                     break;
                 }
                 case METHOD: {
                     final ExecutableElement ex = (ExecutableElement) e;
                     if (hasParameterAnnotated(ex, ANNOTATION_CONFIG_ITEM)) {
-                        processMethodConfigItem(ex, javadocProps, className);
+                        processMethodConfigItem(ex, javadocProps);
                     }
                     break;
                 }
@@ -391,23 +403,23 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         }
     }
 
-    private void processFieldConfigItem(VariableElement field, Properties javadocProps, String className) {
-        javadocProps.put(className + "." + field.getSimpleName().toString(), getRequiredJavadoc(field));
+    private void processFieldConfigItem(VariableElement field, Properties javadocProps) {
+        javadocProps.put(field.getSimpleName().toString(), getRequiredJavadoc(field));
     }
 
-    private void processCtorConfigItem(ExecutableElement ctor, Properties javadocProps, String className) {
+    private void processCtorConfigItem(ExecutableElement ctor, Properties javadocProps) {
         final String docComment = getRequiredJavadoc(ctor);
         final StringBuilder buf = new StringBuilder();
         appendParamTypes(ctor, buf);
-        javadocProps.put(className + "." + buf.toString(), docComment);
+        javadocProps.put(buf.toString(), docComment);
     }
 
-    private void processMethodConfigItem(ExecutableElement method, Properties javadocProps, String className) {
+    private void processMethodConfigItem(ExecutableElement method, Properties javadocProps) {
         final String docComment = getRequiredJavadoc(method);
         final StringBuilder buf = new StringBuilder();
         buf.append(method.getSimpleName().toString());
         appendParamTypes(method, buf);
-        javadocProps.put(className + "." + buf.toString(), docComment);
+        javadocProps.put(buf.toString(), docComment);
     }
 
     private void processConfigGroup(RoundEnvironment roundEnv, TypeElement annotation) {
@@ -460,7 +472,7 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
         }
     }
 
-    private void processRecorder(RoundEnvironment roundEnv, TypeElement annotation) {
+    private void processTemplate(RoundEnvironment roundEnv, TypeElement annotation) {
         final Set<String> groupClassNames = new HashSet<>();
         for (TypeElement i : typesIn(roundEnv.getElementsAnnotatedWith(annotation))) {
             if (groupClassNames.add(i.getQualifiedName().toString())) {

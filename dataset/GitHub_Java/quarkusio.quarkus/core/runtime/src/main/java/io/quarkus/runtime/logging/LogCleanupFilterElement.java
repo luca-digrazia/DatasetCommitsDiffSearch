@@ -1,18 +1,16 @@
 package io.quarkus.runtime.logging;
 
-import java.util.List;
-
 public class LogCleanupFilterElement {
     private String loggerName;
-    private List<String> messageStarts;
+    private String messageStart;
 
     // Required by template
     public LogCleanupFilterElement() {
     }
 
-    public LogCleanupFilterElement(String loggerName, List<String> messageStarts) {
+    public LogCleanupFilterElement(String loggerName, String messageStart) {
         this.loggerName = loggerName;
-        this.messageStarts = messageStarts;
+        this.messageStart = messageStart;
     }
 
     public String getLoggerName() {
@@ -23,11 +21,11 @@ public class LogCleanupFilterElement {
         this.loggerName = loggerName;
     }
 
-    public List<String> getMessageStarts() {
-        return messageStarts;
+    public String getMessageStart() {
+        return messageStart;
     }
 
-    public void setMessageStart(List<String> messageStarts) {
-        this.messageStarts = messageStarts;
+    public void setMessageStart(String messageStart) {
+        this.messageStart = messageStart;
     }
 }

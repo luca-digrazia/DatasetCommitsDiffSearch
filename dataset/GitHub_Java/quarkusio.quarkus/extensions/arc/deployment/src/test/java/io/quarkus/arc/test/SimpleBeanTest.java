@@ -36,7 +36,7 @@ public class SimpleBeanTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(SimpleBean.class)
-                    .addAsResource(new StringAsset("simpleBean.baz=1"), "application.properties"));
+                    .addAsManifestResource(new StringAsset("simpleBean.baz=1"), "microprofile-config.properties"));
 
     @Inject
     SimpleBean simpleBean;
@@ -47,7 +47,6 @@ public class SimpleBeanTest {
         assertEquals(SimpleBean.DEFAULT, simpleBean.getFoo());
         assertFalse(simpleBean.getFooOptional().isPresent());
         assertEquals("1", simpleBean.getBazOptional().get());
-        assertEquals("1", simpleBean.getBazProvider().get());
     }
 
 }

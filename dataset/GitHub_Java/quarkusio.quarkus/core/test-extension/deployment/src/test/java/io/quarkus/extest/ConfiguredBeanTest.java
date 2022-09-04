@@ -9,11 +9,6 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.extest.runtime.NestedConfig;
-import io.quarkus.extest.runtime.ObjectOfValue;
-import io.quarkus.extest.runtime.ObjectValueOf;
-import io.quarkus.extest.runtime.TestBuildAndRunTimeConfig;
-import io.quarkus.extest.runtime.TestRunTimeConfig;
 import io.quarkus.test.QuarkusUnitTest;
 
 /**
@@ -24,7 +19,7 @@ public class ConfiguredBeanTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(ConfiguredBean.class)
-                    .addAsResource("application.properties"));
+                    .addAsManifestResource("microprofile-config.properties"));
 
     @Inject
     ConfiguredBean configuredBean;
@@ -150,6 +145,7 @@ public class ConfiguredBeanTest {
      * Break out the validation of the RUN_TIME config nested map as that currently is not working.
      */
     @Test
+    @Disabled("https://github.com/jbossas/quarkus/issues/956")
     public void validateRuntimeConfigMap() {
         TestRunTimeConfig runTimeConfig = configuredBean.getRunTimeConfig();
         Assertions.assertEquals(2, runTimeConfig.allValues.nestedConfigMap.size());

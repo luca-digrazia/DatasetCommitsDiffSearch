@@ -157,7 +157,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
 
         serviceInitiators.trimToSize();
 
-        return serviceInitiators;
+        return Collections.unmodifiableList(serviceInitiators);
     }
 
     @Override
