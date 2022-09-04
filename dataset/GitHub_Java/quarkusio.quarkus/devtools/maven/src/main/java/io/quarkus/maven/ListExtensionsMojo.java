@@ -23,25 +23,19 @@ public class ListExtensionsMojo extends AbstractMojo {
     protected MavenProject project;
 
     /**
-     * List all extensions or just the installable.
+     * list all extensions or just the installable.
      */
     @Parameter(property = "quarkus.extension.all", alias = "quarkus.extension.all", defaultValue = "true")
     protected boolean all;
 
     /**
-     * Display in simplified format.
+     * display in simplified format.
      */
-    @Parameter(property = "quarkus.extension.format", alias = "quarkus.extension.format", defaultValue = "full")
+    @Parameter(property = "quarkus.extension.format", alias = "quarkus.extension.format", defaultValue = "simple")
     protected String format;
-
-    /**
-     * Search filter on extension list. The format is based on Java Pattern.
-     */
-    @Parameter(property = "searchPattern", alias = "quarkus.extension.searchPattern")
-    protected String searchPattern;
 
     @Override
     public void execute() {
-        new ListExtensions(project.getModel()).listExtensions(all, format, searchPattern);
+        new ListExtensions(project.getModel()).listExtensions(all, format);
     }
 }
