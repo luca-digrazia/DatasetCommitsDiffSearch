@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.SourceFile;
 import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -109,7 +108,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   private boolean includeLocations = true;
   private boolean includeRuleInputsAndOutputs = true;
   private boolean includeSyntheticAttributeHash = false;
-  private boolean includeInstantiationStack = false;
 
   @Nullable private EventHandler eventHandler;
 
@@ -130,7 +128,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
     this.includeLocations = options.protoIncludeLocations;
     this.includeRuleInputsAndOutputs = options.protoIncludeRuleInputsAndOutputs;
     this.includeSyntheticAttributeHash = options.protoIncludeSyntheticAttributeHash;
-    this.includeInstantiationStack = options.protoIncludeInstantiationStack;
   }
 
   @Override
@@ -183,6 +180,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   /** Converts a logical {@link Target} object into a {@link Build.Target} protobuffer. */
+  @VisibleForTesting
   public Build.Target toTargetProtoBuffer(Target target, Object extraDataForAttrHash)
       throws InterruptedException {
     Build.Target.Builder targetPb = Build.Target.newBuilder();
@@ -253,16 +251,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       for (String feature : rule.getPackage().getFeatures()) {
         rulePb.addDefaultSetting(feature);
       }
-
-      if (includeInstantiationStack) {
-        for (StarlarkThread.CallStackEntry fr : rule.getCallStack().toArray()) {
-          // Always report relative locations.
-          // (New fields needn't honor relativeLocations.)
-          rulePb.addInstantiationStack(
-              FormatUtils.getRootRelativeLocation(fr.location, rule.getPackage()) + ": " + fr.name);
-        }
-      }
-
       targetPb.setType(RULE);
       targetPb.setRule(rulePb);
     } else if (target instanceof OutputFile) {

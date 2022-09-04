@@ -332,7 +332,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         ")");
 
     ConfiguredTarget app = getConfiguredTarget("//java/a:a");
-    assertNoEvents();
 
     Artifact copiedLib = getOnlyElement(getNativeLibrariesInApk(app));
     Artifact linkedLib = getGeneratingAction(copiedLib).getInputs().getSingleton();
@@ -834,7 +833,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testIncrementalDexingDisabledWithBlacklistedDexopts() throws Exception {
-    // Even if we mark a dx flag as supported, incremental dexing isn't used with disallowlisted
+    // Even if we mark a dx flag as supported, incremental dexing isn't used with blacklisted
     // dexopts (unless incremental_dexing attribute is set, which a different test covers)
     useConfiguration(
         "--incremental_dexing",
@@ -3461,7 +3460,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     reporter.removeHandler(failFastHandler); // expecting an error
     useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.overwriteFile(
-        "tools/allowlists/config_feature_flag/BUILD",
+        "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
         "    packages = ['//flag'])");
@@ -3495,7 +3494,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   public void testFeatureFlagPolicyDoesNotBlockRuleIfInPolicy() throws Exception {
     useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.overwriteFile(
-        "tools/allowlists/config_feature_flag/BUILD",
+        "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
         "    packages = ['//flag', '//java/com/google/android/foo'])");
@@ -3525,7 +3524,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   @Test
   public void testFeatureFlagPolicyIsNotUsedIfFlagValuesNotUsed() throws Exception {
     scratch.overwriteFile(
-        "tools/allowlists/config_feature_flag/BUILD",
+        "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
         "    packages = ['*super* busted package group'])");
@@ -3541,7 +3540,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertNoEvents();
     // sanity check time: does this test actually test what we're testing for?
     reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//tools/allowlists/config_feature_flag:config_feature_flag"))
+    assertThat(getConfiguredTarget("//tools/whitelists/config_feature_flag:config_feature_flag"))
         .isNull();
     assertContainsEvent("*super* busted package group");
   }
@@ -3743,6 +3742,30 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
+  public void testDebugKeyExistsBinary() throws Exception {
+    String debugKeyTarget = "//java/com/google/android/hello:debug_keystore";
+    scratch.file("java/com/google/android/hello/debug_keystore", "A debug key");
+    scratch.file(
+        "java/com/google/android/hello/BUILD",
+        "android_binary(name = 'b',",
+        "               srcs = ['HelloApp.java'],",
+        "               manifest = 'AndroidManifest.xml',",
+        "               debug_key = '" + debugKeyTarget + "')");
+    checkDebugKey(debugKeyTarget, true);
+  }
+
+  @Test
+  public void testDebugKeyNotExistsBinary() throws Exception {
+    String debugKeyTarget = "//java/com/google/android/hello:debug_keystore";
+    scratch.file(
+        "java/com/google/android/hello/BUILD",
+        "android_binary(name = 'b',",
+        "               srcs = ['HelloApp.java'],",
+        "               manifest = 'AndroidManifest.xml')");
+    checkDebugKey(debugKeyTarget, false);
+  }
+
+  @Test
   public void testOnlyProguardSpecs() throws Exception {
     scratch.file(
         "java/com/google/android/hello/BUILD",
@@ -3766,7 +3789,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "b_proguard.jar",
         false,
         null,
-        /*splitOptimizationPass=*/ false,
         targetConfig.getBinFragment()
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars.jar");
   }
@@ -3906,12 +3928,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               proguard_specs = ['proguard-spec.pro'],",
         "               proguard_generate_mapping = 1)");
     checkProguardUse(
-        "//java/com/google/android/hello:b",
-        "b_proguard.jar",
-        true,
-        null,
-        /*splitOptimizationPass=*/ false,
-        getAndroidJarPath());
+        "//java/com/google/android/hello:b", "b_proguard.jar", true, null, getAndroidJarPath());
   }
 
   @Test
@@ -3963,12 +3980,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro'])");
     checkProguardUse(
-        "//java/com/google/android/hello:b",
-        "b_proguard.jar",
-        false,
-        null,
-        /*splitOptimizationPass=*/ false,
-        getAndroidJarPath());
+        "//java/com/google/android/hello:b", "b_proguard.jar", false, null, getAndroidJarPath());
 
     SpawnAction action =
         (SpawnAction)
@@ -3994,12 +4006,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro'])");
     checkProguardUse(
-        "//java/com/google/android/hello:b",
-        "b_proguard.jar",
-        false,
-        null,
-        /*splitOptimizationPass=*/ false,
-        getAndroidJarPath());
+        "//java/com/google/android/hello:b", "b_proguard.jar", false, null, getAndroidJarPath());
 
     SpawnAction action =
         (SpawnAction)
@@ -4320,7 +4327,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "abin_proguard.jar",
         /*expectMapping=*/ false,
         /*passes=*/ null,
-        /*splitOptimizationPass=*/ false,
         getAndroidJarPath());
   }
 

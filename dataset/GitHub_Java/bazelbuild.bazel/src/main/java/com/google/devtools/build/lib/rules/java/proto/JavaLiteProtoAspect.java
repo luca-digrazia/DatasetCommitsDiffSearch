@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
@@ -155,15 +156,18 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       this.protoInfo = protoInfo;
       this.aspectCommon = aspectCommon;
       this.javaProtoLibraryAspectProviders =
-          ruleContext.getPrerequisites("deps", JavaProtoLibraryAspectProvider.class);
+          ruleContext.getPrerequisites(
+              "deps", TransitionMode.TARGET, JavaProtoLibraryAspectProvider.class);
 
       dependencyCompilationArgs =
           JavaCompilationArgsProvider.merge(
-              ruleContext.getPrerequisites("deps", JavaCompilationArgsProvider.class));
+              ruleContext.getPrerequisites(
+                  "deps", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
 
       this.exportsCompilationArgs =
           JavaCompilationArgsProvider.merge(
-              ruleContext.getPrerequisites("exports", JavaCompilationArgsProvider.class));
+              ruleContext.getPrerequisites(
+                  "exports", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
     }
 
     void addProviders(ConfiguredAspect.Builder aspect) throws InterruptedException {
@@ -239,7 +243,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                       aspectCommon.getProtoRuntimeDeps())));
     }
 
-    private void createProtoCompileAction(Artifact sourceJar) {
+    private void createProtoCompileAction(Artifact sourceJar) throws InterruptedException {
       ProtoCompileActionBuilder.registerActions(
           ruleContext,
           ImmutableList.of(

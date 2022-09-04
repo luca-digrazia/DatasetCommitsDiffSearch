@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -184,7 +183,7 @@ public class DumpCommand implements BlazeCommand {
   public enum SkyframeDumpOption {
     OFF,
     SUMMARY,
-    DETAILED
+    DETAILED;
   }
 
   /**
@@ -298,12 +297,11 @@ public class DumpCommand implements BlazeCommand {
     }
   }
 
-  private static boolean dumpActionCache(CommandEnvironment env, PrintStream out) {
-    Reporter reporter = env.getReporter();
+  private boolean dumpActionCache(CommandEnvironment env, PrintStream out) {
     try {
-      env.getBlazeWorkspace().getOrLoadPersistentActionCache(reporter).dump(out);
+      env.getPersistentActionCache().dump(out);
     } catch (IOException e) {
-      reporter.handle(Event.error("Cannot dump action cache: " + e.getMessage()));
+      env.getReporter().handle(Event.error("Cannot dump action cache: " + e.getMessage()));
       return false;
     }
     return true;
@@ -330,7 +328,7 @@ public class DumpCommand implements BlazeCommand {
     executor.dump(summarize, out);
   }
 
-  private static void dumpRuleClasses(BlazeRuntime runtime, PrintStream out) {
+  private void dumpRuleClasses(BlazeRuntime runtime, PrintStream out) {
     PackageFactory factory = runtime.getPackageFactory();
     List<String> ruleClassNames = new ArrayList<>(factory.getRuleClassNames());
     Collections.sort(ruleClassNames);
@@ -356,7 +354,7 @@ public class DumpCommand implements BlazeCommand {
     }
   }
 
-  private static void dumpRuleStats(
+  private void dumpRuleStats(
       ExtendedEventHandler eventHandler,
       BlazeWorkspace workspace,
       SkyframeExecutor executor,
@@ -455,7 +453,7 @@ public class DumpCommand implements BlazeCommand {
     return String.format("%,d", number);
   }
 
-  private static void dumpStarlarkHeap(BlazeWorkspace workspace, String path, PrintStream out)
+  private void dumpStarlarkHeap(BlazeWorkspace workspace, String path, PrintStream out)
       throws IOException {
     AllocationTracker allocationTracker = workspace.getAllocationTracker();
     if (allocationTracker == null) {

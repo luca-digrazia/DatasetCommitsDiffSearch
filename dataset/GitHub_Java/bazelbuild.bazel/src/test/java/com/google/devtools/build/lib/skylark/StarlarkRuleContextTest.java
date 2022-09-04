@@ -38,7 +38,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.StarlarkAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -888,7 +888,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
   public void testFeatures() throws Exception {
     setRuleContext(createRuleContext("//foo:cc_with_features"));
     Object result = ev.eval("ruleContext.features");
-    assertThat((Sequence) result).containsExactly("f1", "f2");
+    assertThat((Sequence) result).containsExactly("cc_include_scanning", "f1", "f2");
   }
 
   @Test

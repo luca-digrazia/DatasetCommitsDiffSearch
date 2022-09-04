@@ -140,13 +140,13 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "test/my_rule.bzl",
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _dep_rule_impl(ctx):",
-        "   objc_provider = apple_common.new_objc_provider(linkopt=depset(['mock_linkopt']))",
+        "   objc_provider = apple_common.new_objc_provider(define=depset(['mock_define']))",
         "   return struct(foo = objc_provider)",
         "",
         "def _root_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   return MyInfo(",
-        "      linkopt = dep.objc.linkopt,",
+        "      define = dep.objc.define,",
         "   )",
         "",
         "root_rule = rule(implementation = _root_rule_impl,",
@@ -166,9 +166,9 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
 
     ConfiguredTarget starlarkTarget = getConfiguredTarget("//test:test");
     StructImpl myInfo = getMyInfoFromTarget(starlarkTarget);
-    Depset linkoptSet = (Depset) myInfo.getValue("linkopt");
+    Depset defineSet = (Depset) myInfo.getValue("define");
 
-    assertThat(linkoptSet.getSet(String.class).toList()).containsExactly("mock_linkopt");
+    assertThat(defineSet.getSet(String.class).toList()).containsExactly("mock_define");
   }
 
   @Test
@@ -996,17 +996,21 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
   public void testStarlarkCanCreateObjcProviderFromScratch() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
+            "   defines = depset(['define1', 'define2'])",
             "   linkopts = depset(['somelinkopt'])",
             "   created_provider = apple_common.new_objc_provider\\",
-            "(linkopt=linkopts)",
+            "(define=defines, linkopt=linkopts)",
             "   return [created_provider]");
 
     Iterable<String> foundLinkopts =
         starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).get(ObjcProvider.LINKOPT).toList();
+    Iterable<String> foundDefines =
+        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).define().toList();
     boolean usesSwift =
         starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).is(ObjcProvider.Flag.USES_SWIFT);
 
     assertThat(foundLinkopts).containsExactly("somelinkopt");
+    assertThat(foundDefines).containsExactly("define1", "define2");
     assertThat(usesSwift).isFalse();
   }
 
@@ -1040,21 +1044,22 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testStarlarkCanCreateObjcProviderWithLinkopts() throws Exception {
+  public void testStarlarkCanCreateObjcProviderWithDefines() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
-            "   linkopt = depset(['opt1', 'opt2', 'opt3'])",
+            "   define = depset(['def1', 'def2', 'def3'])",
             "   created_provider = apple_common.new_objc_provider\\",
-            "(linkopt=linkopt)",
+            "(define=define)",
             "   return [created_provider]");
 
-    Iterable<String> foundLinkopts =
-        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).get(ObjcProvider.LINKOPT).toList();
+    Iterable<String> foundDefines =
+        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).define().toList();
 
-    assertThat(foundLinkopts).containsExactly("opt1", "opt2", "opt3");
+    assertThat(foundDefines).containsExactly("def1", "def2", "def3");
   }
 
-  private void testStarlarkCanCreateObjcProviderWithHeaders() throws Exception {
+  @Test
+  public void testStarlarkCanCreateObjcProviderWithHeaders() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
             "   hdr1 = ctx.actions.declare_file('hdr1')",
@@ -1066,30 +1071,13 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
             "   return [created_provider]");
 
     Iterable<Artifact> foundHeaders =
-        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).get(ObjcProvider.HEADER).toList();
-    assertThat(foundHeaders).isEmpty();
+        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).header().toList();
 
-    Iterable<Artifact> directHeaders =
-        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).getDirect(ObjcProvider.HEADER);
-    assertThat(ActionsTestUtil.baseArtifactNames(directHeaders)).containsExactly("hdr1", "hdr2");
+    assertThat(ActionsTestUtil.baseArtifactNames(foundHeaders)).containsExactly("hdr1", "hdr2");
   }
 
   @Test
-  public void testStarlarkCanCreateObjcProviderWithHeadersPreAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
-    testStarlarkCanCreateObjcProviderWithHeaders();
-  }
-
-  @Test
-  public void testStarlarkCanCreateObjcProviderWithHeadersPostAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    testStarlarkCanCreateObjcProviderWithHeaders();
-  }
-
-  @Test
-  public void testStarlarkCanCreateObjcProviderWithIncludePathFragmentsPreAPIRemoval()
-      throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
+  public void testStarlarkCanCreateObjcProviderWithIncludePathFragments() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
             "   includes = depset(['path1', 'path_dir/path2', 'path_dir1/path_dir2/path3'])",
@@ -1108,9 +1096,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testStarlarkCanCreateObjcProviderWithFrameworkIncludesPreAPIRemoval()
-      throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
+  public void testStarlarkCanCreateObjcProviderWithFrameworkIncludes() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
             "   includes = depset(['path1/foo.framework', 'path_dir/path2/bar.framework'])",
@@ -1126,8 +1112,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testStarlarkCanCreateObjcProviderWithSystemIncludesPreAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
+  public void testStarlarkCanCreateObjcProviderWithSystemIncludes() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
             "   includes = depset(['path1', 'path_dir/path2', 'path_dir1/path_dir2/path3'])",
@@ -1146,8 +1131,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testStarlarkCanCreateObjcProviderWithQuoteIncludesPreAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
+  public void testStarlarkCanCreateObjcProviderWithQuoteIncludes() throws Exception {
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
             "   includes = depset(['path1', 'path_dir/path2', 'path_dir1/path_dir2/path3'])",
@@ -1163,131 +1147,6 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
             PathFragment.create("path1"),
             PathFragment.create("path_dir/path2"),
             PathFragment.create("path_dir1/path_dir2/path3"));
-  }
-
-  @Test
-  public void testStarlarkCannotCreateObjcProviderWithIncludePathFragmentsPostAPIRemoval()
-      throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderStarlarkTarget(
-                    "   includes = depset(['path'])",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(include=includes)",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, "include"));
-  }
-
-  @Test
-  public void testStarlarkCannotCreateObjcProviderWithDefinePostAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderStarlarkTarget(
-                    "   define = depset(['def'])",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(define=define)",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, "define"));
-  }
-
-  @Test
-  public void testStarlarkCannotCreateObjcProviderWithFrameworkIncludesPostAPIRemoval()
-      throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderStarlarkTarget(
-                    "   includes = depset(['path1/foo.framework'])",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(framework_search_paths=includes)",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(
-            String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, "framework_search_paths"));
-  }
-
-  @Test
-  public void testStarlarkCannotCreateObjcProviderWithSystemIncludesPostAPIRemoval()
-      throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderStarlarkTarget(
-                    "   includes = depset(['path1'])",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(include_system=includes)",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, "include_system"));
-  }
-
-  @Test
-  public void testStarlarkCannotCreateObjcProviderWithQuoteIncludesPostAPIRemoval()
-      throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderStarlarkTarget(
-                    "   includes = depset(['path1'])",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(iquote=includes)",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, "iquote"));
-  }
-
-  @Test
-  public void testStarlarkCanCreateObjcProviderWithMergeZipsPreAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
-    ConfiguredTarget starlarkTarget =
-        createObjcProviderStarlarkTarget(
-            "   file = ctx.actions.declare_file('file')",
-            "   ctx.actions.run_shell(outputs=[file], command='echo')",
-            "   created_provider = apple_common.new_objc_provider\\",
-            "(merge_zip = depset([file]))",
-            "   return [created_provider]");
-
-    Iterable<Artifact> foundMergeZips =
-        starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).get(ObjcProvider.MERGE_ZIP).toList();
-
-    assertThat(ActionsTestUtil.baseArtifactNames(foundMergeZips)).containsExactly("file");
-  }
-
-  @Test
-  public void testStarlarkCannotCreateObjcProviderWithMergeZipsPostAPIRemoval() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=true");
-    AssertionError e =
-        assertThrows(
-            AssertionError.class,
-            () ->
-                createObjcProviderStarlarkTarget(
-                    "   file = ctx.actions.declare_file('file')",
-                    "   ctx.actions.run_shell(outputs=[file], command='echo')",
-                    "   created_provider = apple_common.new_objc_provider\\",
-                    "(merge_zip = depset([file]))",
-                    "   return [created_provider]"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(AppleStarlarkCommon.DEPRECATED_KEY_ERROR, "merge_zip"));
   }
 
   @Test
@@ -1336,7 +1195,6 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
   @Test
   public void testStarlarkCanCreateObjcProviderWithStrictDepsPostMigration() throws Exception {
     useConfiguration("--incompatible_objc_compile_info_migration=true");
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
     ConfiguredTarget starlarkTarget =
         createObjcProviderStarlarkTarget(
             "   strict_includes = depset(['path1'])",
@@ -1394,7 +1252,6 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
 
   @Test
   public void testStarlarkStrictDepsDoesNotSupportDefine() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
     AssertionError e =
         assertThrows(
             AssertionError.class,
@@ -1413,7 +1270,6 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
 
   @Test
   public void testStarlarkStrictDepsDoesNotSupportLinkopt() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
     AssertionError e =
         assertThrows(
             AssertionError.class,
@@ -1523,7 +1379,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "def swift_binary_impl(ctx):",
         "   objc_provider = ctx.attr.deps[0].objc",
         "   return MyInfo(",
-        "      empty_value=objc_provider.linkopt,",
+        "      empty_value=objc_provider.include,",
         "   )",
         "swift_binary = rule(",
         "implementation = swift_binary_impl,",

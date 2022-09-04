@@ -922,7 +922,6 @@ public class RuleClassTest extends PackageLoadingTestCase {
         ThirdPartyLicenseExistencePolicy.USER_CONTROLLABLE,
         /*requiredToolchains=*/ ImmutableSet.of(),
         /*useToolchainResolution=*/ true,
-        /*useToolchainTransition=*/ true,
         /* executionPlatformConstraints= */ ImmutableSet.of(),
         /* execGroups= */ ImmutableMap.of(),
         OutputFile.Kind.FILE,
@@ -1145,14 +1144,14 @@ public class RuleClassTest extends PackageLoadingTestCase {
 
     ruleClassBuilder.addExecGroups(
         ImmutableMap.of(
-            "cherry", ExecGroup.create(ImmutableSet.of(toolchain), ImmutableSet.of(constraint))));
+            "cherry", new ExecGroup(ImmutableSet.of(toolchain), ImmutableSet.of(constraint))));
 
     RuleClass ruleClass = ruleClassBuilder.build();
 
     assertThat(ruleClass.getExecGroups()).hasSize(1);
-    assertThat(ruleClass.getExecGroups().get("cherry").requiredToolchains())
+    assertThat(ruleClass.getExecGroups().get("cherry").getRequiredToolchains())
         .containsExactly(toolchain);
-    assertThat(ruleClass.getExecGroups().get("cherry").execCompatibleWith())
+    assertThat(ruleClass.getExecGroups().get("cherry").getExecutionPlatformConstraints())
         .containsExactly(constraint);
   }
 

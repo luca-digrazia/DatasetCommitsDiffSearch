@@ -21,20 +21,20 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.docgen.starlark.StarlarkBuiltinDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkConstructorMethodDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkMethodDoc;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkModules;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkModules;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.syntax.Tuple;
+import com.google.devtools.build.lib.util.Classpath;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -63,7 +63,8 @@ public class StarlarkDocumentationTest {
       throws Exception {
     Map<String, String> docMap = new HashMap<>();
     Map<String, StarlarkBuiltinDoc> modules =
-        new TreeMap<>(StarlarkDocumentationCollector.getAllModules());
+        StarlarkDocumentationCollector.collectModules(
+            Classpath.findClasses(StarlarkDocumentationProcessor.MODULES_PACKAGE_PREFIX));
     StarlarkBuiltinDoc topLevel =
         modules.remove(StarlarkDocumentationCollector.getTopLevelModule().name());
     for (StarlarkMethodDoc method : topLevel.getMethods()) {
@@ -389,9 +390,11 @@ public class StarlarkDocumentationTest {
 
   @Test
   public void testStarlarkGlobalLibraryCallable() throws Exception {
+    Map<String, StarlarkBuiltinDoc> modules =
+        StarlarkDocumentationCollector.collectModules(
+            Classpath.findClasses(StarlarkDocumentationProcessor.MODULES_PACKAGE_PREFIX));
     StarlarkBuiltinDoc topLevel =
-        StarlarkDocumentationCollector.getAllModules()
-            .get(StarlarkDocumentationCollector.getTopLevelModule().name());
+        modules.remove(StarlarkDocumentationCollector.getTopLevelModule().name());
 
     boolean foundGlobalLibrary = false;
     for (StarlarkMethodDoc methodDoc : topLevel.getMethods()) {

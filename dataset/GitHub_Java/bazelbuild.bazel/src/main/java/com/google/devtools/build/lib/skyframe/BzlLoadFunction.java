@@ -566,7 +566,7 @@ public class BzlLoadFunction implements SkyFunction {
       throw BzlLoadFailedException.starlarkErrors(filePath);
     }
 
-    // Process load statements in .bzl file (recursive .bzl -> .bzl loads),
+    // Process the load statements in the file,
     // resolving labels relative to the current repo mapping.
     ImmutableMap<RepositoryName, RepositoryName> repoMapping = getRepositoryMapping(key, env);
     if (repoMapping == null) {
@@ -605,13 +605,13 @@ public class BzlLoadFunction implements SkyFunction {
     // loads. Loop iteration order matches the source order of load statements.
     Fingerprint fp = new Fingerprint();
     fp.addBytes(astLookupValue.getDigest());
-    Map<String, Module> loadedModules = Maps.newLinkedHashMapWithExpectedSize(loads.size());
+    Map<String, Module> loadedModules = Maps.newHashMapWithExpectedSize(loads.size());
     ImmutableList.Builder<StarlarkFileDependency> fileDependencies =
         ImmutableList.builderWithExpectedSize(loads.size());
     for (int i = 0; i < loads.size(); i++) {
       String loadString = loads.get(i).first;
       BzlLoadValue v = bzlLoads.get(i);
-      loadedModules.put(loadString, v.getModule()); // dups ok
+      loadedModules.put(loadString, v.getModule());
       fileDependencies.add(v.getDependency());
       fp.addBytes(v.getTransitiveDigest());
     }
@@ -620,16 +620,7 @@ public class BzlLoadFunction implements SkyFunction {
     Module module =
         Module.withPredeclared(
             starlarkSemantics, getPredeclaredEnvironment(key, starlarkBuiltinsValue));
-
-    // Record the module's filename, label, digest, and the set of modules it loads,
-    // forming a complete representation of the load DAG.
-    module.setClientData(
-        BazelModuleContext.create(
-            label,
-            file.getStartLocation().file(),
-            ImmutableMap.copyOf(loadedModules),
-            transitiveDigest));
-
+    module.setClientData(BazelModuleContext.create(label, transitiveDigest));
     // executeBzlFile may post events to the Environment's handler, but events do not matter when
     // caching BzlLoadValues. Note that executing the module mutates it.
     executeBzlFile(
@@ -640,8 +631,10 @@ public class BzlLoadFunction implements SkyFunction {
         starlarkSemantics,
         env.getListener(),
         repoMapping);
-    return new BzlLoadValue(
-        module, transitiveDigest, new StarlarkFileDependency(label, fileDependencies.build()));
+    BzlLoadValue result =
+        new BzlLoadValue(
+            module, transitiveDigest, new StarlarkFileDependency(label, fileDependencies.build()));
+    return result;
   }
 
   private static ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping(
