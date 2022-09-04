@@ -18,13 +18,12 @@ package org.graylog2.rest.resources.dashboards;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableMap;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.dashboards.Dashboard;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
@@ -90,7 +89,6 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 400, message = "Validation error."),
             @ApiResponse(code = 400, message = "No such widget type."),
     })
-    @AuditLog(object = "dashboard widget", captureRequestEntity = true, captureResponseEntity = true)
     public Response addWidget(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
@@ -163,7 +161,6 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "dashboard widget")
     public void remove(
             @ApiParam(name = "dashboardId", required = true)
             @PathParam("dashboardId") String dashboardId,
@@ -218,7 +215,6 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "dashboard widget", captureRequestEntity = true, captureResponseEntity = true)
     public void updateWidget(@ApiParam(name = "dashboardId", required = true)
                              @PathParam("dashboardId") String dashboardId,
                              @ApiParam(name = "widgetId", required = true)
@@ -266,7 +262,6 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "dashboard widget description", captureRequestEntity = true, captureResponseEntity = true)
     public void updateDescription(@ApiParam(name = "dashboardId", required = true)
                                   @PathParam("dashboardId") String dashboardId,
                                   @ApiParam(name = "widgetId", required = true)
@@ -298,7 +293,6 @@ public class DashboardWidgetsResource extends RestResource {
             @ApiResponse(code = 404, message = "Widget not found."),
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "dashboard widget cache time", captureRequestEntity = true, captureResponseEntity = true)
     public void updateCacheTime(@ApiParam(name = "dashboardId", required = true)
                                 @PathParam("dashboardId") String dashboardId,
                                 @ApiParam(name = "widgetId", required = true)
