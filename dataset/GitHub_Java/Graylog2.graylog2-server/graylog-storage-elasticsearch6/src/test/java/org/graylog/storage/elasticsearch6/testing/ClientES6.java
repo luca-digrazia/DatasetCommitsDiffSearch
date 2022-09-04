@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.storage.elasticsearch6.testing;
 
@@ -39,7 +39,6 @@ import io.searchbox.indices.IndicesExists;
 import io.searchbox.indices.Refresh;
 import io.searchbox.indices.aliases.AddAliasMapping;
 import io.searchbox.indices.aliases.ModifyAliases;
-import io.searchbox.indices.aliases.RemoveAliasMapping;
 import io.searchbox.indices.mapping.GetMapping;
 import io.searchbox.indices.template.DeleteTemplate;
 import io.searchbox.indices.template.GetTemplate;
@@ -119,14 +118,6 @@ public class ClientES6 implements Client {
         final ModifyAliases addAliasRequest = new ModifyAliases.Builder(addAliasMapping).build();
 
         executeWithExpectedSuccess(addAliasRequest, "failed to add alias " + alias + " for index " + indexName);
-    }
-
-    @Override
-    public void removeAliasMapping(String indexName, String alias) {
-        final RemoveAliasMapping removeAliasMapping = new RemoveAliasMapping.Builder(indexName, alias).build();
-        final ModifyAliases addAliasRequest = new ModifyAliases.Builder(removeAliasMapping).build();
-
-        executeWithExpectedSuccess(addAliasRequest, "failed to remove alias " + alias + " for index " + indexName);
     }
 
     private JsonNode getMapping(String... indices) {
