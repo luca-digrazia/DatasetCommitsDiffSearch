@@ -13,41 +13,62 @@
 // limitations under the License.
 package com.google.devtools.build.lib.graph;
 
-import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * A generic directed-graph Node class. Type parameter T is the type of the node's label.
+ * <p>A generic directed-graph Node class.  Type parameter T is the type
+ * of the node's label.
  *
- * <p>Each node is identified by a label, which is unique within the graph owning the node.
+ * <p>Each node is identified by a label, which is unique within the graph
+ * owning the node.
  *
- * <p>Nodes are immutable, that is, their labels cannot be changed. However, their
- * predecessor/successor lists are mutable.
+ * <p>Nodes are immutable, that is, their labels cannot be changed.  However,
+ * their predecessor/successor lists are mutable.
  *
  * <p>Nodes cannot be created directly by clients.
  *
- * <p>Clients should not confuse nodes belonging to two different graphs! (Use Digraph.checkNode()
- * to catch such errors.) There is no way to find the graph to which a node belongs; it is
- * intentionally not represented, to save space.
- *
- * <p>During adding or removing edge locks always hold in specific order: first=nodeFrom.succs then
- * second=nodeTo.preds. That's why reordering deadlock never happens.
+ * <p>Clients should not confuse nodes belonging to two different graphs!  (Use
+ * Digraph.checkNode() to catch such errors.)  There is no way to find the
+ * graph to which a node belongs; it is intentionally not represented, to save
+ * space.
  */
 public final class Node<T> {
 
+  private static final int ARRAYLIST_THRESHOLD = 6;
+  private static final int INITIAL_HASHSET_CAPACITY = 12;
+
+  // The succs and preds set representation changes depending on its size.
+  // It is implemented using the following collections:
+  // - null for size = 0.
+  // - Collections$SingletonList for size = 1.
+  // - ArrayList(6) for size = [2..6].
+  // - CompactHashSet(12) for size > 6.
+  // These numbers were chosen based on profiling.
+
   private final T label;
 
-  /** A duplicate-free collection of edges from this node. May be null, indicating the empty set. */
-  private final ConcurrentCollectionWrapper<Node<T>> succs = new ConcurrentCollectionWrapper<>();
+  /**
+   * A duplicate-free collection of edges from this node.  May be null,
+   * indicating the empty set.
+   */
+  private Collection<Node<T>> succs = null;
 
-  /** A duplicate-free collection of edges to this node. May be null, indicating the empty set. */
-  private final ConcurrentCollectionWrapper<Node<T>> preds = new ConcurrentCollectionWrapper<>();
+  /**
+   * A duplicate-free collection of edges to this node.  May be null,
+   * indicating the empty set.
+   */
+  private Collection<Node<T>> preds = null;
 
   /**
    * Only Digraph.createNode() can call this!
    */
   Node(T label) {
-    this.label = Preconditions.checkNotNull(label, "label");
+    if (label == null) { throw new NullPointerException("label"); }
+    this.label = label;
   }
 
   /**
@@ -61,24 +82,7 @@ public final class Node<T> {
    * Returns a duplicate-free collection of the nodes that this node links to.
    */
   public Collection<Node<T>> getSuccessors() {
-    return this.succs.get();
-  }
-
-  /**
-   * Remove all successors edges and return collection of its. Self edge removed but did not
-   * returned in result collection.
-   *
-   * @return all existed before successor nodes but this.
-   */
-  Collection<Node<T>> removeAllSuccessors() {
-    this.removeEdge(this); // remove self edge
-    Collection<Node<T>> successors = this.succs.clear();
-    for (Node<T> s : successors) {
-      if (!s.removePredecessor(this)) {
-        throw new IllegalStateException("inconsistent graph state");
-      }
-    }
-    return successors;
+    return succs == null ? Collections.emptyList() : Collections.unmodifiableCollection(succs);
   }
 
   /**
@@ -86,14 +90,23 @@ public final class Node<T> {
    * efficient.
    */
   public boolean hasSuccessors() {
-    return !this.succs.get().isEmpty();
+    return succs != null;
   }
 
   /**
    * Equivalent to {@code getSuccessors().size()} but possibly more efficient.
    */
   public int numSuccessors() {
-    return this.succs.size();
+    return succs == null ? 0 : succs.size();
+  }
+
+  /**
+   * Removes all edges to/from this node.
+   * Private: breaks graph invariant!
+   */
+  void removeAllEdges() {
+    this.succs = null;
+    this.preds = null;
   }
 
   /**
@@ -101,24 +114,15 @@ public final class Node<T> {
    * this node.
    */
   public Collection<Node<T>> getPredecessors() {
-    return this.preds.get();
+    return preds == null ? Collections.emptyList() : Collections.unmodifiableCollection(preds);
   }
 
   /**
-   * Remove all predecessors edges and return collection of its. Self edge removed but did not
-   * returned in result collection.
-   *
-   * @return all existed before predecessor nodes but this.
+   * Equivalent to {@code getPredecessors().size()} but possibly more
+   * efficient.
    */
-  Collection<Node<T>> removeAllPredecessors() {
-    this.removeEdge(this); // remove self edge
-    Collection<Node<T>> predecessors = this.preds.clear();
-    for (Node<T> p : predecessors) {
-      if (!p.removeSuccessor(this)) {
-        throw new IllegalStateException("inconsistent graph state");
-      }
-    }
-    return predecessors;
+  public int numPredecessors() {
+    return preds == null ? 0 : preds.size();
   }
 
   /**
@@ -126,75 +130,137 @@ public final class Node<T> {
    * efficient.
    */
   public boolean hasPredecessors() {
-    return !preds.get().isEmpty();
-  }
-
-  /** Equivalent to {@code getPredecessors().size()} but possibly more efficient. */
-  public int numPredecessors() {
-    return this.preds.size();
+    return preds != null;
   }
 
   /**
-   * Adds edge from this node to target
-   *
-   * <p>In this method one lock held inside another lock. But it can not be reason of reordering
-   * deadlock. Lock always holds in direction fromNode.succs -> toNode.preds.
-   * @see #removeEdge(Node)
-   *
-   * @return true if edge had been added. false - otherwise.
+   * Adds 'value' to either the predecessor or successor set, updating the
+   * appropriate field as necessary.
+   * @return {@code true} if the set was modified; {@code false} if the set
+   * was not modified
    */
-  boolean addEdge(Node<T> target) {
-    synchronized (succs) {
-      boolean isNewSuccessor = this.succs.add(target);
-      boolean isNewPredecessor = target.addPredecessor(this);
-      if (isNewPredecessor != isNewSuccessor) {
-        throw new IllegalStateException("inconsistent graph state");
-      }
-      return isNewSuccessor;
+  private boolean add(boolean predecessorSet, Node<T> value) {
+    final Collection<Node<T>> set = predecessorSet ? preds : succs;
+    if (set == null) {
+      // null -> SingletonList
+      return updateField(predecessorSet, Collections.singletonList(value));
     }
-  }
-
-  /**
-   * Adds edge from this node to target
-   *
-   * <p>In this method one lock held inside another lock. But it can not be reason of reordering
-   * deadlock. Lock always holds in direction fromNode.succs -> toNode.preds.
-   * @see #addEdge(Node)
-   *
-   * @return true if edge had been removed. false - otherwise.
-   */
-  boolean removeEdge(Node<T> target) {
-    synchronized (succs) {
-      boolean isSuccessorRemoved = this.succs.remove(target);
-      if (isSuccessorRemoved) {
-        boolean isPredecessorRemoved = target.removePredecessor(this);
-        if (!isPredecessorRemoved) {
-          throw new IllegalStateException("inconsistent graph state");
-        }
-        return true;
-      }
+    if (set.contains(value)) {
+      // already exists in this set
       return false;
     }
+    int previousSize = set.size();
+    if (previousSize == 1) {
+      // SingletonList -> ArrayList
+      Collection<Node<T>> newSet = new ArrayList<>(ARRAYLIST_THRESHOLD);
+      newSet.addAll(set);
+      newSet.add(value);
+      return updateField(predecessorSet, newSet);
+    } else if (previousSize < ARRAYLIST_THRESHOLD) {
+      // ArrayList
+      set.add(value);
+      return true;
+  } else if (previousSize == ARRAYLIST_THRESHOLD) {
+      // ArrayList -> CompactHashSet
+      Collection<Node<T>> newSet = CompactHashSet.createWithExpectedSize(INITIAL_HASHSET_CAPACITY);
+      newSet.addAll(set);
+      newSet.add(value);
+      return updateField(predecessorSet, newSet);
+    } else {
+      // HashSet
+      set.add(value);
+      return true;
+    }
   }
 
   /**
-   * Add 'from' as a predecessor of 'this' node. Returns true iff the graph changed. Private: breaks
-   * graph invariant!
+   * Removes 'value' from either 'preds' or 'succs', updating the appropriate
+   * field as necessary.
+   * @return {@code true} if the set was modified; {@code false} if the set
+   * was not modified
    */
-  private boolean addPredecessor(Node<T> from) {
-    return preds.add(from);
+  private boolean remove(boolean predecessorSet, Node<T> value) {
+    final Collection<Node<T>> set = predecessorSet ? preds : succs;
+    if (set == null) {
+      // null
+      return false;
+    }
+
+    int previousSize = set.size();
+    if (previousSize == 1) {
+      if (set.contains(value)) {
+        // -> null
+        return updateField(predecessorSet, null);
+      } else {
+        return false;
+      }
+    }
+    // now remove the value
+    if (set.remove(value)) {
+      // may need to change representation
+      if (previousSize == 2) {
+        // -> SingletonList
+        List<Node<T>> list =
+          Collections.singletonList(set.iterator().next());
+        return updateField(predecessorSet, list);
+
+      } else if (previousSize == 1 + ARRAYLIST_THRESHOLD) {
+        // -> ArrayList
+        Collection<Node<T>> newSet = new ArrayList<>(ARRAYLIST_THRESHOLD);
+        newSet.addAll(set);
+        return updateField(predecessorSet, newSet);
+      }
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Remove edge: toNode.preds = {n | n in toNode.preds && n != fromNode} Private: breaks graph
-   * invariant!
+   * Update either the {@link #preds} or {@link #succs} field to point to the
+   * new set.
+   * @return {@code true}, because the set must have been updated
    */
-  private boolean removePredecessor(Node<T> from) {
-    return preds.remove(from);
+  private boolean updateField(boolean predecessorSet,
+      Collection<Node<T>> newSet) {
+    if (predecessorSet) {
+      preds = newSet;
+    } else {
+      succs = newSet;
+    }
+    return true;
   }
 
-  private boolean removeSuccessor(Node<T> to) {
-    return succs.remove(to);
+
+  /**
+   * Add 'to' as a successor of 'this' node.  Returns true iff
+   * the graph changed.  Private: breaks graph invariant!
+   */
+  boolean addSuccessor(Node<T> to) {
+    return add(false, to);
+  }
+
+  /**
+   * Add 'from' as a predecessor of 'this' node.  Returns true iff
+   * the graph changed.  Private: breaks graph invariant!
+   */
+  boolean addPredecessor(Node<T> from) {
+    return add(true, from);
+  }
+
+  /**
+   * Remove edge: fromNode.succs = {n | n in fromNode.succs && n != toNode}
+   * Private: breaks graph invariant!
+   */
+  boolean removeSuccessor(Node<T> to) {
+    return remove(false, to);
+  }
+
+  /**
+   * Remove edge: toNode.preds = {n | n in toNode.preds && n != fromNode}
+   * Private: breaks graph invariant!
+   */
+  boolean removePredecessor(Node<T> from) {
+    return remove(true, from);
   }
 
   @Override
