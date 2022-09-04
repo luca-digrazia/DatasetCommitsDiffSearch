@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Strings;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
@@ -31,6 +32,8 @@ import javax.annotation.Nullable;
 
 /** (Pretty) Printing of Skylark values */
 public class Printer {
+
+  public static final char SKYLARK_QUOTATION_MARK = '"';
 
   /**
    * Creates an instance of {@link BasePrinter} that wraps an existing buffer.
@@ -125,7 +128,7 @@ public class Printer {
    * @param arguments positional arguments.
    * @return the formatted string.
    */
-  static Formattable formattable(final String pattern, Object... arguments) {
+  public static Formattable formattable(final String pattern, Object... arguments) {
     final List<Object> args = Arrays.asList(arguments);
     return new Formattable() {
       @Override
@@ -146,7 +149,7 @@ public class Printer {
    *
    * @return buffer
    */
-  private static Appendable append(Appendable buffer, char c) {
+  public static Appendable append(Appendable buffer, char c) {
     try {
       return buffer.append(c);
     } catch (IOException e) {
@@ -155,12 +158,12 @@ public class Printer {
   }
 
   /**
-   * Append a char sequence to a buffer. In case of {@link IOException} throw an {@link
-   * AssertionError} instead
+   * Append a char sequence to a buffer. In case of {@link IOException} throw an
+   * {@link AssertionError} instead
    *
    * @return buffer
    */
-  private static Appendable append(Appendable buffer, CharSequence s) {
+  public static Appendable append(Appendable buffer, CharSequence s) {
     try {
       return buffer.append(s);
     } catch (IOException e) {
@@ -240,11 +243,11 @@ public class Printer {
     }
 
     /**
-     * Prints the informal representation of value {@code o}. Unlike {@code repr(x)}, it does not
-     * quote strings at top level, though strings and other values appearing as elements of other
-     * structures are quoted as if by {@code repr}.
+     * Print an informal representation of object x. Currently only differs from repr in the
+     * behavior for strings and labels at top-level, that are returned as is rather than quoted.
      *
-     * <p>Implementations of SkylarkValue may define their own behavior of {@code str}.
+     * @param o the object
+     * @return the buffer, in fluent style
      */
     public BasePrinter str(Object o) {
       if (o instanceof SkylarkValue) {
@@ -259,14 +262,11 @@ public class Printer {
     }
 
     /**
-     * Prints the quoted representation of Starlark value {@code o}. The quoted form is often a
-     * Starlark expression that evaluates to {@code o}.
+     * Print an official representation of object x. For regular data structures, the value should
+     * be parsable back into an equal data structure.
      *
-     * <p>Implementations of SkylarkValue may define their own behavior of {@code repr}.
-     *
-     * <p>In addition to Starlark values, {@code repr} also prints instances of classes Map, List,
-     * Map.Entry, Class, Node, or Location. To avoid nondeterminism, all other values are printed
-     * opaquely.
+     * @param o the string a representation of which to repr.
+     * @return BasePrinter.
      */
     @Override
     public BasePrinter repr(Object o) {
@@ -275,8 +275,8 @@ public class Printer {
         // values such as Locations or ASTs.
         this.append("null");
 
-      } else if (o instanceof SkylarkValue) {
-        ((SkylarkValue) o).repr(this);
+      } else if (o instanceof SkylarkPrintable) {
+        ((SkylarkPrintable) o).repr(this);
 
       } else if (o instanceof String) {
         writeString((String) o);
@@ -289,8 +289,6 @@ public class Printer {
 
       } else if (Boolean.FALSE.equals(o)) {
         this.append("False");
-
-        // -- non-Starlark values --
 
       } else if (o instanceof Map<?, ?>) {
         Map<?, ?> dict = (Map<?, ?>) o;
@@ -305,7 +303,6 @@ public class Printer {
         this.repr(entry.getKey());
         this.append(": ");
         this.repr(entry.getValue());
-
       } else if (o instanceof Class<?>) {
         this.append(EvalUtils.getDataTypeNameFromClass((Class<?>) o));
 
@@ -315,13 +312,9 @@ public class Printer {
         this.append(o.toString());
 
       } else {
-        // For now, we print all unknown values opaquely.
-        // Historically this was a defense against accidental nondeterminism,
-        // but Starlark code cannot access values of o that would reach here,
-        // and native code is already trusted to be deterministic.
-        // TODO(adonovan): replace this with a default behavior of this.append(o),
-        // once we require that all @Skylark-annotated classes implement SkylarkValue.
-        // (After all, Java code can call String.format, which also calls toString.)
+        // Other types of objects shouldn't be leaked to Skylark, but if happens, their
+        // .toString method shouldn't be used because their return values are likely to contain
+        // memory addresses or other nondeterministic information.
         this.append("<unknown object " + o.getClass().getName() + ">");
       }
 
@@ -335,13 +328,13 @@ public class Printer {
      * @return this printer.
      */
     protected BasePrinter writeString(String s) {
-      this.append('"');
+      this.append(SKYLARK_QUOTATION_MARK);
       int len = s.length();
       for (int i = 0; i < len; i++) {
         char c = s.charAt(i);
         escapeCharacter(c);
       }
-      return this.append('"');
+      return this.append(SKYLARK_QUOTATION_MARK);
     }
 
     private BasePrinter backslashChar(char c) {
@@ -349,7 +342,7 @@ public class Printer {
     }
 
     private BasePrinter escapeCharacter(char c) {
-      if (c == '"') {
+      if (c == SKYLARK_QUOTATION_MARK) {
         return backslashChar(c);
       }
       switch (c) {
