@@ -33,20 +33,10 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidBinaryDataInfoApi<FileT extends FileApi> extends StructApi {
 
-  /** The name of the provider for this info object. */
-  String NAME = "AndroidBinaryData";
-
   @SkylarkCallable(
       name = "resource_apk",
       structField = true,
       doc = "The resource apk.",
       documented = false)
   FileT getApk();
-
-  @SkylarkCallable(
-      name = "resource_proguard_config",
-      structField = true,
-      doc = "Proguard config generated for the resources.",
-      documented = false)
-  FileT getResourceProguardConfig();
 }
