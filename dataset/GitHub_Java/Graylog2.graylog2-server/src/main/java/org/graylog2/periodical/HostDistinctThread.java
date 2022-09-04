@@ -20,21 +20,17 @@
 
 package org.graylog2.periodical;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Set;
 import org.graylog2.Log;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFMessage;
+import org.graylog2.database.MongoBridge;
 
 /**
- * ChunkedGELFClientManagerThread.java: Sep 20, 2010 9:28:37 PM
+ * SystemStatisticThread.java: May 21, 2010 6:42:25 PM
  *
- * [description]
+ * Calls MongoBridge.distinctHosts() every 10 seconds.
  *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
-public class ChunkedGELFClientManagerThread extends Thread {
+public class HostDistinctThread extends Thread {
 
     /**
      * Start the thread. Runs forever.
@@ -43,24 +39,14 @@ public class ChunkedGELFClientManagerThread extends Thread {
         // Run forever.
         while (true) {
             try {
-                ////////// DEBUG ONLY
-                HashMap<String, ChunkedGELFMessage> messageMap = ChunkedGELFClientManager.getInstance().getMessageMap();
-                Set set = messageMap.keySet();
-                Iterator iter = set.iterator();
-                int i = 0;
-                while(iter.hasNext()) {
-                    String messageId = (String) iter.next();
-                    System.out.println("MESSAGE " + i + ": " + messageId);
-                    i++;
-                }
-                ////////////////////
+                MongoBridge m = new MongoBridge();
 
-                ////////Set invalidMesssage = ChunkedGELFClientManager.getInstance().getInvalidMessages();
-                
+                // Handled syslog events.
+                m.distinctHosts();
             } catch (Exception e) {
-                Log.warn("Error in ChunkedGELFClientManagerThread: " + e.toString());
+                Log.warn("Error in HostDistinctThread: " + e.toString());
             }
-
+            
            // Run every 10 seconds.
            try { Thread.sleep(10000); } catch(InterruptedException e) {}
         }

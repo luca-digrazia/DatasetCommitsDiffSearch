@@ -20,8 +20,11 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.nio.ByteBuffer;
 import org.graylog2.Main;
 
 /**
@@ -151,7 +154,7 @@ public final class GELF {
             rawGELFHeader[i] = message.getData()[i];
         }
 
-        // Make sure that GELF header begins with 30,15 (<3 boris erdmann)
+        // Make sure that GELF header begins with 30,15 (lol, boris erdmann)
         if (rawGELFHeader[0] != 30 || rawGELFHeader[1] != 15) {
             throw new InvalidGELFHeaderException("Invalid GELF ID.");
         }

@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import org.graylog2.periodical.ChunkedGELFClientManagerThread;
-import org.graylog2.periodical.LoadStatisticsThread;
 import org.graylog2.periodical.RRDThread;
 
 /**
@@ -43,21 +42,14 @@ import org.graylog2.periodical.RRDThread;
 public final class Main {
 
     /**
-     * Controlled by parameter "debug". Enables more verbose output.
+     * Controlled by parameter "debug". Enabled more verbose output.
      */
     public static boolean debugMode = false;
-
-    /**
-     * Controlled by parameter "debug". Enables output of messages/second for benchmarking.
-     */
-    public static boolean printLoadStats = false;
 
     /**
      * This holds the configuration from /etc/graylog2.conf
      */
     public static Properties masterConfig = null;
-    
-    
 
     private Main() { }
 
@@ -85,6 +77,7 @@ public final class Main {
         requiredConfigFields.add("mongodb_useauth");
         requiredConfigFields.add("mongodb_user");
         requiredConfigFields.add("mongodb_password");
+        requiredConfigFields.add("mongodb_host");
         requiredConfigFields.add("mongodb_database");
         requiredConfigFields.add("mongodb_port");
         requiredConfigFields.add("messages_collection_size");
@@ -104,12 +97,6 @@ public final class Main {
             }
         }
 
-        // Check if a MongoDB replica set or host is defined.
-        if (Main.masterConfig.getProperty("mongodb_host") == null && Main.masterConfig.getProperty("mongodb_replica_set") == null) {
-            System.out.println("No MongoDB host (mongodb_host) or replica set (mongodb_replica_set) defined. Terminating.");
-            System.exit(1); // Exit with error.
-        }
-
         // Is the syslog_procotol valid? ("tcp"/"udp")
         List<String> allowedSyslogProtocols = new ArrayList<String>();
         allowedSyslogProtocols.add("tcp");
@@ -125,12 +112,6 @@ public final class Main {
             Main.debugMode = true;
         } else {
             System.out.println("[x] Not in Debug mode.");
-
-            // Maybe print out messages/second? (Only available if not in debug mode)
-            if (args.length > 0 && args[0].equalsIgnoreCase("loadstats")) {
-                Main.printLoadStats = true;
-                System.out.println("[x] Printing load stats.");
-            }
         }
 
         // Write a PID file.
@@ -156,8 +137,7 @@ public final class Main {
                     Main.masterConfig.getProperty("mongodb_host"),
                     Main.masterConfig.getProperty("mongodb_database"),
                     Integer.valueOf(Main.masterConfig.getProperty("mongodb_port")),
-                    Main.masterConfig.getProperty("mongodb_useauth"),
-                    Configuration.getMongoDBReplicaSetServers(Main.masterConfig)
+                    Main.masterConfig.getProperty("mongodb_useauth")
             );
         } catch (Exception e) {
             System.out.println("Could not create MongoDB connection: " + e.toString());
@@ -200,12 +180,6 @@ public final class Main {
         HostDistinctThread hostDistinctThread = new HostDistinctThread();
         hostDistinctThread.start();
         System.out.println("[x] Host distinction thread is up.");
-
-        if (Main.printLoadStats) {
-            // Start thread that prints out load statistics.
-            LoadStatisticsThread loadStatThread = new LoadStatisticsThread();
-            loadStatThread.start();
-        }
 
         System.out.println("[x] Graylog2 up and running.");
     }
