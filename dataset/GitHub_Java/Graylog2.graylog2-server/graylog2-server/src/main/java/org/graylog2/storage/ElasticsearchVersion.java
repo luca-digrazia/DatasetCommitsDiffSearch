@@ -14,18 +14,17 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog2.bindings;
+package org.graylog2.storage;
 
-import com.google.inject.AbstractModule;
-import org.graylog2.indexer.IndexMappingFactory;
-import org.graylog2.plugin.Version;
-import org.graylog2.storage.ElasticsearchVersion;
-import org.graylog2.storage.providers.ElasticsearchVersionProvider;
+import com.google.inject.BindingAnnotation;
 
-public class ElasticsearchModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        bind(Version.class).annotatedWith(ElasticsearchVersion.class).toProvider(ElasticsearchVersionProvider.class).asEagerSingleton();
-        bind(IndexMappingFactory.class).asEagerSingleton();
-    }
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Target({ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@BindingAnnotation
+public @interface ElasticsearchVersion {
 }

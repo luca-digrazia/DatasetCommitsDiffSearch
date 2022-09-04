@@ -14,20 +14,30 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog.plugins.views.providers;
+package org.graylog2.storage;
 
-import org.graylog.plugins.views.search.export.ExportBackend;
 import org.graylog2.plugin.Version;
-import org.graylog2.storage.ElasticsearchVersion;
-import org.graylog2.storage.VersionAwareProvider;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
 import java.util.Map;
 
-public class ExportBackendProvider extends VersionAwareProvider<ExportBackend> {
+public class VersionAwareProvider<T> implements Provider<T> {
+    private final Version elasticsearchMajorVersion;
+    private final Map<Version, Provider<T>> pluginBindings;
+
     @Inject
-    public ExportBackendProvider(@ElasticsearchVersion Version version, Map<Version, Provider<ExportBackend>> pluginBindings) {
-        super(version, pluginBindings);
+    public VersionAwareProvider(@ElasticsearchVersion Version elasticsearchMajorVersion, Map<Version, Provider<T>> pluginBindings) {
+        this.elasticsearchMajorVersion = elasticsearchMajorVersion;
+        this.pluginBindings = pluginBindings;
+    }
+
+    @Override
+    public T get() {
+        final Provider<T> provider = this.pluginBindings.get(elasticsearchMajorVersion);
+        if (provider == null) {
+            throw new IllegalStateException("Incomplete Elasticsearch implementation for version \"" + elasticsearchMajorVersion + "\".");
+        }
+        return provider.get();
     }
 }

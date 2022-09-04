@@ -14,9 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog.plugins.views.providers;
+package org.graylog2.storage.providers;
 
-import org.graylog.plugins.views.search.export.ExportBackend;
+import org.graylog.plugins.views.migrations.V20200730000000_AddGl2MessageIdFieldAliasForEvents;
 import org.graylog2.plugin.Version;
 import org.graylog2.storage.ElasticsearchVersion;
 import org.graylog2.storage.VersionAwareProvider;
@@ -25,9 +25,12 @@ import javax.inject.Inject;
 import javax.inject.Provider;
 import java.util.Map;
 
-public class ExportBackendProvider extends VersionAwareProvider<ExportBackend> {
+public class V20200730000000_AddGl2MessageIdFieldAliasForEventsElasticsearchAdapterProvider
+        extends VersionAwareProvider<V20200730000000_AddGl2MessageIdFieldAliasForEvents.ElasticsearchAdapter> {
     @Inject
-    public ExportBackendProvider(@ElasticsearchVersion Version version, Map<Version, Provider<ExportBackend>> pluginBindings) {
+    public V20200730000000_AddGl2MessageIdFieldAliasForEventsElasticsearchAdapterProvider(
+            @ElasticsearchVersion Version version,
+            Map<Version, Provider<V20200730000000_AddGl2MessageIdFieldAliasForEvents.ElasticsearchAdapter>> pluginBindings) {
         super(version, pluginBindings);
     }
 }

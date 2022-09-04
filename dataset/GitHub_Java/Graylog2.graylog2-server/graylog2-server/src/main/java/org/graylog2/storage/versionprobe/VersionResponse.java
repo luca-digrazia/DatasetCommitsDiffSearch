@@ -14,18 +14,22 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog2.bindings;
+package org.graylog2.storage.versionprobe;
 
-import com.google.inject.AbstractModule;
-import org.graylog2.indexer.IndexMappingFactory;
-import org.graylog2.plugin.Version;
-import org.graylog2.storage.ElasticsearchVersion;
-import org.graylog2.storage.providers.ElasticsearchVersionProvider;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.auto.value.AutoValue;
 
-public class ElasticsearchModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        bind(Version.class).annotatedWith(ElasticsearchVersion.class).toProvider(ElasticsearchVersionProvider.class).asEagerSingleton();
-        bind(IndexMappingFactory.class).asEagerSingleton();
+@AutoValue
+@JsonAutoDetect
+@JsonIgnoreProperties(ignoreUnknown = true)
+public abstract class VersionResponse {
+    public abstract String number();
+
+    @JsonCreator
+    public static VersionResponse create(@JsonProperty("number") String number) {
+        return new AutoValue_VersionResponse(number);
     }
 }
