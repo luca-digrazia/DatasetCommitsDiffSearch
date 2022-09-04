@@ -29,7 +29,6 @@ import com.googlecode.androidannotations.annotations.EViewGroup;
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
-import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.googlecode.androidannotations.rclass.IRInnerClass;
@@ -79,8 +78,6 @@ public class EViewGroupProcessor implements ElementProcessor {
 
 		EBeanHolder holder = eBeansHolder.create(element);
 
-		Classes classes = holder.classes();
-
 		TypeElement typeElement = (TypeElement) element;
 
 		String eBeanQualifiedName = typeElement.getQualifiedName().toString();
@@ -103,7 +100,8 @@ public class EViewGroupProcessor implements ElementProcessor {
 		holder.eBean.javadoc().append(SUPPRESS_WARNING_COMMENT);
 
 		{
-			holder.contextRef = holder.eBean.field(PRIVATE, classes.CONTEXT, "context_");
+			JClass contextClass = holder.refClass("android.content.Context");
+			holder.contextRef = holder.eBean.field(PRIVATE, contextClass, "context_");
 		}
 
 		{
