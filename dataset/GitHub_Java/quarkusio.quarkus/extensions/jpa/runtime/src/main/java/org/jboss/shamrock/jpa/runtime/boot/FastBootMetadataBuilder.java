@@ -16,13 +16,41 @@
 
 package org.jboss.shamrock.jpa.runtime.boot;
 
+import static org.hibernate.cfg.AvailableSettings.DATASOURCE;
+import static org.hibernate.cfg.AvailableSettings.DRIVER;
+import static org.hibernate.cfg.AvailableSettings.JACC_PREFIX;
+import static org.hibernate.cfg.AvailableSettings.JACC_ENABLED;
+import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_DRIVER;
+import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_PASSWORD;
+import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_URL;
+import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_USER;
+import static org.hibernate.cfg.AvailableSettings.JPA_JTA_DATASOURCE;
+import static org.hibernate.cfg.AvailableSettings.JPA_NON_JTA_DATASOURCE;
+import static org.hibernate.cfg.AvailableSettings.JPA_TRANSACTION_TYPE;
+import static org.hibernate.cfg.AvailableSettings.PASS;
+import static org.hibernate.cfg.AvailableSettings.TRANSACTION_COORDINATOR_STRATEGY;
+import static org.hibernate.cfg.AvailableSettings.URL;
+import static org.hibernate.cfg.AvailableSettings.USER;
+import static org.hibernate.cfg.AvailableSettings.CLASS_CACHE_PREFIX;
+import static org.hibernate.cfg.AvailableSettings.COLLECTION_CACHE_PREFIX;
+import static org.hibernate.cfg.AvailableSettings.PERSISTENCE_UNIT_NAME;
+import static org.hibernate.cfg.AvailableSettings.WRAP_RESULT_SETS;
+import static org.hibernate.cfg.AvailableSettings.XML_MAPPING_ENABLED;
+import static org.hibernate.cfg.AvailableSettings.USE_SECOND_LEVEL_CACHE;
+import static org.hibernate.cfg.AvailableSettings.USE_QUERY_CACHE;
+import static org.hibernate.cfg.AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES;
+import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_MODE;
+import static org.hibernate.internal.HEMLogging.messageLogger;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
+
 import javax.persistence.PersistenceException;
+import javax.persistence.SharedCacheMode;
 import javax.persistence.spi.PersistenceUnitTransactionType;
 
 import org.hibernate.boot.CacheRegionDefinition;
@@ -42,6 +70,7 @@ import org.hibernate.boot.registry.selector.spi.StrategySelector;
 import org.hibernate.boot.spi.MetadataBuilderContributor;
 import org.hibernate.boot.spi.MetadataBuilderImplementor;
 import org.hibernate.boot.spi.MetadataImplementor;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Environment;
 import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.Dialect;
@@ -51,7 +80,6 @@ import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
 import org.hibernate.internal.EntityManagerMessageLogger;
 import org.hibernate.internal.util.StringHelper;
-import org.hibernate.jpa.AvailableSettings;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.internal.StandardJpaScanEnvironmentImpl;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
@@ -62,30 +90,11 @@ import org.hibernate.jpa.spi.IdentifierGeneratorStrategyProvider;
 import org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorBuilderImpl;
 import org.hibernate.resource.transaction.backend.jta.internal.JtaTransactionCoordinatorBuilderImpl;
 import org.hibernate.service.internal.AbstractServiceRegistryImpl;
-import org.infinispan.protean.hibernate.cache.InfinispanRegionFactory;
+import org.infinispan.protean.hibernate.cache.ProteanInfinispanRegionFactory;
 import org.jboss.shamrock.jpa.runtime.recording.RecordableBootstrap;
 import org.jboss.shamrock.jpa.runtime.recording.RecordedState;
 import org.jboss.shamrock.jpa.runtime.recording.RecordingDialectFactory;
 import org.jboss.shamrock.jpa.runtime.service.FlatClassLoaderService;
-
-import static org.hibernate.cfg.AvailableSettings.DATASOURCE;
-import static org.hibernate.cfg.AvailableSettings.DRIVER;
-import static org.hibernate.cfg.AvailableSettings.JACC_PREFIX;
-import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_DRIVER;
-import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_PASSWORD;
-import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_URL;
-import static org.hibernate.cfg.AvailableSettings.JPA_JDBC_USER;
-import static org.hibernate.cfg.AvailableSettings.JPA_JTA_DATASOURCE;
-import static org.hibernate.cfg.AvailableSettings.JPA_NON_JTA_DATASOURCE;
-import static org.hibernate.cfg.AvailableSettings.JPA_TRANSACTION_TYPE;
-import static org.hibernate.cfg.AvailableSettings.PASS;
-import static org.hibernate.cfg.AvailableSettings.TRANSACTION_COORDINATOR_STRATEGY;
-import static org.hibernate.cfg.AvailableSettings.URL;
-import static org.hibernate.cfg.AvailableSettings.USER;
-import static org.hibernate.internal.HEMLogging.messageLogger;
-import static org.hibernate.jpa.AvailableSettings.CLASS_CACHE_PREFIX;
-import static org.hibernate.jpa.AvailableSettings.COLLECTION_CACHE_PREFIX;
-import static org.hibernate.jpa.AvailableSettings.PERSISTENCE_UNIT_NAME;
 
 /**
  * Alternative to EntityManagerFactoryBuilderImpl so to have full control of how MetadataBuilderImplementor
@@ -193,22 +202,42 @@ public class FastBootMetadataBuilder {
      * org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl#mergeSettings(org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor,
      * java.util.Map, org.hibernate.boot.registry.StandardServiceRegistryBuilder)
      */
+    @SuppressWarnings("unchecked")
     private MergedSettings mergeSettings(PersistenceUnitDescriptor persistenceUnit) {
         final MergedSettings mergedSettings = new MergedSettings();
-
-        if (persistenceUnit.getJtaDataSource() != null) {
-            mergedSettings.configurationValues.put("hibernate.connection.datasource",
-                    persistenceUnit.getJtaDataSource());
-        }
-        // Protean specific!
-        mergedSettings.configurationValues.put("hibernate.temp.use_jdbc_metadata_defaults", "false");
 
         // first, apply persistence.xml-defined settings
         if (persistenceUnit.getProperties() != null) {
             mergedSettings.configurationValues.putAll(persistenceUnit.getProperties());
         }
 
+        if (persistenceUnit.getJtaDataSource() != null) {
+            mergedSettings.configurationValues.put(DATASOURCE, persistenceUnit.getJtaDataSource());
+        }
+
         mergedSettings.configurationValues.put(PERSISTENCE_UNIT_NAME, persistenceUnit.getName());
+
+        // Protean specific
+
+        mergedSettings.configurationValues.put("hibernate.temp.use_jdbc_metadata_defaults", "false");
+
+        if (readBooleanConfigurationValue(mergedSettings.configurationValues, WRAP_RESULT_SETS)) {
+            LOG.warn("Wrapping result sets is not supported. Setting " + WRAP_RESULT_SETS + " to false.");
+        }
+        mergedSettings.configurationValues.put(WRAP_RESULT_SETS, "false");
+
+        if (readBooleanConfigurationValue(mergedSettings.configurationValues, XML_MAPPING_ENABLED)) {
+            LOG.warn("XML mapping is not supported. Setting " + XML_MAPPING_ENABLED + " to false.");
+        }
+        mergedSettings.configurationValues.put(XML_MAPPING_ENABLED, "false");
+
+        // Note: this one is not a boolean, just having the property enables it
+        if (mergedSettings.configurationValues.containsKey(JACC_ENABLED)) {
+            LOG.warn("JACC is not supported. Disabling it.");
+        }
+        mergedSettings.configurationValues.remove(JACC_ENABLED);
+
+        enableCachingByDefault(mergedSettings.configurationValues);
 
         // here we are going to iterate the merged config settings looking for:
         // 1) additional JACC permissions
@@ -243,9 +272,20 @@ public class FastBootMetadataBuilder {
             }
         }
 
-        mergedSettings.configurationValues.put( org.hibernate.cfg.AvailableSettings.CACHE_REGION_FACTORY, InfinispanRegionFactory.class.getName());
+        mergedSettings.configurationValues.put( org.hibernate.cfg.AvailableSettings.CACHE_REGION_FACTORY, ProteanInfinispanRegionFactory.class.getName());
 
         return mergedSettings;
+    }
+
+    /**
+     * Enable 2LC for entities and queries by default. Also allow "reference caching" by default.
+     */
+    private void enableCachingByDefault(final Map configurationValues) {
+        //Only set these if the user isn't making an explicit choice:
+        configurationValues.putIfAbsent(USE_DIRECT_REFERENCE_CACHE_ENTRIES, Boolean.TRUE);
+        configurationValues.putIfAbsent(USE_SECOND_LEVEL_CACHE, Boolean.TRUE);
+        configurationValues.putIfAbsent(USE_QUERY_CACHE, Boolean.TRUE);
+        configurationValues.putIfAbsent(JPA_SHARED_CACHE_MODE, SharedCacheMode.ENABLE_SELECTIVE);
     }
 
     public RecordedState build() {
@@ -322,6 +362,12 @@ public class FastBootMetadataBuilder {
             }
             this.cacheRegionDefinitions.add(cacheRegionDefinition);
         }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private boolean readBooleanConfigurationValue(Map configurationValues, String propertyName) {
+        Object propertyValue = configurationValues.get(propertyName);
+        return propertyValue != null && Boolean.parseBoolean(propertyValue.toString());
     }
 
     private CacheRegionDefinition parseCacheRegionDefinitionEntry(String role, String value,
