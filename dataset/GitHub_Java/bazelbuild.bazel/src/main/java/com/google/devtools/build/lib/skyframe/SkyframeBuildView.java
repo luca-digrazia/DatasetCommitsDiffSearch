@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiff;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
@@ -351,7 +352,6 @@ public final class SkyframeBuildView {
       ExtendedEventHandler eventHandler,
       List<ConfiguredTargetKey> values,
       List<AspectValueKey> aspectKeys,
-      Supplier<Map<BuildConfigurationValue.Key, BuildConfiguration>> configurationLookupSupplier,
       EventBus eventBus,
       boolean keepGoing,
       int numThreads)
@@ -440,13 +440,7 @@ public final class SkyframeBuildView {
     }
 
     Pair<Boolean, ViewCreationFailedException> errors =
-        processErrors(
-            result,
-            configurationLookupSupplier,
-            skyframeExecutor,
-            eventHandler,
-            keepGoing,
-            eventBus);
+        processErrors(result, skyframeExecutor, eventHandler, keepGoing, eventBus);
     Collection<Exception> reportedExceptions = Sets.newHashSet();
     for (Map.Entry<ActionAnalysisMetadata, ConflictException> bad : badActions.entrySet()) {
       ConflictException ex = bad.getValue();
@@ -517,7 +511,6 @@ public final class SkyframeBuildView {
    */
   static Pair<Boolean, ViewCreationFailedException> processErrors(
       EvaluationResult<? extends SkyValue> result,
-      Supplier<Map<BuildConfigurationValue.Key, BuildConfiguration>> configurationLookupSupplier,
       SkyframeExecutor skyframeExecutor,
       ExtendedEventHandler eventHandler,
       boolean keepGoing,
@@ -564,6 +557,7 @@ public final class SkyframeBuildView {
       ConfiguredTargetKey label = (ConfiguredTargetKey) errorKey.argument();
       Label topLevelLabel = label.getLabel();
 
+      BuildEventId configuration = null;
       Iterable<Cause> rootCauses;
       if (cause instanceof ConfiguredValueCreationException) {
         ConfiguredValueCreationException ctCause = (ConfiguredValueCreationException) cause;
@@ -586,6 +580,7 @@ public final class SkyframeBuildView {
           }
         }
         rootCauses = ctCause.getRootCauses();
+        configuration = ctCause.getConfiguration();
       } else if (!Iterables.isEmpty(errorInfo.getCycleInfo())) {
         Label analysisRootCause = maybeGetConfiguredTargetCycleCulprit(
             topLevelLabel, errorInfo.getCycleInfo());
@@ -616,12 +611,11 @@ public final class SkyframeBuildView {
           noKeepGoingException = new ViewCreationFailedException(errorMsg);
         }
       }
+      ConfiguredTargetKey configuredTargetKey =
+          ConfiguredTargetKey.of(
+              topLevelLabel, label.getConfigurationKey(), label.isHostConfiguration());
       if (!inTest) {
-        BuildConfiguration configuration =
-            configurationLookupSupplier.get().get(label.getConfigurationKey());
-        eventBus.post(
-            new AnalysisFailureEvent(
-                label, configuration == null ? null : configuration.getEventId(), rootCauses));
+        eventBus.post(new AnalysisFailureEvent(configuredTargetKey, configuration, rootCauses));
       }
     }
     return Pair.of(hasLoadingError, noKeepGoingException);

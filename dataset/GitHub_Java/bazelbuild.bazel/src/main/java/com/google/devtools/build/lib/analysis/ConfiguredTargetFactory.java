@@ -429,11 +429,7 @@ public final class ConfiguredTargetFactory {
     ConfiguredAspect configuredAspect;
     try {
       configuredAspect =
-          aspectFactory.create(
-              associatedTarget,
-              ruleContext,
-              aspect.getParameters(),
-              ruleClassProvider.getToolsRepository());
+          aspectFactory.create(associatedTarget, ruleContext, aspect.getParameters());
     } catch (ActionConflictException e) {
       throw new AspectFunctionException(e);
     }
