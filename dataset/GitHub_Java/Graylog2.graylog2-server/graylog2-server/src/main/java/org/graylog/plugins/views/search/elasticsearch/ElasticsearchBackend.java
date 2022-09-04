@@ -78,6 +78,7 @@ import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.graylog2.indexer.cluster.jest.JestUtils.deduplicateErrors;
 
+
 public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContext> {
     private static final Logger LOG = LoggerFactory.getLogger(ElasticsearchBackend.class);
 
@@ -87,7 +88,6 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
     private final IndexRangeService indexRangeService;
     private final StreamService streamService;
     private final ESQueryDecorators esQueryDecorators;
-    private final ESGeneratedQueryContext.Factory queryContextFactory;
 
     @Inject
     public ElasticsearchBackend(Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticsearchSearchTypeHandlers,
@@ -95,15 +95,13 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                                 JestClient jestClient,
                                 IndexRangeService indexRangeService,
                                 StreamService streamService,
-                                ESQueryDecorators esQueryDecorators,
-                                ESGeneratedQueryContext.Factory queryContextFactory) {
+                                ESQueryDecorators esQueryDecorators) {
         this.elasticsearchSearchTypeHandlers = elasticsearchSearchTypeHandlers;
         this.queryStringParser = queryStringParser;
         this.jestClient = jestClient;
         this.indexRangeService = indexRangeService;
         this.streamService = streamService;
         this.esQueryDecorators = esQueryDecorators;
-        this.queryContextFactory = queryContextFactory;
     }
 
     private QueryBuilder normalizeQueryString(String queryString) {
@@ -133,7 +131,7 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
                 .from(0)
                 .size(0);
 
-        final ESGeneratedQueryContext queryContext = queryContextFactory.create(this, searchSourceBuilder, job, query, results);
+        final ESGeneratedQueryContext queryContext = new ESGeneratedQueryContext(this, searchSourceBuilder, job, query, results);
         for (SearchType searchType : searchTypes) {
             final SearchSourceBuilder searchTypeSourceBuilder = queryContext.searchSourceBuilder(searchType);
 
