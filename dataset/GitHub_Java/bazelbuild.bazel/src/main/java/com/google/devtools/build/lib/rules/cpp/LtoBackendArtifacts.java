@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -22,6 +21,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -60,9 +60,6 @@ public final class LtoBackendArtifacts {
 
   // The result of executing the above command line, an ELF object file.
   private final Artifact objectFile;
-
-  // The corresponding dwoFile if fission is used.
-  private Artifact dwoFile;
 
   LtoBackendArtifacts(
       PathFragment ltoOutputRootPrefix,
@@ -140,10 +137,6 @@ public final class LtoBackendArtifacts {
     return bitcodeFile;
   }
 
-  public Artifact getDwoFile() {
-    return dwoFile;
-  }
-
   public void addIndexingOutputs(ImmutableList.Builder<Artifact> builder) {
     builder.add(imports);
     builder.add(index);
@@ -211,7 +204,7 @@ public final class LtoBackendArtifacts {
     }
 
     if (generateDwo) {
-      dwoFile =
+      Artifact dwoFile =
           linkArtifactFactory.create(
               ruleContext,
               configuration,
