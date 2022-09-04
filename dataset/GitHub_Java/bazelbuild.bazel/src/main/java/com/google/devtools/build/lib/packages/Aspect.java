@@ -14,9 +14,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Preconditions;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
@@ -25,6 +22,8 @@ import com.google.devtools.build.lib.skyframe.serialization.SerializationExcepti
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * An instance of a given {@code AspectClass} with loaded definition and parameters.
@@ -45,18 +44,8 @@ public final class Aspect implements DependencyFilter.AttributeInfoProvider {
    *
    * <p>Caching of Skylark aspects is not yet implemented.
    */
-  private static final LoadingCache<
-          NativeAspectClass, LoadingCache<AspectParameters, AspectDefinition>>
-      definitionCache =
-          CacheBuilder.newBuilder()
-              .build(
-                  CacheLoader.from(
-                      nativeAspectClass ->
-                          CacheBuilder.newBuilder()
-                              .build(
-                                  CacheLoader.from(
-                                      aspectParameters ->
-                                          nativeAspectClass.getDefinition(aspectParameters)))));
+  private static final Map<NativeAspectClass, Map<AspectParameters, AspectDefinition>>
+      definitionCache = new ConcurrentHashMap<>();
 
   private final AspectDescriptor aspectDescriptor;
   private final AspectDefinition aspectDefinition;
@@ -74,7 +63,9 @@ public final class Aspect implements DependencyFilter.AttributeInfoProvider {
   public static Aspect forNative(
       NativeAspectClass nativeAspectClass, AspectParameters parameters) {
     AspectDefinition definition =
-        definitionCache.getUnchecked(nativeAspectClass).getUnchecked(parameters);
+        definitionCache
+            .computeIfAbsent(nativeAspectClass, key -> new ConcurrentHashMap<>())
+            .computeIfAbsent(parameters, nativeAspectClass::getDefinition);
     return new Aspect(nativeAspectClass, definition, parameters);
   }
 
