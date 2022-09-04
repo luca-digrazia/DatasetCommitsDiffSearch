@@ -21,10 +21,10 @@ class SwigIncludeParser extends IncludeParser {
 
   SwigIncludeParser() {
     // There are no preprocessor-macro hints for swig.
-    super(/* hints= */ null, /* includesFilesInTree= */ false);
+    super(/* hints= */ null);
   }
 
-  private static int skipParentheses(char[] chars, int pos, int end) {
+  private static int skipParentheses(byte[] chars, int pos, int end) {
     // TODO(bazel-team): In theory this could be multiline, but the include scanner currently works
     // on a single line.
     int openedParentheses = 1;
@@ -43,14 +43,14 @@ class SwigIncludeParser extends IncludeParser {
     return pos;
   }
 
-  @Override
   /** See javadoc for {@link IncludeParser#getFileType()} */
+  @Override
   protected GrepIncludesFileType getFileType() {
     return GrepIncludesFileType.SWIG;
   }
 
   @Override
-  protected IncludesKeywordData expectIncludeKeyword(char[] chars, int pos, int end) {
+  protected IncludesKeywordData expectIncludeKeyword(byte[] chars, int pos, int end) {
     int start = skipWhitespace(chars, pos, end);
     if ((pos = expect(chars, start, end, "%include")) == -1
         && (pos = expect(chars, start, end, "%extern")) == -1
@@ -90,6 +90,6 @@ class SwigIncludeParser extends IncludeParser {
     inclusionContent = CharMatcher.whitespace().trimFrom(inclusionContent);
 
     // Treat swig inclusions w/o quotes or angle brackets as quoted inclusions.
-    return inclusionContent.length() > 0 ? new Inclusion(inclusionContent, Kind.QUOTE) : null;
+    return inclusionContent.length() > 0 ? Inclusion.create(inclusionContent, Kind.QUOTE) : null;
   }
 }
