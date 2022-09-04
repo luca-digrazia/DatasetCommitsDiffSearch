@@ -46,7 +46,6 @@ public final class J2ObjcSource {
   private final PathFragment objcFilePath;
   private final SourceType sourceType;
   private final List<PathFragment> headerSearchPaths;
-  private final boolean compileWithARC;
 
   /**
    * Constructs a J2ObjcSource containing target information for j2objc transpilation.
@@ -59,7 +58,6 @@ public final class J2ObjcSource {
    * @param sourceType the type of files from which the ObjC files are generated.
    * @param headerSearchPaths the {@code Iterable} of header search paths necessary for compiling
    *     the generated J2ObjC sources in {@code objcSrcs}
-   * @param compileWithARC whether the source files were generated to support ARC compilation
    */
   public J2ObjcSource(
       Label targetLabel,
@@ -67,15 +65,13 @@ public final class J2ObjcSource {
       List<Artifact> objcHdrs,
       PathFragment objcFilePath,
       SourceType sourceType,
-      List<PathFragment> headerSearchPaths,
-      boolean compileWithARC) {
+      List<PathFragment> headerSearchPaths) {
     this.targetLabel = targetLabel;
     this.objcSrcs = ImmutableList.copyOf(objcSrcs);
     this.objcHdrs = ImmutableList.copyOf(objcHdrs);
     this.objcFilePath = objcFilePath;
     this.sourceType = sourceType;
     this.headerSearchPaths = ImmutableList.copyOf(headerSearchPaths);
-    this.compileWithARC = compileWithARC;
   }
 
   /**
@@ -110,11 +106,6 @@ public final class J2ObjcSource {
     return headerSearchPaths;
   }
 
-  /** Returns whether output files were generated to support ARC compilation. */
-  public boolean compileWithARC() {
-    return compileWithARC;
-  }
-
   @Override
   public final boolean equals(Object other) {
     if (!(other instanceof J2ObjcSource)) {
@@ -127,20 +118,13 @@ public final class J2ObjcSource {
         && this.objcHdrs.equals(that.objcHdrs)
         && Objects.equal(this.objcFilePath, that.objcFilePath)
         && this.sourceType == that.sourceType
-        && this.headerSearchPaths.equals(that.headerSearchPaths)
-        && this.compileWithARC == that.compileWithARC;
+        && this.headerSearchPaths.equals(that.headerSearchPaths);
   }
 
   @Override
   public int hashCode() {
     return Objects.hashCode(
-        targetLabel,
-        objcSrcs,
-        objcHdrs,
-        objcFilePath,
-        sourceType,
-        headerSearchPaths,
-        compileWithARC);
+        targetLabel, objcSrcs, objcHdrs, objcFilePath, sourceType, headerSearchPaths);
   }
 }
 

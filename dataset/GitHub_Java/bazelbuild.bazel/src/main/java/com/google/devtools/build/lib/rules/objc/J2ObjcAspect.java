@@ -144,7 +144,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         .propagateAlongAttribute("runtime_deps")
         .requireSkylarkProviders(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
         .requireSkylarkProviders(ProtoInfo.PROVIDER.id())
-        .advertiseProvider(ImmutableList.of(ObjcProvider.SKYLARK_CONSTRUCTOR.id()))
         .requiresConfigurationFragments(
             AppleConfiguration.class,
             CppConfiguration.class,
@@ -259,12 +258,10 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       throws InterruptedException, ActionConflictException {
     ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(this, parameters, ruleContext);
     ObjcCommon common;
-    ObjcProvider objcProvider = null;
 
     if (!j2ObjcSource.getObjcSrcs().isEmpty()) {
       common =
           common(
-              ObjcCommon.Purpose.COMPILE_AND_LINK,
               ruleContext,
               j2ObjcSource.getObjcSrcs(),
               j2ObjcSource.getObjcHdrs(),
@@ -287,29 +284,26 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             .registerCompileAndArchiveActions(
                 common, EXTRA_COMPILE_ARGS, ImmutableList.<PathFragment>of())
             .registerFullyLinkAction(
-                compilationSupport.getObjcProvider(),
+                common.getObjcProvider(),
                 ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
-        objcProvider = compilationSupport.getObjcProvider();
       } catch (RuleErrorException e) {
         ruleContext.ruleError(e.getMessage());
       }
     } else {
       common =
           common(
-              ObjcCommon.Purpose.LINK_ONLY,
               ruleContext,
               ImmutableList.<Artifact>of(),
               ImmutableList.<Artifact>of(),
               ImmutableList.<PathFragment>of(),
               depAttributes,
               otherDeps);
-      objcProvider = common.getObjcProviderBuilder().build();
     }
 
     return builder
         .addProvider(
             exportedJ2ObjcMappingFileProvider(base, ruleContext, directJ2ObjcMappingFileProvider))
-        .addNativeDeclaredProvider(objcProvider)
+        .addNativeDeclaredProvider(common.getObjcProvider())
         .build();
   }
 
@@ -622,8 +616,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       ProtoLangToolchainProvider protoToolchain,
       RuleContext ruleContext,
       ImmutableList<Artifact> filteredProtoSources,
-      J2ObjcSource j2ObjcSource)
-      throws InterruptedException {
+      J2ObjcSource j2ObjcSource) {
     ImmutableList<Artifact> outputHeaderMappingFiles =
         ProtoCommon.getGeneratedOutputs(ruleContext, filteredProtoSources, ".j2objc.mapping");
     ImmutableList<Artifact> outputClassMappingFiles =
@@ -760,7 +753,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   }
 
   private static J2ObjcSource protoJ2ObjcSource(
-      RuleContext ruleContext, ImmutableList<Artifact> protoSources) throws InterruptedException {
+      RuleContext ruleContext, ImmutableList<Artifact> protoSources) {
     PathFragment objcFileRootExecPath = getProtoOutputRoot(ruleContext);
 
     List<PathFragment> headerSearchPaths =
@@ -775,21 +768,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         headerSearchPaths);
   }
 
-  private static PathFragment getProtoOutputRoot(RuleContext ruleContext)
-      throws InterruptedException {
+  private static PathFragment getProtoOutputRoot(RuleContext ruleContext) {
     return ruleContext
         .getConfiguration()
         .getGenfilesFragment()
         .getRelative(
-            ruleContext
-                .getLabel()
-                .getPackageIdentifier()
-                .getRepository()
-                .getExecPath(
-                    ruleContext
-                        .getAnalysisEnvironment()
-                        .getSkylarkSemantics()
-                        .experimentalSiblingRepositoryLayout()));
+            ruleContext.getLabel().getPackageIdentifier().getRepository().getPathUnderExecRoot());
   }
 
   private static boolean isProtoRule(ConfiguredTarget base) {
@@ -838,7 +822,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   /** Sets up and returns an {@link ObjcCommon} object containing the J2ObjC-translated code. */
   private static ObjcCommon common(
-      ObjcCommon.Purpose purpose,
       RuleContext ruleContext,
       List<Artifact> transpiledSources,
       List<Artifact> transpiledHeaders,
@@ -846,7 +829,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       List<Attribute> dependentAttributes,
       List<TransitiveInfoCollection> otherObjcProviders)
       throws InterruptedException {
-    ObjcCommon.Builder builder = new ObjcCommon.Builder(purpose, ruleContext);
+    ObjcCommon.Builder builder = new ObjcCommon.Builder(ruleContext);
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.j2objcIntermediateArtifacts(ruleContext);
 
