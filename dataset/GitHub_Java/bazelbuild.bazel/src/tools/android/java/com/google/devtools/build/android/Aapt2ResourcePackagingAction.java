@@ -27,7 +27,6 @@ import com.google.devtools.build.android.Converters.VariantTypeConverter;
 import com.google.devtools.build.android.aapt2.Aapt2ConfigOptions;
 import com.google.devtools.build.android.aapt2.CompiledResources;
 import com.google.devtools.build.android.aapt2.PackagedResources;
-import com.google.devtools.build.android.aapt2.ProtoApk;
 import com.google.devtools.build.android.aapt2.ResourceCompiler;
 import com.google.devtools.build.android.aapt2.ResourceLinker;
 import com.google.devtools.build.android.aapt2.StaticLibrary;
@@ -442,14 +441,7 @@ public class Aapt2ResourcePackagingAction {
               .includeGeneratedLocales(aaptConfigOptions.generatePseudoLocale)
               .includeOnlyConfigs(aaptConfigOptions.resourceConfigs)
               .link(compiled);
-      profiler.recordEndOf("link").startTask("validate");
-
-      ValidateAndLinkResourcesAction.checkVisibilityOfResourceReferences(
-          ProtoApk.readFrom(packagedResources.proto()).getManifest(),
-          compiled,
-          compiledResourceDeps);
-
-      profiler.recordEndOf("validate");
+      profiler.recordEndOf("link");
 
       if (options.packagePath != null) {
         copy(packagedResources.apk(), options.packagePath);
