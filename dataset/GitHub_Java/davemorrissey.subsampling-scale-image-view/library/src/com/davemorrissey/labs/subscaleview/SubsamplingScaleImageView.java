@@ -247,13 +247,13 @@ public class SubsamplingScaleImageView extends View {
             if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_assetName)) {
                 String assetName = typedAttr.getString(styleable.SubsamplingScaleImageView_assetName);
                 if (assetName != null && assetName.length() > 0) {
-                    setImage(ImageSource.asset(assetName).tilingEnabled());
+                    setImage(ImageSource.asset(assetName).withTilingEnabled());
                 }
             }
             if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_src)) {
                 int resId = typedAttr.getResourceId(styleable.SubsamplingScaleImageView_src, 0);
                 if (resId > 0) {
-                    setImage(ImageSource.resource(resId).tilingEnabled());
+                    setImage(ImageSource.resource(resId).withTilingEnabled());
                 }
             }
             if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_panEnabled)) {
@@ -312,7 +312,7 @@ public class SubsamplingScaleImageView extends View {
      * Set the image source from a bitmap, resource, asset, file or other URI, providing a preview image to be
      * displayed until the full size image is loaded.
      *
-     * You must declare the dimensions of the full size image by calling {@link ImageSource#dimensions(int, int)}
+     * You must declare the dimensions of the full size image by calling {@link ImageSource#withDimensions(int, int)}
      * on the imageSource object. The preview source will be ignored if you don't provide dimensions,
      * and if you provide a bitmap for the full size image.
      * @param imageSource Image source. Dimensions must be declared.
@@ -328,7 +328,7 @@ public class SubsamplingScaleImageView extends View {
      * This is the best method to use when you want scale and center to be restored after screen orientation change;
      * it avoids any redundant loading of tiles in the wrong orientation.
      *
-     * You must declare the dimensions of the full size image by calling {@link ImageSource#dimensions(int, int)}
+     * You must declare the dimensions of the full size image by calling {@link ImageSource#withDimensions(int, int)}
      * on the imageSource object. The preview source will be ignored if you don't provide dimensions,
      * and if you provide a bitmap for the full size image.
      * @param imageSource Image source. Dimensions must be declared.
@@ -1256,8 +1256,8 @@ public class SubsamplingScaleImageView extends View {
                     tile.sRect = new Rect(
                             x * sTileWidth,
                             y * sTileHeight,
-                            x == xTiles - 1 ? sWidth() : (x + 1) * sTileWidth,
-                            y == yTiles - 1 ? sHeight() : (y + 1) * sTileHeight
+                            x == xTiles - 1 ? sWidth : (x + 1) * sTileWidth,
+                            y == yTiles - 1 ? sHeight : (y + 1) * sTileHeight
                     );
                     tile.vRect = new Rect(0, 0, 0, 0);
                     tile.fileSRect = new Rect(tile.sRect);
