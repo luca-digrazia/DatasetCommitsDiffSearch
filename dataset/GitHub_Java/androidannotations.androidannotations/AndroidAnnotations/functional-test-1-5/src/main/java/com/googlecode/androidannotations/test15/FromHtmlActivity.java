@@ -13,15 +13,23 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.googlecode.androidannotations.annotations;
+package com.googlecode.androidannotations.test15;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+import android.app.Activity;
+import android.widget.TextView;
 
-@Retention(RetentionPolicy.SOURCE)
-@Target(ElementType.FIELD)
-public @interface FromHtml {
-	int value() default Id.DEFAULT_VALUE;
+import com.googlecode.androidannotations.annotations.EActivity;
+import com.googlecode.androidannotations.annotations.FromHtml;
+import com.googlecode.androidannotations.annotations.ViewById;
+
+@EActivity(R.layout.views_injected)
+public class FromHtmlActivity extends Activity {
+	
+	@ViewById(R.id.my_text_view)
+	@FromHtml(R.string.hello_html)
+	TextView textView;
+	
+	@ViewById
+	@FromHtml
+	TextView someView;
 }
