@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.cpp.Link;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
@@ -92,14 +91,13 @@ public abstract class NativeDepsHelper {
    * <p>linkshared=1 means we prefer the ".pic.a" files to the ".a" files, and the LinkTargetType is
    * set to DYNAMIC_LIBRARY which causes Link.java to include "-shared" in the linker options.
    *
-   * <p>It is possible that this function may have no work to do if there are no native libraries in
-   * the transitive closure, or if the only native libraries in the transitive closure are already
-   * shared libraries. In this case, this function returns {@code null}.
+   * <p>It is possible that this function may have no work to do if there are no native libraries
+   * in the transitive closure, or if the only native libraries in the transitive closure are
+   * already shared libraries. In this case, this function returns {@code null}.
    *
    * @param ruleContext the rule context to determine the native deps library
    * @param linkParams the {@link CcLinkParams} for the rule, collected with linkstatic = 1 and
    *     linkshared = 1
-   * @param cppSemantics to use for linkstamp compiles
    * @return the native deps library, or null if there was no code which needed to be linked in the
    *     transitive closure.
    */
@@ -107,8 +105,7 @@ public abstract class NativeDepsHelper {
       final RuleContext ruleContext,
       CcLinkParams linkParams,
       final BuildConfiguration configuration,
-      CcToolchainProvider toolchain,
-      CppSemantics cppSemantics)
+      CcToolchainProvider toolchain)
       throws InterruptedException {
     if (!containsCodeToLink(linkParams.getLibraries())) {
       return null;
@@ -124,15 +121,14 @@ public abstract class NativeDepsHelper {
 
     return createNativeDepsAction(
             ruleContext,
-            linkParams,
-            /* extraLinkOpts= */ ImmutableList.of(),
+            linkParams, /** extraLinkOpts */
+            ImmutableList.<String>of(),
             configuration,
             toolchain,
             nativeDeps,
             libraryIdentifier,
             configuration.getBinDirectory(ruleContext.getRule().getRepository()),
-            /* useDynamicRuntime= */ false,
-            cppSemantics)
+            /*useDynamicRuntime*/ false)
         .getLibrary();
   }
 
@@ -175,8 +171,7 @@ public abstract class NativeDepsHelper {
       Artifact nativeDeps,
       String libraryIdentifier,
       Root bindirIfShared,
-      boolean useDynamicRuntime,
-      CppSemantics cppSemantics)
+      boolean useDynamicRuntime)
       throws InterruptedException {
     Preconditions.checkState(
         ruleContext.isLegalFragment(CppConfiguration.class),
@@ -212,13 +207,7 @@ public abstract class NativeDepsHelper {
     FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext, toolchain);
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(
-            ruleContext,
-            sharedLibrary,
-            configuration,
-            toolchain,
-            fdoSupport,
-            featureConfiguration,
-            cppSemantics);
+            ruleContext, sharedLibrary, configuration, toolchain, fdoSupport, featureConfiguration);
     if (useDynamicRuntime) {
       builder.setRuntimeInputs(ArtifactCategory.DYNAMIC_LIBRARY,
           toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs());
@@ -232,12 +221,6 @@ public abstract class NativeDepsHelper {
         ltoBitcodeFilesMap.putAll(lib.getLtoBitcodeFiles());
       }
     }
-
-    Iterable<Artifact> nonCodeInputs = linkParams.getNonCodeInputs();
-    if (nonCodeInputs == null) {
-      nonCodeInputs = ImmutableList.of();
-    }
-
     builder
         .setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY)
         .setCrosstoolInputs(toolchain.getLink())
@@ -248,8 +231,7 @@ public abstract class NativeDepsHelper {
         .addLinkopts(linkopts)
         .setNativeDeps(true)
         .addLinkstamps(linkstamps)
-        .addLtoBitcodeFiles(ltoBitcodeFilesMap.build())
-        .addNonCodeInputs(nonCodeInputs);
+        .addLtoBitcodeFiles(ltoBitcodeFilesMap.build());
 
     if (!builder.getLtoBitcodeFiles().isEmpty()
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
