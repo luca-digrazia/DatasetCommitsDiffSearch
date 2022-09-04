@@ -74,7 +74,8 @@ public interface AttributeMap {
    */
   default <T> T getOrDefault(String attributeName, Type<T> type, T defaultValue) {
     if (has(attributeName)) {
-      return get(attributeName, type);
+      T value = get(attributeName, type);
+      return value;
     }
     return defaultValue;
   }
