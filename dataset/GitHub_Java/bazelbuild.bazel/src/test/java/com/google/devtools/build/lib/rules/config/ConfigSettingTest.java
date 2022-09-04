@@ -276,7 +276,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
   /** Tests disallowing {@link BuildConfiguration.Fragment#lateBoundOptionDefaults} */
   @Test
   public void disallowLateBoundOptionDefaultsIncompatible() throws Exception {
-    useConfiguration("--incompatible_disable_late_bound_option_defaults=true");
+    useConfiguration("--incompatible_enable_late_bound_option_defaults=false");
     scratch.file(
         "test/BUILD",
         "config_setting(",
