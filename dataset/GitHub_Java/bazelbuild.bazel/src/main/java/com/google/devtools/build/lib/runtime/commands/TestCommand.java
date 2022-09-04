@@ -253,7 +253,8 @@ public class TestCommand implements BlazeCommand {
             requestOptions.getSymlinkPrefix(productName),
             productName,
             env.getWorkspace(),
-            env.getWorkspace());
-    return path -> pathPrettyPrinter.getPrettyPath(path.asFragment()).getPathString();
+            env.getWorkspace(),
+            requestOptions.experimentalNoProductNameOutSymlink);
+    return path -> pathPrettyPrinter.getPrettyPath(path).getPathString();
   }
 }
