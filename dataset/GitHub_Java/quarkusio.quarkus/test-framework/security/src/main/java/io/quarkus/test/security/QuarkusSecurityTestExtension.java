@@ -32,7 +32,7 @@ public class QuarkusSecurityTestExtension implements QuarkusTestBeforeEachCallba
                             return s;
                         }
                         try {
-                            return Class.forName(s.getName(), false, cl);
+                            return cl.loadClass(s.getName());
                         } catch (ClassNotFoundException e) {
                             throw new RuntimeException(e);
                         }
