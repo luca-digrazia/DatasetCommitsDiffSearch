@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
-import com.google.common.base.Ascii;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
 import java.util.Collection;
@@ -48,11 +47,11 @@ import java.util.Collection;
 @ThreadSafe
 public abstract class QueryExpression {
 
-  private static final int MAX_QUERY_EXPRESSION_LOG_CHARS = 1000;
-
-  /** Scan and parse the specified query expression. */
+  /**
+   * Scan and parse the specified query expression.
+   */
   public static QueryExpression parse(String query, QueryEnvironment<?> env)
-      throws QuerySyntaxException {
+      throws QueryException {
     return QueryParser.parse(query, env);
   }
 
@@ -85,25 +84,9 @@ public abstract class QueryExpression {
     return accept(visitor, /*context=*/ null);
   }
 
-  /** Returns this query expression pretty-printed. */
+  /**
+   * Returns this query expression pretty-printed.
+   */
   @Override
   public abstract String toString();
-
-  /**
-   * Returns this query expression pretty-printed, and truncated to a max of 1000 characters.
-   *
-   * <p>Helpful for preparing text for logging or human-readable display, because query expressions
-   * may be very long.
-   */
-  public final String toTrunctatedString() {
-    return truncate(toString());
-  }
-
-  /**
-   * Truncates the provided string to a max of 1000 characters, in the fashion of {@link
-   * #toTrunctatedString()}.
-   */
-  public static String truncate(String expr) {
-    return Ascii.truncate(expr, MAX_QUERY_EXPRESSION_LOG_CHARS, "[truncated]");
-  }
 }

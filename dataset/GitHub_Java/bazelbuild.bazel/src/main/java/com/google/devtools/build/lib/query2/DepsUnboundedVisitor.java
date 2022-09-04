@@ -169,8 +169,7 @@ class DepsUnboundedVisitor extends AbstractEdgeVisitor<SkyKey> {
   }
 
   @Override
-  protected ImmutableList<SkyKey> getUniqueValues(Iterable<SkyKey> keysToVisit)
-      throws QueryException {
+  protected ImmutableList<SkyKey> getUniqueValues(Iterable<SkyKey> keysToVisit) {
     // Legit deps are already filtered using env.getFwdDeps().
     return validDepUniquifier.unique(keysToVisit);
   }

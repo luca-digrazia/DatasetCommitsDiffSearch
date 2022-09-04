@@ -70,7 +70,7 @@ public class ParallelSkyQueryUtils {
         ParallelVisitor.createParallelVisitorCallback(
             new RdepsUnboundedVisitor.Factory(
                 env,
-                /*unfilteredUniverse=*/ Predicates.alwaysTrue(),
+                /*universe=*/ Predicates.alwaysTrue(),
                 callback,
                 packageSemaphore)));
   }
@@ -97,7 +97,7 @@ public class ParallelSkyQueryUtils {
   static QueryTaskFuture<Void> getRdepsInUniverseUnboundedParallel(
       SkyQueryEnvironment env,
       QueryExpression expression,
-      Predicate<SkyKey> unfilteredUniverse,
+      Predicate<SkyKey> universe,
       QueryExpressionContext<Target> context,
       Callback<Target> callback,
       MultisetSemaphore<PackageIdentifier> packageSemaphore) {
@@ -105,8 +105,7 @@ public class ParallelSkyQueryUtils {
         expression,
         context,
         ParallelVisitor.createParallelVisitorCallback(
-            new RdepsUnboundedVisitor.Factory(
-                env, unfilteredUniverse, callback, packageSemaphore)));
+            new RdepsUnboundedVisitor.Factory(env, universe, callback, packageSemaphore)));
   }
 
   static QueryTaskFuture<Predicate<SkyKey>> getDTCSkyKeyPredicateFuture(
@@ -127,7 +126,7 @@ public class ParallelSkyQueryUtils {
               () -> {
                 Callback<Target> visitorCallback =
                     ParallelVisitor.createParallelVisitorCallback(
-                        new UnfilteredTransitiveTraversalValueDTCVisitor.Factory(
+                        new TransitiveTraversalValueDTCVisitor.Factory(
                             env,
                             env.createSkyKeyUniquifier(),
                             processResultsBatchSize,

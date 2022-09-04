@@ -600,13 +600,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
 
   @Override
   public <V> MutableMap<Target, V> createMutableMap() {
-    return new MutableKeyExtractorBackedMapImpl<>(TargetKeyExtractor.INSTANCE);
+    return new MutableKeyExtractorBackedMapImpl<Target, Label, V>(TargetKeyExtractor.INSTANCE);
   }
 
   @ThreadSafe
   @Override
   public Uniquifier<Target> createUniquifier() {
-    return new UniquifierImpl<>(TargetKeyExtractor.INSTANCE);
+    return createTargetUniquifier();
   }
 
   @ThreadSafe
@@ -621,8 +621,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @ThreadSafe
+  Uniquifier<Target> createTargetUniquifier() {
+    return new UniquifierImpl<>(TargetKeyExtractor.INSTANCE, DEFAULT_THREAD_COUNT);
+  }
+
+  @ThreadSafe
   public Uniquifier<SkyKey> createSkyKeyUniquifier() {
-    return new UniquifierImpl<>(SkyKeyKeyExtractor.INSTANCE);
+    return new UniquifierImpl<>(SkyKeyKeyExtractor.INSTANCE, DEFAULT_THREAD_COUNT);
   }
 
   private ImmutableSet<PathFragment> getBlacklistedExcludes(TargetPatternKey targetPatternKey)
@@ -1121,8 +1126,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     // memory. We should have a threshold for when to invoke the callback with a batch, and also a
     // separate, larger, bound on the number of targets being processed at the same time.
     private final ThreadSafeOutputFormatterCallback<Target> callback;
-    private final UniquifierImpl<Target, ?> uniquifier =
-        new UniquifierImpl<>(TargetKeyExtractor.INSTANCE);
+    private final Uniquifier<Target> uniquifier =
+        new UniquifierImpl<>(TargetKeyExtractor.INSTANCE, DEFAULT_THREAD_COUNT);
     private final Object pendingLock = new Object();
     private List<Target> pending = new ArrayList<>();
     private int batchThreshold;

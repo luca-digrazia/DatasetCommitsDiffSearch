@@ -15,20 +15,19 @@ package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.collect.CompactHashSet;
-
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ThreadSafeMutableSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * A loadfiles(x) query expression, which computes the set of .bzl files
  * for each target in set x.  The result is unordered.  This
- * operator is typically used for determinining what files or packages to check
+ * operator is typically used for determining what files or packages to check
  * out.
  *
  * <pre>expr ::= LOADFILES '(' expr ')'</pre>
  */
-class LoadFilesFunction implements QueryEnvironment.QueryFunction {
+public class LoadFilesFunction implements QueryEnvironment.QueryFunction {
   LoadFilesFunction() {}
 
   @Override
@@ -37,27 +36,26 @@ class LoadFilesFunction implements QueryEnvironment.QueryFunction {
   }
 
   @Override
-  public <T> void eval(
+  public <T> QueryTaskFuture<Void> eval(
       final QueryEnvironment<T> env,
+      QueryExpressionContext<T> context,
       final QueryExpression expression,
       List<QueryEnvironment.Argument> args,
-      final Callback<T> callback)
-      throws QueryException, InterruptedException {
-    env.eval(
+      final Callback<T> callback) {
+    final Uniquifier<T> uniquifier = env.createUniquifier();
+    return env.eval(
         args.get(0).getExpression(),
+        context,
         new Callback<T>() {
           @Override
           public void process(Iterable<T> partialResult)
               throws QueryException, InterruptedException {
-            Set<T> result = CompactHashSet.create();
+            ThreadSafeMutableSet<T> result = env.createThreadSafeMutableSet();
             Iterables.addAll(result, partialResult);
             callback.process(
-                env.getBuildFiles(
-                    expression,
-                    result,
-                    /* BUILD */ false,
-                    /* subinclude */ false,
-                    /* load */ true));
+                uniquifier.unique(
+                    env.getBuildFiles(
+                        expression, result, /*buildFiles=*/ false, /*loads=*/ true, context)));
           }
         });
   }

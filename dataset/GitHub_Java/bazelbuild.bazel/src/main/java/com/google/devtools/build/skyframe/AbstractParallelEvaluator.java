@@ -286,8 +286,7 @@ public abstract class AbstractParallelEvaluator {
           // Tell the receiver that the value was not actually changed this run.
           evaluatorContext
               .getProgressReceiver()
-              .evaluated(
-                  skyKey, null, new EvaluationSuccessStateSupplier(state), EvaluationState.CLEAN);
+              .evaluated(skyKey, new EvaluationSuccessStateSupplier(state), EvaluationState.CLEAN);
           if (!evaluatorContext.keepGoing() && state.getErrorInfo() != null) {
             if (!evaluatorContext.getVisitor().preventNewEvaluations()) {
               return DirtyOutcome.ALREADY_PROCESSED;
@@ -678,15 +677,15 @@ public abstract class AbstractParallelEvaluator {
       SkyFunctionEnvironment env,
       boolean keepGoing)
       throws InterruptedException {
-    Iterator<SkyKey> it = env.getNewlyRequestedDeps().iterator();
-    if (!it.hasNext()) {
-      return;
-    }
 
     // We don't expect any unfinished deps in a keep-going build.
     if (!keepGoing) {
       Map<SkyKey, ? extends NodeEntry> newlyRequestedDepMap =
           graph.getBatch(skyKey, Reason.DONE_CHECKING, env.getNewlyRequestedDeps());
+      Iterator<SkyKey> it = env.getNewlyRequestedDeps().iterator();
+      if (!it.hasNext()) {
+        return;
+      }
       Set<SkyKey> unfinishedDeps = new HashSet<>();
       while (it.hasNext()) {
         SkyKey dep = it.next();
