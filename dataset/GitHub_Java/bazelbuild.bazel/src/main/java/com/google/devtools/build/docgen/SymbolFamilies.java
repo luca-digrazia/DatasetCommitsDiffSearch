@@ -15,10 +15,11 @@ package com.google.devtools.build.docgen;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.docgen.starlark.StarlarkBuiltinDoc;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.util.Classpath.ClassPathException;
-import com.google.devtools.build.skydoc.fakebuildapi.FakeStarlarkNativeModuleApi;
+import com.google.devtools.build.skydoc.fakebuildapi.FakeApi;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -43,12 +44,18 @@ public class SymbolFamilies {
       throws NoSuchMethodException, ClassPathException, InvocationTargetException,
           IllegalAccessException, BuildEncyclopediaDocException, ClassNotFoundException,
           IOException {
-    ConfiguredRuleClassProvider configuredRuleClassProvider = createRuleClassProvider(provider);
     this.nativeRules =
-        ImmutableList.copyOf(
-            collectNativeRules(productName, configuredRuleClassProvider, inputDirs, denyList));
+        ImmutableList.copyOf(collectNativeRules(productName, provider, inputDirs, denyList));
     this.globals = Starlark.UNIVERSE;
-    this.bzlGlobals = collectBzlGlobals(configuredRuleClassProvider);
+
+    ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
+    FakeApi.addPredeclared(
+        env,
+        /*rules=*/ Lists.newArrayList(),
+        /*providers=*/ Lists.newArrayList(),
+        /*aspects=*/ Lists.newArrayList());
+    this.bzlGlobals = env.build();
+
     this.types = StarlarkDocumentationCollector.getAllModules();
   }
 
@@ -85,25 +92,13 @@ public class SymbolFamilies {
    * and in BZL files as methods of the native package.
    */
   private List<RuleDocumentation> collectNativeRules(
-      String productName,
-      ConfiguredRuleClassProvider provider,
-      List<String> inputDirs,
-      String denyList)
-      throws BuildEncyclopediaDocException, IOException {
+      String productName, String provider, List<String> inputDirs, String denyList)
+      throws NoSuchMethodException, InvocationTargetException, IllegalAccessException,
+          BuildEncyclopediaDocException, ClassNotFoundException, IOException {
     ProtoFileBuildEncyclopediaProcessor processor =
-        new ProtoFileBuildEncyclopediaProcessor(productName, provider);
+        new ProtoFileBuildEncyclopediaProcessor(productName, createRuleClassProvider(provider));
     processor.generateDocumentation(inputDirs, "", denyList);
     return processor.getNativeRules();
-  }
-
-  /** Collects symbols predefined in BZL files. */
-  private ImmutableMap<String, Object> collectBzlGlobals(ConfiguredRuleClassProvider provider) {
-    // StarlarkNativeModuleApi is faked, because we don't have a PackageFactory here
-    // and we can't use BazelStarlarkEnvironment.
-    return ImmutableMap.<String, Object>builder()
-        .put("native", new FakeStarlarkNativeModuleApi())
-        .putAll(provider.getEnvironment())
-        .build();
   }
 
   private ConfiguredRuleClassProvider createRuleClassProvider(String classProvider)

@@ -35,10 +35,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.Function;
-import net.starlark.java.annot.StarlarkAnnotations;
 import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkInterfaceUtils;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.BuiltinFunction;
+import net.starlark.java.eval.BuiltinCallable;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkCallable;
 import net.starlark.java.eval.StarlarkFunction;
@@ -112,13 +112,13 @@ public class ApiExporter {
       if (obj instanceof StarlarkCallable) {
         value = valueFromCallable((StarlarkCallable) obj);
       } else {
-        StarlarkBuiltin typeModule = StarlarkAnnotations.getStarlarkBuiltin(obj.getClass());
+        StarlarkBuiltin typeModule = StarlarkInterfaceUtils.getStarlarkBuiltin(obj.getClass());
         if (typeModule != null) {
           Method selfCallMethod =
               Starlark.getSelfCallMethod(StarlarkSemantics.DEFAULT, obj.getClass());
           if (selfCallMethod != null) {
             // selfCallMethod may be from a subclass of the annotated method.
-            StarlarkMethod annotation = StarlarkAnnotations.getStarlarkMethod(selfCallMethod);
+            StarlarkMethod annotation = StarlarkInterfaceUtils.getStarlarkMethod(selfCallMethod);
             value = valueFromAnnotation(annotation);
           } else {
             value.setName(entry.getKey());
@@ -161,8 +161,8 @@ public class ApiExporter {
     }
 
     // annotated Java method?
-    if (x instanceof BuiltinFunction) {
-      return valueFromAnnotation(((BuiltinFunction) x).getAnnotation());
+    if (x instanceof BuiltinCallable) {
+      return valueFromAnnotation(((BuiltinCallable) x).getAnnotation());
     }
 
     // application-defined callable?  Treat as def f(**kwargs).
@@ -335,10 +335,6 @@ public class ApiExporter {
     ArrayList<String> defaults = new ArrayList<>();
 
     for (net.starlark.java.annot.Param param : annot.parameters()) {
-      // Ignore undocumented parameters
-      if (!param.documented()) {
-        continue;
-      }
       // Implicit * or *args parameter separates transition from positional to named.
       // f (..., *, ... )  or  f(..., *args, ...)
       // TODO(adonovan): this logic looks fishy. Clean it up.
