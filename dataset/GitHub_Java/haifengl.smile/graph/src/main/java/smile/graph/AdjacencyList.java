@@ -1,47 +1,48 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
+
 package smile.graph;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
-import smile.sort.PriorityQueue;
+import smile.math.matrix.SparseMatrix;
+import smile.sort.QuickSort;
+import smile.util.PriorityQueue;
 
 /**
  * An adjacency list representation of a graph. Multigraph is supported.
  *
  * @author Haifeng Li
  */
-public class AdjacencyList implements Graph {
-
-    /**
-     * The number of vertices.
-     */
-    private int n;
+public class AdjacencyList implements Graph, Serializable {
+    private static final long serialVersionUID = 2L;
     /**
      * Is the graph directed?
      */
-    private boolean digraph;
+    private final boolean digraph;
     /**
      * Adjacency list. Non-zero values are the weights of edges.
      */
-    private LinkedList<Edge>[] graph;
+    private final LinkedList<Edge>[] graph;
 
     /**
      * Constructor.
@@ -60,21 +61,16 @@ public class AdjacencyList implements Graph {
      */
     @SuppressWarnings("unchecked")
     public AdjacencyList(int n, boolean digraph) {
-        this.n = n;
         this.digraph = digraph;
-
-        LinkedList<Edge> list = new LinkedList<Edge>();
-        graph = (LinkedList<Edge>[]) java.lang.reflect.Array.newInstance(list.getClass(), n);
-
-        graph[0] = list;
-        for (int i = 1; i < n; i++) {
-            graph[i] = new LinkedList<Edge>();
+        graph = new LinkedList[n];
+        for (int i = 0; i < n; i++) {
+            graph[i] = new LinkedList<>();
         }
     }
 
     @Override
     public int getNumVertices() {
-        return n;
+        return graph.length;
     }
 
     @Override
@@ -139,8 +135,9 @@ public class AdjacencyList implements Graph {
 
     @Override
     public Collection<Edge> getEdges() {
-        Collection<Edge> set = new HashSet<Edge>();
+        Collection<Edge> set = new HashSet<>();
 
+        int n = graph.length;
         for (int i = 0; i < n; i++) {
             set.addAll(graph[i]);
         }
@@ -155,7 +152,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public Collection<Edge> getEdges(int source, int target) {
-        Collection<Edge> set = new LinkedList<Edge>();
+        Collection<Edge> set = new LinkedList<>();
 
         if (digraph) {
             for (Edge edge : graph[source]) {
@@ -200,10 +197,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public void addEdge(int source, int target, double weight) {
-        Edge edge = new Edge();
-        edge.v1 = source;
-        edge.v2 = target;
-        edge.weight = weight;
+        Edge edge = new Edge(source, target, weight);
         graph[source].add(edge);
         if (!digraph && source != target) {
             graph[target].add(edge);
@@ -282,6 +276,7 @@ public class AdjacencyList implements Graph {
     @Override
     public int getIndegree(int vertex) {
         int degree = 0;
+        int n = graph.length;
 
         for (int i = 0; i < n; i++) {
             if (hasEdge(i, vertex)) {
@@ -327,6 +322,7 @@ public class AdjacencyList implements Graph {
         }
 
         int count = 0;
+        int n = graph.length;
 
         int[] pre = new int[n];
         int[] ts = new int[n];
@@ -366,6 +362,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public int[][] dfs() {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -397,6 +394,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public void dfs(Visitor visitor) {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -435,6 +433,7 @@ public class AdjacencyList implements Graph {
             throw new UnsupportedOperationException("Topological sort is only meaningful for digraph.");
         }
 
+        int n = graph.length;
         int[] in = new int[n];
         int[] ts = new int[n];
         for (int i = 0; i < n; i++) {
@@ -444,14 +443,14 @@ public class AdjacencyList implements Graph {
             }
         }
 
-        Queue<Integer> queue = new LinkedList<Integer>();
+        Queue<Integer> queue = new LinkedList<>();
         for (int i = 0; i < n; i++) {
             if (in[i] == 0) {
                 queue.offer(i);
             }
         }
 
-        for (int i = 0; queue.size() > 0; i++) {
+        for (int i = 0; !queue.isEmpty(); i++) {
             int t = queue.poll();
             ts[i] = t;
             for (Edge edge : graph[t]) {
@@ -473,9 +472,9 @@ public class AdjacencyList implements Graph {
      */
     private void bfs(int v, int[] cc, int id) {
         cc[v] = id;
-        Queue<Integer> queue = new LinkedList<Integer>();
+        Queue<Integer> queue = new LinkedList<>();
         queue.offer(v);
-        while (queue.size() > 0) {
+        while (!queue.isEmpty()) {
             int t = queue.poll();
             for (Edge edge : graph[t]) {
                 int i = edge.v2;
@@ -493,6 +492,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public int[][] bfs() {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -531,9 +531,9 @@ public class AdjacencyList implements Graph {
     private void bfs(Visitor visitor, int v, int[] cc, int id) {
         visitor.visit(v);
         cc[v] = id;
-        Queue<Integer> queue = new LinkedList<Integer>();
+        Queue<Integer> queue = new LinkedList<>();
         queue.offer(v);
-        while (queue.size() > 0) {
+        while (!queue.isEmpty()) {
             int t = queue.poll();
             for (Edge edge : graph[t]) {
                 int i = edge.v2;
@@ -552,6 +552,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public void bfs(Visitor visitor) {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -565,6 +566,7 @@ public class AdjacencyList implements Graph {
 
     @Override
     public double[] dijkstra(int s) {
+        int n = graph.length;
         double[] wt = new double[n];
         Arrays.fill(wt, Double.POSITIVE_INFINITY);
 
@@ -598,28 +600,15 @@ public class AdjacencyList implements Graph {
     }
 
     @Override
-    public double[][] dijkstra() {
-        double[][] wt = new double[n][];
-        for (int i = 0; i < n; i++) {
-            wt[i] = dijkstra(i);
-        }
-        return wt;
-    }
-
-    @Override
     public AdjacencyList subgraph(int[] vertices) {
         int[] v = vertices.clone();
         Arrays.sort(v);
         
-        AdjacencyList g = new AdjacencyList(v.length);
+        AdjacencyList g = new AdjacencyList(v.length, digraph);
         for (int i = 0; i < v.length; i++) {
             Collection<Edge> edges = getEdges(v[i]);
             for (Edge edge : edges) {
-                int j = edge.v2;
-                if (j == i) {
-                    j = edge.v1;
-                }
-
+                int j = edge.v1 == v[i] ? edge.v2 : edge.v1;
                 j = Arrays.binarySearch(v, j);
                 if (j >= 0) {
                     g.addEdge(i, j, edge.weight);
@@ -630,24 +619,49 @@ public class AdjacencyList implements Graph {
         return g;
     }
     
-    /**
-     * Returns the adjacency matrix.
-     * @return the adjacency matrix
-     */
-    /*
-    public SparseMatrix toSparseMatrix() {
-        SparseDataset matrix = new SparseDataset(n);
-        
-        for (LinkedList<Edge> edges : graph) {
+    @Override
+    public SparseMatrix toMatrix() {
+        int size = 0;
+        int n = graph.length;
+        int[] colSize = new int[n];
+        int[] colIndex = new int[n + 1];
+        for (int i = 0; i < n; i++) {
+            LinkedList<Edge> edges = graph[i];
+            size += edges.size();
+            colSize[i] = edges.size();
+        }
+
+        for (int i = 0; i < n; i++) {
+            colIndex[i + 1] = colIndex[i] + colSize[i];
+        }
+
+        int[] rowIndex = new int[size];
+        double[] x = new double[size];
+
+        for (int i = 0; i < n; i++) {
+            LinkedList<Edge> edges = graph[i];
+            int ni = edges.size();
+            int[] index = new int[ni];
+            double[] w = new double[ni];
+
+            int j = 0;
             for (Edge edge : edges) {
-                matrix.set(edge.v1, edge.v2, edge.weight);
+                index[j] = edge.v1 == i ? edge.v2 : edge.v1;
+                w[j++] = edge.weight;
+            }
+
+            QuickSort.sort(index, w);
+
+            int k = colIndex[i];
+            for (j = 0; j < ni; j++, k++) {
+                rowIndex[k] = index[j];
+                x[k] = w[j];
             }
         }
-        
-        return matrix.toSparseMatrix();
+
+        return new SparseMatrix(n, n, x, rowIndex, colIndex).transpose();
     }
-    */
-    
+
     /**
      * Converts the sparse matrix to a graph. If the matrix is structurally
      * symmetric, it is taken as the adjacency matrix of an undirected graph,
@@ -657,8 +671,7 @@ public class AdjacencyList implements Graph {
      * 
      * @return a graph
      */
-    /*
-    public static AdjacencyList fromSparseMatrix(SparseMatrix matrix) {
+    public static AdjacencyList of(SparseMatrix matrix) {
         boolean symmetric = false;
         
         if (matrix.nrows() == matrix.ncols()) {
@@ -705,5 +718,4 @@ public class AdjacencyList implements Graph {
             return graph;            
         }
     }
-    */
 }

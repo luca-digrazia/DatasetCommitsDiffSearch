@@ -1,48 +1,47 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
+
 package smile.graph;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
-
-import smile.sort.PriorityQueue;
-import smile.math.Math;
+import smile.math.MathEx;
+import smile.math.matrix.Matrix;
+import smile.util.PriorityQueue;
 
 /**
  * An adjacency matrix representation of a graph. Only simple graph is supported.
  *
  * @author Haifeng Li
  */
-public class AdjacencyMatrix implements Graph {
+public class AdjacencyMatrix implements Graph, Serializable {
+    private static final long serialVersionUID = 2L;
 
-    /**
-     * The number of vertices.
-     */
-    private int n;
     /**
      * Is the graph directed?
      */
-    private boolean digraph;
+    private final boolean digraph;
     /**
      * Adjacency matrix. Non-zero values are the weights of edges.
      */
-    private double[][] graph;
+    private final double[][] graph;
 
     /**
      * Constructor.
@@ -60,14 +59,13 @@ public class AdjacencyMatrix implements Graph {
      * @param digraph true if this is a directed graph.
      */
     public AdjacencyMatrix(int n, boolean digraph) {
-        this.n = n;
         this.digraph = digraph;
         graph = new double[n][n];
     }
 
     @Override
     public int getNumVertices() {
-        return n;
+        return graph.length;
     }
 
     @Override
@@ -91,16 +89,14 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public Collection<Edge> getEdges() {
-        Collection<Edge> set = new LinkedList<Edge>();
+        Collection<Edge> set = new LinkedList<>();
+        int n = graph.length;
 
         if (digraph) {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
                     if (graph[i][j] != 0.0) {
-                        Edge edge = new Edge();
-                        edge.v1 = i;
-                        edge.v2 = j;
-                        edge.weight = graph[i][j];
+                        Edge edge = new Edge(i, j, graph[i][j]);
                         set.add(edge);
                     }
                 }
@@ -109,10 +105,7 @@ public class AdjacencyMatrix implements Graph {
             for (int i = 0; i < n; i++) {
                 for (int j = i; j < n; j++) {
                     if (graph[i][j] != 0.0) {
-                        Edge edge = new Edge();
-                        edge.v1 = i;
-                        edge.v2 = j;
-                        edge.weight = graph[i][j];
+                        Edge edge = new Edge(i, j, graph[i][j]);
                         set.add(edge);
                     }
                 }
@@ -124,13 +117,11 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public Collection<Edge> getEdges(int vertex) {
-        Collection<Edge> set = new LinkedList<Edge>();
+        Collection<Edge> set = new LinkedList<>();
+        int n = graph.length;
         for (int j = 0; j < n; j++) {
             if (graph[vertex][j] != 0.0) {
-                Edge edge = new Edge();
-                edge.v1 = vertex;
-                edge.v2 = j;
-                edge.weight = graph[vertex][j];
+                Edge edge = new Edge(vertex, j, graph[vertex][j]);
                 set.add(edge);
             }
         }
@@ -139,7 +130,7 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public Collection<Edge> getEdges(int source, int target) {
-        Collection<Edge> set = new LinkedList<Edge>();
+        Collection<Edge> set = new LinkedList<>();
         Edge edge = getEdge(source, target);
         if (edge != null) {
             set.add(edge);
@@ -153,11 +144,7 @@ public class AdjacencyMatrix implements Graph {
             return null;
         }
 
-        Edge edge = new Edge();
-        edge.v1 = source;
-        edge.v2 = target;
-        edge.weight = graph[source][target];
-        return edge;
+        return new Edge(source, target, graph[source][target]);
     }
 
     @Override
@@ -186,9 +173,8 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public void removeEdges(Collection<Edge> edges) {
-        Iterator<Edge> iter = edges.iterator();
-        while (iter.hasNext()) {
-            removeEdge(iter.next());
+        for (Edge edge : edges) {
+            removeEdge(edge);
         }
     }
 
@@ -220,8 +206,8 @@ public class AdjacencyMatrix implements Graph {
     public int getIndegree(int vertex) {
         int degree = 0;
 
-        for (int i = 0; i < n; i++) {
-            if (graph[i][vertex] != 0.0) {
+        for (double[] edges : graph) {
+            if (edges[vertex] != 0.0) {
                 degree++;
             }
         }
@@ -232,6 +218,7 @@ public class AdjacencyMatrix implements Graph {
     @Override
     public int getOutdegree(int vertex) {
         int degree = 0;
+        int n = graph.length;
 
         for (int j = 0; j < n; j++) {
             if (graph[vertex][j] != 0.0) {
@@ -252,6 +239,7 @@ public class AdjacencyMatrix implements Graph {
      */
     private int dfsearch(int v, int[] pre, int[] ts, int count) {
         pre[v] = 0;
+        int n = graph.length;
         for (int t = 0; t < n; t++) {
             if (graph[v][t] != 0.0 && pre[t] == -1) {
                 count = dfsearch(t, pre, ts, count);
@@ -270,6 +258,7 @@ public class AdjacencyMatrix implements Graph {
         }
 
         int count = 0;
+        int n = graph.length;
 
         int[] pre = new int[n];
         int[] ts = new int[n];
@@ -295,6 +284,7 @@ public class AdjacencyMatrix implements Graph {
      */
     private void dfs(int v, int[] cc, int id) {
         cc[v] = id;
+        int n = graph.length;
         for (int t = 0; t < n; t++) {
             if (graph[v][t] != 0.0) {
                 if (cc[t] == -1) {
@@ -306,6 +296,7 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public int[][] dfs() {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -344,6 +335,7 @@ public class AdjacencyMatrix implements Graph {
     private void dfs(Visitor visitor, int v, int[] cc, int id) {
         visitor.visit(v);
         cc[v] = id;
+        int n = graph.length;
         for (int t = 0; t < n; t++) {
             if (graph[v][t] != 0.0) {
                 if (cc[t] == -1) {
@@ -355,6 +347,7 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public void dfs(Visitor visitor) {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -372,6 +365,7 @@ public class AdjacencyMatrix implements Graph {
             throw new UnsupportedOperationException("Topological sort is only meaningful for digraph.");
         }
 
+        int n = graph.length;
         int[] in = new int[n];
         int[] ts = new int[n];
         for (int i = 0; i < n; i++) {
@@ -383,14 +377,14 @@ public class AdjacencyMatrix implements Graph {
             }
         }
 
-        Queue<Integer> queue = new LinkedList<Integer>();
+        Queue<Integer> queue = new LinkedList<>();
         for (int i = 0; i < n; i++) {
             if (in[i] == 0) {
                 queue.offer(i);
             }
         }
 
-        for (int i = 0; queue.size() > 0; i++) {
+        for (int i = 0; !queue.isEmpty(); i++) {
             int t = queue.poll();
             ts[i] = t;
             for (int v = 0; v < n; v++) {
@@ -413,9 +407,10 @@ public class AdjacencyMatrix implements Graph {
      */
     private void bfs(int v, int[] cc, int id) {
         cc[v] = id;
-        Queue<Integer> queue = new LinkedList<Integer>();
+        Queue<Integer> queue = new LinkedList<>();
         queue.offer(v);
-        while (queue.size() > 0) {
+        int n = graph.length;
+        while (!queue.isEmpty()) {
             int t = queue.poll();
             for (int i = 0; i < n; i++) {
                 if (graph[t][i] != 0.0 && cc[i] == -1) {
@@ -428,6 +423,7 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public int[][] bfs() {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -467,9 +463,10 @@ public class AdjacencyMatrix implements Graph {
     private void bfs(Visitor visitor, int v, int[] cc, int id) {
         visitor.visit(v);
         cc[v] = id;
-        Queue<Integer> queue = new LinkedList<Integer>();
+        Queue<Integer> queue = new LinkedList<>();
         queue.offer(v);
-        while (queue.size() > 0) {
+        int n = graph.length;
+        while (!queue.isEmpty()) {
             int t = queue.poll();
             for (int i = 0; i < n; i++) {
                 if (graph[t][i] != 0.0 && cc[i] == -1) {
@@ -483,6 +480,7 @@ public class AdjacencyMatrix implements Graph {
 
     @Override
     public void bfs(Visitor visitor) {
+        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -506,6 +504,7 @@ public class AdjacencyMatrix implements Graph {
      * @return The distance to all vertices from the source.
      */
     public double[] dijkstra(int s, boolean weighted) {
+        int n = graph.length;
         double[] wt = new double[n];
         Arrays.fill(wt, Double.POSITIVE_INFINITY);
 
@@ -536,20 +535,11 @@ public class AdjacencyMatrix implements Graph {
     }
 
     @Override
-    public double[][] dijkstra() {
-        double[][] wt = new double[n][];
-        for (int i = 0; i < n; i++) {
-            wt[i] = dijkstra(i);
-        }
-        return wt;
-    }
-
-    @Override
     public AdjacencyMatrix subgraph(int[] vertices) {
         int[] v = vertices.clone();
         Arrays.sort(v);
         
-        AdjacencyMatrix g = new AdjacencyMatrix(v.length);
+        AdjacencyMatrix g = new AdjacencyMatrix(v.length, digraph);
         for (int i = 0; i < v.length; i++) {
             for (int j = 0; j < v.length; j++) {
                 g.graph[i][j] = graph[v[i]][v[j]];
@@ -564,7 +554,7 @@ public class AdjacencyMatrix implements Graph {
      * @return the adjacency matrix
      */
     public double[][] toArray() {
-        return Math.clone(graph);
+        return MathEx.clone(graph);
     }
     
     /**
@@ -579,6 +569,7 @@ public class AdjacencyMatrix implements Graph {
     }
 
     private void relabel(double[][] flow, int[] height, int u) {
+        int n = graph.length;
         int minHeight = 2*n;
         for (int v = 0; v < n; v++) {
             if (graph[u][v] - flow[u][v] > 0) {
@@ -589,6 +580,7 @@ public class AdjacencyMatrix implements Graph {
     }
 
     private void discharge(double[][] flow, double[] excess, int[] height, int[] seen, int u) {
+        int n = graph.length;
         while (excess[u] > 0) {
             if (seen[u] < n) {
                 int v = seen[u];
@@ -616,6 +608,7 @@ public class AdjacencyMatrix implements Graph {
      * Push-relabel algorithm for maximum flow
      */
     public double pushRelabel(double[][] flow, int source, int sink) {
+        int n = graph.length;
         int[] seen = new int[n];
         int[] queue = new int[n-2];
         for (int i = 0, p = 0; i < n; i++) {
@@ -653,5 +646,10 @@ public class AdjacencyMatrix implements Graph {
         }
 
         return maxflow;
+    }
+
+    @Override
+    public Matrix toMatrix() {
+        return new Matrix(graph);
     }
 }
