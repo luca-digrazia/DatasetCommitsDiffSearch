@@ -2,7 +2,6 @@ package io.quarkus.bootstrap.resolver.maven.options;
 
 import java.util.HashMap;
 import java.util.Map;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.ParseException;
 import org.apache.maven.cli.CLIManager;
@@ -20,8 +19,10 @@ public class BootstrapMavenOptionsParser {
         final Map<String, Object> map = new HashMap<>();
         put(cmdLine, map, CLIManager.ALTERNATE_USER_SETTINGS);
         put(cmdLine, map, CLIManager.ALTERNATE_GLOBAL_SETTINGS);
-        put(cmdLine, map, CLIManager.ACTIVATE_PROFILES);
+        put(cmdLine, map, CLIManager.ALTERNATE_POM_FILE);
+        put(map, String.valueOf(CLIManager.ACTIVATE_PROFILES), cmdLine.getOptionValues(CLIManager.ACTIVATE_PROFILES));
 
+        putBoolean(cmdLine, map, CLIManager.OFFLINE);
         putBoolean(cmdLine, map, CLIManager.SUPRESS_SNAPSHOT_UPDATES);
         putBoolean(cmdLine, map, CLIManager.UPDATE_SNAPSHOTS);
         putBoolean(cmdLine, map, CLIManager.CHECKSUM_FAILURE_POLICY);
@@ -39,19 +40,19 @@ public class BootstrapMavenOptionsParser {
     }
 
     private static void putBoolean(CommandLine cmdLine, Map<String, Object> map, char name) {
-        if(cmdLine.hasOption(name)) {
+        if (cmdLine.hasOption(name)) {
             map.put(String.valueOf(name), Boolean.TRUE.toString());
         }
     }
 
     private static void putBoolean(CommandLine cmdLine, Map<String, Object> map, String name) {
-        if(cmdLine.hasOption(name)) {
+        if (cmdLine.hasOption(name)) {
             map.put(name, Boolean.TRUE.toString());
         }
     }
 
     private static void put(Map<String, Object> map, String name, final Object value) {
-        if(value != null) {
+        if (value != null) {
             map.put(name, value);
         }
     }
