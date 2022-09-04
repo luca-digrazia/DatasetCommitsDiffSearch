@@ -2,7 +2,7 @@ package com.codahale.dropwizard.server;
 
 import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
 import com.codahale.dropwizard.jersey.setup.JerseyEnvironment;
-import com.codahale.dropwizard.jetty.GzipFilterFactory;
+import com.codahale.dropwizard.jetty.GzipHandlerFactory;
 import com.codahale.dropwizard.jetty.NonblockingServletHolder;
 import com.codahale.dropwizard.jetty.RequestLogFactory;
 import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
@@ -27,7 +27,6 @@ import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
-import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.eclipse.jetty.util.thread.ThreadPool;
@@ -44,8 +43,6 @@ import java.io.IOException;
 import java.util.EnumSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.regex.Pattern;
-
-// TODO: 5/15/13 <coda> -- add tests for AbstractServerFactory
 
 /**
  * A base class for {@link ServerFactory} implementations.
@@ -65,7 +62,7 @@ import java.util.regex.Pattern;
  *     <tr>
  *         <td>{@code gzip}</td>
  *         <td></td>
- *         <td>The {@link GzipFilterFactory GZIP} configuration.</td>
+ *         <td>The {@link GzipHandlerFactory GZIP} configuration.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code maxThreads}</td>
@@ -102,7 +99,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     @Valid
     @NotNull
-    private GzipFilterFactory gzip = new GzipFilterFactory();
+    private GzipHandlerFactory gzip = new GzipHandlerFactory();
 
     @Min(2)
     private int maxThreads = 1024;
@@ -132,12 +129,12 @@ public abstract class AbstractServerFactory implements ServerFactory {
     }
 
     @JsonProperty("gzip")
-    public GzipFilterFactory getGzipFilterFactory() {
+    public GzipHandlerFactory getGzipHandlerFactory() {
         return gzip;
     }
 
     @JsonProperty("gzip")
-    public void setGzipFilterFactory(GzipFilterFactory gzip) {
+    public void setGzipHandlerFactory(GzipHandlerFactory gzip) {
         this.gzip = gzip;
     }
 
@@ -197,10 +194,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
                                        @Nullable ServletContainer jerseyContainer,
                                        MetricRegistry metricRegistry) {
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
-        if (gzip.isEnabled()) {
-            final FilterHolder holder = new FilterHolder(gzip.build());
-            handler.addFilter(holder, "/*", EnumSet.allOf(DispatcherType.class));
-        }
         if (jerseyContainer != null) {
             jersey.addProvider(new JacksonMessageBodyProvider(objectMapper, validator));
             handler.addServlet(new NonblockingServletHolder(jerseyContainer), jersey.getUrlPattern());
@@ -229,14 +222,15 @@ public abstract class AbstractServerFactory implements ServerFactory {
         return server;
     }
 
-    protected Handler addRequestLog(Handler handler, String name) {
+    protected Handler addGzipAndRequestLog(Handler handler, String name) {
+        final Handler gzipHandler = gzip.wrapHandler(handler);
         if (requestLog.isEnabled()) {
             final RequestLogHandler requestLogHandler = new RequestLogHandler();
             requestLogHandler.setRequestLog(requestLog.build(name));
-            requestLogHandler.setHandler(handler);
+            requestLogHandler.setHandler(gzipHandler);
             return requestLogHandler;
         }
-        return handler;
+        return gzipHandler;
     }
 
     protected void printBanner(String name) {
