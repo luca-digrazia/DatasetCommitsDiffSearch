@@ -14,39 +14,28 @@
 
 package com.google.devtools.build.lib.bazel.rules.java.proto;
 
-import static com.google.devtools.build.lib.packages.Aspect.INJECTING_RULE_KIND_PARAMETER_KEY;
+import static com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaLiteProtoAspect.DEFAULT_PROTO_TOOLCHAIN_LABEL;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.LITE_PROTO_RUNTIME_ATTR;
-import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.LITE_PROTO_RUNTIME_LABEL;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.getProtoToolchainLabel;
 
-import com.google.common.base.Function;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.rules.java.JavaRuleClasses.JavaToolchainBaseRule;
 import com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoLibrary;
-import javax.annotation.Nullable;
+import com.google.devtools.build.lib.rules.java.proto.JavaProtoAspectCommon;
+import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 
 /** Declaration of the {@code java_lite_proto_library} rule. */
 public class BazelJavaLiteProtoLibraryRule implements RuleDefinition {
-
-  private static final Function<Rule, AspectParameters> ASPECT_PARAMETERS =
-      new Function<Rule, AspectParameters>() {
-        @Nullable
-        @Override
-        public AspectParameters apply(@Nullable Rule rule) {
-          return new AspectParameters.Builder()
-              .addAttribute(INJECTING_RULE_KIND_PARAMETER_KEY, "java_lite_proto_library")
-              .build();
-        }
-      };
 
   private final BazelJavaLiteProtoAspect javaProtoAspect;
 
@@ -57,8 +46,6 @@ public class BazelJavaLiteProtoLibraryRule implements RuleDefinition {
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        // This rule isn't ready for use yet.
-        .setUndocumented()
         .requiresConfigurationFragments(JavaConfiguration.class)
         /* <!-- #BLAZE_RULE(java_lite_proto_library).ATTRIBUTE(deps) -->
         The list of <a href="protocol-buffer.html#proto_library"><code>proto_library</code></a>
@@ -68,16 +55,14 @@ public class BazelJavaLiteProtoLibraryRule implements RuleDefinition {
             attr("deps", LABEL_LIST)
                 .allowedRuleClasses("proto_library")
                 .allowedFileTypes()
-                .aspect(javaProtoAspect, ASPECT_PARAMETERS))
-        /* <!-- #BLAZE_RULE(java_lite_proto_library).ATTRIBUTE(deps) -->
-        When True, this rule only exposes the protos that it wraps directly. Depending on indirect
-        protos will break the build and print an 'add_dep' command to correct the build.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("strict_deps", BOOLEAN))
+                .aspect(javaProtoAspect))
         .add(
-            attr(LITE_PROTO_RUNTIME_ATTR, LABEL)
-                .legacyAllowAnyFileType()
-                .value(Label.parseAbsoluteUnchecked(LITE_PROTO_RUNTIME_LABEL)))
+            attr(JavaProtoAspectCommon.LITE_PROTO_TOOLCHAIN_ATTR, LABEL)
+                .mandatoryBuiltinProviders(
+                    ImmutableList.<Class<? extends TransitiveInfoProvider>>of(
+                        ProtoLangToolchainProvider.class))
+                .value(getProtoToolchainLabel(DEFAULT_PROTO_TOOLCHAIN_LABEL)))
+        .advertiseStarlarkProvider(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
         .build();
   }
 
@@ -86,7 +71,7 @@ public class BazelJavaLiteProtoLibraryRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("java_lite_proto_library")
         .factoryClass(JavaLiteProtoLibrary.class)
-        .ancestors(BaseRuleClasses.RuleBase.class)
+        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class, JavaToolchainBaseRule.class)
         .build();
   }
 }
