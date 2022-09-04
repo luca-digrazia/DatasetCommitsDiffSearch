@@ -119,7 +119,11 @@ public class Searches {
         terms.field(field);
         terms.size(size);
 
-        terms.facetFilter(standardFilters(range, filter));
+        terms.facetFilter(
+                FilterBuilders.boolFilter()
+                        .must(IndexHelper.getTimestampRangeFilter(range))
+                        .must(FilterBuilders.queryFilter(QueryBuilders.queryString(filter)))
+        );
 
         srb.addFacet(terms);
 
@@ -151,10 +155,17 @@ public class Searches {
             srb = filteredSearchRequest(query, filter, IndexHelper.determineAffectedIndices(server, range));
         }
 
+        System.out.println("WOW FILTER:" + filter);
+
         StatisticalFacetBuilder stats = new StatisticalFacetBuilder(STATS_FACET_NAME);
         stats.global(false);
 
-        stats.facetFilter(standardFilters(range, filter));
+        // wow such dsl
+        stats.facetFilter(
+                FilterBuilders.boolFilter()
+                        .must(IndexHelper.getTimestampRangeFilter(range))
+                        .must(FilterBuilders.queryFilter(QueryBuilders.queryString(filter)))
+        );
 
         stats.field(field);
 
@@ -186,7 +197,11 @@ public class Searches {
 				.field("timestamp")
 				.interval(interval.toString().toLowerCase());
 
-        fb.facetFilter(standardFilters(range, filter));
+        fb.facetFilter(
+                FilterBuilders.boolFilter()
+                        .must(IndexHelper.getTimestampRangeFilter(range))
+                        .must(FilterBuilders.queryFilter(QueryBuilders.queryString(filter)))
+        );
 
         QueryStringQueryBuilder qs = queryString(query);
         qs.allowLeadingWildcard(server.getConfiguration().isAllowLeadingWildcardSearches());
@@ -275,9 +290,16 @@ public class Searches {
     private SearchRequestBuilder filteredSearchRequest(String query, String filter, Set<String> indices, int limit, int offset, TimeRange range, SortOrder sort) throws IndexHelper.InvalidRangeFormatException {
         SearchRequestBuilder srb = standardSearchRequest(query, indices, limit, offset, range, sort);
 
-        if (range != null && filter != null) {
-            srb.setFilter(standardFilters(range, filter));
+
+        FilterBuilder fb = FilterBuilders.queryFilter(
+                QueryBuilders.queryString(filter)
+        );
+
+        if (range != null) {
+            fb = FilterBuilders.andFilter(IndexHelper.getTimestampRangeFilter(range), fb);
         }
+
+        srb.setFilter(fb);
 
         return srb;
     }
@@ -295,28 +317,6 @@ public class Searches {
         } else {
             return null;
         }
-    }
-
-    private BoolFilterBuilder standardFilters(TimeRange range, String filter) throws IndexHelper.InvalidRangeFormatException {
-        BoolFilterBuilder bfb = FilterBuilders.boolFilter();
-
-        boolean set = false;
-
-        if (range != null) {
-            bfb.must(IndexHelper.getTimestampRangeFilter(range));
-            set = true;
-        }
-
-        if(filter != null && !filter.isEmpty() && !filter.equals("*")) {
-            bfb.must(FilterBuilders.queryFilter(QueryBuilders.queryString(filter)));
-            set = true;
-        }
-
-        if (!set) {
-            throw new RuntimeException("Either range or filter must be set.");
-        }
-
-        return bfb;
     }
 
     public class FieldTypeException extends Exception {
