@@ -19,16 +19,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Maps;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Context;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Marshaller;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.PrimitiveValueSerializationCodeGenerator;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.Marshaller.Context;
 import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.protobuf.AbstractMessage;
 import com.google.protobuf.ExtensionRegistryLite;
@@ -45,10 +42,7 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.PrimitiveType;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 /** Class containing all {@link Marshaller} instances. */
@@ -60,147 +54,31 @@ class Marshallers {
   }
 
   void writeSerializationCode(Context context) {
-    if (context.canBeNull()) {
-      context.builder.beginControlFlow("if ($L != null)", context.name);
-      context.builder.addStatement("codedOut.writeBoolNoTag(true)");
-    }
-    getMatchingCodeGenerator(context.type).addSerializationCode(context);
-    if (context.canBeNull()) {
-      context.builder.nextControlFlow("else");
-      context.builder.addStatement("codedOut.writeBoolNoTag(false)");
-      context.builder.endControlFlow();
-    }
+    context.builder.beginControlFlow("if ($L != null)", context.name);
+    context.builder.addStatement("codedOut.writeBoolNoTag(true)");
+    getMatchingMarshaller(context.type).addSerializationCode(context);
+    context.builder.nextControlFlow("else");
+    context.builder.addStatement("codedOut.writeBoolNoTag(false)");
+    context.builder.endControlFlow();
   }
 
   void writeDeserializationCode(Context context) {
-    if (context.canBeNull()) {
-      context.builder.addStatement("$T $L = null", context.getTypeName(), context.name);
-      context.builder.beginControlFlow("if (codedIn.readBool())");
-    } else {
-      context.builder.addStatement("$T $L", context.getTypeName(), context.name);
-    }
-    getMatchingCodeGenerator(context.type).addDeserializationCode(context);
-    if (requiresNullityCheck(context)) {
-      context.builder.endControlFlow();
-    }
-  }
-
-  /**
-   *  Writes out the deserialization loop and build code for any entity serialized as a list.
-   *
-   * @param context context object for list with possibly another type.
-   * @param repeated context for generic type deserialization.
-   * @param builderName String for referencing the entity builder.
-   */
-  void writeListDeserializationLoopAndBuild(Context context, Context repeated, String builderName) {
-    String lengthName = context.makeName("length");
-    context.builder.addStatement("int $L = codedIn.readInt32()", lengthName);
-    String indexName = context.makeName("i");
-    context.builder.beginControlFlow(
-        "for (int $L = 0; $L < $L; ++$L)", indexName, indexName, lengthName, indexName);
-    writeDeserializationCode(repeated);
-    context.builder.addStatement("$L.add($L)", builderName, repeated.name);
+    context.builder.addStatement("$T $L = null", context.getTypeName(), context.name);
+    context.builder.beginControlFlow("if (codedIn.readBool())");
+    getMatchingMarshaller(context.type).addDeserializationCode(context);
     context.builder.endControlFlow();
-    context.builder.addStatement("$L = $L.build()", context.name, builderName);
   }
 
-  private static boolean requiresNullityCheck(Context context) {
-    return !(context.type instanceof PrimitiveType);
-  }
-
-  private SerializationCodeGenerator getMatchingCodeGenerator(TypeMirror type) {
-    if (type.getKind() == TypeKind.ARRAY) {
-      return arrayCodeGenerator;
-    }
-
-    if (type instanceof PrimitiveType) {
-      PrimitiveType primitiveType = (PrimitiveType) type;
-      return primitiveGenerators
-          .stream()
-          .filter(generator -> generator.matches((PrimitiveType) type))
-          .findFirst()
-          .orElseThrow(() -> new IllegalArgumentException("No generator for: " + primitiveType));
-    }
-
-    // TODO(cpeyser): Refactor primitive handling from AutoCodecProcessor.java
-    if (!(type instanceof DeclaredType)) {
-      throw new IllegalArgumentException(
-          "Can only serialize primitive, array or declared fields, found " + type);
-    }
-    DeclaredType declaredType = (DeclaredType) type;
-
+  private Marshaller getMatchingMarshaller(DeclaredType type) {
     return marshallers
         .stream()
-        .filter(marshaller -> marshaller.matches(declaredType))
+        .filter(marshaller -> marshaller.matches(type))
         .findFirst()
         .orElseThrow(
             () ->
                 new IllegalArgumentException(
-                    "No marshaller for: "
-                        + ((TypeElement) declaredType.asElement()).getQualifiedName()));
+                    "No marshaller for: " + ((TypeElement) type.asElement()).getQualifiedName()));
   }
-
-  private final SerializationCodeGenerator arrayCodeGenerator =
-      new SerializationCodeGenerator() {
-        @Override
-        public void addSerializationCode(Context context) {
-          String length = context.makeName("length");
-          context.builder.addStatement("int $L = $L.length", length, context.name);
-          context.builder.addStatement("codedOut.writeInt32NoTag($L)", length);
-          Context repeated =
-              context.with(
-                  ((ArrayType) context.type).getComponentType(), context.makeName("repeated"));
-          String indexName = context.makeName("i");
-          context.builder.beginControlFlow(
-              "for(int $L = 0; $L < $L; ++$L)", indexName, indexName, length, indexName);
-          context.builder.addStatement(
-              "$T $L = $L[$L]", repeated.getTypeName(), repeated.name, context.name, indexName);
-          writeSerializationCode(repeated);
-          context.builder.endControlFlow();
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          Context repeated =
-              context.with(
-                  ((ArrayType) context.type).getComponentType(), context.makeName("repeated"));
-          String lengthName = context.makeName("length");
-          context.builder.addStatement("int $L = codedIn.readInt32()", lengthName);
-
-          String resultName = context.makeName("result");
-          context.builder.addStatement(
-              "$T[] $L = new $T[$L]",
-              repeated.getTypeName(),
-              resultName,
-              repeated.getTypeName(),
-              lengthName);
-          String indexName = context.makeName("i");
-          context.builder.beginControlFlow(
-              "for (int $L = 0; $L < $L; ++$L)", indexName, indexName, lengthName, indexName);
-          writeDeserializationCode(repeated);
-          context.builder.addStatement("$L[$L] = $L", resultName, indexName, repeated.name);
-          context.builder.endControlFlow();
-          context.builder.addStatement("$L = $L", context.name, resultName);
-        }
-      };
-
-  private final PrimitiveValueSerializationCodeGenerator intCodeGenerator =
-      new PrimitiveValueSerializationCodeGenerator() {
-        @Override
-        public boolean matches(PrimitiveType type) {
-          return type.getKind() == TypeKind.INT;
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.writeInt32NoTag($L)", context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          context.builder.addStatement("$L = codedIn.readInt32()", context.name);
-        }
-      };
 
   private final Marshaller enumMarshaller =
       new Marshaller() {
@@ -211,7 +89,7 @@ class Marshallers {
 
         @Override
         public void addSerializationCode(Context context) {
-          if (isProtoEnum(context.getDeclaredType())) {
+          if (isProtoEnum(context.type)) {
             context.builder.addStatement("codedOut.writeInt32NoTag($L.getNumber())", context.name);
           } else {
             context.builder.addStatement("codedOut.writeInt32NoTag($L.ordinal())", context.name);
@@ -220,7 +98,7 @@ class Marshallers {
 
         @Override
         public void addDeserializationCode(Context context) {
-          if (isProtoEnum(context.getDeclaredType())) {
+          if (isProtoEnum(context.type)) {
             context.builder.addStatement(
                 "$L = $T.forNumber(codedIn.readInt32())", context.name, context.getTypeName());
           } else {
@@ -269,15 +147,13 @@ class Marshallers {
 
         @Override
         public void addSerializationCode(Context context) {
-          DeclaredType optionalType =
-              (DeclaredType) context.getDeclaredType().getTypeArguments().get(0);
+          DeclaredType optionalType = (DeclaredType) context.type.getTypeArguments().get(0);
           writeSerializationCode(context.with(optionalType, context.name + ".orNull()"));
         }
 
         @Override
         public void addDeserializationCode(Context context) {
-          DeclaredType optionalType =
-              (DeclaredType) context.getDeclaredType().getTypeArguments().get(0);
+          DeclaredType optionalType = (DeclaredType) context.type.getTypeArguments().get(0);
           String optionalName = context.makeName("optional");
           writeDeserializationCode(context.with(optionalType, optionalName));
           context.builder.addStatement(
@@ -294,20 +170,18 @@ class Marshallers {
 
         @Override
         public void addSerializationCode(Context context) {
-          DeclaredType keyType = (DeclaredType) context.getDeclaredType().getTypeArguments().get(0);
+          DeclaredType keyType = (DeclaredType) context.type.getTypeArguments().get(0);
           writeSerializationCode(context.with(keyType, context.name + ".getKey()"));
-          DeclaredType valueType =
-              (DeclaredType) context.getDeclaredType().getTypeArguments().get(1);
+          DeclaredType valueType = (DeclaredType) context.type.getTypeArguments().get(1);
           writeSerializationCode(context.with(valueType, context.name + ".getValue()"));
         }
 
         @Override
         public void addDeserializationCode(Context context) {
-          DeclaredType keyType = (DeclaredType) context.getDeclaredType().getTypeArguments().get(0);
+          DeclaredType keyType = (DeclaredType) context.type.getTypeArguments().get(0);
           String keyName = context.makeName("key");
           writeDeserializationCode(context.with(keyType, keyName));
-          DeclaredType valueType =
-              (DeclaredType) context.getDeclaredType().getTypeArguments().get(1);
+          DeclaredType valueType = (DeclaredType) context.type.getTypeArguments().get(1);
           String valueName = context.makeName("value");
           writeDeserializationCode(context.with(valueType, valueName));
           context.builder.addStatement(
@@ -332,7 +206,7 @@ class Marshallers {
           context.builder.addStatement("codedOut.writeInt32NoTag($L.size())", context.name);
           Context repeated =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
+                  (DeclaredType) context.type.getTypeArguments().get(0),
                   context.makeName("repeated"));
           context.builder.beginControlFlow(
               "for ($T $L : $L)", repeated.getTypeName(), repeated.name, context.name);
@@ -344,7 +218,7 @@ class Marshallers {
         public void addDeserializationCode(Context context) {
           Context repeated =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
+                  (DeclaredType) context.type.getTypeArguments().get(0),
                   context.makeName("repeated"));
           String builderName = context.makeName("builder");
           context.builder.addStatement(
@@ -353,36 +227,15 @@ class Marshallers {
               repeated.getTypeName(),
               builderName,
               ImmutableList.Builder.class);
-          writeListDeserializationLoopAndBuild(context, repeated, builderName);
-        }
-      };
-
-  private final Marshaller immutableSetMarshaller =
-      new Marshaller() {
-        @Override
-        public boolean matches(DeclaredType type) {
-          return matchesErased(type, ImmutableSet.class);
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          listMarshaller.addSerializationCode(context);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          Context repeated =
-              context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
-                  context.makeName("repeated"));
-          String builderName = context.makeName("builder");
-          context.builder.addStatement(
-              "$T<$T> $L = new $T<>()",
-              ImmutableSet.Builder.class,
-              repeated.getTypeName(),
-              builderName,
-              ImmutableSet.Builder.class);
-          writeListDeserializationLoopAndBuild(context, repeated, builderName);
+          String lengthName = context.makeName("length");
+          context.builder.addStatement("int $L = codedIn.readInt32()", lengthName);
+          String indexName = context.makeName("i");
+          context.builder.beginControlFlow(
+              "for (int $L = 0; $L < $L; ++$L)", indexName, indexName, lengthName, indexName);
+          writeDeserializationCode(repeated);
+          context.builder.addStatement("$L.add($L)", builderName, repeated.name);
+          context.builder.endControlFlow();
+          context.builder.addStatement("$L = $L.build()", context.name, builderName);
         }
       };
 
@@ -402,7 +255,7 @@ class Marshallers {
         public void addDeserializationCode(Context context) {
           Context repeated =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
+                  (DeclaredType) context.type.getTypeArguments().get(0),
                   context.makeName("repeated"));
           String builderName = context.makeName("builder");
           context.builder.addStatement(
@@ -412,7 +265,15 @@ class Marshallers {
               builderName,
               ImmutableSortedSet.Builder.class,
               Comparator.class);
-          writeListDeserializationLoopAndBuild(context, repeated, builderName);
+          String lengthName = context.makeName("length");
+          context.builder.addStatement("int $L = codedIn.readInt32()", lengthName);
+          String indexName = context.makeName("i");
+          context.builder.beginControlFlow(
+              "for (int $L = 0; $L < $L; ++$L)", indexName, indexName, lengthName, indexName);
+          writeDeserializationCode(repeated);
+          context.builder.addStatement("$L.add($L)", builderName, repeated.name);
+          context.builder.endControlFlow();
+          context.builder.addStatement("$L = $L.build()", context.name, builderName);
         }
       };
 
@@ -430,12 +291,10 @@ class Marshallers {
           String entryName = context.makeName("entry");
           Context key =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
-                  entryName + ".getKey()");
+                  (DeclaredType) context.type.getTypeArguments().get(0), entryName + ".getKey()");
           Context value =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(1),
-                  entryName + ".getValue()");
+                  (DeclaredType) context.type.getTypeArguments().get(1), entryName + ".getValue()");
           context.builder.addStatement(
               "$T<$T, $T> $L = null", Map.class, key.getTypeName(), value.getTypeName(), mapName);
           context.builder.beginControlFlow("if ($L instanceof $T)", context.name, SortedMap.class);
@@ -488,12 +347,10 @@ class Marshallers {
       Context context, String builderName, boolean isImmutableMap) {
           Context key =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
-                  context.makeName("key"));
+                  (DeclaredType) context.type.getTypeArguments().get(0), context.makeName("key"));
           Context value =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(1),
-                  context.makeName("value"));
+                  (DeclaredType) context.type.getTypeArguments().get(1), context.makeName("value"));
     if (isImmutableMap) {
       context.builder.addStatement(
           "$T<$T, $T> $L = new $T<>($T.naturalOrder())",
@@ -531,12 +388,10 @@ class Marshallers {
           String entryName = context.makeName("entry");
           Context key =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
-                  entryName + ".getKey()");
+                  (DeclaredType) context.type.getTypeArguments().get(0), entryName + ".getKey()");
           Context value =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(1),
-                  entryName + ".getValue()");
+                  (DeclaredType) context.type.getTypeArguments().get(1), entryName + ".getValue()");
           context.builder.beginControlFlow(
               "for ($T<$T, $T> $L : $L.entries())",
               Map.Entry.class,
@@ -553,12 +408,10 @@ class Marshallers {
         public void addDeserializationCode(Context context) {
           Context key =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(0),
-                  context.makeName("key"));
+                  (DeclaredType) context.type.getTypeArguments().get(0), context.makeName("key"));
           Context value =
               context.with(
-                  (DeclaredType) context.getDeclaredType().getTypeArguments().get(1),
-                  context.makeName("value"));
+                  (DeclaredType) context.type.getTypeArguments().get(1), context.makeName("value"));
           String builderName = context.makeName("builder");
           context.builder.addStatement(
               "$T<$T, $T> $L = new $T<>()",
@@ -664,7 +517,7 @@ class Marshallers {
 
         @Override
         public void addSerializationCode(Context context) {
-          TypeMirror codecType = getCodec(context.getDeclaredType()).get().asType();
+          TypeMirror codecType = getCodec(context.type).get().asType();
           if (isSubtypeErased(codecType, ObjectCodec.class)) {
             context.builder.addStatement(
                 "$T.CODEC.serialize($L, codedOut)", context.getTypeName(), context.name);
@@ -676,14 +529,14 @@ class Marshallers {
           } else {
             throw new IllegalArgumentException(
                 "CODEC field of "
-                    + ((TypeElement) context.getDeclaredType().asElement()).getQualifiedName()
+                    + ((TypeElement) context.type.asElement()).getQualifiedName()
                     + " is neither ObjectCodec nor InjectingCodec");
           }
         }
 
         @Override
         public void addDeserializationCode(Context context) {
-          TypeMirror codecType = getCodec(context.getDeclaredType()).get().asType();
+          TypeMirror codecType = getCodec(context.type).get().asType();
           if (isSubtypeErased(codecType, ObjectCodec.class)) {
             context.builder.addStatement(
                 "$L = $T.CODEC.deserialize(codedIn)", context.name, context.getTypeName());
@@ -695,14 +548,11 @@ class Marshallers {
           } else {
             throw new IllegalArgumentException(
                 "CODEC field of "
-                    + ((TypeElement) context.getDeclaredType().asElement()).getQualifiedName()
+                    + ((TypeElement) context.type.asElement()).getQualifiedName()
                     + " is neither ObjectCodec nor InjectingCodec");
           }
         }
       };
-
-  private final ImmutableList<PrimitiveValueSerializationCodeGenerator> primitiveGenerators =
-      ImmutableList.of(intCodeGenerator);
 
   private final ImmutableList<Marshaller> marshallers =
       ImmutableList.of(
@@ -711,7 +561,6 @@ class Marshallers {
           optionalMarshaller,
           mapEntryMarshaller,
           listMarshaller,
-          immutableSetMarshaller,
           immutableSortedSetMarshaller,
           mapMarshaller,
           immutableMapMarshaller,
