@@ -83,8 +83,8 @@ public class ArtifactFactory implements ArtifactResolver {
      */
     private final Map<PathFragment, Entry> pathToSourceArtifact = new ConcurrentHashMap<>();
 
-    /** Id of current build. Has to be increased every time before analysis starts. */
-    private int buildId = -1;
+    /** Id of current build. Has to be increased every time before execution phase starts. */
+    private int buildId = 0;
 
     /** Returns artifact if it present in the cache, otherwise null. */
     @ThreadSafe
@@ -121,7 +121,7 @@ public class ArtifactFactory implements ArtifactResolver {
 
     void clear() {
       pathToSourceArtifact.clear();
-      buildId = -1;
+      buildId = 0;
     }
 
     @ThreadCompatible // Concurrent puts do not know which one actually got its artifact in.
@@ -163,9 +163,6 @@ public class ArtifactFactory implements ArtifactResolver {
    */
   public synchronized void setPackageRoots(PackageRoots.PackageRootLookup packageRoots) {
     this.packageRoots = packageRoots;
-  }
-
-  public synchronized void noteAnalysisStarting() {
     sourceArtifactCache.newBuild();
   }
 
