@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
 import com.google.devtools.build.lib.rules.java.ImportDepsCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -158,10 +157,6 @@ public class AarImport implements RuleConfiguredTargetFactory {
         new JavaCompilationArtifacts.Builder()
             .addRuntimeJar(mergedJar)
             .addCompileTimeJarAsFullJar(mergedJar)
-            // Allow direct dependents to compile against un-merged R classes
-            .addCompileTimeJarAsFullJar(
-                ruleContext.getImplicitOutputArtifact(
-                    AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
             .setCompileTimeDependencies(jdepsArtifact)
             .build());
 
