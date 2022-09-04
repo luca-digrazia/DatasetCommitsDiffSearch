@@ -918,7 +918,7 @@ public final class CcLinkingHelper {
       Preconditions.checkState(linkedName.startsWith("lib"));
       linkedName = linkedName.substring(3);
       artifactRoot =
-          ((RuleContext) actionConstructionContext).getRule().outputsToBindir()
+          ((RuleContext) actionConstructionContext).getRule().hasBinaryOutput()
               ? configuration.getBinDirectory(label.getRepository())
               : configuration.getGenfilesDirectory(label.getRepository());
     }
