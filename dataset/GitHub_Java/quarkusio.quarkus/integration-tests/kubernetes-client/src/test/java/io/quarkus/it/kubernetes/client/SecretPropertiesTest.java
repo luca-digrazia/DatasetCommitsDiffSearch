@@ -8,20 +8,21 @@ import org.junit.jupiter.api.Test;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 
-@QuarkusTestResource(CustomKubernetesMockServerTestResource.class)
+@QuarkusTestResource(value = CustomKubernetesMockServerTestResource.class, restrictToAnnotatedTest = true)
 @QuarkusTest
 public class SecretPropertiesTest {
 
     @Test
     public void testPropertiesReadFromConfigMap() {
         assertProperty("dummysecret", "dummysecret");
+        assertProperty("overriddensecret", "secret");
         assertProperty("secretProp1", "val1");
         assertProperty("secretProp2", "val2");
         assertProperty("secretProp3", "val3");
         assertProperty("secretProp4", "val4");
     }
 
-    private void assertProperty(String propertyName, String expectedValue) {
+    public static void assertProperty(String propertyName, String expectedValue) {
         given()
                 .when().get("/secretProperties/" + propertyName)
                 .then()

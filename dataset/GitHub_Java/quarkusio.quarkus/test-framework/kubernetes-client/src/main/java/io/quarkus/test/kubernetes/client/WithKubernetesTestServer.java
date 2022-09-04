@@ -4,7 +4,6 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.util.function.Consumer;
 
 import io.fabric8.kubernetes.client.server.mock.KubernetesServer;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -33,14 +32,4 @@ public @interface WithKubernetesTestServer {
      */
     int port() default 0;
 
-    /**
-     * Setup class to call after the mock server is created, for custom setup.
-     */
-    Class<? extends Consumer<KubernetesServer>> setup() default NO_SETUP.class;
-
-    static class NO_SETUP implements Consumer<KubernetesServer> {
-        @Override
-        public void accept(KubernetesServer t) {
-        }
-    };
 }
