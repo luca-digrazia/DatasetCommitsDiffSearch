@@ -137,11 +137,11 @@ public class AmqpTransport extends ThrottleableTransport {
     public void launch(MessageInput input) throws MisfireException {
         consumer = new AmqpConsumer(
                 configuration.getString(CK_HOSTNAME),
-                configuration.getInt(CK_PORT),
+                (int) configuration.getInt(CK_PORT),
                 configuration.getString(CK_VHOST),
                 configuration.getString(CK_USERNAME),
                 configuration.getString(CK_PASSWORD),
-                configuration.getInt(CK_PREFETCH),
+                (int) configuration.getInt(CK_PREFETCH),
                 configuration.getString(CK_QUEUE),
                 configuration.getString(CK_EXCHANGE),
                 configuration.getString(CK_ROUTING_KEY),

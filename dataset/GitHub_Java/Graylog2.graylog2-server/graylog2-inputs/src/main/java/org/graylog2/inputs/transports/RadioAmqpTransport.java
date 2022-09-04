@@ -40,6 +40,9 @@ public class RadioAmqpTransport extends AmqpTransport {
     }
 
     private static Configuration setDefaultConfig(Configuration configuration) {
+        configuration.setString(CK_EXCHANGE, "graylog2");
+        configuration.setString(CK_QUEUE, "graylog2-radio-messages");
+        configuration.setString(CK_ROUTING_KEY, "graylog2-radio-message");
         return configuration;
     }
 
@@ -56,22 +59,12 @@ public class RadioAmqpTransport extends AmqpTransport {
     public static class Config extends AmqpTransport.Config {
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
-            return super.getRequestedConfiguration();
-        }
-
-        @Override
-        protected String defaultRouttingKey() {
-            return "graylog2-radio-message";
-        }
-
-        @Override
-        protected String defaultExchangeName() {
-            return "graylog2";
-        }
-
-        @Override
-        protected String defaultQueueName() {
-            return "graylog2-radio-messages";
+            final ConfigurationRequest r = super.getRequestedConfiguration();
+            // we have defaults for these
+            r.removeField(CK_EXCHANGE);
+            r.removeField(CK_QUEUE);
+            r.removeField(CK_ROUTING_KEY);
+            return r;
         }
     }
 }

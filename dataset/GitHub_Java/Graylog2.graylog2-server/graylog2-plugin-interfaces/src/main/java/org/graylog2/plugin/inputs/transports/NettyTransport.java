@@ -82,7 +82,7 @@ public abstract class NettyTransport implements Transport {
         if (configuration.stringIsSet(CK_BIND_ADDRESS) && configuration.intIsSet(CK_PORT)) {
             this.socketAddress = new InetSocketAddress(
                     configuration.getString(CK_BIND_ADDRESS),
-                    configuration.getInt(CK_PORT)
+                    (int) configuration.getInt(CK_PORT)
             );
         } else {
             this.socketAddress = null;
