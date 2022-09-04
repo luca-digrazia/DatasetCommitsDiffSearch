@@ -30,16 +30,15 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @WebServlet(name = "MyServlet", urlPatterns = "/testservlet", initParams = {@WebInitParam(name = "message", value = "A message")})
 public class TestServlet extends HttpServlet {
 
-    public TestServlet(){
-        new RuntimeException().printStackTrace();
-    }
-
     @Inject
     @ConfigProperty(name = "web-message")
     String configMessage;
 
+    @Inject
+    HttpServletResponse injectedResponse;
+
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        resp.getWriter().write(configMessage);
+        injectedResponse.getWriter().write(configMessage);
     }
 }
