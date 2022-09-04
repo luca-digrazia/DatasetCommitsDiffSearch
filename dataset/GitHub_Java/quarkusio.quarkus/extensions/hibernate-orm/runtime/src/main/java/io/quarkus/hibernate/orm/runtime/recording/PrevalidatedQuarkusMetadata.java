@@ -2,7 +2,6 @@ package io.quarkus.hibernate.orm.runtime.recording;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import org.hibernate.MappingException;
@@ -14,7 +13,6 @@ import org.hibernate.boot.internal.SessionFactoryOptionsBuilder;
 import org.hibernate.boot.model.IdentifierGeneratorDefinition;
 import org.hibernate.boot.model.TypeDefinition;
 import org.hibernate.boot.model.relational.Database;
-import org.hibernate.boot.spi.MetadataBuildingOptions;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.annotations.NamedEntityGraphDefinition;
 import org.hibernate.cfg.annotations.NamedProcedureCallDefinition;
@@ -23,17 +21,11 @@ import org.hibernate.engine.ResultSetMappingDefinition;
 import org.hibernate.engine.spi.FilterDefinition;
 import org.hibernate.engine.spi.NamedQueryDefinition;
 import org.hibernate.engine.spi.NamedSQLQueryDefinition;
-import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.id.factory.IdentifierGeneratorFactory;
-import org.hibernate.internal.SessionFactoryImpl;
 import org.hibernate.mapping.FetchProfile;
-import org.hibernate.mapping.MappedSuperclass;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Table;
-import org.hibernate.query.spi.NamedQueryRepository;
 import org.hibernate.type.Type;
-import org.hibernate.type.TypeResolver;
-import org.hibernate.type.spi.TypeConfiguration;
 
 /**
  * This is a Quarkus custom implementation of Metadata wrapping the original
@@ -47,7 +39,7 @@ import org.hibernate.type.spi.TypeConfiguration;
  * are unavailable, as these would normally trigger an additional validation phase:
  * we can actually boot Quarkus in a simpler way.
  */
-public final class PrevalidatedQuarkusMetadata implements MetadataImplementor {
+public final class PrevalidatedQuarkusMetadata implements Metadata {
 
     private final MetadataImpl metadata;
 
@@ -69,6 +61,10 @@ public final class PrevalidatedQuarkusMetadata implements MetadataImplementor {
                 metadata.getBootstrapContext());
     }
 
+    public MetadataImplementor getOriginalMetadata() {
+        return metadata;
+    }
+
     //Relevant overrides:
 
     @Override
@@ -81,11 +77,6 @@ public final class PrevalidatedQuarkusMetadata implements MetadataImplementor {
     public SessionFactory buildSessionFactory() {
         //Ensure we don't boot Hibernate using this, but rather use the #buildSessionFactoryOptionsBuilder above.
         throw new IllegalStateException("This method is not supposed to be used in Quarkus");
-    }
-
-    @Override
-    public void validate() throws MappingException {
-        //Intentional no-op
     }
 
     //All other contracts from Metadata delegating:
@@ -231,38 +222,6 @@ public final class PrevalidatedQuarkusMetadata implements MetadataImplementor {
     @Override
     public Type getReferencedPropertyType(final String className, final String propertyName) throws MappingException {
         return metadata.getReferencedPropertyType(className, propertyName);
-    }
-
-    // Delegates for MetadataImplementor:
-
-    @Override
-    public MetadataBuildingOptions getMetadataBuildingOptions() {
-        return metadata.getMetadataBuildingOptions();
-    }
-
-    @Override
-    public TypeConfiguration getTypeConfiguration() {
-        return metadata.getTypeConfiguration();
-    }
-
-    @Override
-    public TypeResolver getTypeResolver() {
-        return metadata.getTypeResolver();
-    }
-
-    @Override
-    public NamedQueryRepository buildNamedQueryRepository(SessionFactoryImpl sessionFactory) {
-        return metadata.buildNamedQueryRepository(sessionFactory);
-    }
-
-    @Override
-    public Set<MappedSuperclass> getMappedSuperclassMappingsCopy() {
-        return metadata.getMappedSuperclassMappingsCopy();
-    }
-
-    @Override
-    public void initSessionFactory(SessionFactoryImplementor sessionFactoryImplementor) {
-        metadata.initSessionFactory(sessionFactoryImplementor);
     }
 
 }
