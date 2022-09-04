@@ -5,7 +5,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.core.reflection.AnnotatedMethod;
 import com.sun.jersey.core.reflection.MethodList;
-import com.sun.jersey.core.spi.scanning.PackageNamesScanner;
 import com.yammer.dropwizard.AbstractService;
 import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import com.yammer.dropwizard.jetty.JettyManaged;
@@ -16,7 +15,6 @@ import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.tasks.GarbageCollectionTask;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.metrics.core.HealthCheck;
-import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
@@ -57,7 +55,6 @@ public class Environment extends AbstractLifeCycle {
     private final ImmutableSet.Builder<EventListener> servletListeners;
     private final ImmutableSet.Builder<Task> tasks;
     private final AggregateLifeCycle lifeCycle;
-    private SessionHandler sessionHandler;
 
     /**
      * Creates a new environment.
@@ -110,21 +107,6 @@ public class Environment extends AbstractLifeCycle {
      */
     public void addResource(Object resource) {
         config.getSingletons().add(checkNotNull(resource));
-    }
-
-    /**
-     * Scans the packages and sub-packages of the given {@link Class} objects for resources and
-     * providers.
-     *  
-     * @param classes     the classes whose packages to scan
-     */
-    public void scanPackagesForResourcesAndProviders(Class<?>... classes) {
-        checkNotNull(classes);
-        final String[] names = new String[classes.length];
-        for(int i = 0; i < classes.length; i++) {
-            names[i] = classes[i].getPackage().getName();
-        }
-        config.init(new PackageNamesScanner(names));
     }
 
     /**
@@ -270,10 +252,6 @@ public class Environment extends AbstractLifeCycle {
      */
     public void addTask(Task task) {
         tasks.add(checkNotNull(task));
-    }
-
-    public void setSessionHandler(SessionHandler sessionHandler) {
-        this.sessionHandler = sessionHandler;
     }
 
     /**
@@ -505,9 +483,5 @@ public class Environment extends AbstractLifeCycle {
 
     public AbstractService<?> getService() {
         return service;
-    }
-
-    public SessionHandler getSessionHandler() {
-        return sessionHandler;
     }
 }
