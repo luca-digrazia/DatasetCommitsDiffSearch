@@ -403,12 +403,10 @@ public final class PackageFactory {
       }
       BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase(ruleClass.getName());
       try {
-        PackageContext context = getContext(thread);
         RuleFactory.createAndAddRule(
-            context.pkgBuilder,
+            getContext(thread),
             ruleClass,
             new BuildLangTypedAttributeValuesMap(kwargs),
-            context.eventHandler,
             thread.getSemantics(),
             thread.getCallStack());
       } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
@@ -523,14 +521,6 @@ public final class PackageFactory {
     /** Returns the builder of this Package. */
     public Package.Builder getBuilder() {
       return pkgBuilder;
-    }
-
-    /**
-     * Returns the event handler that should be used to report events happening while building this
-     * package.
-     */
-    public ExtendedEventHandler getEventHandler() {
-      return eventHandler;
     }
   }
 
