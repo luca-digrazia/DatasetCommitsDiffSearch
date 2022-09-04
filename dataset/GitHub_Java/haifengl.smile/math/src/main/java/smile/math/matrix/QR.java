@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.math.matrix;
 
+import smile.math.Math;
+
 /**
  * For an m-by-n matrix A with m &ge; n, the QR decomposition is an m-by-n
  * orthogonal matrix Q and an n-by-n upper triangular matrix R such that
@@ -53,11 +55,6 @@ public class QR {
         this.qr = qr;
         this.tau = tau;
         this.singular = singular;
-    }
-
-    /** Returns the QR decomposition matrix. */
-    public DenseMatrix matrix() {
-        return qr;
     }
 
     /**
@@ -145,7 +142,7 @@ public class QR {
         }
 
         double[] B = b.clone();
-        solve(Matrix.of(B));
+        solve(Matrix.newInstance(B));
         System.arraycopy(B, 0, x, 0, x.length);
     }
 
