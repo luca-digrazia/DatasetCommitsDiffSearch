@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -82,7 +81,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
     private Path generatedSourcesDir;
     private Path configDir;
     private Map<Path, Set<String>> transformedClassesByJar;
-    private Properties buildSystemProperties;
 
     /**
      * Output directory for the outcome of this phase.
@@ -155,17 +153,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
      */
     public AugmentPhase setGeneratedSourcesDir(final Path generatedSourcesDir) {
         this.generatedSourcesDir = generatedSourcesDir;
-        return this;
-    }
-
-    /**
-     * Set the build system's properties, if any.
-     *
-     * @param buildSystemProperties the build system properties or {@code null} to unset
-     * @return this phase instance
-     */
-    public AugmentPhase setBuildSystemProperties(final Properties buildSystemProperties) {
-        this.buildSystemProperties = buildSystemProperties;
         return this;
     }
 
@@ -333,7 +320,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                 builder.setRoot(appClassesDir);
                 builder.setClassLoader(runnerClassLoader);
                 builder.setOutput(classOutput);
-                builder.setBuildSystemProperties(buildSystemProperties);
                 builder.addFinal(BytecodeTransformerBuildItem.class)
                         .addFinal(ApplicationArchivesBuildItem.class)
                         .addFinal(MainClassBuildItem.class)
