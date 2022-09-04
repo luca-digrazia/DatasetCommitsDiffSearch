@@ -97,7 +97,9 @@ public class ResourceJarActionBuilder {
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
-              javabase.javaBinaryExecPathFragment(), singleJar, javaToolchain.getJvmOptions())
+              javabase.javaBinaryExecPath(),
+              singleJar,
+              javaToolchain.getJvmOptions())
           .addTransitiveInputs(javabase.javaBaseInputsMiddleman());
     } else {
       builder.setExecutable(singleJar);
