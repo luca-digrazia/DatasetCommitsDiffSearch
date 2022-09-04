@@ -33,8 +33,7 @@ public abstract class EnvironmentCommand<T extends Configuration> extends Config
                                                         bootstrap.getObjectMapper(),
                                                         bootstrap.getValidatorFactory().getValidator(),
                                                         bootstrap.getMetricRegistry(),
-                                                        bootstrap.getClassLoader(),
-                                                        bootstrap.getHealthCheckRegistry());
+                                                        bootstrap.getClassLoader());
         configuration.getMetricsFactory().configure(environment.lifecycle(),
                                                     bootstrap.getMetricRegistry());
         configuration.getServerFactory().configure(environment);

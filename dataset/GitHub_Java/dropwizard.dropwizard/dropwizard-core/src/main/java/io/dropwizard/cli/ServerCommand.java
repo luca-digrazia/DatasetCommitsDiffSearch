@@ -53,16 +53,8 @@ public class ServerCommand<T extends Configuration> extends EnvironmentCommand<T
             server.start();
         } catch (Exception e) {
             LOGGER.error("Unable to start server, shutting down", e);
-            try {
-                server.stop();
-            } catch (Exception e1) {
-                LOGGER.warn("Failure during stop server", e1);
-            }
-            try {
-                cleanup();
-            } catch (Exception e2) {
-                LOGGER.warn("Failure during cleanup", e2);
-            }
+            server.stop();
+            cleanup();
             throw e;
         }
     }

@@ -11,12 +11,15 @@ import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.JarLocation;
 import net.sourceforge.argparse4j.inf.Argument;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.internal.ArgumentParserImpl;
+import net.sourceforge.argparse4j.internal.SubparserImpl;
 import org.eclipse.jetty.server.Server;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -54,31 +57,31 @@ public class InheritedServerCommandTest {
     private final ServerFactory serverFactory = mock(ServerFactory.class);
     private final Configuration configuration = mock(Configuration.class);
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         when(serverFactory.build(environment)).thenReturn(server);
         when(configuration.getServerFactory()).thenReturn(serverFactory);
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         server.stop();
     }
 
     @Test
-    void hasAName() throws Exception {
+    public void hasAName() throws Exception {
         assertThat(command.getName())
                 .isEqualTo("api");
     }
 
     @Test
-    void hasADescription() throws Exception {
+    public void hasADescription() throws Exception {
         assertThat(command.getDescription())
                 .isEqualTo("Runs the Dropwizard application as an API HTTP server");
     }
 
     @Test
-    void buildsAndRunsAConfiguredServer() throws Exception {
+    public void buildsAndRunsAConfiguredServer() throws Exception {
         command.run(environment, namespace, configuration);
 
         assertThat(server.isStarted())
@@ -86,16 +89,16 @@ public class InheritedServerCommandTest {
     }
 
     @Test
-    void usesDefaultConfigPath() throws Exception {
+    public void usesDefaultConfigPath() throws Exception {
 
-        class SingletonConfigurationFactory implements ConfigurationFactory<Configuration> {
+        class SingletonConfigurationFactory implements ConfigurationFactory{
             @Override
-            public Configuration build(final ConfigurationSourceProvider provider, final String path) throws IOException, ConfigurationException {
+            public Object build(final ConfigurationSourceProvider provider, final String path) throws IOException, ConfigurationException {
                 return configuration;
             }
 
             @Override
-            public Configuration build() throws IOException, ConfigurationException {
+            public Object build() throws IOException, ConfigurationException {
                 throw new AssertionError("Didn't use the default config path variable");
             }
         }
