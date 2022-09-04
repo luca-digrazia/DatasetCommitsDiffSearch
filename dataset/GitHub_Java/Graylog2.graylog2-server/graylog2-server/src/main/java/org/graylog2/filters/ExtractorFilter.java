@@ -19,7 +19,6 @@
  */
 package org.graylog2.filters;
 
-import com.codahale.metrics.Timer;
 import org.graylog2.Core;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
@@ -29,8 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -48,22 +45,14 @@ public class ExtractorFilter implements MessageFilter {
         }
 
         for (Extractor extractor : msg.getSourceInput().getExtractors().values()) {
-            Timer timer = server.metrics().timer(extractor.getTotalTimerName());
-            final Timer.Context timerContext = timer.time();
-
             try {
                 extractor.run(msg);
             } catch (Exception e) {
                 LOG.error("Could not apply extractor.", e);
-                timerContext.close();
                 continue;
             }
 
-            Timer cTimer = server.metrics().timer(extractor.getConverterTimerName());
-            final Timer.Context cTimerContext = cTimer.time();
             extractor.runConverters(msg);
-            cTimerContext.stop();
-            timerContext.stop();
         }
 
         return false;

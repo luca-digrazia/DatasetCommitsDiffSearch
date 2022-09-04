@@ -39,7 +39,9 @@ import org.drools.util.codec.Base64;
 import org.elasticsearch.search.SearchHit;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.joda.time.format.*;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.ISODateTimeFormat;
 
 /**
  * Utilty class for various tool/helper functions.
@@ -47,9 +49,6 @@ import org.joda.time.format.*;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class Tools {
-
-    public static final String ES_DATE_FORMAT = "yyyy-MM-dd HH-mm-ss.SSS";
-    public static final String ES_DATE_FORMAT_NO_MS = "yyyy-MM-dd HH-mm-ss";
 
     private Tools() { }
 
@@ -267,27 +266,8 @@ public final class Tools {
         return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS.%1$tL", cal); // ramtamtam
     }
 
-    /**
-     * Accepts our ElasticSearch time formats without milliseconds.
-     *
-     * @return A DateTimeFormtter suitable to parse an ES_DATE_FORMAT formatted string to a
-     *         DateTime Object even if it contains no milliseconds.
-     */
-    public static DateTimeFormatter timeFormatterWithOptionalMilliseconds() {
-        // This is the .SSS part
-        DateTimeParser ms = new DateTimeFormatterBuilder()
-                .appendLiteral(".")
-                .appendFractionOfSecond(1,3)
-                .toParser();
-
-        return new DateTimeFormatterBuilder()
-                .append(DateTimeFormat.forPattern(ES_DATE_FORMAT_NO_MS))
-                .appendOptional(ms)
-                .toFormatter();
-    }
-
     public static String buildElasticSearchTimeFormatFromDateTime(DateTime d) {
-        return d.toString(DateTimeFormat.forPattern(ES_DATE_FORMAT));
+        return d.toString(DateTimeFormat.forPattern("yyyy-MM-dd HH-mm-ss.SSS"));
     }
 
     public static int getTimestampOfMessage(SearchHit msg) {
@@ -296,7 +276,7 @@ public final class Tools {
             throw new RuntimeException("Document has no field timestamp.");
         }
 
-        DateTimeFormatter formatter = DateTimeFormat.forPattern(ES_DATE_FORMAT);
+        DateTimeFormatter formatter = DateTimeFormat.forPattern("yyyy-MM-dd HH-mm-ss.SSS");
         DateTime dt = formatter.parseDateTime(field.toString());
 
         return (int) (dt.getMillis()/1000);

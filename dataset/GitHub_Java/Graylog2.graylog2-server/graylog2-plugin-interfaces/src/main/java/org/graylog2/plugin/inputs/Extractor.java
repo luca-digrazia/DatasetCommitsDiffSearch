@@ -32,8 +32,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
@@ -62,9 +60,6 @@ public abstract class Extractor implements EmbeddedPersistable {
     protected final Map<String, Object> extractorConfig;
     protected final List<Converter> converters;
 
-    private final String totalTimerName;
-    private final String converterTimerName;
-
     public abstract void run(Message msg);
 
     public Extractor(String id, String title, Type type, CursorStrategy cursorStrategy, String sourceField, String targetField, Map<String, Object> extractorConfig, String creatorUserId, List<Converter> converters) throws ReservedFieldException {
@@ -81,9 +76,6 @@ public abstract class Extractor implements EmbeddedPersistable {
         this.extractorConfig = extractorConfig;
         this.creatorUserId = creatorUserId;
         this.converters = converters;
-
-        this.totalTimerName = name(getClass(), getType().toString().toLowerCase(), getId(), "executionTime");
-        this.converterTimerName = name(getClass(), getType().toString().toLowerCase(), getId(), "converterExecutionTime");
     }
 
     public void runConverters(Message msg) {
@@ -171,11 +163,4 @@ public abstract class Extractor implements EmbeddedPersistable {
         return converterConfig;
     }
 
-    public String getTotalTimerName() {
-        return totalTimerName;
-    }
-
-    public String getConverterTimerName() {
-        return converterTimerName;
-    }
 }
