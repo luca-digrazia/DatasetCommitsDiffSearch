@@ -20,7 +20,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,13 +46,13 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
-import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.OutputFilesLocker;
 import com.google.devtools.build.lib.remote.AbstractRemoteActionCache.UploadManifest;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
@@ -74,7 +73,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -89,15 +87,11 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 
 /** Tests for {@link AbstractRemoteActionCache}. */
 @RunWith(JUnit4.class)
 public class AbstractRemoteActionCacheTests {
-
-  @Mock private OutputFilesLocker outputFilesLocker;
 
   private FileSystem fs;
   private Path execRoot;
@@ -113,7 +107,6 @@ public class AbstractRemoteActionCacheTests {
 
   @Before
   public void setUp() throws Exception {
-    MockitoAnnotations.initMocks(this);
     fs = new InMemoryFileSystem(new JavaClock(), DigestHashFunction.SHA256);
     execRoot = fs.getPath("/execroot");
     execRoot.createDirectoryAndParents();
@@ -278,7 +271,7 @@ public class AbstractRemoteActionCacheTests {
             digestUtil, result, execRoot, /*uploadSymlinks=*/ true, /*allowSymlinks=*/ true);
     IOException e = assertThrows(IOException.class, () -> um.addFiles(ImmutableList.of(link)));
     assertThat(e).hasMessageThat().contains("dangling");
-    assertThat(e).hasMessageThat().contains("/execroot/link");
+      assertThat(e).hasMessageThat().contains("/execroot/link");
     assertThat(e).hasMessageThat().contains("target");
   }
 
@@ -510,7 +503,7 @@ public class AbstractRemoteActionCacheTests {
             digestUtil, result, execRoot, /*uploadSymlinks=*/ true, /*allowSymlinks=*/ true);
     IOException e = assertThrows(IOException.class, () -> um.addFiles(ImmutableList.of(dir)));
     assertThat(e).hasMessageThat().contains("dangling");
-    assertThat(e).hasMessageThat().contains("/execroot/dir/link");
+      assertThat(e).hasMessageThat().contains("/execroot/dir/link");
     assertThat(e).hasMessageThat().contains("/execroot/target");
   }
 
@@ -529,7 +522,7 @@ public class AbstractRemoteActionCacheTests {
             digestUtil, result, execRoot, /*uploadSymlinks=*/ true, /*allowSymlinks=*/ false);
     ExecException e = assertThrows(ExecException.class, () -> um.addFiles(ImmutableList.of(dir)));
     assertThat(e).hasMessageThat().contains("symbolic link");
-    assertThat(e).hasMessageThat().contains("dir/link");
+      assertThat(e).hasMessageThat().contains("dir/link");
     assertThat(e).hasMessageThat().contains("--remote_allow_symlink_upload");
   }
 
@@ -539,11 +532,10 @@ public class AbstractRemoteActionCacheTests {
     ActionResult.Builder result = ActionResult.newBuilder();
     result.addOutputFileSymlinksBuilder().setPath("a/b/link").setTarget("../../foo");
     // Doesn't check for dangling links, hence download succeeds.
-    cache.download(result.build(), execRoot, null, outputFilesLocker);
+    cache.download(result.build(), execRoot, null);
     Path path = execRoot.getRelative("a/b/link");
     assertThat(path.isSymbolicLink()).isTrue();
     assertThat(path.readSymbolicLink()).isEqualTo(PathFragment.create("../../foo"));
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -552,11 +544,10 @@ public class AbstractRemoteActionCacheTests {
     ActionResult.Builder result = ActionResult.newBuilder();
     result.addOutputDirectorySymlinksBuilder().setPath("a/b/link").setTarget("foo");
     // Doesn't check for dangling links, hence download succeeds.
-    cache.download(result.build(), execRoot, null, outputFilesLocker);
+    cache.download(result.build(), execRoot, null);
     Path path = execRoot.getRelative("a/b/link");
     assertThat(path.isSymbolicLink()).isTrue();
     assertThat(path.readSymbolicLink()).isEqualTo(PathFragment.create("foo"));
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -572,11 +563,10 @@ public class AbstractRemoteActionCacheTests {
     ActionResult.Builder result = ActionResult.newBuilder();
     result.addOutputDirectoriesBuilder().setPath("dir").setTreeDigest(treeDigest);
     // Doesn't check for dangling links, hence download succeeds.
-    cache.download(result.build(), execRoot, null, outputFilesLocker);
+    cache.download(result.build(), execRoot, null);
     Path path = execRoot.getRelative("dir/link");
     assertThat(path.isSymbolicLink()).isTrue();
     assertThat(path.readSymbolicLink()).isEqualTo(PathFragment.create("../foo"));
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -585,12 +575,9 @@ public class AbstractRemoteActionCacheTests {
     ActionResult.Builder result = ActionResult.newBuilder();
     result.addOutputDirectorySymlinksBuilder().setPath("foo").setTarget("/abs/link");
     IOException expected =
-        assertThrows(
-            IOException.class,
-            () -> cache.download(result.build(), execRoot, null, outputFilesLocker));
+        assertThrows(IOException.class, () -> cache.download(result.build(), execRoot, null));
     assertThat(expected).hasMessageThat().contains("/abs/link");
     assertThat(expected).hasMessageThat().contains("absolute path");
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -599,12 +586,9 @@ public class AbstractRemoteActionCacheTests {
     ActionResult.Builder result = ActionResult.newBuilder();
     result.addOutputFileSymlinksBuilder().setPath("foo").setTarget("/abs/link");
     IOException expected =
-        assertThrows(
-            IOException.class,
-            () -> cache.download(result.build(), execRoot, null, outputFilesLocker));
+        assertThrows(IOException.class, () -> cache.download(result.build(), execRoot, null));
     assertThat(expected).hasMessageThat().contains("/abs/link");
     assertThat(expected).hasMessageThat().contains("absolute path");
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -620,14 +604,10 @@ public class AbstractRemoteActionCacheTests {
     ActionResult.Builder result = ActionResult.newBuilder();
     result.addOutputDirectoriesBuilder().setPath("dir").setTreeDigest(treeDigest);
     IOException expected =
-        assertThrows(
-            IOException.class,
-            () -> cache.download(result.build(), execRoot, null, outputFilesLocker));
-    assertThat(expected.getSuppressed()).isEmpty();
+        assertThrows(IOException.class, () -> cache.download(result.build(), execRoot, null));
     assertThat(expected).hasMessageThat().contains("dir/link");
-    assertThat(expected).hasMessageThat().contains("/foo");
+      assertThat(expected).hasMessageThat().contains("/foo");
     assertThat(expected).hasMessageThat().contains("absolute path");
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -644,13 +624,11 @@ public class AbstractRemoteActionCacheTests {
     result.addOutputFiles(
         OutputFile.newBuilder().setPath("outputdir/outputfile").setDigest(outputFileDigest));
     result.addOutputFiles(OutputFile.newBuilder().setPath("otherfile").setDigest(otherFileDigest));
-    assertThrows(
-        IOException.class, () -> cache.download(result.build(), execRoot, null, outputFilesLocker));
+    assertThrows(IOException.class, () -> cache.download(result.build(), execRoot, null));
     assertThat(cache.getNumFailedDownloads()).isEqualTo(1);
-    assertThat(execRoot.getRelative("outputdir").exists()).isTrue();
-    assertThat(execRoot.getRelative("outputdir/outputfile").exists()).isFalse();
+      assertThat(execRoot.getRelative("outputdir").exists()).isTrue();
+      assertThat(execRoot.getRelative("outputdir/outputfile").exists()).isFalse();
     assertThat(execRoot.getRelative("otherfile").exists()).isFalse();
-    verify(outputFilesLocker, never()).lock();
   }
 
   @Test
@@ -677,45 +655,11 @@ public class AbstractRemoteActionCacheTests {
     IOException e =
         assertThrows(
             IOException.class,
-            () ->
-                cache.download(
-                    result, execRoot, new FileOutErr(stdout, stderr), outputFilesLocker));
-    assertThat(e.getSuppressed()).isEmpty();
+            () -> cache.download(result, execRoot, new FileOutErr(stdout, stderr)));
     assertThat(cache.getNumSuccessfulDownloads()).isEqualTo(2);
-    assertThat(cache.getNumFailedDownloads()).isEqualTo(1);
-    assertThat(cache.getDownloadQueueSize()).isEqualTo(3);
+      assertThat(cache.getNumFailedDownloads()).isEqualTo(1);
+      assertThat(cache.getDownloadQueueSize()).isEqualTo(3);
     assertThat(Throwables.getRootCause(e)).hasMessageThat().isEqualTo("download failed");
-    verify(outputFilesLocker, never()).lock();
-  }
-
-  @Test
-  public void downloadWithMultipleErrorsAddsThemAsSuppressed() throws Exception {
-    Path stdout = fs.getPath("/execroot/stdout");
-    Path stderr = fs.getPath("/execroot/stderr");
-
-    DefaultRemoteActionCache cache = newTestCache();
-    Digest digest1 = cache.addContents("file1");
-    Digest digest2 = cache.addException("file2", new IOException("file2 failed"));
-    Digest digest3 = cache.addException("file3", new IOException("file3 failed"));
-
-    ActionResult result =
-        ActionResult.newBuilder()
-            .setExitCode(0)
-            .addOutputFiles(OutputFile.newBuilder().setPath("file1").setDigest(digest1))
-            .addOutputFiles(OutputFile.newBuilder().setPath("file2").setDigest(digest2))
-            .addOutputFiles(OutputFile.newBuilder().setPath("file3").setDigest(digest3))
-            .build();
-    IOException e =
-        assertThrows(
-            IOException.class,
-            () ->
-                cache.download(
-                    result, execRoot, new FileOutErr(stdout, stderr), outputFilesLocker));
-
-    assertThat(e.getSuppressed()).hasLength(1);
-    assertThat(e.getSuppressed()[0]).isInstanceOf(IOException.class);
-    assertThat(e.getSuppressed()[0]).hasMessageThat().isEqualTo("file3 failed");
-    assertThat(Throwables.getRootCause(e)).hasMessageThat().isEqualTo("file2 failed");
   }
 
   @Test
@@ -741,7 +685,7 @@ public class AbstractRemoteActionCacheTests {
             .setStderrDigest(digestStderr)
             .build();
 
-    cache.download(result, execRoot, spyOutErr, outputFilesLocker);
+    cache.download(result, execRoot, spyOutErr);
 
     verify(spyOutErr, Mockito.times(2)).childOutErr();
     verify(spyChildOutErr).clearOut();
@@ -755,8 +699,6 @@ public class AbstractRemoteActionCacheTests {
     } catch (IOException err) {
       throw new AssertionError("outErr should still be writable after download finished.", err);
     }
-
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -782,8 +724,8 @@ public class AbstractRemoteActionCacheTests {
             .setStdoutDigest(digestStdout)
             .setStderrDigest(digestStderr)
             .build();
-    assertThrows(
-        IOException.class, () -> cache.download(result, execRoot, spyOutErr, outputFilesLocker));
+    IOException e =
+        assertThrows(IOException.class, () -> cache.download(result, execRoot, spyOutErr));
     verify(spyOutErr, Mockito.times(2)).childOutErr();
     verify(spyChildOutErr).clearOut();
     verify(spyChildOutErr).clearErr();
@@ -796,39 +738,6 @@ public class AbstractRemoteActionCacheTests {
     } catch (IOException err) {
       throw new AssertionError("outErr should still be writable after download failed.", err);
     }
-
-    verify(outputFilesLocker, never()).lock();
-  }
-
-  @Test
-  public void testDownloadClashes() throws Exception {
-    // Test that injecting the metadata for a remote output file works
-
-    // arrange
-    DefaultRemoteActionCache remoteCache = newTestCache();
-    Digest d1 = remoteCache.addContents("content1");
-    Digest d2 = remoteCache.addContents("content2");
-    ActionResult r =
-        ActionResult.newBuilder()
-            .setExitCode(0)
-            .addOutputFiles(OutputFile.newBuilder().setPath("outputs/foo.tmp").setDigest(d1))
-            .addOutputFiles(OutputFile.newBuilder().setPath("outputs/foo").setDigest(d2))
-            .build();
-
-    Artifact a1 = ActionsTestUtil.createArtifact(artifactRoot, "foo.tmp");
-    Artifact a2 = ActionsTestUtil.createArtifact(artifactRoot, "foo");
-
-    // act
-
-    remoteCache.download(r, execRoot, new FileOutErr(), outputFilesLocker);
-
-    // assert
-
-    assertThat(FileSystemUtils.readContent(a1.getPath(), StandardCharsets.UTF_8))
-        .isEqualTo("content1");
-    assertThat(FileSystemUtils.readContent(a2.getPath(), StandardCharsets.UTF_8))
-        .isEqualTo("content2");
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -859,8 +768,7 @@ public class AbstractRemoteActionCacheTests {
             /* inMemoryOutputPath= */ null,
             new FileOutErr(),
             execRoot,
-            injector,
-            outputFilesLocker);
+            injector);
 
     // assert
     assertThat(inMemoryOutput).isNull();
@@ -871,8 +779,6 @@ public class AbstractRemoteActionCacheTests {
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
-
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -908,7 +814,7 @@ public class AbstractRemoteActionCacheTests {
         new SpecialArtifact(
             artifactRoot,
             PathFragment.create("outputs/dir"),
-            ActionsTestUtil.NULL_ARTIFACT_OWNER,
+            ArtifactOwner.NullArtifactOwner.INSTANCE,
             SpecialArtifactType.TREE);
 
     MetadataInjector injector = mock(MetadataInjector.class);
@@ -921,8 +827,7 @@ public class AbstractRemoteActionCacheTests {
             /* inMemoryOutputPath= */ null,
             new FileOutErr(),
             execRoot,
-            injector,
-            outputFilesLocker);
+            injector);
 
     // assert
     assertThat(inMemoryOutput).isNull();
@@ -940,8 +845,6 @@ public class AbstractRemoteActionCacheTests {
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
-
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -979,7 +882,7 @@ public class AbstractRemoteActionCacheTests {
         new SpecialArtifact(
             artifactRoot,
             PathFragment.create("outputs/dir"),
-            ActionsTestUtil.NULL_ARTIFACT_OWNER,
+            ArtifactOwner.NullArtifactOwner.INSTANCE,
             SpecialArtifactType.TREE);
     MetadataInjector injector = mock(MetadataInjector.class);
 
@@ -994,11 +897,8 @@ public class AbstractRemoteActionCacheTests {
                     /* inMemoryOutputPath= */ null,
                     new FileOutErr(),
                     execRoot,
-                    injector,
-                    outputFilesLocker));
+                    injector));
     assertThat(e).isEqualTo(downloadTreeException);
-
-    verify(outputFilesLocker, never()).lock();
   }
 
   @Test
@@ -1021,13 +921,7 @@ public class AbstractRemoteActionCacheTests {
     // act
     InMemoryOutput inMemoryOutput =
         remoteCache.downloadMinimal(
-            r,
-            ImmutableList.of(),
-            /* inMemoryOutputPath= */ null,
-            outErr,
-            execRoot,
-            injector,
-            outputFilesLocker);
+            r, ImmutableList.of(), /* inMemoryOutputPath= */ null, outErr, execRoot, injector);
 
     // assert
     assertThat(inMemoryOutput).isNull();
@@ -1036,8 +930,6 @@ public class AbstractRemoteActionCacheTests {
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
-
-    verify(outputFilesLocker).lock();
   }
 
   @Test
@@ -1068,8 +960,7 @@ public class AbstractRemoteActionCacheTests {
             inMemoryOutputPathFragment,
             new FileOutErr(),
             execRoot,
-            injector,
-            outputFilesLocker);
+            injector);
 
     // assert
     assertThat(inMemoryOutput).isNotNull();
@@ -1084,8 +975,6 @@ public class AbstractRemoteActionCacheTests {
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
-
-    verify(outputFilesLocker).lock();
   }
 
   private DefaultRemoteActionCache newTestCache() {

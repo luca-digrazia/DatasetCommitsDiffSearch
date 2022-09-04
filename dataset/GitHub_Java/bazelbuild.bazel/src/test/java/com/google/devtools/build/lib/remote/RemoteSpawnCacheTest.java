@@ -182,8 +182,7 @@ public class RemoteSpawnCacheTest {
 
             @Override
             public void injectRemoteDirectory(
-                Artifact.SpecialArtifact output,
-                Map<PathFragment, RemoteFileArtifactValue> children) {
+                Artifact output, Map<PathFragment, RemoteFileArtifactValue> children) {
               throw new UnsupportedOperationException();
             }
 
