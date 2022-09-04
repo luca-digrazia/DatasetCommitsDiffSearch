@@ -16,13 +16,13 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
+import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -73,10 +73,7 @@ public class AndroidResourcesProcessorBuilder {
           .toArgConverter();
 
   private ResourceContainer primary;
-
-  private ResourceDependencies resourceDependencies;
-  private AssetDependencies assetDependencies;
-
+  private ResourceDependencies dependencies;
   private Artifact proguardOut;
   private Artifact mainDexProguardOut;
   private boolean conditionalKeepRules;
@@ -135,14 +132,8 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  public AndroidResourcesProcessorBuilder withResourceDependencies(
-      ResourceDependencies resourceDeps) {
-    this.resourceDependencies = resourceDeps;
-    return this;
-  }
-
-  public AndroidResourcesProcessorBuilder withAssetDependencies(AssetDependencies assetDeps) {
-    this.assetDependencies = assetDeps;
+  public AndroidResourcesProcessorBuilder withDependencies(ResourceDependencies resourceDeps) {
+    this.dependencies = resourceDeps;
     return this;
   }
 
@@ -241,26 +232,9 @@ public class AndroidResourcesProcessorBuilder {
 
   public ResourceContainer build(ActionConstructionContext context) {
     if (aaptVersion == AndroidAaptVersion.AAPT2) {
-      createAapt2ApkAction(context);
-    } else {
-      createAaptAction(context);
+      return createAapt2ApkAction(context);
     }
-
-    ResourceContainer.Builder builder =
-        primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).setSymbols(symbols);
-
-    // If there is an apk to be generated, use it, else reuse the apk from the primary resources.
-    // All android_binary ResourceContainers have to have an apk, but if a new one is not
-    // requested to be built for this resource processing action (in case of just creating an
-    // R.txt or proguard merging), reuse the primary resource from the dependencies.
-    if (apkOut != null) {
-      builder.setApk(apkOut);
-    }
-    if (manifestOut != null) {
-      builder.setManifest(manifestOut);
-    }
-
-    return builder.build();
+    return createAaptAction(context);
   }
 
   public AndroidResourcesProcessorBuilder setJavaPackage(String customJavaPackage) {
@@ -301,7 +275,7 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  private void createAapt2ApkAction(ActionConstructionContext context) {
+  private ResourceContainer createAapt2ApkAction(ActionConstructionContext context) {
     List<Artifact> outs = new ArrayList<>();
     // TODO(corysmith): Convert to an immutable list builder, as there is no benefit to a NestedSet
     // here, as it will already have been flattened.
@@ -312,26 +286,24 @@ public class AndroidResourcesProcessorBuilder {
     builder.add("--tool").add("AAPT2_PACKAGE").add("--");
 
     builder.addExecPath("--aapt2", sdk.getAapt2().getExecutable());
-    if (resourceDependencies != null) {
+    if (dependencies != null) {
       ResourceContainerConverter.addToCommandLine(
-          resourceDependencies,
+          dependencies,
           builder,
           useCompiledResourcesForMerge
               ? AAPT2_RESOURCE_DEP_TO_ARG_NO_PARSE
               : AAPT2_RESOURCE_DEP_TO_ARG);
       inputs
-          .addTransitive(resourceDependencies.getTransitiveResources())
-          .addTransitive(resourceDependencies.getTransitiveAssets())
-          .addTransitive(resourceDependencies.getTransitiveManifests())
-          .addTransitive(resourceDependencies.getTransitiveAapt2RTxt())
-          .addTransitive(resourceDependencies.getTransitiveCompiledSymbols());
+          .addTransitive(dependencies.getTransitiveResources())
+          .addTransitive(dependencies.getTransitiveAssets())
+          .addTransitive(dependencies.getTransitiveManifests())
+          .addTransitive(dependencies.getTransitiveAapt2RTxt())
+          .addTransitive(dependencies.getTransitiveCompiledSymbols());
 
       if (!useCompiledResourcesForMerge) {
-        inputs.addTransitive(resourceDependencies.getTransitiveSymbolsBin());
+        inputs.addTransitive(dependencies.getTransitiveSymbolsBin());
       }
     }
-
-    addAssetDeps(builder, inputs);
 
     if (useCompiledResourcesForMerge) {
       builder.add("--useCompiledResourcesForMerge");
@@ -367,9 +339,24 @@ public class AndroidResourcesProcessorBuilder {
             .setProgressMessage("Processing Android resources for %s", ruleContext.getLabel())
             .setMnemonic("AndroidAapt2")
             .build(context));
+
+    // Return the full set of processed transitive dependencies.
+    ResourceContainer.Builder result =
+        primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).setSymbols(symbols);
+    // If there is an apk to be generated, use it, else reuse the apk from the primary resources.
+    // All android_binary ResourceContainers have to have an apk, but if a new one is not
+    // requested to be built for this resource processing action (in case of just creating an
+    // R.txt or proguard merging), reuse the primary resource from the dependencies.
+    if (apkOut != null) {
+      result.setApk(apkOut);
+    }
+    if (manifestOut != null) {
+      result.setManifest(manifestOut);
+    }
+    return result.build();
   }
 
-  private void createAaptAction(ActionConstructionContext context) {
+  private ResourceContainer createAaptAction(ActionConstructionContext context) {
     List<Artifact> outs = new ArrayList<>();
     // TODO(corysmith): Convert to an immutable list builder, as there is no benefit to a NestedSet
     // here, as it will already have been flattened.
@@ -379,19 +366,15 @@ public class AndroidResourcesProcessorBuilder {
     // Set the busybox tool.
     builder.add("--tool").add("PACKAGE").add("--");
 
-    if (resourceDependencies != null) {
-      ResourceContainerConverter.addToCommandLine(
-          resourceDependencies, builder, RESOURCE_DEP_TO_ARG);
+    if (dependencies != null) {
+      ResourceContainerConverter.addToCommandLine(dependencies, builder, RESOURCE_DEP_TO_ARG);
       inputs
-          .addTransitive(resourceDependencies.getTransitiveResources())
-          .addTransitive(resourceDependencies.getTransitiveAssets())
-          .addTransitive(resourceDependencies.getTransitiveManifests())
-          .addTransitive(resourceDependencies.getTransitiveRTxt())
-          .addTransitive(resourceDependencies.getTransitiveSymbolsBin());
+          .addTransitive(dependencies.getTransitiveResources())
+          .addTransitive(dependencies.getTransitiveAssets())
+          .addTransitive(dependencies.getTransitiveManifests())
+          .addTransitive(dependencies.getTransitiveRTxt())
+          .addTransitive(dependencies.getTransitiveSymbolsBin());
     }
-
-    addAssetDeps(builder, inputs);
-
     builder.addExecPath("--aapt", sdk.getAapt().getExecutable());
     configureCommonFlags(outs, inputs, builder);
 
@@ -425,25 +408,21 @@ public class AndroidResourcesProcessorBuilder {
             .setProgressMessage("Processing Android resources for %s", ruleContext.getLabel())
             .setMnemonic("AaptPackage")
             .build(context));
-  }
 
-  private void addAssetDeps(CustomCommandLine.Builder builder, NestedSetBuilder<Artifact> inputs) {
-    if (assetDependencies == null || assetDependencies.getTransitiveAssets().isEmpty()) {
-      return;
+    // Return the full set of processed transitive dependencies.
+    ResourceContainer.Builder result =
+        primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).setSymbols(symbols);
+    // If there is an apk to be generated, use it, else reuse the apk from the primary resources.
+    // All android_binary ResourceContainers have to have an apk, but if a new one is not
+    // requested to be built for this resource processing action (in case of just creating an
+    // R.txt or proguard merging), reuse the primary resource from the dependencies.
+    if (apkOut != null) {
+      result.setApk(apkOut);
     }
-
-    builder
-        .addAll(
-            "--directAssets",
-            AndroidDataConverter.MERGABLE_DATA_CONVERTER.getVectorArg(
-                assetDependencies.getDirectParsedAssets()))
-        .addAll(
-            "--assets",
-            AndroidDataConverter.MERGABLE_DATA_CONVERTER.getVectorArg(
-                assetDependencies.getTransitiveParsedAssets()));
-
-    inputs.addTransitive(assetDependencies.getTransitiveAssets());
-    inputs.addTransitive(assetDependencies.getTransitiveSymbols());
+    if (manifestOut != null) {
+      result.setManifest(manifestOut);
+    }
+    return result.build();
   }
 
   private void configureCommonFlags(

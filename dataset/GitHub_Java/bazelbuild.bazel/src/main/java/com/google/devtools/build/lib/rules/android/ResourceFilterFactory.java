@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.common.options.EnumConverter;
@@ -60,6 +61,9 @@ import javax.annotation.Nullable;
 public class ResourceFilterFactory {
   public static final String RESOURCE_CONFIGURATION_FILTERS_NAME = "resource_configuration_filters";
   public static final String DENSITIES_NAME = "densities";
+
+  public static final ObjectCodec<ResourceFilterFactory> CODEC =
+      new ResourceFilterFactory_AutoCodec();
 
   /**
    * Locales used for pseudolocation.
@@ -785,7 +789,6 @@ public class ResourceFilterFactory {
     return new AddDynamicallyConfiguredResourceFilteringTransition(attrs);
   }
 
-  @AutoCodec
   public static final PatchTransition REMOVE_DYNAMICALLY_CONFIGURED_RESOURCE_FILTERING_TRANSITION =
       new RemoveDynamicallyConfiguredResourceFilteringTransition();
 
@@ -797,8 +800,6 @@ public class ResourceFilterFactory {
     }
   }
 
-  // There is no codec for this class because AttributeMap can contain extremely heavyweight
-  // objects like Package.
   @VisibleForTesting
   static final class AddDynamicallyConfiguredResourceFilteringTransition
       extends BaseDynamicallyConfiguredResourceFilteringTransition {
