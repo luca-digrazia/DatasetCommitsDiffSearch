@@ -1,10 +1,13 @@
 package io.quarkus.mongodb.impl;
 
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 
 import org.bson.Document;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.conversions.Bson;
+import org.eclipse.microprofile.reactive.streams.operators.PublisherBuilder;
+import org.eclipse.microprofile.reactive.streams.operators.ReactiveStreams;
 
 import com.mongodb.MongoNamespace;
 import com.mongodb.bulk.BulkWriteResult;
@@ -27,14 +30,13 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.model.changestream.ChangeStreamDocument;
 import com.mongodb.client.result.DeleteResult;
-import com.mongodb.client.result.InsertManyResult;
-import com.mongodb.client.result.InsertOneResult;
 import com.mongodb.client.result.UpdateResult;
 import com.mongodb.reactivestreams.client.AggregatePublisher;
 import com.mongodb.reactivestreams.client.ChangeStreamPublisher;
 import com.mongodb.reactivestreams.client.ClientSession;
 import com.mongodb.reactivestreams.client.DistinctPublisher;
 import com.mongodb.reactivestreams.client.FindPublisher;
+import com.mongodb.reactivestreams.client.ListIndexesPublisher;
 import com.mongodb.reactivestreams.client.MapReducePublisher;
 import com.mongodb.reactivestreams.client.MongoCollection;
 
@@ -43,9 +45,7 @@ import io.quarkus.mongodb.ChangeStreamOptions;
 import io.quarkus.mongodb.DistinctOptions;
 import io.quarkus.mongodb.FindOptions;
 import io.quarkus.mongodb.MapReduceOptions;
-import io.quarkus.mongodb.reactive.ReactiveMongoCollection;
-import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.Uni;
+import io.quarkus.mongodb.ReactiveMongoCollection;
 
 public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T> {
 
@@ -61,68 +61,94 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
     }
 
     @Override
+    public CodecRegistry getCodecRegistry() {
+        return collection.getCodecRegistry();
+    }
+
+    @Override
     public Class<T> getDocumentClass() {
         return collection.getDocumentClass();
     }
 
     @Override
-    public Uni<Long> estimatedDocumentCount() {
-        return Wrappers.toUni(collection.estimatedDocumentCount());
+    public CompletionStage<Long> estimatedDocumentCount() {
+        return Wrappers.toCompletionStage(collection.estimatedDocumentCount());
     }
 
     @Override
-    public Uni<Long> estimatedDocumentCount(EstimatedDocumentCountOptions options) {
-        return Wrappers.toUni(collection.estimatedDocumentCount(options));
+    public CompletionStage<Long> estimatedDocumentCount(EstimatedDocumentCountOptions options) {
+        return Wrappers.toCompletionStage(collection.estimatedDocumentCount(options));
     }
 
     @Override
-    public Uni<Long> countDocuments() {
-        return Wrappers.toUni(collection.countDocuments());
+    public CompletionStage<Long> countDocuments() {
+        return Wrappers.toCompletionStage(collection.countDocuments());
     }
 
     @Override
-    public Uni<Long> countDocuments(Bson filter) {
-        return Wrappers.toUni(collection.countDocuments(filter));
+    public CompletionStage<Long> countDocuments(Bson filter) {
+        return Wrappers.toCompletionStage(collection.countDocuments(filter));
     }
 
     @Override
-    public Uni<Long> countDocuments(Bson filter, CountOptions options) {
-        return Wrappers.toUni(collection.countDocuments(filter, options));
+    public CompletionStage<Long> countDocuments(Bson filter, CountOptions options) {
+        return Wrappers.toCompletionStage(collection.countDocuments(filter, options));
     }
 
     @Override
-    public Uni<Long> countDocuments(ClientSession clientSession) {
-        return Wrappers.toUni(collection.countDocuments(clientSession));
+    public CompletionStage<Long> countDocuments(ClientSession clientSession) {
+        return Wrappers.toCompletionStage(collection.countDocuments(clientSession));
     }
 
     @Override
-    public Uni<Long> countDocuments(ClientSession clientSession, Bson filter) {
-        return Wrappers.toUni(collection.countDocuments(clientSession, filter));
+    public CompletionStage<Long> countDocuments(ClientSession clientSession, Bson filter) {
+        return Wrappers.toCompletionStage(collection.countDocuments(clientSession, filter));
     }
 
     @Override
-    public Uni<Long> countDocuments(ClientSession clientSession, Bson filter, CountOptions options) {
-        return Wrappers.toUni(collection.countDocuments(clientSession, filter, options));
+    public CompletionStage<Long> countDocuments(ClientSession clientSession, Bson filter, CountOptions options) {
+        return Wrappers.toCompletionStage(collection.countDocuments(clientSession, filter, options));
     }
 
     @Override
-    public <D> Multi<D> distinct(String fieldName, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(fieldName, clazz));
+    public <D> DistinctPublisher<D> distinctAsPublisher(String fieldName, Class<D> clazz) {
+        return collection.distinct(fieldName, clazz);
     }
 
     @Override
-    public <D> Multi<D> distinct(String fieldName, Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(fieldName, filter, clazz));
+    public <D> DistinctPublisher<D> distinctAsPublisher(String fieldName, Bson filter, Class<D> clazz) {
+        return collection.distinct(fieldName, filter, clazz);
     }
 
     @Override
-    public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(clientSession, fieldName, clazz));
+    public <D> DistinctPublisher<D> distinctAsPublisher(ClientSession clientSession, String fieldName, Class<D> clazz) {
+        return collection.distinct(clientSession, fieldName, clazz);
     }
 
     @Override
-    public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.distinct(clientSession, fieldName, filter, clazz));
+    public <D> DistinctPublisher<D> distinctAsPublisher(ClientSession clientSession, String fieldName, Bson filter,
+            Class<D> clazz) {
+        return collection.distinct(clientSession, fieldName, filter, clazz);
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> distinct(String fieldName, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.distinct(fieldName, clazz));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> distinct(String fieldName, Bson filter, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.distinct(fieldName, filter, clazz));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> distinct(ClientSession clientSession, String fieldName, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.distinct(clientSession, fieldName, clazz));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> distinct(ClientSession clientSession, String fieldName, Bson filter, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.distinct(clientSession, fieldName, filter, clazz));
     }
 
     private <D> DistinctPublisher<D> apply(DistinctOptions options, DistinctPublisher<D> stream) {
@@ -133,68 +159,108 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
     }
 
     @Override
-    public <D> Multi<D> distinct(String fieldName, Class<D> clazz, DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(fieldName, clazz)));
+    public <D> PublisherBuilder<D> distinct(String fieldName, Class<D> clazz, DistinctOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.distinct(fieldName, clazz)));
     }
 
     @Override
-    public <D> Multi<D> distinct(String fieldName, Bson filter, Class<D> clazz, DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(fieldName, filter, clazz)));
+    public <D> PublisherBuilder<D> distinct(String fieldName, Bson filter, Class<D> clazz, DistinctOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.distinct(fieldName, filter, clazz)));
     }
 
     @Override
-    public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Class<D> clazz,
+    public <D> PublisherBuilder<D> distinct(ClientSession clientSession, String fieldName, Class<D> clazz,
             DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(clientSession, fieldName, clazz)));
+        return Wrappers.toPublisherBuilder(apply(options, collection.distinct(clientSession, fieldName, clazz)));
     }
 
     @Override
-    public <D> Multi<D> distinct(ClientSession clientSession, String fieldName, Bson filter, Class<D> clazz,
+    public <D> PublisherBuilder<D> distinct(ClientSession clientSession, String fieldName, Bson filter, Class<D> clazz,
             DistinctOptions options) {
-        return Wrappers.toMulti(apply(options, collection.distinct(clientSession, fieldName, filter, clazz)));
+        return Wrappers.toPublisherBuilder(apply(options, collection.distinct(clientSession, fieldName, filter, clazz)));
     }
 
     @Override
-    public Multi<T> find() {
-        return Wrappers.toMulti(collection.find());
+    public FindPublisher<T> findAsPublisher() {
+        return collection.find();
     }
 
     @Override
-    public <D> Multi<D> find(Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(clazz));
+    public <D> FindPublisher<D> findAsPublisher(Class<D> clazz) {
+        return collection.find(clazz);
     }
 
     @Override
-    public Multi<T> find(Bson filter) {
-        return Wrappers.toMulti(collection.find(filter));
+    public FindPublisher<T> findAsPublisher(Bson filter) {
+        return collection.find(filter);
     }
 
     @Override
-    public <D> Multi<D> find(Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(filter, clazz));
+    public <D> FindPublisher<D> findAsPublisher(Bson filter, Class<D> clazz) {
+        return collection.find(filter, clazz);
     }
 
     @Override
-    public Multi<T> find(ClientSession clientSession) {
-        return Wrappers.toMulti(collection.find(clientSession));
+    public FindPublisher<T> findAsPublisher(ClientSession clientSession) {
+        return collection.find(clientSession);
     }
 
     @Override
-    public <D> Multi<D> find(ClientSession clientSession, Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(clientSession, clazz));
+    public <D> FindPublisher<D> findAsPublisher(ClientSession clientSession, Class<D> clazz) {
+        return collection.find(clientSession, clazz);
     }
 
     @Override
-    public Multi<T> find(ClientSession clientSession, Bson filter) {
-        return Wrappers.toMulti(collection.find(clientSession, filter));
+    public FindPublisher<T> findAsPublisher(ClientSession clientSession, Bson filter) {
+        return collection.find(clientSession, filter);
     }
 
     @Override
-    public <D> Multi<D> find(ClientSession clientSession, Bson filter, Class<D> clazz) {
-        return Wrappers.toMulti(collection.find(clientSession, filter, clazz));
+    public <D> FindPublisher<D> findAsPublisher(ClientSession clientSession, Bson filter, Class<D> clazz) {
+        return collection.find(clientSession, filter, clazz);
     }
 
-    private <D> FindPublisher<D> apply(FindOptions options, FindPublisher<D> publisher) {
+    @Override
+    public PublisherBuilder<T> find() {
+        return Wrappers.toPublisherBuilder(collection.find());
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> find(Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.find(clazz));
+    }
+
+    @Override
+    public PublisherBuilder<T> find(Bson filter) {
+        return Wrappers.toPublisherBuilder(collection.find(filter));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> find(Bson filter, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.find(filter, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<T> find(ClientSession clientSession) {
+        return Wrappers.toPublisherBuilder(collection.find(clientSession));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> find(ClientSession clientSession, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.find(clientSession, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<T> find(ClientSession clientSession, Bson filter) {
+        return Wrappers.toPublisherBuilder(collection.find(clientSession, filter));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> find(ClientSession clientSession, Bson filter, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.find(clientSession, filter, clazz));
+    }
+
+    private <D> FindPublisher<D> apply(io.quarkus.mongodb.FindOptions options, FindPublisher<D> publisher) {
         if (options == null) {
             return publisher;
         }
@@ -202,63 +268,93 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
     }
 
     @Override
-    public Multi<T> find(FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find()));
+    public PublisherBuilder<T> find(io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find()));
     }
 
     @Override
-    public <D> Multi<D> find(Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clazz)));
+    public <D> PublisherBuilder<D> find(Class<D> clazz, io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(clazz)));
     }
 
     @Override
-    public Multi<T> find(Bson filter, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(filter)));
+    public PublisherBuilder<T> find(Bson filter, io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(filter)));
     }
 
     @Override
-    public <D> Multi<D> find(Bson filter, Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(filter, clazz)));
+    public <D> PublisherBuilder<D> find(Bson filter, Class<D> clazz, io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(filter, clazz)));
     }
 
     @Override
-    public Multi<T> find(ClientSession clientSession, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession)));
+    public PublisherBuilder<T> find(ClientSession clientSession, io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(clientSession)));
     }
 
     @Override
-    public <D> Multi<D> find(ClientSession clientSession, Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession, clazz)));
+    public <D> PublisherBuilder<D> find(ClientSession clientSession, Class<D> clazz, io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(clientSession, clazz)));
     }
 
     @Override
-    public Multi<T> find(ClientSession clientSession, Bson filter, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession, filter)));
+    public PublisherBuilder<T> find(ClientSession clientSession, Bson filter, io.quarkus.mongodb.FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(clientSession, filter)));
     }
 
     @Override
-    public <D> Multi<D> find(ClientSession clientSession, Bson filter, Class<D> clazz, FindOptions options) {
-        return Wrappers.toMulti(apply(options, collection.find(clientSession, filter, clazz)));
+    public <D> PublisherBuilder<D> find(ClientSession clientSession, Bson filter, Class<D> clazz, FindOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.find(clientSession, filter, clazz)));
     }
 
     @Override
-    public Multi<T> aggregate(List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.aggregate(pipeline));
+    public AggregatePublisher<Document> aggregateAsPublisher(List<? extends Bson> pipeline) {
+        return collection.aggregate(pipeline);
     }
 
     @Override
-    public <D> Multi<D> aggregate(List<? extends Bson> pipeline, Class<D> clazz) {
-        return Wrappers.toMulti(collection.aggregate(pipeline, clazz));
+    public <D> AggregatePublisher<D> aggregateAsPublisher(List<? extends Bson> pipeline, Class<D> clazz) {
+        return collection.aggregate(pipeline, clazz);
     }
 
     @Override
-    public Multi<T> aggregate(ClientSession clientSession, List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.aggregate(clientSession, pipeline));
+    public AggregatePublisher<Document> aggregateAsPublisher(ClientSession clientSession, List<? extends Bson> pipeline) {
+        return collection.aggregate(clientSession, pipeline);
+    }
+
+    /**
+     * Aggregates documents according to the specified aggregation pipeline.
+     *
+     * @param clientSession the client session with which to associate this operation
+     * @param pipeline the aggregate pipeline
+     * @param clazz the class to decode each document into
+     * @param <D> the target document type of the iterable.
+     * @return a stream containing the result of the aggregation operation
+     */
+    @Override
+    public <D> AggregatePublisher<D> aggregateAsPublisher(ClientSession clientSession, List<? extends Bson> pipeline,
+            Class<D> clazz) {
+        return collection.aggregate(clientSession, pipeline, clazz);
     }
 
     @Override
-    public <D> Multi<D> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<D> clazz) {
-        return Wrappers.toMulti(collection.aggregate(clientSession, pipeline, clazz));
+    public PublisherBuilder<Document> aggregate(List<? extends Bson> pipeline) {
+        return Wrappers.toPublisherBuilder(collection.aggregate(pipeline));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> aggregate(List<? extends Bson> pipeline, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.aggregate(pipeline, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<Document> aggregate(ClientSession clientSession, List<? extends Bson> pipeline) {
+        return Wrappers.toPublisherBuilder(collection.aggregate(clientSession, pipeline));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.aggregate(clientSession, pipeline, clazz));
     }
 
     private <D> AggregatePublisher<D> apply(AggregateOptions options, AggregatePublisher<D> publisher) {
@@ -269,71 +365,112 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
     }
 
     @Override
-    public Multi<T> aggregate(List<? extends Bson> pipeline, AggregateOptions options) {
-        return Multi.createFrom().publisher(apply(options, collection.aggregate(pipeline)));
+    public PublisherBuilder<Document> aggregate(List<? extends Bson> pipeline, AggregateOptions options) {
+        return ReactiveStreams.fromPublisher(apply(options, collection.aggregate(pipeline)));
     }
 
     @Override
-    public <D> Multi<D> aggregate(List<? extends Bson> pipeline, Class<D> clazz, AggregateOptions options) {
-        return Multi.createFrom().publisher(apply(options, collection.aggregate(pipeline, clazz)));
+    public <D> PublisherBuilder<D> aggregate(List<? extends Bson> pipeline, Class<D> clazz, AggregateOptions options) {
+        return ReactiveStreams.fromPublisher(apply(options, collection.aggregate(pipeline, clazz)));
     }
 
     @Override
-    public Multi<T> aggregate(ClientSession clientSession, List<? extends Bson> pipeline,
+    public PublisherBuilder<Document> aggregate(ClientSession clientSession, List<? extends Bson> pipeline,
             AggregateOptions options) {
-        return Multi.createFrom().publisher(apply(options, collection.aggregate(clientSession, pipeline)));
+        return ReactiveStreams.fromPublisher(apply(options, collection.aggregate(clientSession, pipeline)));
     }
 
     @Override
-    public <D> Multi<D> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<D> clazz,
+    public <D> PublisherBuilder<D> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<D> clazz,
             AggregateOptions options) {
-        return Multi.createFrom().publisher(apply(options, collection.aggregate(clientSession, pipeline, clazz)));
+        return ReactiveStreams.fromPublisher(apply(options, collection.aggregate(clientSession, pipeline, clazz)));
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch() {
-        return Wrappers.toMulti(collection.watch());
+    public ChangeStreamPublisher<Document> watchAsPublisher() {
+        return collection.watch();
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(clazz));
+    public <D> ChangeStreamPublisher<D> watchAsPublisher(Class<D> clazz) {
+        return collection.watch(clazz);
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.watch(pipeline));
+    public ChangeStreamPublisher<Document> watchAsPublisher(List<? extends Bson> pipeline) {
+        return collection.watch(pipeline);
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(List<? extends Bson> pipeline, Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(pipeline, clazz));
+    public <D> ChangeStreamPublisher<D> watchAsPublisher(List<? extends Bson> pipeline, Class<D> clazz) {
+        return collection.watch(pipeline, clazz);
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession) {
-        return Wrappers.toMulti(collection.watch(clientSession));
+    public ChangeStreamPublisher<Document> watchAsPublisher(ClientSession clientSession) {
+        return collection.watch(clientSession);
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(clientSession, clazz));
+    public <D> ChangeStreamPublisher<D> watchAsPublisher(ClientSession clientSession, Class<D> clazz) {
+        return collection.watch(clientSession, clazz);
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline) {
-        return Wrappers.toMulti(collection.watch(clientSession, pipeline));
+    public ChangeStreamPublisher<Document> watchAsPublisher(ClientSession clientSession, List<? extends Bson> pipeline) {
+        return collection.watch(clientSession, pipeline);
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
+    public <D> ChangeStreamPublisher<D> watchAsPublisher(ClientSession clientSession, List<? extends Bson> pipeline,
             Class<D> clazz) {
-        return Wrappers.toMulti(collection.watch(clientSession, pipeline, clazz));
+        return collection.watch(clientSession, pipeline, clazz);
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch()));
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch() {
+        return Wrappers.toPublisherBuilder(collection.watch());
+    }
+
+    @Override
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.watch(clazz));
+    }
+
+    @Override
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline) {
+        return Wrappers.toPublisherBuilder(collection.watch(pipeline));
+    }
+
+    @Override
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(List<? extends Bson> pipeline, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.watch(pipeline, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(ClientSession clientSession) {
+        return Wrappers.toPublisherBuilder(collection.watch(clientSession));
+    }
+
+    @Override
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(ClientSession clientSession, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.watch(clientSession, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline) {
+        return Wrappers.toPublisherBuilder(collection.watch(clientSession, pipeline));
+    }
+
+    @Override
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
+            Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.watch(clientSession, pipeline, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(ChangeStreamOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch()));
     }
 
     private <D> ChangeStreamPublisher<D> apply(ChangeStreamOptions options, ChangeStreamPublisher<D> watch) {
@@ -344,68 +481,90 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(Class<D> clazz, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clazz)));
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(Class<D> clazz, ChangeStreamOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(clazz)));
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(pipeline)));
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(List<? extends Bson> pipeline, ChangeStreamOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(pipeline)));
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(List<? extends Bson> pipeline, Class<D> clazz,
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(List<? extends Bson> pipeline, Class<D> clazz,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(pipeline, clazz)));
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(pipeline, clazz)));
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession)));
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(ClientSession clientSession, ChangeStreamOptions options) {
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(clientSession)));
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, Class<D> clazz,
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(ClientSession clientSession, Class<D> clazz,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession, clazz)));
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(clientSession, clazz)));
     }
 
     @Override
-    public Multi<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
+    public PublisherBuilder<ChangeStreamDocument<Document>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession, pipeline)));
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(clientSession, pipeline)));
     }
 
     @Override
-    public <D> Multi<ChangeStreamDocument<D>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
+    public <D> PublisherBuilder<ChangeStreamDocument<D>> watch(ClientSession clientSession, List<? extends Bson> pipeline,
             Class<D> clazz, ChangeStreamOptions options) {
-        return Wrappers.toMulti(apply(options, collection.watch(clientSession, pipeline, clazz)));
+        return Wrappers.toPublisherBuilder(apply(options, collection.watch(clientSession, pipeline, clazz)));
     }
 
     @Override
-    public Multi<T> mapReduce(String mapFunction, String reduceFunction) {
-        return Wrappers.toMulti(collection.mapReduce(mapFunction, reduceFunction));
+    public MapReducePublisher<Document> mapReduceAsPublisher(String mapFunction, String reduceFunction) {
+        return collection.mapReduce(mapFunction, reduceFunction);
     }
 
     @Override
-    public <D> Multi<D> mapReduce(String mapFunction, String reduceFunction, Class<D> clazz) {
-        return Wrappers.toMulti(collection.mapReduce(mapFunction, reduceFunction, clazz));
+    public <D> MapReducePublisher<D> mapReduceAsPublisher(String mapFunction, String reduceFunction, Class<D> clazz) {
+        return collection.mapReduce(mapFunction, reduceFunction, clazz);
     }
 
     @Override
-    public Multi<T> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction) {
-        return Wrappers.toMulti(collection.mapReduce(clientSession, mapFunction, reduceFunction));
+    public MapReducePublisher<Document> mapReduceAsPublisher(ClientSession clientSession, String mapFunction,
+            String reduceFunction) {
+        return collection.mapReduce(clientSession, mapFunction, reduceFunction);
     }
 
     @Override
-    public <D> Multi<D> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
+    public <D> MapReducePublisher<D> mapReduceAsPublisher(ClientSession clientSession, String mapFunction,
+            String reduceFunction, Class<D> clazz) {
+        return collection.mapReduce(clientSession, mapFunction, reduceFunction, clazz);
+    }
+
+    @Override
+    public PublisherBuilder<Document> mapReduce(String mapFunction, String reduceFunction) {
+        return Wrappers.toPublisherBuilder(mapReduceAsPublisher(mapFunction, reduceFunction));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> mapReduce(String mapFunction, String reduceFunction, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(mapReduceAsPublisher(mapFunction, reduceFunction, clazz));
+    }
+
+    @Override
+    public PublisherBuilder<Document> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction) {
+        return Wrappers.toPublisherBuilder(mapReduceAsPublisher(clientSession, mapFunction, reduceFunction));
+    }
+
+    @Override
+    public <D> PublisherBuilder<D> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
             Class<D> clazz) {
-        return Wrappers.toMulti(collection.mapReduce(clientSession, mapFunction, reduceFunction, clazz));
+        return Wrappers.toPublisherBuilder(mapReduceAsPublisher(clientSession, mapFunction, reduceFunction, clazz));
     }
 
     @Override
-    public Multi<T> mapReduce(String mapFunction, String reduceFunction, MapReduceOptions options) {
-        return Multi.createFrom().publisher(apply(options, collection.mapReduce(mapFunction, reduceFunction)));
+    public PublisherBuilder<Document> mapReduce(String mapFunction, String reduceFunction, MapReduceOptions options) {
+        return ReactiveStreams.fromPublisher(apply(options, mapReduceAsPublisher(mapFunction, reduceFunction)));
     }
 
     private <D> MapReducePublisher<D> apply(MapReduceOptions options, MapReducePublisher<D> mapReduce) {
@@ -416,413 +575,422 @@ public class ReactiveMongoCollectionImpl<T> implements ReactiveMongoCollection<T
     }
 
     @Override
-    public <D> Multi<D> mapReduce(String mapFunction, String reduceFunction, Class<D> clazz,
+    public <D> PublisherBuilder<D> mapReduce(String mapFunction, String reduceFunction, Class<D> clazz,
             MapReduceOptions options) {
-        return Multi.createFrom().publisher(apply(options, collection.mapReduce(mapFunction, reduceFunction, clazz)));
+        return ReactiveStreams.fromPublisher(apply(options, mapReduceAsPublisher(mapFunction, reduceFunction, clazz)));
     }
 
     @Override
-    public Multi<T> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
+    public PublisherBuilder<Document> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
             MapReduceOptions options) {
-        return Multi.createFrom()
-                .publisher(apply(options, collection.mapReduce(clientSession, mapFunction, reduceFunction)));
+        return ReactiveStreams.fromPublisher(apply(options, mapReduceAsPublisher(clientSession, mapFunction, reduceFunction)));
     }
 
     @Override
-    public <D> Multi<D> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
+    public <D> PublisherBuilder<D> mapReduce(ClientSession clientSession, String mapFunction, String reduceFunction,
             Class<D> clazz, MapReduceOptions options) {
-        return Multi.createFrom()
-                .publisher(apply(options, collection.mapReduce(clientSession, mapFunction, reduceFunction, clazz)));
+        return ReactiveStreams
+                .fromPublisher(apply(options, mapReduceAsPublisher(clientSession, mapFunction, reduceFunction, clazz)));
     }
 
     @Override
-    public Uni<BulkWriteResult> bulkWrite(List<? extends WriteModel<? extends T>> requests) {
-        return Wrappers.toUni(collection.bulkWrite(requests));
+    public CompletionStage<BulkWriteResult> bulkWrite(List<? extends WriteModel<? extends T>> requests) {
+        return Wrappers.toCompletionStage(collection.bulkWrite(requests));
     }
 
     @Override
-    public Uni<BulkWriteResult> bulkWrite(List<? extends WriteModel<? extends T>> requests,
+    public CompletionStage<BulkWriteResult> bulkWrite(List<? extends WriteModel<? extends T>> requests,
             BulkWriteOptions options) {
-        return Wrappers.toUni(collection.bulkWrite(requests, options));
+        return Wrappers.toCompletionStage(collection.bulkWrite(requests, options));
     }
 
     @Override
-    public Uni<BulkWriteResult> bulkWrite(ClientSession clientSession,
+    public CompletionStage<BulkWriteResult> bulkWrite(ClientSession clientSession,
             List<? extends WriteModel<? extends T>> requests) {
-        return Wrappers.toUni(collection.bulkWrite(clientSession, requests));
+        return Wrappers.toCompletionStage(collection.bulkWrite(clientSession, requests));
     }
 
     @Override
-    public Uni<BulkWriteResult> bulkWrite(ClientSession clientSession,
+    public CompletionStage<BulkWriteResult> bulkWrite(ClientSession clientSession,
             List<? extends WriteModel<? extends T>> requests, BulkWriteOptions options) {
-        return Wrappers.toUni(collection.bulkWrite(clientSession, requests, options));
+        return Wrappers.toCompletionStage(collection.bulkWrite(clientSession, requests, options));
     }
 
     @Override
-    public Uni<InsertOneResult> insertOne(T t) {
-        return Wrappers.toUni(collection.insertOne(t));
+    public CompletionStage<Void> insertOne(T t) {
+        return Wrappers.toEmptyCompletionStage(collection.insertOne(t));
     }
 
     @Override
-    public Uni<InsertOneResult> insertOne(T t, InsertOneOptions options) {
-        return Wrappers.toUni(collection.insertOne(t, options));
+    public CompletionStage<Void> insertOne(T t, InsertOneOptions options) {
+        return Wrappers.toEmptyCompletionStage(collection.insertOne(t, options));
     }
 
     @Override
-    public Uni<InsertOneResult> insertOne(ClientSession clientSession, T t) {
-        return Wrappers.toUni(collection.insertOne(clientSession, t));
+    public CompletionStage<Void> insertOne(ClientSession clientSession, T t) {
+        return Wrappers.toEmptyCompletionStage(collection.insertOne(clientSession, t));
     }
 
     @Override
-    public Uni<InsertOneResult> insertOne(ClientSession clientSession, T t, InsertOneOptions options) {
-        return Wrappers.toUni(collection.insertOne(clientSession, t, options));
+    public CompletionStage<Void> insertOne(ClientSession clientSession, T t, InsertOneOptions options) {
+        return Wrappers.toEmptyCompletionStage(collection.insertOne(clientSession, t, options));
     }
 
     @Override
-    public Uni<InsertManyResult> insertMany(List<? extends T> tDocuments) {
-        return Wrappers.toUni(collection.insertMany(tDocuments));
+    public CompletionStage<Void> insertMany(List<? extends T> tDocuments) {
+        return Wrappers.toEmptyCompletionStage(collection.insertMany(tDocuments));
     }
 
     @Override
-    public Uni<InsertManyResult> insertMany(List<? extends T> tDocuments, InsertManyOptions options) {
-        return Wrappers.toUni(collection.insertMany(tDocuments, options));
+    public CompletionStage<Void> insertMany(List<? extends T> tDocuments, InsertManyOptions options) {
+        return Wrappers.toEmptyCompletionStage(collection.insertMany(tDocuments, options));
     }
 
     @Override
-    public Uni<InsertManyResult> insertMany(ClientSession clientSession, List<? extends T> tDocuments) {
-        return Wrappers.toUni(collection.insertMany(clientSession, tDocuments));
+    public CompletionStage<Void> insertMany(ClientSession clientSession, List<? extends T> tDocuments) {
+        return Wrappers.toEmptyCompletionStage(collection.insertMany(clientSession, tDocuments));
     }
 
     @Override
-    public Uni<InsertManyResult> insertMany(ClientSession clientSession, List<? extends T> tDocuments,
+    public CompletionStage<Void> insertMany(ClientSession clientSession, List<? extends T> tDocuments,
             InsertManyOptions options) {
-        return Wrappers.toUni(collection.insertMany(clientSession, tDocuments, options));
+        return Wrappers.toEmptyCompletionStage(collection.insertMany(clientSession, tDocuments, options));
     }
 
     @Override
-    public Uni<DeleteResult> deleteOne(Bson filter) {
-        return Wrappers.toUni(collection.deleteOne(filter));
+    public CompletionStage<DeleteResult> deleteOne(Bson filter) {
+        return Wrappers.toCompletionStage(collection.deleteOne(filter));
     }
 
     @Override
-    public Uni<DeleteResult> deleteOne(Bson filter, DeleteOptions options) {
-        return Wrappers.toUni(collection.deleteOne(filter, options));
+    public CompletionStage<DeleteResult> deleteOne(Bson filter, DeleteOptions options) {
+        return Wrappers.toCompletionStage(collection.deleteOne(filter, options));
     }
 
     @Override
-    public Uni<DeleteResult> deleteOne(ClientSession clientSession, Bson filter) {
-        return Wrappers.toUni(collection.deleteOne(clientSession, filter));
+    public CompletionStage<DeleteResult> deleteOne(ClientSession clientSession, Bson filter) {
+        return Wrappers.toCompletionStage(collection.deleteOne(clientSession, filter));
     }
 
     @Override
-    public Uni<DeleteResult> deleteOne(ClientSession clientSession, Bson filter, DeleteOptions options) {
-        return Wrappers.toUni(collection.deleteOne(clientSession, filter, options));
+    public CompletionStage<DeleteResult> deleteOne(ClientSession clientSession, Bson filter, DeleteOptions options) {
+        return Wrappers.toCompletionStage(collection.deleteOne(clientSession, filter, options));
     }
 
     @Override
-    public Uni<DeleteResult> deleteMany(Bson filter) {
-        return Wrappers.toUni(collection.deleteMany(filter));
+    public CompletionStage<DeleteResult> deleteMany(Bson filter) {
+        return Wrappers.toCompletionStage(collection.deleteMany(filter));
     }
 
     @Override
-    public Uni<DeleteResult> deleteMany(Bson filter, DeleteOptions options) {
-        return Wrappers.toUni(collection.deleteMany(filter, options));
+    public CompletionStage<DeleteResult> deleteMany(Bson filter, DeleteOptions options) {
+        return Wrappers.toCompletionStage(collection.deleteMany(filter, options));
     }
 
     @Override
-    public Uni<DeleteResult> deleteMany(ClientSession clientSession, Bson filter) {
-        return Wrappers.toUni(collection.deleteMany(clientSession, filter));
+    public CompletionStage<DeleteResult> deleteMany(ClientSession clientSession, Bson filter) {
+        return Wrappers.toCompletionStage(collection.deleteMany(clientSession, filter));
     }
 
     @Override
-    public Uni<DeleteResult> deleteMany(ClientSession clientSession, Bson filter, DeleteOptions options) {
-        return Wrappers.toUni(collection.deleteMany(clientSession, filter, options));
+    public CompletionStage<DeleteResult> deleteMany(ClientSession clientSession, Bson filter, DeleteOptions options) {
+        return Wrappers.toCompletionStage(collection.deleteMany(clientSession, filter, options));
     }
 
     @Override
-    public Uni<UpdateResult> replaceOne(Bson filter, T replacement) {
-        return Wrappers.toUni(collection.replaceOne(filter, replacement));
+    public CompletionStage<UpdateResult> replaceOne(Bson filter, T replacement) {
+        return Wrappers.toCompletionStage(collection.replaceOne(filter, replacement));
     }
 
     @Override
-    public Uni<UpdateResult> replaceOne(Bson filter, T replacement, ReplaceOptions options) {
-        return Wrappers.toUni(collection.replaceOne(filter, replacement, options));
+    public CompletionStage<UpdateResult> replaceOne(Bson filter, T replacement, ReplaceOptions options) {
+        return Wrappers.toCompletionStage(collection.replaceOne(filter, replacement, options));
     }
 
     @Override
-    public Uni<UpdateResult> replaceOne(ClientSession clientSession, Bson filter, T replacement) {
-        return Wrappers.toUni(collection.replaceOne(clientSession, filter, replacement));
+    public CompletionStage<UpdateResult> replaceOne(ClientSession clientSession, Bson filter, T replacement) {
+        return Wrappers.toCompletionStage(collection.replaceOne(clientSession, filter, replacement));
     }
 
     @Override
-    public Uni<UpdateResult> replaceOne(ClientSession clientSession, Bson filter, T replacement,
+    public CompletionStage<UpdateResult> replaceOne(ClientSession clientSession, Bson filter, T replacement,
             ReplaceOptions options) {
-        return Wrappers.toUni(collection.replaceOne(clientSession, filter, replacement, options));
+        return Wrappers.toCompletionStage(collection.replaceOne(clientSession, filter, replacement, options));
     }
 
     @Override
-    public Uni<UpdateResult> updateOne(Bson filter, Bson update) {
-        return Wrappers.toUni(collection.updateOne(filter, update));
+    public CompletionStage<UpdateResult> updateOne(Bson filter, Bson update) {
+        return Wrappers.toCompletionStage(collection.updateOne(filter, update));
     }
 
     @Override
-    public Uni<UpdateResult> updateOne(Bson filter, Bson update, UpdateOptions options) {
-        return Wrappers.toUni(collection.updateOne(filter, update, options));
+    public CompletionStage<UpdateResult> updateOne(Bson filter, Bson update, UpdateOptions options) {
+        return Wrappers.toCompletionStage(collection.updateOne(filter, update, options));
     }
 
     @Override
-    public Uni<UpdateResult> updateOne(ClientSession clientSession, Bson filter, Bson update) {
-        return Wrappers.toUni(collection.updateOne(clientSession, filter, update));
+    public CompletionStage<UpdateResult> updateOne(ClientSession clientSession, Bson filter, Bson update) {
+        return Wrappers.toCompletionStage(collection.updateOne(clientSession, filter, update));
     }
 
     @Override
-    public Uni<UpdateResult> updateOne(ClientSession clientSession, Bson filter, Bson update,
+    public CompletionStage<UpdateResult> updateOne(ClientSession clientSession, Bson filter, Bson update,
             UpdateOptions options) {
-        return Wrappers.toUni(collection.updateOne(clientSession, filter, update, options));
+        return Wrappers.toCompletionStage(collection.updateOne(clientSession, filter, update, options));
     }
 
     @Override
-    public Uni<UpdateResult> updateMany(Bson filter, Bson update) {
-        return Wrappers.toUni(collection.updateMany(filter, update));
+    public CompletionStage<UpdateResult> updateMany(Bson filter, Bson update) {
+        return Wrappers.toCompletionStage(collection.updateMany(filter, update));
     }
 
     @Override
-    public Uni<UpdateResult> updateMany(Bson filter, Bson update, UpdateOptions options) {
-        return Wrappers.toUni(collection.updateMany(filter, update, options));
+    public CompletionStage<UpdateResult> updateMany(Bson filter, Bson update, UpdateOptions options) {
+        return Wrappers.toCompletionStage(collection.updateMany(filter, update, options));
     }
 
     @Override
-    public Uni<UpdateResult> updateMany(ClientSession clientSession, Bson filter, Bson update) {
-        return Wrappers.toUni(collection.updateMany(clientSession, filter, update));
+    public CompletionStage<UpdateResult> updateMany(ClientSession clientSession, Bson filter, Bson update) {
+        return Wrappers.toCompletionStage(collection.updateMany(clientSession, filter, update));
     }
 
     @Override
-    public Uni<UpdateResult> updateMany(ClientSession clientSession, Bson filter, Bson update,
+    public CompletionStage<UpdateResult> updateMany(ClientSession clientSession, Bson filter, Bson update,
             UpdateOptions options) {
-        return Wrappers.toUni(collection.updateMany(clientSession, filter, update, options));
+        return Wrappers.toCompletionStage(collection.updateMany(clientSession, filter, update, options));
     }
 
     @Override
-    public Uni<T> findOneAndDelete(Bson filter) {
-        return Wrappers.toUni(collection.findOneAndDelete(filter));
+    public CompletionStage<T> findOneAndDelete(Bson filter) {
+        return Wrappers.toCompletionStage(collection.findOneAndDelete(filter));
     }
 
     @Override
-    public Uni<T> findOneAndDelete(Bson filter, FindOneAndDeleteOptions options) {
-        return Wrappers.toUni(collection.findOneAndDelete(filter, options));
+    public CompletionStage<T> findOneAndDelete(Bson filter, FindOneAndDeleteOptions options) {
+        return Wrappers.toCompletionStage(collection.findOneAndDelete(filter, options));
     }
 
     @Override
-    public Uni<T> findOneAndDelete(ClientSession clientSession, Bson filter) {
-        return Wrappers.toUni(collection.findOneAndDelete(clientSession, filter));
+    public CompletionStage<T> findOneAndDelete(ClientSession clientSession, Bson filter) {
+        return Wrappers.toCompletionStage(collection.findOneAndDelete(clientSession, filter));
     }
 
     @Override
-    public Uni<T> findOneAndDelete(ClientSession clientSession, Bson filter, FindOneAndDeleteOptions options) {
-        return Wrappers.toUni(collection.findOneAndDelete(clientSession, filter, options));
+    public CompletionStage<T> findOneAndDelete(ClientSession clientSession, Bson filter, FindOneAndDeleteOptions options) {
+        return Wrappers.toCompletionStage(collection.findOneAndDelete(clientSession, filter, options));
     }
 
     @Override
-    public Uni<T> findOneAndReplace(Bson filter, T replacement) {
-        return Wrappers.toUni(collection.findOneAndReplace(filter, replacement));
+    public CompletionStage<T> findOneAndReplace(Bson filter, T replacement) {
+        return Wrappers.toCompletionStage(collection.findOneAndReplace(filter, replacement));
     }
 
     @Override
-    public Uni<T> findOneAndReplace(Bson filter, T replacement, FindOneAndReplaceOptions options) {
-        return Wrappers.toUni(collection.findOneAndReplace(filter, replacement, options));
+    public CompletionStage<T> findOneAndReplace(Bson filter, T replacement, FindOneAndReplaceOptions options) {
+        return Wrappers.toCompletionStage(collection.findOneAndReplace(filter, replacement, options));
     }
 
     @Override
-    public Uni<T> findOneAndReplace(ClientSession clientSession, Bson filter, T replacement) {
-        return Wrappers.toUni(collection.findOneAndReplace(clientSession, filter, replacement));
+    public CompletionStage<T> findOneAndReplace(ClientSession clientSession, Bson filter, T replacement) {
+        return Wrappers.toCompletionStage(collection.findOneAndReplace(clientSession, filter, replacement));
     }
 
     @Override
-    public Uni<T> findOneAndReplace(ClientSession clientSession, Bson filter, T replacement,
+    public CompletionStage<T> findOneAndReplace(ClientSession clientSession, Bson filter, T replacement,
             FindOneAndReplaceOptions options) {
-        return Wrappers.toUni(collection.findOneAndReplace(clientSession, filter, replacement, options));
+        return Wrappers.toCompletionStage(collection.findOneAndReplace(clientSession, filter, replacement, options));
     }
 
     @Override
-    public Uni<T> findOneAndUpdate(Bson filter, Bson update) {
-        return Wrappers.toUni(collection.findOneAndUpdate(filter, update));
+    public CompletionStage<T> findOneAndUpdate(Bson filter, Bson update) {
+        return Wrappers.toCompletionStage(collection.findOneAndUpdate(filter, update));
     }
 
     @Override
-    public Uni<T> findOneAndUpdate(Bson filter, Bson update, FindOneAndUpdateOptions options) {
-        return Wrappers.toUni(collection.findOneAndUpdate(filter, update, options));
+    public CompletionStage<T> findOneAndUpdate(Bson filter, Bson update, FindOneAndUpdateOptions options) {
+        return Wrappers.toCompletionStage(collection.findOneAndUpdate(filter, update, options));
     }
 
     @Override
-    public Uni<T> findOneAndUpdate(ClientSession clientSession, Bson filter, Bson update) {
-        return Wrappers.toUni(collection.findOneAndUpdate(clientSession, filter, update));
+    public CompletionStage<T> findOneAndUpdate(ClientSession clientSession, Bson filter, Bson update) {
+        return Wrappers.toCompletionStage(collection.findOneAndUpdate(clientSession, filter, update));
     }
 
     @Override
-    public Uni<T> findOneAndUpdate(ClientSession clientSession, Bson filter, Bson update,
+    public CompletionStage<T> findOneAndUpdate(ClientSession clientSession, Bson filter, Bson update,
             FindOneAndUpdateOptions options) {
-        return Wrappers.toUni(collection.findOneAndUpdate(clientSession, filter, update, options));
+        return Wrappers.toCompletionStage(collection.findOneAndUpdate(clientSession, filter, update, options));
     }
 
     @Override
-    public Uni<Void> drop() {
-        return Wrappers.toUni(collection.drop());
+    public CompletionStage<Void> drop() {
+        return Wrappers.toEmptyCompletionStage(collection.drop());
     }
 
     @Override
-    public Uni<Void> drop(ClientSession clientSession) {
-        return Wrappers.toUni(collection.drop(clientSession));
+    public CompletionStage<Void> drop(ClientSession clientSession) {
+        return Wrappers.toEmptyCompletionStage(collection.drop(clientSession));
     }
 
     @Override
-    public Uni<String> createIndex(Bson key) {
-        return Wrappers.toUni(collection.createIndex(key));
+    public CompletionStage<String> createIndex(Bson key) {
+        return Wrappers.toCompletionStage(collection.createIndex(key));
     }
 
     @Override
-    public Uni<String> createIndex(Bson key, IndexOptions options) {
-        return Wrappers.toUni(collection.createIndex(key, options));
+    public CompletionStage<String> createIndex(Bson key, IndexOptions options) {
+        return Wrappers.toCompletionStage(collection.createIndex(key, options));
     }
 
     @Override
-    public Uni<String> createIndex(ClientSession clientSession, Bson key) {
-        return Wrappers.toUni(collection.createIndex(clientSession, key));
+    public CompletionStage<String> createIndex(ClientSession clientSession, Bson key) {
+        return Wrappers.toCompletionStage(collection.createIndex(clientSession, key));
     }
 
     @Override
-    public Uni<String> createIndex(ClientSession clientSession, Bson key, IndexOptions options) {
-        return Wrappers.toUni(collection.createIndex(clientSession, key, options));
+    public CompletionStage<String> createIndex(ClientSession clientSession, Bson key, IndexOptions options) {
+        return Wrappers.toCompletionStage(collection.createIndex(clientSession, key, options));
     }
 
     @Override
-    public Uni<List<String>> createIndexes(List<IndexModel> indexes) {
-        return Wrappers.toUniOfList(collection.createIndexes(indexes));
+    public CompletionStage<List<String>> createIndexes(List<IndexModel> indexes) {
+        return Wrappers.toCompletionStageOfList(collection.createIndexes(indexes));
     }
 
     @Override
-    public Uni<List<String>> createIndexes(List<IndexModel> indexes, CreateIndexOptions createIndexOptions) {
-        return Wrappers.toUniOfList(collection.createIndexes(indexes, createIndexOptions));
+    public CompletionStage<List<String>> createIndexes(List<IndexModel> indexes, CreateIndexOptions createIndexOptions) {
+        return Wrappers.toCompletionStageOfList(collection.createIndexes(indexes, createIndexOptions));
     }
 
     @Override
-    public Uni<List<String>> createIndexes(ClientSession clientSession, List<IndexModel> indexes) {
-        return Wrappers.toUniOfList(collection.createIndexes(clientSession, indexes));
+    public CompletionStage<List<String>> createIndexes(ClientSession clientSession, List<IndexModel> indexes) {
+        return Wrappers.toCompletionStageOfList(collection.createIndexes(clientSession, indexes));
     }
 
     @Override
-    public Uni<List<String>> createIndexes(ClientSession clientSession, List<IndexModel> indexes,
+    public CompletionStage<List<String>> createIndexes(ClientSession clientSession, List<IndexModel> indexes,
             CreateIndexOptions createIndexOptions) {
-        return Wrappers.toUniOfList(collection.createIndexes(clientSession, indexes, createIndexOptions));
+        return Wrappers.toCompletionStageOfList(collection.createIndexes(clientSession, indexes, createIndexOptions));
     }
 
     @Override
-    public Multi<Document> listIndexes() {
-        return Wrappers.toMulti(collection.listIndexes());
+    public ListIndexesPublisher<Document> listIndexesAsPublisher() {
+        return collection.listIndexes();
     }
 
     @Override
-    public <D> Multi<D> listIndexes(Class<D> clazz) {
-        return Wrappers.toMulti(collection.listIndexes(clazz));
+    public <D> ListIndexesPublisher<D> listIndexesAsPublisher(Class<D> clazz) {
+        return collection.listIndexes(clazz);
     }
 
     @Override
-    public Multi<Document> listIndexes(ClientSession clientSession) {
-        return Wrappers.toMulti(collection.listIndexes(clientSession));
+    public ListIndexesPublisher<Document> listIndexesAsPublisher(ClientSession clientSession) {
+        return collection.listIndexes(clientSession);
     }
 
     @Override
-    public <D> Multi<D> listIndexes(ClientSession clientSession, Class<D> clazz) {
-        return Wrappers.toMulti(collection.listIndexes(clientSession, clazz));
+    public <D> ListIndexesPublisher<D> listIndexesAsPublisher(ClientSession clientSession, Class<D> clazz) {
+        return collection.listIndexes(clientSession, clazz);
     }
 
     @Override
-    public Uni<Void> dropIndex(String indexName) {
-        return Wrappers.toUni(collection.dropIndex(indexName));
+    public PublisherBuilder<Document> listIndexes() {
+        return Wrappers.toPublisherBuilder(collection.listIndexes());
     }
 
     @Override
-    public Uni<Void> dropIndex(Bson keys) {
-        return Wrappers.toUni(collection.dropIndex(keys));
+    public <D> PublisherBuilder<D> listIndexes(Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.listIndexes(clazz));
     }
 
     @Override
-    public Uni<Void> dropIndex(String indexName, DropIndexOptions dropIndexOptions) {
-        return Wrappers.toUni(collection.dropIndex(indexName, dropIndexOptions));
+    public PublisherBuilder<Document> listIndexes(ClientSession clientSession) {
+        return Wrappers.toPublisherBuilder(collection.listIndexes(clientSession));
     }
 
     @Override
-    public Uni<Void> dropIndex(Bson keys, DropIndexOptions dropIndexOptions) {
-        return Wrappers.toUni(collection.dropIndex(keys, dropIndexOptions));
+    public <D> PublisherBuilder<D> listIndexes(ClientSession clientSession, Class<D> clazz) {
+        return Wrappers.toPublisherBuilder(collection.listIndexes(clientSession, clazz));
     }
 
     @Override
-    public Uni<Void> dropIndex(ClientSession clientSession, String indexName) {
-        return Wrappers.toUni(collection.dropIndex(clientSession, indexName));
+    public CompletionStage<Void> dropIndex(String indexName) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(indexName));
     }
 
     @Override
-    public Uni<Void> dropIndex(ClientSession clientSession, Bson keys) {
-        return Wrappers.toUni(collection.dropIndex(clientSession, keys));
+    public CompletionStage<Void> dropIndex(Bson keys) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(keys));
     }
 
     @Override
-    public Uni<Void> dropIndex(ClientSession clientSession, String indexName, DropIndexOptions dropIndexOptions) {
-        return Wrappers.toUni(collection.dropIndex(clientSession, indexName, dropIndexOptions));
+    public CompletionStage<Void> dropIndex(String indexName, DropIndexOptions dropIndexOptions) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(indexName, dropIndexOptions));
     }
 
     @Override
-    public Uni<Void> dropIndex(ClientSession clientSession, Bson keys, DropIndexOptions dropIndexOptions) {
-        return Wrappers.toUni(collection.dropIndex(clientSession, keys, dropIndexOptions));
+    public CompletionStage<Void> dropIndex(Bson keys, DropIndexOptions dropIndexOptions) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(keys, dropIndexOptions));
     }
 
     @Override
-    public Uni<Void> dropIndexes() {
-        return Wrappers.toUni(collection.dropIndexes());
+    public CompletionStage<Void> dropIndex(ClientSession clientSession, String indexName) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(clientSession, indexName));
     }
 
     @Override
-    public Uni<Void> dropIndexes(DropIndexOptions dropIndexOptions) {
-        return Wrappers.toUni(collection.dropIndexes(dropIndexOptions));
+    public CompletionStage<Void> dropIndex(ClientSession clientSession, Bson keys) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(clientSession, keys));
     }
 
     @Override
-    public Uni<Void> dropIndexes(ClientSession clientSession) {
-        return Wrappers.toUni(collection.dropIndexes(clientSession));
+    public CompletionStage<Void> dropIndex(ClientSession clientSession, String indexName, DropIndexOptions dropIndexOptions) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(clientSession, indexName, dropIndexOptions));
     }
 
     @Override
-    public Uni<Void> dropIndexes(ClientSession clientSession, DropIndexOptions dropIndexOptions) {
-        return Wrappers.toUni(collection.dropIndexes(clientSession, dropIndexOptions));
+    public CompletionStage<Void> dropIndex(ClientSession clientSession, Bson keys, DropIndexOptions dropIndexOptions) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndex(clientSession, keys, dropIndexOptions));
     }
 
     @Override
-    public Uni<Void> renameCollection(MongoNamespace newCollectionNamespace) {
-        return Wrappers.toUni(collection.renameCollection(newCollectionNamespace));
+    public CompletionStage<Void> dropIndexes() {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndexes());
     }
 
     @Override
-    public Uni<Void> renameCollection(MongoNamespace newCollectionNamespace, RenameCollectionOptions options) {
-        return Wrappers.toUni(collection.renameCollection(newCollectionNamespace, options));
+    public CompletionStage<Void> dropIndexes(DropIndexOptions dropIndexOptions) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndexes(dropIndexOptions));
     }
 
     @Override
-    public Uni<Void> renameCollection(ClientSession clientSession, MongoNamespace newCollectionNamespace) {
-        return Wrappers.toUni(collection.renameCollection(clientSession, newCollectionNamespace));
+    public CompletionStage<Void> dropIndexes(ClientSession clientSession) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndexes(clientSession));
     }
 
     @Override
-    public Uni<Void> renameCollection(ClientSession clientSession, MongoNamespace newCollectionNamespace,
+    public CompletionStage<Void> dropIndexes(ClientSession clientSession, DropIndexOptions dropIndexOptions) {
+        return Wrappers.toEmptyCompletionStage(collection.dropIndexes(clientSession, dropIndexOptions));
+    }
+
+    @Override
+    public CompletionStage<Void> renameCollection(MongoNamespace newCollectionNamespace) {
+        return Wrappers.toEmptyCompletionStage(collection.renameCollection(newCollectionNamespace));
+    }
+
+    @Override
+    public CompletionStage<Void> renameCollection(MongoNamespace newCollectionNamespace, RenameCollectionOptions options) {
+        return Wrappers.toEmptyCompletionStage(collection.renameCollection(newCollectionNamespace, options));
+    }
+
+    @Override
+    public CompletionStage<Void> renameCollection(ClientSession clientSession, MongoNamespace newCollectionNamespace) {
+        return Wrappers.toEmptyCompletionStage(collection.renameCollection(clientSession, newCollectionNamespace));
+    }
+
+    @Override
+    public CompletionStage<Void> renameCollection(ClientSession clientSession, MongoNamespace newCollectionNamespace,
             RenameCollectionOptions options) {
-        return Wrappers.toUni(collection.renameCollection(clientSession, newCollectionNamespace, options));
-    }
-
-    @Override
-    public CodecRegistry getCodecRegistry() {
-        return collection.getCodecRegistry();
-    }
-
-    @Override
-    public <NewTDocument> ReactiveMongoCollection<NewTDocument> withDocumentClass(Class<NewTDocument> clazz) {
-        return new ReactiveMongoCollectionImpl<>(this.collection.withDocumentClass(clazz));
+        return Wrappers.toEmptyCompletionStage(collection.renameCollection(clientSession, newCollectionNamespace, options));
     }
 }
