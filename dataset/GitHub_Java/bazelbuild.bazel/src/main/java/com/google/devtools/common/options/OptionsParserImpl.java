@@ -341,15 +341,8 @@ class OptionsParserImpl {
       OptionDefinition optionDefinition = parsedOption.getOptionDefinition();
       // All options can be deprecated; check and warn before doing any option-type specific work.
       maybeAddDeprecationWarning(optionDefinition);
-
-      // Track the value, before any remaining option-type specific work that is done outside of
-      // the OptionValueDescription.
-      OptionValueDescription entry =
-          optionValues.computeIfAbsent(
-              optionDefinition, OptionValueDescription::createOptionValueDescription);
-      entry.addOptionInstance(parsedOption, implicitDependent, expandedFrom, warnings);
-
       @Nullable String unconvertedValue = parsedOption.getUnconvertedValue();
+
       if (optionDefinition.isWrapperOption()) {
         if (unconvertedValue.startsWith("-")) {
           String sourceMessage =
@@ -421,6 +414,11 @@ class OptionsParserImpl {
                   + ": "
                   + Joiner.on(' ').join(unparsed));
         }
+      } else {
+        OptionValueDescription entry =
+            optionValues.computeIfAbsent(
+                optionDefinition, OptionValueDescription::createOptionValueDescription);
+        entry.addOptionInstance(parsedOption, implicitDependent, expandedFrom, warnings);
       }
 
       // Collect any implicit requirements.

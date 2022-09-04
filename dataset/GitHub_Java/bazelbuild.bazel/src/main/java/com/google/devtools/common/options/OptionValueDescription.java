@@ -26,7 +26,9 @@ import java.util.stream.Collectors;
 /**
  * The value of an option.
  *
- * <p>This takes care of tracking the final value as multiple instances of an option are parsed.
+ * <p>This takes care of tracking the final value as multiple instances of an option are parsed. It
+ * also tracks additional metadata describing its priority, source, whether it was set via an
+ * implicit dependency, and if so, by which other option.
  */
 public abstract class OptionValueDescription {
 
@@ -46,8 +48,12 @@ public abstract class OptionValueDescription {
   /** Returns the source(s) of this option, if there were multiple, duplicates are removed. */
   public abstract String getSourceString();
 
+  // TODO(b/65540004) implicitDependant and expandedFrom are artifacts of an option instance, and
+  // should be in ParsedOptionDescription.
   abstract void addOptionInstance(
       ParsedOptionDescription parsedOption,
+      OptionDefinition implicitDependant,
+      OptionDefinition expandedFrom,
       List<String> warnings)
       throws OptionsParsingException;
 
@@ -99,6 +105,8 @@ public abstract class OptionValueDescription {
     @Override
     void addOptionInstance(
         ParsedOptionDescription parsedOption,
+        OptionDefinition implicitDependant,
+        OptionDefinition expandedFrom,
         List<String> warnings) {
       throw new IllegalStateException(
           "Cannot add values to the default option value. Create a modifiable "
@@ -113,6 +121,8 @@ public abstract class OptionValueDescription {
   static class SingleOptionValueDescription extends OptionValueDescription {
     private ParsedOptionDescription effectiveOptionInstance;
     private Object effectiveValue;
+    private OptionDefinition optionThatDependsOnEffectiveValue;
+    private OptionDefinition optionThatExpandedToEffectiveValue;
 
     private SingleOptionValueDescription(OptionDefinition optionDefinition) {
       super(optionDefinition);
@@ -124,6 +134,8 @@ public abstract class OptionValueDescription {
       }
       effectiveOptionInstance = null;
       effectiveValue = null;
+      optionThatDependsOnEffectiveValue = null;
+      optionThatExpandedToEffectiveValue = null;
     }
 
     @Override
@@ -140,11 +152,15 @@ public abstract class OptionValueDescription {
     @Override
     void addOptionInstance(
         ParsedOptionDescription parsedOption,
+        OptionDefinition implicitDependant,
+        OptionDefinition expandedFrom,
         List<String> warnings)
         throws OptionsParsingException {
       // This might be the first value, in that case, just store it!
       if (effectiveOptionInstance == null) {
         effectiveOptionInstance = parsedOption;
+        optionThatDependsOnEffectiveValue = implicitDependant;
+        optionThatExpandedToEffectiveValue = expandedFrom;
         effectiveValue = effectiveOptionInstance.getConvertedValue();
         return;
       }
@@ -152,31 +168,23 @@ public abstract class OptionValueDescription {
       // If there was another value, check whether the new one will override it, and if so,
       // log warnings describing the change.
       if (parsedOption.getPriority().compareTo(effectiveOptionInstance.getPriority()) >= 0) {
-        // Identify the option that might have led to the current and new value of this option.
-        OptionDefinition implicitDependent = parsedOption.getImplicitDependent();
-        OptionDefinition expandedFrom = parsedOption.getExpandedFrom();
-        OptionDefinition optionThatDependsOnEffectiveValue =
-            effectiveOptionInstance.getImplicitDependent();
-        OptionDefinition optionThatExpandedToEffectiveValue =
-            effectiveOptionInstance.getExpandedFrom();
-
         // Output warnings:
-        if ((implicitDependent != null) && (optionThatDependsOnEffectiveValue != null)) {
-          if (!implicitDependent.equals(optionThatDependsOnEffectiveValue)) {
+        if ((implicitDependant != null) && (optionThatDependsOnEffectiveValue != null)) {
+          if (!implicitDependant.equals(optionThatDependsOnEffectiveValue)) {
             warnings.add(
                 String.format(
                     "Option '%s' is implicitly defined by both option '%s' and option '%s'",
                     optionDefinition.getOptionName(),
                     optionThatDependsOnEffectiveValue.getOptionName(),
-                    implicitDependent.getOptionName()));
+                    implicitDependant.getOptionName()));
           }
-        } else if ((implicitDependent != null)
+        } else if ((implicitDependant != null)
             && parsedOption.getPriority().equals(effectiveOptionInstance.getPriority())) {
           warnings.add(
               String.format(
                   "Option '%s' is implicitly defined by option '%s'; the implicitly set value "
                       + "overrides the previous one",
-                  optionDefinition.getOptionName(), implicitDependent.getOptionName()));
+                  optionDefinition.getOptionName(), implicitDependant.getOptionName()));
         } else if (optionThatDependsOnEffectiveValue != null) {
           warnings.add(
               String.format(
@@ -203,6 +211,8 @@ public abstract class OptionValueDescription {
 
         // Record the new value:
         effectiveOptionInstance = parsedOption;
+        optionThatDependsOnEffectiveValue = implicitDependant;
+        optionThatExpandedToEffectiveValue = expandedFrom;
         effectiveValue = parsedOption.getConvertedValue();
       } else {
         // The new value does not override the old value, as it has lower priority.
@@ -265,17 +275,17 @@ public abstract class OptionValueDescription {
     @Override
     void addOptionInstance(
         ParsedOptionDescription parsedOption,
+        OptionDefinition implicitDependant,
+        OptionDefinition expandedFrom,
         List<String> warnings)
         throws OptionsParsingException {
       // For repeatable options, we allow flags that take both single values and multiple values,
       // potentially collapsing them down.
       Object convertedValue = parsedOption.getConvertedValue();
-      OptionPriority priority = parsedOption.getPriority();
-      parsedOptions.put(priority, parsedOption);
       if (convertedValue instanceof List<?>) {
-        optionValues.putAll(priority, (List<?>) convertedValue);
+        optionValues.putAll(parsedOption.getPriority(), (List<?>) convertedValue);
       } else {
-        optionValues.put(priority, convertedValue);
+        optionValues.put(parsedOption.getPriority(), convertedValue);
       }
     }
   }
@@ -308,6 +318,8 @@ public abstract class OptionValueDescription {
     @Override
     void addOptionInstance(
         ParsedOptionDescription parsedOption,
+        OptionDefinition implicitDependant,
+        OptionDefinition expandedFrom,
         List<String> warnings) {
       // TODO(b/65540004) Deal with expansion options here instead of in parse(), and track their
       // link to the options they expanded to to.
@@ -329,11 +341,13 @@ public abstract class OptionValueDescription {
     @Override
     void addOptionInstance(
         ParsedOptionDescription parsedOption,
+        OptionDefinition implicitDependant,
+        OptionDefinition expandedFrom,
         List<String> warnings)
         throws OptionsParsingException {
       // This is a valued flag, its value is handled the same way as a normal
       // SingleOptionValueDescription.
-      super.addOptionInstance(parsedOption, warnings);
+      super.addOptionInstance(parsedOption, implicitDependant, expandedFrom, warnings);
 
       // Now deal with the implicit requirements.
       // TODO(b/65540004) Deal with options with implicit requirements here instead of in parse(),
@@ -361,6 +375,8 @@ public abstract class OptionValueDescription {
     @Override
     void addOptionInstance(
         ParsedOptionDescription parsedOption,
+        OptionDefinition implicitDependant,
+        OptionDefinition expandedFrom,
         List<String> warnings)
         throws OptionsParsingException {
       // TODO(b/65540004) Deal with options with implicit requirements here instead of in parse(),
