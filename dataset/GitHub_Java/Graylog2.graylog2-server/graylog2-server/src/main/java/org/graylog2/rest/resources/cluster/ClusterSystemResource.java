@@ -30,7 +30,6 @@ import org.graylog2.cluster.NodeService;
 import org.graylog2.rest.RemoteInterfaceProvider;
 import org.graylog2.rest.models.system.responses.SystemOverviewResponse;
 import org.graylog2.rest.models.system.responses.SystemThreadDumpResponse;
-import org.graylog2.shared.rest.resources.ProxiedResource;
 import org.graylog2.shared.rest.resources.system.RemoteSystemResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
@@ -46,6 +45,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -53,19 +53,26 @@ import java.util.stream.Collectors;
 @Api(value = "Cluster", description = "System information of all nodes in the cluster")
 @Path("/cluster")
 @Produces(MediaType.APPLICATION_JSON)
-public class ClusterSystemResource extends ProxiedResource {
+public class ClusterSystemResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterSystemResource.class);
 
     private final NodeService nodeService;
     private final RemoteInterfaceProvider remoteInterfaceProvider;
+    private final String authenticationToken;
 
     @Inject
     public ClusterSystemResource(NodeService nodeService,
                                  RemoteInterfaceProvider remoteInterfaceProvider,
                                  @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders);
         this.nodeService = nodeService;
         this.remoteInterfaceProvider = remoteInterfaceProvider;
+
+        final List<String> authenticationTokens = httpHeaders.getRequestHeader("Authorization");
+        if (authenticationTokens != null && authenticationTokens.size() >= 1) {
+            this.authenticationToken = authenticationTokens.get(0);
+        } else {
+            this.authenticationToken = null;
+        }
     }
 
     @GET
