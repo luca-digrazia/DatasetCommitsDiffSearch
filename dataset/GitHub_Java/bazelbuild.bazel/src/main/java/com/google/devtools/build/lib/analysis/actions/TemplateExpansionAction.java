@@ -130,11 +130,24 @@ public final class TemplateExpansionAction extends AbstractAction {
 
   @Override
   public final ActionContinuationOrResult beginExecution(
-      ActionExecutionContext actionExecutionContext) throws InterruptedException {
+      ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
     SpawnContinuation first =
-        actionExecutionContext
-            .getContext(TemplateExpansionContext.class)
-            .expandTemplate(TemplateExpansionAction.this, actionExecutionContext);
+        new SpawnContinuation() {
+          @Override
+          public ListenableFuture<?> getFuture() {
+            return null;
+          }
+
+          @Override
+          public SpawnContinuation execute() throws ExecException, InterruptedException {
+            TemplateExpansionContext expansionContext =
+                actionExecutionContext.getContext(TemplateExpansionContext.class);
+            return expansionContext.expandTemplate(
+                TemplateExpansionAction.this, actionExecutionContext);
+          }
+        };
+
     return new ActionContinuationOrResult() {
       private SpawnContinuation spawnContinuation = first;
 
@@ -147,11 +160,11 @@ public final class TemplateExpansionAction extends AbstractAction {
       @Override
       public ActionContinuationOrResult execute()
           throws ActionExecutionException, InterruptedException {
-        SpawnContinuation nextContinuation;
+        SpawnContinuation next;
         try {
-          nextContinuation = spawnContinuation.execute();
-          if (!nextContinuation.isDone()) {
-            spawnContinuation = nextContinuation;
+          next = spawnContinuation.execute();
+          if (!next.isDone()) {
+            spawnContinuation = next;
             return this;
           }
         } catch (ExecException e) {
@@ -160,9 +173,9 @@ public final class TemplateExpansionAction extends AbstractAction {
               actionExecutionContext.getVerboseFailures(),
               TemplateExpansionAction.this);
         }
-        return ActionContinuationOrResult.of(ActionResult.create(nextContinuation.get()));
+        return ActionContinuationOrResult.of(ActionResult.create(next.get()));
       }
-    };
+    }.execute();
   }
 
   @Override
