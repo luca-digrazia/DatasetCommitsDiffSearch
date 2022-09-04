@@ -348,7 +348,9 @@ public class Serialisers {
             readers = this.readers;
         }
         do {
-            Collections.addAll(toProcess, klass.getInterfaces());
+            for (Class<?> i : klass.getInterfaces()) {
+                toProcess.add(i);
+            }
             if (klass == Object.class || klass.getSuperclass() == null) {
                 //spec extension, look for interfaces as well
                 //we match interfaces before Object
@@ -376,19 +378,14 @@ public class Serialisers {
     private void readerLookup(MediaType mediaType, RuntimeType runtimeType, List<MediaType> mt, List<MessageBodyReader<?>> ret,
             List<ResourceReader> goodTypeReaders) {
         if (goodTypeReaders != null && !goodTypeReaders.isEmpty()) {
-            List<ResourceReader> mediaTypeMatchingReaders = new ArrayList<>(goodTypeReaders.size());
             for (ResourceReader goodTypeReader : goodTypeReaders) {
                 if (!goodTypeReader.matchesRuntimeType(runtimeType)) {
                     continue;
                 }
                 MediaType match = MediaTypeHelper.getBestMatch(mt, goodTypeReader.mediaTypes());
                 if (match != null || mediaType == null) {
-                    mediaTypeMatchingReaders.add(goodTypeReader);
+                    ret.add(goodTypeReader.getInstance());
                 }
-            }
-            mediaTypeMatchingReaders.sort(ResourceReader.ResourceReaderComparator.INSTANCE);
-            for (ResourceReader mediaTypeMatchingReader : mediaTypeMatchingReaders) {
-                ret.add(mediaTypeMatchingReader.getInstance());
             }
         }
     }

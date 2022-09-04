@@ -1,10 +1,9 @@
 package io.quarkus.rest.runtime.util;
 
-import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -16,6 +15,8 @@ import io.vertx.core.http.HttpServerRequest;
 /**
  * A representation of a server side media type.
  *
+ * TODO: There is a good chance that this class has taken on too many responsibilities so we
+ * might want to look into breaking out some pieces
  */
 public class ServerMediaType {
 
@@ -89,30 +90,20 @@ public class ServerMediaType {
         }
     }
 
-    /**
-     *
-     * @return An entry containing the negotiated desired media type as a key and the negotiated
-     *         provided media type as a value
-     */
-    public Map.Entry<MediaType, MediaType> negotiateProduces(HttpServerRequest request) {
-        return negotiateProduces(request, this.hardCoded);
+    public MediaType negotiateProduces(HttpServerRequest request) {
+        return negotiateProduces(request, this.hardCoded, NegotiateFallbackStrategy.SERVER);
     }
 
-    /**
-     *
-     * @return An entry containing the negotiated desired media type as a key and the negotiated
-     *         provided media type as a value
-     */
-    public Map.Entry<MediaType, MediaType> negotiateProduces(HttpServerRequest request, MediaType hardCoded) {
+    public MediaType negotiateProduces(HttpServerRequest request, MediaType hardCoded,
+            NegotiateFallbackStrategy negotiateFallbackStrategy) {
         if (hardCoded != null) {
             //technically we should negotiate here, and check if we need to return a 416
             //but for performance reasons we ignore this
-            return new AbstractMap.SimpleEntry<>(hardCoded, null);
+            return hardCoded;
         }
         String acceptStr = request.getHeader(HttpHeaders.ACCEPT);
-        MediaType selectedDesired = null;
-        MediaType selectedProvided = null;
-        List<MediaType> parsedAccepted;
+        MediaType selected = null;
+        List<MediaType> parsedAccepted = Collections.emptyList();
         if (acceptStr != null) {
             //TODO: this can be optimised
             parsedAccepted = MediaTypeHelper.parseHeader(acceptStr);
@@ -121,27 +112,26 @@ public class ServerMediaType {
             int currentServerIndex = Integer.MAX_VALUE;
             if (!parsedAccepted.isEmpty()) {
                 for (MediaType desired : parsedAccepted) {
-                    if (selectedDesired != null) {
+                    if (selected != null) {
                         //this is to enable server side q values to take effect
                         //the client side is sorted by q, if we have already picked one and the q is
                         //different then we can return the current one
                         if (!Objects.equals(desired.getParameters().get("q"), currentClientQ)) {
-                            if (selectedDesired.equals(MediaType.WILDCARD_TYPE)) {
-                                return new AbstractMap.SimpleEntry<>(MediaType.APPLICATION_OCTET_STREAM_TYPE, selectedProvided);
+                            if (selected.equals(MediaType.WILDCARD_TYPE)) {
+                                return MediaType.APPLICATION_OCTET_STREAM_TYPE;
                             }
-                            return new AbstractMap.SimpleEntry<>(selectedDesired, selectedProvided);
+                            return selected;
                         }
                     }
                     for (int j = 0; j < sortedMediaTypes.length; j++) {
                         MediaType provide = sortedMediaTypes[j];
                         if (provide.isCompatible(desired)) {
-                            if (selectedDesired == null || j < currentServerIndex) {
+                            if (selected == null || j < currentServerIndex) {
                                 if (desired.isWildcardType()) {
-                                    selectedDesired = MediaType.APPLICATION_OCTET_STREAM_TYPE;
+                                    selected = MediaType.APPLICATION_OCTET_STREAM_TYPE;
                                 } else {
-                                    selectedDesired = desired;
+                                    selected = desired;
                                 }
-                                selectedProvided = provide;
                                 currentServerIndex = j;
                                 currentClientQ = desired.getParameters().get("q");
                             }
@@ -150,13 +140,18 @@ public class ServerMediaType {
                 }
             }
         }
-        if (selectedDesired == null) {
-            selectedDesired = sortedMediaTypes[0];
+        if (selected == null) {
+            if ((negotiateFallbackStrategy == NegotiateFallbackStrategy.CLIENT) && (!parsedAccepted.isEmpty())) {
+                selected = parsedAccepted.get(0);
+            } else {
+                selected = sortedMediaTypes[0];
+            }
+
         }
-        if (selectedDesired.equals(MediaType.WILDCARD_TYPE)) {
-            return new AbstractMap.SimpleEntry<>(MediaType.APPLICATION_OCTET_STREAM_TYPE, selectedProvided);
+        if (selected.equals(MediaType.WILDCARD_TYPE)) {
+            return MediaType.APPLICATION_OCTET_STREAM_TYPE;
         }
-        return new AbstractMap.SimpleEntry<>(selectedDesired, selectedProvided);
+        return selected;
     }
 
     public MediaType[] getSortedMediaTypes() {
@@ -167,4 +162,8 @@ public class ServerMediaType {
         return sortedOriginalMediaTypes;
     }
 
+    public enum NegotiateFallbackStrategy {
+        SERVER,
+        CLIENT
+    }
 }

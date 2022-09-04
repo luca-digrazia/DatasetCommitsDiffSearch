@@ -8,7 +8,6 @@ import java.util.Map;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -32,7 +31,7 @@ public class MediaTypeHelper {
                     float rtn = Float.valueOf(val);
                     if (rtn > 1.0F)
                         throw new WebApplicationException("Media type q greated than 1" + type.toString(),
-                                Response.Status.BAD_REQUEST);
+                                HttpResponseCodes.SC_BAD_REQUEST);
                     return rtn;
                 }
             } catch (NumberFormatException e) {
@@ -66,7 +65,7 @@ public class MediaTypeHelper {
         return (isCompositeWildcardSubtype(subtype) || isWildcardCompositeSubtype(subtype));
     }
 
-    public static class MediaTypeComparator implements Comparator<MediaType>, Serializable {
+    private static class MediaTypeComparator implements Comparator<MediaType>, Serializable {
 
         private static final long serialVersionUID = -5828700121582498092L;
 
