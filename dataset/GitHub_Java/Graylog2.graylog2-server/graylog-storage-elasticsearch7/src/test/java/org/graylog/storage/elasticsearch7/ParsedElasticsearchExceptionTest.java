@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
- *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
- */
 package org.graylog.storage.elasticsearch7;
 
 import org.junit.jupiter.api.Test;
@@ -63,20 +47,6 @@ class ParsedElasticsearchExceptionTest {
             assertThat(p.type()).isEqualTo("unavailable_shards_exception");
             assertThat(p.reason()).isEqualTo("[graylog_0][2] primary shard is not active Timeout: [1m], " +
                     "request: [BulkShardRequest [[graylog_0][2]] containing [125] requests]]");
-        });
-    }
-
-    @Test
-    void parsingInvalidWriteTargetMessage() {
-        final String exception = "Elasticsearch exception [type=illegal_argument_exception, reason=no write index is defined for alias [messages_it_deflector]. The write index may be explicitly disabled using is_write_index=false or the alias points to multiple indices without one being designated as a write index]";
-
-        final ParsedElasticsearchException parsed = ParsedElasticsearchException.from(exception);
-
-        assertThat(parsed).satisfies(p -> {
-            assertThat(p.type()).isEqualTo("illegal_argument_exception");
-            assertThat(p.reason()).isEqualTo("no write index is defined for alias [messages_it_deflector]. " +
-                    "The write index may be explicitly disabled using is_write_index=false or the alias points to " +
-                    "multiple indices without one being designated as a write index");
         });
     }
 }
