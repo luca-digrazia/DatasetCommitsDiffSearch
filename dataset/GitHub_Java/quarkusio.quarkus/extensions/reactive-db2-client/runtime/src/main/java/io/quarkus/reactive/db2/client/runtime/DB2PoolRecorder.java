@@ -19,7 +19,6 @@ import io.quarkus.credentials.runtime.CredentialsProviderFinder;
 import io.quarkus.datasource.runtime.DataSourceRuntimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveRuntimeConfig;
-import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveRuntimeConfig;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
@@ -34,23 +33,17 @@ public class DB2PoolRecorder {
     private static final Logger log = Logger.getLogger(DB2PoolRecorder.class);
 
     public RuntimeValue<DB2Pool> configureDB2Pool(RuntimeValue<Vertx> vertx,
-            String dataSourceName,
             DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
-            DataSourcesReactiveRuntimeConfig dataSourcesReactiveRuntimeConfig,
-            DataSourcesReactiveDB2Config dataSourcesReactiveDB2Config,
+            DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
+            DataSourceReactiveDB2Config dataSourceReactiveDB2Config,
             ShutdownContext shutdown) {
 
-        DB2Pool db2Pool = initialize(vertx.getValue(),
-                dataSourcesRuntimeConfig.getDataSourceRuntimeConfig(dataSourceName),
-                dataSourcesReactiveRuntimeConfig.getDataSourceReactiveRuntimeConfig(dataSourceName),
-                dataSourcesReactiveDB2Config.getDataSourceReactiveRuntimeConfig(dataSourceName));
+        DB2Pool pool = initialize(vertx.getValue(), dataSourcesRuntimeConfig.defaultDataSource,
+                dataSourceReactiveRuntimeConfig,
+                dataSourceReactiveDB2Config);
 
-        shutdown.addShutdownTask(db2Pool::close);
-        return new RuntimeValue<>(db2Pool);
-    }
-
-    public RuntimeValue<io.vertx.mutiny.db2client.DB2Pool> mutinyDB2Pool(RuntimeValue<DB2Pool> db2Pool) {
-        return new RuntimeValue<>(io.vertx.mutiny.db2client.DB2Pool.newInstance(db2Pool.getValue()));
+        shutdown.addShutdownTask(pool::close);
+        return new RuntimeValue<>(pool);
     }
 
     private DB2Pool initialize(Vertx vertx, DataSourceRuntimeConfig dataSourceRuntimeConfig,
@@ -60,11 +53,11 @@ public class DB2PoolRecorder {
                 dataSourceReactiveDB2Config);
         DB2ConnectOptions connectOptions = toConnectOptions(dataSourceRuntimeConfig, dataSourceReactiveRuntimeConfig,
                 dataSourceReactiveDB2Config);
-        if (dataSourceReactiveRuntimeConfig.threadLocal.isPresent()) {
-            log.warn(
-                    "Configuration element 'thread-local' on Reactive datasource connections is deprecated and will be ignored. The started pool will always be based on a per-thread separate pool now.");
+        if (dataSourceReactiveRuntimeConfig.threadLocal.isPresent() &&
+                dataSourceReactiveRuntimeConfig.threadLocal.get()) {
+            return new ThreadLocalDB2Pool(vertx, connectOptions, poolOptions);
         }
-        return new ThreadLocalDB2Pool(vertx, connectOptions, poolOptions);
+        return DB2Pool.pool(vertx, connectOptions, poolOptions);
     }
 
     private PoolOptions toPoolOptions(DataSourceRuntimeConfig dataSourceRuntimeConfig,

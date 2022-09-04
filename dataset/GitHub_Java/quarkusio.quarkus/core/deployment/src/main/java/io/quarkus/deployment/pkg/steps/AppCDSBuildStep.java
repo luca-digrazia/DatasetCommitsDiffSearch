@@ -38,7 +38,8 @@ public class AppCDSBuildStep {
     public void requested(OutputTargetBuildItem outputTarget, BuildProducer<AppCDSRequestedBuildItem> producer)
             throws IOException {
         Path appCDSDir = outputTarget.getOutputDirectory().resolve("appcds");
-        IoUtils.recursiveDeleteAndThenCreate(appCDSDir);
+        IoUtils.recursiveDelete(appCDSDir);
+        Files.createDirectories(appCDSDir);
 
         producer.produce(new AppCDSRequestedBuildItem(outputTarget.getOutputDirectory().resolve("appcds")));
     }
