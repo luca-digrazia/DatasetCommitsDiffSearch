@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.analysis.AliasProvider.TargetMode;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
@@ -184,7 +183,7 @@ public final class RuleContext extends TargetContext
   private final BuildConfiguration hostConfiguration;
   private final PatchTransition disableLipoTransition;
   private final ConfigurationFragmentPolicy configurationFragmentPolicy;
-  private final ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments;
+  private final Class<? extends BuildConfiguration.Fragment> universalFragment;
   private final ErrorReporter reporter;
   @Nullable private final ToolchainContext toolchainContext;
 
@@ -199,7 +198,7 @@ public final class RuleContext extends TargetContext
       ListMultimap<String, ConfiguredTargetAndData> targetMap,
       ListMultimap<String, ConfiguredFilesetEntry> filesetEntryMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments,
+      Class<? extends BuildConfiguration.Fragment> universalFragment,
       String ruleClassNameForLogging,
       ImmutableMap<String, Attribute> aspectAttributes,
       @Nullable ToolchainContext toolchainContext) {
@@ -214,7 +213,7 @@ public final class RuleContext extends TargetContext
             .map(a -> a.getDescriptor())
             .collect(ImmutableList.toImmutableList());
     this.configurationFragmentPolicy = builder.configurationFragmentPolicy;
-    this.universalFragments = universalFragments;
+    this.universalFragment = universalFragment;
     this.targetMap = targetMap;
     this.filesetEntryMap = filesetEntryMap;
     this.configConditions = configConditions;
@@ -452,7 +451,7 @@ public final class RuleContext extends TargetContext
 
   public <T extends Fragment> boolean isLegalFragment(
       Class<T> fragment, ConfigurationTransition transition) {
-    return universalFragments.contains(fragment)
+    return fragment == universalFragment
         || fragment == PlatformConfiguration.class
         || configurationFragmentPolicy.isLegalConfigurationFragment(fragment, transition);
   }
@@ -1405,7 +1404,7 @@ public final class RuleContext extends TargetContext
     private final AnalysisEnvironment env;
     private final Rule rule;
     private final ConfigurationFragmentPolicy configurationFragmentPolicy;
-    private ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments;
+    private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private final BuildConfiguration configuration;
     private final BuildConfiguration hostConfiguration;
     private PatchTransition disableLipoTransition;
@@ -1453,7 +1452,7 @@ public final class RuleContext extends TargetContext
           targetMap,
           filesetEntryMap,
           configConditions,
-          universalFragments,
+          universalFragment,
           getRuleClassNameForLogging(),
           aspectAttributes != null ? aspectAttributes : ImmutableMap.<String, Attribute>of(),
           toolchainContext);
@@ -1498,13 +1497,12 @@ public final class RuleContext extends TargetContext
     /**
      * Sets the fragment that can be legally accessed even when not explicitly declared.
      */
-    Builder setUniversalFragments(
-        ImmutableList<Class<? extends BuildConfiguration.Fragment>> fragments) {
+    Builder setUniversalFragment(Class<? extends BuildConfiguration.Fragment> fragment) {
       // TODO(bazel-team): Add this directly to ConfigurationFragmentPolicy, so we
       // don't need separate logic specifically for checking this fragment. The challenge is
       // that we need RuleClassProvider to figure out what this fragment is, and not every
       // call state that creates ConfigurationFragmentPolicy has access to that.
-      this.universalFragments = fragments;
+      this.universalFragment = fragment;
       return this;
     }
 
@@ -1681,25 +1679,26 @@ public final class RuleContext extends TargetContext
     }
 
     private String badPrerequisiteMessage(
-        ConfiguredTargetAndData prerequisite, String reason, boolean isWarning) {
-      String targetKind = prerequisite.getTarget().getTargetKind();
+        String targetKind, ConfiguredTargetAndData prerequisite, String reason, boolean isWarning) {
+      String msgPrefix = targetKind != null ? targetKind + " " : "";
       String msgReason = reason != null ? " (" + reason + ")" : "";
       if (isWarning) {
         return String.format(
-            "%s is unexpected here%s; continuing anyway",
-            AliasProvider.describeTargetWithAliases(prerequisite, TargetMode.WITH_KIND),
+            "%s%s is unexpected here%s; continuing anyway",
+            msgPrefix, AliasProvider.printLabelWithAliasChain(prerequisite),
             msgReason);
       }
-      return String.format("%s is misplaced here%s",
-          AliasProvider.describeTargetWithAliases(prerequisite, TargetMode.WITH_KIND), msgReason);
+      return String.format("%s%s is misplaced here%s",
+          msgPrefix, AliasProvider.printLabelWithAliasChain(prerequisite), msgReason);
     }
 
     private void reportBadPrerequisite(
         Attribute attribute,
+        String targetKind,
         ConfiguredTargetAndData prerequisite,
         String reason,
         boolean isWarning) {
-      String message = badPrerequisiteMessage(prerequisite, reason, isWarning);
+      String message = badPrerequisiteMessage(targetKind, prerequisite, reason, isWarning);
       if (isWarning) {
         attributeWarning(attribute.getName(), message);
       } else {
@@ -1717,7 +1716,8 @@ public final class RuleContext extends TargetContext
 
         String reason = attribute.getValidityPredicate().checkValid(rule, prerequisiteRule);
         if (reason != null) {
-          reportBadPrerequisite(attribute, prerequisite, reason, false);
+          reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(),
+              prerequisite, reason, false);
         }
       }
 
@@ -1742,7 +1742,7 @@ public final class RuleContext extends TargetContext
               }
             } else {
               // The file exists but has a bad extension
-              reportBadPrerequisite(attribute, prerequisite,
+              reportBadPrerequisite(attribute, "file", prerequisite,
                   "expected " + attribute.getAllowedFileTypesPredicate(), false);
             }
           }
@@ -1880,6 +1880,7 @@ public final class RuleContext extends TargetContext
         // but maybe prerequisite provides required providers? do not reject yet.
         unfulfilledRequirements.add(
             badPrerequisiteMessage(
+                prerequisite.getTarget().getTargetKind(),
                 prerequisite,
                 "expected " + attribute.getAllowedRuleClassesPredicate(),
                 false));
@@ -1900,6 +1901,7 @@ public final class RuleContext extends TargetContext
         Predicate<RuleClass> allowedRuleClasses = attribute.getAllowedRuleClassesPredicate();
         reportBadPrerequisite(
             attribute,
+            prerequisite.getTarget().getTargetKind(),
             prerequisite,
             allowedRuleClasses == Predicates.<RuleClass>alwaysTrue()
                 ? null
