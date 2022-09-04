@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.FetchProgress;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.StarlarkInfo;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
@@ -87,12 +86,12 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkSemantics;
 import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.syntax.Location;
 
 /** Starlark API for the repository_rule's context. */
 public class StarlarkRepositoryContext
@@ -771,8 +770,8 @@ public class StarlarkRepositoryContext
           new IOException("thread interrupted"), Transience.TRANSIENT);
     } catch (IOException e) {
       if (allowFail) {
-        return StarlarkInfo.create(
-            StructProvider.STRUCT, ImmutableMap.of("success", false), Location.BUILTIN);
+        Dict<String, Object> dict = Dict.of((Mutability) null, "success", false);
+        return StructProvider.STRUCT.createWithBuiltinLocation(dict);
       } else {
         throw new RepositoryFunctionException(e, Transience.TRANSIENT);
       }
@@ -899,8 +898,8 @@ public class StarlarkRepositoryContext
     } catch (IOException e) {
       env.getListener().post(w);
       if (allowFail) {
-        return StarlarkInfo.create(
-            StructProvider.STRUCT, ImmutableMap.of("success", false), Location.BUILTIN);
+        Dict<String, Object> dict = Dict.of((Mutability) null, "success", false);
+        return StructProvider.STRUCT.createWithBuiltinLocation(dict);
       } else {
         throw new RepositoryFunctionException(e, Transience.TRANSIENT);
       }
@@ -1021,7 +1020,7 @@ public class StarlarkRepositoryContext
           Transience.PERSISTENT);
     }
 
-    ImmutableMap.Builder<String, Object> out = ImmutableMap.builder();
+    Dict.Builder<String, Object> out = Dict.builder();
     out.put("success", true);
     out.put("integrity", finalChecksum.toSubresourceIntegrity());
 
@@ -1029,7 +1028,7 @@ public class StarlarkRepositoryContext
     if (finalChecksum.getKeyType() == KeyType.SHA256) {
       out.put("sha256", finalChecksum.toString());
     }
-    return StarlarkInfo.create(StructProvider.STRUCT, out.build(), Location.BUILTIN);
+    return StructProvider.STRUCT.createWithBuiltinLocation(out.buildImmutable());
   }
 
   private static ImmutableList<String> checkAllUrls(Iterable<?> urlList) throws EvalException {
