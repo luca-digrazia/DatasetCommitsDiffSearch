@@ -292,6 +292,8 @@ public final class HibernateOrmProcessor {
             return;
         }
 
+        final boolean enversIsPresent = capabilities.isPresent(Capability.HIBERNATE_ENVERS);
+
         // First produce the PUs having a persistence.xml: these are not reactive, as we don't allow using a persistence.xml for them.
         for (PersistenceXmlDescriptorBuildItem persistenceXmlDescriptorBuildItem : persistenceXmlDescriptors) {
             persistenceUnitDescriptors
@@ -301,7 +303,8 @@ public final class HibernateOrmProcessor {
                                     .getProperties().getProperty(AvailableSettings.MULTI_TENANT))),
                             null,
                             false,
-                            true));
+                            true,
+                            enversIsPresent));
         }
 
         if (impliedPU.shouldGenerateImpliedBlockingPersistenceUnit()) {
@@ -904,11 +907,13 @@ public final class HibernateOrmProcessor {
             storageEngineCollector.add(persistenceUnitConfig.dialect.storageEngine.get());
         }
 
+        final boolean isEnversPresent = capabilities.isPresent(Capability.HIBERNATE_ENVERS);
+
         persistenceUnitDescriptors.produce(
                 new PersistenceUnitDescriptorBuildItem(descriptor, dataSource,
                         getMultiTenancyStrategy(persistenceUnitConfig.multitenant),
                         persistenceUnitConfig.multitenantSchemaDatasource.orElse(null),
-                        false, false));
+                        false, false, isEnversPresent));
     }
 
     public static Optional<String> guessDialect(String resolvedDbKind) {
