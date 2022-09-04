@@ -16,8 +16,11 @@
  */
 package org.graylog2.indexer.cluster;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import io.searchbox.core.Cat;
+import io.searchbox.core.CatResult;
 import org.graylog.testing.elasticsearch.ElasticsearchBaseTest;
 import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.cluster.health.ClusterAllocationDiskSettings;
@@ -25,7 +28,6 @@ import org.graylog2.indexer.cluster.health.NodeDiskUsageStats;
 import org.graylog2.indexer.cluster.health.NodeFileDescriptorStats;
 import org.graylog2.indexer.cluster.health.WatermarkSettings;
 import org.graylog2.indexer.indices.HealthStatus;
-import org.graylog2.rest.models.system.indexer.responses.ClusterHealth;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -51,13 +53,9 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
     @Mock
     private IndexSetRegistry indexSetRegistry;
 
-    protected Cluster cluster;
+    private Cluster cluster;
 
     protected abstract ClusterAdapter clusterAdapter(Duration timeout);
-
-    protected abstract String currentNodeId();
-    protected abstract String currentNodeName();
-    protected abstract String currentHostnameOrIp();
 
     @Before
     public void setUp() throws Exception {
@@ -85,7 +83,19 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void health() {
+    public void getClusterAllocationDiskSettings() throws Exception{
+        final ClusterAllocationDiskSettings clusterAllocationDiskSettings = cluster.getClusterAllocationDiskSettings();
+
+        //Default Elasticsearch settings in Elasticsearch 5.6
+        assertThat(clusterAllocationDiskSettings.ThresholdEnabled()).isTrue();
+        assertThat(clusterAllocationDiskSettings.watermarkSettings().type()).isEqualTo(WatermarkSettings.SettingsType.PERCENTAGE);
+        assertThat(clusterAllocationDiskSettings.watermarkSettings().low()).isEqualTo(85D);
+        assertThat(clusterAllocationDiskSettings.watermarkSettings().high()).isEqualTo(90D);
+        assertThat(clusterAllocationDiskSettings.watermarkSettings().floodStage()).isNull();
+    }
+
+    @Test
+    public void health() throws Exception {
         final String index = client().createRandomIndex("cluster_it_");
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{index});
 
@@ -120,11 +130,24 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void nodeIdToName() {
-        final Optional<String> name = cluster.nodeIdToName(currentNodeId());
+    public void nodeIdToName() throws Exception {
+        final Cat nodesInfo = new Cat.NodesBuilder()
+                .setParameter("h", "id,name")
+                .setParameter("format", "json")
+                .setParameter("full_id", "true")
+                .build();
+        final CatResult catResult = jestClient().execute(nodesInfo);
+        final JsonNode result = catResult.getJsonObject().path("result");
+        assertThat(result).isNotEmpty();
+
+        final JsonNode node = result.path(0);
+        final String nodeId = node.get("id").asText();
+        final String expectedName = node.get("name").asText();
+
+        final Optional<String> name = cluster.nodeIdToName(nodeId);
         assertThat(name)
                 .isPresent()
-                .contains(currentNodeName());
+                .contains(expectedName);
     }
 
     @Test
@@ -132,12 +155,28 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
         final Optional<String> name = cluster.nodeIdToName("invalid-node-id");
         assertThat(name).isEmpty();
     }
+
     @Test
-    public void nodeIdToHostName() {
-        final Optional<String> hostName = cluster.nodeIdToHostName(currentNodeId());
+    public void nodeIdToHostName() throws Exception {
+        final Cat nodesInfo = new Cat.NodesBuilder()
+                .setParameter("h", "id,host,ip")
+                .setParameter("format", "json")
+                .setParameter("full_id", "true")
+                .build();
+        final CatResult catResult = jestClient().execute(nodesInfo);
+        final JsonNode result = catResult.getJsonObject().path("result");
+        assertThat(result).isNotEmpty();
+
+        final JsonNode node = result.path(0);
+        final String nodeId = node.get("id").asText();
+        // "host" only exists in Elasticsearch 2.x
+        final String ip = node.path("ip").asText();
+        final String expectedHostName = node.path("host").asText(ip);
+
+        final Optional<String> hostName = cluster.nodeIdToHostName(nodeId);
         assertThat(hostName)
                 .isPresent()
-                .contains(currentHostnameOrIp());
+                .contains(expectedHostName);
     }
 
     @Test
@@ -152,7 +191,7 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void isHealthy() {
+    public void isHealthy() throws Exception {
         final String index = client().createRandomIndex("cluster_it_");
         when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{index});
         when(indexSetRegistry.isUp()).thenReturn(true);
@@ -198,27 +237,5 @@ public abstract class ClusterIT extends ElasticsearchBaseTest {
         when(indexSetRegistry.isUp()).thenReturn(true);
 
         cluster.waitForConnectedAndDeflectorHealthy();
-    }
-
-    @Test
-    public void retrievesClusterHealth() {
-        when(indexSetRegistry.getIndexWildcards()).thenReturn(new String[]{INDEX_NAME});
-        when(indexSetRegistry.getWriteIndexAliases()).thenReturn(new String[]{ALIAS_NAME});
-        when(indexSetRegistry.isUp()).thenReturn(true);
-
-        final Optional<ClusterHealth> clusterHealth = cluster.clusterHealthStats();
-
-        assertThat(clusterHealth).isNotEmpty();
-    }
-
-    @Test
-    public void getDefaultClusterAllocationDiskSettings() {
-        final ClusterAllocationDiskSettings clusterAllocationDiskSettings = cluster.getClusterAllocationDiskSettings();
-
-        assertThat(clusterAllocationDiskSettings.ThresholdEnabled()).isTrue();
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().type()).isEqualTo(WatermarkSettings.SettingsType.PERCENTAGE);
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().low()).isEqualTo(85D);
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().high()).isEqualTo(90D);
-        assertThat(clusterAllocationDiskSettings.watermarkSettings().floodStage()).isEqualTo(95D);
     }
 }
