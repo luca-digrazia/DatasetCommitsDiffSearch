@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -63,18 +63,10 @@ public class GenerateJavaDocTest extends AAProcessorTestHelper {
 		File generatedFile = toGeneratedFile(ServiceWithServiceAction.class);
 
 		assertCompilationSuccessful(result);
-		// CHECKSTYLE:OFF
-		String[] doc = new String[] { //
-				"         * this is a javadoc comment", //
-				"         * ", //
-				"         *  @param param", //
-				"         *             this is a param", //
-				"         * ", //
-				"         * @return", //
-				"         *     the IntentBuilder to chain calls" };
-		// CHECKSTYLE:ON
 
-		assertGeneratedClassContains(generatedFile, doc);
+		assertGeneratedClassMatches(generatedFile, ".*\\* this is a javadoc comment");
+		assertGeneratedClassMatches(generatedFile, ".*\\*  @param param this is a param");
+		assertGeneratedClassMatches(generatedFile, ".*\\* @return");
 	}
 
 	@Test
@@ -88,7 +80,6 @@ public class GenerateJavaDocTest extends AAProcessorTestHelper {
 		String[] fieldDoc = { //
 				"     * <p><b>Defaults to</b>: 42</p>", //
 				"     * The Age!", //
-				"     *  ", //
 				"     *  @deprecated use {@link #ageLong()}", //
 				"     * ", //
 				"     * @return", //
@@ -98,7 +89,6 @@ public class GenerateJavaDocTest extends AAProcessorTestHelper {
 		};
 		String[] editorDoc = { //
 				"         * The Age!", //
-				"         *  ", //
 				"         *  @deprecated use {@link #ageLong()}", //
 				"         */", //
 				"        public IntPrefEditorField<SharedPrefWithJavaDoc_.SharedPrefWithJavaDocEditor_> age() {", //
@@ -128,6 +118,7 @@ public class GenerateJavaDocTest extends AAProcessorTestHelper {
 		// CHECKSTYLE:ON
 		assertGeneratedClassContains(generatedFile, fieldDoc);
 	}
+
 
 	@Test
 	public void generateJavaDocForNonEmptySharedPrefStringFields() throws IOException {

@@ -1,5 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -29,7 +30,6 @@ public interface SharedPrefWithJavaDoc {
 
 	/**
 	 * The Age!
-	 * @return the age as int
 	 * @deprecated use {@link #ageLong()}
 	 */
 	@Deprecated
@@ -38,4 +38,9 @@ public interface SharedPrefWithJavaDoc {
 
 	@DefaultLong(42L)
 	long ageLong();
+
+	String title();
+
+	@DefaultString("something")
+	String something();
 }
