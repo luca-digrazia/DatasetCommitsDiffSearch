@@ -25,8 +25,6 @@ import java.util.Collections;
 import java.util.Set;
 
 public class MapWidgetMetaData implements PluginMetaData {
-    private static final String PLUGIN_PROPERTIES = "org.graylog.plugins.graylog-plugin-map-widget/graylog-plugin.properties";
-
     @Override
     public String getUniqueId() {
         return "org.graylog.plugins.map.MapWidgetPlugin";
@@ -44,12 +42,12 @@ public class MapWidgetMetaData implements PluginMetaData {
 
     @Override
     public URI getURL() {
-        return URI.create("http://docs.graylog.org/en/latest/pages/geolocation.html");
+        return URI.create("https://www.graylog.org/");
     }
 
     @Override
     public Version getVersion() {
-        return Version.fromPluginProperties(this.getClass(), PLUGIN_PROPERTIES, "version", Version.from(0, 0, 0, "unknown"));
+        return new Version(1, 0, 0, "alpha.4");
     }
 
     @Override
@@ -59,7 +57,7 @@ public class MapWidgetMetaData implements PluginMetaData {
 
     @Override
     public Version getRequiredVersion() {
-        return Version.fromPluginProperties(this.getClass(), PLUGIN_PROPERTIES, "graylog.version", Version.CURRENT_CLASSPATH);
+        return new Version(2, 0, 0);
     }
 
     @Override
