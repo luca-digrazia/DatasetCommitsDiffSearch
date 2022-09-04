@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryExpressionContext;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
+import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -53,7 +54,7 @@ import javax.annotation.Nullable;
 public class ParallelSkyQueryUtils {
 
   /** The maximum number of keys to visit at once. */
-  @VisibleForTesting public static final int VISIT_BATCH_SIZE = 10000;
+  @VisibleForTesting static final int VISIT_BATCH_SIZE = 10000;
 
   private ParallelSkyQueryUtils() {
   }
@@ -166,11 +167,11 @@ public class ParallelSkyQueryUtils {
       Collection<PathFragment> fileIdentifiers,
       QueryExpressionContext<Target> context,
       Callback<Target> callback) throws QueryException, InterruptedException {
+    Uniquifier<SkyKey> keyUniquifier = env.createSkyKeyUniquifier();
     RBuildFilesVisitor visitor =
         new RBuildFilesVisitor(
             env,
-            /*visitUniquifier=*/ env.createSkyKeyUniquifier(),
-            /*resultUniquifier=*/ env.createSkyKeyUniquifier(),
+            keyUniquifier,
             context,
             callback,
             /*rdepFilter=*/ rdep ->
