@@ -73,9 +73,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
-
     ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap =
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
     ImmutableListMultimap<BuildConfiguration, ObjcProvider> configToObjcAvoidDepsMap =

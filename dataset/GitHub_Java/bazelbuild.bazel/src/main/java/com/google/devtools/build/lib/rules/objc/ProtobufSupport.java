@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
 import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * Support for generating Objective C proto static libraries that registers actions which generate
@@ -175,13 +174,8 @@ final class ProtobufSupport {
             .addAdditionalHdrs(
                 getGeneratedProtoOutputs(inputsToOutputsMap.values(), HEADER_SUFFIX));
 
-    CompilationSupport compilationSupport =
-        new CompilationSupport.Builder()
-            .setRuleContext(ruleContext)
-            .setCompilationAttributes(new CompilationAttributes.Builder().build())
-            .build();
-
-    compilationSupport.registerGenerateModuleMapAction(moduleMapCompilationArtifacts.build());
+    CompilationSupport.createForAttributes(ruleContext, new CompilationAttributes.Builder().build())
+        .registerGenerateModuleMapAction(moduleMapCompilationArtifacts.build());
   }
 
   /**
@@ -207,8 +201,7 @@ final class ProtobufSupport {
               buildConfiguration,
               intermediateArtifacts,
               new CompilationAttributes.Builder().build(),
-              /*useDeps=*/ false,
-              new TreeMap<String, NestedSet<Artifact>>())
+              /*useDeps=*/false)
           .registerCompileAndArchiveActions(common, userHeaderSearchPaths);
 
       actionId++;

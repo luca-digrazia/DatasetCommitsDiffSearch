@@ -85,8 +85,6 @@ public class MultiArchBinarySupport {
    *     provider collections which are propagated from the dependencies of that configuration
    * @param outputLipoBinary the artifact (lipo'ed binary) which should be output as a result of
    *     this support
-   * @param outputMapCollector a map to which output groups created by compile action generation are
-   *     added
    * @throws RuleErrorException if there are attribute errors in the current rule context
    */
   public void registerActions(
@@ -95,8 +93,7 @@ public class MultiArchBinarySupport {
       Set<DependencySpecificConfiguration> dependencySpecificConfigurations,
       Iterable<Artifact> extraLinkInputs,
       ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap,
-      Artifact outputLipoBinary,
-      Map<String, NestedSet<Artifact>> outputMapCollector)
+      Artifact outputLipoBinary)
       throws RuleErrorException, InterruptedException {
 
     NestedSetBuilder<Artifact> binariesToLipo =
@@ -132,15 +129,7 @@ public class MultiArchBinarySupport {
               ruleContext,
               ObjcRuleClasses.intermediateArtifacts(
                   ruleContext, dependencySpecificConfiguration.config()));
-
-      CompilationSupport compilationSupport =
-          new CompilationSupport.Builder()
-              .setRuleContext(ruleContext)
-              .setConfig(dependencySpecificConfiguration.config())
-              .setOutputGroupCollector(outputMapCollector)
-              .build();
-
-      compilationSupport
+      CompilationSupport.createForConfig(ruleContext, dependencySpecificConfiguration.config())
           .registerCompileAndArchiveActions(
               compilationArtifacts, objcProvider, dependencySpecificConfiguration.toolchain())
           .registerLinkActions(
