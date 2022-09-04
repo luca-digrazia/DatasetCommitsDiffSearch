@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.java.JavaCcInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -71,10 +70,6 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
         JavaSourceJarsProvider.merge(
             ruleContext.getPrerequisites("deps", JavaSourceJarsProvider.class));
 
-    JavaRuleOutputJarsProvider outputJarsProvider =
-        JavaRuleOutputJarsProvider.merge(
-            ruleContext.getPrerequisites("deps", JavaRuleOutputJarsProvider.class));
-
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
     filesToBuild.addAll(sourceJarsProvider.getSourceJars());
@@ -83,24 +78,23 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
       filesToBuild.addTransitive(provider.getJars());
     }
 
-    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-
-    JavaInfo javaInfo =
+    JavaInfo.Builder javaInfoBuilder =
         JavaInfo.Builder.create()
-            .addProvider(JavaCompilationArgsProvider.class, dependencyArgsProviders)
+            .addProvider(JavaCompilationArgsProvider.class, dependencyArgsProviders);
+    JavaInfo javaInfo =
+        javaInfoBuilder
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-            .addProvider(JavaRuleOutputJarsProvider.class, outputJarsProvider)
-            .addProvider(
-                JavaCcInfoProvider.class, createCcLinkingInfo(ruleContext, ImmutableList.of()))
+            .addProvider(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.EMPTY)
             .setJavaConstraints(ImmutableList.of("android"))
             .build();
 
-    return builder
+    return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(filesToBuild.build())
         .addProvider(RunfilesProvider.simple(runfiles))
         .addOutputGroup(OutputGroupInfo.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
         .addNativeDeclaredProvider(getJavaLiteRuntimeSpec(ruleContext))
         .addNativeDeclaredProvider(javaInfo)
+        .addNativeDeclaredProvider(createCcLinkingInfo(ruleContext, ImmutableList.of()))
         .build();
   }
 
