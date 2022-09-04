@@ -25,7 +25,7 @@ public interface ReactivePanacheQuery<Entity> {
      * Defines a projection class: the getters, and the public fields, will be used to restrict which fields should be
      * retrieved from the database.
      *
-     * @return @return a new query with the same state as the previous one (params, page, range, ...).
+     * @return this query, modified
      */
     public <T> ReactivePanacheQuery<T> project(Class<T> type);
 
@@ -54,7 +54,6 @@ public interface ReactivePanacheQuery<Entity> {
      * Sets the current page to the next page
      * 
      * @return this query, modified
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #previousPage()
      */
     public <T extends Entity> ReactivePanacheQuery<T> nextPage();
@@ -63,7 +62,6 @@ public interface ReactivePanacheQuery<Entity> {
      * Sets the current page to the previous page (or the first page if there is no previous page)
      * 
      * @return this query, modified
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #nextPage()
      */
     public <T extends Entity> ReactivePanacheQuery<T> previousPage();
@@ -72,7 +70,6 @@ public interface ReactivePanacheQuery<Entity> {
      * Sets the current page to the first page
      * 
      * @return this query, modified
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #lastPage()
      */
     public <T extends Entity> ReactivePanacheQuery<T> firstPage();
@@ -81,7 +78,6 @@ public interface ReactivePanacheQuery<Entity> {
      * Sets the current page to the last page. This will cause reading of the entity count.
      * 
      * @return this query, modified
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #firstPage()
      * @see #count()
      */
@@ -92,7 +88,6 @@ public interface ReactivePanacheQuery<Entity> {
      * This will cause reading of the entity count.
      * 
      * @return true if there is another page to read
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #hasPreviousPage()
      * @see #count()
      */
@@ -102,7 +97,6 @@ public interface ReactivePanacheQuery<Entity> {
      * Returns true if there is a page to read before the current one.
      * 
      * @return true if there is a previous page to read
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #hasNextPage()
      */
     public boolean hasPreviousPage();
@@ -112,7 +106,6 @@ public interface ReactivePanacheQuery<Entity> {
      * This will cause reading of the entity count.
      * 
      * @return the total number of pages to be read using the current page size.
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      */
     public Uni<Integer> pageCount();
 
@@ -120,7 +113,6 @@ public interface ReactivePanacheQuery<Entity> {
      * Returns the current page.
      * 
      * @return the current page
-     * @throws UnsupportedOperationException if a page hasn't been set or if a range is already set
      * @see #page(Page)
      * @see #page(int,int)
      */
