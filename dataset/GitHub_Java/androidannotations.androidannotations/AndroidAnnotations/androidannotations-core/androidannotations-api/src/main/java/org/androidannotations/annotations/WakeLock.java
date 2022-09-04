@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,6 +20,8 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+
+import org.androidannotations.api.KotlinOpen;
 
 /**
  * <p>
@@ -51,6 +53,7 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
+@KotlinOpen
 public @interface WakeLock {
 
 	/**
@@ -68,7 +71,8 @@ public @interface WakeLock {
 	String tag() default DEFAULT_TAG;
 
 	/**
-	 * The level of the created {@link android.os.PowerManager.WakeLock WakeLock}.
+	 * The level of the created {@link android.os.PowerManager.WakeLock
+	 * WakeLock}.
 	 * 
 	 * @see android.os.PowerManager#newWakeLock(int, String)
 	 * 
@@ -77,8 +81,8 @@ public @interface WakeLock {
 	Level level() default Level.PARTIAL_WAKE_LOCK;
 
 	/**
-	 * The optional flags for the created {@link android.os.PowerManager.WakeLock
-	 * WakeLock}.
+	 * The optional flags for the created
+	 * {@link android.os.PowerManager.WakeLock WakeLock}.
 	 * 
 	 * @see android.os.PowerManager#newWakeLock(int, String)
 	 * 
@@ -87,8 +91,8 @@ public @interface WakeLock {
 	Flag[] flags() default {};
 
 	/**
-	 * A convenience wrapper enum for the {@link android.os.PowerManager.WakeLock
-	 * WakeLock} level integer values.
+	 * A convenience wrapper enum for the
+	 * {@link android.os.PowerManager.WakeLock WakeLock} level integer values.
 	 */
 	enum Level {
 		/**
@@ -109,12 +113,12 @@ public @interface WakeLock {
 		/**
 		 * Represents {@link android.os.PowerManager#SCREEN_DIM_WAKE_LOCK}.
 		 */
-		SCREEN_DIM_WAKE_LOCK
+		SCREEN_DIM_WAKE_LOCK;
 	}
 
 	/**
-	 * A convenience wrapper enum for the {@link android.os.PowerManager.WakeLock
-	 * WakeLock} flag integer values.
+	 * A convenience wrapper enum for the
+	 * {@link android.os.PowerManager.WakeLock WakeLock} flag integer values.
 	 */
 	enum Flag {
 

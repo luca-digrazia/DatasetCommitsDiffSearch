@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -583,7 +583,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 	private void setGetLastNonConfigurationInstance() throws JClassAlreadyExistsException {
 		AnnotationHelper annotationHelper = new AnnotationHelper(getEnvironment());
-		TypeElement fragmentActivityTypeElement = getFragmentActivity(annotationHelper);
+		TypeElement fragmentActivityTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
 		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(generatedClass._extends().fullName());
 		String getLastNonConfigurationInstanceName = "getLastNonConfigurationInstance";
 		if (fragmentActivityTypeElement != null && annotationHelper.isSubtype(typeElement.asType(), fragmentActivityTypeElement.asType())) {
@@ -618,7 +618,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 	private void setOnRetainNonConfigurationInstance() throws JClassAlreadyExistsException {
 		AnnotationHelper annotationHelper = new AnnotationHelper(getEnvironment());
-		TypeElement fragmentActivityTypeElement = getFragmentActivity(annotationHelper);
+		TypeElement fragmentActivityTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
 		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(generatedClass._extends().fullName());
 
 		String onRetainNonConfigurationInstanceName = "onRetainNonConfigurationInstance";
@@ -637,14 +637,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		methodBody.assign(onRetainNonConfigurationInstance.ref(ncHolder.getSuperNonConfigurationInstanceField()), superCall);
 		onRetainNonConfigurationInstanceBindBlock = methodBody.blockSimple();
 		methodBody._return(onRetainNonConfigurationInstance);
-	}
-
-	private TypeElement getFragmentActivity(AnnotationHelper annotationHelper) {
-		TypeElement supportFragmentActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
-		if (supportFragmentActivity == null) {
-			return annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ANDROIDX_FRAGMENT_ACTIVITY);
-		}
-		return supportFragmentActivity;
 	}
 
 	@Override

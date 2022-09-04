@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
 /**
  * Utility annotation to easily support kotlin-allopen plugin
  *
- * @see "https://github.com/androidannotations/androidannotations/wiki/Kotlin-support"
+ * @see "https://github.com/androidannotations/androidannotations/wiki/Kotlin"
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
