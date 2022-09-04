@@ -701,7 +701,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "r1 = rule(impl, outputs = {'a': 'a.txt'})");
     RuleClass c = ((SkylarkRuleFunction) lookup("r1")).getRuleClass();
     ImplicitOutputsFunction function = c.getDefaultImplicitOutputsFunction();
-    assertThat(function.getImplicitOutputs(ev.getEventHandler(), null)).containsExactly("a.txt");
+    assertThat(function.getImplicitOutputs(null)).containsExactly("a.txt");
   }
 
   @Test
@@ -951,7 +951,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "  }",
         ")");
     scratch.file("third_party/foo/BUILD",
-        "load('//test:rule.bzl', 'some_rule')",
+        "load('/test/rule', 'some_rule')",
         "some_rule(",
         "    name='r',",
         "    licenses = ['unencumbered']",
@@ -1604,7 +1604,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
       ")"
     );
     scratch.file("third_party/foo/BUILD",
-      "load(':extension.bzl', 'my_rule')",
+      "load('extension',  'my_rule')",
       "my_rule(name = 'main', exe = ':tool.sh')"
     );
 

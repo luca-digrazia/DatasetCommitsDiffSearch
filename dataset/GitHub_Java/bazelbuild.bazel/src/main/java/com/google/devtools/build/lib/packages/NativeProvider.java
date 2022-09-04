@@ -40,16 +40,16 @@ import javax.annotation.Nullable;
  * #createInstanceFromSkylark(Object[], Location)} (see {@link #STRUCT} for an example.
  */
 @Immutable
-public abstract class NativeProvider<V extends Info> extends Provider {
+public abstract class NativeProvider<VALUE extends Info> extends Provider {
   private final NativeKey key;
-  private final String errorMessageFormatForUnknownField;
+  private final String errorMessageForInstances;
 
   /** "struct" function. */
-  public static final StructProvider STRUCT = new StructProvider();
+  public static final StructConstructor STRUCT = new StructConstructor();
 
-  private final Class<V> valueClass;
+  private final Class<VALUE> valueClass;
 
-  public Class<V> getValueClass() {
+  public Class<VALUE> getValueClass() {
     return valueClass;
   }
 
@@ -61,17 +61,17 @@ public abstract class NativeProvider<V extends Info> extends Provider {
    * Skylark code.
    */
   @Deprecated
-  public interface WithLegacySkylarkName {
+  public static interface WithLegacySkylarkName {
     String getSkylarkName();
   }
 
   /**
-   * The provider for the built-in type {@code struct}.
+   * A constructor for default {@code struct}s.
    *
-   * <p>Its singleton instance is {@link #STRUCT}.
+   * <p>Singleton, instance is {@link #STRUCT}.
    */
-  public static final class StructProvider extends NativeProvider<Info> {
-    private StructProvider() {
+  public static final class StructConstructor extends NativeProvider<Info> {
+    private StructConstructor() {
       super(Info.class, "struct");
     }
 
@@ -82,19 +82,11 @@ public abstract class NativeProvider<V extends Info> extends Provider {
       return SkylarkInfo.fromMap(this, kwargs, loc);
     }
 
-    /**
-     * Creates a struct with the he given field values and message format for unknown fields.
-     *
-     * <p>The custom message is useful for objects that have fields but aren't exactly used as
-     * providers, such as the {@code native} object, and the struct fields of {@code ctx} like
-     * {@code ctx.attr}.
-     * */
-    public Info create(Map<String, Object> values, String errorMessageFormatForUnknownField) {
-      return new SkylarkInfo.MapBackedSkylarkInfo(this, values, errorMessageFormatForUnknownField);
+    public Info create(Map<String, Object> values, String message) {
+      return new SkylarkInfo.MapBackedSkylarkInfo(this, values, message);
     }
 
-    /** Creates an empty struct with the given location. */
-    public Info createEmpty(Location loc) {
+    public Info create(Location loc) {
       return SkylarkInfo.fromMap(this, ImmutableMap.of(), loc);
     }
   }
@@ -102,18 +94,18 @@ public abstract class NativeProvider<V extends Info> extends Provider {
   private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
       FunctionSignature.WithValues.create(FunctionSignature.KWARGS);
 
-  protected NativeProvider(Class<V> clazz, String name) {
+  protected NativeProvider(Class<VALUE> clazz, String name) {
     this(clazz, name, SIGNATURE);
   }
 
   protected NativeProvider(
-      Class<V> valueClass,
+      Class<VALUE> valueClass,
       String name,
       FunctionSignature.WithValues<Object, SkylarkType> signature) {
     super(name, signature, Location.BUILTIN);
     key = new NativeKey(name, getClass());
     this.valueClass = valueClass;
-    errorMessageFormatForUnknownField = String.format("'%s' object has no attribute '%%s'", name);
+    errorMessageForInstances = String.format("'%s' object has no attribute '%%s'", name);
   }
 
   /**
@@ -144,8 +136,8 @@ public abstract class NativeProvider<V extends Info> extends Provider {
   }
 
   @Override
-  public String getErrorMessageFormatForUnknownField() {
-    return errorMessageFormatForUnknownField;
+  public String getErrorMessageFormatForInstances() {
+    return errorMessageForInstances;
   }
 
   @Override

@@ -35,8 +35,8 @@ public abstract class SkylarkInfo extends Info implements Concatable {
     super(provider, loc);
   }
 
-  public SkylarkInfo(StructConstructor provider, String message) {
-    super(provider, message);
+  public SkylarkInfo(StructConstructor provider, Map<String, Object> values, String message) {
+    super(provider, values, message);
   }
 
   @Override
@@ -75,7 +75,7 @@ public abstract class SkylarkInfo extends Info implements Concatable {
 
     public MapBackedSkylarkInfo(
         StructConstructor provider, Map<String, Object> values, String message) {
-      super(provider, message);
+      super(provider, values, message);
       this.values = copyValues(values);
     }
 
