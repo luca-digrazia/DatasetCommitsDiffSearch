@@ -5,8 +5,7 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 
 import java.util.regex.Pattern;
 
-import static io.dropwizard.logging.PrefixedThrowableProxyConverter.PREFIX;
-import static io.dropwizard.logging.PrefixedThrowableProxyConverter.PATTERN;
+import static io.dropwizard.logging.PrefixedThrowableProxyConverter.*;
 
 /**
  * A {@link RootCauseFirstThrowableProxyConverter} that prefixes stack traces with {@code !}.
@@ -15,8 +14,7 @@ public class PrefixedRootCauseFirstThrowableProxyConverter
         extends RootCauseFirstThrowableProxyConverter {
 
     private static final String CAUSING = PREFIX + "Causing:";
-    private static final Pattern CAUSING_PATTERN = Pattern.compile("^" + Pattern.quote(PREFIX) + "Wrapped by:",
-            Pattern.MULTILINE);
+    private static final Pattern CAUSING_PATTERN = Pattern.compile("^" + Pattern.quote(PREFIX) + "Wrapped by:", Pattern.MULTILINE);
 
     @Override
     protected String throwableProxyToString(IThrowableProxy tp) {
