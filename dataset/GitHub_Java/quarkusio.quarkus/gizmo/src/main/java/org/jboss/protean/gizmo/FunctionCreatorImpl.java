@@ -268,7 +268,17 @@ public class FunctionCreatorImpl implements FunctionCreator {
             BranchResult delegate = this.delegate.ifNonZero(resultHandle);
             BytecodeCreator trueBranch = new FunctionBytecodeCreator(functionCreator, delegate.trueBranch(), owner);
             BytecodeCreator falseBranch = new FunctionBytecodeCreator(functionCreator, delegate.falseBranch(), owner);
-            return new BranchResultImpl(owner, trueBranch, falseBranch, (BytecodeCreatorImpl) delegate.trueBranch(), (BytecodeCreatorImpl)delegate.falseBranch());
+            return new BranchResult() {
+                @Override
+                public BytecodeCreator trueBranch() {
+                    return trueBranch;
+                }
+
+                @Override
+                public BytecodeCreator falseBranch() {
+                    return falseBranch;
+                }
+            };
         }
 
         @Override
@@ -277,7 +287,7 @@ public class FunctionCreatorImpl implements FunctionCreator {
             BranchResult delegate = this.delegate.ifNull(resultHandle);
             BytecodeCreator trueBranch = new FunctionBytecodeCreator(functionCreator, delegate.trueBranch(), owner);
             BytecodeCreator falseBranch = new FunctionBytecodeCreator(functionCreator, delegate.falseBranch(), owner);
-            return new BranchResultImpl(owner, trueBranch, falseBranch, (BytecodeCreatorImpl) delegate.trueBranch(), (BytecodeCreatorImpl)delegate.falseBranch());
+            return new BranchResultImpl(trueBranch, falseBranch);
         }
 
         public ResultHandle getMethodParam(int methodNo) {
