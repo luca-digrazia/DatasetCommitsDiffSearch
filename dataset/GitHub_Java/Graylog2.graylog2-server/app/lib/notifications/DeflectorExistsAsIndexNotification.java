@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,11 +15,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib.notifications;
 
-import models.SystemJob;
+import org.graylog2.restclient.models.Notification;
+import org.graylog2.restclient.models.SystemJob;
 import org.joda.time.DateTime;
 
 import java.util.HashMap;
@@ -33,8 +33,17 @@ public class DeflectorExistsAsIndexNotification implements NotificationType {
     private static final String TITLE = "Deflector exists as an index and is not an alias.";
     private static final String DESCRIPTION = "The deflector is meant to be an alias but exists as an index. Multiple " +
             "failures of infrastructure can lead to this. Your messages are still indexed but searches and all " +
-            "maintenance tasks will fail or produce incorrect results. It is strongly recommend that act as soon " +
+            "maintenance tasks will fail or produce incorrect results. It is strongly recommend that you act as soon " +
             "as possible.";
+    private final Notification notification;
+
+    public DeflectorExistsAsIndexNotification(Notification notification) {
+        this.notification = notification;
+    }
+
+    public Notification getNotification() {
+        return notification;
+    }
 
     @Override
     public Map<SystemJob.Type, String> options() {
@@ -58,7 +67,7 @@ public class DeflectorExistsAsIndexNotification implements NotificationType {
 
     @Override
     public boolean isCloseable() {
-        return false;
+        return true;
     }
 
 }

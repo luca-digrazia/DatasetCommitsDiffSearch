@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,12 +15,12 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib.notifications;
 
 import com.google.common.collect.Maps;
-import models.SystemJob;
+import org.graylog2.restclient.models.Notification;
+import org.graylog2.restclient.models.SystemJob;
 
 import java.util.Map;
 
@@ -35,6 +35,16 @@ public class MultiMasterNotification implements NotificationType {
             "there already is a master but you should still fix this. Check the graylog2.conf of every node and " +
             "make sure that only one instance has is_master set to true. Close this notification if you think you " +
             "resolved the problem. It will pop back up if you start a second master node again.";
+    private final Notification notification;
+
+    public MultiMasterNotification(Notification notification) {
+        this.notification = notification;
+    }
+
+    @Override
+    public Notification getNotification() {
+        return notification;
+    }
 
     @Override
     public Map<SystemJob.Type, String> options() {

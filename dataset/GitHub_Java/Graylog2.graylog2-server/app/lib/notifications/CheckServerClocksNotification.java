@@ -19,11 +19,23 @@
 package lib.notifications;
 
 import com.google.common.collect.Maps;
-import models.SystemJob;
+import org.graylog2.restclient.models.Notification;
+import org.graylog2.restclient.models.SystemJob;
 
 import java.util.Map;
 
 public class CheckServerClocksNotification implements NotificationType {
+    private final Notification notification;
+
+    public CheckServerClocksNotification(Notification notification) {
+        this.notification = notification;
+    }
+
+    @Override
+    public Notification getNotification() {
+        return notification;
+    }
+
     @Override
     public Map<SystemJob.Type, String> options() {
         return Maps.newHashMap();
@@ -43,6 +55,6 @@ public class CheckServerClocksNotification implements NotificationType {
 
     @Override
     public boolean isCloseable() {
-        return false;
+        return true;
     }
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -28,18 +28,18 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class EsOpenFilesNotification implements NotificationType {
+public class OutdatedVersionNotification implements NotificationType {
 
-    private static final String TITLE = "ElasticSearch nodes with too low open file limit";
-    private static final String DESCRIPTION = "There are ElasticSearch nodes in the cluster that have a too low " +
-                                              "open file limit. (below 64000) This will be causing problems that can be hard to diagnose. " +
-                                              "Read how to raise the maximum number of open files in " +
-                                              "<a href='http://support.torch.sh/help/kb/graylog2-server/configuring-and-tuning-elasticsearch-for-graylog2-v0200' target='_blank'>the documentation</a>.";
-
+    private final String TITLE;
+    private final String DESCRIPTION;
     private final Notification notification;
 
-    public EsOpenFilesNotification(Notification notification) {
+    public OutdatedVersionNotification(Notification notification) {
         this.notification = notification;
+        DESCRIPTION = "The most recent stable Graylog2 version is <em>" + notification.getDetail("current_version")
+                + "</em>. Get it from <a href=\"http://www.graylog2.org/\" target=\"_blank\">http://www.graylog2.org/</a>.";
+
+        TITLE = "You are running an outdated Graylog2 version.";
     }
 
     @Override

@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -15,7 +15,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib.notifications;
 
@@ -25,20 +24,11 @@ import org.graylog2.restclient.models.SystemJob;
 
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class EsOpenFilesNotification implements NotificationType {
-
-    private static final String TITLE = "ElasticSearch nodes with too low open file limit";
-    private static final String DESCRIPTION = "There are ElasticSearch nodes in the cluster that have a too low " +
-                                              "open file limit. (below 64000) This will be causing problems that can be hard to diagnose. " +
-                                              "Read how to raise the maximum number of open files in " +
-                                              "<a href='http://support.torch.sh/help/kb/graylog2-server/configuring-and-tuning-elasticsearch-for-graylog2-v0200' target='_blank'>the documentation</a>.";
+public class NoMasterNotification implements NotificationType {
 
     private final Notification notification;
 
-    public EsOpenFilesNotification(Notification notification) {
+    public NoMasterNotification(Notification notification) {
         this.notification = notification;
     }
 
@@ -54,17 +44,20 @@ public class EsOpenFilesNotification implements NotificationType {
 
     @Override
     public String getTitle() {
-        return TITLE;
+        return "There was no master graylog2-server node detected in the cluster.";
     }
 
     @Override
     public String getDescription() {
-        return DESCRIPTION;
+        return "Certain operations of graylog2-server require the presence of a master node, but no such master was started. " +
+                "Please ensure that one of your graylog2-server nodes contains the setting <code>is_master = true</code> in its " +
+                "configuration and that it is running. Until this is resolved index cycling will not be able to run, which " +
+                "means that the index retention mechanism is also not running, leading to increased index sizes. Certain" +
+                " maintenance functions as well as a variety of web interface pages (e.g. Dashboards) are unavailable.";
     }
 
     @Override
     public boolean isCloseable() {
-        return true;
+        return false;
     }
-
 }
