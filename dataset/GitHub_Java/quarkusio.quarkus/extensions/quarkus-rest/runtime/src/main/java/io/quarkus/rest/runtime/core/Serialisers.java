@@ -7,12 +7,13 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -43,17 +44,22 @@ import io.quarkus.rest.runtime.jaxrs.QuarkusRestWriterInterceptorContext;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.model.ResourceReader;
 import io.quarkus.rest.runtime.model.ResourceWriter;
+import io.quarkus.rest.runtime.providers.serialisers.BigDecimalMessageBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.BigIntegerMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.BooleanMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.ByteArrayMessageBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.ByteMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.CharArrayMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.CharacterMessageBodyHandler;
-import io.quarkus.rest.runtime.providers.serialisers.ClientDefaultTextPlainBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.DoubleMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.FileBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.FloatMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.FormUrlEncodedProvider;
 import io.quarkus.rest.runtime.providers.serialisers.InputStreamMessageBodyHandler;
-import io.quarkus.rest.runtime.providers.serialisers.NumberMessageBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.IntegerMessageBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.LongMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.ReaderBodyHandler;
-import io.quarkus.rest.runtime.providers.serialisers.ServerDefaultTextPlainBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.ShortMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.StringMessageBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.VertxBufferMessageBodyWriter;
 import io.quarkus.rest.runtime.spi.QuarkusRestClientMessageBodyWriter;
@@ -67,18 +73,6 @@ import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 
 public class Serialisers {
-
-    private static Map<Class<?>, Class<?>> primitivesToWrappers = new HashMap<>();
-    static {
-        primitivesToWrappers.put(boolean.class, Boolean.class);
-        primitivesToWrappers.put(char.class, Character.class);
-        primitivesToWrappers.put(byte.class, Byte.class);
-        primitivesToWrappers.put(short.class, Short.class);
-        primitivesToWrappers.put(int.class, Integer.class);
-        primitivesToWrappers.put(long.class, Long.class);
-        primitivesToWrappers.put(float.class, Float.class);
-        primitivesToWrappers.put(double.class, Double.class);
-    }
 
     public static class Builtin {
         public final Class<?> entityClass;
@@ -127,17 +121,30 @@ public class Serialisers {
                     MediaType.TEXT_PLAIN),
             new BuiltinReader(Character.class, CharacterMessageBodyHandler.class,
                     MediaType.TEXT_PLAIN),
-            new BuiltinReader(Number.class, NumberMessageBodyHandler.class,
+            new BuiltinReader(Byte.class, ByteMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(Short.class, ShortMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(Integer.class, IntegerMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(Long.class, LongMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(Float.class, FloatMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(Double.class, DoubleMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(BigInteger.class, BigIntegerMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new BuiltinReader(BigDecimal.class, BigDecimalMessageBodyHandler.class,
                     MediaType.TEXT_PLAIN),
             new BuiltinReader(InputStream.class, InputStreamMessageBodyHandler.class, MediaType.WILDCARD),
             new BuiltinReader(Reader.class, ReaderBodyHandler.class, MediaType.WILDCARD),
             new BuiltinReader(File.class, FileBodyHandler.class, MediaType.WILDCARD),
 
+            // the client always expects these to exist
             new BuiltinReader(byte[].class, ByteArrayMessageBodyHandler.class, MediaType.WILDCARD, RuntimeType.CLIENT),
             new BuiltinReader(MultivaluedMap.class, FormUrlEncodedProvider.class, MediaType.APPLICATION_FORM_URLENCODED,
                     RuntimeType.CLIENT),
-            new BuiltinReader(Object.class, ServerDefaultTextPlainBodyHandler.class, MediaType.TEXT_PLAIN, RuntimeType.SERVER),
-            new BuiltinReader(Object.class, ClientDefaultTextPlainBodyHandler.class, MediaType.TEXT_PLAIN, RuntimeType.CLIENT),
     };
 
     public static BuiltinWriter[] BUILTIN_WRITERS = new BuiltinWriter[] {
@@ -220,14 +227,14 @@ public class Serialisers {
         }
     };
 
-    public static boolean invokeWriter(QuarkusRestRequestContext context, Object entity, MessageBodyWriter writer,
-            Serialisers serialisers)
+    public static boolean invokeWriter(QuarkusRestRequestContext context, Object entity, MessageBodyWriter writer)
             throws IOException {
-        return invokeWriter(context, entity, writer, serialisers, null);
+        return invokeWriter(context, entity, writer, null);
     }
 
     public static boolean invokeWriter(QuarkusRestRequestContext context, Object entity, MessageBodyWriter writer,
-            Serialisers serialisers, MediaType mediaType) throws IOException {
+            MediaType mediaType)
+            throws IOException {
         //note that GenericEntity is not a factor here. It should have already been unwrapped
 
         Response response = context.getResponse();
@@ -259,7 +266,7 @@ public class Serialisers {
                     Serialisers.encodeResponseHeaders(context);
                     context.getContext().response().end(Buffer.buffer(baos.toByteArray()));
                 } else {
-                    runWriterInterceptors(context, entity, writer, response, writerInterceptors, serialisers);
+                    runWriterInterceptors(context, entity, writer, response, writerInterceptors);
                 }
                 return true;
             } else {
@@ -269,11 +276,12 @@ public class Serialisers {
     }
 
     public static void runWriterInterceptors(QuarkusRestRequestContext context, Object entity, MessageBodyWriter writer,
-            Response response, WriterInterceptor[] writerInterceptor, Serialisers serialisers) throws IOException {
+            Response response, WriterInterceptor[] writerInterceptor) throws IOException {
         QuarkusRestWriterInterceptorContext wc = new QuarkusRestWriterInterceptorContext(context, writerInterceptor, writer,
                 context.getAllAnnotations(), entity.getClass(), context.getGenericReturnType(), entity, response.getMediaType(),
-                response.getHeaders(), serialisers);
+                response.getHeaders());
         wc.proceed();
+
     }
 
     public void registerBuiltins(RuntimeType constraint) {
@@ -324,8 +332,6 @@ public class Serialisers {
         List<MessageBodyReader<?>> ret = new ArrayList<>();
         Deque<Class<?>> toProcess = new LinkedList<>();
         Class<?> klass = entityType;
-        if (primitivesToWrappers.containsKey(klass))
-            klass = primitivesToWrappers.get(klass);
         QuarkusMultivaluedMap<Class<?>, ResourceReader> readers;
         if (configuration != null && !configuration.getResourceReaders().isEmpty()) {
             readers = new QuarkusMultivaluedHashMap<>();
@@ -471,8 +477,6 @@ public class Serialisers {
         List<MediaType> mt = Collections.singletonList(resolvedMediaType);
         List<MessageBodyWriter<?>> ret = new ArrayList<>();
         Class<?> klass = entityType;
-        if (primitivesToWrappers.containsKey(klass))
-            klass = primitivesToWrappers.get(klass);
         Deque<Class<?>> toProcess = new LinkedList<>();
         QuarkusMultivaluedMap<Class<?>, ResourceWriter> writers;
         if (configuration != null && !configuration.getResourceWriters().isEmpty()) {
@@ -588,7 +592,7 @@ public class Serialisers {
     }
 
     public NoMediaTypeResult findWriterNoMediaType(QuarkusRestRequestContext requestContext, Object entity,
-            Serialisers serialisers, RuntimeType runtimeType) {
+            RuntimeType runtimeType) {
         List<ResourceWriter> resultForClass = noMediaTypeClassCache.computeIfAbsent(entity.getClass(), mappingFunction);
         List<ResourceWriter> constrainedResultsForClass = new ArrayList<>(resultForClass.size());
         for (ResourceWriter writer : resultForClass) {
@@ -634,7 +638,7 @@ public class Serialisers {
                 }
             }
         }
-        return new NoMediaTypeResult(finalResult.toArray(NO_WRITER), selected, serialisers);
+        return new NoMediaTypeResult(finalResult.toArray(NO_WRITER), selected);
     }
 
     public static class NoMediaTypeResult {
@@ -642,10 +646,10 @@ public class Serialisers {
         final MediaType mediaType;
         final EntityWriter entityWriter;
 
-        public NoMediaTypeResult(MessageBodyWriter<?>[] writers, MediaType mediaType, Serialisers serialisers) {
+        public NoMediaTypeResult(MessageBodyWriter<?>[] writers, MediaType mediaType) {
             this.writers = writers;
             this.mediaType = mediaType;
-            this.entityWriter = new FixedEntityWriterArray(writers, serialisers);
+            this.entityWriter = new FixedEntityWriterArray(writers);
         }
 
         public MessageBodyWriter<?>[] getWriters() {
@@ -722,8 +726,7 @@ public class Serialisers {
     // FIXME: pass InvocationState to wrap args?
     public static Buffer invokeClientWriter(Entity<?> entity, Object entityObject, Class<?> entityClass, Type entityType,
             MultivaluedMap<String, String> headerMap, MessageBodyWriter writer, WriterInterceptor[] writerInterceptors,
-            Map<String, Object> properties, Serialisers serialisers, QuarkusRestConfiguration configuration)
-            throws IOException {
+            Map<String, Object> properties) throws IOException {
         if (writer instanceof QuarkusRestClientMessageBodyWriter && writerInterceptors == null) {
             QuarkusRestClientMessageBodyWriter<Object> quarkusRestWriter = (QuarkusRestClientMessageBodyWriter<Object>) writer;
             if (writer.isWriteable(entityClass, entityType, entity.getAnnotations(), entity.getMediaType())) {
@@ -738,8 +741,7 @@ public class Serialisers {
                     return Buffer.buffer(baos.toByteArray());
                 } else {
                     return runClientWriterInterceptors(entityObject, entityClass, entityType, entity.getAnnotations(),
-                            entity.getMediaType(), headerMap, writer, writerInterceptors, properties, serialisers,
-                            configuration);
+                            entity.getMediaType(), headerMap, writer, writerInterceptors, properties);
                 }
             }
         }
@@ -750,10 +752,11 @@ public class Serialisers {
     public static Buffer runClientWriterInterceptors(Object entity, Class<?> entityClass, Type entityType,
             Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, String> headers, MessageBodyWriter writer,
-            WriterInterceptor[] writerInterceptors, Map<String, Object> properties, Serialisers serialisers,
-            QuarkusRestConfiguration configuration) throws IOException {
+            WriterInterceptor[] writerInterceptors, Map<String, Object> properties) throws IOException {
         QuarkusRestClientWriterInterceptorContext wc = new QuarkusRestClientWriterInterceptorContext(writerInterceptors, writer,
-                annotations, entityClass, entityType, entity, mediaType, headers, properties, serialisers, configuration);
+                annotations, entityClass, entityType, entity,
+                mediaType,
+                headers, properties);
         wc.proceed();
         return wc.getResult();
     }
@@ -766,7 +769,7 @@ public class Serialisers {
         // FIXME: perhaps optimise for when we have no interceptor?
         QuarkusRestClientReaderInterceptorContext context = new QuarkusRestClientReaderInterceptorContext(annotations,
                 entityClass, entityType, mediaType,
-                properties, metadata, configuration, serialisers, in, interceptors);
+                properties, (MultivaluedMap) metadata, configuration, serialisers, in, interceptors, RuntimeType.CLIENT);
         return context.proceed();
     }
 }

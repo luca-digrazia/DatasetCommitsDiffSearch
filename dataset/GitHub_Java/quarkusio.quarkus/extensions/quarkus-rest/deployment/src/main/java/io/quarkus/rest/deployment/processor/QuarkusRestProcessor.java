@@ -112,16 +112,9 @@ import io.quarkus.rest.runtime.providers.serialisers.VertxJsonMessageBodyWriter;
 import io.quarkus.rest.runtime.providers.serialisers.jsonb.JsonbMessageBodyReader;
 import io.quarkus.rest.runtime.providers.serialisers.jsonb.JsonbMessageBodyWriter;
 import io.quarkus.rest.runtime.spi.BeanFactory;
-import io.quarkus.rest.spi.ContainerRequestFilterBuildItem;
-import io.quarkus.rest.spi.ContainerResponseFilterBuildItem;
-import io.quarkus.rest.spi.DynamicFeatureBuildItem;
 import io.quarkus.runtime.RuntimeValue;
-import io.quarkus.vertx.http.deployment.RouteBuildItem;
-import io.quarkus.vertx.http.runtime.BasicRoute;
+import io.quarkus.vertx.http.deployment.FilterBuildItem;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
-import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
-import io.vertx.core.Handler;
-import io.vertx.ext.web.RoutingContext;
 
 public class QuarkusRestProcessor {
 
@@ -281,7 +274,7 @@ public class QuarkusRestProcessor {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    public void setupEndpoints(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
+    public FilterBuildItem setupEndpoints(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BeanContainerBuildItem beanContainerBuildItem,
             QuarkusRestConfig config,
             Optional<ResourceScanningResultBuildItem> resourceScanningResultBuildItem,
@@ -292,15 +285,11 @@ public class QuarkusRestProcessor {
             ShutdownContextBuildItem shutdownContext,
             HttpBuildTimeConfig vertxConfig,
             Capabilities capabilities,
-            List<ContainerRequestFilterBuildItem> additionalContainerRequestFilters,
-            List<ContainerResponseFilterBuildItem> additionalContainerResponseFilters,
-            List<DynamicFeatureBuildItem> additionalDynamicFeatures,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<RouteBuildItem> routes) {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
 
         if (!resourceScanningResultBuildItem.isPresent()) {
             // no detected @Path, bail out
-            return;
+            return null;
         }
 
         IndexView index = beanArchiveIndexBuildItem.getIndex();
@@ -456,24 +445,6 @@ public class QuarkusRestProcessor {
                     }
                 }
             }
-            for (ContainerRequestFilterBuildItem additionalFilter : additionalContainerRequestFilters) {
-                ResourceRequestInterceptor interceptor = new ResourceRequestInterceptor();
-                interceptor.setFactory(recorder.factory(additionalFilter.getClassName(), beanContainerBuildItem.getValue()));
-                if (additionalFilter.getPriority() != null) {
-                    interceptor.setPriority(additionalFilter.getPriority());
-                }
-                if (additionalFilter.getPreMatching() != null) {
-                    interceptor.setPreMatching(additionalFilter.getPreMatching());
-                    if (additionalFilter.getPreMatching()) {
-                        interceptors.addResourcePreMatchInterceptor(interceptor);
-                    } else {
-                        interceptors.addGlobalRequestInterceptor(interceptor);
-                    }
-                } else {
-                    interceptors.addGlobalRequestInterceptor(interceptor);
-                }
-            }
-
             for (ClassInfo filterClass : containerResponseFilters) {
                 if (filterClass.classAnnotation(QuarkusRestDotNames.PROVIDER) != null) {
                     ResourceResponseInterceptor interceptor = new ResourceResponseInterceptor();
@@ -492,15 +463,6 @@ public class QuarkusRestProcessor {
                     }
                 }
             }
-            for (ContainerResponseFilterBuildItem additionalFilter : additionalContainerResponseFilters) {
-                ResourceResponseInterceptor interceptor = new ResourceResponseInterceptor();
-                interceptor.setFactory(recorder.factory(additionalFilter.getClassName(), beanContainerBuildItem.getValue()));
-                if (additionalFilter.getPriority() != null) {
-                    interceptor.setPriority(additionalFilter.getPriority());
-                }
-                interceptors.addGlobalResponseInterceptor(interceptor);
-            }
-
             for (ClassInfo filterClass : writerInterceptors) {
                 if (filterClass.classAnnotation(QuarkusRestDotNames.PROVIDER) != null) {
                     ResourceWriterInterceptor interceptor = new ResourceWriterInterceptor();
@@ -600,12 +562,6 @@ public class QuarkusRestProcessor {
                             beanContainerBuildItem.getValue()));
                     dynamicFeats.addFeature(resourceFeature);
                 }
-            }
-            for (DynamicFeatureBuildItem additionalDynamicFeature : additionalDynamicFeatures) {
-                ResourceDynamicFeature resourceFeature = new ResourceDynamicFeature();
-                resourceFeature.setFactory(
-                        recorder.factory(additionalDynamicFeature.getClassName(), beanContainerBuildItem.getValue()));
-                dynamicFeats.addFeature(resourceFeature);
             }
 
             GenericTypeMapping genericTypeMapping = new GenericTypeMapping();
@@ -714,27 +670,13 @@ public class QuarkusRestProcessor {
 
             String applicationPath = determineApplicationPath(index);
 
-            // Handler used for both the default and non-default deployment path (specified as application path or resteasyConfig.path)
-            // Routes use the order VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1 to ensure the default route is called before the resteasy one
-            Handler<RoutingContext> handler = recorder.handler(interceptors.sort(), exceptionMapping, ctxResolvers, feats,
-                    dynamicFeats,
-                    serialisers, resourceClasses, subResourceClasses,
-                    beanContainerBuildItem.getValue(), shutdownContext, config, vertxConfig, applicationPath,
-                    clientImplementations,
-                    genericTypeMapping, converterProviders, initClassFactory);
-
-            String deploymentPath = sanitizeApplicationPath(applicationPath);
-            // Exact match for resources matched to the root path
-            routes.produce(new RouteBuildItem(
-                    new BasicRoute(deploymentPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1), handler));
-            String matchPath = deploymentPath;
-            if (matchPath.endsWith("/")) {
-                matchPath += "*";
-            } else {
-                matchPath += "/*";
-            }
-            // Match paths that begin with the deployment path
-            routes.produce(new RouteBuildItem(new BasicRoute(matchPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1), handler));
+            return new FilterBuildItem(
+                    recorder.handler(interceptors.sort(), exceptionMapping, ctxResolvers, feats, dynamicFeats,
+                            serialisers, resourceClasses, subResourceClasses,
+                            beanContainerBuildItem.getValue(), shutdownContext, config, vertxConfig, applicationPath,
+                            clientImplementations,
+                            genericTypeMapping, converterProviders, initClassFactory),
+                    10);
         }
     }
 
@@ -765,22 +707,6 @@ public class QuarkusRestProcessor {
         if ((applicationPathValue != null)) {
             applicationPath = applicationPathValue.asString();
         }
-        return applicationPath;
-    }
-
-    private String sanitizeApplicationPath(String applicationPath) {
-        if ((applicationPath == null) || applicationPath.isEmpty()) {
-            return "/";
-        }
-        applicationPath = applicationPath.trim();
-        if (applicationPath.equals("/"))
-            applicationPath = "";
-        // add leading slash
-        if (!applicationPath.startsWith("/"))
-            applicationPath = "/" + applicationPath;
-        // remove trailing slash
-        if (applicationPath.endsWith("/"))
-            applicationPath = applicationPath.substring(0, applicationPath.length() - 1);
         return applicationPath;
     }
 
