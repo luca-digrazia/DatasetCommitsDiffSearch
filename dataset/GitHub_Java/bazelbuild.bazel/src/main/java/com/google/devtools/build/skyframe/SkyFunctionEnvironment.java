@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import static com.google.devtools.build.skyframe.AbstractParallelEvaluator.isDoneForBuild;
+
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -36,7 +38,6 @@ import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -69,16 +70,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
 
   private SkyValue value = null;
   private ErrorInfo errorInfo = null;
-
-  /**
-   * This is not {@code null} only during cycle detection and error bubbling. The nullness of this
-   * field is used to detect whether evaluation is in one of those special states.
-   *
-   * <p>When this is not {@code null}, values in this map should be used (while getting
-   * dependencies' values, events, or posts) over values from the graph for keys present in this
-   * map.
-   */
-  @Nullable private final Map<SkyKey, ValueWithMetadata> bubbleErrorInfo;
+  private final Map<SkyKey, ValueWithMetadata> bubbleErrorInfo;
 
   /**
    * The values previously declared as dependencies.
@@ -87,25 +79,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
    * NodeEntry#getValueMaybeWithMetadata}. In the latter case, they should be processed using the
    * static methods of {@link ValueWithMetadata}.
    */
-  private final Map<SkyKey, SkyValue> previouslyRequestedDepsValues;
-
-  /**
-   * The values newly requested from the graph.
-   *
-   * <p>Values in this map are either {@link #NULL_MARKER} or were retrieved via {@link
-   * NodeEntry#getValueMaybeWithMetadata}. In the latter case, they should be processed using the
-   * static methods of {@link ValueWithMetadata}.
-   */
-  private final Map<SkyKey, SkyValue> newlyRequestedDepsValues = new HashMap<>();
-
-  /**
-   * Keys of dependencies registered via {@link #registerDependencies}.
-   *
-   * <p>The {@link #registerDependencies} method is hacky. Deps registered through it will not have
-   * entries in {@link #newlyRequestedDepsValues}, but they are expected to be done. This set tracks
-   * those keys so that they aren't removed when {@link #removeUndoneNewlyRequestedDeps} is called.
-   */
-  private final Set<SkyKey> newlyRegisteredDeps = new HashSet<>();
+  private final Map<SkyKey, SkyValue> directDeps;
 
   /**
    * The grouped list of values requested during this build as dependencies. On a subsequent build,
@@ -164,11 +138,11 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     this.skyKey = skyKey;
     this.oldDeps = oldDeps;
     this.evaluatorContext = evaluatorContext;
-    this.previouslyRequestedDepsValues =
+    this.directDeps =
         batchPrefetch(skyKey, directDeps, oldDeps, /*assertDone=*/ bubbleErrorInfo == null, skyKey);
     this.bubbleErrorInfo = bubbleErrorInfo;
     Preconditions.checkState(
-        !this.previouslyRequestedDepsValues.containsKey(ErrorTransienceValue.KEY),
+        !this.directDeps.containsKey(ErrorTransienceValue.KEY),
         "%s cannot have a dep on ErrorTransienceValue during building",
         skyKey);
   }
@@ -315,23 +289,9 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     this.errorInfo = Preconditions.checkNotNull(errorInfo, skyKey);
   }
 
-  /**
-   * Returns a map of {@code keys} to values or {@link #NULL_MARKER}s, populating the map's contents
-   * by looking in order at:
-   *
-   * <ol>
-   *   <li>{@link #bubbleErrorInfo}
-   *   <li>{@link #previouslyRequestedDepsValues}
-   *   <li>{@link #newlyRequestedDepsValues}
-   *   <li>{@link #evaluatorContext}'s graph accessing methods
-   * </ol>
-   *
-   * <p>Any key whose {@link NodeEntry}--or absence thereof--had to be read from the graph will also
-   * be entered into {@link #newlyRequestedDepsValues} with its value or a {@link #NULL_MARKER}.
-   */
-  private Map<SkyKey, SkyValue> maybeGetValuesFromErrorOrDepsOrGraph(
-      Iterable<? extends SkyKey> keys) throws InterruptedException {
-    // Uses a HashMap, not an ImmutableMap.Builder, because we have not yet deduplicated these keys
+  private Map<SkyKey, SkyValue> getValuesMaybeFromError(Iterable<? extends SkyKey> keys)
+      throws InterruptedException {
+    // Use a HashMap, not an ImmutableMap.Builder, because we have not yet deduplicated these keys
     // and ImmutableMap.Builder does not tolerate duplicates.  The map will be thrown away
     // shortly in any case.
     Map<SkyKey, SkyValue> result = new HashMap<>();
@@ -351,31 +311,26 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     Map<SkyKey, ? extends NodeEntry> missingEntries =
         evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
     for (SkyKey key : missingKeys) {
-      SkyValue valueOrNullMarker = getValueOrNullMarker(missingEntries.get(key));
-      result.put(key, valueOrNullMarker);
-      newlyRequestedDepsValues.put(key, valueOrNullMarker);
+      result.put(key, getValueOrNullMarker(missingEntries.get(key)));
     }
     return result;
   }
 
   /**
    * Returns just the values of the deps in {@code depKeys}, looking at {@code bubbleErrorInfo},
-   * {@link #previouslyRequestedDepsValues}, and the backing {@link #evaluatorContext#graph} in that
-   * order. Any deps that are not yet done will not have their values present in the returned
-   * collection.
+   * {@link #directDeps}, and the backing {@link #evaluatorContext#graph} in that order. Any deps
+   * that are not yet done will not have their values present in the returned collection.
    */
   private Collection<SkyValue> getDepValuesForDoneNodeMaybeFromError(GroupedList<SkyKey> depKeys)
       throws InterruptedException {
     int keySize = depKeys.numElements();
     List<SkyValue> result = new ArrayList<>(keySize);
     // depKeys consists of all known deps of this entry. That should include all the keys in
-    // previouslyRequestedDepsValues, and any keys in bubbleErrorInfo. We expect to have to retrieve
-    // the keys that are not in either one.
+    // directDeps, and any keys in bubbleErrorInfo. We expect to have to retrieve the keys that
+    // are not in either one.
     int expectedMissingKeySize =
         Math.max(
-            keySize
-                - previouslyRequestedDepsValues.size()
-                - (bubbleErrorInfo == null ? 0 : bubbleErrorInfo.size()),
+            keySize - directDeps.size() - (bubbleErrorInfo == null ? 0 : bubbleErrorInfo.size()),
             0);
     ArrayList<SkyKey> missingKeys = new ArrayList<>(expectedMissingKeySize);
     for (SkyKey key : depKeys.getAllElementsAsIterable()) {
@@ -393,18 +348,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     return result;
   }
 
-  /**
-   * Returns a value or a {@link #NULL_MARKER} associated with {@code key} by looking in order at:
-   *
-   * <ol>
-   *   <li>{@code bubbleErrorInfo}
-   *   <li>{@link #previouslyRequestedDepsValues}
-   *   <li>{@link #newlyRequestedDepsValues}
-   * </ol>
-   *
-   * <p>Returns {@code null} if no entries for {@code key} were found in any of those three maps.
-   * (Note that none of the maps can have {@code null} as a value.)
-   */
   @Nullable
   private SkyValue maybeGetValueFromErrorOrDeps(SkyKey key) {
     if (bubbleErrorInfo != null) {
@@ -413,27 +356,12 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         return bubbleErrorInfoValue;
       }
     }
-    SkyValue directDepsValue = previouslyRequestedDepsValues.get(key);
-    if (directDepsValue != null) {
-      return directDepsValue;
-    }
-    SkyValue newlyRequestedDepsValue = newlyRequestedDepsValues.get(key);
-    if (newlyRequestedDepsValue != null) {
-      return newlyRequestedDepsValue;
-    }
-    return null;
+    return directDeps.get(key);
   }
 
   private static SkyValue getValueOrNullMarker(@Nullable NodeEntry nodeEntry)
       throws InterruptedException {
-    if (nodeEntry == null) {
-      return NULL_MARKER;
-    }
-    SkyValue valueMaybeWithMetadata = nodeEntry.getValueMaybeWithMetadata();
-    if (valueMaybeWithMetadata == null) {
-      return NULL_MARKER;
-    }
-    return valueMaybeWithMetadata;
+    return isDoneForBuild(nodeEntry) ? nodeEntry.getValueMaybeWithMetadata() : NULL_MARKER;
   }
 
   @Override
@@ -441,25 +369,27 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       Iterable<? extends SkyKey> depKeys) throws InterruptedException {
     checkActive();
     newlyRequestedDeps.startGroup();
-    Map<SkyKey, SkyValue> values = maybeGetValuesFromErrorOrDepsOrGraph(depKeys);
+    Map<SkyKey, SkyValue> values = getValuesMaybeFromError(depKeys);
     for (Map.Entry<SkyKey, SkyValue> depEntry : values.entrySet()) {
       SkyKey depKey = depEntry.getKey();
       SkyValue depValue = depEntry.getValue();
       if (depValue == NULL_MARKER) {
-        if (previouslyRequestedDepsValues.containsKey(depKey)) {
+        if (directDeps.containsKey(depKey)) {
           throw new IllegalStateException(
-              String.format(
-                  "Undone key %s was already in deps of %s( dep: %s, parent: %s )",
-                  depKey,
-                  skyKey,
-                  evaluatorContext.getGraph().get(skyKey, Reason.OTHER, depKey),
-                  evaluatorContext.getGraph().get(null, Reason.OTHER, skyKey)));
+              "Undone key "
+                  + depKey
+                  + " was already in deps of "
+                  + skyKey
+                  + "( dep: "
+                  + evaluatorContext.getGraph().get(skyKey, Reason.OTHER, depKey)
+                  + ", parent: "
+                  + evaluatorContext.getGraph().get(null, Reason.OTHER, skyKey));
         }
         valuesMissing = true;
-        newlyRequestedDeps.add(depKey);
+        addDep(depKey);
         continue;
       }
-      ErrorInfo errorInfo = ValueWithMetadata.getMaybeErrorInfo(depValue);
+      ErrorInfo errorInfo = ValueWithMetadata.getMaybeErrorInfo(depEntry.getValue());
       if (errorInfo != null) {
         childErrorInfos.add(errorInfo);
         if (bubbleErrorInfo != null) {
@@ -479,9 +409,9 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         }
       }
 
-      if (!previouslyRequestedDepsValues.containsKey(depKey)) {
+      if (!directDeps.containsKey(depKey)) {
         if (bubbleErrorInfo == null) {
-          newlyRequestedDeps.add(depKey);
+          addDep(depKey);
         }
         evaluatorContext
             .getReplayingNestedSetPostableVisitor()
@@ -535,6 +465,10 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         });
   }
 
+  private void addDep(SkyKey key) {
+    newlyRequestedDeps.add(key);
+  }
+
   /**
    * If {@code !keepGoing} and there is at least one dep in error, returns a dep in error. Otherwise
    * returns {@code null}.
@@ -558,29 +492,12 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     return newlyRequestedDeps;
   }
 
-  void removeUndoneNewlyRequestedDeps() {
-    HashSet<SkyKey> undoneDeps = new HashSet<>();
-    for (SkyKey newlyRequestedDep : newlyRequestedDeps) {
-      if (newlyRegisteredDeps.contains(newlyRequestedDep)) {
-        continue;
-      }
-      SkyValue newlyRequestedDepValue =
-          Preconditions.checkNotNull(
-              newlyRequestedDepsValues.get(newlyRequestedDep), newlyRequestedDep);
-      if (newlyRequestedDepValue == NULL_MARKER) {
-        // The dep was normally requested, and was not done.
-        undoneDeps.add(newlyRequestedDep);
-      }
-    }
-    newlyRequestedDeps.remove(undoneDeps);
-  }
-
   boolean isAnyDirectDepErrorTransitivelyTransient() {
     Preconditions.checkState(
         bubbleErrorInfo == null,
         "Checking dep error transitive transience during error bubbling for: %s",
         skyKey);
-    for (SkyValue skyValue : previouslyRequestedDepsValues.values()) {
+    for (SkyValue skyValue : directDeps.values()) {
       ErrorInfo maybeErrorInfo = ValueWithMetadata.getMaybeErrorInfo(skyValue);
       if (maybeErrorInfo != null && maybeErrorInfo.isTransitivelyTransient()) {
         return true;
@@ -589,14 +506,23 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     return false;
   }
 
-  boolean isAnyNewlyRequestedDepErrorTransitivelyTransient() {
-    Preconditions.checkState(
-        bubbleErrorInfo == null,
-        "Checking dep error transitive transience during error bubbling for: %s",
-        skyKey);
-    for (SkyValue skyValue : newlyRequestedDepsValues.values()) {
-      ErrorInfo maybeErrorInfo = ValueWithMetadata.getMaybeErrorInfo(skyValue);
-      if (maybeErrorInfo != null && maybeErrorInfo.isTransitivelyTransient()) {
+  boolean isAnyNewlyRequestedDepErrorTransitivelyTransient() throws InterruptedException {
+    // TODO(mschaller): consider collecting SkyValues of newly requested deps as they're requested
+    // which would allow this code to avoid graph queries for nodes already queried.
+    //
+    // This will also be necessary for correct behavior in the presence of node re-dirtying.
+      Preconditions.checkState(
+          bubbleErrorInfo == null,
+          "Checking dep error transitive transience during error bubbling for: %s",
+          skyKey);
+    Map<SkyKey, ? extends NodeEntry> newlyRequestedDeps =
+        evaluatorContext.getBatchValues(skyKey, Reason.DONE_CHECKING, getNewlyRequestedDeps());
+    for (NodeEntry depEntry : newlyRequestedDeps.values()) {
+      if (!isDoneForBuild(depEntry)) {
+        continue;
+      }
+      ErrorInfo depError = depEntry.getErrorInfo();
+      if (depError != null && depError.isTransitivelyTransient()) {
         return true;
       }
     }
@@ -726,9 +652,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   public void registerDependencies(Iterable<SkyKey> keys) {
     newlyRequestedDeps.startGroup();
     for (SkyKey key : keys) {
-      if (!previouslyRequestedDepsValues.containsKey(key)) {
-        newlyRequestedDeps.add(key);
-        newlyRegisteredDeps.add(key);
+      if (!directDeps.containsKey(key)) {
+        addDep(key);
       }
     }
     newlyRequestedDeps.endGroup();
