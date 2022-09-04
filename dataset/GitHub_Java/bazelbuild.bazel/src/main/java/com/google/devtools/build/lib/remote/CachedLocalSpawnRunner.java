@@ -126,10 +126,8 @@ final class CachedLocalSpawnRunner implements SpawnRunner {
         }
       }
       SpawnResult spawnResult = delegate.exec(spawn, policy);
-      if (options.remoteLocalExecUploadResults
-          && spawnResult.status() == Status.SUCCESS
-          && spawnResult.exitCode() == 0) {
-        writeCacheEntry(spawn, policy.getFileOutErr(), actionKey);
+      if (options.remoteLocalExecUploadResults && spawnResult.setupSuccess()) {
+        writeCacheEntry(spawn, actionKey);
       }
       return spawnResult;
     } catch (StatusRuntimeException e) {
@@ -174,7 +172,7 @@ final class CachedLocalSpawnRunner implements SpawnRunner {
     outErr.printErr(new String(streams.get(1), UTF_8));
   }
 
-  private void writeCacheEntry(Spawn spawn, FileOutErr outErr, ActionKey actionKey)
+  private void writeCacheEntry(Spawn spawn, ActionKey actionKey)
           throws IOException, InterruptedException {
     ArrayList<Path> outputFiles = new ArrayList<>();
     for (ActionInput output : spawn.getOutputFiles()) {
@@ -187,10 +185,6 @@ final class CachedLocalSpawnRunner implements SpawnRunner {
     }
     ActionResult.Builder result = ActionResult.newBuilder();
     actionCache.uploadAllResults(execRoot, outputFiles, result);
-    ContentDigest stderr = actionCache.uploadFileContents(outErr.getErrorPath());
-    ContentDigest stdout = actionCache.uploadFileContents(outErr.getOutputPath());
-    result.setStderrDigest(stderr);
-    result.setStdoutDigest(stdout);
     actionCache.setCachedActionResult(actionKey, result.build());
   }
 }
