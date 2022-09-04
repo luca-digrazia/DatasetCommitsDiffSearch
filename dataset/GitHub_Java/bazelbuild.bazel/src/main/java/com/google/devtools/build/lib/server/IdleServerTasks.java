@@ -37,7 +37,7 @@ class IdleServerTasks {
 
   private final Path workspaceDir;
   private final ScheduledThreadPoolExecutor executor;
-  private static final Logger logger = Logger.getLogger(IdleServerTasks.class.getName());
+  private static final Logger log = Logger.getLogger(IdleServerTasks.class.getName());
 
   private static final long FIVE_MIN_MILLIS = 1000 * 60 * 5;
 
@@ -57,11 +57,10 @@ class IdleServerTasks {
     Preconditions.checkState(!executor.isShutdown());
 
     // Do a GC cycle while the server is idle.
-    @SuppressWarnings("unused")
+    @SuppressWarnings("unused") 
     Future<?> possiblyIgnoredError =
-        executor.schedule(
-            () -> {
-              try (AutoProfiler p = AutoProfiler.logged("Idle GC", logger)) {
+        executor.schedule(() -> {
+              try (AutoProfiler p = AutoProfiler.logged("Idle GC", log)) {
                 System.gc();
               }
             },
@@ -131,7 +130,7 @@ class IdleServerTasks {
     try {
       memInfo = new ProcMeminfoParser();
     } catch (IOException e) {
-      logger.info("Could not process /proc/meminfo: " + e);
+      log.info("Could not process /proc/meminfo: " + e);
       return true;
     }
 
@@ -151,8 +150,9 @@ class IdleServerTasks {
 
     // If the system as a whole is low on memory, let this server die.
     if (fractionFree < .1) {
-      logger.info("Terminating due to memory constraints");
-      logger.info(String.format("Total physical:%d\nTotal free: %d\n", totalPhysical, totalFree));
+      log.info("Terminating due to memory constraints");
+      log.info(String.format("Total physical:%d\nTotal free: %d\n",
+                                         totalPhysical, totalFree));
       return false;
     }
 
