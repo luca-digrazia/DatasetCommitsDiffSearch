@@ -2214,7 +2214,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "    implementation = transition_func,",
         "    for_analysis_testing=True,",
         "    inputs = [],",
-        "    outputs = ['//command_line_option:strict_java_deps'])",
+        "    outputs = [])",
         "",
         "inner_rule = rule(implementation = inner_rule_impl,",
         "                  fragments = ['java'])",
