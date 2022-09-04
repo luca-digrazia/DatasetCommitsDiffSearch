@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
@@ -241,14 +240,14 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
    */
   // TODO(ulfjack): Instead of going to local disk here, use SpawnResult (add list of files there).
   public ImmutableList<Pair<String, Path>> getTestOutputsMapping(
-      ArtifactPathResolver resolver, Path execRoot) {
+      @Nullable ActionExecutionContext context, Path execRoot) {
     ImmutableList.Builder<Pair<String, Path>> builder = ImmutableList.builder();
-    if (resolver.toPath(getTestLog()).exists()) {
-      builder.add(Pair.of(TestFileNameConstants.TEST_LOG, resolver.toPath(getTestLog())));
+    if (convertPath(context, getTestLog()).exists()) {
+      builder.add(Pair.of(TestFileNameConstants.TEST_LOG, convertPath(context, getTestLog())));
     }
-    if (getCoverageData() != null && resolver.toPath(getCoverageData()).exists()) {
+    if (getCoverageData() != null && convertPath(context, getCoverageData()).exists()) {
       builder.add(Pair.of(TestFileNameConstants.TEST_COVERAGE,
-          resolver.toPath(getCoverageData())));
+          convertPath(context, getCoverageData())));
     }
     if (execRoot != null) {
       ResolvedPaths resolvedPaths = resolve(execRoot);
@@ -294,6 +293,13 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
       }
     }
     return builder.build();
+  }
+
+  private static Path convertPath(@Nullable ActionExecutionContext actionContext,
+      Artifact artifact) {
+    return actionContext == null
+        ? artifact.getPath()
+        : actionContext.getInputPath(artifact);
   }
 
   @Override

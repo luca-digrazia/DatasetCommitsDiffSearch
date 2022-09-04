@@ -162,7 +162,7 @@ public class StandaloneTestStrategy extends TestStrategy {
       }
       processLastTestAttempt(attempt, dataBuilder, standaloneTestResult.testResultData());
       ImmutableList<Pair<String, Path>> testOutputs =
-          action.getTestOutputsMapping(actionExecutionContext.getPathResolver(), execRoot);
+          action.getTestOutputsMapping(actionExecutionContext, execRoot);
       actionExecutionContext
           .getEventHandler()
           .post(
@@ -211,8 +211,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     // Get the normal test output paths, and then update them to use "attempt_N" names, and
     // attemptDir, before adding them to the outputs.
     ImmutableList<Pair<String, Path>> testOutputs =
-        action.getTestOutputsMapping(actionExecutionContext.getPathResolver(),
-            actionExecutionContext.getExecRoot());
+        action.getTestOutputsMapping(actionExecutionContext, actionExecutionContext.getExecRoot());
     for (Pair<String, Path> testOutput : testOutputs) {
       // e.g. /testRoot/test.dir/file, an example we follow throughout this loop's comments.
       Path testOutputPath = testOutput.getSecond();
