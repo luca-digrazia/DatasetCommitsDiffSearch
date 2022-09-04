@@ -6,20 +6,20 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.Layout;
 import ch.qos.logback.core.net.SyslogConstants;
+import com.codahale.dropwizard.validation.OneOf;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.google.common.base.CharMatcher;
 
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.lang.management.ManagementFactory;
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * An {@link AppenderFactory} implementation which provides an appender that sends events to a
- * syslog server.
+ * An {@link AppenderFactory} implementation which provides an appender that sends events to a syslog server.
  * <p/>
  * <b>Configuration Parameters:</b>
  * <table>
@@ -42,11 +42,10 @@ import java.util.regex.Pattern;
  *         <td>{@code facility}</td>
  *         <td>{@code local0}</td>
  *         <td>
- *             The syslog facility to use. Can be either {@code auth}, {@code authpriv},
- *             {@code daemon}, {@code cron}, {@code ftp}, {@code lpr}, {@code kern}, {@code mail},
- *             {@code news}, {@code syslog}, {@code user}, {@code uucp}, {@code local0},
- *             {@code local1}, {@code local2}, {@code local3}, {@code local4}, {@code local5},
- *             {@code local6}, or {@code local7}.
+ *             The syslog facility to use. Can be either {@code auth}, {@code authpriv}, {@code daemon}, {@code cron},
+ *             {@code ftp}, {@code lpr}, {@code kern}, {@code mail}, {@code news}, {@code syslog}, {@code user},
+ *             {@code uucp}, {@code local0}, {@code local1}, {@code local2}, {@code local3}, {@code local4},
+ *             {@code local5}, {@code local6}, or {@code local7}.
  *         </td>
  *     </tr>
  *     <tr>
@@ -64,44 +63,20 @@ import java.util.regex.Pattern;
  *         </td>
  *     </tr>
  * </table>
- *
- * @see AbstractAppenderFactory
  */
 @JsonTypeName("syslog")
 public class SyslogAppenderFactory extends AbstractAppenderFactory {
-    public enum Facility {
-        AUTH,
-        AUTHPRIV,
-        DAEMON,
-        CRON,
-        FTP,
-        LPR,
-        KERN,
-        MAIL,
-        NEWS,
-        SYSLOG,
-        USER,
-        UUCP,
-        LOCAL0,
-        LOCAL1,
-        LOCAL2,
-        LOCAL3,
-        LOCAL4,
-        LOCAL5,
-        LOCAL6,
-        LOCAL7
-    }
 
-    private static final String LOG_TOKEN_NAME = "%app";
-    private static final String LOG_TOKEN_PID = "%pid";
+    private static String LOG_TOKEN_NAME = "%app";
+    private static String LOG_TOKEN_PID = "%pid";
 
-    private static final Pattern PID_PATTERN = Pattern.compile("(\\d+)@");
+    private static Pattern PID_PATTERN = Pattern.compile("(\\d+)@");
     private static String PID = "";
 
     // make an attempt to get the PID of the process
     // this will only work on UNIX platforms; for others, the PID will be "unknown"
     static {
-        final Matcher matcher = PID_PATTERN.matcher(ManagementFactory.getRuntimeMXBean().getName());
+        Matcher matcher = PID_PATTERN.matcher(ManagementFactory.getRuntimeMXBean().getName());
         if (matcher.find()) {
             PID = "[" + matcher.group(1) + "]";
         }
@@ -115,14 +90,21 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
     private int port = SyslogConstants.SYSLOG_PORT;
 
     @NotNull
-    private Facility facility = Facility.LOCAL0;
+    @OneOf(
+            value = {
+                    "auth", "authpriv", "daemon", "cron", "ftp", "lpr", "kern", "mail", "news", "syslog", "user",
+                    "uucp", "local0", "local1", "local2", "local3", "local4", "local5", "local6", "local7"
+            },
+            ignoreCase = true, ignoreWhitespace = true
+    )
+    private String facility = "local0";
 
     // prefix the logFormat with the application name and PID (if available)
     private String logFormat = LOG_TOKEN_NAME + LOG_TOKEN_PID + ": " +
             SyslogAppender.DEFAULT_SUFFIX_PATTERN;
 
     /**
-     * Returns the Logback pattern with which events will be formatted.
+     * Sets the lowest level of events to print to the console.
      */
     @Override
     @JsonProperty
@@ -131,7 +113,7 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
     }
 
     /**
-     * Sets the Logback pattern with which events will be formatted.
+     * Returns the Logback pattern with which events will be formatted.
      */
     @Override
     @JsonProperty
@@ -147,26 +129,41 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
         return host;
     }
 
+    /**
+     * Sets the hostname of the syslog server.
+     */
     @JsonProperty
     public void setHost(String host) {
         this.host = host;
     }
 
+    /**
+     * Returns the syslog facility to use.
+     */
     @JsonProperty
-    public Facility getFacility() {
+    public String getFacility() {
         return facility;
     }
 
+    /**
+     * Sets the syslog facility to use.
+     */
     @JsonProperty
-    public void setFacility(Facility facility) {
+    public void setFacility(String facility) {
         this.facility = facility;
     }
 
+    /**
+     * Returns the hostname of the syslog port.
+     */
     @JsonProperty
     public int getPort() {
         return port;
     }
 
+    /**
+     * Sets the hostname of the syslog port.
+     */
     @JsonProperty
     public void setPort(int port) {
         this.port = port;
@@ -175,14 +172,13 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
     @Override
     public Appender<ILoggingEvent> build(LoggerContext context, String applicationName, Layout<ILoggingEvent> layout) {
         final SyslogAppender appender = new SyslogAppender();
-        appender.setName("syslog-appender");
         appender.setContext(context);
         appender.setSuffixPattern(logFormat.replaceAll(LOG_TOKEN_PID, PID).replaceAll(LOG_TOKEN_NAME, applicationName));
         appender.setSyslogHost(host);
         appender.setPort(port);
-        appender.setFacility(facility.toString().toLowerCase(Locale.ENGLISH));
+        appender.setFacility(facility);
         addThresholdFilter(appender, threshold);
         appender.start();
-        return wrapAsync(appender);
+        return appender;
     }
 }
