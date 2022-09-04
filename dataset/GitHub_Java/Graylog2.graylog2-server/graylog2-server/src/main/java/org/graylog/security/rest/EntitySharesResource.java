@@ -16,6 +16,7 @@
  */
 package org.graylog.security.rest;
 
+import com.google.common.collect.ImmutableMap;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -23,6 +24,7 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.security.DBGrantService;
+import org.graylog.security.GrantDTO;
 import org.graylog.security.entities.EntityDescriptor;
 import org.graylog.security.shares.EntityShareRequest;
 import org.graylog.security.shares.EntityShareResponse;
@@ -54,14 +56,15 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.Collections;
+import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
 
-@Path("/authz/shares")
+@Path("shares")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
-@Api(value = "Authorization/Shares", description = "Manage share permissions on entities")
+@Api(value = "Permissions/Sharing", description = "Manage share permissions on entities")
 @RequiresAuthentication
 public class EntitySharesResource extends RestResourceWithOwnerCheck {
     private static final Logger LOG = LoggerFactory.getLogger(EntitySharesResource.class);
@@ -87,19 +90,18 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
 
     @GET
     @ApiOperation(value = "Return shares for a user")
-    @Path("user/{userId}")
+    @Path("user/{username}")
     public PaginatedResponse<EntityDescriptor> get(@ApiParam(name = "pagination parameters") @BeanParam PaginationParameters paginationParameters,
-                                                   @ApiParam(name = "userId", required = true) @PathParam("userId") @NotBlank String userId,
+                                                   @ApiParam(name = "username", required = true) @PathParam("username") @NotBlank String username,
                                                    @ApiParam(name = "capability") @QueryParam("capability") @DefaultValue("") String capabilityFilter,
                                                    @ApiParam(name = "entity_type") @QueryParam("entity_type") @DefaultValue("") String entityTypeFilter) {
-
-        final User user = userService.loadById(userId);
-        if (user == null) {
-            throw new NotFoundException("Couldn't find user <" + userId + ">");
+        if (!isPermitted(USERS_EDIT, username)) {
+            throw new ForbiddenException("Couldn't access user " + username);
         }
 
-        if (!isPermitted(USERS_EDIT, user.getName())) {
-            throw new ForbiddenException("Couldn't access user <" + userId + ">");
+        final User user = userService.load(username);
+        if (user == null) {
+            throw new NotFoundException("Couldn't find user " + username);
         }
 
         final GranteeSharesService.SharesResponse response = granteeSharesService.getPaginatedSharesFor(grnRegistry.ofUser(user), paginationParameters, capabilityFilter, entityTypeFilter);
@@ -138,5 +140,19 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
         } else {
             return Response.ok(entityShareResponse).build();
         }
+    }
+
+    @GET
+    @Path("entities/{entityGRN}")
+    public Response entityShares(@PathParam("entityGRN") @NotBlank String entityGRN) {
+        final GRN grn = grnRegistry.parse(entityGRN);
+
+        checkOwnership(grn);
+
+        // TODO: We need to make the return value of this resource more useful to the frontend
+        //       (e.g. returning a list of entities with title, etc.)
+        final List<GrantDTO> grants = grantService.getForTarget(grn);
+
+        return Response.ok(ImmutableMap.of("grants", grants)).build();
     }
 }

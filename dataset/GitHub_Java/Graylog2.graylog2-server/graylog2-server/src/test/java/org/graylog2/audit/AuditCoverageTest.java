@@ -18,6 +18,12 @@ package org.graylog2.audit;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import org.graylog.events.audit.EventsAuditEventTypes;
+import org.graylog.plugins.pipelineprocessor.audit.PipelineProcessorAuditEventTypes;
+import org.graylog.plugins.sidecar.audit.SidecarAuditEventTypes;
+import org.graylog.plugins.views.audit.ViewsAuditEventTypes;
+import org.graylog.scheduler.audit.JobSchedulerAuditEventTypes;
+import org.graylog.security.SecurityAuditEventTypes;
 import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.audit.jersey.NoAuditEvent;
 import org.junit.Test;
@@ -41,7 +47,16 @@ public class AuditCoverageTest {
         final ConfigurationBuilder configurationBuilder = new ConfigurationBuilder()
                 .setUrls(ClasspathHelper.forPackage("org.graylog2"))
                 .setScanners(new MethodAnnotationsScanner());
-        final Set<String> auditEventTypes = new AuditEventTypes().auditEventTypes();
+        // TODO: Dynamically discover event types?
+        final Set<String> auditEventTypes = ImmutableSet.<String>builder()
+                .addAll(new AuditEventTypes().auditEventTypes())
+                .addAll(new PipelineProcessorAuditEventTypes().auditEventTypes())
+                .addAll(new SidecarAuditEventTypes().auditEventTypes())
+                .addAll(new ViewsAuditEventTypes().auditEventTypes())
+                .addAll(new JobSchedulerAuditEventTypes().auditEventTypes())
+                .addAll(new EventsAuditEventTypes().auditEventTypes())
+                .addAll(new SecurityAuditEventTypes().auditEventTypes())
+                .build();
         final Reflections reflections = new Reflections(configurationBuilder);
 
         final ImmutableSet.Builder<Method> methods = ImmutableSet.builder();
@@ -85,9 +100,13 @@ public class AuditCoverageTest {
         final Set<String> auditEventTypes = new AuditEventTypes().auditEventTypes();
 
         for (Field field : fields) {
+            // Skip public NAMESPACE field, which is meant to identify server audit events
+            if (field.getName().equals("NAMESPACE")) {
+                continue;
+            }
             String type = "";
             try {
-                type = (String) field.get(field.getType().newInstance());
+                type = (String) field.get(field.getType().getConstructor().newInstance());
                 if (!auditEventTypes.contains(type)) {
                     missingErrors.add(field.getName() + "=" + type);
                 }
