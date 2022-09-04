@@ -18,7 +18,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.substrate.RuntimeReinitializedClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.netty.BossEventLoopGroup;
@@ -70,6 +69,9 @@ class NettyProcessor {
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ReferenceCountedOpenSslClientContext")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.util.ThreadLocalInsecureRandom")
                 .addRuntimeInitializedClass("io.netty.buffer.ByteBufUtil$HexUtil")
+                .addRuntimeInitializedClass("io.netty.buffer.PooledByteBufAllocator")
+                .addRuntimeInitializedClass("io.netty.buffer.ByteBufAllocator")
+                .addRuntimeInitializedClass("io.netty.buffer.ByteBufUtil")
                 .addRuntimeInitializedClass("io.netty.handler.ssl.ConscryptAlpnSslEngine")
                 .addNativeImageSystemProperty("io.netty.leakDetection.level", "DISABLED");
         try {
@@ -161,12 +163,6 @@ class NettyProcessor {
                 .setScope(ApplicationScoped.class)
                 .addQualifier(MainEventLoopGroup.class)
                 .build());
-    }
-
-    @BuildStep
-    public RuntimeReinitializedClassBuildItem reinitScheduledFutureTask() {
-        return new RuntimeReinitializedClassBuildItem(
-                "io.quarkus.netty.runtime.graal.Holder_io_netty_util_concurrent_ScheduledFutureTask");
     }
 
 }
