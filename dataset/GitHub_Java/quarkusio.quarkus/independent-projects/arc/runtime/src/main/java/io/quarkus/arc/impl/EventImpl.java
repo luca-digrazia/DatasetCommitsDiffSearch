@@ -115,7 +115,6 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public Event<T> select(Annotation... qualifiers) {
-        Qualifiers.verify(qualifiers);
         Set<Annotation> mergedQualifiers = new HashSet<>(this.qualifiers);
         Collections.addAll(mergedQualifiers, qualifiers);
         return new EventImpl<T>(eventType, mergedQualifiers);
@@ -123,7 +122,6 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public <U extends T> Event<U> select(Class<U> subtype, Annotation... qualifiers) {
-        Qualifiers.verify(qualifiers);
         Set<Annotation> mergerdQualifiers = new HashSet<>(this.qualifiers);
         Collections.addAll(mergerdQualifiers, qualifiers);
         return new EventImpl<U>(subtype, mergerdQualifiers);
@@ -131,11 +129,6 @@ class EventImpl<T> implements Event<T> {
 
     @Override
     public <U extends T> Event<U> select(TypeLiteral<U> subtype, Annotation... qualifiers) {
-        Qualifiers.verify(qualifiers);
-        if (Types.containsTypeVariable(subtype.getType())) {
-            throw new IllegalArgumentException(
-                    "Event#select(TypeLiteral, Annotation...) cannot be used with type variable parameter");
-        }
         Set<Annotation> mergerdQualifiers = new HashSet<>(this.qualifiers);
         Collections.addAll(mergerdQualifiers, qualifiers);
         return new EventImpl<U>(subtype.getType(), mergerdQualifiers);
@@ -148,17 +141,12 @@ class EventImpl<T> implements Event<T> {
 
     static <T> Notifier<T> createNotifier(Class<?> runtimeType, Type eventType, Set<Annotation> qualifiers,
             ArcContainerImpl container) {
-        return createNotifier(runtimeType, eventType, qualifiers, container, true);
-    }
-
-    static <T> Notifier<T> createNotifier(Class<?> runtimeType, Type eventType, Set<Annotation> qualifiers,
-            ArcContainerImpl container, boolean activateRequestContext) {
         EventMetadata metadata = new EventMetadataImpl(qualifiers, eventType);
         List<ObserverMethod<? super T>> notifierObserverMethods = new ArrayList<>();
         for (ObserverMethod<? super T> observerMethod : container.resolveObservers(eventType, qualifiers)) {
             notifierObserverMethods.add(observerMethod);
         }
-        return new Notifier<>(runtimeType, notifierObserverMethods, metadata, activateRequestContext);
+        return new Notifier<>(runtimeType, notifierObserverMethods, metadata);
     }
 
     private Type initEventType(Type type) {
@@ -218,19 +206,12 @@ class EventImpl<T> implements Event<T> {
         private final List<ObserverMethod<? super T>> observerMethods;
         private final EventMetadata eventMetadata;
         private final boolean hasTxObservers;
-        private final boolean activateRequestContext;
 
         Notifier(Class<?> runtimeType, List<ObserverMethod<? super T>> observerMethods, EventMetadata eventMetadata) {
-            this(runtimeType, observerMethods, eventMetadata, true);
-        }
-
-        Notifier(Class<?> runtimeType, List<ObserverMethod<? super T>> observerMethods, EventMetadata eventMetadata,
-                boolean activateRequestContext) {
             this.runtimeType = runtimeType;
             this.observerMethods = observerMethods;
             this.eventMetadata = eventMetadata;
             this.hasTxObservers = observerMethods.stream().anyMatch(this::isTxObserver);
-            this.activateRequestContext = activateRequestContext;
         }
 
         void notify(T event) {
@@ -241,8 +222,7 @@ class EventImpl<T> implements Event<T> {
         void notify(T event, ObserverExceptionHandler exceptionHandler, boolean async) {
             if (!isEmpty()) {
 
-                Predicate<ObserverMethod<? super T>> predicate = async ? ObserverMethod::isAsync
-                        : Predicate.not(ObserverMethod::isAsync);
+                Predicate<ObserverMethod<? super T>> predicate = async ? ObserverMethod::isAsync : this::isSyncObserver;
 
                 if (!async && hasTxObservers) {
                     // Note that tx observers are never async
@@ -278,21 +258,17 @@ class EventImpl<T> implements Event<T> {
                     }
                 }
 
-                // Non-tx observers notifications
-                if (activateRequestContext) {
-                    ManagedContext requestContext = Arc.container().requestContext();
-                    if (requestContext.isActive()) {
-                        notifyObservers(event, exceptionHandler, predicate);
-                    } else {
-                        try {
-                            requestContext.activate();
-                            notifyObservers(event, exceptionHandler, predicate);
-                        } finally {
-                            requestContext.terminate();
-                        }
-                    }
-                } else {
+                // Sync notifications
+                ManagedContext requestContext = Arc.container().requestContext();
+                if (requestContext.isActive()) {
                     notifyObservers(event, exceptionHandler, predicate);
+                } else {
+                    try {
+                        requestContext.activate();
+                        notifyObservers(event, exceptionHandler, predicate);
+                    } finally {
+                        requestContext.terminate();
+                    }
                 }
             }
         }
@@ -326,6 +302,10 @@ class EventImpl<T> implements Event<T> {
 
         private boolean isNotTxObserver(ObserverMethod<?> observer) {
             return !isTxObserver(observer);
+        }
+
+        private boolean isSyncObserver(ObserverMethod<?> observer) {
+            return !observer.isAsync();
         }
 
     }
