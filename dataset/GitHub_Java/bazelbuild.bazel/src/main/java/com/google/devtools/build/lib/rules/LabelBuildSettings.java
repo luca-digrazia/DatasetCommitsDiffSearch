@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.rules;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.RuleClass.Builder.STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
+import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ToolchainResolutionMode;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.rules.LateBoundAlias.CommonAliasRule;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -56,7 +55,7 @@ public class LabelBuildSettings {
           null,
           (rule, attributes, configuration) -> {
             if (rule == null || configuration == null) {
-              return attributes.get(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL);
+              return attributes.get(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL);
             }
             Object commandLineValue =
                 configuration.getOptions().getStarlarkOptions().get(rule.getLabel());
@@ -64,7 +63,7 @@ public class LabelBuildSettings {
             try {
               asLabel =
                   commandLineValue == null
-                      ? attributes.get(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)
+                      ? attributes.get(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)
                       : LABEL.convert(commandLineValue, "label_flag value resolution");
             } catch (ConversionException e) {
               throw new IllegalStateException(
@@ -81,9 +80,9 @@ public class LabelBuildSettings {
         .removeAttribute("licenses")
         .removeAttribute("distribs")
         .add(attr(":alias", LABEL).value(ACTUAL))
-        .setBuildSetting(BuildSetting.create(flag, LABEL))
+        .setBuildSetting(new BuildSetting(flag, LABEL))
         .canHaveAnyProvider()
-        .useToolchainResolution(ToolchainResolutionMode.DISABLED)
+        .useToolchainResolution(false)
         .build();
   }
 

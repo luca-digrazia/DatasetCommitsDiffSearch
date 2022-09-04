@@ -29,6 +29,8 @@ import org.junit.runners.JUnit4;
 public class LabelBuildSettingTest extends BuildViewTestCase {
 
   private void writeRulesBzl(String type) throws Exception {
+    setSkylarkSemanticsOptions("--experimental_build_setting_api=True");
+
     scratch.file(
         "test/rules.bzl",
         "def _my_rule_impl(ctx):",
@@ -139,8 +141,7 @@ public class LabelBuildSettingTest extends BuildViewTestCase {
         ImmutableMap.of(
             "//test:my_label_flag", Label.parseAbsoluteUnchecked("//test:command_line")));
     getConfiguredTarget("//test:selector");
-    assertContainsEvent(
-        "configurable attribute \"value\" in //test:selector doesn't match this configuration");
+    assertContainsEvent("Configurable attribute \"value\" doesn't match this configuration");
   }
 
   @Test
@@ -167,8 +168,7 @@ public class LabelBuildSettingTest extends BuildViewTestCase {
         ImmutableMap.of(
             "//test:my_label_flag", Label.parseAbsoluteUnchecked("//test:command_line")));
     getConfiguredTarget("//test:selector");
-    assertContainsEvent(
-        "configurable attribute \"value\" in //test:selector doesn't match this configuration");
+    assertContainsEvent("Configurable attribute \"value\" doesn't match this configuration");
   }
 
   @Test
@@ -196,9 +196,9 @@ public class LabelBuildSettingTest extends BuildViewTestCase {
   @Test
   public void transitionTypeParsing() throws Exception {
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//test/...',",
         "    ],",
@@ -222,8 +222,8 @@ public class LabelBuildSettingTest extends BuildViewTestCase {
         "    implementation = _rule_impl,",
         "    cfg = _my_transition,",
         "    attrs = {",
-        "        '_allowlist_function_transition': attr.label(",
-        "            default = '//tools/allowlists/function_transition_allowlist',",
+        "        '_whitelist_function_transition': attr.label(",
+        "            default = '//tools/whitelists/function_transition_whitelist',",
         "        ),",
         "    }",
         ")");
@@ -242,9 +242,9 @@ public class LabelBuildSettingTest extends BuildViewTestCase {
   @Test
   public void transitionsDontAllowRelativeLabels() throws Exception {
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//test/...',",
         "    ],",
@@ -267,8 +267,8 @@ public class LabelBuildSettingTest extends BuildViewTestCase {
         "    implementation = _rule_impl,",
         "    cfg = _my_transition,",
         "    attrs = {",
-        "        '_allowlist_function_transition': attr.label(",
-        "            default = '//tools/allowlists/function_transition_allowlist',",
+        "        '_whitelist_function_transition': attr.label(",
+        "            default = '//tools/whitelists/function_transition_whitelist',",
         "        ),",
         "    }",
         ")");
