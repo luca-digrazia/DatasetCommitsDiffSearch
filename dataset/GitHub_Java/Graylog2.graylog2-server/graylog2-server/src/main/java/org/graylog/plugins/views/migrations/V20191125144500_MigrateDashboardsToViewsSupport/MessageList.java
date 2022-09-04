@@ -33,6 +33,10 @@ abstract class MessageList implements SearchType {
     String type() { return NAME;}
 
     @Nullable
+    @JsonProperty
+    abstract String id();
+
+    @Nullable
     Object filter() { return null; }
 
     @JsonProperty
