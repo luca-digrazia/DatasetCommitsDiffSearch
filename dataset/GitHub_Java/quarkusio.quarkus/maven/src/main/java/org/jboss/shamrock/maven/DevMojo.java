@@ -80,10 +80,6 @@ public class DevMojo extends AbstractMojo {
             throw new MojoFailureException("The `src/main/java` directory is required, please create it.");
         }
 
-        if (! buildDir.isDirectory()  || ! new File(buildDir, "classes").isDirectory()) {
-            throw new MojoFailureException("The project has no output yet, run `mvn compile shamrock:dev`.");
-        }
-
         try {
             List<String> args = new ArrayList<>();
             args.add("java");
