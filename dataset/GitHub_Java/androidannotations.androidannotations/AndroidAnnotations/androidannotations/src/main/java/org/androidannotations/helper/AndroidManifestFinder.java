@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,39 +15,40 @@
  */
 package org.androidannotations.helper;
 
+import static org.androidannotations.helper.ModelConstants.classSuffix;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import javax.annotation.processing.Filer;
-import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.util.Elements;
-import javax.tools.Diagnostic.Kind;
-import javax.tools.JavaFileObject;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.androidannotations.helper.FileHelper.FileHolder;
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class AndroidManifestFinder {
 
-	private static final String ANDROID_MANIFEST_FILE_OPTION = "androidManifestFile";
-
+	private static final Logger LOGGER = LoggerFactory.getLogger(AndroidManifestFinder.class);
 	private static final int MAX_PARENTS_FROM_SOURCE_FOLDER = 10;
 
-	private ProcessingEnvironment processingEnv;
+	private final ProcessingEnvironment processingEnv;
+	private final OptionsHelper optionsHelper;
 
 	public AndroidManifestFinder(ProcessingEnvironment processingEnv) {
 		this.processingEnv = processingEnv;
+		optionsHelper = new OptionsHelper(processingEnv);
 	}
 
 	public Option<AndroidManifest> extractAndroidManifest() {
@@ -72,8 +73,7 @@ public class AndroidManifestFinder {
 					String androidLibraryProperty = properties.getProperty("android.library");
 					libraryProject = androidLibraryProperty.equals("true");
 
-					Messager messager = processingEnv.getMessager();
-					messager.printMessage(Kind.NOTE, "Found android.library property in project.properties, value: " + libraryProject);
+					LOGGER.debug("Found android.library={} property in project.properties", libraryProject);
 				}
 			} catch (IOException ignored) {
 			}
@@ -83,22 +83,21 @@ public class AndroidManifestFinder {
 	}
 
 	private Option<File> findManifestFile() {
-		if (processingEnv.getOptions().containsKey(ANDROID_MANIFEST_FILE_OPTION)) {
-			return findManifestInSpecifiedPath();
+		String androidManifestFile = optionsHelper.getAndroidManifestFile();
+		if (androidManifestFile != null) {
+			return findManifestInSpecifiedPath(androidManifestFile);
 		} else {
 			return findManifestInParentsDirectories();
 		}
 	}
 
-	private Option<File> findManifestInSpecifiedPath() {
-		String path = processingEnv.getOptions().get(ANDROID_MANIFEST_FILE_OPTION);
-		File androidManifestFile = new File(path);
-		Messager messager = processingEnv.getMessager();
+	private Option<File> findManifestInSpecifiedPath(String androidManifestPath) {
+		File androidManifestFile = new File(androidManifestPath);
 		if (!androidManifestFile.exists()) {
-			messager.printMessage(Kind.ERROR, "Could not find the AndroidManifest.xml file in specified path : " + path);
+			LOGGER.error("Could not find the AndroidManifest.xml file in specified path : {}", androidManifestPath);
 			return Option.absent();
 		} else {
-			messager.printMessage(Kind.NOTE, "AndroidManifest.xml file found: " + androidManifestFile.toString());
+			LOGGER.debug("AndroidManifest.xml file found with specified path: {}", androidManifestFile.toString());
 		}
 		return Option.of(androidManifestFile);
 	}
@@ -111,40 +110,13 @@ public class AndroidManifestFinder {
 	 * appreciated.
 	 */
 	private Option<File> findManifestInParentsDirectories() {
-		Filer filer = processingEnv.getFiler();
-
-		Messager messager = processingEnv.getMessager();
-
-		JavaFileObject dummySourceFile;
-		try {
-			dummySourceFile = filer.createSourceFile("dummy" + System.currentTimeMillis());
-		} catch (IOException ignored) {
-			messager.printMessage(Kind.ERROR, "Could not find the AndroidManifest.xml file, unable to create a dummy source file to locate the source folder");
-			return Option.absent();
-		}
-		String dummySourceFilePath = dummySourceFile.toUri().toString();
-
-		if (dummySourceFilePath.startsWith("file:")) {
-			if (!dummySourceFilePath.startsWith("file://")) {
-				dummySourceFilePath = "file://" + dummySourceFilePath.substring("file:".length());
-			}
-		} else {
-			dummySourceFilePath = "file://" + dummySourceFilePath;
-		}
-
-		URI cleanURI;
-		try {
-			cleanURI = new URI(dummySourceFilePath);
-		} catch (URISyntaxException e) {
-			messager.printMessage(Kind.ERROR, "Could not find the AndroidManifest.xml file, path to dummy source file cannot be parsed: " + dummySourceFilePath);
+		Option<FileHolder> projectRootHolderOption = FileHelper.findRootProjectHolder(processingEnv);
+		if (projectRootHolderOption.isAbsent()) {
 			return Option.absent();
 		}
 
-		File dummyFile = new File(cleanURI);
-
-		File sourcesGenerationFolder = dummyFile.getParentFile();
-
-		File projectRoot = sourcesGenerationFolder.getParentFile();
+		FileHolder projectRootHolder = projectRootHolderOption.get();
+		File projectRoot = projectRootHolder.projectRoot;
 
 		File androidManifestFile = new File(projectRoot, "AndroidManifest.xml");
 		for (int i = 0; i < MAX_PARENTS_FROM_SOURCE_FOLDER; i++) {
@@ -161,17 +133,16 @@ public class AndroidManifestFinder {
 		}
 
 		if (!androidManifestFile.exists()) {
-			messager.printMessage(Kind.ERROR, "Could not find the AndroidManifest.xml file, going up from path [" + sourcesGenerationFolder.getAbsolutePath() + "] found using dummy file [" + dummySourceFilePath + "] (max atempts: " + MAX_PARENTS_FROM_SOURCE_FOLDER + ")");
+			LOGGER.error("Could not find the AndroidManifest.xml file, going up from path [{}] found using dummy file [] (max attempts: {})", projectRootHolder.sourcesGenerationFolder.getAbsolutePath(), projectRootHolder.dummySourceFilePath, MAX_PARENTS_FROM_SOURCE_FOLDER);
 			return Option.absent();
 		} else {
-			messager.printMessage(Kind.NOTE, "AndroidManifest.xml file found: " + androidManifestFile.toString());
+			LOGGER.debug("AndroidManifest.xml file found in parent folder {}: {}", projectRoot.getAbsolutePath(), androidManifestFile.toString());
 		}
 
 		return Option.of(androidManifestFile);
 	}
 
 	private Option<AndroidManifest> parse(File androidManifestFile, boolean libraryProject) {
-
 		DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
 
 		Document doc;
@@ -179,8 +150,7 @@ public class AndroidManifestFinder {
 			DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder();
 			doc = docBuilder.parse(androidManifestFile);
 		} catch (Exception e) {
-			Messager messager = processingEnv.getMessager();
-			messager.printMessage(Kind.ERROR, "Could not parse the AndroidManifest.xml file at path " + androidManifestFile);
+			LOGGER.error("Could not parse the AndroidManifest.xml file at path {}", androidManifestFile, e);
 			return Option.absent();
 		}
 
@@ -189,33 +159,41 @@ public class AndroidManifestFinder {
 
 		String applicationPackage = documentElement.getAttribute("package");
 
+		int minSdkVersion = -1;
+		int maxSdkVersion = -1;
+		int targetSdkVersion = -1;
+		NodeList sdkNodes = documentElement.getElementsByTagName("uses-sdk");
+		if (sdkNodes.getLength() > 0) {
+			Node sdkNode = sdkNodes.item(0);
+			minSdkVersion = extractAttributeIntValue(sdkNode, "android:minSdkVersion", -1);
+			maxSdkVersion = extractAttributeIntValue(sdkNode, "android:maxSdkVersion", -1);
+			targetSdkVersion = extractAttributeIntValue(sdkNode, "android:targetSdkVersion", -1);
+		}
+
 		if (libraryProject) {
-			return Option.of(AndroidManifest.createLibraryManifest(applicationPackage));
+			return Option.of(AndroidManifest.createLibraryManifest(applicationPackage, minSdkVersion, maxSdkVersion, targetSdkVersion));
 		}
 
 		NodeList applicationNodes = documentElement.getElementsByTagName("application");
 
-		String applicationQualifiedName = null;
+		String applicationClassQualifiedName = null;
 		boolean applicationDebuggableMode = false;
 
 		if (applicationNodes.getLength() > 0) {
 			Node applicationNode = applicationNodes.item(0);
 			Node nameAttribute = applicationNode.getAttributes().getNamedItem("android:name");
 
-			String qualifiedName = manifestNameToValidQualifiedName(applicationPackage, nameAttribute);
+			applicationClassQualifiedName = manifestNameToValidQualifiedName(applicationPackage, nameAttribute);
 
-			if (qualifiedName != null) {
-				applicationQualifiedName = qualifiedName;
-			} else {
-				Messager messager = processingEnv.getMessager();
+			if (applicationClassQualifiedName == null) {
 				if (nameAttribute != null) {
-					messager.printMessage(Kind.NOTE, String.format("The class application declared in the AndroidManifest.xml cannot be found in the compile path: [%s]", nameAttribute.getNodeValue()));
+					LOGGER.warn("The class application declared in the AndroidManifest.xml cannot be found in the compile path: [{}]", nameAttribute.getNodeValue());
 				}
 			}
 
 			Node debuggableAttribute = applicationNode.getAttributes().getNamedItem("android:debuggable");
 			if (debuggableAttribute != null) {
-				applicationDebuggableMode = debuggableAttribute.getNodeValue().equalsIgnoreCase("true") ? true : false;
+				applicationDebuggableMode = debuggableAttribute.getNodeValue().equalsIgnoreCase("true");
 			}
 		}
 
@@ -238,12 +216,26 @@ public class AndroidManifestFinder {
 		componentQualifiedNames.addAll(providerQualifiedNames);
 
 		NodeList usesPermissionNodes = documentElement.getElementsByTagName("uses-permission");
-		List<String> usesPermissionQualifiedNames = extractUsesPermissionNames(applicationPackage, usesPermissionNodes);
+		List<String> usesPermissionQualifiedNames = extractUsesPermissionNames(usesPermissionNodes);
 
 		List<String> permissionQualifiedNames = new ArrayList<String>();
 		permissionQualifiedNames.addAll(usesPermissionQualifiedNames);
 
-		return Option.of(AndroidManifest.createManifest(applicationPackage, applicationQualifiedName, componentQualifiedNames, permissionQualifiedNames, applicationDebuggableMode));
+		return Option.of(AndroidManifest.createManifest(applicationPackage, applicationClassQualifiedName, componentQualifiedNames, permissionQualifiedNames, minSdkVersion, maxSdkVersion, targetSdkVersion, applicationDebuggableMode));
+	}
+
+	private int extractAttributeIntValue(Node node, String attribute, int defaultValue) {
+		try {
+			NamedNodeMap attributes = node.getAttributes();
+			if (attributes.getLength() > 0) {
+				Node attributeNode = attributes.getNamedItem(attribute);
+				if (attributeNode != null) {
+					return Integer.parseInt(attributeNode.getNodeValue());
+				}
+			}
+		} catch (NumberFormatException ignored) {
+		}
+		return defaultValue;
 	}
 
 	private List<String> extractComponentNames(String applicationPackage, NodeList componentNodes) {
@@ -258,11 +250,10 @@ public class AndroidManifestFinder {
 			if (qualifiedName != null) {
 				componentQualifiedNames.add(qualifiedName);
 			} else {
-				Messager messager = processingEnv.getMessager();
 				if (nameAttribute != null) {
-					messager.printMessage(Kind.NOTE, String.format("A class activity declared in the AndroidManifest.xml cannot be found in the compile path: [%s]", nameAttribute.getNodeValue()));
+					LOGGER.warn("A class activity declared in the AndroidManifest.xml cannot be found in the compile path: [{}]", nameAttribute.getNodeValue());
 				} else {
-					messager.printMessage(Kind.NOTE, String.format("The %d activity node in the AndroidManifest.xml has no android:name attribute", i));
+					LOGGER.warn("The {} activity node in the AndroidManifest.xml has no android:name attribute", i);
 				}
 			}
 		}
@@ -293,8 +284,8 @@ public class AndroidManifestFinder {
 	private boolean classOrModelClassExists(String className) {
 		Elements elementUtils = processingEnv.getElementUtils();
 
-		if (className.endsWith("_")) {
-			className = className.substring(0, className.length() - 1);
+		if (className.endsWith(classSuffix())) {
+			className = className.substring(0, className.length() - classSuffix().length());
 		}
 		return elementUtils.getTypeElement(className) != null;
 	}
@@ -307,7 +298,7 @@ public class AndroidManifestFinder {
 		}
 	}
 
-	private List<String> extractUsesPermissionNames(String applicationPackage, NodeList usesPermissionNodes) {
+	private List<String> extractUsesPermissionNames(NodeList usesPermissionNodes) {
 		List<String> usesPermissionQualifiedNames = new ArrayList<String>();
 
 		for (int i = 0; i < usesPermissionNodes.getLength(); i++) {
