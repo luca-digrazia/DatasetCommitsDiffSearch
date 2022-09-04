@@ -17,10 +17,10 @@ package smile.projection;
 
 import java.io.Serializable;
 import smile.math.Math;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.EVD;
-import smile.math.matrix.SVD;
+import smile.math.matrix.EigenValueDecomposition;
+import smile.math.matrix.SingularValueDecomposition;
 
 /**
  * Principal component analysis. PCA is an orthogonal
@@ -119,16 +119,16 @@ public class PCA implements Projection<double[]>, Serializable {
         int m = data.length;
         n = data[0].length;
 
-        mu = Math.colMeans(data);
-        DenseMatrix x = Matrix.newInstance(data);
-        for (int j = 0; j < n; j++) {
-            for (int i = 0; i < m; i++) {
-                x.sub(i, j, mu[j]);
+        mu = Math.colMean(data);
+        double[][] x = Math.clone(data);
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                x[i][j] = data[i][j] - mu[j];
             }
         }
 
         if (m > n && !cor) {
-            SVD svd = x.svd();
+            SingularValueDecomposition svd = new SingularValueDecomposition(x);
             eigvalues = svd.getSingularValues();
             for (int i = 0; i < eigvalues.length; i++) {
                 eigvalues[i] *= eigvalues[i];
@@ -138,18 +138,19 @@ public class PCA implements Projection<double[]>, Serializable {
 
         } else {
 
-            DenseMatrix cov = Matrix.zeros(n, n);
+            DenseMatrix cov = new ColumnMajorMatrix(n, n);
+            cov.setSymmetric(true);
             for (int k = 0; k < m; k++) {
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j <= i; j++) {
-                        cov.add(i, j, x.get(k, i) * x.get(k, j));
+                        cov.add(i, j, x[k][i] * x[k][j]);
                     }
                 }
             }
 
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j <= i; j++) {
-                    cov.div(i, j, m); // divide m instead of m-1 for S-PLUS compatibility
+                    cov.div(i, j, m); // divide m instead of m-1 for S-PLUS compatibilit
                     cov.set(j, i, cov.get(i, j));
                 }
             }
@@ -169,8 +170,7 @@ public class PCA implements Projection<double[]>, Serializable {
                 }
             }
 
-            cov.setSymmetric(true);
-            EVD eigen = cov.eigen();
+            EigenValueDecomposition eigen = new EigenValueDecomposition(cov);
 
             DenseMatrix loadings = eigen.getEigenVectors();
             if (cor) {
@@ -254,7 +254,7 @@ public class PCA implements Projection<double[]>, Serializable {
         }
 
         this.p = p;
-        projection = Matrix.zeros(p, n);
+        projection = new ColumnMajorMatrix(p, n);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < p; j++) {
                 projection.set(j, i, eigvectors.get(i, j));

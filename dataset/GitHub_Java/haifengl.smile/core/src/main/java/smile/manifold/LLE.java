@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.manifold;
 
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Comparator;
 import org.slf4j.Logger;
@@ -24,12 +23,7 @@ import smile.graph.AdjacencyList;
 import smile.graph.Graph;
 import smile.math.Math;
 import smile.math.distance.EuclideanDistance;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.SparseMatrix;
-import smile.math.matrix.LU;
-import smile.math.matrix.EVD;
-import smile.math.matrix.Lanczos;
+import smile.math.matrix.*;
 import smile.neighbor.CoverTree;
 import smile.neighbor.KDTree;
 import smile.neighbor.KNNSearch;
@@ -153,7 +147,8 @@ public class LLE {
             colIndex[i] = colIndex[i - 1] + k + 1;
         }
 
-        DenseMatrix C = Matrix.zeros(k, k);
+        DenseMatrix C = new ColumnMajorMatrix(k, k);
+        double[] x = new double[k];
         double[] b = new double[k];
         for (int i = 0; i < k; i++) {
             b[i] = 1.0;
@@ -179,10 +174,10 @@ public class LLE {
                 }
             }
 
-            LU lu = C.lu(true);
-            lu.solve(b);
+            LUDecomposition lu = new LUDecomposition(C);
+            lu.solve(b, x);
 
-            double sum = Math.sum(b);
+            double sum = Math.sum(x);
             int shift = 0;
             for (int p = 0; p < k; p++) {
                 if (newIndex[N[i][p]] > m && shift == 0) {
@@ -190,7 +185,7 @@ public class LLE {
                     w[m * (k + 1) + p] = 1.0;
                     rowIndex[m * (k + 1) + p] = m;
                 }
-                w[m * (k + 1) + p + shift] = -b[p] / sum;
+                w[m * (k + 1) + p + shift] = -x[p] / sum;
                 rowIndex[m * (k + 1) + p + shift] = newIndex[N[i][p]];
             }
 
@@ -205,34 +200,13 @@ public class LLE {
         // This is actually the transpose of W in the paper.
         SparseMatrix W = new SparseMatrix(n, n, w, rowIndex, colIndex);
         SparseMatrix M = W.aat();
-        M.setSymmetric(true);
 
-        try {
-            Class<?> clazz = Class.forName("smile.netlib.ARPACK");
-            Method method = clazz.getMethod("eigen", Matrix.class, Integer.TYPE, String.class);
-            EVD eigen = (EVD) method.invoke(null, M, d+1, "SA");
-            DenseMatrix V = eigen.getEigenVectors();
-            for (int i = 0; i < eigen.getEigenValues().length;i++) System.out.print(eigen.getEigenValues()[i]+" ");
-            System.out.println();
-            System.out.println(V);
-            coordinates = new double[n][d];
-            for (int j = 0; j < d; j++) {
-                for (int i = 0; i < n; i++) {
-                    coordinates[i][j] = V.get(i, j+1);
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            // ARPACK is not available. Use pure Java implementation of Lanczos algorithm.
-            // We don't support caclulate smallest eigen values with Lanczos. So we compute
-            // all the eigen values.
-            EVD eigen = Lanczos.eigen(M, n);
+        EigenValueDecomposition eigen = Lanczos.eigen(M, n);
 
-            coordinates = new double[n][d];
-            for (int j = 0; j < d; j++) {
-                for (int i = 0; i < n; i++) {
-                    coordinates[i][j] = eigen.getEigenVectors().get(i, n-j-2);
-                }
+        coordinates = new double[n][d];
+        for (int j = 0; j < d; j++) {
+            for (int i = 0; i < n; i++) {
+                coordinates[i][j] = eigen.getEigenVectors().get(i, n-j-2);
             }
         }
     }

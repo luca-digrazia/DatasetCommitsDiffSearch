@@ -19,7 +19,7 @@ package smile.classification;
 import java.io.Serializable;
 import java.util.Arrays;
 import smile.math.Math;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EigenValueDecomposition;
 import smile.projection.Projection;
@@ -74,11 +74,11 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
     /**
      * Original class mean vectors.
      */
-    private final DenseMatrix mu;
+    private final double[][] mu;
     /**
      * Project matrix.
      */
-    private final DenseMatrix scaling;
+    private final double[][] scaling;
     /**
      * Projected common mean vector.
      */
@@ -219,24 +219,24 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
         // The number of instances in each class.
         int[] ni = new int[k];
         // Common mean vector.
-        mean = Math.colMeans(x);
+        mean = Math.colMean(x);
         // Common covariance.
-        DenseMatrix T = Matrix.zeros(p, p);
+        DenseMatrix T = new ColumnMajorMatrix(p, p);
+        T.setSymmetric(true);
         // Class mean vectors.
-        mu = Matrix.zeros(k, p);
+        mu = new double[k][p];
 
         for (int i = 0; i < n; i++) {
             int c = y[i];
             ni[c]++;
             for (int j = 0; j < p; j++) {
-                mu.add(c, j, x[i][j]);
+                mu[c][j] += x[i][j];
             }
         }
 
         for (int i = 0; i < k; i++) {
             for (int j = 0; j < p; j++) {
-                mu.div(i, j, ni[i]);
-                mu.sub(i, j, mean[j]);
+                mu[i][j] = mu[i][j] / ni[i] - mean[j];
             }
         }
 
@@ -256,11 +256,11 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
         }
 
         // Between class scatter
-        DenseMatrix B = Matrix.zeros(p, p);
+        DenseMatrix B = new ColumnMajorMatrix(p, p);
         for (int i = 0; i < k; i++) {
             for (int j = 0; j < p; j++) {
                 for (int l = 0; l <= j; l++) {
-                    B.add(j, l, mu.get(i, j) * mu.get(i, l));
+                    B.add(j, l, mu[i][j] * mu[i][l]);
                 }
             }
         }
@@ -272,7 +272,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
             }
         }
 
-        EigenValueDecomposition eigen = new EigenValueDecomposition(T, true);
+        EigenValueDecomposition eigen = new EigenValueDecomposition(T);
         
         tol = tol * tol;
         double[] s = eigen.getEigenValues();
@@ -294,19 +294,21 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
         }
 
         B = U.abmm(UB);
-        eigen = new EigenValueDecomposition(B, true);
+        B.setSymmetric(true);
+
+        eigen = new EigenValueDecomposition(B);
 
         U = eigen.getEigenVectors();
-        scaling = Matrix.zeros(p, L);
-        for (int j = 0; j < L; j++) {
-            for (int i = 0; i < p; i++) {
-                scaling.set(i, j, U.get(i, j));
+        scaling = new double[p][L];
+        for (int i = 0; i < p; i++) {
+            for (int j = 0; j < L; j++) {
+                scaling[i][j] = U.get(i, j);
             }
         }
         
         smean = new double[L];
-        scaling.atx(mean, smean);
-        smu = mu.abmm(scaling).array();
+        Math.atx(scaling, mean, smean);
+        smu = Math.abmm(mu, scaling);
     }
 
     @Override
@@ -336,22 +338,22 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
         }
 
-        double[] y = new double[scaling.ncols()];
-        scaling.atx(x, y);
+        double[] y = new double[scaling[0].length];
+        Math.atx(scaling, x, y);
         Math.minus(y, smean);
         return y;
     }
 
     @Override
     public double[][] project(double[][] x) {
-        double[][] y = new double[x.length][scaling.ncols()];
+        double[][] y = new double[x.length][scaling[0].length];
         
         for (int i = 0; i < x.length; i++) {
             if (x[i].length != p) {
                 throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x[i].length, p));
             }
 
-            scaling.atx(x[i], y[i]);
+            Math.atx(scaling, x[i], y[i]);
             Math.minus(y[i], smean);
         }
         
@@ -362,7 +364,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]>, Serializ
      * Returns the projection matrix W. The dimension reduced data can be obtained
      * by y = W' * x.
      */
-    public DenseMatrix getProjection() {
+    public double[][] getProjection() {
         return scaling;
     }
 }

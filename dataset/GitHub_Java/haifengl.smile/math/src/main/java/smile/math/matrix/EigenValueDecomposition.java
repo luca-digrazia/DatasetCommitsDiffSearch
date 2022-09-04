@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.math.matrix;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.math.Complex;
 import smile.math.Math;
 
@@ -172,28 +174,17 @@ public class EigenValueDecomposition {
      * @param A    square matrix which will be altered during decomposition.
      */
     public EigenValueDecomposition(double[][] A) {
-        this(new ColumnMajorMatrix(A));
+        this(A, false);
     }
 
     /**
      * Full eigen value decomposition of a square matrix. Note that the input
      * matrix will be altered during decomposition.
      * @param A    square matrix which will be altered during decomposition.
-     * @param symmetric if the matrix A is symmetric.
-     */
-    public EigenValueDecomposition(double[][] A, boolean symmetric) {
-        this(new ColumnMajorMatrix(A), symmetric);
-    }
-
-    /**
-     * Full eigen value decomposition of a square matrix. Note that the input
-     * matrix will be altered during decomposition.
-     * @param A    square matrix which will be altered during decomposition.
-     * @param symmetric if the matrix A is symmetric.
      * @param onlyValues if true, only compute eigenvalues; the default is to compute eigenvectors also.
      */
-    public EigenValueDecomposition(double[][] A, boolean symmetric, boolean onlyValues) {
-        this(new ColumnMajorMatrix(A), symmetric, onlyValues);
+    public EigenValueDecomposition(double[][] A, boolean onlyValues) {
+        this(new ColumnMajorMatrix(A), onlyValues);
     }
 
     /**
@@ -209,20 +200,9 @@ public class EigenValueDecomposition {
      * Full eigen value decomposition of a square matrix. Note that the input
      * matrix will be altered during decomposition.
      * @param A    square matrix which will be altered during decomposition.
-     * @param symmetric if the matrix A is symmetric.
-     */
-    public EigenValueDecomposition(DenseMatrix A, boolean symmetric) {
-        this(A, symmetric, false);
-    }
-
-    /**
-     * Full eigen value decomposition of a square matrix. Note that the input
-     * matrix will be altered during decomposition.
-     * @param A    square matrix which will be altered during decomposition.
-     * @param symmetric if the matrix A is symmetric.
      * @param onlyValues if true, only compute eigenvalues; the default is to compute eigenvectors also.
      */
-    public EigenValueDecomposition(DenseMatrix A, boolean symmetric, boolean onlyValues) {
+    public EigenValueDecomposition(DenseMatrix A,  boolean onlyValues) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.nrows(), A.ncols()));
         }
@@ -231,7 +211,7 @@ public class EigenValueDecomposition {
         d = new double[n];
         e = new double[n];
 
-        if (symmetric) {
+        if (A.isSymmetric()) {
             V = A;
 
             if (onlyValues) {

@@ -123,12 +123,12 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
     /**
      * Set the entry value at row i and column j.
      */
-    public abstract double set(int i, int j, double x);
+    public abstract DenseMatrix set(int i, int j, double x);
 
     /**
      * Set the entry value at row i and column j. For Scala users.
      */
-    public double update(int i, int j, double x) {
+    public DenseMatrix update(int i, int j, double x) {
         return set(i, j, x);
     }
 
@@ -152,22 +152,22 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
     /**
      * A[i][j] += x
      */
-    public abstract double add(int i, int j, double x);
+    public abstract DenseMatrix add(int i, int j, double x);
 
     /**
      * A[i][j] -= x
      */
-    public abstract double sub(int i, int j, double x);
+    public abstract DenseMatrix sub(int i, int j, double x);
 
     /**
      * A[i][j] *= x
      */
-    public abstract double mul(int i, int j, double x);
+    public abstract DenseMatrix mul(int i, int j, double x);
 
     /**
      * A[i][j] /= x
      */
-    public abstract double div(int i, int j, double x);
+    public abstract DenseMatrix div(int i, int j, double x);
 
     @Override
     public abstract DenseMatrix abmm(DenseMatrix B);
@@ -256,38 +256,6 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
                 div(i, j, b.get(i, j));
             }
         }
-        return this;
-    }
-
-    /**
-     * Element-wise addition A = A + x
-     */
-    public DenseMatrix add(double x) {
-        int m = nrows();
-        int n = ncols();
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                add(i, j, x);
-            }
-        }
-
-        return this;
-    }
-
-    /**
-     * Element-wise subtraction A = A - x
-     */
-    public DenseMatrix sub(double x) {
-        int m = nrows();
-        int n = ncols();
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                sub(i, j, x);
-            }
-        }
-
         return this;
     }
 
@@ -535,7 +503,7 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
      * @return the solution matrix, actually b.
      */
     @Override
-    public double[] solve(double[] b, double[] x) {
+    public void solve(double[] b, double[] x) {
         if (nrows() == ncols()) {
             if (symmetric && positive) {
                 cholesky().solve(b, x);
@@ -545,8 +513,6 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
         } else {
             qr().solve(b, x);
         }
-
-        return x;
     }
 
     /**
@@ -622,27 +588,5 @@ public abstract class DenseMatrix implements Matrix, LinearSolver, MatrixMultipl
                 x[i] -= r[i];
             }
         }
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        int m = Math.min(10, nrows());
-        int n = Math.min(10, ncols());
-
-        String newline = n < ncols() ? "...\n" : "\n";
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                sb.append(String.format("%.5f\t", get(i, j)));
-            }
-            sb.append(newline);
-        }
-
-        if (m < nrows()) {
-            sb.append("...\n");
-        }
-
-        return sb.toString();
     }
 }

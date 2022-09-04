@@ -16,7 +16,9 @@
 package smile.math.matrix;
 
 import java.util.Arrays;
-import smile.math.MathEx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.math.Math;
 
 /**
  * PageRank is a link analysis algorithm and it assigns a numerical weighting
@@ -31,7 +33,7 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class PageRank {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PageRank.class);
+    private static final Logger logger = LoggerFactory.getLogger(PageRank.class);
     /**
      * Calculate the page rank vector.
      * @param A the matrix supporting matrix vector multiplication operation.
@@ -78,14 +80,14 @@ public class PageRank {
         }
 
         int n = A.nrows();
-        tol = Math.max(tol, MathEx.EPSILON * n);
+        tol = smile.math.Math.max(tol, Math.EPSILON * n);
 
         double[] z = new double[n];
         double[] p = Arrays.copyOf(v, n);
 
         for (int iter = 1; iter <= maxIter; iter++) {
             A.ax(p, z);
-            double beta = 1.0 - damping * MathEx.norm1(z);
+            double beta = 1.0 - damping * Math.norm1(z);
 
             double delta = 0.0;
             for (int i = 0; i < n; i++) {

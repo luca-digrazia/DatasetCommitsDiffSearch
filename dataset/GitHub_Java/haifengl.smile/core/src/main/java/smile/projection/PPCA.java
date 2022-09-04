@@ -16,11 +16,11 @@
 package smile.projection;
 
 import java.io.Serializable;
-import smile.math.MathEx;
-import smile.math.matrix.Matrix;
+import smile.math.Math;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Cholesky;
-import smile.math.matrix.EVD;
+import smile.math.matrix.EigenValueDecomposition;
+import smile.math.matrix.LUDecomposition;
 
 /**
  * Probabilistic principal component analysis. PPCA is a simplified factor analysis
@@ -105,7 +105,7 @@ public class PPCA implements Projection<double[]>, Serializable {
 
         double[] y = new double[projection.nrows()];
         projection.ax(x, y);
-        MathEx.sub(y, pmu);
+        Math.minus(y, pmu);
         return y;
     }
 
@@ -118,7 +118,7 @@ public class PPCA implements Projection<double[]>, Serializable {
         double[][] y = new double[x.length][projection.nrows()];
         for (int i = 0; i < x.length; i++) {
             projection.ax(x[i], y[i]);
-            MathEx.sub(y[i], pmu);
+            Math.minus(y[i], pmu);
         }
         return y;
     }
@@ -132,8 +132,8 @@ public class PPCA implements Projection<double[]>, Serializable {
         int m = data.length;
         int n = data[0].length;
 
-        mu = MathEx.colMeans(data);
-        DenseMatrix cov = Matrix.zeros(n, n);
+        mu = Math.colMean(data);
+        DenseMatrix cov = new ColumnMajorMatrix(n, n);
         for (int l = 0; l < m; l++) {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j <= i; j++) {
@@ -149,8 +149,8 @@ public class PPCA implements Projection<double[]>, Serializable {
             }
         }
 
-        cov.setSymmetric(true);
-        EVD eigen = cov.eigen();
+
+        EigenValueDecomposition eigen = new EigenValueDecomposition(cov);
         double[] evalues = eigen.getEigenValues();
         DenseMatrix evectors = eigen.getEigenVectors();
 
@@ -160,10 +160,10 @@ public class PPCA implements Projection<double[]>, Serializable {
         }
         noise /= (n - k);
 
-        loading = Matrix.zeros(n, k);
+        loading = new ColumnMajorMatrix(n, k);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < k; j++) {
-                loading.set(i, j, evectors.get(i, j) * MathEx.sqrt(evalues[j] - noise));
+                loading.set(i, j, evectors.get(i, j) * Math.sqrt(evalues[j] - noise));
             }
         }
 
@@ -172,8 +172,7 @@ public class PPCA implements Projection<double[]>, Serializable {
             M.add(i, i, noise);
         }
 
-        Cholesky chol = M.cholesky();
-        DenseMatrix Mi = chol.inverse();
+        DenseMatrix Mi = M.inverse();
         projection = Mi.abtmm(loading);
 
         pmu = new double[projection.nrows()];

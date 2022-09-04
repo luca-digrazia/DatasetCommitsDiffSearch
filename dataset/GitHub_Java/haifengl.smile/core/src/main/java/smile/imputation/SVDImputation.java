@@ -15,9 +15,9 @@
  *******************************************************************************/
 package smile.imputation;
 
+import smile.math.Math;
 import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.QRDecomposition;
 import smile.math.matrix.SingularValueDecomposition;
 
 /**
@@ -151,8 +151,7 @@ public class SVDImputation implements MissingValueImputation {
             }
 
             double[] s = new double[k];
-            QRDecomposition qr = new QRDecomposition(A);
-            qr.solve(b, s);
+            A.solve(b, s);
 
             for (int j = 0; j < d; j++) {
                 if (Double.isNaN(raw[i][j])) {

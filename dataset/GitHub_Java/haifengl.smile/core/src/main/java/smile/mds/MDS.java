@@ -16,7 +16,6 @@
 package smile.mds;
 
 import smile.math.Math;
-import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.EigenValueDecomposition;
 
 /**
@@ -144,26 +143,26 @@ public class MDS {
         }
 
         if (add) {
-            ColumnMajorMatrix Z = new ColumnMajorMatrix(2 * n, 2 * n);
+            double[][] Z = new double[2 * n][2 * n];
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
-                    Z.set(i, n + j, 2 * B[i][j]);
+                    Z[i][n + j] = 2 * B[i][j];
                 }
             }
 
             for (int i = 0; i < n; i++) {
-                Z.set(n + i, i, -1);
+                Z[n + i][i] = -1;
             }
 
             mean = Math.rowMean(proximity);
             mu = Math.mean(mean);
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
-                    Z.set(n + i, n + j, 2 * (proximity[i][j] - mean[i] - mean[j] + mu));
+                    Z[n + i][n + j] = 2 * (proximity[i][j] - mean[i] - mean[j] + mu);
                 }
             }
 
-            EigenValueDecomposition eigen = new EigenValueDecomposition(Z, false, true);
+            EigenValueDecomposition eigen = new EigenValueDecomposition(Z, true);
             double c = Math.max(eigen.getEigenValues());
 
             for (int i = 0; i < n; i++) {

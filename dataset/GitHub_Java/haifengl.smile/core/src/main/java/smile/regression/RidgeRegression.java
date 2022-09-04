@@ -18,8 +18,7 @@ package smile.regression;
 
 import java.io.Serializable;
 import smile.math.Math;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.Cholesky;
+import smile.math.matrix.CholeskyDecomposition;
 import smile.math.matrix.DenseMatrix;
 import smile.math.special.Beta;
 
@@ -199,19 +198,19 @@ public class RidgeRegression implements Regression<double[]>, Serializable {
         }
 
         ym = Math.mean(y);                
-        center = Math.colMeans(x);
+        center = Math.colMean(x); 
         
-        DenseMatrix X = Matrix.zeros(n, p);
+        double[][] X = new double[n][p];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < p; j++) {
-                X.set(i, j, x[i][j] - center[j]);
+                X[i][j] = x[i][j] - center[j];
             }
         }
         
         scale = new double[p];
         for (int j = 0; j < p; j++) {
             for (int i = 0; i < n; i++) {
-                scale[j] += Math.sqr(X.get(i, j));
+                scale[j] += Math.sqr(X[i][j]);
             }
             scale[j] = Math.sqrt(scale[j] / n);
         }
@@ -219,19 +218,19 @@ public class RidgeRegression implements Regression<double[]>, Serializable {
         for (int j = 0; j < p; j++) {
             if (!Math.isZero(scale[j])) {
                 for (int i = 0; i < n; i++) {
-                    X.div(i, j, scale[j]);
+                    X[i][j] /= scale[j];
                 }
             }
         }
 
         w = new double[p];
-        X.atx(y, w);
+        Math.atx(X, y, w);
 
-        DenseMatrix XtX = X.ata();;
+        double[][] XtX = Math.atamm(X);
         for (int i = 0; i < p; i++) {
-            XtX.add(i, i, lambda);
+            XtX[i][i] += lambda;
         }
-        Cholesky cholesky = XtX.cholesky();;
+        CholeskyDecomposition cholesky = new CholeskyDecomposition(XtX);
 
         cholesky.solve(w);
         
@@ -243,14 +242,14 @@ public class RidgeRegression implements Regression<double[]>, Serializable {
         b = ym - Math.dot(w, center);
 
         double[] yhat = new double[n];
-        X.ax(w, yhat);
+        Math.ax(x, w, yhat);
 
         double TSS = 0.0;
         RSS = 0.0;
         double ybar = Math.mean(y);
         residuals = new double[n];
         for (int i = 0; i < n; i++) {
-            double r = y[i] - yhat[i];
+            double r = y[i] - yhat[i] - b;
             residuals[i] = r;
             RSS += Math.sqr(r);
             TSS += Math.sqr(y[i] - ybar);

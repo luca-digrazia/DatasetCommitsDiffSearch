@@ -16,9 +16,8 @@
 
 package smile.math.distance;
 
+import java.io.Serializable;
 import smile.math.Math;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Matrix;
 
 /**
  * In statistics, Mahalanobis distance is based on correlations between
@@ -30,18 +29,22 @@ import smile.math.matrix.Matrix;
  *
  * @author Haifeng Li
  */
-public class MahalanobisDistance implements Metric<double[]> {
+public class MahalanobisDistance implements Metric<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
-    private DenseMatrix sigma;
-    private DenseMatrix sigmaInv;
+    private double[][] sigma;
+    private double[][] sigmaInv;
 
     /**
      * Constructor with given covariance matrix.
      */
     public MahalanobisDistance(double[][] cov) {
-        sigma = Matrix.newInstance(cov);
-        sigmaInv = sigma.inverse();
+        sigma = new double[cov.length][cov.length];
+        for (int i = 0; i < cov.length; i++) {
+            System.arraycopy(cov[i], 0, sigma[i], 0, cov.length);
+        }
+
+        sigmaInv = Math.inverse(sigma).array();
     }
 
     @Override
@@ -51,18 +54,18 @@ public class MahalanobisDistance implements Metric<double[]> {
 
     @Override
     public double d(double[] x, double[] y) {
-        if (x.length != sigma.nrows())
-            throw new IllegalArgumentException(String.format("Array x[%d] has different dimension with Sigma[%d][%d].", x.length, sigma.nrows(), sigma.ncols()));
+        if (x.length != sigma.length)
+            throw new IllegalArgumentException(String.format("Array x[%d] has different dimension with Sigma[%d][%d].", x.length, sigma.length, sigma.length));
 
-        if (y.length != sigma.nrows())
-            throw new IllegalArgumentException(String.format("Array y[%d] has different dimension with Sigma[%d][%d].", y.length, sigma.nrows(), sigma.ncols()));
+        if (y.length != sigma.length)
+            throw new IllegalArgumentException(String.format("Array y[%d] has different dimension with Sigma[%d][%d].", y.length, sigma.length, sigma.length));
 
         int n = x.length;
         double[] z = new double[n];
         for (int i = 0; i < n; i++)
             z[i] = x[i] - y[i];
 
-        double dist = sigmaInv.xax(z);
+        double dist = Math.xax(sigmaInv, z);
         return Math.sqrt(dist);
     }
 }

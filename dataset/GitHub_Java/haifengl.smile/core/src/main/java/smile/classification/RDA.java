@@ -19,9 +19,9 @@ package smile.classification;
 import java.io.Serializable;
 import java.util.Arrays;
 import smile.math.Math;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.EVD;
+import smile.math.matrix.EigenValueDecomposition;
 
 /**
  * Regularized discriminant analysis. RDA is a compromise between LDA and QDA,
@@ -208,7 +208,7 @@ public class RDA implements SoftClassifier<double[]>, Serializable {
             }
             
             if (i > 0 && labels[i] - labels[i-1] > 1) {
-                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+                throw new IllegalArgumentException("Missing class: " + labels[i]+1);                 
             }
         }
 
@@ -236,9 +236,9 @@ public class RDA implements SoftClassifier<double[]>, Serializable {
         // The number of instances in each class.
         int[] ni = new int[k];
         // Common mean vector.
-        double[] mean = Math.colMeans(x);
+        double[] mean = Math.colMean(x);
         // Common covariance.
-        DenseMatrix C = Matrix.zeros(p, p);
+        DenseMatrix C = new ColumnMajorMatrix(p, p);
         // Class mean vectors.
         mu = new double[k][p];
         // Class covarainces.
@@ -257,7 +257,8 @@ public class RDA implements SoftClassifier<double[]>, Serializable {
                 throw new IllegalArgumentException(String.format("Class %d has only one sample.", i));
             }
 
-            cov[i] = Matrix.zeros(p, p);
+            cov[i] = new ColumnMajorMatrix(p, p);
+            cov[i].setSymmetric(true);
 
             for (int j = 0; j < p; j++) {
                 mu[i][j] /= ni[i];
@@ -308,8 +309,7 @@ public class RDA implements SoftClassifier<double[]>, Serializable {
                 }
             }
 
-            cov[i].setSymmetric(true);
-            EVD eigen = cov[i].eigen();
+            EigenValueDecomposition eigen = new EigenValueDecomposition(cov[i]);
 
             for (double s : eigen.getEigenValues()) {
                 if (s < tol) {

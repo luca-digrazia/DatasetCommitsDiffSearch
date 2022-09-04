@@ -163,28 +163,33 @@ public class NaiveMatrix extends DenseMatrix {
     }
 
     @Override
-    public double set(int i, int j, double x) {
-        return A[i][j] = x;
+    public NaiveMatrix set(int i, int j, double x) {
+        A[i][j] = x;
+        return this;
     }
 
     @Override
-    public double add(int i, int j, double x) {
-        return A[i][j] += x;
+    public NaiveMatrix add(int i, int j, double x) {
+        A[i][j] += x;
+        return this;
     }
 
     @Override
-    public double sub(int i, int j, double x) {
-        return A[i][j] -= x;
+    public NaiveMatrix sub(int i, int j, double x) {
+        A[i][j] -= x;
+        return this;
     }
 
     @Override
-    public double mul(int i, int j, double x) {
-        return A[i][j] *= x;
+    public NaiveMatrix mul(int i, int j, double x) {
+        A[i][j] *= x;
+        return this;
     }
 
     @Override
-    public double div(int i, int j, double x) {
-        return A[i][j] /= x;
+    public NaiveMatrix div(int i, int j, double x) {
+        A[i][j] /= x;
+        return this;
     }
 
     @Override
@@ -198,33 +203,33 @@ public class NaiveMatrix extends DenseMatrix {
     }
 
     @Override
-    public double[] ax(double[] x, double[] y) {
-        return Math.ax(A, x, y);
+    public void ax(double[] x, double[] y) {
+        Math.ax(A, x, y);
     }
 
     @Override
-    public double[] axpy(double[] x, double[] y) {
-        return Math.axpy(A, x, y);
+    public void axpy(double[] x, double[] y) {
+        Math.axpy(A, x, y);
     }
 
     @Override
-    public double[] axpy(double[] x, double[] y, double b) {
-        return Math.axpy(A, x, y, b);
+    public void axpy(double[] x, double[] y, double b) {
+        Math.axpy(A, x, y, b);
     }
 
     @Override
-    public double[] atx(double[] x, double[] y) {
-        return Math.atx(A, x, y);
+    public void atx(double[] x, double[] y) {
+        Math.atx(A, x, y);
     }
 
     @Override
-    public double[] atxpy(double[] x, double[] y) {
-        return Math.atxpy(A, x, y);
+    public void atxpy(double[] x, double[] y) {
+        Math.atxpy(A, x, y);
     }
 
     @Override
-    public double[] atxpy(double[] x, double[] y, double b) {
-        return Math.atxpy(A, x, y, b);
+    public void atxpy(double[] x, double[] y, double b) {
+        Math.atxpy(A, x, y, b);
     }
 
     @Override

@@ -24,9 +24,9 @@ import smile.clustering.BBDTree;
 import smile.clustering.linkage.Linkage;
 import smile.clustering.linkage.UPGMALinkage;
 import smile.math.Math;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.EVD;
+import smile.math.matrix.EigenValueDecomposition;
 
 /**
  * Self-Organizing Map. An SOM is a unsupervised learning method to produce
@@ -219,14 +219,14 @@ public class SOM implements Clustering<double[]> {
             mu[i] /= n;
         }
 
-        DenseMatrix D = Matrix.zeros(n, d);
+        DenseMatrix D = new ColumnMajorMatrix(n, d);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < d; j++) {
                 D.set(i, j, data[i][j] - mu[j]);
             }
         }
 
-        DenseMatrix V = Matrix.zeros(d, d);
+        DenseMatrix V = new ColumnMajorMatrix(d, d);
         for (int i = 0; i < d; i++) {
             for (int j = i; j < d; j++) {
                 for (int k = 0; k < n; k++) {
@@ -237,9 +237,7 @@ public class SOM implements Clustering<double[]> {
             }
         }
 
-        V.setSymmetric(true);
-        EVD eigen = V.eigen(2);
-
+        EigenValueDecomposition eigen = Math.eigen(V, 2);
         double[] v1 = new double[d];
         double[] v2 = new double[d];
         for (int i = 0; i < d; i++) {

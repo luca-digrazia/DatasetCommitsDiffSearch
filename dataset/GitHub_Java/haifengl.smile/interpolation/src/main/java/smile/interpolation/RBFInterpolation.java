@@ -109,29 +109,47 @@ public class RBFInterpolation {
 
         int n = x.length;
 
-        DenseMatrix G = new ColumnMajorMatrix(n, n);
-        double[] rhs = new double[n];
-        for (int i = 0; i < n; i++) {
-            double sum = 0.0;
-            for (int j = 0; j <= i; j++) {
-                double r = rbf.f(Math.distance(x[i], x[j]));
-                G.set(i, j, r);
-                G.set(j, i, r);
-                sum += 2 * r;
-            }
-
-            if (normalized) {
-                rhs[i] = sum * y[i];
-            } else {
-                rhs[i] = y[i];
-            }
-        }
-
         if (rbf instanceof GaussianRadialBasis) {
+            DenseMatrix G = new ColumnMajorMatrix(n, n);
+            double[] rhs = new double[n];
+            for (int i = 0; i < n; i++) {
+                double sum = 0.0;
+                for (int j = 0; j <= i; j++) {
+                    double r = rbf.f(Math.distance(x[i], x[j]));
+                    G.set(i, j, r);
+                    G.set(j, i, r);
+                    sum += 2 * r;
+                }
+
+                if (normalized) {
+                    rhs[i] = sum * y[i];
+                } else {
+                    rhs[i] = y[i];
+                }
+            }
+
             CholeskyDecomposition cholesky = new CholeskyDecomposition(G);
             cholesky.solve(rhs);
             w = rhs;
         } else {
+            DenseMatrix G = new ColumnMajorMatrix(n, n);
+            double[] rhs = new double[n];
+            for (int i = 0; i < n; i++) {
+                double sum = 0.0;
+                for (int j = 0; j <= i; j++) {
+                    double r = rbf.f(Math.distance(x[i], x[j]));
+                    G.set(i, j, r);
+                    G.set(j, i, r);
+                    sum += 2 * r;
+                }
+
+                if (normalized) {
+                    rhs[i] = sum * y[i];
+                } else {
+                    rhs[i] = y[i];
+                }
+            }
+
             LUDecomposition lu = new LUDecomposition(G);
             lu.solve(rhs);
             w = rhs;

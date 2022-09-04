@@ -24,15 +24,15 @@ public interface MatrixMultiplication<A, B> {
     /**
      * Returns the result of matrix multiplication A * B.
      */
-    A abmm(B b);
+    public A abmm(B b);
 
     /**
      * Returns the result of matrix multiplication A * B'.
      */
-    A abtmm(B b);
+    public A abtmm(B b);
 
     /**
      * Returns the result of matrix multiplication A' * B.
      */
-    A atbmm(B b);
+    public A atbmm(B b);
 }

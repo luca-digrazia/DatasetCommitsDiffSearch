@@ -16,13 +16,10 @@
 
 package smile.regression;
 
+import java.io.Serializable;
 import smile.math.Math;
 import smile.math.kernel.MercerKernel;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Cholesky;
-import smile.math.matrix.LU;
-import smile.math.matrix.EVD;
+import smile.math.matrix.*;
 
 /**
  * Gaussian Process for Regression. A Gaussian process is a stochastic process
@@ -68,7 +65,7 @@ import smile.math.matrix.EVD;
  * </ol>
  * @author Haifeng Li
  */
-public class GaussianProcessRegression <T> implements Regression<T> {
+public class GaussianProcessRegression <T> implements Regression<T>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -154,20 +151,19 @@ public class GaussianProcessRegression <T> implements Regression<T> {
         
         int n = x.length;
 
-        DenseMatrix K = Matrix.zeros(n, n);
+        double[][] K = new double[n][n];
+        w = new double[n];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j <= i; j++) {
-                double k = kernel.k(x[i], x[j]);
-                K.set(i, j, k);
-                K.set(j, i, k);
+                K[i][j] = kernel.k(x[i], x[j]);
+                K[j][i] = K[i][j];
             }
 
-            K.add(i, i, lambda);
+            K[i][i] += lambda;
         }
 
-        Cholesky cholesky = K.cholesky();
-        w = y.clone();
-        cholesky.solve(w);
+        CholeskyDecomposition cholesky = new CholeskyDecomposition(K);
+        cholesky.solve(y, w);
     }
 
     /**
@@ -197,26 +193,27 @@ public class GaussianProcessRegression <T> implements Regression<T> {
         int n = x.length;
         int m = t.length;
 
-        DenseMatrix G = Matrix.zeros(n, m);
+        double[][] G = new double[n][m];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < m; j++) {
-                G.set(i, j, kernel.k(x[i], t[j]));
+                G[i][j] = kernel.k(x[i], t[j]);
             }
         }
 
-        DenseMatrix K = G.ata();;
+        double[][] K = Math.atamm(G);
         for (int i = 0; i < m; i++) {
             for (int j = 0; j <= i; j++) {
-                K.add(i, j, lambda * kernel.k(t[i], t[j]));
-                K.set(j, i, K.get(i, j));
+                K[i][j] += lambda * kernel.k(t[i], t[j]);
+                K[j][i] = K[i][j];
             }
         }
 
+        double[] b = new double[m];
         w = new double[m];
-        G.atx(y, w);
+        Math.atx(G, y, b);
 
-        LU lu = K.lu(true);
-        lu.solve(w);
+        LUDecomposition lu = new LUDecomposition(K);
+        lu.solve(b, w);
     }
 
     /**
@@ -247,14 +244,15 @@ public class GaussianProcessRegression <T> implements Regression<T> {
         int n = x.length;
         int m = t.length;
 
-        DenseMatrix E = Matrix.zeros(n, m);
+        DenseMatrix E = new ColumnMajorMatrix(n, m);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < m; j++) {
                 E.set(i, j, kernel.k(x[i], t[j]));
             }
         }
 
-        DenseMatrix W = Matrix.zeros(m, m);
+        ColumnMajorMatrix W = new ColumnMajorMatrix(m, m);
+        W.setSymmetric(true);
         for (int i = 0; i < m; i++) {
             for (int j = 0; j <= i; j++) {
                 double k = kernel.k(t[i], t[j]);
@@ -263,8 +261,7 @@ public class GaussianProcessRegression <T> implements Regression<T> {
             }
         }
 
-        W.setSymmetric(true);
-        EVD eigen = W.eigen();
+        EigenValueDecomposition eigen = new EigenValueDecomposition(W);
         DenseMatrix U = eigen.getEigenVectors();
         DenseMatrix D = eigen.getD();
         for (int i = 0; i < m; i++) {
@@ -279,9 +276,8 @@ public class GaussianProcessRegression <T> implements Regression<T> {
         for (int i = 0; i < m; i++) {
             LtL.add(i, i, lambda);
         }
-
-        Cholesky chol = LtL.cholesky();
-        DenseMatrix invLtL = chol.inverse();
+        
+        DenseMatrix invLtL = LtL.inverse();
         DenseMatrix K = L.abmm(invLtL).abtmm(L);
         
         w = new double[n];

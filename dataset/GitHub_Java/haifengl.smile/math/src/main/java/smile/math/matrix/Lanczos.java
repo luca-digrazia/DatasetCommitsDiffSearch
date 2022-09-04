@@ -79,7 +79,7 @@ public class Lanczos {
         }
 
         @Override
-        public double[] ax(double[] x, double[] y) {
+        public void ax(double[] x, double[] y) {
             if (A.nrows() >= A.ncols()) {
                 A.ax(x, buf);
                 A.atx(buf, y);
@@ -87,22 +87,20 @@ public class Lanczos {
                 A.atx(x, buf);
                 A.ax(buf, y);
             }
-
-            return y;
         }
 
         @Override
-        public double[] atx(double[] x, double[] y) {
-            return ax(x, y);
+        public void atx(double[] x, double[] y) {
+            ax(x, y);
         }
 
         @Override
-        public double[] axpy(double[] x, double[] y) {
+        public void axpy(double[] x, double[] y) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public double[] axpy(double[] x, double[] y, double b) {
+        public void axpy(double[] x, double[] y, double b) {
             throw new UnsupportedOperationException();
         }
 
@@ -117,12 +115,12 @@ public class Lanczos {
         }
 
         @Override
-        public double[] atxpy(double[] x, double[] y) {
+        public void atxpy(double[] x, double[] y) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public double[] atxpy(double[] x, double[] y, double b) {
+        public void atxpy(double[] x, double[] y, double b) {
             throw new UnsupportedOperationException();
         }
     };
