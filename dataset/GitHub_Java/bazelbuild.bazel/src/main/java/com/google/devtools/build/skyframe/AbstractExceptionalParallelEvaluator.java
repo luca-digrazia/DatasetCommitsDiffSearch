@@ -170,7 +170,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         informProgressReceiverThatValueIsDone(skyKey, batch.get(skyKey));
       }
       // Note that the 'catastrophe' parameter doesn't really matter here (it's only used for
-      // checking).
+      // sanity checking).
       return constructResultExceptionally(skyKeySet, null, /*catastrophe=*/ false);
     }
 
@@ -190,7 +190,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       // Errors, even cached ones, should halt evaluations not in keepGoing mode.
       if (!cachedErrorKeys.isEmpty()) {
         // Note that the 'catastrophe' parameter doesn't really matter here (it's only used for
-        // checking).
+        // sanity checking).
         return constructResultExceptionally(cachedErrorKeys, null, /*catastrophe=*/ false);
       }
     }
@@ -495,7 +495,6 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         factory.compute(parent, env);
         completedRun = true;
       } catch (InterruptedException interruptedException) {
-        logger.atInfo().withCause(interruptedException).log("Interrupted during %s eval", parent);
         // Do nothing.
         // This throw happens if the builder requested the failed node, and then checked the
         // interrupted state later -- getValueOrThrow sets the interrupted bit after the failed
