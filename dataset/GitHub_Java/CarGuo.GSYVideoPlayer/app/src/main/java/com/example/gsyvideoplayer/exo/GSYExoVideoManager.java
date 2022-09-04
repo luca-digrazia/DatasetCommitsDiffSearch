@@ -17,6 +17,8 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 
+import tv.danmaku.ijk.media.player.IjkLibLoader;
+
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
 
 /**
@@ -33,9 +35,11 @@ public class GSYExoVideoManager extends GSYVideoBaseManager {
     @SuppressLint("StaticFieldLeak")
     private static GSYExoVideoManager videoManager;
 
-
-    private GSYExoVideoManager() {
-        init();
+    /***
+     * @param libLoader 是否使用外部动态加载so
+     * */
+    private GSYExoVideoManager(IjkLibLoader libLoader) {
+        init(libLoader);
     }
 
     /**
@@ -43,21 +47,22 @@ public class GSYExoVideoManager extends GSYVideoBaseManager {
      */
     public static synchronized GSYExoVideoManager instance() {
         if (videoManager == null) {
-            videoManager = new GSYExoVideoManager();
+            videoManager = new GSYExoVideoManager(ijkLibLoader);
         }
         return videoManager;
     }
 
     @Override
-    protected IPlayerManager getPlayManager() {
+    protected IPlayerManager getPlayManager(int videoType) {
         return new GSYExoPlayerManager();
     }
 
-    public void prepare(List<String> urls, Map<String, String> mapHeadData, int index,  boolean loop, float speed, boolean cache, File cachePath, String overrideExtension) {
+    public void prepare(List<String> urls, Map<String, String> mapHeadData, boolean loop, float speed, boolean cache, File cachePath) {
         if (urls.size() == 0) return;
         Message msg = new Message();
         msg.what = HANDLER_PREPARE;
-        msg.obj = new GSYExoModel(urls, mapHeadData, index, loop, speed, cache, cachePath, overrideExtension);
+        mMapHeadData = mapHeadData;
+        msg.obj = new GSYExoModel(urls, mapHeadData, loop, speed, cache, cachePath);
         sendMessage(msg);
         if (needTimeOutOther) {
             startTimeOutBuffer();

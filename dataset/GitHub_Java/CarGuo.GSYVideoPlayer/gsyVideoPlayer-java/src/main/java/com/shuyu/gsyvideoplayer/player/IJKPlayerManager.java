@@ -1,15 +1,20 @@
 package com.shuyu.gsyvideoplayer.player;
 
+import android.content.ContentResolver;
 import android.content.Context;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Message;
+import android.text.TextUtils;
 import android.view.Surface;
 
+import com.shuyu.gsyvideoplayer.cache.ICacheManager;
 import com.shuyu.gsyvideoplayer.model.GSYModel;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
+import com.shuyu.gsyvideoplayer.utils.RawDataSourceProvider;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,13 +40,16 @@ public class IJKPlayerManager implements IPlayerManager {
 
     private List<VideoOptionModel> optionModelList;
 
+    private Surface surface;
+
+
     @Override
     public IMediaPlayer getMediaPlayer() {
         return mediaPlayer;
     }
 
     @Override
-    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList) {
+    public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList, ICacheManager cacheManager) {
         mediaPlayer = (ijkLibLoader == null) ? new IjkMediaPlayer() : new IjkMediaPlayer(ijkLibLoader);
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         mediaPlayer.setOnNativeInvokeListener(new IjkMediaPlayer.OnNativeInvokeListener() {
@@ -50,6 +58,11 @@ public class IJKPlayerManager implements IPlayerManager {
                 return true;
             }
         });
+
+        GSYModel gsyModel = (GSYModel) msg.obj;
+        String url = gsyModel.getUrl();
+
+
         try {
             //开启硬解码
             if (GSYVideoType.isMediaCodec()) {
@@ -58,10 +71,26 @@ public class IJKPlayerManager implements IPlayerManager {
                 mediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", 1);
                 mediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-handle-resolution-change", 1);
             }
-            mediaPlayer.setDataSource(((GSYModel) msg.obj).getUrl(), ((GSYModel) msg.obj).getMapHeadData());
-            mediaPlayer.setLooping(((GSYModel) msg.obj).isLooping());
-            if (((GSYModel) msg.obj).getSpeed() != 1 && ((GSYModel) msg.obj).getSpeed() > 0) {
-                mediaPlayer.setSpeed(((GSYModel) msg.obj).getSpeed());
+
+            if (gsyModel.isCache() && cacheManager != null) {
+                cacheManager.doCacheLogic(context, mediaPlayer, url, gsyModel.getMapHeadData(), gsyModel.getCachePath());
+            } else {
+                if (!TextUtils.isEmpty(url)) {
+                    Uri uri = Uri.parse(url);
+                    if (uri.getScheme().equals(ContentResolver.SCHEME_ANDROID_RESOURCE)) {
+                        RawDataSourceProvider rawDataSourceProvider = RawDataSourceProvider.create(context, uri);
+                        mediaPlayer.setDataSource(rawDataSourceProvider);
+                    } else {
+                        mediaPlayer.setDataSource(url, gsyModel.getMapHeadData());
+                    }
+                } else {
+                    mediaPlayer.setDataSource(url, gsyModel.getMapHeadData());
+                }
+            }
+
+            mediaPlayer.setLooping(gsyModel.isLooping());
+            if (gsyModel.getSpeed() != 1 && gsyModel.getSpeed() > 0) {
+                mediaPlayer.setSpeed(gsyModel.getSpeed());
             }
             mediaPlayer.native_setLogLevel(logLevel);
             initIJKOption(mediaPlayer, optionModelList);
@@ -76,6 +105,7 @@ public class IJKPlayerManager implements IPlayerManager {
             mediaPlayer.setSurface(null);
         } else {
             Surface holder = (Surface) msg.obj;
+            surface = holder;
             if (mediaPlayer != null && holder.isValid()) {
                 mediaPlayer.setSurface(holder);
             }
@@ -116,6 +146,15 @@ public class IJKPlayerManager implements IPlayerManager {
             } else {
                 mediaPlayer.setVolume(1, 1);
             }
+        }
+    }
+
+
+    @Override
+    public void releaseSurface() {
+        if (surface != null) {
+            surface.release();
+            surface = null;
         }
     }
 

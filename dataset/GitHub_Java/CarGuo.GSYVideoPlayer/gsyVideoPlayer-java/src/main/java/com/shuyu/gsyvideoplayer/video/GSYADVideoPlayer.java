@@ -15,6 +15,9 @@ import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoViewBridge;
 
+import java.io.File;
+
+import tv.danmaku.ijk.media.player.IjkLibLoader;
 
 /**
  * Created by guoshuyu on 2018/2/1.
@@ -60,6 +63,12 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     @Override
     public int getLayoutId() {
         return R.layout.video_layout_ad;
+    }
+
+
+    @Override
+    public void setIjkLibLoader(IjkLibLoader libLoader) {
+        GSYVideoADManager.setIjkLibLoader(libLoader);
     }
 
     @Override
@@ -180,8 +189,8 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     }
 
     @Override
-    protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime, boolean forceChange) {
-        super.setProgressAndTime(progress, secProgress, currentTime, totalTime, forceChange);
+    protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime) {
+        super.setProgressAndTime(progress, secProgress, currentTime, totalTime);
         if (mADTime != null && currentTime > 0) {
             int totalSeconds = totalTime / 1000;
             int currentSeconds = currentTime / 1000;

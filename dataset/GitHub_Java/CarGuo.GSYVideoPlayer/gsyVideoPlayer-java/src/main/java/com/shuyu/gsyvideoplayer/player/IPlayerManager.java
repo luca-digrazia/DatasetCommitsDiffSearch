@@ -3,6 +3,7 @@ package com.shuyu.gsyvideoplayer.player;
 import android.content.Context;
 import android.os.Message;
 
+import com.shuyu.gsyvideoplayer.cache.ICacheManager;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 
 import java.util.List;
@@ -18,13 +19,15 @@ public interface IPlayerManager {
 
     IMediaPlayer getMediaPlayer();
 
-    void initVideoPlayer(Context context, Message message, List<VideoOptionModel> optionModelList);
+    void initVideoPlayer(Context context, Message message, List<VideoOptionModel> optionModelList, ICacheManager cacheManager);
 
     void showDisplay(Message msg);
 
     void setSpeed(float speed, boolean soundTouch);
 
     void setNeedMute(boolean needMute);
+
+    void releaseSurface();
 
     void release();
 

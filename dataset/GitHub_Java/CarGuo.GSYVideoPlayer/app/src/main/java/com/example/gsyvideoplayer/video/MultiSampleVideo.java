@@ -1,37 +1,26 @@
 package com.example.gsyvideoplayer.video;
 
 import android.content.Context;
-import android.graphics.Point;
 import android.media.AudioManager;
 import android.text.TextUtils;
 import android.util.AttributeSet;
-import android.widget.ImageView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.request.RequestOptions;
-import com.example.gsyvideoplayer.R;
 import com.example.gsyvideoplayer.video.manager.CustomManager;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
-import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoViewBridge;
 
+import java.io.File;
+
+import tv.danmaku.ijk.media.player.IjkLibLoader;
 
 /**
  * 多个同时播放的播放控件
  * Created by guoshuyu on 2018/1/31.
  */
 
-public class MultiSampleVideo extends StandardGSYVideoPlayer {
+public class MultiSampleVideo extends SampleCoverVideo {
 
     private final static String TAG = "MultiSampleVideo";
-
-
-    ImageView mCoverImage;
-
-    String mCoverOriginUrl;
-
-    int mDefaultRes;
 
     public MultiSampleVideo(Context context, Boolean fullFlag) {
         super(context, fullFlag);
@@ -48,11 +37,6 @@ public class MultiSampleVideo extends StandardGSYVideoPlayer {
     @Override
     protected void init(Context context) {
         super.init(context);
-        mCoverImage = (ImageView) findViewById(R.id.thumbImage);
-        if (mThumbImageViewLayout != null &&
-                (mCurrentState == -1 || mCurrentState == CURRENT_STATE_NORMAL || mCurrentState == CURRENT_STATE_ERROR)) {
-            mThumbImageViewLayout.setVisibility(VISIBLE);
-        }
         onAudioFocusChangeListener = new AudioManager.OnAudioFocusChangeListener() {
             @Override
             public void onAudioFocusChange(int focusChange) {
@@ -83,6 +67,11 @@ public class MultiSampleVideo extends StandardGSYVideoPlayer {
     }
 
     @Override
+    public void setIjkLibLoader(IjkLibLoader libLoader) {
+
+    }
+
+    @Override
     public GSYVideoViewBridge getGSYVideoManager() {
         CustomManager.getCustomManager(getKey()).initContext(getContext().getApplicationContext());
         return CustomManager.getCustomManager(getKey());
@@ -107,44 +96,6 @@ public class MultiSampleVideo extends StandardGSYVideoPlayer {
     @Override
     protected int getSmallId() {
         return CustomManager.SMALL_ID;
-    }
-
-
-    @Override
-    public int getLayoutId() {
-        return R.layout.video_layout_cover;
-    }
-
-    public void loadCoverImage(String url, int res) {
-        mCoverOriginUrl = url;
-        mDefaultRes = res;
-        Glide.with(getContext().getApplicationContext())
-                .setDefaultRequestOptions(
-                        new RequestOptions()
-                                .frame(1000000)
-                                .centerCrop()
-                                .error(res)
-                                .placeholder(res))
-                .load(url)
-                .into(mCoverImage);
-    }
-
-    @Override
-    public GSYBaseVideoPlayer startWindowFullscreen(Context context, boolean actionBar, boolean statusBar) {
-        GSYBaseVideoPlayer gsyBaseVideoPlayer = super.startWindowFullscreen(context, actionBar, statusBar);
-        MultiSampleVideo multiSampleVideo = (MultiSampleVideo) gsyBaseVideoPlayer;
-        multiSampleVideo.loadCoverImage(mCoverOriginUrl, mDefaultRes);
-        return multiSampleVideo;
-    }
-
-
-    @Override
-    public GSYBaseVideoPlayer showSmallVideo(Point size, boolean actionBar, boolean statusBar) {
-        //下面这里替换成你自己的强制转化
-        MultiSampleVideo multiSampleVideo = (MultiSampleVideo) super.showSmallVideo(size, actionBar, statusBar);
-        multiSampleVideo.mStartButton.setVisibility(GONE);
-        multiSampleVideo.mStartButton = null;
-        return multiSampleVideo;
     }
 
     public String getKey() {

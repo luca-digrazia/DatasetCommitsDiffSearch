@@ -22,6 +22,7 @@ import com.transitionseverywhere.TransitionManager;
 
 import java.lang.reflect.Constructor;
 
+import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getActionBarHeight;
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getStatusBarHeight;
@@ -141,7 +142,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     @Override
     protected void lockTouchLogic() {
         super.lockTouchLogic();
-        if (!mLockCurScreen) {
+        if (mLockCurScreen) {
             if (mOrientationUtils != null)
                 mOrientationUtils.setEnable(isRotateViewAuto());
         } else {
@@ -160,7 +161,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     @Override
     public void onInfo(int what, int extra) {
         super.onInfo(what, extra);
-        if (what == getGSYVideoManager().getRotateInfoFlag()) {
+        if (what == IMediaPlayer.MEDIA_INFO_VIDEO_ROTATION_CHANGED) {
             checkAutoFullSizeWhenFull();
         }
     }
@@ -308,7 +309,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    Debuger.printfLog("GSYVideoBase resolveFullVideoShow isVerticalFullByVideoSize " + isVertical);
+                    Debuger.printfLog("GSYVideoBase resolveFullVideoShow isVerticalFullByVideoSize " +  isVertical);
                     //autoFull模式下，非横屏视频视频不横屏，并且不自动旋转
                     if (!isVertical && isLockLand && mOrientationUtils.getIsLand() != 1) {
                         mOrientationUtils.resolveByClick();
@@ -472,8 +473,8 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         boolean isVertical = false;
         int videoHeight = getCurrentVideoHeight();
         int videoWidth = getCurrentVideoWidth();
-        Debuger.printfLog("GSYVideoBase isVerticalVideo  videoHeight " + videoHeight + " videoWidth " + videoWidth);
-        Debuger.printfLog("GSYVideoBase isVerticalVideo  mRotate " + mRotate);
+        Debuger.printfLog("GSYVideoBase isVerticalVideo  videoHeight " +  videoHeight + " videoWidth " + videoWidth);
+        Debuger.printfLog("GSYVideoBase isVerticalVideo  mRotate " +  mRotate);
         if (videoHeight > 0 && videoWidth > 0) {
             if (mRotate == 90 || mRotate == 270) {
                 isVertical = videoWidth > videoHeight;
@@ -922,7 +923,6 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
 
     /**
      * 是否根据视频尺寸，自动选择竖屏全屏或者横屏全屏，注意，这时候默认旋转无效
-     *
      * @param autoFullWithSize 默认false
      */
     public void setAutoFullWithSize(boolean autoFullWithSize) {

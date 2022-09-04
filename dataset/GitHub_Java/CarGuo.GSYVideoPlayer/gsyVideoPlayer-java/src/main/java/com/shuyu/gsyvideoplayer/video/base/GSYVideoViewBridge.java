@@ -37,8 +37,6 @@ public interface GSYVideoViewBridge {
 
     IMediaPlayer getMediaPlayer();
 
-    int getBufferedPercentage();
-
     void releaseMediaPlayer();
 
     void setCurrentVideoHeight(int currentVideoHeight);
@@ -61,8 +59,6 @@ public interface GSYVideoViewBridge {
 
     boolean isCacheFile();
 
-    boolean cachePreview(Context context, File cacheDir, String url);
-
-    void clearCache(Context context, File clearCache, String url);
+    void clearCache(Context context, String url);
 
 }

@@ -20,7 +20,6 @@ import java.util.Map;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 /**
- * 代理缓存管理器
  * Created by guoshuyu on 2018/5/18.
  */
 
@@ -60,7 +59,6 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     @Override
     public void doCacheLogic(Context context, IMediaPlayer mediaPlayer, String originUrl, Map<String, String> header, File cachePath) {
         String url = originUrl;
-        mMapHeadData = header;
         if (url.startsWith("http") && !url.contains("127.0.0.1") && !url.contains(".m3u8")) {
             HttpProxyCacheServer proxy = getProxy(context.getApplicationContext(), cachePath);
             if (proxy != null) {
@@ -85,7 +83,7 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     }
 
     @Override
-    public void clearCache(Context context, File cachePath, String url) {
+    public void clearCache(Context context, String url) {
         if (TextUtils.isEmpty(url)) {
             String path = StorageUtils.getIndividualCacheDirectory
                     (context.getApplicationContext()).getAbsolutePath();
@@ -93,9 +91,9 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
         } else {
             Md5FileNameGenerator md5FileNameGenerator = new Md5FileNameGenerator();
             String name = md5FileNameGenerator.generate(url);
-            if (cachePath != null) {
-                String tmpPath = cachePath.getAbsolutePath() + File.separator + name + ".download";
-                String path = cachePath.getAbsolutePath() + File.separator + name;
+            if (mCacheDir != null) {
+                String tmpPath = mCacheDir.getAbsolutePath() + File.separator + name + ".download";
+                String path = mCacheDir.getAbsolutePath() + File.separator + name ;
                 CommonUtil.deleteFile(tmpPath);
                 CommonUtil.deleteFile(path);
             } else {
@@ -114,22 +112,8 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     @Override
     public void release() {
         if (proxy != null) {
-            try {
-                proxy.unregisterCacheListener(this);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            proxy.unregisterCacheListener(this);
         }
-    }
-
-    @Override
-    public boolean cachePreview(Context context, File cacheDir, String url) {
-        HttpProxyCacheServer proxy = getProxy(context.getApplicationContext(), cacheDir);
-        if (proxy != null) {
-            //此处转换了url，然后再赋值给mUrl。
-            url = proxy.getProxyUrl(url);
-        }
-        return (!url.startsWith("http"));
     }
 
     @Override
@@ -168,7 +152,6 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
         return new HttpProxyCacheServer.Builder(context.getApplicationContext())
                 .headerInjector(new UserAgentHeadersInjector()).build();
     }
-
     /**
      * for android video cache header
      */
@@ -221,6 +204,6 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
                     ProxyCacheManager.instance().newProxy(context, file)) : proxy;
         }
     }
-
+    
 
 }

@@ -11,7 +11,6 @@ import com.example.gsyvideoplayer.R;
 import com.example.gsyvideoplayer.model.SwitchVideoModel;
 import com.example.gsyvideoplayer.view.LoadingDialog;
 import com.example.gsyvideoplayer.view.SwitchVideoTypeDialog;
-import com.shuyu.gsyvideoplayer.GSYVideoBaseManager;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
@@ -128,8 +127,6 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
     public GSYBaseVideoPlayer startWindowFullscreen(Context context, boolean actionBar, boolean statusBar) {
         SmartPickVideo sampleVideo = (SmartPickVideo) super.startWindowFullscreen(context, actionBar, statusBar);
         sampleVideo.mSourcePosition = mSourcePosition;
-        sampleVideo.mListItemRect = mListItemRect;
-        sampleVideo.mListItemSize = mListItemSize;
         sampleVideo.mType = mType;
         sampleVideo.mUrlList = mUrlList;
         sampleVideo.mTypeText = mTypeText;
@@ -201,8 +198,8 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
         @Override
         public void onPrepared() {
             if (mTmpManager != null) {
-                mTmpManager.start();
-                mTmpManager.seekTo(getCurrentPositionWhenPlaying());
+                mTmpManager.getMediaPlayer().start();
+                mTmpManager.getMediaPlayer().seekTo(getCurrentPositionWhenPlaying());
             }
         }
 
@@ -224,14 +221,13 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
         @Override
         public void onSeekComplete() {
             if (mTmpManager != null) {
-                GSYVideoBaseManager manager = GSYVideoManager.instance();
+                GSYVideoManager.instance().releaseMediaPlayer();
                 GSYVideoManager.changeManager(mTmpManager);
-                mTmpManager.setLastListener(manager.lastListener());
-                mTmpManager.setListener(manager.listener());
+                mTmpManager.setLastListener(SmartPickVideo.this);
+                mTmpManager.setListener(SmartPickVideo.this);
                 mTmpManager.setDisplay(mSurface);
                 changeUiToPlayingClear();
                 resolveChangedResult();
-                manager.releaseMediaPlayer();
             }
         }
 
@@ -285,7 +281,8 @@ public class SmartPickVideo extends StandardGSYVideoPlayer {
         final String name = mUrlList.get(position).getName();
         if (mSourcePosition != position) {
             if ((mCurrentState == GSYVideoPlayer.CURRENT_STATE_PLAYING
-                    || mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE)) {
+                    || mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE)
+                    && GSYVideoManager.instance().getMediaPlayer() != null) {
                 showLoading();
                 final String url = mUrlList.get(position).getUrl();
                 cancelProgressTimer();

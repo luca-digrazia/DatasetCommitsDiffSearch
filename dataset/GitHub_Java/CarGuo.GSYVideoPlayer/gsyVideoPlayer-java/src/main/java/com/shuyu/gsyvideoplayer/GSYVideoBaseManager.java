@@ -9,9 +9,8 @@ import android.os.Message;
 import android.text.TextUtils;
 import android.view.Surface;
 
-import com.danikula.videocache.CacheListener;
-import com.danikula.videocache.HttpProxyCacheServer;
-import com.danikula.videocache.headers.HeaderInjector;
+import com.shuyu.gsyvideoplayer.cache.ICacheManager;
+import com.shuyu.gsyvideoplayer.cache.ProxyCacheManager;
 import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 import com.shuyu.gsyvideoplayer.model.GSYModel;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
@@ -38,19 +37,23 @@ import tv.danmaku.ijk.media.player.IjkLibLoader;
 
 public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedListener, IMediaPlayer.OnCompletionListener,
         IMediaPlayer.OnBufferingUpdateListener, IMediaPlayer.OnSeekCompleteListener, IMediaPlayer.OnErrorListener,
-        IMediaPlayer.OnVideoSizeChangedListener, IMediaPlayer.OnInfoListener, CacheListener, GSYVideoViewBridge {
+        IMediaPlayer.OnVideoSizeChangedListener, IMediaPlayer.OnInfoListener, ICacheManager.ICacheAvailableListener, GSYVideoViewBridge {
 
-    public static String TAG = "GSYVideoManager";
+    public static String TAG = "GSYVideoBaseManager";
 
-    private static final int HANDLER_PREPARE = 0;
+    protected static final int HANDLER_PREPARE = 0;
 
-    private static final int HANDLER_SETDISPLAY = 1;
+    protected static final int HANDLER_SETDISPLAY = 1;
 
-    private static final int HANDLER_RELEASE = 2;
+    protected static final int HANDLER_RELEASE = 2;
 
-    private static final int HANDLER_RELEASE_SURFACE = 3;
+    protected static final int HANDLER_RELEASE_SURFACE = 3;
 
-    private static final int BUFFER_TIME_OUT_ERROR = -192;//外部超时错误码
+    protected static final int BUFFER_TIME_OUT_ERROR = -192;//外部超时错误码
+
+    //单例模式实在不好给instance()加参数，还是直接设为静态变量吧
+    //自定义so包加载类
+    protected static IjkLibLoader ijkLibLoader;
 
     protected MediaHandler mMediaHandler;
 
@@ -63,9 +66,6 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     //配置ijk option
     protected List<VideoOptionModel> optionModelList;
 
-    //视频代理
-    protected HttpProxyCacheServer proxy;
-
     //是否需要的自定义缓冲路径
     protected File cacheFile;
 
@@ -77,7 +77,15 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
 
     protected Context context;
 
+    /**
+     *
+     */
     protected IPlayerManager playerManager;
+
+    /**
+     *
+     */
+    protected ICacheManager cacheManager;
 
     //当前播放的视频宽的高
     protected int currentVideoWidth = 0;
@@ -106,8 +114,49 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     //是否需要外部超时判断
     protected boolean needTimeOutOther;
 
+    /**
+     * 设置自定义so包加载类
+     * 需要在instance之前设置
+     */
+    public static void setIjkLibLoader(IjkLibLoader libLoader) {
+        IJKPlayerManager.setIjkLibLoader(libLoader);
+        ijkLibLoader = libLoader;
+    }
 
-    private static IPlayerManager getPlayManager(int videoType) {
+
+    public static IjkLibLoader getIjkLibLoader() {
+        return ijkLibLoader;
+    }
+
+
+    /**
+     * 删除默认所有缓存文件
+     */
+    public void clearAllDefaultCache(Context context) {
+        clearDefaultCache(context, null);
+    }
+
+    /**
+     * 删除url对应默认缓存文件
+     */
+    public void clearDefaultCache(Context context, String url) {
+        if (cacheManager != null) {
+            cacheManager.clearCache(context, url);
+        }
+    }
+
+    /***
+     * @param libLoader 是否使用外部动态加载so
+     * */
+    protected void init(IjkLibLoader libLoader) {
+        IJKPlayerManager.setIjkLibLoader(libLoader);
+        HandlerThread mediaHandlerThread = new HandlerThread(TAG);
+        mediaHandlerThread.start();
+        mMediaHandler = new MediaHandler((mediaHandlerThread.getLooper()));
+        mainThreadHandler = new Handler();
+    }
+
+    protected IPlayerManager getPlayManager(int videoType) {
         switch (videoType) {
             case GSYVideoType.IJKEXOPLAYER2:
                 return new EXO2PlayerManager();
@@ -119,44 +168,14 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         }
     }
 
-
-    /***
-     * @param libLoader 是否使用外部动态加载so
-     * */
-    void init(IjkLibLoader libLoader) {
-        playerManager = getPlayManager(GSYVideoType.IJKPLAYER);
-        IJKPlayerManager.setIjkLibLoader(libLoader);
-        HandlerThread mediaHandlerThread = new HandlerThread(TAG);
-        mediaHandlerThread.start();
-        mMediaHandler = new MediaHandler((mediaHandlerThread.getLooper()));
-        mainThreadHandler = new Handler();
-    }
-
-
-    /**
-     * 创建缓存代理服务,带文件目录的.
-     */
-    public HttpProxyCacheServer newProxy(Context context, File file) {
-        if (!file.exists()) {
-            file.mkdirs();
+    protected ICacheManager getCacheManager(int type) {
+        switch (type) {
+            case GSYVideoType.IJKEXOPLAYER2:
+            case GSYVideoType.SYSTEMPLAYER:
+            case GSYVideoType.IJKPLAYER:
+            default:
+                return new ProxyCacheManager();
         }
-        HttpProxyCacheServer.Builder builder = new HttpProxyCacheServer.Builder(context);
-        builder.cacheDirectory(file);
-        builder.headerInjector(new UserAgentHeadersInjector());
-        cacheFile = file;
-        return builder.build();
-    }
-
-    public void setProxy(HttpProxyCacheServer proxy) {
-        this.proxy = proxy;
-    }
-
-    /**
-     * 创建缓存代理服务
-     */
-    public HttpProxyCacheServer newProxy(Context context) {
-        return new HttpProxyCacheServer.Builder(context.getApplicationContext())
-                .headerInjector(new UserAgentHeadersInjector()).build();
     }
 
     @Override
@@ -197,14 +216,14 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     }
 
     @Override
-    public void prepare(final String url, final Map<String, String> mapHeadData, boolean loop, float speed) {
+    public void prepare(final String url, final Map<String, String> mapHeadData, boolean loop, float speed, boolean cache, File cachePath) {
         if (TextUtils.isEmpty(url)) return;
         Message msg = new Message();
         msg.what = HANDLER_PREPARE;
         mMapHeadData = mapHeadData;
-        GSYModel fb = new GSYModel(url, mapHeadData, loop, speed);
+        GSYModel fb = new GSYModel(url, mapHeadData, loop, speed, cache, cachePath);
         msg.obj = fb;
-        mMediaHandler.sendMessage(msg);
+        sendMessage(msg);
         if (needTimeOutOther) {
             startTimeOutBuffer();
         }
@@ -214,7 +233,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     public void releaseMediaPlayer() {
         Message msg = new Message();
         msg.what = HANDLER_RELEASE;
-        mMediaHandler.sendMessage(msg);
+        sendMessage(msg);
         playTag = "";
         playPosition = -22;
     }
@@ -224,7 +243,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         Message msg = new Message();
         msg.what = HANDLER_SETDISPLAY;
         msg.obj = holder;
-        mMediaHandler.sendMessage(msg);
+        showDisplay(msg);
     }
 
     @Override
@@ -232,7 +251,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         Message msg = new Message();
         msg.what = HANDLER_RELEASE_SURFACE;
         msg.obj = holder;
-        mMediaHandler.sendMessage(msg);
+        sendMessage(msg);
     }
 
     @Override
@@ -241,7 +260,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
             @Override
             public void run() {
                 cancelTimeOutBuffer();
-                if (listener != null) {
+                if (listener() != null) {
                     listener().onPrepared();
                 }
             }
@@ -254,7 +273,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
             @Override
             public void run() {
                 cancelTimeOutBuffer();
-                if (listener != null) {
+                if (listener() != null) {
                     listener().onAutoCompletion();
                 }
             }
@@ -266,7 +285,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         mainThreadHandler.post(new Runnable() {
             @Override
             public void run() {
-                if (listener != null) {
+                if (listener() != null) {
                     if (percent > buffterPoint) {
                         listener().onBufferingUpdate(percent);
                     } else {
@@ -283,7 +302,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
             @Override
             public void run() {
                 cancelTimeOutBuffer();
-                if (listener != null) {
+                if (listener() != null) {
                     listener().onSeekComplete();
                 }
             }
@@ -296,7 +315,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
             @Override
             public void run() {
                 cancelTimeOutBuffer();
-                if (listener != null) {
+                if (listener() != null) {
                     listener().onError(what, extra);
                 }
             }
@@ -316,7 +335,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
                         cancelTimeOutBuffer();
                     }
                 }
-                if (listener != null) {
+                if (listener() != null) {
                     listener().onInfo(what, extra);
                 }
             }
@@ -331,7 +350,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         mainThreadHandler.post(new Runnable() {
             @Override
             public void run() {
-                if (listener != null) {
+                if (listener() != null) {
                     listener().onVideoSizeChanged();
                 }
             }
@@ -350,11 +369,6 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
             return playerManager.getMediaPlayer();
         }
         return null;
-    }
-
-    @Override
-    public CacheListener getCacheListener() {
-        return this;
     }
 
     @Override
@@ -408,6 +422,21 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     }
 
 
+    @Override
+    public boolean isCacheFile() {
+        return cacheManager != null && cacheManager.hadCached();
+    }
+
+
+    @Override
+    public void clearCache(Context context, String url) {
+        clearDefaultCache(context, url);
+    }
+
+    protected void sendMessage(Message message) {
+        mMediaHandler.sendMessage(message);
+    }
+
     private class MediaHandler extends Handler {
 
         MediaHandler(Looper looper) {
@@ -422,15 +451,14 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
                     initVideo(msg);
                     break;
                 case HANDLER_SETDISPLAY:
-                    showDisplay(msg);
                     break;
                 case HANDLER_RELEASE:
                     if (playerManager != null) {
                         playerManager.release();
                     }
                     setNeedMute(false);
-                    if (proxy != null) {
-                        proxy.unregisterCacheListener(GSYVideoBaseManager.this);
+                    if (cacheManager != null) {
+                        cacheManager.release();
                     }
                     buffterPoint = 0;
                     cancelTimeOutBuffer();
@@ -453,8 +481,9 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
             }
 
             playerManager = getPlayManager(videoType);
-
-            playerManager.initVideoPlayer(context, msg, optionModelList);
+            cacheManager = getCacheManager(videoType);
+            cacheManager.setCacheAvailableListener(this);
+            playerManager.initVideoPlayer(context, msg, optionModelList, cacheManager);
             setNeedMute(needMute);
             IMediaPlayer mediaPlayer = playerManager.getMediaPlayer();
             mediaPlayer.setOnCompletionListener(this);
@@ -476,7 +505,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     /**
      * 启动十秒的定时器进行 缓存操作
      */
-    private void startTimeOutBuffer() {
+    protected void startTimeOutBuffer() {
         // 启动定时
         Debuger.printfError("startTimeOutBuffer");
         mainThreadHandler.postDelayed(mTimeOutRunnable, timeOut);
@@ -486,7 +515,7 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     /**
      * 取消 十秒的定时器进行 缓存操作
      */
-    private void cancelTimeOutBuffer() {
+    protected void cancelTimeOutBuffer() {
         Debuger.printfError("cancelTimeOutBuffer");
         // 取消定时
         if (needTimeOutOther)
@@ -521,29 +550,32 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
         }
     }
 
-    /**
-     * for android video cache header
-     */
-    private class UserAgentHeadersInjector implements HeaderInjector {
-
-        @Override
-        public Map<String, String> addHeaders(String url) {
-            return mMapHeadData;
-        }
-    }
-
     public int getVideoType() {
         return videoType;
     }
 
     /**
-     * 设置了视频的播放类型,IJKEXOPLAYER和IJKEXOPLAYER2是互斥的
-     * GSYVideoType IJKPLAYER = 0 or IJKEXOPLAYER = 1 or IJKEXOPLAYER2 = 2;
-     * IJKEXOPLAYER2 must be compile com.shuyu:gsyVideoPlayer-exo2:$gsyVideoVersion
+     * 设置了视频的播放类型
+     * IJKPLAYER = 0; 默认IJK
+     * IJKEXOPLAYER2 = 2;EXOPlayer2
+     * SYSTEMPLAYER = 4;系统播放器
      */
     public void setVideoType(Context context, int videoType) {
         this.context = context.getApplicationContext();
         this.videoType = videoType;
+    }
+
+    public void initContext(Context context) {
+        this.context = context.getApplicationContext();
+    }
+
+    /**
+     * 打开raw播放支持
+     *
+     * @param context
+     */
+    public void enableRawPlay(Context context) {
+        this.context = context.getApplicationContext();
     }
 
     public List<VideoOptionModel> getOptionModelList() {
