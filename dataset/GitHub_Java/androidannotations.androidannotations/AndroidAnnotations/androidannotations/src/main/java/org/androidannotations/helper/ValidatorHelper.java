@@ -78,7 +78,8 @@ import org.androidannotations.api.rest.RestClientSupport;
 import org.androidannotations.api.sharedpreferences.SharedPreferencesHelper;
 import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
+import org.androidannotations.processing.InstanceStateProcessor;
+import org.androidannotations.validation.IsValid;
 
 public class ValidatorHelper {
 
@@ -103,12 +104,12 @@ public class ValidatorHelper {
 
 	public final ValidatorParameterHelper param;
 
-	private final ActionBarSherlockHelper thirdPartyLibHelper;
+	private final ThirdPartyLibHelper thirdPartyLibHelper;
 
 	public ValidatorHelper(TargetAnnotationHelper targetAnnotationHelper) {
 		annotationHelper = targetAnnotationHelper;
 		param = new ValidatorParameterHelper(annotationHelper);
-		thirdPartyLibHelper = new ActionBarSherlockHelper(annotationHelper);
+		thirdPartyLibHelper = new ThirdPartyLibHelper(annotationHelper);
 	}
 
 	public void isNotFinal(Element element, IsValid valid) {
@@ -161,6 +162,13 @@ public class ValidatorHelper {
 		if (element.getReturnType().getKind().isPrimitive()) {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "%s cannot return primitive");
+		}
+	}
+
+	public void doesNotReturnArray(ExecutableElement element, IsValid valid) {
+		if (element.getReturnType().getKind() == TypeKind.ARRAY) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(element, "%s cannot return array");
 		}
 	}
 
@@ -279,6 +287,23 @@ public class ValidatorHelper {
 		elementHasAnnotation(ViewById.class, element, validatedElements, valid, error);
 	}
 
+	public void elementHasRestAnnotationOrEnclosingElementHasRestAnnotationAndElementHasMethodRestAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+		String error = "can only be used in an interface annotated with";
+		elementHasAnnotation(Rest.class, element, validatedElements, valid, error);
+
+		if (!valid.isValid()) {
+			enclosingElementHasRestAnnotation(element, validatedElements, valid);
+			elementHasMethodRestAnnotation(element, validatedElements, valid);
+		}
+
+	}
+
+	public void elementHasMethodRestAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+		String error = "can only be used on a method annotated with Rest methods.";
+		elementHasAnnotationContainsIn(REST_ANNOTATION_CLASSES, element, validatedElements, valid, error);
+
+	}
+
 	public void enclosingElementHasRestAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
 		String error = "can only be used in an interface annotated with";
 		enclosingElementHasAnnotation(Rest.class, element, validatedElements, valid, error);
@@ -301,6 +326,21 @@ public class ValidatorHelper {
 		}
 	}
 
+	public void elementHasAnnotationContainsIn(List<Class<? extends Annotation>> annotations, Element element, AnnotationElements validatedElements, IsValid valid, String error) {
+		boolean isAnnoted = false;
+		for (Class<? extends Annotation> annotation : annotations) {
+			if (elementHasAnnotation(annotation, element, validatedElements)) {
+				isAnnoted = true;
+				break;
+			}
+		}
+
+		if (!isAnnoted) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(element, "%s " + error);
+		}
+	}
+
 	public boolean elementHasAnnotation(Class<? extends Annotation> annotation, Element element, AnnotationElements validatedElements) {
 		Set<? extends Element> layoutAnnotatedElements = validatedElements.getRootAnnotatedElements(annotation.getName());
 		return layoutAnnotatedElements.contains(element);
@@ -313,6 +353,13 @@ public class ValidatorHelper {
 				valid.invalidate();
 				annotationHelper.printAnnotationError(element, "%s annotated methods can only declare throwing a RestClientException");
 			}
+		}
+	}
+
+	public void elementHasGetOrPostAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+
+		if (!elementHasAnnotation(Get.class, element) && !elementHasAnnotation(Post.class, element)) {
+			annotationHelper.printAnnotationError(element, "%s can only be used in an interface annotated with Get or Post annotation");
 		}
 	}
 
@@ -352,6 +399,27 @@ public class ValidatorHelper {
 			}
 		}
 		return false;
+	}
+
+	private boolean elementHasAnnotation(Class<? extends Annotation> annotation, Element element) {
+		return element.getAnnotation(annotation) != null;
+	}
+
+	public void elementHasRestAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+		String error = "can only be used in an interface annotated with";
+		elementHasAnnotation(Rest.class, element, validatedElements, valid, error);
+	}
+
+	public void returnTypeNotGenericUnlessResponseEntity(ExecutableElement element, IsValid valid) {
+		TypeMirror returnType = element.getReturnType();
+		TypeKind returnKind = returnType.getKind();
+		if (returnKind == TypeKind.DECLARED) {
+			DeclaredType declaredReturnType = (DeclaredType) returnType;
+			if (!declaredReturnType.toString().startsWith("org.springframework.http.ResponseEntity<") && declaredReturnType.getTypeArguments().size() > 0) {
+				valid.invalidate();
+				annotationHelper.printAnnotationError(element, "%s annotated methods cannot return parameterized types, except for ResponseEntity");
+			}
+		}
 	}
 
 	public void hasHttpHeadersReturnType(ExecutableElement element, IsValid valid) {
@@ -670,14 +738,14 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void isDeclaredType(Element element, IsValid valid) {
-		if (!(element.asType() instanceof DeclaredType)) {
+	public void isDeclaredType(Element element, IsValid valid, TypeMirror uiFieldTypeMirror) {
+		if (!(uiFieldTypeMirror instanceof DeclaredType)) {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "%s can only be used on a field which is a declared type");
 		}
 	}
 
-	public void isPrefMethod(Element element, IsValid valid) {
+	public boolean isPrefMethod(Element element) {
 		if (!element.getKind().equals(ElementKind.METHOD)) {
 			annotationHelper.printError(element, "Only methods are allowed in an " + annotationHelper.annotationName() + " annotated interface");
 		} else {
@@ -694,25 +762,25 @@ public class ValidatorHelper {
 					if (INVALID_PREF_METHOD_NAMES.contains(methodName)) {
 						annotationHelper.printError(element, "The method name " + methodName + " is forbidden in an " + annotationHelper.annotationName() + " annotated interface");
 					} else {
-						return;
+						return true;
 					}
 				}
 			}
 		}
-		valid.invalidate();
+		return false;
 	}
 
-	public void hasCorrectDefaultAnnotation(ExecutableElement method, IsValid valid) {
-		checkDefaultAnnotation(method, DefaultBoolean.class, "boolean", new TypeKindAnnotationCondition(TypeKind.BOOLEAN), valid);
-		checkDefaultAnnotation(method, DefaultFloat.class, "float", new TypeKindAnnotationCondition(TypeKind.FLOAT), valid);
-		checkDefaultAnnotation(method, DefaultInt.class, "int", new TypeKindAnnotationCondition(TypeKind.INT), valid);
-		checkDefaultAnnotation(method, DefaultLong.class, "long", new TypeKindAnnotationCondition(TypeKind.LONG), valid);
+	public void hasCorrectDefaultAnnotation(ExecutableElement method) {
+		checkDefaultAnnotation(method, DefaultBoolean.class, "boolean", new TypeKindAnnotationCondition(TypeKind.BOOLEAN));
+		checkDefaultAnnotation(method, DefaultFloat.class, "float", new TypeKindAnnotationCondition(TypeKind.FLOAT));
+		checkDefaultAnnotation(method, DefaultInt.class, "int", new TypeKindAnnotationCondition(TypeKind.INT));
+		checkDefaultAnnotation(method, DefaultLong.class, "long", new TypeKindAnnotationCondition(TypeKind.LONG));
 		checkDefaultAnnotation(method, DefaultString.class, "String", new DefaultAnnotationCondition() {
 			@Override
 			public boolean correctReturnType(TypeMirror returnType) {
 				return returnType.toString().equals(CanonicalNameConstants.STRING);
 			}
-		}, valid);
+		});
 	}
 
 	private interface DefaultAnnotationCondition {
@@ -734,12 +802,11 @@ public class ValidatorHelper {
 
 	}
 
-	private <T extends Annotation> void checkDefaultAnnotation(ExecutableElement method, Class<T> annotationClass, String expectedReturnType, DefaultAnnotationCondition condition, IsValid valid) {
+	private <T extends Annotation> void checkDefaultAnnotation(ExecutableElement method, Class<T> annotationClass, String expectedReturnType, DefaultAnnotationCondition condition) {
 		T defaultAnnotation = method.getAnnotation(annotationClass);
 		if (defaultAnnotation != null) {
 			if (!condition.correctReturnType(method.getReturnType())) {
 				annotationHelper.printAnnotationError(method, annotationClass.getName(), TargetAnnotationHelper.annotationName(annotationClass) + " can only be used on a method that returns a " + expectedReturnType);
-				valid.invalidate();
 			}
 		}
 	}
@@ -876,32 +943,30 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void isAbstractOrHasEmptyOrContextConstructor(Element element, IsValid valid) {
+	public void hasEmptyOrContextConstructor(Element element, IsValid valid) {
 		List<ExecutableElement> constructors = ElementFilter.constructorsIn(element.getEnclosedElements());
 
-		if (!element.getModifiers().contains(Modifier.ABSTRACT)) {
-			if (constructors.size() == 1) {
-				ExecutableElement constructor = constructors.get(0);
+		if (constructors.size() == 1) {
+			ExecutableElement constructor = constructors.get(0);
 
-				if (!annotationHelper.isPrivate(constructor)) {
-					if (constructor.getParameters().size() > 1) {
+			if (!annotationHelper.isPrivate(constructor)) {
+				if (constructor.getParameters().size() > 1) {
+					annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
+					valid.invalidate();
+				} else if (constructor.getParameters().size() == 1) {
+					VariableElement parameter = constructor.getParameters().get(0);
+					if (!parameter.asType().toString().equals(CanonicalNameConstants.CONTEXT)) {
 						annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
 						valid.invalidate();
-					} else if (constructor.getParameters().size() == 1) {
-						VariableElement parameter = constructor.getParameters().get(0);
-						if (!parameter.asType().toString().equals(CanonicalNameConstants.CONTEXT)) {
-							annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
-							valid.invalidate();
-						}
 					}
-				} else {
-					annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");
-					valid.invalidate();
 				}
 			} else {
-				annotationHelper.printAnnotationError(element, "%s annotated element should have only one constructor");
+				annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");
 				valid.invalidate();
 			}
+		} else {
+			annotationHelper.printAnnotationError(element, "%s annotated element should have only one constructor");
+			valid.invalidate();
 		}
 	}
 
@@ -995,7 +1060,7 @@ public class ValidatorHelper {
 	}
 
 	private boolean isKnowInstanceStateType(String type) {
-		return BundleHelper.methodSuffixNameByTypeName.containsKey(type);
+		return InstanceStateProcessor.methodSuffixNameByTypeName.containsKey(type);
 	}
 
 	public void componentRegistered(Element element, AndroidManifest androidManifest, IsValid valid) {
@@ -1126,188 +1191,6 @@ public class ValidatorHelper {
 				valid.invalidate();
 				annotationHelper.printAnnotationError(element, "The interceptor class must be a subtype of " + CLIENT_HTTP_REQUEST_INTERCEPTOR);
 			}
-		}
-	}
-
-	public void hasBeforeTextChangedMethodParameters(ExecutableElement executableElement, IsValid valid) {
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean charSequenceParameterFound = false;
-		boolean textViewParameterFound = false;
-		for (VariableElement parameter : parameters) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.CHAR_SEQUENCE)) {
-				if (charSequenceParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type java.lang.CharSequence");
-					valid.invalidate();
-				}
-				charSequenceParameterFound = true;
-				continue;
-			}
-			if (parameterType.equals(CanonicalNameConstants.TEXT_VIEW)) {
-				if (textViewParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type android.widget.TextView");
-					valid.invalidate();
-				}
-				textViewParameterFound = true;
-				continue;
-			}
-			if (parameter.asType().getKind() == TypeKind.INT || CanonicalNameConstants.INTEGER.equals(parameterType)) {
-				String parameterName = parameter.toString();
-				if ("start".equals(parameterName) || "count".equals(parameterName) || "after".equals(parameterName)) {
-					continue;
-				}
-				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter name. You can only have start, before, or count parameter name. Try to pick a parameter from android.text.TextWatcher.beforeTextChanged() method.");
-				valid.invalidate();
-				continue;
-			}
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter (" + parameter.toString() + "). %s can only have a android.widget.TextView parameter and/or parameters from android.text.TextWatcher.beforeTextChanged() method.");
-			valid.invalidate();
-		}
-	}
-
-	public void hasTextChangedMethodParameters(ExecutableElement executableElement, IsValid valid) {
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean charSequenceParameterFound = false;
-		boolean textViewParameterFound = false;
-		for (VariableElement parameter : parameters) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.CHAR_SEQUENCE)) {
-				if (charSequenceParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type java.lang.CharSequence");
-					valid.invalidate();
-				}
-				charSequenceParameterFound = true;
-				continue;
-			}
-			if (parameterType.equals(CanonicalNameConstants.TEXT_VIEW)) {
-				if (textViewParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type android.widget.TextView");
-					valid.invalidate();
-				}
-				textViewParameterFound = true;
-				continue;
-			}
-			if (parameter.asType().getKind() == TypeKind.INT || CanonicalNameConstants.INTEGER.equals(parameterType)) {
-				String parameterName = parameter.toString();
-				if ("start".equals(parameterName) || "before".equals(parameterName) || "count".equals(parameterName)) {
-					continue;
-				}
-				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter name. You can only have start, before, or count parameter name. Try to pick a prameter from the android.text.TextWatcher.onTextChanged() method.");
-				valid.invalidate();
-				continue;
-			}
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter (" + parameter.toString() + "). %s can only have a android.widget.TextView parameter and/or parameters from android.text.TextWatcher.onTextChanged() method.");
-			valid.invalidate();
-		}
-	}
-
-	public void hasAfterTextChangedMethodParameters(ExecutableElement executableElement, IsValid valid) {
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean editableParameterFound = false;
-		boolean textViewParameterFound = false;
-		for (VariableElement parameter : parameters) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.EDITABLE)) {
-				if (editableParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type android.text.Editable");
-					valid.invalidate();
-				}
-				editableParameterFound = true;
-				continue;
-			}
-			if (parameterType.equals(CanonicalNameConstants.TEXT_VIEW)) {
-				if (textViewParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type android.widget.TextView");
-					valid.invalidate();
-				}
-				textViewParameterFound = true;
-				continue;
-			}
-			valid.invalidate();
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter type. %s can only have a android.widget.TextView parameter and/or an android.text.Editable parameter. See android.text.TextWatcher.afterTextChanged() for more informations.");
-		}
-	}
-
-	public void hasSeekBarProgressChangeMethodParameters(ExecutableElement executableElement, IsValid valid) {
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean seekBarParameterFound = false;
-		boolean fromUserParameterFound = false;
-		boolean progressParameterFound = false;
-		for (VariableElement parameter : parameters) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.SEEKBAR)) {
-				if (seekBarParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. You can declare only one parameter of type " + CanonicalNameConstants.SEEKBAR);
-					valid.invalidate();
-				}
-				seekBarParameterFound = true;
-				continue;
-			}
-			if (parameter.asType().getKind() == TypeKind.INT || CanonicalNameConstants.INTEGER.equals(parameterType)) {
-				if (progressParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "You can have only one parameter of type " + CanonicalNameConstants.INTEGER);
-					valid.invalidate();
-				}
-				progressParameterFound = true;
-				continue;
-			}
-			if (parameter.asType().getKind() == TypeKind.BOOLEAN || CanonicalNameConstants.BOOLEAN.equals(parameterType)) {
-				if (fromUserParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "You can have only one parameter of type " + CanonicalNameConstants.BOOLEAN);
-					valid.invalidate();
-				}
-				fromUserParameterFound = true;
-				continue;
-			}
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter '" + parameter.toString() + "'. %s signature should be " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR + " seekBar, int progress, boolean fromUser). The 'fromUser' and 'progress' parameters are optional.");
-			valid.invalidate();
-		}
-	}
-
-	public void hasSeekBarTouchTrackingMethodParameters(ExecutableElement executableElement, IsValid valid) {
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-
-		if (parameters.size() > 1) {
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. You can only have one parameter of type " + CanonicalNameConstants.SEEKBAR + ". Try declaring " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR + " seekBar);");
-			valid.invalidate();
-			return;
-		}
-
-		if (parameters.size() == 1) {
-			String parameterType = parameters.get(0).asType().toString();
-			if (!parameterType.equals(CanonicalNameConstants.SEEKBAR)) {
-				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. You can only have one parameter of type " + CanonicalNameConstants.SEEKBAR + ". Try declaring " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR + " seekBar);");
-				valid.invalidate();
-			}
-		}
-
-	}
-
-	public void hasOnResultMethodParameters(ExecutableElement executableElement, IsValid valid) {
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean resultCodeParameterFound = false;
-		boolean intentParameterFound = false;
-		for (VariableElement parameter : parameters) {
-			TypeMirror parameterType = parameter.asType();
-			if (parameterType.toString().equals(CanonicalNameConstants.INTEGER) //
-					|| parameterType.getKind().equals(TypeKind.INT)) {
-				if (resultCodeParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type int or java.lang.Integer");
-					valid.invalidate();
-				}
-				resultCodeParameterFound = true;
-				continue;
-			}
-			if (parameterType.toString().equals(CanonicalNameConstants.INTENT)) {
-				if (intentParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type android.content.Intent");
-					valid.invalidate();
-				}
-				intentParameterFound = true;
-				continue;
-			}
-			valid.invalidate();
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter type. %s can only have a android.content.Intent parameter and/or an Integer parameter");
 		}
 	}
 
