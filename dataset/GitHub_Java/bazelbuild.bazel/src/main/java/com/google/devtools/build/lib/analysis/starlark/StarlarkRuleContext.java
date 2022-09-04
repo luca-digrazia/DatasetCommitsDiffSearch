@@ -76,7 +76,6 @@ import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
-import com.google.devtools.build.lib.starlarkbuildapi.platform.ToolchainContextApi;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -702,24 +701,9 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   }
 
   @Override
-  public ToolchainContextApi toolchains() throws EvalException {
+  public ResolvedToolchainContext toolchains() throws EvalException {
     checkMutable("toolchains");
-    ResolvedToolchainContext toolchainContext = ruleContext.getToolchainContext();
-    if (toolchainContext == null) {
-      // Starlark rules are easier if this cannot be null, so return a no-op value instead.
-      return new ToolchainContextApi() {
-        @Override
-        public Object getIndex(StarlarkSemantics semantics, Object key) {
-          return Starlark.NONE;
-        }
-
-        @Override
-        public boolean containsKey(StarlarkSemantics semantics, Object key) {
-          return false;
-        }
-      };
-    }
-    return toolchainContext;
+    return ruleContext.getToolchainContext();
   }
 
   @Override
