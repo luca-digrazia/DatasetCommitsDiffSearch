@@ -195,7 +195,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   private final PathFragment fdoPath;
   private final Label fdoOptimizeLabel;
 
-  // TODO(b/113849758): Remove once it's not needed for toolchain selection in CppConfiguration.
+  // TODO(bazel-team): All these labels (except for ccCompilerRuleLabel) can be removed once the
+  // transition to the cc_compiler rule is complete.
   private final Label ccToolchainLabel;
   private final Label stlLabel;
 
@@ -470,11 +471,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       defaultLabel = "//tools/cpp:crosstool",
       defaultInToolRepository = true)
   public Label getRuleProvidingCcToolchainProvider() {
-    if (provideCcToolchainInfoFromCcToolchainSuite()) {
-      return crosstoolTop;
-    } else {
-      return ccToolchainLabel;
-    }
+    return ccToolchainLabel;
   }
 
   /**
@@ -1170,9 +1167,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.disableMakeVariables;
   }
 
-  public boolean disableCcToolchainFromCrosstool() {
-    return cppOptions.disableCcToolchainFromCrosstool;
-  }
   /**
    * cc_toolchain_suite allows to override CROSSTOOL by using proto attribute. This attribute value
    * is stored here so cc_toolchain can access it in the analysis. Don't use this for anything, it
@@ -1214,7 +1208,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     if (cppOptions.disableLegacyCompilationApi || cppOptions.disableLegacyFlagsCcToolchainApi) {
       throw new EvalException(
           null,
-          "Starlark APIs accessing compilation flags has been removed. "
+          "Skylark APIs accessing compilation flags has been removed. "
               + "Use the new API on cc_common (see "
               + "--incompatible_disable_legacy_flags_cc_toolchain_api on"
               + "https://docs.bazel.build/versions/master/skylark/backward-compatibility.html"
@@ -1226,7 +1220,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     if (cppOptions.disableLegacyLinkingApi || cppOptions.disableLegacyFlagsCcToolchainApi) {
       throw new EvalException(
           null,
-          "Starlark APIs accessing linking flags has been removed. "
+          "Skylark APIs accessing linking flags has been removed. "
               + "Use the new API on cc_common (see "
               + "--incompatible_disable_legacy_flags_cc_toolchain_api on"
               + "https://docs.bazel.build/versions/master/skylark/backward-compatibility.html"
@@ -1254,9 +1248,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
    */
   public Label getLibcTopLabel() {
     return cppOptions.libcTopLabel;
-  }
-
-  public boolean provideCcToolchainInfoFromCcToolchainSuite() {
-    return cppOptions.provideCcToolchainInfoFromCcToolchainSuite;
   }
 }
