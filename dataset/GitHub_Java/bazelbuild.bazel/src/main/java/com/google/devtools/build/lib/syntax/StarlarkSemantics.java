@@ -200,8 +200,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalAllowIncrementalRepositoryUpdates();
 
-  public abstract String experimentalBuiltinsBzlPath();
-
   public abstract ImmutableList<String> experimentalCcStarlarkApiEnabledPackages();
 
   public abstract boolean experimentalEnableAndroidMigrationApis();
@@ -314,7 +312,6 @@ public abstract class StarlarkSemantics {
           .debugDepsetDepth(false)
           .experimentalActionArgs(true)
           .experimentalAllowTagsPropagation(false)
-          .experimentalBuiltinsBzlPath("")
           .experimentalCcStarlarkApiEnabledPackages(ImmutableList.of())
           .experimentalAllowIncrementalRepositoryUpdates(true)
           .experimentalEnableAndroidMigrationApis(false)
@@ -367,8 +364,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalAllowIncrementalRepositoryUpdates(boolean value);
 
     public abstract Builder experimentalAllowTagsPropagation(boolean value);
-
-    public abstract Builder experimentalBuiltinsBzlPath(String value);
 
     public abstract Builder experimentalCcStarlarkApiEnabledPackages(List<String> value);
 
