@@ -1,47 +1,39 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package org.jboss.quarkus.arc.test.instance.destroy;
+package io.quarkus.arc.test.instance.destroy;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.test.ArcTestContainer;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-
+import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 import javax.inject.Singleton;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
 public class InstanceDestroyTest {
 
     @Rule
-    public ArcTestContainer container = new ArcTestContainer(Alpha.class, Washcloth.class);
+    public ArcTestContainer container = new ArcTestContainer(Alpha.class, Washcloth.class, Knight.class);
 
     @Test
     public void testDestroy() {
         assertFalse(Washcloth.DESTROYED.get());
         Arc.container().instance(Alpha.class).get().doSomething();
         assertTrue(Washcloth.DESTROYED.get());
+        // App scoped beans
+        Knight knight1 = Arc.container().instance(Knight.class).get();
+        String id1 = knight1.getId();
+        Arc.container().beanManager().createInstance().destroy(knight1);
+        assertTrue(Knight.DESTROYED.get());
+        assertNotEquals(id1, Arc.container().instance(Knight.class).get().getId());
     }
 
     @Singleton
@@ -64,6 +56,29 @@ public class InstanceDestroyTest {
         static final AtomicBoolean DESTROYED = new AtomicBoolean(false);
 
         void wash() {
+        }
+
+        @PreDestroy
+        void destroy() {
+            DESTROYED.set(true);
+        }
+
+    }
+
+    @ApplicationScoped
+    static class Knight {
+
+        static final AtomicBoolean DESTROYED = new AtomicBoolean(false);
+
+        String id;
+
+        String getId() {
+            return id;
+        }
+
+        @PostConstruct
+        void init() {
+            this.id = UUID.randomUUID().toString();
         }
 
         @PreDestroy
