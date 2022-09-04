@@ -16,16 +16,19 @@
  */
 package org.graylog2.lookup.adapters;
 
+import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.Ints;
+import com.google.inject.assistedinject.Assisted;
+
 import au.com.bytecode.opencsv.CSVReader;
+
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.google.auto.value.AutoValue;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.primitives.Ints;
-import com.google.inject.assistedinject.Assisted;
+
 import org.graylog.autovalue.WithBeanGetter;
 import org.graylog2.plugin.lookup.LookupDataAdapter;
 import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
@@ -36,10 +39,6 @@ import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.Size;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -50,6 +49,11 @@ import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.Size;
+
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class CSVFileDataAdapter extends LookupDataAdapter {
@@ -58,7 +62,7 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
     public static final String NAME = "csvfile";
 
     private final Config config;
-    private final AtomicReference<Map<String, String>> lookupRef = new AtomicReference<>(ImmutableMap.of());
+    private final AtomicReference<Map<Object, Object>> lookupRef = new AtomicReference<>(ImmutableMap.of());
 
     private FileInfo fileInfo;
 
@@ -108,10 +112,10 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         }
     }
 
-    private Map<String, String> parseCSVFile() throws IOException {
+    private Map<Object, Object> parseCSVFile() throws IOException {
         final InputStream inputStream = Files.newInputStream(Paths.get(config.path()));
         final InputStreamReader fileReader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
-        final ImmutableMap.Builder<String, String> newLookupBuilder = ImmutableMap.builder();
+        final ImmutableMap.Builder<Object, Object> newLookupBuilder = ImmutableMap.builder();
 
         try (final CSVReader csvReader = new CSVReader(fileReader, config.separatorAsChar(), config.quotecharAsChar())) {
             int line = 0;
@@ -161,13 +165,13 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
     @Override
     public LookupResult doGet(Object key) {
-        final String value = lookupRef.get().get(String.valueOf(key));
+        final Object value = lookupRef.get().get(key);
 
         if (value == null) {
             return LookupResult.empty();
         }
 
-        return LookupResult.single(value);
+        return LookupResult.single(key, value);
     }
 
     @Override
