@@ -14,9 +14,9 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.skyframe.GraphTester.CONCATENATE;
 import static com.google.devtools.build.skyframe.GraphTester.NODE_TYPE;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -346,7 +346,7 @@ public class EagerInvalidatorTest {
     eval(/*keepGoing=*/false, parent);
     final Thread mainThread = Thread.currentThread();
     final AtomicReference<SkyKey> badKey = new AtomicReference<>();
-    final DirtyTrackingProgressReceiver receiver =
+    DirtyTrackingProgressReceiver receiver =
         new DirtyTrackingProgressReceiver(
             new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
               @Override
@@ -373,21 +373,25 @@ public class EagerInvalidatorTest {
                 }
               }
             });
-    assertThrows(InterruptedException.class, () -> invalidateWithoutError(receiver, child));
+    try {
+      invalidateWithoutError(receiver, child);
+      fail();
+    } catch (InterruptedException e) {
+      // Expected.
+    }
     assertThat(badKey.get()).isNull();
     assertThat(state.isEmpty()).isFalse();
     final Set<SkyKey> invalidated = Sets.newConcurrentHashSet();
     assertThat(isInvalidated(parent)).isFalse();
     assertThat(graph.get(null, Reason.OTHER, parent).getValue()).isNotNull();
-    final DirtyTrackingProgressReceiver receiver2 =
-        new DirtyTrackingProgressReceiver(
-            new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
-              @Override
-              public void invalidated(SkyKey skyKey, InvalidationState state) {
-                invalidated.add(skyKey);
-              }
-            });
-    invalidateWithoutError(receiver2);
+    receiver = new DirtyTrackingProgressReceiver(
+        new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+      @Override
+      public void invalidated(SkyKey skyKey, InvalidationState state) {
+        invalidated.add(skyKey);
+      }
+    });
+    invalidateWithoutError(receiver);
     assertThat(invalidated).contains(parent);
     assertThat(state.getInvalidationsForTesting()).isEmpty();
 

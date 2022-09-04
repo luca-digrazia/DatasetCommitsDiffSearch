@@ -38,16 +38,15 @@ public class SequentialBuildDriver implements BuildDriver {
       return memoizingEvaluator.evaluate(
           roots,
           curVersion,
-          evaluationContext.getExecutorServiceSupplier().isPresent()
-              ? evaluationContext
-              : EvaluationContext.newBuilder()
+          evaluationContext.getExecutorService() == null
+              ? EvaluationContext.newBuilder()
                   .copyFrom(evaluationContext)
-                  .setNumThreads(evaluationContext.getParallelism())
                   .setExecutorServiceSupplier(
                       () ->
                           AbstractQueueVisitor.createExecutorService(
-                              evaluationContext.getParallelism(), "skyframe-evaluator"))
-                  .build());
+                              evaluationContext.getNumThreads(), "skyframe-evaluator"))
+                  .build()
+              : evaluationContext);
     } finally {
       curVersion = curVersion.next();
     }

@@ -200,7 +200,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
                             evaluationContext.getNumThreads(), "skyframe-evaluator")
                     : evaluationContext.getExecutorService(),
                 new SimpleCycleDetector(),
-                EvaluationVersionBehavior.GRAPH_VERSION);
+                EvaluationVersionBehavior.MAX_CHILD_VERSIONS);
         result = evaluator.eval(roots);
       }
       return EvaluationResult.<T>builder()

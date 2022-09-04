@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.concurrent;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier.ErrorClassification;
 import java.util.Map;
@@ -446,12 +444,6 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
    */
   public final long getTaskCount() {
     return remainingTasks.get();
-  }
-
-  @Override
-  public void dependOnFuture(ListenableFuture<?> future) {
-    remainingTasks.incrementAndGet();
-    future.addListener(this::decrementRemainingTasks, MoreExecutors.directExecutor());
   }
 
   /**

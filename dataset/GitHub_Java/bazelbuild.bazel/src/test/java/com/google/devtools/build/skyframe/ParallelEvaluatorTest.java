@@ -126,6 +126,10 @@ public class ParallelEvaluatorTest {
     return eval(keepGoing, ImmutableList.of(key)).get(key);
   }
 
+  protected ErrorInfo evalValueInError(SkyKey key) throws InterruptedException {
+    return eval(true, ImmutableList.of(key)).getError(key);
+  }
+
   protected <T extends SkyValue> EvaluationResult<T> eval(boolean keepGoing, SkyKey... keys)
       throws InterruptedException {
     return eval(keepGoing, ImmutableList.copyOf(keys));
@@ -135,10 +139,6 @@ public class ParallelEvaluatorTest {
       throws InterruptedException {
     ParallelEvaluator evaluator = makeEvaluator(graph, tester.getSkyFunctionMap(), keepGoing);
     return evaluator.eval(keys);
-  }
-
-  protected ErrorInfo evalValueInError(SkyKey key) throws InterruptedException {
-    return eval(true, ImmutableList.of(key)).getError(key);
   }
 
   protected GraphTester.TestFunction set(String name, String value) {
@@ -239,7 +239,7 @@ public class ParallelEvaluatorTest {
       throws InterruptedException {
     // This is a regression test for a crash bug in
     // AbstractExceptionalParallelEvaluator#doMutatingEvaluation in a very specific window of time
-    // between enqueueing one top-level node for evaluation and checking if another top-level node
+    // inbetween enqueueing one top-level node for evaluation and checking if another top-level node
     // is done.
 
     // When we have two top-level nodes, A and B,
