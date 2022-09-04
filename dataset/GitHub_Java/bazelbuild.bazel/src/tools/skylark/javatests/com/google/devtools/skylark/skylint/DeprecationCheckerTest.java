@@ -36,39 +36,30 @@ public class DeprecationCheckerTest {
   }
 
   @Test
-  public void symbolDeprecatedInSameFile() {
+  public void functionDeprecatedInSameFile() {
     String errorMessages =
         findIssues(
                 "def f():",
                 "  g()",
                 "  h()",
-                "  print(x)",
                 "def g():",
                 "  '''Foo.",
                 "  ",
                 "  Deprecated:",
-                "    Reason.'''",
+                "    reason'''",
                 "def h():",
                 "  '''Bar.",
                 "  ",
                 "  This function is DEPRECATED for some reason.",
                 "  The deprecation should really be documented in a 'Deprecated:' section",
-                "  but the linter should recognize this kind of deprecation as well'''",
-                "x = 0",
-                "'''A deprecated variable.",
-                "",
-                "Deprecated:",
-                "  Reason.",
-                "'''")
+                "  but the linter should recognize this kind of deprecation as well'''")
             .toString();
     Truth.assertThat(errorMessages)
-        .contains("2:3: usage of 'g' is deprecated: Reason. [deprecated-symbol]");
+        .contains("2:3: usage of 'g' is deprecated: reason [deprecated-symbol]");
     Truth.assertThat(errorMessages)
         .contains(
             "3:3: usage of 'h' is deprecated: This function is DEPRECATED for some reason."
                 + " [deprecated-symbol]");
-    Truth.assertThat(errorMessages)
-        .contains("4:9: usage of 'x' is deprecated: Reason. [deprecated-symbol]");
   }
 
   @Test

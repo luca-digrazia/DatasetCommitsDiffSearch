@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionDefStatement;
 import com.google.devtools.build.lib.syntax.ListComprehension;
 import com.google.devtools.build.lib.syntax.Statement;
+import com.google.devtools.build.lib.syntax.StringLiteral;
 import com.google.devtools.build.lib.syntax.SyntaxTreeVisitor;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,30 +42,27 @@ public class StatementWithoutEffectChecker extends SyntaxTreeVisitor {
 
   @Override
   public void visit(BuildFileAST ast) {
-    checkStatementsExceptDocstrings(ast.getStatements(), /*allowVariableDocstrings=*/ true);
+    checkStatementsExceptDocstring(ast.getStatements());
   }
 
   @Override
   public void visit(FunctionDefStatement node) {
     topLevel = false;
-    checkStatementsExceptDocstrings(node.getStatements(), /*allowVariableDocstrings=*/ false);
+    checkStatementsExceptDocstring(node.getStatements());
     topLevel = true;
   }
 
-  private void checkStatementsExceptDocstrings(
-      List<Statement> stmts, boolean allowVariableDocstrings) {
-    Statement prev = null;
-    for (Statement cur : stmts) {
-      boolean isStringLiteral = DocstringUtils.getStringLiteral(cur) != null;
-      boolean isVariableDocstring =
-          allowVariableDocstrings
-              && isStringLiteral
-              && DocstringUtils.getAssignedVariableName(prev) != null;
-      boolean isDocstringAtTop = isStringLiteral && prev == null;
-      if (!isVariableDocstring && !isDocstringAtTop) {
-        visit(cur);
-      }
-      prev = cur;
+  private void checkStatementsExceptDocstring(List<Statement> stmts) {
+    if (stmts.isEmpty()) {
+      return;
+    }
+    Statement firstStatement = stmts.get(0);
+    // skip docstrings
+    boolean skipFirstStatement =
+        firstStatement instanceof ExpressionStatement
+            && ((ExpressionStatement) firstStatement).getExpression() instanceof StringLiteral;
+    for (int i = skipFirstStatement ? 1 : 0; i < stmts.size(); i++) {
+      visit(stmts.get(i));
     }
   }
 
