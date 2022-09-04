@@ -19,9 +19,6 @@
  */
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.mongodb.BasicDBObject;
@@ -231,33 +228,16 @@ public abstract class DashboardWidget implements EmbeddedPersistable {
         return cache.get(RESULT_CACHE_KEY, new Callable<ComputationResult>() {
             @Override
             public ComputationResult call() throws Exception {
-                ComputationResult result;
 
-                Timer.Context timer = getCalculationTimer().time();
-                try {
-                    result = compute();
-                } finally {
-                    timer.stop();
-                }
+                // TODO time metrics here
 
-                getCalculationMeter().mark();
-
-                return result;
+                return compute();
             }
         });
     }
 
     public abstract Map<String, Object> getPersistedConfig();
     protected abstract ComputationResult compute();
-
-
-    private Timer getCalculationTimer() {
-        return core.metrics().timer(MetricRegistry.name(this.getClass(), getId(), "calculationTime"));
-    }
-
-    private Meter getCalculationMeter() {
-        return core.metrics().meter(MetricRegistry.name(this.getClass(), getId(), "calculations"));
-    }
 
     public static class NoSuchWidgetTypeException extends Exception {
 
