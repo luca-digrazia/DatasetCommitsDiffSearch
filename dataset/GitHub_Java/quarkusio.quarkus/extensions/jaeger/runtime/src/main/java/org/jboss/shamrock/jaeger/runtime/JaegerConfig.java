@@ -1,7 +1,5 @@
 package org.jboss.shamrock.jaeger.runtime;
 
-import java.net.URI;
-import java.time.Duration;
 import java.util.Optional;
 
 import org.jboss.shamrock.runtime.annotations.ConfigItem;
@@ -19,7 +17,7 @@ public class JaegerConfig {
      * like http://jaeger-collector:14268/api/traces
      */
     @ConfigItem
-    public Optional<URI> endpoint;
+    public Optional<String> endpoint;
 
     /**
      * Authentication Token to send as "Bearer" to the endpoint
@@ -40,28 +38,34 @@ public class JaegerConfig {
     public Optional<String> password;
 
     /**
-     * The hostname and port for communicating with agent via UDP
+     * The hostname for communicating with agent via UDP
      */
     @ConfigItem
-    public Optional<String> agentHostPort;
+    public Optional<String> agentHost;
+
+    /**
+     * The port for communicating with agent via UDP
+     */
+    @ConfigItem
+    public Optional<String> agentPort;
 
     /**
      * Whether the reporter should also log the spans
      */
     @ConfigItem
-    public Optional<Boolean> reporterLogSpans;
+    public Optional<String> reporterLogSpans;
 
     /**
      * The reporter's maximum queue size
      */
     @ConfigItem
-    public Optional<Integer> reporterMaxQueueSize;
+    public Optional<String> reporterMaxQueueSize;
 
     /**
      * The reporter's flush interval (ms)
      */
     @ConfigItem
-    public Optional<Integer> reporterFlushInterval;
+    public Optional<String> reporterFlushInterval;
 
     /**
      * The sampler type (const, probabilistic, ratelimiting or remote)
