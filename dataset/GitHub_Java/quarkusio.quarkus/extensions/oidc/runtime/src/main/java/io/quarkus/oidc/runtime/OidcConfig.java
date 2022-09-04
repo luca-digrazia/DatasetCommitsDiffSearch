@@ -1,5 +1,6 @@
 package io.quarkus.oidc.runtime;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,12 +11,6 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 
 @ConfigRoot(phase = ConfigPhase.RUN_TIME)
 public class OidcConfig {
-
-    /**
-     * If the OIDC extension is enabled.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean enabled;
 
     /**
      * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
@@ -51,6 +46,13 @@ public class OidcConfig {
     Optional<String> clientId;
 
     /**
+     * The maximum amount of time the adapter will try connecting to the currently unavailable OIDC server for.
+     * For example, setting it to '20S' will let the adapter keep requesting the connection for up to 20 seconds.
+     */
+    @ConfigItem
+    public Optional<Duration> connectionDelay;
+
+    /**
      * Configuration to find and parse a custom claim containing the roles information.
      */
     @ConfigItem
@@ -67,12 +69,6 @@ public class OidcConfig {
      */
     Authentication authentication;
 
-    /**
-     * The application type, which can be one of the following values from enum {@link ApplicationType}..
-     */
-    @ConfigItem(defaultValue = "service")
-    ApplicationType applicationType;
-
     public String getAuthServerUrl() {
         return authServerUrl;
     }
@@ -87,10 +83,6 @@ public class OidcConfig {
 
     public Roles getRoles() {
         return roles;
-    }
-
-    public ApplicationType getApplicationType() {
-        return applicationType;
     }
 
     @ConfigGroup
@@ -155,22 +147,6 @@ public class OidcConfig {
          *
          */
         @ConfigItem
-        public List<String> scopes;
-    }
-
-    public enum ApplicationType {
-        /**
-         * A {@code WEB_APP} is a client that server pages, usually a frontend application. For this type of client the
-         * Authorization Code Flow is
-         * defined as the preferred method for authenticating users.
-         */
-        WEB_APP,
-
-        /**
-         * A {@code SERVICE} is a client that has a set of protected HTTP resources, usually a backend application following the
-         * RESTful Architectural Design. For this type of client, the Bearer Authorization method is defined as the preferred
-         * method for authenticating and authorizing users.
-         */
-        SERVICE
+        public Optional<List<String>> scopes;
     }
 }

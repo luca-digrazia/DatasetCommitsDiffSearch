@@ -1,10 +1,6 @@
 package io.quarkus.oidc.runtime;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.function.Function;
 
 import org.jboss.logging.Logger;
 
@@ -19,84 +15,41 @@ import io.vertx.ext.auth.PubSecKeyOptions;
 import io.vertx.ext.auth.oauth2.OAuth2Auth;
 import io.vertx.ext.auth.oauth2.OAuth2ClientOptions;
 import io.vertx.ext.auth.oauth2.providers.KeycloakAuth;
-import io.vertx.ext.jwt.JWTOptions;
 
 @Recorder
 public class OidcRecorder {
 
     private static final Logger LOG = Logger.getLogger(OidcRecorder.class);
 
-    public void setup(OidcConfig config, RuntimeValue<Vertx> vertx, BeanContainer beanContainer) {
-        final Vertx vertxValue = vertx.getValue();
-        Map<String, TenantConfigContext> tenantsConfig = new HashMap<>();
-
-        for (Map.Entry<String, OidcTenantConfig> tenant : config.namedTenants.entrySet()) {
-            if (config.defaultTenant.getTenantId().isPresent()
-                    && tenant.getKey().equals(config.defaultTenant.getTenantId().get())) {
-                throw new OIDCException("tenant-id '" + tenant.getKey() + "' duplicates the default tenant-id");
-            }
-            if (tenant.getValue().getTenantId().isPresent() && !tenant.getKey().equals(tenant.getValue().getTenantId().get())) {
-                throw new OIDCException("Configuration has 2 different tenant-id values: '"
-                        + tenant.getKey() + "' and '" + tenant.getValue().getTenantId().get() + "'");
-            }
-            tenantsConfig.put(tenant.getKey(), createTenantContext(vertxValue, tenant.getValue()));
-        }
-
-        DefaultTenantConfigResolver resolver = beanContainer.instance(DefaultTenantConfigResolver.class);
-
-        resolver.setDefaultTenant(createTenantContext(vertxValue, config.defaultTenant));
-        resolver.setTenantsConfig(tenantsConfig);
-        resolver.setTenantConfigContextFactory(new Function<OidcTenantConfig, TenantConfigContext>() {
-            @Override
-            public TenantConfigContext apply(OidcTenantConfig config) {
-                return createTenantContext(vertxValue, config);
-            }
-        });
-    }
-
-    private TenantConfigContext createTenantContext(Vertx vertx, OidcTenantConfig oidcConfig) {
+    public void setup(OidcConfig config, OidcBuildTimeConfig btConfig, RuntimeValue<Vertx> vertx, BeanContainer beanContainer) {
         OAuth2ClientOptions options = new OAuth2ClientOptions();
 
-        if (!oidcConfig.getAuthServerUrl().isPresent()) {
-            return null;
-        }
-
         // Base IDP server URL
-        options.setSite(oidcConfig.getAuthServerUrl().get());
+        options.setSite(config.authServerUrl);
         // RFC7662 introspection service address
-        if (oidcConfig.getIntrospectionPath().isPresent()) {
-            options.setIntrospectionPath(oidcConfig.getIntrospectionPath().get());
+        if (config.introspectionPath.isPresent()) {
+            options.setIntrospectionPath(config.introspectionPath.get());
         }
 
         // RFC7662 JWKS service address
-        if (oidcConfig.getJwksPath().isPresent()) {
-            options.setJwkPath(oidcConfig.getJwksPath().get());
+        if (config.jwksPath.isPresent()) {
+            options.setJwkPath(config.jwksPath.get());
         }
 
-        if (oidcConfig.getClientId().isPresent()) {
-            options.setClientID(oidcConfig.getClientId().get());
+        if (config.clientId.isPresent()) {
+            options.setClientID(config.clientId.get());
         }
 
-        if (oidcConfig.getCredentials().secret.isPresent()) {
-            options.setClientSecret(oidcConfig.getCredentials().secret.get());
+        if (config.credentials.secret.isPresent()) {
+            options.setClientSecret(config.credentials.secret.get());
         }
-        if (oidcConfig.getPublicKey().isPresent()) {
+        if (config.publicKey.isPresent()) {
             options.addPubSecKey(new PubSecKeyOptions()
                     .setAlgorithm("RS256")
-                    .setPublicKey(oidcConfig.getPublicKey().get()));
-        }
-        if (oidcConfig.getToken().issuer.isPresent()) {
-            options.setValidateIssuer(false);
+                    .setPublicKey(config.publicKey.get()));
         }
 
-        if (oidcConfig.getToken().getExpirationGrace().isPresent()) {
-            JWTOptions jwtOptions = new JWTOptions();
-            jwtOptions.setLeeway(oidcConfig.getToken().getExpirationGrace().get());
-            options.setJWTOptions(jwtOptions);
-        }
-
-        final long connectionDelayInSecs = oidcConfig.getConnectionDelay().isPresent()
-                ? oidcConfig.getConnectionDelay().get().toMillis() / 1000
+        final long connectionDelayInSecs = config.connectionDelay.isPresent() ? config.connectionDelay.get().toMillis() / 1000
                 : 0;
         final long connectionRetryCount = connectionDelayInSecs > 1 ? connectionDelayInSecs / 2 : 1;
         if (connectionRetryCount > 1) {
@@ -107,7 +60,7 @@ public class OidcRecorder {
         for (long i = 0; i < connectionRetryCount; i++) {
             try {
                 CompletableFuture<OAuth2Auth> cf = new CompletableFuture<>();
-                KeycloakAuth.discover(vertx, options, new Handler<AsyncResult<OAuth2Auth>>() {
+                KeycloakAuth.discover(vertx.getValue(), options, new Handler<AsyncResult<OAuth2Auth>>() {
                     @Override
                     public void handle(AsyncResult<OAuth2Auth> event) {
                         if (event.failed()) {
@@ -120,27 +73,32 @@ public class OidcRecorder {
 
                 auth = cf.join();
                 break;
-            } catch (Throwable throwable) {
-                while (throwable instanceof CompletionException && throwable.getCause() != null) {
-                    throwable = throwable.getCause();
-                }
-                if (throwable instanceof OIDCException) {
-                    if (i + 1 < connectionRetryCount) {
-                        try {
-                            Thread.sleep(2000);
-                        } catch (InterruptedException iex) {
-                            // continue connecting
-                        }
-                    } else {
-                        throw (OIDCException) throwable;
+            } catch (OIDCException ex) {
+                if (i + 1 < connectionRetryCount) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException iex) {
+                        // continue connecting
                     }
+
                 } else {
-                    throw new OIDCException(throwable);
+                    throw ex;
                 }
             }
         }
 
-        return new TenantConfigContext(auth, oidcConfig);
+        OidcIdentityProvider identityProvider = beanContainer.instance(OidcIdentityProvider.class);
+        identityProvider.setAuth(auth);
+        identityProvider.setConfig(config);
+        AbstractOidcAuthenticationMechanism mechanism = null;
+
+        if (OidcBuildTimeConfig.ApplicationType.SERVICE.equals(btConfig.applicationType)) {
+            mechanism = beanContainer.instance(BearerAuthenticationMechanism.class);
+        } else if (OidcBuildTimeConfig.ApplicationType.WEB_APP.equals(btConfig.applicationType)) {
+            mechanism = beanContainer.instance(CodeAuthenticationMechanism.class);
+        }
+
+        mechanism.setAuth(auth, config);
     }
 
     protected static OIDCException toOidcException(Throwable cause) {
