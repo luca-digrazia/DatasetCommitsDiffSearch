@@ -19,6 +19,8 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.desugar.io.FileContentProvider;
+import com.google.devtools.build.android.desugar.langmodel.ClassAttributeRecord;
+import com.google.devtools.build.android.desugar.langmodel.ClassMemberRecord;
 import com.google.devtools.build.android.desugar.testing.junit.DesugarRule;
 import com.google.devtools.build.android.desugar.testing.junit.DesugarRunner;
 import com.google.devtools.build.android.desugar.testing.junit.JarEntryRecord;
@@ -49,11 +51,18 @@ public final class NestAnalyzerTest {
           .enableIterativeTransformation(0)
           .build();
 
+  private final ClassMemberRecord classMemberRecord = ClassMemberRecord.create();
+  private final ClassAttributeRecord classAttributeRecord = ClassAttributeRecord.create();
+  private final NestCompanions nestCompanions =
+      NestCompanions.create(classMemberRecord, classAttributeRecord);
+
   @Test
   public void emptyInputFiles() throws IOException {
-    NestDigest nestDigest = NestAnalyzer.analyzeNests(ImmutableList.of());
-
-    assertThat(nestDigest.getAllCompanionClassNames()).isEmpty();
+    NestAnalyzer nestAnalyzer =
+        new NestAnalyzer(
+            ImmutableList.of(), nestCompanions, classMemberRecord, classAttributeRecord);
+    nestAnalyzer.analyze();
+    assertThat(nestCompanions.getAllCompanionClasses()).isEmpty();
   }
 
   @Test
@@ -65,17 +74,21 @@ public final class NestAnalyzerTest {
       throws IOException {
 
     JarFile jarFile = analyzedTarget.jarFile();
-
-    NestDigest nestDigest =
-        NestAnalyzer.analyzeNests(
+    NestAnalyzer nestAnalyzer =
+        new NestAnalyzer(
             jarFile.stream()
                 .map(
                     entry ->
                         new FileContentProvider<>(
                             entry.getName(), () -> getJarEntryInputStream(jarFile, entry)))
-                .collect(toImmutableList()));
+                .collect(toImmutableList()),
+            nestCompanions,
+            classMemberRecord,
+            classAttributeRecord);
 
-    assertThat(nestDigest.getAllCompanionClassNames())
+    nestAnalyzer.analyze();
+
+    assertThat(nestCompanions.getAllCompanionClasses())
         .containsExactly(
             "com/google/devtools/build/android/desugar/nest/testsrc/nestanalyzer/AnalyzedTarget$NestCC");
   }

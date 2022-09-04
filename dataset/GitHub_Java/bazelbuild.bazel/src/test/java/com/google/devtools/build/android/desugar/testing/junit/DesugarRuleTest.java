@@ -18,106 +18,113 @@ package com.google.devtools.build.android.desugar.testing.junit;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
-import com.google.common.flags.Flag;
-import com.google.common.flags.FlagSpec;
-import com.google.common.flags.Flags;
-import com.google.testing.junit.junit4.api.TestArgs;
+import com.google.devtools.build.android.desugar.testing.junit.RuntimeMethodHandle.MemberUseContext;
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.zip.ZipEntry;
-import org.junit.BeforeClass;
+import javax.inject.Inject;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
 /** The test for {@link DesugarRule}. */
-@RunWith(JUnit4.class)
-public class DesugarRuleTest {
-
-  @FlagSpec(help = "The input jar to be processed under desugar operations.", name = "input_jar")
-  private static final Flag<String> inputJar = Flag.nullString();
+@JdkSuppress(minJdkVersion = JdkVersion.V11)
+@RunWith(DesugarRunner.class)
+public final class DesugarRuleTest {
 
   @Rule
   public final DesugarRule desugarRule =
       DesugarRule.builder(this, MethodHandles.lookup())
+          .addInputs(Paths.get(System.getProperty("input_jar")))
+          .addSourceInputsFromJvmFlag("input_srcs")
+          .addJavacOptions("-source 11", "-target 11")
           .enableIterativeTransformation(3)
-          .addInputs(Paths.get(inputJar.getNonNull()))
+          .setWorkingJavaPackage("com.google.devtools.build.android.desugar.testing.junit")
           .build();
 
-  @LoadClass(
+  @Inject
+  @DynamicClassLiteral("DesugarRuleTestTarget$InterfaceSubjectToDesugar")
+  private Class<?> interfaceSubjectToDesugarRound1;
+
+  @Inject
+  @DynamicClassLiteral(value = "DesugarRuleTestTarget$InterfaceSubjectToDesugar", round = 2)
+  private Class<?> interfaceSubjectToDesugarRound2;
+
+  @Inject
+  @DynamicClassLiteral("DesugarRuleTestTarget$InterfaceSubjectToDesugar")
+  private Class<?> interfaceSubjectToDesugarFromSimpleClassName;
+
+  @Inject
+  @DynamicClassLiteral(
       "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget$InterfaceSubjectToDesugar")
-  private Class<?> interfaceSubjectToDesugarClassRound1;
+  private Class<?> interfaceSubjectToDesugarFromQualifiedClassName;
 
-  @LoadClass(
-      value =
-          "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget$InterfaceSubjectToDesugar",
-      round = 2)
-  private Class<?> interfaceSubjectToDesugarClassRound2;
-
-  @LoadClass(
-      "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC")
+  @Inject
+  @DynamicClassLiteral("DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC")
   private Class<?> interfaceSubjectToDesugarCompanionClassRound1;
 
-  @LoadClass(
-      value =
-          "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC",
-      round = 2)
+  @Inject
+  @DynamicClassLiteral(value = "DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC", round = 2)
   private Class<?> interfaceSubjectToDesugarCompanionClassRound2;
 
-  @LoadZipEntry(
-      value =
-          "com/google/devtools/build/android/desugar/testing/junit/DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC.class",
-      round = 1)
-  private ZipEntry interfaceSubjectToDesugarZipEntryRound1;
-
-  @LoadZipEntry(
-      value =
-          "com/google/devtools/build/android/desugar/testing/junit/DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC.class",
-      round = 2)
-  private ZipEntry interfaceSubjectToDesugarZipEntryRound2;
-
-  @LoadAsmNode(
-      className = "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget")
+  @Inject
+  @AsmNode(className = "DesugarRuleTestTarget")
   private ClassNode desugarRuleTestTargetClassNode;
 
-  @LoadAsmNode(
-      className =
-          "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget$Alpha",
-      memberName = "twoIntSum")
+  @Inject
+  @AsmNode(className = "DesugarRuleTestTarget$Alpha", memberName = "twoIntSum")
   private MethodNode twoIntSum;
 
-  @LoadAsmNode(
-      className =
-          "com.google.devtools.build.android.desugar.testing.junit.DesugarRuleTestTarget$Alpha",
+  @Inject
+  @AsmNode(
+      className = "DesugarRuleTestTarget$Alpha",
       memberName = "multiplier",
       memberDescriptor = "J")
   private FieldNode multiplier;
 
-  @BeforeClass
-  public static void parseFlags() throws Exception {
-    Flags.parse(TestArgs.get());
-  }
+  @Inject
+  @RuntimeMethodHandle(className = "DesugarRuleTestTarget$Alpha", memberName = "<init>")
+  private MethodHandle alphaConstructor;
+
+  @Inject
+  @RuntimeMethodHandle(
+      className = "DesugarRuleTestTarget$Alpha",
+      memberName = "linearLongTransform")
+  private MethodHandle linearLongTransform;
+
+  @Inject
+  @RuntimeMethodHandle(
+      className = "DesugarRuleTestTarget$Alpha",
+      memberName = "multiplier",
+      usage = MemberUseContext.FIELD_GETTER)
+  private MethodHandle alphaMultiplierGetter;
+
+  @Inject
+  @RuntimeMethodHandle(
+      className = "DesugarRuleTestTarget$Alpha",
+      memberName = "multiplier",
+      usage = MemberUseContext.FIELD_SETTER)
+  private MethodHandle alphaMultiplierSetter;
 
   @Test
   public void staticMethodsAreMovedFromOriginatingClass() {
     assertThrows(
         NoSuchMethodException.class,
-        () -> interfaceSubjectToDesugarClassRound1.getDeclaredMethod("staticMethod"));
+        () -> interfaceSubjectToDesugarRound1.getDeclaredMethod("staticMethod"));
   }
 
   @Test
   public void staticMethodsAreMovedFromOriginatingClass_desugarTwice() {
     assertThrows(
         NoSuchMethodException.class,
-        () -> interfaceSubjectToDesugarClassRound2.getDeclaredMethod("staticMethod"));
+        () -> interfaceSubjectToDesugarRound2.getDeclaredMethod("staticMethod"));
   }
 
   @Test
@@ -129,24 +136,46 @@ public class DesugarRuleTest {
   }
 
   @Test
-  public void nestMembers() {
-    assertThat(desugarRuleTestTargetClassNode.nestMembers)
+  public void innerClasses() {
+    assertThat(
+            desugarRuleTestTargetClassNode.innerClasses.stream().map(classNode -> classNode.name))
         .contains(
             "com/google/devtools/build/android/desugar/testing/junit/DesugarRuleTestTarget$InterfaceSubjectToDesugar");
   }
 
   @Test
-  public void idempotencyOperation() {
-    assertThat(interfaceSubjectToDesugarZipEntryRound1.getCrc())
-        .isEqualTo(interfaceSubjectToDesugarZipEntryRound2.getCrc());
+  public void idempotencyOperation(
+      @RuntimeJarEntry(
+              value = "DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC.class",
+              round = 1)
+          JarEntryRecord interfaceSubjectToDesugarJarEntryRound1,
+      @RuntimeJarEntry(
+              value = "DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC.class",
+              round = 2)
+          JarEntryRecord interfaceSubjectToDesugarJarEntryRound2) {
+    assertThat(interfaceSubjectToDesugarJarEntryRound1.jarEntry().getCrc())
+        .isEqualTo(interfaceSubjectToDesugarJarEntryRound2.jarEntry().getCrc());
   }
 
   @Test
   public void classLoaders_sameInstanceInSameRound() {
-    assertThat(interfaceSubjectToDesugarClassRound1.getClassLoader())
+    assertThat(interfaceSubjectToDesugarRound1.getClassLoader())
         .isSameInstanceAs(interfaceSubjectToDesugarCompanionClassRound1.getClassLoader());
-    assertThat(interfaceSubjectToDesugarClassRound2.getClassLoader())
+    assertThat(interfaceSubjectToDesugarRound2.getClassLoader())
         .isSameInstanceAs(interfaceSubjectToDesugarCompanionClassRound2.getClassLoader());
+  }
+
+  @Test
+  public void classLiterals_requestedWithFullQualifiedClassName() {
+    assertThat(interfaceSubjectToDesugarFromQualifiedClassName)
+        .isSameInstanceAs(interfaceSubjectToDesugarFromSimpleClassName);
+  }
+
+  @Test
+  public void injectClassLiteralsFromParam(
+      @DynamicClassLiteral("DesugarRuleTestTarget$InterfaceSubjectToDesugar")
+          Class<?> interfaceSubjectToDesugarParam) {
+    assertThat(interfaceSubjectToDesugarParam).isSameInstanceAs(interfaceSubjectToDesugarRound1);
   }
 
   @Test
@@ -157,5 +186,50 @@ public class DesugarRuleTest {
   @Test
   public void injectMethodNodes() {
     assertThat(multiplier.desc).isEqualTo("J");
+  }
+
+  @Test
+  @ParameterValueSource({"1", "2", "3"})
+  @ParameterValueSource({"100", "400", "500"})
+  public void invokeStaticMethodHandle(
+      @RuntimeMethodHandle(className = "DesugarRuleTestTarget$Alpha", memberName = "twoIntSum")
+          MethodHandle twoIntSum,
+      @FromParameterValueSource int x,
+      @FromParameterValueSource int y,
+      @FromParameterValueSource int expectedResult)
+      throws Throwable {
+    int result = (int) twoIntSum.invoke(x, y);
+    assertThat(result).isEqualTo(expectedResult);
+  }
+
+  @Test
+  public void invokeVirtualMethodHandle() throws Throwable {
+    long result = (long) linearLongTransform.invoke(alphaConstructor.invoke(1000, 2), 3L);
+    assertThat(result).isEqualTo(3002);
+  }
+
+  @Test
+  public void invokeFieldGetter() throws Throwable {
+    Object alpha = alphaConstructor.invoke(1000, 2);
+    long result = (long) alphaMultiplierGetter.invoke(alpha);
+    assertThat(result).isEqualTo(1000);
+  }
+
+  @Test
+  public void invokeFieldSetter() throws Throwable {
+    Object alpha = alphaConstructor.invoke(1000, 2);
+    alphaMultiplierSetter.invoke(alpha, 1111);
+
+    long result = (long) alphaMultiplierGetter.invoke(alpha);
+    assertThat(result).isEqualTo(1111);
+  }
+
+  @Test
+  public void invokeRuntimeCompiledTarget(
+      @RuntimeMethodHandle(className = "DesugarRuleTestSourceTarget", memberName = "twoSum")
+          MethodHandle twoSum)
+      throws Throwable {
+    int result = (int) twoSum.invokeExact(1, 2);
+    assertThat(result).isEqualTo(3);
   }
 }
