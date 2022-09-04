@@ -151,7 +151,6 @@ public class VertxInputStream extends InputStream {
         public VertxBlockingInput(HttpServerRequest request) throws IOException {
             this.request = request;
             if (!request.isEnded()) {
-                request.pause();
                 request.handler(this);
                 request.endHandler(new Handler<Void>() {
                     @Override
@@ -200,7 +199,7 @@ public class VertxInputStream extends InputStream {
                     if (input1 == null) {
                         request.fetch(1);
                     }
-                } else if (!eof) {
+                } else {
                     request.fetch(1);
                 }
 

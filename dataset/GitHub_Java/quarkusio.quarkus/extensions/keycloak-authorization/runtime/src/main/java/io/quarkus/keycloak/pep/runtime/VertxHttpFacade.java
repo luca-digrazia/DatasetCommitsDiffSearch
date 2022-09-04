@@ -36,11 +36,9 @@ public class VertxHttpFacade implements OIDCHttpFacade {
     private final Response response;
     private final RoutingContext routingContext;
     private final Request request;
-    private final long readTimeout;
 
-    public VertxHttpFacade(RoutingContext routingContext, long readTimeout) {
+    public VertxHttpFacade(RoutingContext routingContext) {
         this.routingContext = routingContext;
-        this.readTimeout = readTimeout;
         request = createRequest(routingContext);
         response = createResponse(routingContext);
     }
@@ -141,7 +139,7 @@ public class VertxHttpFacade implements OIDCHttpFacade {
                     if (routingContext.request().isEnded()) {
                         return new ByteArrayInputStream(new byte[0]);
                     }
-                    return new VertxInputStream(routingContext, readTimeout);
+                    return new VertxInputStream(routingContext);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

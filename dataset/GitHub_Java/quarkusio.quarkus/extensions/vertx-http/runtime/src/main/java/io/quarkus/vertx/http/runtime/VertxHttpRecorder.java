@@ -190,7 +190,8 @@ public class VertxHttpRecorder {
         filterList.addAll(filters.getFilters());
 
         // Then, fire the resuming router
-        event.select(Router.class).fire(router);
+        ResumingRouter resumingRouter = new ResumingRouter(router);
+        event.select(Router.class).fire(resumingRouter);
 
         for (Filter filter : filterList) {
             if (filter.getHandler() != null) {
@@ -203,7 +204,7 @@ public class VertxHttpRecorder {
             defaultRouteHandler.accept(router.route().order(10_000));
         }
 
-        container.instance(RouterProducer.class).initialize(router);
+        container.instance(RouterProducer.class).initialize(resumingRouter);
         router.route().last().failureHandler(new QuarkusErrorHandler(launchMode.isDevOrTest()));
 
         if (requireBodyHandler) {
@@ -248,39 +249,20 @@ public class VertxHttpRecorder {
             });
         }
 
-        Handler<HttpServerRequest> root;
         if (rootPath.equals("/")) {
             if (hotReplacementHandler != null) {
                 router.route().order(-1).handler(hotReplacementHandler);
             }
-            root = router;
+            rootHandler = router;
         } else {
             Router mainRouter = Router.router(vertx.getValue());
             mainRouter.mountSubRouter(rootPath, router);
             if (hotReplacementHandler != null) {
                 mainRouter.route().order(-1).handler(hotReplacementHandler);
             }
-            root = mainRouter;
+            rootHandler = mainRouter;
         }
 
-        if (httpConfiguration.proxyAddressForwarding) {
-            Handler<HttpServerRequest> delegate = root;
-            root = new Handler<HttpServerRequest>() {
-                @Override
-                public void handle(HttpServerRequest event) {
-                    delegate.handle(new ForwardedServerRequestWrapper(event, httpConfiguration.allowForwarded));
-                }
-            };
-        }
-        Handler<HttpServerRequest> delegate = root;
-        root = new Handler<HttpServerRequest>() {
-            @Override
-            public void handle(HttpServerRequest event) {
-                delegate.handle(new ResumingRequestWrapper(event));
-            }
-        };
-
-        rootHandler = root;
     }
 
     private static void doServerStart(Vertx vertx, HttpConfiguration httpConfiguration, LaunchMode launchMode,
@@ -540,11 +522,14 @@ public class VertxHttpRecorder {
     }
 
     public void addRoute(RuntimeValue<Router> router, Function<Router, Route> route, Handler<RoutingContext> handler,
-            HandlerType blocking) {
+            HandlerType blocking, boolean resume) {
 
         Route vr = route.apply(router.getValue());
 
         Handler<RoutingContext> requestHandler = handler;
+        if (resume) {
+            requestHandler = new ResumeHandler(handler);
+        }
         if (blocking == HandlerType.BLOCKING) {
             vr.blockingHandler(requestHandler);
         } else if (blocking == HandlerType.FAILURE) {
@@ -564,8 +549,6 @@ public class VertxHttpRecorder {
         private final HttpServerOptions httpOptions;
         private final HttpServerOptions httpsOptions;
         private final LaunchMode launchMode;
-        private volatile boolean clearHttpProperty = false;
-        private volatile boolean clearHttpsProperty = false;
 
         public WebDeploymentVerticle(int port, int httpsPort, String host, HttpServerOptions httpOptions,
                 HttpServerOptions httpsOptions, LaunchMode launchMode) {
@@ -590,7 +573,6 @@ public class VertxHttpRecorder {
                     int actualPort = event.result().actualPort();
                     if (actualPort != port) {
                         // Override quarkus.http.(test-)?port
-                        clearHttpProperty = true;
                         System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port",
                                 String.valueOf(actualPort));
                         // Set in HttpOptions to output the port in the Timing class
@@ -611,7 +593,6 @@ public class VertxHttpRecorder {
                         int actualPort = event.result().actualPort();
                         if (actualPort != httpsPort) {
                             // Override quarkus.https.(test-)?port
-                            clearHttpsProperty = true;
                             System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port",
                                     String.valueOf(actualPort));
                             // Set in HttpOptions to output the port in the Timing class
@@ -627,12 +608,6 @@ public class VertxHttpRecorder {
 
         @Override
         public void stop(Future<Void> stopFuture) {
-            if (clearHttpProperty) {
-                System.clearProperty(launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port");
-            }
-            if (clearHttpsProperty) {
-                System.clearProperty(launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port");
-            }
             httpServer.close(new Handler<AsyncResult<Void>>() {
                 @Override
                 public void handle(AsyncResult<Void> event) {
