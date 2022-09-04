@@ -2035,7 +2035,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
         Map<PackageValue.Key, PackageValue> buildSettingPackages =
             getBuildSettingPackages(transition, eventHandler);
         toOptions =
-            ConfigurationResolver.applyTransitionWithoutSkyframe(
+            ConfigurationResolver.applyTransition(
                     fromOptions, transition, buildSettingPackages, eventHandler)
                 .values();
       } catch (TransitionException e) {
@@ -2061,7 +2061,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
         Map<PackageValue.Key, PackageValue> buildSettingPackages =
             getBuildSettingPackages(key.getTransition(), eventHandler);
         toOptions =
-            ConfigurationResolver.applyTransitionWithoutSkyframe(
+            ConfigurationResolver.applyTransition(
                     fromOptions, key.getTransition(), buildSettingPackages, eventHandler)
                 .values();
       } catch (TransitionException e) {

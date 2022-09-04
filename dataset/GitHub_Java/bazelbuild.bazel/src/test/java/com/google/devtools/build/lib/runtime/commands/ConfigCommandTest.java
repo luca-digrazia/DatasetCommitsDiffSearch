@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -261,8 +260,7 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
         "--action_env=b=2",
         "--notrim_test_configuration",
         "--experimental_keep_config_nodes_on_analysis_discard");
-    String targetConfig2Hash =
-        getTargetConfig(/*excludedHashes=*/ ImmutableSet.of(targetConfig1Hash)).configHash;
+    String targetConfig2Hash = getTargetConfig().configHash;
 
     // Get their diff.
     String result = callConfigCommand(targetConfig1Hash, targetConfig2Hash).outAsLatin1();
@@ -291,8 +289,7 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
         "--action_env=b=2",
         "--notrim_test_configuration",
         "--experimental_keep_config_nodes_on_analysis_discard");
-    String targetConfig2Hash =
-        getTargetConfig(/*excludedHashes=*/ ImmutableSet.of(targetConfig1Hash)).configHash;
+    String targetConfig2Hash = getTargetConfig().configHash;
 
     String hashPrefix1 = targetConfig1Hash.substring(0, targetConfig1Hash.length() / 2);
     String hashPrefix2 = targetConfig2Hash.substring(0, targetConfig2Hash.length() / 2);
@@ -339,11 +336,6 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
   }
 
   private ConfigurationForOutput getTargetConfig() throws Exception {
-    return getTargetConfig(ImmutableSet.of());
-  }
-
-  private ConfigurationForOutput getTargetConfig(ImmutableSet<String> excludedHashes)
-      throws Exception {
     // Find a target configuration hash.
     for (JsonElement element :
         JsonParser.parseString(callConfigCommand().outAsLatin1())
@@ -351,9 +343,6 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
             .get("configuration-IDs")
             .getAsJsonArray()) {
       String configHash = element.getAsString();
-      if (excludedHashes.contains(configHash)) {
-        continue;
-      }
       ConfigurationForOutput config =
           new Gson()
               .fromJson(callConfigCommand(configHash).outAsLatin1(), ConfigurationForOutput.class);
