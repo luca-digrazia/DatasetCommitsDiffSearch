@@ -1,13 +1,11 @@
 package io.quarkus.reactive.mysql.client.deployment;
 
-import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Singleton;
 
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem.ExtendedBeanConfigurator;
 import io.quarkus.arc.processor.DotNames;
-import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
-import io.quarkus.datasource.runtime.DataSourceBuildTimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
 import io.quarkus.deployment.Feature;
@@ -19,12 +17,11 @@ import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.reactive.datasource.ReactiveDataSource;
 import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
-import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveBuildTimeConfig;
-import io.quarkus.reactive.datasource.runtime.DataSourcesReactiveRuntimeConfig;
-import io.quarkus.reactive.mysql.client.runtime.DataSourcesReactiveMySQLConfig;
+import io.quarkus.reactive.datasource.runtime.DataSourceReactiveRuntimeConfig;
+import io.quarkus.reactive.mysql.client.runtime.DataSourceReactiveMySQLConfig;
+import io.quarkus.reactive.mysql.client.runtime.MySQLPoolProducer;
 import io.quarkus.reactive.mysql.client.runtime.MySQLPoolRecorder;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
@@ -34,153 +31,93 @@ import io.vertx.sqlclient.Pool;
 
 class ReactiveMySQLClientProcessor {
 
+    /**
+     * The producer needs to be produced in a separate method to avoid a circular dependency (the Vert.x instance creation
+     * consumes the AdditionalBeanBuildItems).
+     */
+    @BuildStep
+    void poolProducer(
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
+            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
+        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
+            return;
+        }
+
+        additionalBeans.produce(new AdditionalBeanBuildItem.Builder()
+                .addBeanClass(MySQLPoolProducer.class)
+                .setUnremovable()
+                .setDefaultScope(DotNames.APPLICATION_SCOPED)
+                .build());
+    }
+
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     ServiceStartBuildItem build(BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<MySQLPoolBuildItem> mySQLPool,
+            BuildProducer<MySQLPoolBuildItem> mysqlPool,
             BuildProducer<VertxPoolBuildItem> vertxPool,
             MySQLPoolRecorder recorder,
             VertxBuildItem vertx,
-            ShutdownContextBuildItem shutdown,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeans, ShutdownContextBuildItem shutdown,
             BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig, DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
-            DataSourcesReactiveBuildTimeConfig dataSourcesReactiveBuildTimeConfig,
-            DataSourcesReactiveRuntimeConfig dataSourcesReactiveRuntimeConfig,
-            DataSourcesReactiveMySQLConfig dataSourcesReactiveMySQLConfig) {
+            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig,
+            DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
+            DataSourceReactiveMySQLConfig dataSourceReactiveMySQLConfig) {
 
         feature.produce(new FeatureBuildItem(Feature.REACTIVE_MYSQL_CLIENT));
+        // Make sure the MySQLPoolProducer is initialized before the StartupEvent is fired
+        ServiceStartBuildItem serviceStart = new ServiceStartBuildItem("reactive-mysql-client");
 
-        createPoolIfDefined(recorder, vertx, shutdown, mySQLPool, vertxPool, syntheticBeans,
-                DataSourceUtil.DEFAULT_DATASOURCE_NAME, dataSourcesBuildTimeConfig,
-                dataSourcesRuntimeConfig, dataSourcesReactiveBuildTimeConfig, dataSourcesReactiveRuntimeConfig,
-                dataSourcesReactiveMySQLConfig);
-
-        for (String dataSourceName : dataSourcesBuildTimeConfig.namedDataSources.keySet()) {
-            createPoolIfDefined(recorder, vertx, shutdown, mySQLPool, vertxPool, syntheticBeans, dataSourceName,
-                    dataSourcesBuildTimeConfig, dataSourcesRuntimeConfig, dataSourcesReactiveBuildTimeConfig,
-                    dataSourcesReactiveRuntimeConfig, dataSourcesReactiveMySQLConfig);
+        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
+            return serviceStart;
         }
+
+        RuntimeValue<MySQLPool> mySqlPool = recorder.configureMySQLPool(vertx.getVertx(),
+                dataSourcesRuntimeConfig, dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig,
+                shutdown);
+        mysqlPool.produce(new MySQLPoolBuildItem(mySqlPool));
+
+        // Synthetic bean for MySQLPool
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(MySQLPool.class).addType(Pool.class).scope(Singleton.class)
+                .runtimeValue(mySqlPool)
+                .setRuntimeInit().done());
+
+        boolean isDefault = true; // assume always the default pool for now
+        vertxPool.produce(new VertxPoolBuildItem(mySqlPool, DatabaseKind.MYSQL, isDefault));
 
         // Enable SSL support by default
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_MYSQL_CLIENT));
 
-        return new ServiceStartBuildItem("reactive-mysql-client");
+        return serviceStart;
     }
 
-    /**
-     * The health check needs to be produced in a separate method to avoid a circular dependency (the Vert.x instance creation
-     * consumes the AdditionalBeanBuildItems).
-     */
     @BuildStep
     void addHealthCheck(
             BuildProducer<HealthBuildItem> healthChecks,
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourcesReactiveBuildTimeConfig dataSourcesReactiveBuildTimeConfig) {
-        if (!hasPools(dataSourcesBuildTimeConfig, dataSourcesReactiveBuildTimeConfig)) {
+            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
+        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
             return;
         }
 
         healthChecks.produce(
-                new HealthBuildItem("io.quarkus.reactive.mysql.client.runtime.health.ReactiveMySQLDataSourcesHealthCheck",
+                new HealthBuildItem("io.quarkus.reactive.mysql.client.runtime.health.ReactiveMySQLDataSourceHealthCheck",
                         dataSourcesBuildTimeConfig.healthEnabled));
     }
 
-    private void createPoolIfDefined(MySQLPoolRecorder recorder,
-            VertxBuildItem vertx,
-            ShutdownContextBuildItem shutdown,
-            BuildProducer<MySQLPoolBuildItem> mySQLPool,
-            BuildProducer<VertxPoolBuildItem> vertxPool,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
-            String dataSourceName,
-            DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
-            DataSourcesReactiveBuildTimeConfig dataSourcesReactiveBuildTimeConfig,
-            DataSourcesReactiveRuntimeConfig dataSourcesReactiveRuntimeConfig,
-            DataSourcesReactiveMySQLConfig dataSourcesReactiveMySQLConfig) {
-
-        if (!isReactiveMySQLPoolDefined(dataSourcesBuildTimeConfig, dataSourcesReactiveBuildTimeConfig, dataSourceName)) {
-            return;
-        }
-
-        RuntimeValue<MySQLPool> pool = recorder.configureMySQLPool(vertx.getVertx(),
-                dataSourceName,
-                dataSourcesRuntimeConfig,
-                dataSourcesReactiveRuntimeConfig,
-                dataSourcesReactiveMySQLConfig,
-                shutdown);
-        mySQLPool.produce(new MySQLPoolBuildItem(dataSourceName, pool));
-
-        ExtendedBeanConfigurator mySQLPoolBeanConfigurator = SyntheticBeanBuildItem.configure(MySQLPool.class)
-                .defaultBean()
-                .addType(Pool.class)
-                .scope(ApplicationScoped.class)
-                .runtimeValue(pool)
-                .unremovable()
-                .setRuntimeInit();
-
-        addQualifiers(mySQLPoolBeanConfigurator, dataSourceName);
-
-        syntheticBeans.produce(mySQLPoolBeanConfigurator.done());
-
-        ExtendedBeanConfigurator mutinyMySQLPoolConfigurator = SyntheticBeanBuildItem
-                .configure(io.vertx.mutiny.mysqlclient.MySQLPool.class)
-                .defaultBean()
-                .scope(ApplicationScoped.class)
-                .runtimeValue(recorder.mutinyMySQLPool(pool))
-                .setRuntimeInit();
-
-        addQualifiers(mutinyMySQLPoolConfigurator, dataSourceName);
-
-        syntheticBeans.produce(mutinyMySQLPoolConfigurator.done());
-
-        vertxPool.produce(new VertxPoolBuildItem(pool, DatabaseKind.MYSQL, DataSourceUtil.isDefault(dataSourceName)));
-    }
-
-    private static boolean isReactiveMySQLPoolDefined(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourcesReactiveBuildTimeConfig dataSourcesReactiveBuildTimeConfig, String dataSourceName) {
-        DataSourceBuildTimeConfig dataSourceBuildTimeConfig = dataSourcesBuildTimeConfig
-                .getDataSourceRuntimeConfig(dataSourceName);
-        DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig = dataSourcesReactiveBuildTimeConfig
-                .getDataSourceReactiveBuildTimeConfig(dataSourceName);
-
-        if (!dataSourceBuildTimeConfig.dbKind.isPresent()) {
+    private static boolean createPool(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
+            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
+        if (!dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent()) {
             return false;
         }
 
-        if ((!DatabaseKind.isMySQL(dataSourceBuildTimeConfig.dbKind.get())
-                && !DatabaseKind.isMariaDB(dataSourceBuildTimeConfig.dbKind.get()))
+        if ((!DatabaseKind.isMySQL(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get())
+                && !DatabaseKind.isMariaDB(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get()))
                 || !dataSourceReactiveBuildTimeConfig.enabled) {
             return false;
         }
 
         return true;
-    }
-
-    private boolean hasPools(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourcesReactiveBuildTimeConfig dataSourcesReactiveBuildTimeConfig) {
-        if (isReactiveMySQLPoolDefined(dataSourcesBuildTimeConfig, dataSourcesReactiveBuildTimeConfig,
-                DataSourceUtil.DEFAULT_DATASOURCE_NAME)) {
-            return true;
-        }
-
-        for (String dataSourceName : dataSourcesBuildTimeConfig.namedDataSources.keySet()) {
-            if (isReactiveMySQLPoolDefined(dataSourcesBuildTimeConfig, dataSourcesReactiveBuildTimeConfig,
-                    dataSourceName)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static void addQualifiers(ExtendedBeanConfigurator configurator, String dataSourceName) {
-        if (DataSourceUtil.isDefault(dataSourceName)) {
-            configurator.addQualifier(DotNames.DEFAULT);
-        } else {
-            configurator.addQualifier().annotation(DotNames.NAMED).addValue("value", dataSourceName).done();
-            configurator.addQualifier().annotation(ReactiveDataSource.class).addValue("value", dataSourceName)
-                    .done();
-        }
     }
 }
