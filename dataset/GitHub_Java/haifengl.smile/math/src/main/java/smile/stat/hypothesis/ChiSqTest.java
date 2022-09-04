@@ -1,19 +1,18 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.stat.hypothesis;
 
@@ -22,46 +21,35 @@ import smile.math.special.Gamma;
 /**
  * Pearson's chi-square test, also known as the chi-square goodness-of-fit test
  * or chi-square test for independence. Note that the chi-square distribution
- * is only approximately valid for large sample size. If a significant fraction
- * of bins have small numbers of counts (say, &lt; 10), then the statistic is
+ * is only approximately valid for large sample size. If a siginficant fraction
+ * of bins have small numbers of counts (say, &lt; 10), then it the statistic is
  * not well approximated by a chi-square probability function.
  *
  * @author Haifeng Li
  */
 public class ChiSqTest {
     /**
-     * A character string indicating what type of test was performed.
-     */
-    public final String method;
-
-    /**
      * The degree of freedom of chisq-statistic.
      */
-    public final double df;
+    public double df;
 
     /**
      * chi-square statistic
      */
-    public final double chisq;
+    public double chisq;
 
     /**
      * p-value
      */
-    public final double pvalue;
+    public double pvalue;
 
     /**
      * Constructor.
      */
-    private ChiSqTest(String method, double chisq, double df, double pvalue) {
-        this.method = method;
+    private ChiSqTest(double chisq, double df, double pvalue) {
         this.chisq = chisq;
         this.df = df;
         this.pvalue = pvalue;
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s Chi-squared Test(t = %.4f, df = %.3f, p-value = %G)", method, chisq, df, pvalue);
     }
 
     /**
@@ -105,7 +93,7 @@ public class ChiSqTest {
 
         double p = Gamma.regularizedUpperIncompleteGamma(0.5 * df, 0.5 * chisq);
 
-        return new ChiSqTest("One Sample", chisq, df, p);
+        return new ChiSqTest(chisq, df, p);
     }
 
     /**
@@ -142,71 +130,6 @@ public class ChiSqTest {
 
         double p = Gamma.regularizedUpperIncompleteGamma(0.5 * df, 0.5 * chisq);
 
-        return new ChiSqTest("Two Sample", chisq, df, p);
-    }
-
-    /**
-     * Given a two-dimensional contingency table in the form of an array of
-     * integers, returns Chi-square test for independence. The rows of contingency table
-     * are labels by the values of one nominal variable, the columns are labels
-     * by the values of the other nominal variable, and whose entries are
-     * nonnegative integers giving the number of observed events for each
-     * combination of row and column. Continuity correction
-     * will be applied when computing the test statistic for 2x2 tables: one half
-     * is subtracted from all |O-E| differences. The correlation coefficient is
-     * calculated as Cramer's V.
-     */
-    public static ChiSqTest test(int[][] table) {
-        final double TINY = 1.0e-16;
-
-        int ni = table.length;
-        int nj = table[0].length;
-
-        boolean correct = false;
-        if (ni == 2 && nj == 2) {
-            correct = true;
-        }
-
-        double sum = 0.0;
-
-        int nni = ni;
-        double[] sumi = new double[ni];
-        for (int i = 0; i < ni; i++) {
-            for (int j = 0; j < nj; j++) {
-                sumi[i] += table[i][j];
-                sum += table[i][j];
-            }
-            if (sumi[i] == 0.0) {
-                --nni;
-            }
-        }
-
-        int nnj = nj;
-        double[] sumj = new double[nj];
-        for (int j = 0; j < nj; j++) {
-            for (int i = 0; i < ni; i++) {
-                sumj[j] += table[i][j];
-            }
-            if (sumj[j] == 0.0) {
-                --nnj;
-            }
-        }
-
-        int df = nni * nnj - nni - nnj + 1;
-        double chisq = 0.0;
-        for (int i = 0; i < ni; i++) {
-            for (int j = 0; j < nj; j++) {
-                double expctd = sumj[j] * sumi[i] / sum;
-                double temp = table[i][j] - expctd;
-                if (correct) temp = Math.abs(temp) - 0.5;
-                chisq += temp * temp / (expctd + TINY);
-            }
-        }
-
-        double prob = Gamma.regularizedUpperIncompleteGamma(0.5 * df, 0.5 * chisq);
-        int minij = nni < nnj ? nni-1 : nnj-1;
-        double v = Math.sqrt(chisq/(sum*minij));
-
-        return new ChiSqTest("Pearson's", chisq, df, prob);
+        return new ChiSqTest(chisq, df, p);
     }
 }
