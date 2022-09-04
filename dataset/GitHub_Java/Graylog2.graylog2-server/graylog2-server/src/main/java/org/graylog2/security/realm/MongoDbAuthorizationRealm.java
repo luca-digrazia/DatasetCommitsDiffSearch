@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.security.realm;
 
@@ -26,16 +26,15 @@ import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
-import org.apache.shiro.authz.permission.WildcardPermissionResolver;
 import org.apache.shiro.realm.AuthorizingRealm;
 import org.apache.shiro.subject.PrincipalCollection;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNTypes;
+import org.graylog.security.GrantChangedEvent;
 import org.graylog.security.PermissionAndRoleResolver;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.security.MongoDbAuthorizationCacheManager;
-import org.graylog2.shared.security.ShiroRequestHeadersBinder;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.users.events.UserChangedEvent;
 import org.slf4j.Logger;
@@ -46,7 +45,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.commons.lang3.StringUtils.isBlank;
-import static org.graylog2.shared.rest.RequestIdFilter.X_REQUEST_ID;
 
 public class MongoDbAuthorizationRealm extends AuthorizingRealm {
 
@@ -68,19 +66,6 @@ public class MongoDbAuthorizationRealm extends AuthorizingRealm {
         setCachingEnabled(true);
         setCacheManager(mongoDbAuthorizationCacheManager);
         serverEventBus.register(this);
-        // Use case sensitive permission resolver
-        setPermissionResolver(new WildcardPermissionResolver(true));
-    }
-
-    @Override
-    protected Object getAuthorizationCacheKey(PrincipalCollection principals) {
-        final Optional<String> requestId = ShiroRequestHeadersBinder.getHeaderFromThreadContext(X_REQUEST_ID);
-
-        if (requestId.isPresent()) {
-            return ImmutableSet.builder().addAll(principals).add(requestId.get()).build();
-        }
-        LOG.warn("Could not find X-Request-Id header. This is not supposed to happen.");
-        return principals.asSet();
     }
 
     @Override
@@ -157,6 +142,11 @@ public class MongoDbAuthorizationRealm extends AuthorizingRealm {
 
     @Subscribe
     public void handleUserSave(UserChangedEvent event) {
+        getAuthorizationCache().clear();
+    }
+
+    @Subscribe
+    public void handleGrantChange(GrantChangedEvent event) {
         getAuthorizationCache().clear();
     }
 }

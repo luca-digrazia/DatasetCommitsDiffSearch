@@ -30,6 +30,7 @@ import org.graylog.testing.mongodb.MongoDBFixtures;
 import org.graylog.testing.mongodb.MongoDBTestService;
 import org.graylog.testing.mongodb.MongoJackExtension;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
+import org.graylog2.events.ClusterEventBus;
 import org.graylog2.rest.PaginationParameters;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,9 +43,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MongoDBExtension.class)
 @ExtendWith(MongoJackExtension.class)
@@ -58,12 +58,10 @@ class GranteeSharesServiceTest {
     void setUp(MongoDBTestService mongodb,
                MongoJackObjectMapperProvider mongoJackObjectMapperProvider,
                GRNRegistry grnRegistry,
-               @Mock GRNDescriptorService grnDescriptorService,
-               @Mock GranteeService granteeService) {
+               @Mock GRNDescriptorService grnDescriptorService) {
         this.grnDescriptorService = grnDescriptorService;
-        final DBGrantService dbGrantService = new DBGrantService(mongodb.mongoConnection(), mongoJackObjectMapperProvider, grnRegistry);
-        when(granteeService.getGranteeAliases(any(GRN.class))).thenAnswer(a -> Collections.singleton(a.getArgument(0)));
-        this.granteeSharesService = new GranteeSharesService(dbGrantService, grnDescriptorService, granteeService);
+        final DBGrantService dbGrantService = new DBGrantService(mongodb.mongoConnection(), mongoJackObjectMapperProvider, grnRegistry, mock(ClusterEventBus.class));
+        this.granteeSharesService = new GranteeSharesService(dbGrantService, grnDescriptorService);
     }
 
     @DisplayName("Paginated shares for a user")
@@ -123,35 +121,19 @@ class GranteeSharesServiceTest {
                 assertThat(response.capabilities()).doesNotContainKey(stream1);
             }
 
-            @DisplayName("paginated shares with view capability filter")
+            @DisplayName("paginated shares with capability filter")
             @Test
-            void getPaginatedSharesForUserWithViewCapabilityFilter() {
+            void getPaginatedSharesForUserWithCapabilityFilter() {
                 final GranteeSharesService.SharesResponse response = granteeSharesService.getPaginatedSharesFor(GRNTypes.USER.toGRN("jane"), paginationParameters, "viEw", "");
 
-                assertThat(response.paginatedEntities()).hasSize(2);
-                assertThat(response.paginatedEntities().get(0)).isEqualTo(EntityDescriptor.create(stream0, "Stream 0", Collections.emptySet()));
-                assertThat(response.paginatedEntities().get(1)).isEqualTo(EntityDescriptor.create(stream1, "Stream 1", Collections.emptySet()));
-
-                assertThat(response.capabilities()).hasSize(2);
-                assertThat(response.capabilities().get(stream0)).isEqualTo(Capability.VIEW);
-                assertThat(response.capabilities().get(stream1)).isEqualTo(Capability.VIEW);
-                assertThat(response.capabilities()).doesNotContainKey(dashboard0);
-                assertThat(response.capabilities()).doesNotContainKey(dashboard1);
-            }
-
-            @DisplayName("paginated shares with manage capability filter")
-            @Test
-            void getPaginatedSharesForUserWithManageCapabilityFilter() {
-                final GranteeSharesService.SharesResponse response = granteeSharesService.getPaginatedSharesFor(GRNTypes.USER.toGRN("jane"), paginationParameters, "manage", "");
-
                 assertThat(response.paginatedEntities()).hasSize(1);
-                assertThat(response.paginatedEntities().get(0)).isEqualTo(EntityDescriptor.create(stream1, "Stream 1", Collections.emptySet()));
+                assertThat(response.paginatedEntities().get(0)).isEqualTo(EntityDescriptor.create(stream0, "Stream 0", Collections.emptySet()));
 
                 assertThat(response.capabilities()).hasSize(1);
-                assertThat(response.capabilities().get(stream1)).isEqualTo(Capability.MANAGE);
-                assertThat(response.capabilities()).doesNotContainKey(stream0);
+                assertThat(response.capabilities().get(stream0)).isEqualTo(Capability.VIEW);
                 assertThat(response.capabilities()).doesNotContainKey(dashboard0);
                 assertThat(response.capabilities()).doesNotContainKey(dashboard1);
+                assertThat(response.capabilities()).doesNotContainKey(stream1);
             }
 
             @DisplayName("paginated shares with entity type filter")
@@ -186,8 +168,6 @@ class GranteeSharesServiceTest {
                 assertThat(response.capabilities()).doesNotContainKey(dashboard0);
                 assertThat(response.capabilities()).doesNotContainKey(dashboard1);
                 assertThat(response.capabilities()).doesNotContainKey(stream0);
-
-                assertThat(response.paginatedEntities().pagination().total()).isEqualTo(3);
             }
 
             @DisplayName("paginated shares with reverse order")

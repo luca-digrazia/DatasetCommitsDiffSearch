@@ -1,19 +1,20 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.migrations.V20200803120800_GrantsMigrations;
 
 import com.google.common.collect.ImmutableSet;
@@ -26,7 +27,6 @@ import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNTypes;
 import org.graylog.plugins.views.search.views.ViewRequirements;
 import org.graylog.plugins.views.search.views.ViewService;
-import org.graylog.plugins.views.search.views.ViewSummaryService;
 import org.graylog.security.Capability;
 import org.graylog.security.DBGrantService;
 import org.graylog.security.entities.EntityOwnershipService;
@@ -38,6 +38,7 @@ import org.graylog.testing.mongodb.MongoJackExtension;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
+import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.shared.users.Role;
@@ -83,7 +84,7 @@ class ViewSharingToGrantsMigrationTest {
         this.dbCollection = mongodb.mongoCollection("view_sharings");
         this.userService = userService;
         this.roleService = roleService;
-        this.grantService = new DBGrantService(mongodb.mongoConnection(), objectMapperProvider, grnRegistry);
+        this.grantService = new DBGrantService(mongodb.mongoConnection(), objectMapperProvider, grnRegistry, mock(ClusterEventBus.class));
 
         when(userService.load(anyString())).thenAnswer(a -> {
             final String argument = a.getArgument(0);
@@ -203,7 +204,7 @@ class ViewSharingToGrantsMigrationTest {
                                MongoJackObjectMapperProvider mapper,
                                ClusterConfigService clusterConfigService,
                                EntityOwnershipService entityOwnerShipService) {
-            super(mongoConnection, mapper, clusterConfigService, view -> new ViewRequirements(Collections.emptySet(), view), entityOwnerShipService, mock(ViewSummaryService.class));
+            super(mongoConnection, mapper, clusterConfigService, view -> new ViewRequirements(Collections.emptySet(), view), entityOwnerShipService);
         }
     }
 }

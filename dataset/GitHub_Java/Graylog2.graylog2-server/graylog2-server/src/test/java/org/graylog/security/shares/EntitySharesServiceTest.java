@@ -1,8 +1,25 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.security.shares;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.eventbus.EventBus;
 import org.apache.shiro.subject.Subject;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
@@ -18,6 +35,7 @@ import org.graylog.testing.mongodb.MongoDBFixtures;
 import org.graylog.testing.mongodb.MongoDBTestService;
 import org.graylog.testing.mongodb.MongoJackExtension;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
+import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.database.users.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,7 +48,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MongoDBExtension.class)
 @ExtendWith(MongoJackExtension.class)
@@ -58,13 +75,14 @@ public class EntitySharesServiceTest {
                GRNRegistry grnRegistry) {
         this.grnRegistry = grnRegistry;
 
-        final DBGrantService dbGrantService = new DBGrantService(mongodb.mongoConnection(), mongoJackObjectMapperProvider, this.grnRegistry);
+        final DBGrantService dbGrantService = new DBGrantService(mongodb.mongoConnection(), mongoJackObjectMapperProvider, this.grnRegistry, mock(ClusterEventBus.class));
 
         lenient().when(entityDependencyResolver.resolve(any())).thenReturn(ImmutableSet.of());
         lenient().when(entityDependencyPermissionChecker.check(any(), any(), any())).thenReturn(ImmutableMultimap.of());
         lenient().when(granteeService.getAvailableGrantees(any())).thenReturn(ImmutableSet.of());
 
-        this.entitySharesService = new EntitySharesService(dbGrantService, entityDependencyResolver, entityDependencyPermissionChecker, grnRegistry, granteeService);
+        final EventBus serverEventBus = mock(EventBus.class);
+        this.entitySharesService = new EntitySharesService(dbGrantService, entityDependencyResolver, entityDependencyPermissionChecker, grnRegistry, granteeService, serverEventBus);
 
         // TODO this is needed to initialize the CAPABILITIES field
         new BuiltinCapabilities();
@@ -78,9 +96,8 @@ public class EntitySharesServiceTest {
         final GRN entity = grnRegistry.newGRN(GRNTypes.STREAM, "54e3deadbeefdeadbeefaffe");
         final EntityShareRequest shareRequest = EntityShareRequest.create(ImmutableMap.of());
 
-        final User user = mock(User.class);
+        final User user = createMockUser("hans");
         final Subject subject = mock(Subject.class);
-        when(user.getName()).thenReturn("hans");
         final EntityShareResponse entityShareResponse = entitySharesService.prepareShare(entity, shareRequest, user, subject);
         assertThat(entityShareResponse.validationResult()).satisfies(validationResult -> {
             assertThat(validationResult.failed()).isTrue();
@@ -97,9 +114,8 @@ public class EntitySharesServiceTest {
         final GRN jane = grnRegistry.newGRN(GRNTypes.USER, "jane");
         final EntityShareRequest shareRequest = EntityShareRequest.create(ImmutableMap.of(jane, Capability.VIEW));
 
-        final User user = mock(User.class);
+        final User user = createMockUser("hans");
         final Subject subject = mock(Subject.class);
-        when(user.getName()).thenReturn("hans");
         final EntityShareResponse entityShareResponse = entitySharesService.prepareShare(entity, shareRequest, user, subject);
         assertThat(entityShareResponse.validationResult()).satisfies(validationResult -> {
             assertThat(validationResult.failed()).isTrue();
@@ -116,9 +132,8 @@ public class EntitySharesServiceTest {
         final GRN horst = grnRegistry.newGRN(GRNTypes.USER, "horst");
         final EntityShareRequest shareRequest = EntityShareRequest.create(ImmutableMap.of(horst, Capability.OWN));
 
-        final User user = mock(User.class);
+        final User user = createMockUser("hans");
         final Subject subject = mock(Subject.class);
-        when(user.getName()).thenReturn("hans");
         final EntityShareResponse entityShareResponse = entitySharesService.prepareShare(entity, shareRequest, user, subject);
         assertThat(entityShareResponse.validationResult()).satisfies(validationResult -> {
             assertThat(validationResult.failed()).isFalse();
@@ -133,13 +148,34 @@ public class EntitySharesServiceTest {
         final GRN horst = grnRegistry.newGRN(GRNTypes.USER, "horst");
         final EntityShareRequest shareRequest = EntityShareRequest.create(ImmutableMap.of(horst, Capability.MANAGE));
 
-        final User user = mock(User.class);
+        final User user = createMockUser("hans");
         final Subject subject = mock(Subject.class);
-        when(user.getName()).thenReturn("hans");
         final EntityShareResponse entityShareResponse = entitySharesService.prepareShare(entity, shareRequest, user, subject);
         assertThat(entityShareResponse.validationResult()).satisfies(validationResult -> {
             assertThat(validationResult.failed()).isFalse();
             assertThat(validationResult.getErrors()).isEmpty();
         });
+    }
+
+    @DisplayName("Don't run validation on initial empty request")
+    @Test
+    void noValidationOnEmptyRequest() {
+        final GRN entity = grnRegistry.newGRN(GRNTypes.DASHBOARD, "54e3deadbeefdeadbeefaffe");
+        final EntityShareRequest shareRequest = EntityShareRequest.create(null);
+
+        final User user = createMockUser("hans");
+        final Subject subject = mock(Subject.class);
+        final EntityShareResponse entityShareResponse = entitySharesService.prepareShare(entity, shareRequest, user, subject);
+        assertThat(entityShareResponse.validationResult()).satisfies(validationResult -> {
+            assertThat(validationResult.failed()).isFalse();
+            assertThat(validationResult.getErrors()).isEmpty();
+        });
+    }
+
+    private User createMockUser(String name) {
+        final User user = mock(User.class);
+        lenient().when(user.getName()).thenReturn(name);
+        lenient().when(user.getId()).thenReturn(name);
+        return user;
     }
 }
