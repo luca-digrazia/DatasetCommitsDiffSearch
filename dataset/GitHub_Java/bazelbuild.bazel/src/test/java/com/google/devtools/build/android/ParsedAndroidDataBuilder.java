@@ -19,7 +19,6 @@ import com.google.devtools.build.android.FullyQualifiedName.Factory;
 import com.google.devtools.build.android.ParsedAndroidData.CombiningConsumer;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 import com.google.devtools.build.android.ParsedAndroidData.OverwritableConsumer;
-import com.google.devtools.build.android.resources.Visibility;
 import com.google.devtools.build.android.xml.Namespaces;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -149,10 +148,7 @@ public class ParsedAndroidDataBuilder {
             @Nullable Factory factory,
             @Nullable Path root,
             KeyValueConsumer<DataKey, DataResource> consumer) {
-          consumer.accept(
-              factory.parse(rawKey),
-              DataValueFile.of(
-                  Visibility.UNKNOWN, source, /*fingerprint=*/ null, /*rootXmlNode=*/ null));
+          consumer.accept(factory.parse(rawKey), DataValueFile.of(source));
         }
 
         @Override
@@ -160,8 +156,7 @@ public class ParsedAndroidDataBuilder {
           target.accept(
               RelativeAssetPath.Factory.of(chooseRoot(defaultRoot).resolve("assets"))
                   .create(source.getPath()),
-              DataValueFile.of(
-                  Visibility.UNKNOWN, source, /*fingerprint=*/ null, /*rootXmlNode=*/ null));
+              DataValueFile.of(source));
         }
       };
     }
