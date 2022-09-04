@@ -1212,7 +1212,6 @@ public class CcToolchainFeatures implements Serializable {
     private static final Interner<FeatureConfiguration> FEATURE_CONFIGURATION_INTERNER =
         BlazeInterners.newWeakInterner();
 
-    private final ImmutableSet<String> requestedFeatures;
     private final ImmutableSet<String> enabledFeatureNames;
     private final ImmutableList<Feature> enabledFeatures;
     private final ImmutableSet<String> enabledActionConfigActionNames;
@@ -1231,7 +1230,6 @@ public class CcToolchainFeatures implements Serializable {
 
     protected FeatureConfiguration() {
       this(
-          /* requestedFeatures= */ ImmutableSet.of(),
           /* enabledFeatures= */ ImmutableList.of(),
           /* enabledActionConfigActionNames= */ ImmutableSet.of(),
           /* actionConfigByActionName= */ ImmutableMap.of(),
@@ -1240,14 +1238,12 @@ public class CcToolchainFeatures implements Serializable {
 
     @AutoCodec.Instantiator
     static FeatureConfiguration createForSerialization(
-        ImmutableSet<String> requestedFeatures,
         ImmutableList<Feature> enabledFeatures,
         ImmutableSet<String> enabledActionConfigActionNames,
         ImmutableMap<String, ActionConfig> actionConfigByActionName,
         PathFragment ccToolchainPath) {
       return FEATURE_CONFIGURATION_INTERNER.intern(
           new FeatureConfiguration(
-              requestedFeatures,
               enabledFeatures,
               enabledActionConfigActionNames,
               actionConfigByActionName,
@@ -1255,12 +1251,10 @@ public class CcToolchainFeatures implements Serializable {
     }
 
     FeatureConfiguration(
-        ImmutableSet<String> requestedFeatures,
         ImmutableList<Feature> enabledFeatures,
         ImmutableSet<String> enabledActionConfigActionNames,
         ImmutableMap<String, ActionConfig> actionConfigByActionName,
         PathFragment ccToolchainPath) {
-      this.requestedFeatures = requestedFeatures;
       this.enabledFeatures = enabledFeatures;
 
       this.actionConfigByActionName = actionConfigByActionName;
@@ -1278,11 +1272,6 @@ public class CcToolchainFeatures implements Serializable {
      */
     public boolean isEnabled(String feature) {
       return enabledFeatureNames.contains(feature);
-    }
-
-    /** The list of requested features, even if they do not exist in CROSSTOOLs. */
-    public ImmutableSet<String> getRequestedFeatures() {
-      return requestedFeatures;
     }
 
     /** @return true if tool_path in action_config points to a real tool, not a dummy placeholder */
