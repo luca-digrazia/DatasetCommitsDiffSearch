@@ -31,21 +31,22 @@ import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
 
-import org.jboss.quarkus.arc.Arc;
-import io.quarkus.test.QuarkusUnitTest;
-import io.quarkus.vertx.runtime.ConsumeEvent;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.test.QuarkusUnitTest;
+import io.vertx.core.Context;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 
 public class MessageConsumerMethodTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest config = new QuarkusUnitTest().setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(SimpleBean.class));
+    static final QuarkusUnitTest config = new QuarkusUnitTest()
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(SimpleBean.class));
 
     @Inject
     SimpleBean simpleBean;
@@ -67,7 +68,7 @@ public class MessageConsumerMethodTest {
         });
         assertEquals("HELLO", synchronizer.poll(2, TimeUnit.SECONDS));
     }
-    
+
     @Test
     public void testSendAsync() throws InterruptedException {
         EventBus eventBus = Arc.container().instance(EventBus.class).get();
@@ -85,7 +86,7 @@ public class MessageConsumerMethodTest {
         });
         assertEquals("olleh", synchronizer.poll(2, TimeUnit.SECONDS));
     }
-    
+
     @Test
     public void testSendDefaultAddress() throws InterruptedException {
         EventBus eventBus = Arc.container().instance(EventBus.class).get();
@@ -106,11 +107,44 @@ public class MessageConsumerMethodTest {
 
     @Test
     public void testPublish() throws InterruptedException {
+        SimpleBean.MESSAGES.clear();
         EventBus eventBus = Arc.container().instance(EventBus.class).get();
         SimpleBean.latch = new CountDownLatch(2);
         eventBus.publish("pub", "Hello");
         SimpleBean.latch.await(2, TimeUnit.SECONDS);
         assertTrue(SimpleBean.MESSAGES.contains("hello"));
+        assertTrue(SimpleBean.MESSAGES.contains("HELLO"));
+    }
+
+    @Test
+    public void testBlockingConsumer() throws InterruptedException {
+        SimpleBean.MESSAGES.clear();
+        EventBus eventBus = Arc.container().instance(EventBus.class).get();
+        SimpleBean.latch = new CountDownLatch(1);
+        eventBus.publish("blocking", "Hello");
+        SimpleBean.latch.await(2, TimeUnit.SECONDS);
+        assertEquals(1, SimpleBean.MESSAGES.size());
+        String message = SimpleBean.MESSAGES.get(0);
+        assertTrue(message.contains("hello::true"));
+    }
+
+    @Test
+    public void testPublishRx() throws InterruptedException {
+        SimpleBean.MESSAGES.clear();
+        EventBus eventBus = Arc.container().instance(EventBus.class).get();
+        SimpleBean.latch = new CountDownLatch(1);
+        eventBus.publish("pub-rx", "Hello");
+        SimpleBean.latch.await(2, TimeUnit.SECONDS);
+        assertTrue(SimpleBean.MESSAGES.contains("HELLO"));
+    }
+
+    @Test
+    public void testPublishAxle() throws InterruptedException {
+        SimpleBean.MESSAGES.clear();
+        EventBus eventBus = Arc.container().instance(EventBus.class).get();
+        SimpleBean.latch = new CountDownLatch(1);
+        eventBus.publish("pub-axle", "Hello");
+        SimpleBean.latch.await(2, TimeUnit.SECONDS);
         assertTrue(SimpleBean.MESSAGES.contains("HELLO"));
     }
 
@@ -124,7 +158,7 @@ public class MessageConsumerMethodTest {
         String sendDefaultAddress(String message) {
             return message.toLowerCase();
         }
-        
+
         @ConsumeEvent("foo")
         String reply(String message) {
             return message.toUpperCase();
@@ -141,10 +175,28 @@ public class MessageConsumerMethodTest {
             MESSAGES.add(message.body().toUpperCase());
             latch.countDown();
         }
-        
+
         @ConsumeEvent("foo-async")
         CompletionStage<String> replyAsync(String message) {
             return CompletableFuture.completedFuture(new StringBuilder(message).reverse().toString());
+        }
+
+        @ConsumeEvent(value = "blocking", blocking = true)
+        void consumeBlocking(String message) {
+            MESSAGES.add(message.toLowerCase() + "::" + Context.isOnWorkerThread());
+            latch.countDown();
+        }
+
+        @ConsumeEvent("pub-axle")
+        void consume(io.vertx.axle.core.eventbus.Message<String> message) {
+            MESSAGES.add(message.body().toUpperCase());
+            latch.countDown();
+        }
+
+        @ConsumeEvent("pub-rx")
+        void consume(io.vertx.reactivex.core.eventbus.Message<String> message) {
+            MESSAGES.add(message.body().toUpperCase());
+            latch.countDown();
         }
     }
 
