@@ -27,16 +27,22 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
+import com.google.devtools.build.lib.actions.BaseSpawn;
+import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.JavaCompileInfo;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -45,10 +51,9 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -56,7 +61,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.skyframe.AspectValue;
+import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -68,11 +75,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Action that represents a Java compilation. */
-@ThreadCompatible
-@Immutable
-public final class JavaCompileAction extends SpawnAction {
+/**
+ * Action that represents a Java compilation.
+ */
+@ThreadCompatible @Immutable
+public final class JavaCompileAction extends AbstractAction {
   private static final String JACOCO_INSTRUMENTATION_PROCESSOR = "jacoco";
+
+  private static final String GUID = "786e174d-ed97-4e79-9f61-ae74430714cf";
 
   private static final ResourceSet LOCAL_RESOURCES =
       ResourceSet.createWithRamCpuIo(750 /*MB*/, 0.5 /*CPU*/, 0.0 /*IO*/);
@@ -100,9 +110,6 @@ public final class JavaCompileAction extends SpawnAction {
   /** The list of bootclasspath entries to specify to javac. */
   private final ImmutableList<Artifact> bootclasspathEntries;
 
-  /** The list of sourcepath entries to specify to javac. */
-  private final ImmutableList<Artifact> sourcePathEntries;
-
   /**
    * The path to the extdir to specify to javac.
    */
@@ -128,6 +135,9 @@ public final class JavaCompileAction extends SpawnAction {
    */
   private final NestedSet<Artifact> resourceJars;
 
+  /** The number of resources that will be put into the jar. */
+  private final int resourceCount;
+
   /** Set of additional Java source files to compile. */
   private final ImmutableList<Artifact> sourceJars;
 
@@ -144,6 +154,9 @@ public final class JavaCompileAction extends SpawnAction {
   /** The subset of classpath jars provided by direct dependencies. */
   private final NestedSet<Artifact> directJars;
 
+  /** The ExecutionInfo to be used when creating the SpawnAction for this compilation. */
+  private final ImmutableMap<String, String> executionInfo;
+
   /**
    * The level of strict dependency checks (off, warnings, or errors).
    */
@@ -158,43 +171,28 @@ public final class JavaCompileAction extends SpawnAction {
    * Constructs an action to compile a set of Java source files to class files.
    *
    * @param owner the action owner, typically a java_* RuleConfiguredTarget.
-   * @param tools the tools used by the action
-   * @param inputs the inputs of the action
+   * @param baseInputs the set of the input artifacts of the compile action without the parameter
+   *     file action;
    * @param outputs the outputs of the action
+   * @param paramFile the file containing the command line arguments to JavaBuilder
    * @param javaCompileCommandLine the command line for the java library builder - it's actually
    *     written to the parameter file, but other parts (for example, ide_build_info) need access to
    *     the data
    * @param commandLine the actual invocation command line
-   * @param classDirectory the directory in which generated classfiles are placed
-   * @param outputJar the jar file the compilation outputs will be written to
-   * @param classpathEntries the compile-time classpath entries
-   * @param bootclasspathEntries the compile-time bootclasspath entries
-   * @param extdirInputs the compile-time extclasspath entries
-   * @param processorPath the classpath to search for annotation processors
-   * @param processorNames the annotation processors to run
-   * @param resources the resources to add to the output jar
-   * @param resourceJars jars of resources to merge into the output jar
-   * @param sourceJars jars of sources to compile
-   * @param sourceFiles source files to compile
-   * @param javacOpts the javac options for the compilation
-   * @param directJars the subset of classpath jars provided by direct dependencies
-   * @param executionInfo the execution info
-   * @param strictJavaDeps the Strict Java Deps mode
-   * @param compileTimeDependencyArtifacts the jdeps files for direct dependencies
-   * @param progressMessage the progress message
+   * @param resourceCount the count of all resource inputs
    */
   private JavaCompileAction(
       ActionOwner owner,
       NestedSet<Artifact> tools,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> baseInputs,
       Collection<Artifact> outputs,
+      Artifact paramFile,
       CommandLine javaCompileCommandLine,
       CommandLine commandLine,
       PathFragment classDirectory,
       Artifact outputJar,
       NestedSet<Artifact> classpathEntries,
       ImmutableList<Artifact> bootclasspathEntries,
-      ImmutableList<Artifact> sourcePathEntries,
       ImmutableList<Artifact> extdirInputs,
       List<Artifact> processorPath,
       List<String> processorNames,
@@ -205,24 +203,20 @@ public final class JavaCompileAction extends SpawnAction {
       List<String> javacOpts,
       NestedSet<Artifact> directJars,
       Map<String, String> executionInfo,
-      StrictDepsMode strictJavaDeps,
+      BuildConfiguration.StrictDepsMode strictJavaDeps,
       Collection<Artifact> compileTimeDependencyArtifacts,
-      String progressMessage) {
+      int resourceCount) {
     super(
         owner,
         tools,
-        inputs,
-        outputs,
-        LOCAL_RESOURCES,
-        commandLine,
-        ImmutableMap.copyOf(UTF8_ENVIRONMENT),
-        ImmutableSet.copyOf(ImmutableSet.<String>of()),
-        ImmutableMap.copyOf(executionInfo),
-        progressMessage,
-        EmptyRunfilesSupplier.INSTANCE,
-        "Javac",
-        false /*executeUnconditionally*/,
-        null /*extraActionInfoSupplier*/);
+        NestedSetBuilder.<Artifact>stableOrder()
+            .addTransitive(classpathEntries)
+            .addAll(compileTimeDependencyArtifacts)
+            .addAll(baseInputs)
+            .add(paramFile)
+            .addTransitive(tools)
+            .build(),
+        outputs);
     this.javaCompileCommandLine = javaCompileCommandLine;
     this.commandLine = commandLine;
 
@@ -230,7 +224,6 @@ public final class JavaCompileAction extends SpawnAction {
     this.outputJar = outputJar;
     this.classpathEntries = classpathEntries;
     this.bootclasspathEntries = ImmutableList.copyOf(bootclasspathEntries);
-    this.sourcePathEntries = ImmutableList.copyOf(sourcePathEntries);
     this.extdirInputs = extdirInputs;
     this.processorPath = ImmutableList.copyOf(processorPath);
     this.processorNames = ImmutableList.copyOf(processorNames);
@@ -240,8 +233,10 @@ public final class JavaCompileAction extends SpawnAction {
     this.sourceFiles = ImmutableList.copyOf(sourceFiles);
     this.javacOpts = ImmutableList.copyOf(javacOpts);
     this.directJars = checkNotNull(directJars, "directJars must not be null");
+    this.executionInfo = ImmutableMap.copyOf(executionInfo);
     this.strictJavaDeps = strictJavaDeps;
     this.compileTimeDependencyArtifacts = ImmutableList.copyOf(compileTimeDependencyArtifacts);
+    this.resourceCount = resourceCount;
   }
 
   /**
@@ -280,12 +275,6 @@ public final class JavaCompileAction extends SpawnAction {
     return bootclasspathEntries;
   }
 
-  /** Returns the list of paths that represents the sourcepath. */
-  @VisibleForTesting
-  public Collection<Artifact> getSourcePathEntries() {
-    return sourcePathEntries;
-  }
-
   /**
    * Returns the path to the extdir.
    */
@@ -313,6 +302,11 @@ public final class JavaCompileAction extends SpawnAction {
   @VisibleForTesting
   public List<String> getJavacOpts() {
     return javacOpts;
+  }
+
+  @VisibleForTesting
+  public ImmutableMap<String, String> getExecutionInfo() {
+    return executionInfo;
   }
 
   @VisibleForTesting
@@ -371,6 +365,86 @@ public final class JavaCompileAction extends SpawnAction {
   /** Returns the command and arguments for a java compile action. */
   public List<String> getCommand() {
     return ImmutableList.copyOf(commandLine.arguments());
+  }
+
+  @VisibleForTesting
+  Spawn createSpawn() {
+    return new BaseSpawn(getCommand(), UTF8_ENVIRONMENT, executionInfo, this, LOCAL_RESOURCES);
+  }
+
+  @Override
+  @ThreadCompatible
+  public void execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
+    try {
+      getContext(executor).exec(createSpawn(), actionExecutionContext);
+    } catch (ExecException e) {
+      throw e.toActionExecutionException(
+          "Java compilation in rule '" + getOwner().getLabel() + "'",
+          executor.getVerboseFailures(),
+          this);
+    }
+  }
+
+  @Override
+  protected String computeKey() {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addStrings(commandLine.arguments());
+    return f.hexDigestAndReset();
+  }
+
+  @Override
+  public String describeKey() {
+    StringBuilder message = new StringBuilder();
+    for (String arg : ShellEscaper.escapeAll(commandLine.arguments())) {
+      message.append("  Command-line argument: ");
+      message.append(arg);
+      message.append('\n');
+    }
+    return message.toString();
+  }
+
+  @Override
+  public String getMnemonic() {
+    return "Javac";
+  }
+
+  @Override
+  protected String getRawProgressMessage() {
+    StringBuilder sb = new StringBuilder("Building ");
+    sb.append(outputJar.prettyPrint());
+    sb.append(" (");
+    boolean first = true;
+    first = appendCount(sb, first, sourceFiles.size(), "source file");
+    first = appendCount(sb, first, sourceJars.size(), "source jar");
+    first = appendCount(sb, first, resourceCount, "resource");
+    sb.append(")");
+    return sb.toString();
+  }
+
+  /**
+   * Append an input count to the progress message, e.g. "2 source jars". If an input
+   * count has already been appended, prefix with ", ".
+   */
+  private static boolean appendCount(StringBuilder sb, boolean first, int count, String name) {
+    if (count > 0) {
+      if (!first) {
+        sb.append(", ");
+      } else {
+        first = false;
+      }
+      sb.append(count).append(' ').append(name);
+      if (count > 1) {
+        sb.append('s');
+      }
+    }
+    return first;
+  }
+
+  protected SpawnActionContext getContext(Executor executor) {
+    return executor.getSpawnActionContext(getMnemonic());
   }
 
   @Override
@@ -565,7 +639,6 @@ public final class JavaCompileAction extends SpawnAction {
     private NestedSet<Artifact> classpathEntries =
         NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     private ImmutableList<Artifact> bootclasspathEntries = ImmutableList.of();
-    private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
     private ImmutableList<Artifact> extdirInputs = ImmutableList.of();
     private Artifact javaBuilderJar;
     private Artifact langtoolsJar;
@@ -635,6 +708,21 @@ public final class JavaCompileAction extends SpawnAction {
             configuration.getBinDirectory(targetLabel.getPackageIdentifier().getRepository()));
       }
 
+      // ImmutableIterable is safe to use here because we know that none of the components of
+      // the Iterable.concat() will change. Without ImmutableIterable, AbstractAction will
+      // waste memory by making a preventive copy of the iterable.
+      Iterable<Artifact> baseInputs = ImmutableIterable.from(Iterables.concat(
+          processorPath,
+          translations,
+          resources.values(),
+          resourceJars,
+          sourceJars,
+          sourceFiles,
+          classpathResources,
+          javabaseInputs,
+          bootclasspathEntries,
+          extdirInputs));
+
       Preconditions.checkState(javaExecutable != null, owner);
       Preconditions.checkState(javaExecutable.isAbsolute() ^ !javabaseInputs.isEmpty(),
           javaExecutable);
@@ -679,37 +767,18 @@ public final class JavaCompileAction extends SpawnAction {
               .addAll(instrumentationJars)
               .build();
 
-      NestedSet<Artifact> inputs =
-          NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(classpathEntries)
-              .addAll(compileTimeDependencyArtifacts)
-              .addAll(processorPath)
-              .addAll(translations)
-              .addAll(resources.values())
-              .addTransitive(resourceJars)
-              .addAll(sourceJars)
-              .addAll(sourceFiles)
-              .addAll(classpathResources)
-              .addAll(javabaseInputs)
-              .addAll(bootclasspathEntries)
-              .addAll(sourcePathEntries)
-              .addAll(extdirInputs)
-              .add(paramFile)
-              .addTransitive(tools)
-              .build();
-
       return new JavaCompileAction(
           owner,
           tools,
-          inputs,
+          baseInputs,
           outputs,
+          paramFile,
           paramFileContents,
           javaBuilderCommandLine,
           classDirectory,
           outputJar,
           classpathEntries,
           bootclasspathEntries,
-          sourcePathEntries,
           extdirInputs,
           processorPath,
           processorNames,
@@ -722,7 +791,7 @@ public final class JavaCompileAction extends SpawnAction {
           executionInfo,
           strictJavaDeps,
           compileTimeDependencyArtifacts,
-          buildProgressMessage());
+          resources.size() + classpathResources.size() + translations.size());
     }
 
     private CustomCommandLine buildParamFileContents(Collection<String> javacOpts) {
@@ -759,9 +828,6 @@ public final class JavaCompileAction extends SpawnAction {
       if (!bootclasspathEntries.isEmpty()) {
         result.addJoinExecPaths(
             "--bootclasspath", pathSeparator, bootclasspathEntries);
-      }
-      if (!sourcePathEntries.isEmpty()) {
-        result.addJoinExecPaths("--sourcepath", pathSeparator, sourcePathEntries);
       }
       if (!processorPath.isEmpty() || !processorPathDirs.isEmpty()) {
         ImmutableList.Builder<String> execPathStrings = ImmutableList.<String>builder();
@@ -851,38 +917,6 @@ public final class JavaCompileAction extends SpawnAction {
         result.add("-*TestCase");
       }
       return result.build();
-    }
-
-    private String buildProgressMessage() {
-      StringBuilder sb = new StringBuilder("Building ");
-      sb.append(outputJar.prettyPrint());
-      sb.append(" (");
-      boolean first = true;
-      first = appendCount(sb, first, sourceFiles.size(), "source file");
-      first = appendCount(sb, first, sourceJars.size(), "source jar");
-      int resourceCount = resources.size() + classpathResources.size() + translations.size();
-      first = appendCount(sb, first, resourceCount, "resource");
-      sb.append(")");
-      return sb.toString();
-    }
-
-    /**
-     * Append an input count to the progress message, e.g. "2 source jars". If an input count has
-     * already been appended, prefix with ", ".
-     */
-    private static boolean appendCount(StringBuilder sb, boolean first, int count, String name) {
-      if (count > 0) {
-        if (!first) {
-          sb.append(", ");
-        } else {
-          first = false;
-        }
-        sb.append(count).append(' ').append(name);
-        if (count > 1) {
-          sb.append('s');
-        }
-      }
-      return first;
     }
 
     public Builder setParameterFile(Artifact paramFile) {
@@ -1012,11 +1046,6 @@ public final class JavaCompileAction extends SpawnAction {
 
     public Builder setBootclasspathEntries(Iterable<Artifact> bootclasspathEntries) {
       this.bootclasspathEntries = ImmutableList.copyOf(bootclasspathEntries);
-      return this;
-    }
-
-    public Builder setSourcePathEntries(Iterable<Artifact> sourcePathEntries) {
-      this.sourcePathEntries = ImmutableList.copyOf(sourcePathEntries);
       return this;
     }
 

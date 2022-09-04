@@ -176,7 +176,6 @@ public final class JavaCompilationHelper {
     builder.setResourceJars(attributes.getResourceJars());
     builder.addClasspathResources(attributes.getClassPathResources());
     builder.setBootclasspathEntries(getBootclasspathOrDefault());
-    builder.setSourcePathEntries(attributes.getSourcePath());
     builder.setExtdirInputs(getExtdirInputs());
     builder.setLangtoolsJar(javaToolchain.getJavac());
     builder.setJavaBuilderJar(javaToolchain.getJavaBuilder());
@@ -485,7 +484,8 @@ public final class JavaCompilationHelper {
    * targets acting as aliases have to be filtered out.
    */
   private boolean generatesOutputDeps() {
-    return getJavaConfiguration().getGenerateJavaDeps() && attributes.hasSources();
+    return getJavaConfiguration().getGenerateJavaDeps()
+        && (attributes.hasSourceFiles() || attributes.hasSourceJars());
   }
 
   /**
