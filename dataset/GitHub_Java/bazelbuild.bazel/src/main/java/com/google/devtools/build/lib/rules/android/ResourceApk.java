@@ -219,8 +219,7 @@ public final class ResourceApk {
     return resourceDeps.toInfo(validatedResources);
   }
 
-  public void addToConfiguredTargetBuilder(
-      RuleConfiguredTargetBuilder builder, Label label, boolean includeSkylarkApiProvider) {
+  public void addToConfiguredTargetBuilder(RuleConfiguredTargetBuilder builder, Label label) {
     AndroidResourcesInfo resourceInfo = toResourceInfo(label);
     builder.addNativeDeclaredProvider(resourceInfo);
 
@@ -238,10 +237,8 @@ public final class ResourceApk {
       builder.addNativeDeclaredProvider(assetDeps.toInfo(label));
     }
 
-    if (includeSkylarkApiProvider) {
-      builder.addSkylarkTransitiveInfo(
-          AndroidSkylarkApiProvider.NAME, new AndroidSkylarkApiProvider(resourceInfo));
-    }
+    builder.addSkylarkTransitiveInfo(
+        AndroidSkylarkApiProvider.NAME, new AndroidSkylarkApiProvider(resourceInfo));
   }
 
   /**

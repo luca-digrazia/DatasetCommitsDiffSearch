@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorAr
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.util.OS;
 import java.util.Collections;
@@ -51,7 +52,7 @@ public class ResourceShrinkerActionBuilder {
   private ResourceFilterFactory resourceFilterFactory;
 
   /** @param ruleContext The RuleContext of the owning rule. */
-  public ResourceShrinkerActionBuilder(RuleContext ruleContext) {
+  public ResourceShrinkerActionBuilder(RuleContext ruleContext) throws RuleErrorException {
     this.ruleContext = ruleContext;
     this.spawnActionBuilder = new SpawnAction.Builder();
     this.sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
@@ -131,7 +132,7 @@ public class ResourceShrinkerActionBuilder {
     return this;
   }
 
-  public Artifact build() {
+  public Artifact build() throws RuleErrorException {
     ImmutableList.Builder<Artifact> inputs = ImmutableList.builder();
     ImmutableList.Builder<Artifact> outputs = ImmutableList.builder();
 
