@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.runtime.BuildEventArtifactUploaderFactory;
 import com.google.devtools.build.lib.runtime.BuildEventArtifactUploaderFactoryMap;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.vfs.Path;
-import java.io.IOException;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
@@ -71,7 +70,7 @@ public final class BuildEventArtifactUploaderFactoryMapTest {
   }
 
   @Test
-  public void testAlphabeticalOrder() throws IOException {
+  public void testAlphabeticalOrder() {
     assertThat(uploaderFactories.select(null).create(null).getClass())
         .isEqualTo(LocalFilesArtifactUploader.class);
   }
