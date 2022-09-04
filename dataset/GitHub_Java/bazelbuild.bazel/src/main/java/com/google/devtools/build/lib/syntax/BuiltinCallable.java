@@ -33,9 +33,7 @@ public final class BuiltinCallable implements StarlarkCallable {
   private final Object obj;
   private final String methodName;
 
-  // This function is only public for the to_{json,proto} hack.
-  // TODO(adonovan): make it private.
-  public BuiltinCallable(Object obj, String methodName) {
+  BuiltinCallable(Object obj, String methodName) {
     this.obj = obj;
     this.methodName = methodName;
   }

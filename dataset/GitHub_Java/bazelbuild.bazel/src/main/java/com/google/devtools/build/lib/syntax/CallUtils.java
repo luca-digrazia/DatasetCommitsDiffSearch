@@ -61,7 +61,6 @@ public final class CallUtils {
   }
 
   // Information derived from a SkylarkCallable-annotated class and a StarlarkSemantics.
-  // methods is a superset of fields.
   private static class CacheValue {
     @Nullable MethodDescriptor selfCall;
     ImmutableMap<String, MethodDescriptor> fields; // sorted by Java method name
@@ -167,7 +166,11 @@ public final class CallUtils {
           String.format(
               "value of type %s has no .%s field", EvalUtils.getDataTypeName(x), fieldName));
     }
-    return desc.callField(x, Location.BUILTIN, semantics, /*mu=*/ null);
+    // This condition is enforced statically by the annotation processor.
+    Preconditions.checkArgument(
+        !(desc.isUseStarlarkThread() || desc.isUseStarlarkSemantics() || desc.isUseLocation()),
+        "Cannot be invoked on structField callables with extra interpreter params");
+    return desc.call(x, new Object[0], Location.BUILTIN, /*thread=*/ null);
   }
 
   /** Returns the names of the Starlark fields of {@code x} under the specified semantics. */
@@ -175,7 +178,7 @@ public final class CallUtils {
     return getCacheValue(x.getClass(), semantics).fields.keySet();
   }
 
-  /** Returns the SkylarkCallable-annotated method of objClass with the given name. */
+  /** Returns the list of Skylark callable Methods of objClass with the given name. */
   static MethodDescriptor getMethod(
       StarlarkSemantics semantics, Class<?> objClass, String methodName) {
     return getCacheValue(objClass, semantics).methods.get(methodName);
@@ -185,7 +188,7 @@ public final class CallUtils {
    * Returns a set of the Skylark name of all Skylark callable methods for object of type {@code
    * objClass}.
    */
-  static ImmutableSet<String> getMethodNames(StarlarkSemantics semantics, Class<?> objClass) {
+  static Set<String> getMethodNames(StarlarkSemantics semantics, Class<?> objClass) {
     return getCacheValue(objClass, semantics).methods.keySet();
   }
 
@@ -208,6 +211,25 @@ public final class CallUtils {
     MethodDescriptor selfCall =
         getSelfCallMethodDescriptor(StarlarkSemantics.DEFAULT_SEMANTICS, objClass);
     return selfCall == null ? null : selfCall.getAnnotation();
+  }
+
+  /**
+   * Returns a {@link BuiltinCallable} representing a {@link SkylarkCallable}-annotated instance
+   * method of a given object with the given Starlark field name (not necessarily the same as the
+   * Java method name).
+   */
+  static BuiltinCallable getBuiltinCallable(
+      StarlarkSemantics semantics, Object obj, String methodName) {
+    // TODO(adonovan): implement by EvalUtils.getAttr, once the latter doesn't require
+    // a Thread and Location.
+    Class<?> objClass = obj.getClass();
+    MethodDescriptor desc = getMethod(semantics, objClass, methodName);
+    if (desc == null) {
+      throw new IllegalStateException(String.format(
+          "Expected a method named '%s' in %s, but found none",
+          methodName, objClass));
+    }
+    return new BuiltinCallable(obj, methodName);
   }
 
   /**
@@ -237,7 +259,7 @@ public final class CallUtils {
         "struct field methods should be handled by DotExpression separately");
 
     ImmutableList<ParamDescriptor> parameters = method.getParameters();
-    // *args, **kwargs, location, call, thread, skylark semantics
+    // *args, **kwargs, location, ast, thread, skylark semantics
     final int extraArgsCount = 6;
     List<Object> builder = new ArrayList<>(parameters.size() + extraArgsCount);
 
@@ -422,20 +444,53 @@ public final class CallUtils {
     }
   }
 
+  private static EvalException missingMethodException(
+      FuncallExpression call, Class<?> objClass, String methodName) {
+    return new EvalException(
+        call.getLocation(),
+        String.format(
+            "type '%s' has no method %s()",
+            EvalUtils.getDataTypeNameFromClass(objClass), methodName));
+  }
+
+  /**
+   * Returns the extra interpreter arguments for the given {@link SkylarkCallable}, to be added at
+   * the end of the argument list for the callable.
+   *
+   * <p>This method accepts null {@code ast} only if {@code callable.useAst()} is false. It is up to
+   * the caller to validate this invariant.
+   */
+  static List<Object> extraInterpreterArgs(
+      MethodDescriptor method,
+      @Nullable FuncallExpression ast,
+      Location loc,
+      StarlarkThread thread) {
+    List<Object> builder = new ArrayList<>();
+    appendExtraInterpreterArgs(builder, method, ast, loc, thread);
+    return ImmutableList.copyOf(builder);
+  }
+
+  /**
+   * Same as {@link #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location,
+   * StarlarkThread)} but appends args to a passed {@code builder} to avoid unnecessary allocations
+   * of intermediate instances.
+   *
+   * @see #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location, StarlarkThread)
+   */
   private static void appendExtraInterpreterArgs(
       List<Object> builder,
       MethodDescriptor method,
-      @Nullable FuncallExpression call,
+      @Nullable FuncallExpression ast,
       Location loc,
       StarlarkThread thread) {
     if (method.isUseLocation()) {
       builder.add(loc);
     }
     if (method.isUseAst()) {
-      if (call == null) {
+      if (ast == null) {
         throw new IllegalArgumentException("Callable expects to receive ast: " + method.getName());
       }
-      builder.add(call);
+      builder.add(ast);
     }
     if (method.isUseStarlarkThread()) {
       builder.add(thread);
@@ -469,6 +524,92 @@ public final class CallUtils {
       argTokens.add("**kwargs");
     }
     return methodDescriptor.getName() + "(" + Joiner.on(", ").join(argTokens.build()) + ")";
+  }
+
+  /** Invoke object.method() and return the result. */
+  static Object callMethod(
+      StarlarkThread thread,
+      FuncallExpression call,
+      Object object,
+      ArrayList<Object> posargs,
+      Map<String, Object> kwargs,
+      String methodName,
+      Location dotLocation)
+      throws EvalException, InterruptedException {
+    // Case 1: Object is a String. String is an unusual special case.
+    if (object instanceof String) {
+      return callStringMethod(thread, call, (String) object, methodName, posargs, kwargs);
+    }
+
+    // Case 2: Object is a Java object with a matching @SkylarkCallable method.
+    // This is an optimization. For 'foo.bar()' where 'foo' is a java object with a callable
+    // java method 'bar()', this avoids evaluating 'foo.bar' in isolation (which would require
+    // creating a throwaway function-like object).
+    MethodDescriptor methodDescriptor =
+        getMethod(thread.getSemantics(), object.getClass(), methodName);
+    if (methodDescriptor != null && !methodDescriptor.isStructField()) {
+      Object[] javaArguments =
+          convertStarlarkArgumentsToJavaMethodArguments(
+              thread, call, methodDescriptor, object.getClass(), posargs, kwargs);
+      return methodDescriptor.call(object, javaArguments, call.getLocation(), thread);
+    }
+
+    // Case 3: All other cases. Evaluate "foo.bar" as a dot expression, then try to invoke it
+    // as a callable.
+    Object functionObject = EvalUtils.getAttr(thread, dotLocation, object, methodName);
+    if (functionObject == null) {
+      throw missingMethodException(call, object.getClass(), methodName);
+    } else {
+      return call(thread, call, functionObject, posargs, kwargs);
+    }
+  }
+
+  private static Object callStringMethod(
+      StarlarkThread thread,
+      FuncallExpression call,
+      String objValue,
+      String methodName,
+      ArrayList<Object> posargs,
+      Map<String, Object> kwargs)
+      throws InterruptedException, EvalException {
+    // String is a special case, since it can't be subclassed. Methods on strings defer
+    // to StringModule, and thus need to include the actual string as a 'self' parameter.
+    posargs.add(0, objValue);
+
+    MethodDescriptor method = getMethod(thread.getSemantics(), StringModule.class, methodName);
+    if (method == null) {
+      throw missingMethodException(call, StringModule.class, methodName);
+    }
+
+    Object[] javaArguments =
+        convertStarlarkArgumentsToJavaMethodArguments(
+            thread, call, method, StringModule.class, posargs, kwargs);
+    return method.call(StringModule.INSTANCE, javaArguments, call.getLocation(), thread);
+  }
+
+  static Object call(
+      StarlarkThread thread,
+      FuncallExpression call,
+      Object fn,
+      ArrayList<Object> posargs,
+      Map<String, Object> kwargs)
+      throws EvalException, InterruptedException {
+
+    if (fn instanceof StarlarkCallable) {
+      StarlarkCallable callable = (StarlarkCallable) fn;
+      return callable.call(posargs, ImmutableMap.copyOf(kwargs), call, thread);
+    }
+
+    MethodDescriptor selfCall = getSelfCallMethodDescriptor(thread.getSemantics(), fn.getClass());
+    if (selfCall != null) {
+      Object[] javaArguments =
+          convertStarlarkArgumentsToJavaMethodArguments(
+              thread, call, selfCall, fn.getClass(), posargs, kwargs);
+      return selfCall.call(fn, javaArguments, call.getLocation(), thread);
+    }
+
+    throw new EvalException(
+        call.getLocation(), "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
   }
 
   // A memoization of evalDefault, keyed by expression.
