@@ -545,8 +545,6 @@ public class RuleClass {
             parent.getConfigurationFragmentPolicy().getMissingFragmentPolicy());
         supportsConstraintChecking = parent.supportsConstraintChecking;
 
-        addRequiredToolchains(parent.getRequiredToolchains());
-
         for (Attribute attribute : parent.getAttributes()) {
           String attrName = attribute.getName();
           Preconditions.checkArgument(
