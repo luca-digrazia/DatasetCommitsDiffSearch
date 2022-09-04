@@ -169,30 +169,15 @@ public class MemoizingEvaluatorTest {
   protected Set<InconsistencyData> setupGraphInconsistencyReceiver(boolean allowDuplicates) {
     Set<InconsistencyData> inconsistencies = Sets.newConcurrentHashSet();
     tester.setGraphInconsistencyReceiver(
-        (key, otherKeys, inconsistency) -> {
-          if (otherKeys == null) {
+        (key, otherKey, inconsistency) ->
             Preconditions.checkState(
-                inconsistencies.add(
-                        InconsistencyData.create(key, /*otherKey=*/ null, inconsistency))
+                inconsistencies.add(InconsistencyData.create(key, otherKey, inconsistency))
                     || allowDuplicates,
                 "Duplicate inconsistency: (%s, %s, %s)\nexisting = %s",
                 key,
-                null,
+                otherKey,
                 inconsistency,
-                inconsistencies);
-          } else {
-            for (SkyKey otherKey : otherKeys) {
-              Preconditions.checkState(
-                  inconsistencies.add(InconsistencyData.create(key, otherKey, inconsistency))
-                      || allowDuplicates,
-                  "Duplicate inconsistency: (%s, %s, %s)\nexisting = %s",
-                  key,
-                  otherKey,
-                  inconsistency,
-                  inconsistencies);
-            }
-          }
-        });
+                inconsistencies));
     // #initialize must be called after setting the GraphInconsistencyReceiver for the receiver to
     // be registered with the test's memoizing evaluator.
     tester.initialize(/*keepEdges=*/ true);
@@ -2551,13 +2536,8 @@ public class MemoizingEvaluatorTest {
     SkyKey missingChild = GraphTester.skyKey("missing");
     AtomicInteger numInconsistencyCalls = new AtomicInteger(0);
     tester.setGraphInconsistencyReceiver(
-        (key, otherKeys, inconsistency) -> {
-          Preconditions.checkState(otherKeys.size() == 1, otherKeys);
-          Preconditions.checkState(
-              missingChild.equals(Iterables.getOnlyElement(otherKeys)),
-              "%s %s",
-              missingChild,
-              otherKeys);
+        (key, otherKey, inconsistency) -> {
+          Preconditions.checkState(missingChild.equals(otherKey), otherKey);
           Preconditions.checkState(
               inconsistency == Inconsistency.CHILD_MISSING_FOR_DIRTY_NODE, inconsistency);
           Preconditions.checkState(topKey.equals(key), key);
