@@ -18,16 +18,18 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
+import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.ErrorDeterminingRepositoryException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceFileHelper;
 import com.google.devtools.build.lib.skyframe.PackageFunction.PackageFunctionException;
@@ -44,12 +46,6 @@ import javax.annotation.Nullable;
 
 /** SkyFunction for {@link LocalRepositoryLookupValue}s. */
 public class LocalRepositoryLookupFunction implements SkyFunction {
-
-  private final ExternalPackageHelper externalPackageHelper;
-
-  public LocalRepositoryLookupFunction(ExternalPackageHelper externalPackageHelper) {
-    this.externalPackageHelper = externalPackageHelper;
-  }
 
   @Override
   @Nullable
@@ -140,10 +136,32 @@ public class LocalRepositoryLookupFunction implements SkyFunction {
   private Optional<LocalRepositoryLookupValue> maybeCheckWorkspaceForRepository(
       Environment env, final RootedPath directory)
       throws InterruptedException, LocalRepositoryLookupFunctionException {
-    RootedPath workspacePath = externalPackageHelper.findWorkspaceFile(env);
-    if (env.valuesMissing()) {
-      return Optional.absent();
+    // Look up the main WORKSPACE file by the external package, to find all repositories.
+    PackageLookupValue externalPackageLookupValue;
+    try {
+      externalPackageLookupValue =
+          (PackageLookupValue)
+              env.getValueOrThrow(
+                  PackageLookupValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER),
+                  BuildFileNotFoundException.class,
+                  InconsistentFilesystemException.class);
+      if (externalPackageLookupValue == null) {
+        return Optional.absent();
+      }
+    } catch (BuildFileNotFoundException e) {
+      throw new LocalRepositoryLookupFunctionException(
+          new ErrorDeterminingRepositoryException(
+              "BuildFileNotFoundException while loading the //external package", e),
+          Transience.PERSISTENT);
+    } catch (InconsistentFilesystemException e) {
+      throw new LocalRepositoryLookupFunctionException(
+          new ErrorDeterminingRepositoryException(
+              "InconsistentFilesystemException while loading the //external package", e),
+          Transience.PERSISTENT);
     }
+
+    RootedPath workspacePath =
+        externalPackageLookupValue.getRootedPath(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER);
 
     SkyKey workspaceKey = WorkspaceFileValue.key(workspacePath);
     do {
@@ -170,6 +188,10 @@ public class LocalRepositoryLookupFunction implements SkyFunction {
       }
 
       Package externalPackage = value.getPackage();
+      if (externalPackage.containsErrors()) {
+        Event.replayEventsOn(env.getListener(), externalPackage.getEvents());
+      }
+
       // Find all local_repository rules in the WORKSPACE, and check if any have a "path" attribute
       // the same as the requested directory.
       Iterable<Rule> localRepositories =

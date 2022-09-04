@@ -1461,8 +1461,11 @@ public class Package {
       // current instance here.
       buildFile = (InputFile) Preconditions.checkNotNull(targets.get(buildFileLabel.getName()));
 
-      List<Label> labelsOfTestTargets = new ArrayList<>();
-      List<Rule> implicitTestSuiteRuleInstances = new ArrayList<>();
+      // The Iterable returned by getTargets is sorted, so when we build up the list of tests by
+      // processing it in order below, that list will be sorted too.
+
+      List<Label> sortedTests = new ArrayList<>();
+      List<Rule> implicitTestSuites = new ArrayList<>();
       Map<Label, InputFile> newInputFiles = new HashMap<>();
       for (final Rule rule : getTargets(Rule.class)) {
         if (discoverAssumedInputFiles) {
@@ -1482,13 +1485,13 @@ public class Package {
         // since clearly this information isn't available at Rule construction
         // time, as forward references are permitted.
         if (TargetUtils.isTestRule(rule) && !TargetUtils.hasManualTag(rule)) {
-          labelsOfTestTargets.add(rule.getLabel());
+          sortedTests.add(rule.getLabel());
         }
 
         AttributeMap attributes = NonconfigurableAttributeMapper.of(rule);
         if (rule.getRuleClass().equals("test_suite")
             && attributes.get("tests", BuildType.LABEL_LIST).isEmpty()) {
-          implicitTestSuiteRuleInstances.add(rule);
+          implicitTestSuites.add(rule);
         }
       }
 
@@ -1496,11 +1499,8 @@ public class Package {
         addInputFile(inputFile);
       }
 
-      if (!implicitTestSuiteRuleInstances.isEmpty()) {
-        Collections.sort(labelsOfTestTargets);
-        for (Rule rule : implicitTestSuiteRuleInstances) {
-          rule.setAttributeValueByName("$implicit_tests", labelsOfTestTargets);
-        }
+      for (Rule rule : implicitTestSuites) {
+        rule.setAttributeValueByName("$implicit_tests", sortedTests);
       }
       return this;
     }
