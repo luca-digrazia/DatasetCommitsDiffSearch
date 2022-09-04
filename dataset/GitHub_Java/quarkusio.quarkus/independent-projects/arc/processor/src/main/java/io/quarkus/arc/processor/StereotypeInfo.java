@@ -3,7 +3,6 @@ package io.quarkus.arc.processor;
 import java.util.List;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.DotName;
 
 public class StereotypeInfo {
 
@@ -62,10 +61,6 @@ public class StereotypeInfo {
         return target;
     }
 
-    public DotName getName() {
-        return target.name();
-    }
-
     public boolean isAdditionalBeanDefiningAnnotation() {
         return isAdditionalBeanDefiningAnnotation;
     }
@@ -73,9 +68,4 @@ public class StereotypeInfo {
     public boolean isAdditionalStereotypeBuildItem() {
         return isAdditionalStereotypeBuildItem;
     }
-
-    public boolean isGenuine() {
-        return !isAdditionalBeanDefiningAnnotation && !isAdditionalStereotypeBuildItem;
-    }
-
 }
