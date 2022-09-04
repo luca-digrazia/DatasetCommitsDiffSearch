@@ -77,18 +77,11 @@ public final class BinaryOperatorExpression extends Expression {
         return ((String) rval).contains((String) lval);
       } else {
         throw new EvalException(
-            location,
-            "'in <string>' requires string as left operand, not '"
-                + EvalUtils.getDataTypeName(lval)
-                + "'");
+            location, "in operator only works on strings if the left operand is also a string");
       }
     } else {
       throw new EvalException(
-          location,
-          "argument of type '"
-              + EvalUtils.getDataTypeName(rval)
-              + "' is not iterable. "
-              + "in operator only works on lists, tuples, dicts and strings.");
+          location, "in operator only works on lists, tuples, sets, dicts and strings");
     }
   }
 

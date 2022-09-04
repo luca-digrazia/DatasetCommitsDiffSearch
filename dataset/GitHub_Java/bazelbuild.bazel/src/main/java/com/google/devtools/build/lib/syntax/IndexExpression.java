@@ -14,26 +14,21 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.events.Location;
-import java.io.IOException;
 
-/**
- * An index expression ({@code obj[field]}). Not to be confused with a slice expression ({@code
- * obj[from:to]}). The object may be either a sequence or an associative mapping (most commonly
- * lists and dictionaries).
- */
+/** Syntax node for an index expression. e.g. obj[field], but not obj[from:to] */
 public final class IndexExpression extends Expression {
 
-  private final Expression object;
+  private final Expression obj;
 
   private final Expression key;
 
-  public IndexExpression(Expression object, Expression key) {
-    this.object = object;
+  public IndexExpression(Expression obj, Expression key) {
+    this.obj = obj;
     this.key = key;
   }
 
   public Expression getObject() {
-    return object;
+    return obj;
   }
 
   public Expression getKey() {
@@ -41,42 +36,38 @@ public final class IndexExpression extends Expression {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    object.prettyPrint(buffer);
-    buffer.append('[');
-    key.prettyPrint(buffer);
-    buffer.append(']');
+  public String toString() {
+    return String.format("%s[%s]", obj, key);
   }
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    return evaluate(object.eval(env), key.eval(env), env, getLocation());
+    Object objValue = obj.eval(env);
+    return eval(env, objValue);
   }
 
   /**
-   * Retrieves the value associated with a key in the given object.
-   *
-   * @throws EvalException if {@code object} is not a list or dictionary
+   * This method can be used instead of eval(Environment) if we want to avoid `obj` being evaluated
+   * several times.
    */
-  public static Object evaluate(Object object, Object key, Environment env, Location loc)
-      throws EvalException, InterruptedException {
-    if (object instanceof SkylarkIndexable) {
-      Object result = ((SkylarkIndexable) object).getIndex(key, loc);
-      // TODO(bazel-team): We shouldn't have this convertToSkylark call here. If it's needed at all,
-      // it should go in the implementations of SkylarkIndexable#getIndex that produce non-Skylark
-      // values.
+  Object eval(Environment env, Object objValue) throws EvalException, InterruptedException {
+    Object keyValue = key.eval(env);
+    Location loc = getLocation();
+
+    if (objValue instanceof SkylarkIndexable) {
+      Object result = ((SkylarkIndexable) objValue).getIndex(keyValue, loc);
       return SkylarkType.convertToSkylark(result, env);
-    } else if (object instanceof String) {
-      String string = (String) object;
-      int index = EvalUtils.getSequenceIndex(key, string.length(), loc);
+    } else if (objValue instanceof String) {
+      String string = (String) objValue;
+      int index = EvalUtils.getSequenceIndex(keyValue, string.length(), loc);
       return string.substring(index, index + 1);
-    } else {
-      throw new EvalException(
-          loc,
-          String.format(
-              "type '%s' has no operator [](%s)",
-              EvalUtils.getDataTypeName(object), EvalUtils.getDataTypeName(key)));
     }
+
+    throw new EvalException(
+        loc,
+        Printer.format(
+            "type '%s' has no operator [](%s)",
+            EvalUtils.getDataTypeName(objValue), EvalUtils.getDataTypeName(keyValue)));
   }
 
   @Override
@@ -86,6 +77,6 @@ public final class IndexExpression extends Expression {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    object.validate(env);
+    obj.validate(env);
   }
 }
