@@ -2,13 +2,10 @@ package io.dropwizard.logging;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.filter.ThresholdFilter;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
-import ch.qos.logback.core.Layout;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
-import io.dropwizard.logging.layout.DiscoverableLayoutFactory;
 
 import javax.annotation.concurrent.GuardedBy;
 import java.util.TimeZone;
@@ -25,9 +22,9 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class BootstrapLogging {
 
-    @GuardedBy("BOOTSTRAPPING_LOCK")
+    @GuardedBy("bootstrappingLock")
     private static boolean bootstrapped = false;
-    private static final Lock BOOTSTRAPPING_LOCK = new ReentrantLock();
+    private static final Lock bootstrappingLock = new ReentrantLock();
 
     private BootstrapLogging() {
     }
@@ -38,13 +35,9 @@ public class BootstrapLogging {
     }
 
     public static void bootstrap(Level level) {
-        bootstrap(level, DropwizardLayout::new);
-    }
-
-    public static void bootstrap(Level level, DiscoverableLayoutFactory<ILoggingEvent> layoutFactory) {
         LoggingUtil.hijackJDKLogging();
 
-        BOOTSTRAPPING_LOCK.lock();
+        bootstrappingLock.lock();
         try {
             if (bootstrapped) {
                 return;
@@ -52,8 +45,8 @@ public class BootstrapLogging {
             final Logger root = LoggingUtil.getLoggerContext().getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
             root.detachAndStopAllAppenders();
 
-            final Layout<ILoggingEvent> layout = layoutFactory.build(root.getLoggerContext(), TimeZone.getDefault());
-            layout.start();
+            final DropwizardLayout formatter = new DropwizardLayout(root.getLoggerContext(), TimeZone.getDefault());
+            formatter.start();
 
             final ThresholdFilter filter = new ThresholdFilter();
             filter.setLevel(level.toString());
@@ -64,14 +57,14 @@ public class BootstrapLogging {
             appender.setContext(root.getLoggerContext());
 
             final LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
-            layoutEncoder.setLayout(layout);
+            layoutEncoder.setLayout(formatter);
             appender.setEncoder(layoutEncoder);
             appender.start();
 
             root.addAppender(appender);
             bootstrapped = true;
         } finally {
-            BOOTSTRAPPING_LOCK.unlock();
+            bootstrappingLock.unlock();
         }
     }
 }
