@@ -293,17 +293,18 @@ public class PanacheResourceProcessor {
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             BuildProducer<BytecodeTransformerBuildItem> transformers) {
         // manage @BsonProperty for the @ProjectionFor annotation
-        Map<DotName, Map<String, String>> propertyMapping = new HashMap<>();
+        Map<ClassInfo, Map<String, String>> propertyMapping = new HashMap<>();
         for (AnnotationInstance annotationInstance : index.getIndex().getAnnotations(DOTNAME_PROJECTION_FOR)) {
             Type targetClass = annotationInstance.value().asClass();
             ClassInfo target = index.getIndex().getClassByName(targetClass.name());
             Map<String, String> classPropertyMapping = new HashMap<>();
             extractMappings(classPropertyMapping, target, index);
-            propertyMapping.put(targetClass.name(), classPropertyMapping);
+            propertyMapping.put(target, classPropertyMapping);
         }
         for (AnnotationInstance annotationInstance : index.getIndex().getAnnotations(DOTNAME_PROJECTION_FOR)) {
             Type targetClass = annotationInstance.value().asClass();
-            Map<String, String> targetPropertyMapping = propertyMapping.get(targetClass.name());
+            ClassInfo target = index.getIndex().getClassByName(targetClass.name());
+            Map<String, String> targetPropertyMapping = propertyMapping.get(target);
             if (targetPropertyMapping != null && !targetPropertyMapping.isEmpty()) {
                 ClassInfo info = annotationInstance.target().asClass();
                 ProjectionForEnhancer fieldEnhancer = new ProjectionForEnhancer(targetPropertyMapping);
@@ -312,7 +313,7 @@ public class PanacheResourceProcessor {
 
             // Register for building the property mapping cache
             propertyMappingClass
-                    .produce(new PropertyMappingClassBuildStep(targetClass.name().toString(),
+                    .produce(new PropertyMappingClassBuildStep(target.name().toString(),
                             annotationInstance.target().asClass().name().toString()));
         }
     }
