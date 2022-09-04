@@ -6,7 +6,6 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.net.URL;
 import java.net.URLConnection;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -433,7 +432,7 @@ public class DevConsoleProcessor {
                         jarPath = jarPath.substring(1).replace('/', '\\');
                     }
                     try (FileSystem fs = FileSystems
-                            .newFileSystem(Paths.get(URLDecoder.decode(jarPath, StandardCharsets.UTF_8.name())), classLoader)) {
+                            .newFileSystem(Paths.get(jarPath), classLoader)) {
                         scanTemplates(fs, devTemplatePaths);
                     }
                 }
