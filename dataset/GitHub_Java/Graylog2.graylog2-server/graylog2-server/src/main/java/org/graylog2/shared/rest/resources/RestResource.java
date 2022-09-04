@@ -1,32 +1,30 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.shared.rest.resources;
 
 import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.jaxrs.cfg.EndpointConfigBase;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterInjector;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterModifier;
-import com.google.common.base.Function;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.Iterables;
 import org.apache.shiro.subject.Subject;
-import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.configuration.HttpConfiguration;
+import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.shared.security.ShiroPrincipal;
 import org.graylog2.shared.users.UserService;
@@ -36,26 +34,27 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.ws.rs.ForbiddenException;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
+import java.net.URI;
 import java.security.Principal;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public abstract class RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
 
     @Inject
-    protected ObjectMapper objectMapper;
-
-    @Inject
     protected UserService userService;
 
     @Inject
-    private BaseConfiguration configuration;
+    protected HttpConfiguration configuration;
 
     @Context
     SecurityContext securityContext;
@@ -84,8 +83,9 @@ public abstract class RestResource {
 
         final Principal p = securityContext.getUserPrincipal();
         if (!(p instanceof ShiroPrincipal)) {
-            LOG.error("Unknown SecurityContext class {}, cannot continue.", securityContext);
-            throw new IllegalStateException();
+            final String msg = "Unknown SecurityContext class " + securityContext + ", cannot continue.";
+            LOG.error(msg);
+            throw new IllegalStateException(msg);
         }
 
         final ShiroPrincipal principal = (ShiroPrincipal) p;
@@ -98,6 +98,7 @@ public abstract class RestResource {
 
     protected void checkPermission(String permission) {
         if (!isPermitted(permission)) {
+            LOG.info("Not authorized. User <{}> is missing permission <{}>", getSubject().getPrincipal(), permission);
             throw new ForbiddenException("Not authorized");
         }
     }
@@ -108,20 +109,17 @@ public abstract class RestResource {
 
     protected void checkPermission(String permission, String instanceId) {
         if (!isPermitted(permission, instanceId)) {
-            throw new ForbiddenException("Not authorized to access resource id " + instanceId);
+            LOG.info("Not authorized to access resource id <{}>. User <{}> is missing permission <{}:{}>",
+                    instanceId, getSubject().getPrincipal(), permission, instanceId);
+            throw new ForbiddenException("Not authorized to access resource id <" + instanceId + ">");
         }
     }
 
     protected boolean isAnyPermitted(String[] permissions, final String instanceId) {
-        final Iterable<String> instancePermissions = Iterables.transform(Arrays.asList(permissions),
-                                                               new Function<String, String>() {
-                                                                   @Nullable
-                                                                   @Override
-                                                                   public String apply(String permission) {
-                                                                       return permission + ":" + instanceId;
-                                                                   }
-                                                               });
-        return isAnyPermitted(FluentIterable.from(instancePermissions).toArray(String.class));
+        final List<String> instancePermissions = Arrays.stream(permissions)
+                .map(permission -> permission + ":" + instanceId)
+                .collect(Collectors.toList());
+        return isAnyPermitted(instancePermissions.toArray(new String[0]));
     }
 
     protected boolean isAnyPermitted(String... permissions) {
@@ -136,13 +134,16 @@ public abstract class RestResource {
 
     protected void checkAnyPermission(String permissions[], String instanceId) {
         if (!isAnyPermitted(permissions, instanceId)) {
-            throw new ForbiddenException("Not authorized to access resource id " + instanceId);
+            LOG.info("Not authorized to access resource id <{}>. User <{}> is missing permissions {} on instance <{}>",
+                    instanceId, getSubject().getPrincipal(), Arrays.toString(permissions), instanceId);
+            throw new ForbiddenException("Not authorized to access resource id <" + instanceId + ">");
         }
     }
 
+    @Nullable
     protected User getCurrentUser() {
         final Object principal = getSubject().getPrincipal();
-        final User user = userService.load(principal.toString());
+        final User user = userService.loadById(principal.toString());
 
         if (user == null) {
             LOG.error("Loading the current user failed, this should not happen. Did you call this method in an unauthenticated REST resource?");
@@ -152,9 +153,16 @@ public abstract class RestResource {
     }
 
     protected UriBuilder getUriBuilderToSelf() {
-        if (configuration.getRestTransportUri() != null) {
-            return UriBuilder.fromUri(configuration.getRestTransportUri());
-        } else
+        final URI httpPublishUri = configuration.getHttpPublishUri();
+        if (httpPublishUri != null) {
+            return UriBuilder.fromUri(httpPublishUri);
+        } else {
             return uriInfo.getBaseUriBuilder();
+        }
+    }
+
+    protected IndexSet getIndexSet(final IndexSetRegistry indexSetRegistry, final String indexSetId) {
+        return indexSetRegistry.get(indexSetId)
+                .orElseThrow(() -> new NotFoundException("Index set <" + indexSetId + "> not found."));
     }
 }
