@@ -59,16 +59,6 @@ public class AssetServlet extends HttpServlet {
     
     private Charset defaultCharset = Charsets.UTF_8;
 
-    public void setDefaultCharset( Charset defaultCharset )
-    {
-        this.defaultCharset = defaultCharset;
-    }
-
-    public Charset getDefaultCharset()
-    {
-        return this.defaultCharset;
-    }
-
     /**
      * Creates a new {@code AssetServlet} that serves static assets loaded from {@code resourceURL} (typically a file:
      * or jar: URL). The assets are served at URIs rooted at {@code uriPath}. For example, given a {@code resourceURL}
@@ -94,11 +84,19 @@ public class AssetServlet extends HttpServlet {
     }
 
     public URL getResourceURL() {
-        return Resources.getResource( resourcePath );
+        return Resources.getResource(resourcePath);
     }
 
     public String getUriPath() {
         return uriPath;
+    }
+    
+    public void setDefaultCharset(Charset defaultCharset) {
+        this.defaultCharset = defaultCharset;
+    }
+
+    public Charset getDefaultCharset() {
+        return this.defaultCharset;
     }
 
     public String getIndexFile() {
@@ -123,23 +121,23 @@ public class AssetServlet extends HttpServlet {
             resp.setDateHeader(HttpHeaders.LAST_MODIFIED, cachedAsset.getLastModifiedTime());
             resp.setHeader(HttpHeaders.ETAG, cachedAsset.getETag());
 
-            final Buffer mimeType = mimeTypes.getMimeByExtension(req.getRequestURI());
+            final Buffer mimeTypeOfExtension = mimeTypes.getMimeByExtension(req.getRequestURI());
             MediaType mediaType = DEFAULT_MEDIA_TYPE;
             
-            if (mimeType != null) {
+            if (mimeTypeOfExtension != null) {
                 try {
-                    mediaType = MediaType.parse( mimeType.toString() );
-                    if (defaultCharset != null && mediaType.is( MediaType.ANY_TEXT_TYPE)) {
+                    mediaType = MediaType.parse(mimeTypeOfExtension.toString());
+                    if (defaultCharset != null && mediaType.is(MediaType.ANY_TEXT_TYPE)) {
                         mediaType = mediaType.withCharset(defaultCharset);
                     }
                 }
-                catch ( IllegalArgumentException ignore ) {}
+                catch (IllegalArgumentException ignore) {}
             }
             
-            resp.setContentType( mediaType.type() + "/" + mediaType.subtype() );
+            resp.setContentType(mediaType.type() + "/" + mediaType.subtype());
 
             if (mediaType.charset().isPresent()) {
-                resp.setCharacterEncoding( mediaType.charset().get().toString() );
+                resp.setCharacterEncoding(mediaType.charset().get().toString());
             }
 
             final ServletOutputStream output = resp.getOutputStream();
@@ -148,7 +146,7 @@ public class AssetServlet extends HttpServlet {
             } finally {
                 output.close();
             }
-        } catch (RuntimeException ignored) {ignored.printStackTrace();
+        } catch (RuntimeException ignored) {
             resp.sendError(HttpServletResponse.SC_NOT_FOUND);
         } catch (URISyntaxException ignored) {
             resp.sendError(HttpServletResponse.SC_NOT_FOUND);
@@ -158,7 +156,8 @@ public class AssetServlet extends HttpServlet {
     private CachedAsset loadAsset(String key) throws URISyntaxException, IOException {
         Preconditions.checkArgument(key.startsWith(uriPath));
         final String requestedResourcePath = CharMatcher.is('/').trimFrom(key.substring(uriPath.length()));
-        final String absoluteRequestedResourcePath = this.resourcePath + requestedResourcePath;
+        final String absoluteRequestedResourcePath = CharMatcher.is('/').trimFrom(
+        		this.resourcePath + requestedResourcePath);
         
         URL requestedResourceURL = Resources.getResource(absoluteRequestedResourcePath);
 
