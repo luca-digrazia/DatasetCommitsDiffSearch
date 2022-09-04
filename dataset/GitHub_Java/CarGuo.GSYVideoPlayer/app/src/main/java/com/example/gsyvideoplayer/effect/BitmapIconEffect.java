@@ -1,31 +1,16 @@
 package com.example.gsyvideoplayer.effect;
 
-import android.graphics.Bitmap;
 import android.opengl.GLSurfaceView;
 
 import com.shuyu.gsyvideoplayer.GSYVideoGLView.ShaderInterface;
 
 
 /**
- * 水印效果
+ * 合成两个渲染图画面
  */
 public class BitmapIconEffect implements ShaderInterface {
 
-
-    private Bitmap mBitmap;
-
-    private int mWidth = -1;
-
-    private int mHeight = -1;
-
-    public BitmapIconEffect(Bitmap bitmap) {
-        this(bitmap, bitmap.getWidth(), bitmap.getHeight());
-    }
-
-    public BitmapIconEffect(Bitmap bitmap, int width, int height) {
-        this.mBitmap = bitmap;
-        this.mWidth = width;
-        this.mHeight = height;
+    public BitmapIconEffect() {
     }
 
     @Override
@@ -42,17 +27,5 @@ public class BitmapIconEffect implements ShaderInterface {
                         + "}\n";
         return shader;
 
-    }
-
-    public float getWidth() {
-        return (float) mWidth;
-    }
-
-    public float getHeight() {
-        return (float) mHeight;
-    }
-
-    public Bitmap getBitmap() {
-        return mBitmap;
     }
 }
