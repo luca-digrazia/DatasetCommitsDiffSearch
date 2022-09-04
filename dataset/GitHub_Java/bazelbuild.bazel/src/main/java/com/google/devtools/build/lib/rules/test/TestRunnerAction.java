@@ -641,7 +641,8 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    TestActionContext context = actionExecutionContext.getContext(TestActionContext.class);
+    TestActionContext context =
+        actionExecutionContext.getExecutor().getContext(TestActionContext.class);
     try {
       context.exec(this, actionExecutionContext);
     } catch (ExecException e) {

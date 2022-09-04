@@ -155,7 +155,7 @@ public final class ActionsTestUtil {
 
     @Override
     protected Map<SkyKey, ValueOrUntypedException> getValueOrUntypedExceptions(
-        Iterable<? extends SkyKey> depKeys) {
+        Iterable<SkyKey> depKeys) {
       EvaluationResult<SkyValue> evaluationResult;
       Map<SkyKey, ValueOrUntypedException> result = new HashMap<>();
       try {
@@ -211,7 +211,6 @@ public final class ActionsTestUtil {
           "dummy-configuration-mnemonic",
           null,
           "dummy-configuration",
-          null,
           null);
 
   public static final ArtifactOwner NULL_ARTIFACT_OWNER =

@@ -24,6 +24,7 @@ import com.google.common.io.Closeables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -43,6 +44,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
 import com.google.devtools.common.options.Converters.RangeConverter;
 import com.google.devtools.common.options.EnumConverter;
+import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.io.Closeable;
 import java.io.IOException;
@@ -135,8 +137,8 @@ public abstract class TestStrategy implements TestActionContext {
   protected final ExecutionOptions executionOptions;
   protected final BinTools binTools;
 
-  public TestStrategy(ExecutionOptions executionOptions, BinTools binTools) {
-    this.executionOptions = executionOptions;
+  public TestStrategy(OptionsClassProvider requestOptionsProvider, BinTools binTools) {
+    this.executionOptions = requestOptionsProvider.getOptions(ExecutionOptions.class);
     this.binTools = binTools;
   }
 
@@ -234,10 +236,9 @@ public abstract class TestStrategy implements TestActionContext {
   /*
    * Finalize test run: persist the result, and post on the event bus.
    */
-  protected void postTestResult(ActionExecutionContext actionExecutionContext, TestResult result)
-      throws IOException {
+  protected void postTestResult(Executor executor, TestResult result) throws IOException {
     result.getTestAction().saveCacheStatus(result.getData());
-    actionExecutionContext.getEventBus().post(result);
+    executor.getEventBus().post(result);
   }
 
   /**
@@ -365,6 +366,8 @@ public abstract class TestStrategy implements TestActionContext {
       ImmutableMap<String, String> shellEnvironment,
       boolean enableRunfiles)
       throws ExecException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
+
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
     Path outputManifest = runfilesDir.getRelative("MANIFEST");
     try {
@@ -381,7 +384,7 @@ public abstract class TestStrategy implements TestActionContext {
       // Ignore it - we will just try to create runfiles directory.
     }
 
-    actionExecutionContext
+    executor
         .getEventHandler()
         .handle(
             Event.progress(
@@ -393,8 +396,7 @@ public abstract class TestStrategy implements TestActionContext {
         .createSymlinks(
             testAction, actionExecutionContext, binTools, shellEnvironment, enableRunfiles);
 
-    actionExecutionContext.getEventHandler()
-        .handle(Event.progress(testAction.getProgressMessage()));
+    executor.getEventHandler().handle(Event.progress(testAction.getProgressMessage()));
   }
 
   /** In rare cases, we might write something to stderr. Append it to the real test.log. */
