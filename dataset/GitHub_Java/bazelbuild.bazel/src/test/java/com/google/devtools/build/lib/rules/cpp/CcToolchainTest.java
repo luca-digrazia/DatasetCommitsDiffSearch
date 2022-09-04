@@ -901,7 +901,7 @@ public class CcToolchainTest extends BuildViewTestCase {
         .setupCrosstool(
             mockToolsConfig,
             CrosstoolConfig.CToolchain.newBuilder().setDefaultGrteTop("//libc1").buildPartial());
-    useConfiguration("--incompatible_disable_sysroot_from_configuration=false");
+    useConfiguration();
     ConfiguredTarget target = getConfiguredTarget("//a:b");
     CcToolchainProvider toolchainProvider =
         (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
