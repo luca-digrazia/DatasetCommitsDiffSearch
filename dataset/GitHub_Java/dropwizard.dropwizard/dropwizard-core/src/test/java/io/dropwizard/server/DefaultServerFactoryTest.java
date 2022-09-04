@@ -13,7 +13,6 @@ import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
 import io.dropwizard.jetty.HttpConnectorFactory;
-import io.dropwizard.jetty.ServerPushFilterFactory;
 import io.dropwizard.logging.ConsoleAppenderFactory;
 import io.dropwizard.logging.FileAppenderFactory;
 import io.dropwizard.logging.SyslogAppenderFactory;
@@ -67,14 +66,6 @@ public class DefaultServerFactoryTest {
     public void loadsGzipConfig() throws Exception {
         assertThat(http.getGzipFilterFactory().isEnabled())
                 .isFalse();
-    }
-
-    @Test
-    public void loadsServerPushConfig() throws Exception {
-        final ServerPushFilterFactory serverPush = http.getServerPush();
-        assertThat(serverPush.isEnabled()).isTrue();
-        assertThat(serverPush.getRefererHosts()).contains("dropwizard.io");
-        assertThat(serverPush.getRefererPorts()).contains(8445);
     }
 
     @Test
@@ -151,12 +142,15 @@ public class DefaultServerFactoryTest {
 
         ((AbstractNetworkConnector)server.getConnectors()[0]).setPort(0);
 
-        ScheduledFuture<Void> cleanup = executor.schedule((Callable<Void>) () -> {
-            if (!server.isStopped()) {
-                server.stop();
+        ScheduledFuture<Void> cleanup = executor.schedule(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                if (!server.isStopped()) {
+                    server.stop();
+                }
+                executor.shutdownNow();
+                return null;
             }
-            executor.shutdownNow();
-            return null;
         }, 5, TimeUnit.SECONDS);
 
 
@@ -164,18 +158,24 @@ public class DefaultServerFactoryTest {
 
         final int port = ((AbstractNetworkConnector) server.getConnectors()[0]).getLocalPort();
 
-        Future<String> futureResult = executor.submit(() -> {
-            URL url = new URL("http://localhost:" + port + "/app/test");
-            URLConnection connection = url.openConnection();
-            connection.connect();
-            return CharStreams.toString(new InputStreamReader(connection.getInputStream()));
+        Future<String> futureResult = executor.submit(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                URL url = new URL("http://localhost:" + port + "/app/test");
+                URLConnection connection = url.openConnection();
+                connection.connect();
+                return CharStreams.toString(new InputStreamReader(connection.getInputStream()));
+            }
         });
 
         requestReceived.await();
 
-        Future<Void> serverStopped = executor.submit((Callable<Void>) () -> {
-            server.stop();
-            return null;
+        Future<Void> serverStopped = executor.submit(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                server.stop();
+                return null;
+            }
         });
 
         Connector[] connectors = server.getConnectors();
