@@ -2,7 +2,9 @@ package io.dropwizard.client;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
+
 import io.dropwizard.util.Duration;
+
 import org.apache.http.Header;
 import org.apache.http.HeaderIterator;
 import org.apache.http.HttpHeaders;
@@ -59,15 +61,6 @@ public class HttpClientBuilderTest {
 
         assertThat(connectionManager.getDefaultMaxPerRoute())
                 .isEqualTo(413);
-    }
-
-    @Test
-    public void setsTheUserAgent() {
-        configuration.setUserAgent("qwerty");
-
-        final AbstractHttpClient client = (AbstractHttpClient) builder.using(configuration).build("test");
-        assertThat(client.getParams().getParameter(AllClientPNames.USER_AGENT))
-                .isEqualTo("qwerty");
     }
 
     @Test
