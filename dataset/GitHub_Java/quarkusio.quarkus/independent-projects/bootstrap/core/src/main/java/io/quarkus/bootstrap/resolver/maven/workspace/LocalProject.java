@@ -1,31 +1,22 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.bootstrap.resolver.maven.workspace;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import org.apache.maven.model.Model;
-import org.apache.maven.model.Parent;
-import org.jboss.logging.Logger;
+import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.BootstrapException;
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppArtifactKey;
+import io.quarkus.bootstrap.resolver.maven.BootstrapMavenContext;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.Parent;
+import org.apache.maven.model.Resource;
 
 /**
  *
@@ -33,46 +24,97 @@ import io.quarkus.bootstrap.model.AppArtifactKey;
  */
 public class LocalProject {
 
-    private static final Logger log = Logger.getLogger(LocalProject.class);
+    public static final String PROJECT_GROUPID = "${project.groupId}";
 
+    private static final String PROJECT_BASEDIR = "${project.basedir}";
     private static final String POM_XML = "pom.xml";
 
-    public static LocalProject resolveLocalProject(Path currentProjectDir) throws BootstrapException {
+    public static LocalProject load(Path path) throws BootstrapException {
+        return load(path, true);
+    }
+
+    public static LocalProject load(Path path, boolean required) throws BootstrapException {
+        final Path pom = locateCurrentProjectPom(path, required);
+        if (pom == null) {
+            return null;
+        }
         try {
-            return new LocalProject(currentProjectDir, null);
-        } catch (IOException e) {
-            throw new BootstrapException("Failed to resolve local Maven project for " + currentProjectDir, e);
+            return new LocalProject(readModel(pom), null);
+        } catch (UnresolvedVersionException e) {
+            // if a property in the version couldn't be resolved, we are trying to resolve it from the workspace
+            return loadWorkspace(pom);
         }
     }
 
-    public static LocalProject resolveLocalProjectWithWorkspace(Path currentProjectDir) throws BootstrapException {
-
-        final Path rootDir = locateRootProjectDir(currentProjectDir);
-        log.debugf("Root project dir %s", rootDir);
-
-        final LocalWorkspace workspace = new LocalWorkspace();
-        final LocalProject project;
-        try {
-            project = loadProject(workspace, rootDir, currentProjectDir);
-        } catch (IOException e) {
-            throw new BootstrapException("Failed to resolve local Maven projects for " + currentProjectDir, e);
-        }
-        if(project == null) {
-            throw new BootstrapException("Failed to locate current project among the loaded local projects");
-        }
-        return project;
+    public static LocalProject loadWorkspace(Path path) throws BootstrapException {
+        return loadWorkspace(path, true);
     }
 
-    private static LocalProject loadProject(LocalWorkspace workspace, Path dir, Path currentProjectDir) throws IOException {
-        final LocalProject project = new LocalProject(dir, workspace);
-        final Path projectDir = project.getDir();
-        LocalProject result = currentProjectDir == null || !currentProjectDir.equals(projectDir) ? null : project;
+    public static LocalProject loadWorkspace(Path path, boolean required) throws BootstrapException {
+        path = path.normalize().toAbsolutePath();
+        Path currentProjectPom = null;
+        Model rootModel = null;
+        if (!Files.isDirectory(path)) {
+            // see if that's an actual pom
+            try {
+                rootModel = loadRootModel(path);
+                if (rootModel != null) {
+                    currentProjectPom = path;
+                }
+            } catch (BootstrapException e) {
+                // ignore, it's not a POM file, we'll be looking for the POM later
+            }
+        }
+        if (currentProjectPom == null) {
+            currentProjectPom = locateCurrentProjectPom(path, required);
+            if (currentProjectPom == null) {
+                return null;
+            }
+            rootModel = loadRootModel(currentProjectPom);
+        }
+        return loadWorkspace(currentProjectPom, rootModel);
+    }
+
+    /**
+     * Loads the workspace the current project belongs to.
+     * If current project does not exist then the method will return null.
+     *
+     * @param ctx bootstrap maven context
+     * @return current project with the workspace or null in case the current project could not be resolved
+     * @throws BootstrapException in case of an error
+     */
+    public static LocalProject loadWorkspace(BootstrapMavenContext ctx) throws BootstrapException {
+        final Path currentProjectPom = ctx.getCurrentProjectPomOrNull();
+        if (currentProjectPom == null) {
+            return null;
+        }
+        final Path rootProjectBaseDir = ctx.getRootProjectBaseDir();
+        final Model rootModel = rootProjectBaseDir == null || rootProjectBaseDir.equals(currentProjectPom.getParent())
+                ? loadRootModel(currentProjectPom)
+                : readModel(rootProjectBaseDir.resolve(POM_XML));
+        return loadWorkspace(currentProjectPom, rootModel);
+    }
+
+    private static LocalProject loadWorkspace(Path currentProjectPom, Model rootModel) throws BootstrapException {
+        final LocalWorkspace ws = new LocalWorkspace();
+        final LocalProject project = load(ws, null, rootModel, currentProjectPom.getParent());
+        return project == null ? load(ws, null, readModel(currentProjectPom), currentProjectPom.getParent()) : project;
+    }
+
+    private static LocalProject load(LocalWorkspace workspace, LocalProject parent, Model model, Path currentProjectDir)
+            throws BootstrapException {
+        final LocalProject project = new LocalProject(model, workspace);
+        if (parent != null) {
+            parent.modules.add(project);
+        }
+        LocalProject result = currentProjectDir == null || !currentProjectDir.equals(project.getDir()) ? null : project;
         final List<String> modules = project.getRawModel().getModules();
         if (!modules.isEmpty()) {
             Path dirArg = result == null ? currentProjectDir : null;
             for (String module : modules) {
-                final LocalProject loaded = loadProject(workspace, projectDir.resolve(module), dirArg);
-                if(loaded != null && result == null) {
+                final LocalProject loaded = load(workspace, project,
+                        readModel(project.getDir().resolve(module).resolve(POM_XML)), dirArg);
+                if (loaded != null && result == null) {
                     result = loaded;
                     dirArg = null;
                 }
@@ -81,29 +123,49 @@ public class LocalProject {
         return result;
     }
 
-    private static Path locateRootProjectDir(Path currentProjectDir) throws BootstrapException {
-        Path p = currentProjectDir;
-        while(true) {
-            final Path parentDir = p.getParent();
-            if(parentDir == null) {
-                return p;
+    private static Model loadRootModel(Path pomXml) throws BootstrapException {
+        Model model = null;
+        while (pomXml != null && Files.exists(pomXml)) {
+            model = readModel(pomXml);
+            final Parent parent = model.getParent();
+            if (parent != null
+                    && parent.getRelativePath() != null
+                    && !parent.getRelativePath().isEmpty()) {
+                pomXml = pomXml.getParent().resolve(parent.getRelativePath()).normalize();
+                if (Files.isDirectory(pomXml)) {
+                    pomXml = pomXml.resolve(POM_XML);
+                }
+            } else {
+                final Path parentDir = pomXml.getParent().getParent();
+                pomXml = parentDir == null ? null : parentDir.resolve(POM_XML);
             }
-            if(!Files.exists(parentDir.resolve(POM_XML))) {
-                return p;
-            }
-            p = parentDir;
+        }
+        return model;
+    }
+
+    private static final Model readModel(Path pom) throws BootstrapException {
+        try {
+            final Model model = ModelUtils.readModel(pom);
+            model.setPomFile(pom.toFile());
+            return model;
+        } catch (IOException e) {
+            throw new BootstrapException("Failed to read " + pom, e);
         }
     }
 
-    public static Path locateCurrentProjectDir(Path path) throws BootstrapException {
+    private static Path locateCurrentProjectPom(Path path, boolean required) throws BootstrapException {
         Path p = path;
-        while(p != null) {
-            if(Files.exists(p.resolve(POM_XML))) {
-                return p;
+        while (p != null) {
+            final Path pom = p.resolve(POM_XML);
+            if (Files.exists(pom)) {
+                return pom;
             }
             p = p.getParent();
         }
-        throw new BootstrapException("Failed to locate project pom.xml for " + path);
+        if (required) {
+            throw new BootstrapException("Failed to locate project pom.xml for " + path);
+        }
+        return null;
     }
 
     private final Model rawModel;
@@ -112,37 +174,37 @@ public class LocalProject {
     private final String version;
     private final Path dir;
     private final LocalWorkspace workspace;
+    private final List<LocalProject> modules = new ArrayList<>(0);
+    private AppArtifactKey key;
 
-    private LocalProject(Path dir, LocalWorkspace workspace) throws IOException {
-        this.dir = dir;
+    private LocalProject(Model rawModel, LocalWorkspace workspace) throws BootstrapException {
+        this.rawModel = rawModel;
+        this.dir = rawModel.getProjectDirectory().toPath();
         this.workspace = workspace;
-        final Path pomXml = dir.resolve(POM_XML);
-        rawModel = ModelUtils.readModel(pomXml);
-        rawModel.setPomFile(pomXml.toFile());
-        final Parent parent = rawModel.getParent();
-        String groupId = rawModel.getGroupId();
-        if(groupId == null) {
-            if(parent == null) {
-                throw new IOException("Failed to determine groupId for " + pomXml);
+        this.groupId = ModelUtils.getGroupId(rawModel);
+        this.artifactId = rawModel.getArtifactId();
+
+        final String rawVersion = ModelUtils.getRawVersion(rawModel);
+        final boolean rawVersionIsUnresolved = ModelUtils.isUnresolvedVersion(rawVersion);
+        String resolvedVersion = rawVersionIsUnresolved ? ModelUtils.resolveVersion(rawVersion, rawModel) : rawVersion;
+
+        if (workspace != null) {
+            workspace.addProject(this, rawModel.getPomFile().lastModified());
+            if (rawVersionIsUnresolved) {
+                if (resolvedVersion == null) {
+                    resolvedVersion = workspace.getResolvedVersion();
+                    if (resolvedVersion == null) {
+                        throw UnresolvedVersionException.forGa(groupId, artifactId, rawVersion);
+                    }
+                } else {
+                    workspace.setResolvedVersion(resolvedVersion);
+                }
             }
-            this.groupId = parent.getGroupId();
-        } else {
-            this.groupId = groupId;
+        } else if (resolvedVersion == null) {
+            throw UnresolvedVersionException.forGa(groupId, artifactId, rawVersion);
         }
 
-        this.artifactId = rawModel.getArtifactId();
-        String version = rawModel.getVersion();
-        if(version == null) {
-            if(parent == null) {
-                throw new IOException("Failed to determine version for " + pomXml);
-            }
-            this.version = parent.getVersion();
-        } else {
-            this.version = version;
-        }
-        if(workspace != null) {
-            workspace.addProject(this, pomXml.toFile().lastModified());
-        }
+        this.version = resolvedVersion;
     }
 
     public String getGroupId() {
@@ -161,8 +223,31 @@ public class LocalProject {
         return dir;
     }
 
+    public Path getOutputDir() {
+        return dir.resolve("target");
+    }
+
     public Path getClassesDir() {
-        return dir.resolve("target").resolve("classes");
+        final String classesDir = rawModel.getBuild() == null ? null : rawModel.getBuild().getOutputDirectory();
+        return resolveRelativeToBaseDir(classesDir, "target/classes");
+    }
+
+    public Path getTestClassesDir() {
+        final String classesDir = rawModel.getBuild() == null ? null : rawModel.getBuild().getTestOutputDirectory();
+        return resolveRelativeToBaseDir(classesDir, "target/test-classes");
+    }
+
+    public Path getSourcesSourcesDir() {
+        final String srcDir = rawModel.getBuild() == null ? null : rawModel.getBuild().getSourceDirectory();
+        return resolveRelativeToBaseDir(srcDir, "src/main/java");
+    }
+
+    public Path getResourcesSourcesDir() {
+        final List<Resource> resources = rawModel.getBuild() == null ? Collections.emptyList()
+                : rawModel.getBuild().getResources();
+        //todo: support multiple resources dirs for config hot deployment
+        final String resourcesDir = resources.isEmpty() ? null : resources.get(0).getDirectory();
+        return resolveRelativeToBaseDir(resourcesDir, "src/main/resources");
     }
 
     public Model getRawModel() {
@@ -174,12 +259,56 @@ public class LocalProject {
     }
 
     public AppArtifactKey getKey() {
-        return new AppArtifactKey(groupId, artifactId);
+        return key == null ? key = new AppArtifactKey(groupId, artifactId) : key;
     }
 
     public AppArtifact getAppArtifact() {
-        final AppArtifact appArtifact = new AppArtifact(groupId, artifactId, "", rawModel.getPackaging(), version);
-        appArtifact.setPath(getClassesDir());
-        return appArtifact;
+        return getAppArtifact(rawModel.getPackaging());
+    }
+
+    public AppArtifact getAppArtifact(String extension) {
+        return new AppArtifact(groupId, artifactId, BootstrapConstants.EMPTY, extension, version);
+    }
+
+    public List<LocalProject> getSelfWithLocalDeps() {
+        if (workspace == null) {
+            return Collections.singletonList(this);
+        }
+        final List<LocalProject> ordered = new ArrayList<>();
+        collectSelfWithLocalDeps(this, new HashSet<>(), ordered);
+        return ordered;
+    }
+
+    private static void collectSelfWithLocalDeps(LocalProject project, Set<AppArtifactKey> addedDeps,
+            List<LocalProject> ordered) {
+        if (!project.modules.isEmpty()) {
+            for (LocalProject module : project.modules) {
+                collectSelfWithLocalDeps(module, addedDeps, ordered);
+            }
+        }
+        for (Dependency dep : project.getRawModel().getDependencies()) {
+            final AppArtifactKey depKey = project.getKey(dep);
+            final LocalProject localDep = project.workspace.getProject(depKey);
+            if (localDep == null || addedDeps.contains(depKey)) {
+                continue;
+            }
+            collectSelfWithLocalDeps(localDep, addedDeps, ordered);
+        }
+        if (addedDeps.add(project.getKey())) {
+            ordered.add(project);
+        }
+    }
+
+    private AppArtifactKey getKey(Dependency dep) {
+        return new AppArtifactKey(PROJECT_GROUPID.equals(dep.getGroupId()) ? getGroupId() : dep.getGroupId(),
+                dep.getArtifactId());
+    }
+
+    private Path resolveRelativeToBaseDir(String path, String defaultPath) {
+        return dir.resolve(path == null ? defaultPath : stripProjectBasedirPrefix(path));
+    }
+
+    private static String stripProjectBasedirPrefix(String path) {
+        return path.startsWith(PROJECT_BASEDIR) ? path.substring(PROJECT_BASEDIR.length() + 1) : path;
     }
 }
