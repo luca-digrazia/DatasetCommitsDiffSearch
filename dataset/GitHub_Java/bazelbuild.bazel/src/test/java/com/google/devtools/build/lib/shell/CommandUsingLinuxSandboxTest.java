@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
@@ -42,7 +43,7 @@ public final class CommandUsingLinuxSandboxTest {
 
   @Before
   public final void createFileSystem() throws Exception {
-    testFS = new UnixFileSystem();
+    testFS = new UnixFileSystem(DigestHashFunction.getDefaultUnchecked());
     runfilesDir = testFS.getPath(BlazeTestUtils.runfilesDir());
   }
 
@@ -55,7 +56,7 @@ public final class CommandUsingLinuxSandboxTest {
   }
 
   @Test
-  public void testCommand_Echo() throws Exception {
+  public void testCommand_echo() throws Exception {
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "colorless green ideas");
 
     Command command = new Command(commandArguments.toArray(new String[0]));
@@ -66,7 +67,7 @@ public final class CommandUsingLinuxSandboxTest {
   }
 
   @Test
-  public void testLinuxSandboxedCommand_Echo() throws Exception {
+  public void testLinuxSandboxedCommand_echo() throws Exception {
     // TODO(b/62588075) Currently no linux-sandbox tool support in Windows.
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
     // TODO(b/62588075) Currently no linux-sandbox tool support in MacOS.
@@ -85,7 +86,7 @@ public final class CommandUsingLinuxSandboxTest {
   }
 
   private void checkLinuxSandboxStatistics(Duration userTimeToSpend, Duration systemTimeToSpend)
-      throws IOException, CommandException {
+      throws IOException, CommandException, InterruptedException {
     ImmutableList<String> commandArguments =
         ImmutableList.of(
             getCpuTimeSpenderPath().getPathString(),
@@ -105,8 +106,8 @@ public final class CommandUsingLinuxSandboxTest {
   }
 
   @Test
-  public void testLinuxSandboxedCommand_WithStatistics_SpendUserTime()
-      throws CommandException, IOException {
+  public void testLinuxSandboxedCommand_withStatistics_spendUserTime()
+      throws CommandException, IOException, InterruptedException {
     // TODO(b/62588075) Currently no linux-sandbox tool support in Windows.
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
     // TODO(b/62588075) Currently no linux-sandbox tool support in MacOS.
@@ -119,8 +120,8 @@ public final class CommandUsingLinuxSandboxTest {
   }
 
   @Test
-  public void testLinuxSandboxedCommand_WithStatistics_SpendSystemTime()
-      throws CommandException, IOException {
+  public void testLinuxSandboxedCommand_withStatistics_spendSystemTime()
+      throws CommandException, IOException, InterruptedException {
     // TODO(b/62588075) Currently no linux-sandbox tool support in Windows.
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
     // TODO(b/62588075) Currently no linux-sandbox tool support in MacOS.
@@ -133,8 +134,8 @@ public final class CommandUsingLinuxSandboxTest {
   }
 
   @Test
-  public void testLinuxSandboxedCommand_WithStatistics_SpendUserAndSystemTime()
-      throws CommandException, IOException {
+  public void testLinuxSandboxedCommand_withStatistics_spendUserAndSystemTime()
+      throws CommandException, IOException, InterruptedException {
     // TODO(b/62588075) Currently no linux-sandbox tool support in Windows.
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
     // TODO(b/62588075) Currently no linux-sandbox tool support in MacOS.

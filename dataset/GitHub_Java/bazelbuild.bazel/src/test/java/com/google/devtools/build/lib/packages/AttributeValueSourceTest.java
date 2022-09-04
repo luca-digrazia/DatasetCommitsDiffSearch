@@ -15,10 +15,9 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static org.junit.Assert.fail;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static org.junit.Assert.assertThrows;
 
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -33,38 +32,34 @@ import org.junit.runners.JUnit4;
 public class AttributeValueSourceTest {
 
   @Test
-  public void testValidateSkylarkName() throws Exception {
+  public void testValidateStarlarkName() throws Exception {
     // Success means "no exception is being thrown".
-    AttributeValueSource.COMPUTED_DEFAULT.validateSkylarkName("_name", Location.BUILTIN);
-    AttributeValueSource.LATE_BOUND.validateSkylarkName("_name", Location.BUILTIN);
-    AttributeValueSource.DIRECT.validateSkylarkName("_name", Location.BUILTIN);
-    AttributeValueSource.DIRECT.validateSkylarkName("name", Location.BUILTIN);
+    AttributeValueSource.COMPUTED_DEFAULT.validateStarlarkName("_name");
+    AttributeValueSource.LATE_BOUND.validateStarlarkName("_name");
+    AttributeValueSource.DIRECT.validateStarlarkName("_name");
+    AttributeValueSource.DIRECT.validateStarlarkName("name");
   }
 
   @Test
-  public void testValidateSkylarkName_EmptyName() throws Exception {
+  public void testValidateStarlarkName_emptyName() throws Exception {
     for (AttributeValueSource source : AttributeValueSource.values()) {
       assertNameIsNotValid(source, "", "Attribute name must not be empty.");
     }
   }
 
   @Test
-  public void testValidateSkylarkName_MissingPrefix() throws Exception {
+  public void testValidateStarlarkName_missingPrefix() throws Exception {
     String msg =
         "When an attribute value is a function, the attribute must be private "
-            + "(i.e. start with '_')";
-    assertNameIsNotValid(AttributeValueSource.COMPUTED_DEFAULT, "name", msg);
-    assertNameIsNotValid(AttributeValueSource.LATE_BOUND, "name", msg);
+            + "(i.e. start with '_'). Found 'my_name'";
+    assertNameIsNotValid(AttributeValueSource.COMPUTED_DEFAULT, "my_name", msg);
+    assertNameIsNotValid(AttributeValueSource.LATE_BOUND, "my_name", msg);
   }
 
   private void assertNameIsNotValid(
       AttributeValueSource source, String name, String expectedExceptionMessage) throws Exception {
-    try {
-      source.validateSkylarkName(name, Location.BUILTIN);
-      fail("Expected an exception because of an invalid name.");
-    } catch (EvalException ex) {
-      assertThat(ex).hasMessage(expectedExceptionMessage);
-    }
+    EvalException ex = assertThrows(EvalException.class, () -> source.validateStarlarkName(name));
+    assertThat(ex).hasMessageThat().isEqualTo(expectedExceptionMessage);
   }
 
   @Test
@@ -76,28 +71,28 @@ public class AttributeValueSourceTest {
   }
 
   private void assertConvertsToCorrectNativeName(
-      AttributeValueSource source, String skylarkName, String expectedNativeName) throws Exception {
-    assertThat(source.convertToNativeName(skylarkName, Location.BUILTIN))
-        .isEqualTo(expectedNativeName);
+      AttributeValueSource source, String starlarkName, String expectedNativeName)
+      throws Exception {
+    assertThat(source.convertToNativeName(starlarkName)).isEqualTo(expectedNativeName);
   }
 
   @Test
-  public void testConvertToNativeName_InvalidName() throws Exception {
+  public void testConvertToNativeName_invalidName() throws Exception {
     assertTranslationFails(AttributeValueSource.COMPUTED_DEFAULT, "name");
     assertTranslationFails(AttributeValueSource.LATE_BOUND, "name");
   }
 
   private void assertTranslationFails(AttributeValueSource source, String invalidName)
       throws Exception {
-    try {
-      source.convertToNativeName(invalidName, Location.BUILTIN);
-      fail("Expected an exception because of an invalid name.");
-    } catch (EvalException ex) {
-      assertThat(ex)
-          .hasMessage(
-              "When an attribute value is a function, the attribute must be private "
-                  + "(i.e. start with '_')");
-    }
+    EvalException ex =
+        assertThrows(EvalException.class, () -> source.convertToNativeName(invalidName));
+    assertThat(ex)
+        .hasMessageThat()
+        .isEqualTo(
+            String.format(
+                "When an attribute value is a function, the attribute must be private "
+                    + "(i.e. start with '_'). Found '%s'",
+                invalidName));
   }
 
   @Test

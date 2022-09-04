@@ -51,13 +51,13 @@ import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAc
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.FsUtils;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestPackageFactoryBuilderFactory;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileAccessException;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -92,7 +92,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkSemantics;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -151,7 +150,7 @@ public class FileFunctionTest {
         ExternalFilesHelper.createForTesting(pkgLocatorRef, externalFileAction, directories);
     differencer = new SequencedRecordingDifferencer();
     ConfiguredRuleClassProvider ruleClassProvider =
-        TestRuleClassProvider.getRuleClassProviderWithClearedSuffix();
+        TestRuleClassProvider.getRuleClassProvider(true);
     MemoizingEvaluator evaluator =
         new InMemoryMemoizingEvaluator(
             ImmutableMap.<SkyFunctionName, SkyFunction>builder()
@@ -170,7 +169,7 @@ public class FileFunctionTest {
                 .put(FileValue.FILE, new FileFunction(pkgLocatorRef))
                 .put(
                     SkyFunctions.PACKAGE,
-                    new PackageFunction(null, null, null, null, null, null, null))
+                    new PackageFunction(null, null, null, null, null, null, null, null))
                 .put(
                     SkyFunctions.PACKAGE_LOOKUP,
                     new PackageLookupFunction(
@@ -178,6 +177,7 @@ public class FileFunctionTest {
                         CrossRepositoryLabelViolationStrategy.ERROR,
                         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
                         BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER))
+                .put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider))
                 .put(
                     WorkspaceFileValue.WORKSPACE_FILE,
                     new WorkspaceFileFunction(
@@ -459,16 +459,7 @@ public class FileFunctionTest {
   @Test
   public void testRecursiveNestingSymlink() throws Exception {
     symlink("a/a", "../a");
-    file("b");
-    assertNoError("a/a/a/a/b");
-  }
-
-  @Test
-  public void testSimpleUnboundedAncestorSymlinkExpansionChainReported() throws Exception {
-    symlink("a/a", "../a");
-    FileValue v = valueForPath(path("a/a"));
-    assertThat(v.unboundedAncestorSymlinkExpansionChain())
-        .containsExactly(rootedPath("a/a"), rootedPath("a"));
+    assertError("a/a/b");
   }
 
   @Test
@@ -514,7 +505,7 @@ public class FileFunctionTest {
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getFastDigest(PathFragment path) {
+          protected byte[] getFastDigest(Path path) {
             return digest;
           }
         });
@@ -552,7 +543,7 @@ public class FileFunctionTest {
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getFastDigest(PathFragment path) {
+          protected byte[] getFastDigest(Path path) {
             return path.getBaseName().equals("unreadable") ? expectedDigest : null;
           }
         });
@@ -850,7 +841,7 @@ public class FileFunctionTest {
     fs =
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected byte[] getDigest(PathFragment path) throws IOException {
+          protected byte[] getDigest(Path path) throws IOException {
             digestCalls.incrementAndGet();
             return super.getDigest(path);
           }
@@ -932,7 +923,7 @@ public class FileFunctionTest {
     createFsAndRoot(
         new CustomInMemoryFs(manualClock) {
           @Override
-          protected boolean isReadable(PathFragment path) throws IOException {
+          protected boolean isReadable(Path path) throws IOException {
             if (path.getBaseName().equals("unreadable")) {
               throw new IOException("isReadable failed");
             }
@@ -1112,7 +1103,7 @@ public class FileFunctionTest {
   public void testSymlinkToPackagePathBoundary() throws Exception {
     Path path = path("this/is/a/path");
     FileSystemUtils.ensureSymbolicLink(path, pkgRoot.asPath());
-    assertNoError("this/is/a/path");
+    assertError("this/is/a/path");
   }
 
   private void runTestSimpleInfiniteSymlinkExpansion(
@@ -1173,24 +1164,20 @@ public class FileFunctionTest {
             .setEventHandler(eventHandler)
             .build();
     EvaluationResult<FileValue> result = driver.evaluate(keys, evaluationContext);
-    if (symlinkToAncestor) {
-      assertThat(result.hasError()).isFalse();
-    } else {
-      assertThat(result.hasError()).isTrue();
-      for (SkyKey key : errorKeys) {
-        ErrorInfo errorInfo = result.getError(key);
-        // FileFunction detects infinite symlink expansion explicitly.
-        assertThat(errorInfo.getCycleInfo()).isEmpty();
-        FileSymlinkInfiniteExpansionException fsiee =
-            (FileSymlinkInfiniteExpansionException) errorInfo.getException();
-        assertThat(fsiee).hasMessageThat().contains("Infinite symlink expansion");
-        assertThat(fsiee.getChain()).containsExactlyElementsIn(expectedChain).inOrder();
-      }
-      // Check that the unique symlink expansion error was reported exactly once.
-      assertThat(eventHandler.getEvents()).hasSize(1);
-      assertThat(Iterables.getOnlyElement(eventHandler.getEvents()).getMessage())
-          .contains("infinite symlink expansion detected");
+    assertThat(result.hasError()).isTrue();
+    for (SkyKey key : errorKeys) {
+      ErrorInfo errorInfo = result.getError(key);
+      // FileFunction detects infinite symlink expansion explicitly.
+      assertThat(errorInfo.getCycleInfo()).isEmpty();
+      FileSymlinkInfiniteExpansionException fsiee =
+          (FileSymlinkInfiniteExpansionException) errorInfo.getException();
+      assertThat(fsiee).hasMessageThat().contains("Infinite symlink expansion");
+      assertThat(fsiee.getChain()).containsExactlyElementsIn(expectedChain).inOrder();
     }
+    // Check that the unique symlink expansion error was reported exactly once.
+    assertThat(eventHandler.getEvents()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(eventHandler.getEvents()).getMessage())
+        .contains("infinite symlink expansion detected");
   }
 
   @Test
@@ -1219,13 +1206,15 @@ public class FileFunctionTest {
   @Test
   public void testInfiniteSymlinkExpansion_symlinkToReferrerToAncestor() throws Exception {
     symlink("d", "a");
-    directory("a/b");
+    Path abPath = directory("a/b");
+    Path abcPath = abPath.getChild("c");
     symlink("a/b/c", "../../d/b");
-    symlink("e", "a/b/c");
-    Path fPath = symlink("f", "e");
 
-    RootedPath rootedPathF = RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(fPath));
-    SkyKey keyF = FileValue.key(rootedPathF);
+    RootedPath rootedPathABC = RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(abcPath));
+    RootedPath rootedPathAB = RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(abPath));
+    RootedPath rootedPathDB = RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(path("d/b")));
+
+    SkyKey keyABC = FileValue.key(rootedPathABC);
 
     StoredEventHandler eventHandler = new StoredEventHandler();
     SequentialBuildDriver driver = makeDriver();
@@ -1235,16 +1224,25 @@ public class FileFunctionTest {
             .setNumThreads(DEFAULT_THREAD_COUNT)
             .setEventHandler(eventHandler)
             .build();
-    EvaluationResult<FileValue> result = driver.evaluate(ImmutableList.of(keyF), evaluationContext);
+    EvaluationResult<FileValue> result =
+        driver.evaluate(ImmutableList.of(keyABC), evaluationContext);
 
-    assertThatEvaluationResult(result).hasNoError();
-    FileValue e = result.get(keyF);
-    assertThat(e.pathToUnboundedAncestorSymlinkExpansionChain())
-        .containsExactly(rootedPath("f"), rootedPath("e"))
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(keyABC).isNotTransient();
+    assertThatEvaluationResult(result)
+        .hasErrorEntryForKeyThat(keyABC)
+        .hasExceptionThat()
+        .isInstanceOf(FileSymlinkInfiniteExpansionException.class);
+    FileSymlinkInfiniteExpansionException fiee =
+        (FileSymlinkInfiniteExpansionException) result.getError(keyABC).getException();
+    assertThat(fiee).hasMessageThat().contains("Infinite symlink expansion");
+    assertThat(fiee.getPathToChain()).isEmpty();
+    assertThat(fiee.getChain())
+        .containsExactly(rootedPathABC, rootedPathDB, rootedPathAB)
         .inOrder();
-    assertThat(e.unboundedAncestorSymlinkExpansionChain())
-        .containsExactly(rootedPath("a/b/c"), rootedPath("d/b"), rootedPath("a/b"))
-        .inOrder();
+
+    assertThat(eventHandler.getEvents()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(eventHandler.getEvents()).getMessage())
+        .contains("infinite symlink expansion detected");
   }
 
   @Test
@@ -1255,6 +1253,10 @@ public class FileFunctionTest {
 
     RootedPath rootedPathDir1AB =
         RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(path("dir1/a/b")));
+    RootedPath rootedPathDir2B =
+        RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(path("dir2/b")));
+    RootedPath rootedPathDir1 = RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(path("dir1")));
+
     SkyKey keyDir1AB = FileValue.key(rootedPathDir1AB);
 
     StoredEventHandler eventHandler = new StoredEventHandler();
@@ -1268,7 +1270,22 @@ public class FileFunctionTest {
     EvaluationResult<FileValue> result =
         driver.evaluate(ImmutableList.of(keyDir1AB), evaluationContext);
 
-    assertThatEvaluationResult(result).hasNoError();
+    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(keyDir1AB).isNotTransient();
+    assertThatEvaluationResult(result)
+        .hasErrorEntryForKeyThat(keyDir1AB)
+        .hasExceptionThat()
+        .isInstanceOf(FileSymlinkInfiniteExpansionException.class);
+    FileSymlinkInfiniteExpansionException fiee =
+        (FileSymlinkInfiniteExpansionException) result.getError(keyDir1AB).getException();
+    assertThat(fiee).hasMessageThat().contains("Infinite symlink expansion");
+    assertThat(fiee.getPathToChain()).isEmpty();
+    assertThat(fiee.getChain())
+        .containsExactly(rootedPathDir1AB, rootedPathDir2B, rootedPathDir1)
+        .inOrder();
+
+    assertThat(eventHandler.getEvents()).hasSize(1);
+    assertThat(Iterables.getOnlyElement(eventHandler.getEvents()).getMessage())
+        .contains("infinite symlink expansion detected");
   }
 
   @Test
@@ -1302,7 +1319,7 @@ public class FileFunctionTest {
         .hasExceptionThat()
         .hasMessageThat()
         .isEqualTo("bork");
-    fs.stubbedStatErrors.remove(foo.asFragment());
+    fs.stubbedStatErrors.remove(foo);
     differencer.inject(
         fileStateSkyKey("foo"),
         FileStateValue.create(
@@ -1752,20 +1769,20 @@ public class FileFunctionTest {
 
   private class CustomInMemoryFs extends InMemoryFileSystem {
 
-    private final Map<PathFragment, FileStatus> stubbedStats = Maps.newHashMap();
-    private final Map<PathFragment, IOException> stubbedStatErrors = Maps.newHashMap();
-    private final Map<PathFragment, IOException> stubbedFastDigestErrors = Maps.newHashMap();
+    private final Map<Path, FileStatus> stubbedStats = Maps.newHashMap();
+    private final Map<Path, IOException> stubbedStatErrors = Maps.newHashMap();
+    private final Map<Path, IOException> stubbedFastDigestErrors = Maps.newHashMap();
 
     CustomInMemoryFs(ManualClock manualClock) {
-      super(manualClock, DigestHashFunction.SHA256);
+      super(manualClock);
     }
 
     void stubFastDigestError(Path path, IOException error) {
-      stubbedFastDigestErrors.put(path.asFragment(), error);
+      stubbedFastDigestErrors.put(path, error);
     }
 
     @Override
-    protected byte[] getFastDigest(PathFragment path) throws IOException {
+    protected byte[] getFastDigest(Path path) throws IOException {
       if (stubbedFastDigestErrors.containsKey(path)) {
         throw stubbedFastDigestErrors.get(path);
       }
@@ -1773,15 +1790,15 @@ public class FileFunctionTest {
     }
 
     void stubStat(Path path, @Nullable FileStatus stubbedResult) {
-      stubbedStats.put(path.asFragment(), stubbedResult);
+      stubbedStats.put(path, stubbedResult);
     }
 
     void stubStatError(Path path, IOException error) {
-      stubbedStatErrors.put(path.asFragment(), error);
+      stubbedStatErrors.put(path, error);
     }
 
     @Override
-    public FileStatus statIfFound(PathFragment path, boolean followSymlinks) throws IOException {
+    public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
       if (stubbedStatErrors.containsKey(path)) {
         throw stubbedStatErrors.get(path);
       }

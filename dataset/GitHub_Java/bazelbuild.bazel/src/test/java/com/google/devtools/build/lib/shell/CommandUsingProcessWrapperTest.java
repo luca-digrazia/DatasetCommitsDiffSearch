@@ -15,17 +15,20 @@
 package com.google.devtools.build.lib.shell;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth8.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
+import com.google.devtools.build.lib.runtime.ProcessWrapper;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestUtils;
-import java.io.File;
+import com.google.devtools.build.lib.unix.UnixFileSystem;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
+import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -33,8 +36,20 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link Command}s that are wrapped using the {@code process-wrapper}. */
 @RunWith(JUnit4.class)
 public final class CommandUsingProcessWrapperTest {
-  private String getProcessWrapperPath() {
-    return BlazeTestUtils.runfilesDir() + "/" + TestConstants.PROCESS_WRAPPER_PATH;
+  private FileSystem testFS;
+
+  @Before
+  public final void createFileSystem() throws Exception {
+    testFS = new UnixFileSystem(DigestHashFunction.getDefaultUnchecked());
+  }
+
+  private ProcessWrapper getProcessWrapper() {
+    return new ProcessWrapper(
+        testFS
+            .getPath(BlazeTestUtils.runfilesDir())
+            .getRelative(TestConstants.PROCESS_WRAPPER_PATH),
+        /*killDelay=*/ null,
+        /*extraFlags=*/ ImmutableList.of());
   }
 
   private String getCpuTimeSpenderPath() {
@@ -42,7 +57,7 @@ public final class CommandUsingProcessWrapperTest {
   }
 
   @Test
-  public void testCommand_Echo() throws Exception {
+  public void testCommand_echo() throws Exception {
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "worker bees can leave");
 
     Command command = new Command(commandArguments.toArray(new String[0]));
@@ -53,86 +68,63 @@ public final class CommandUsingProcessWrapperTest {
   }
 
   @Test
-  public void testProcessWrappedCommand_Echo() throws Exception {
+  public void testProcessWrappedCommand_echo() throws Exception {
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "even drones can fly away");
 
-    List<String> fullProcessWrapperCommandLine =
-        ProcessWrapperUtil.commandLineBuilder()
-            .setProcessWrapperPath(getProcessWrapperPath())
-            .setCommandArguments(commandArguments)
-            .build();
+    List<String> fullCommandLine = getProcessWrapper().commandLineBuilder(commandArguments).build();
 
-    Command command = new Command(fullProcessWrapperCommandLine.toArray(new String[0]));
+    Command command = new Command(fullCommandLine.toArray(new String[0]));
     CommandResult commandResult = command.execute();
 
     assertThat(commandResult.getTerminationStatus().success()).isTrue();
     assertThat(commandResult.getStdoutStream().toString()).contains("even drones can fly away");
   }
 
-  private void checkStatisticsAboutCpuTimeSpent(
-      Duration userTimeToSpend, Duration systemTimeToSpend) throws CommandException, IOException {
-    Duration userTimeLowerBound = userTimeToSpend;
-    Duration userTimeUpperBound = userTimeToSpend.plusSeconds(2);
-    Duration systemTimeLowerBound = systemTimeToSpend;
-    Duration systemTimeUpperBound = systemTimeToSpend.plusSeconds(2);
-
-    File outputDir = TestUtils.makeTempDir();
-    String statisticsFilePath = outputDir.getAbsolutePath() + "/" + "stats.out";
-
+  private void checkProcessWrapperStatistics(Duration userTimeToSpend, Duration systemTimeToSpend)
+      throws IOException, CommandException, InterruptedException {
     ImmutableList<String> commandArguments =
         ImmutableList.of(
             getCpuTimeSpenderPath(),
             Long.toString(userTimeToSpend.getSeconds()),
             Long.toString(systemTimeToSpend.getSeconds()));
 
-    List<String> fullProcessWrapperCommandLine =
-        ProcessWrapperUtil.commandLineBuilder()
-            .setProcessWrapperPath(getProcessWrapperPath())
-            .setCommandArguments(commandArguments)
+    Path outputDir = testFS.getPath(TestUtils.makeTempDir().getCanonicalPath());
+    Path statisticsFilePath = outputDir.getRelative("stats.out");
+
+    List<String> fullCommandLine =
+        getProcessWrapper()
+            .commandLineBuilder(commandArguments)
             .setStatisticsPath(statisticsFilePath)
             .build();
 
-    Command command = new Command(fullProcessWrapperCommandLine.toArray(new String[0]));
-    CommandResult commandResult = command.execute();
-    assertThat(commandResult.getTerminationStatus().success()).isTrue();
-
-    ExecutionStatistics executionStatistics = new ExecutionStatistics(statisticsFilePath);
-
-    assertThat(executionStatistics.getUserExecutionTime()).isPresent();
-    Duration userTime = executionStatistics.getUserExecutionTime().get();
-    assertThat(userTime).isAtLeast(userTimeLowerBound);
-    assertThat(userTime).isAtMost(userTimeUpperBound);
-
-    assertThat(executionStatistics.getSystemExecutionTime()).isPresent();
-    Duration systemTime = executionStatistics.getSystemExecutionTime().get();
-    assertThat(systemTime).isAtLeast(systemTimeLowerBound);
-    assertThat(systemTime).isAtMost(systemTimeUpperBound);
+    ExecutionStatisticsTestUtil.executeCommandAndCheckStatisticsAboutCpuTimeSpent(
+        userTimeToSpend, systemTimeToSpend, fullCommandLine, statisticsFilePath);
   }
 
   @Test
-  public void testProcessWrappedCommand_WithStatistics_SpendUserTime()
-      throws CommandException, IOException {
+  public void testProcessWrappedCommand_withStatistics_spendUserTime()
+      throws CommandException, IOException, InterruptedException {
     Duration userTimeToSpend = Duration.ofSeconds(10);
     Duration systemTimeToSpend = Duration.ZERO;
 
-    checkStatisticsAboutCpuTimeSpent(userTimeToSpend, systemTimeToSpend);
+    checkProcessWrapperStatistics(userTimeToSpend, systemTimeToSpend);
   }
 
   @Test
-  public void testProcessWrappedCommand_WithStatistics_SpendSystemTime()
-      throws CommandException, IOException {
+  public void testProcessWrappedCommand_withStatistics_spendSystemTime()
+      throws CommandException, IOException, InterruptedException {
     Duration userTimeToSpend = Duration.ZERO;
     Duration systemTimeToSpend = Duration.ofSeconds(10);
 
-    checkStatisticsAboutCpuTimeSpent(userTimeToSpend, systemTimeToSpend);
+    checkProcessWrapperStatistics(userTimeToSpend, systemTimeToSpend);
   }
 
   @Test
-  public void testProcessWrappedCommand_WithStatistics_SpendUserAndSystemTime()
-      throws CommandException, IOException {
+  public void testProcessWrappedCommand_withStatistics_spendUserAndSystemTime()
+      throws CommandException, IOException, InterruptedException {
     Duration userTimeToSpend = Duration.ofSeconds(10);
     Duration systemTimeToSpend = Duration.ofSeconds(10);
 
-    checkStatisticsAboutCpuTimeSpent(userTimeToSpend, systemTimeToSpend);
+    checkProcessWrapperStatistics(userTimeToSpend, systemTimeToSpend);
   }
 }

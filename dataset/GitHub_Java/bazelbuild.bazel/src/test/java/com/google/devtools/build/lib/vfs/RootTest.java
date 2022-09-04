@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.vfs;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
@@ -40,12 +39,12 @@ public class RootTest {
 
   @Before
   public final void initializeFileSystem() throws Exception {
-    fs = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.SHA256);
+    fs = new InMemoryFileSystem(BlazeClock.instance());
   }
 
   @Test
   public void testEqualsAndHashCodeContract() throws Exception {
-    FileSystem otherFs = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.SHA256);
+    FileSystem otherFs = new InMemoryFileSystem(BlazeClock.instance());
     new EqualsTester()
         .addEqualityGroup(Root.absoluteRoot(fs), Root.absoluteRoot(fs))
         .addEqualityGroup(Root.absoluteRoot(otherFs), Root.absoluteRoot(otherFs))
@@ -72,7 +71,7 @@ public class RootTest {
 
   @Test
   public void testFilesystemTransform() throws Exception {
-    FileSystem fs2 = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.SHA256);
+    FileSystem fs2 = new InMemoryFileSystem(BlazeClock.instance());
     Root root = Root.fromPath(fs.getPath("/foo"));
     Root root2 = Root.toFileSystem(root, fs2);
     assertThat(root2.asPath().getFileSystem()).isSameInstanceAs(fs2);
@@ -125,7 +124,6 @@ public class RootTest {
     Root fooPathRoot = Root.fromPath(fs.getPath("/foo"));
     Root otherFooPathRoot = Root.fromPath(fs.getPath("/foo"));
     Root barPathRoot = Root.fromPath(fs.getPath("/bar"));
-    Root bazPathRoot = Root.fromPath(fs.getPath("/baz"));
     Root fsAabsoluteRoot = Root.absoluteRoot(fs);
 
     assertThat(fooPathRoot).isNotSameInstanceAs(otherFooPathRoot);
@@ -137,8 +135,7 @@ public class RootTest {
             .put(FileSystem.class, fs)
             .put(
                 Root.RootCodecDependencies.class,
-                new Root.RootCodecDependencies(
-                    /*likelyPopularRoots=*/ ImmutableList.of(fooPathRoot, bazPathRoot)))
+                new Root.RootCodecDependencies(/*likelyPopularRoot=*/ fooPathRoot))
             .build();
     ObjectCodecRegistry.Builder registryBuilder = registry.getBuilder();
     for (Object val : dependencies.values()) {
@@ -157,10 +154,6 @@ public class RootTest {
         (Root) objectCodecs.deserialize(objectCodecs.serialize(barPathRoot));
     assertThat(barPathRootDeserialized).isNotSameInstanceAs(barPathRoot);
     assertThat(barPathRootDeserialized).isEqualTo(barPathRoot);
-
-    Root bazPathRootDeserialized =
-        (Root) objectCodecs.deserialize(objectCodecs.serialize(bazPathRoot));
-    assertThat(bazPathRootDeserialized).isSameInstanceAs(bazPathRoot);
 
     Root fsAabsoluteRootDeserialized =
         (Root) objectCodecs.deserialize(objectCodecs.serialize(fsAabsoluteRoot));

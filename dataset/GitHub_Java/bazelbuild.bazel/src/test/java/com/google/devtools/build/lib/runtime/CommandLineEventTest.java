@@ -17,6 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.bazel.BazelStartupOptionsModule.Options;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId.StructuredCommandLineId;
 import com.google.devtools.build.lib.runtime.CommandLineEvent.CanonicalCommandLineEvent;
 import com.google.devtools.build.lib.runtime.CommandLineEvent.OriginalCommandLineEvent;
@@ -51,10 +52,11 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testMostlyEmpty_OriginalCommandLine() {
+  public void testMostlyEmpty_originalCommandLine() {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
 
     CommandLine line =
         new OriginalCommandLineEvent(
@@ -77,10 +79,11 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testMostlyEmpty_CanonicalCommandLine() {
+  public void testMostlyEmpty_canonicalCommandLine() {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
 
     CommandLine line =
         new CanonicalCommandLineEvent(
@@ -93,23 +96,24 @@ public class CommandLineEventTest {
     checkCommandLineSectionLabels(line);
 
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
-    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(2);
+    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(1);
     assertThat(line.getSections(1).getOptionList().getOption(0).getCombinedForm())
-        .isEqualTo("--nomaster_blazerc");
-    assertThat(line.getSections(1).getOptionList().getOption(1).getCombinedForm())
-        .isEqualTo("--blazerc=/dev/null");
+        .isEqualTo("--ignore_all_rc_files");
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
     assertThat(line.getSections(3).getOptionList().getOptionCount()).isEqualTo(0);
     assertThat(line.getSections(4).getChunkList().getChunkCount()).isEqualTo(0);
   }
 
   @Test
-  public void testActiveBlazercs_OriginalCommandLine() throws OptionsParsingException {
+  public void testActiveBazelrcs_originalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
+        OptionsParser.builder()
+            .optionsClasses(BlazeServerStartupOptions.class, Options.class)
+            .build();
     fakeStartupOptions.parse(
-        "--blazerc=/some/path", "--master_blazerc", "--blazerc", "/some/other/path");
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        "--bazelrc=/some/path", "--master_bazelrc", "--bazelrc", "/some/other/path");
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
 
     CommandLine line =
         new OriginalCommandLineEvent(
@@ -129,21 +133,24 @@ public class CommandLineEventTest {
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
     assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(3);
     assertThat(line.getSections(1).getOptionList().getOption(0).getCombinedForm())
-        .isEqualTo("--blazerc=/some/path");
+        .isEqualTo("--bazelrc=/some/path");
     assertThat(line.getSections(1).getOptionList().getOption(1).getCombinedForm())
-        .isEqualTo("--master_blazerc");
+        .isEqualTo("--master_bazelrc");
     assertThat(line.getSections(1).getOptionList().getOption(2).getCombinedForm())
-        .isEqualTo("--blazerc /some/other/path");
+        .isEqualTo("--bazelrc /some/other/path");
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
     assertThat(line.getSections(3).getOptionList().getOptionCount()).isEqualTo(0);
     assertThat(line.getSections(4).getChunkList().getChunkCount()).isEqualTo(0);
   }
 
   @Test
-  public void testPassedInBlazercs_OriginalCommandLine() throws OptionsParsingException {
+  public void testPassedInBazelrcs_originalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder()
+            .optionsClasses(BlazeServerStartupOptions.class, Options.class)
+            .build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
 
     CommandLine line =
         new OriginalCommandLineEvent(
@@ -153,9 +160,9 @@ public class CommandLineEventTest {
                 fakeCommandOptions,
                 Optional.of(
                     ImmutableList.of(
-                        Pair.of("", "--blazerc=/some/path"),
-                        Pair.of("", "--master_blazerc"),
-                        Pair.of("", "--blazerc=/some/other/path"),
+                        Pair.of("", "--bazelrc=/some/path"),
+                        Pair.of("", "--master_bazelrc"),
+                        Pair.of("", "--bazelrc=/some/other/path"),
                         Pair.of("", "--invocation_policy=notARealPolicy"))))
             .asStreamProto(null)
             .getStructuredCommandLine();
@@ -168,11 +175,11 @@ public class CommandLineEventTest {
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
     assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(4);
     assertThat(line.getSections(1).getOptionList().getOption(0).getCombinedForm())
-        .isEqualTo("--blazerc=/some/path");
+        .isEqualTo("--bazelrc=/some/path");
     assertThat(line.getSections(1).getOptionList().getOption(1).getCombinedForm())
-        .isEqualTo("--master_blazerc");
+        .isEqualTo("--master_bazelrc");
     assertThat(line.getSections(1).getOptionList().getOption(2).getCombinedForm())
-        .isEqualTo("--blazerc=/some/other/path");
+        .isEqualTo("--bazelrc=/some/other/path");
     assertThat(line.getSections(1).getOptionList().getOption(3).getCombinedForm())
         .isEqualTo("--invocation_policy=notARealPolicy");
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
@@ -181,12 +188,15 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testBlazercs_CanonicalCommandLine() throws OptionsParsingException {
+  public void testBazelrcs_canonicalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
+        OptionsParser.builder()
+            .optionsClasses(BlazeServerStartupOptions.class, Options.class)
+            .build();
     fakeStartupOptions.parse(
-        "--blazerc=/some/path", "--master_blazerc", "--blazerc", "/some/other/path");
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        "--bazelrc=/some/path", "--master_bazelrc", "--bazelrc", "/some/other/path");
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
 
     CommandLine line =
         new CanonicalCommandLineEvent(
@@ -201,21 +211,20 @@ public class CommandLineEventTest {
     // Expect the provided rc-related startup options are removed and replaced with the
     // rc-prevention options.
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
-    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(2);
+    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(1);
     assertThat(line.getSections(1).getOptionList().getOption(0).getCombinedForm())
-        .isEqualTo("--nomaster_blazerc");
-    assertThat(line.getSections(1).getOptionList().getOption(1).getCombinedForm())
-        .isEqualTo("--blazerc=/dev/null");
+        .isEqualTo("--ignore_all_rc_files");
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
     assertThat(line.getSections(3).getOptionList().getOptionCount()).isEqualTo(0);
     assertThat(line.getSections(4).getChunkList().getChunkCount()).isEqualTo(0);
   }
 
   @Test
-  public void testOptionsAtVariousPriorities_OriginalCommandLine() throws OptionsParsingException {
+  public void testOptionsAtVariousPriorities_originalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
     fakeCommandOptions.parse(
         PriorityCategory.COMMAND_LINE,
         "command line",
@@ -255,10 +264,11 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testOptionsAtVariousPriorities_CanonicalCommandLine() throws OptionsParsingException {
+  public void testOptionsAtVariousPriorities_canonicalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
     fakeCommandOptions.parse(
         PriorityCategory.COMMAND_LINE,
         "command line",
@@ -281,26 +291,27 @@ public class CommandLineEventTest {
     checkCommandLineSectionLabels(line);
 
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
-    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(2);
+    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(1);
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
-    // In the canonical line, expect the options in alphabetical order.
+    // In the canonical line, expect the options in priority order.
     assertThat(line.getSections(3).getOptionList().getOptionCount()).isEqualTo(4);
     assertThat(line.getSections(3).getOptionList().getOption(0).getCombinedForm())
-        .isEqualTo("--expanded_c=2");
-    assertThat(line.getSections(3).getOptionList().getOption(1).getCombinedForm())
         .isEqualTo("--test_multiple_string=baz");
+    assertThat(line.getSections(3).getOptionList().getOption(1).getCombinedForm())
+        .isEqualTo("--test_string=foo");
     assertThat(line.getSections(3).getOptionList().getOption(2).getCombinedForm())
         .isEqualTo("--test_multiple_string=bar");
     assertThat(line.getSections(3).getOptionList().getOption(3).getCombinedForm())
-        .isEqualTo("--test_string=foo");
+        .isEqualTo("--expanded_c=2");
     assertThat(line.getSections(4).getChunkList().getChunkCount()).isEqualTo(0);
   }
 
   @Test
-  public void testExpansionOption_OriginalCommandLine() throws OptionsParsingException {
+  public void testExpansionOption_originalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
     fakeCommandOptions.parse(
         PriorityCategory.COMMAND_LINE, "command line", ImmutableList.of("--test_expansion"));
 
@@ -329,10 +340,11 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testExpansionOption_CanonicalCommandLine() throws OptionsParsingException {
+  public void testExpansionOption_canonicalCommandLine() throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
     fakeCommandOptions.parse(
         PriorityCategory.COMMAND_LINE, "command line", ImmutableList.of("--test_expansion"));
 
@@ -347,7 +359,7 @@ public class CommandLineEventTest {
     checkCommandLineSectionLabels(line);
 
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
-    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(2);
+    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(1);
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
 
     assertThat(line.getSections(3).getOptionList().getOptionCount()).isEqualTo(4);
@@ -363,11 +375,12 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testOptionWithImplicitRequirement_OriginalCommandLine()
+  public void testOptionWithImplicitRequirement_originalCommandLine()
       throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
     fakeCommandOptions.parse(
         PriorityCategory.COMMAND_LINE,
         "command line",
@@ -397,11 +410,12 @@ public class CommandLineEventTest {
   }
 
   @Test
-  public void testOptionWithImplicitRequirement_CanonicalCommandLine()
+  public void testOptionWithImplicitRequirement_canonicalCommandLine()
       throws OptionsParsingException {
     OptionsParser fakeStartupOptions =
-        OptionsParser.newOptionsParser(BlazeServerStartupOptions.class);
-    OptionsParser fakeCommandOptions = OptionsParser.newOptionsParser(TestOptions.class);
+        OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build();
+    OptionsParser fakeCommandOptions =
+        OptionsParser.builder().optionsClasses(TestOptions.class).build();
     fakeCommandOptions.parse(
         PriorityCategory.COMMAND_LINE,
         "command line",
@@ -419,7 +433,7 @@ public class CommandLineEventTest {
 
     // Unlike expansion flags, implicit requirements are not listed separately.
     assertThat(line.getSections(0).getChunkList().getChunk(0)).isEqualTo("testblaze");
-    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(2);
+    assertThat(line.getSections(1).getOptionList().getOptionCount()).isEqualTo(1);
     assertThat(line.getSections(2).getChunkList().getChunk(0)).isEqualTo("someCommandName");
     assertThat(line.getSections(3).getOptionList().getOptionCount()).isEqualTo(1);
     assertThat(line.getSections(3).getOptionList().getOption(0).getCombinedForm())
@@ -429,7 +443,8 @@ public class CommandLineEventTest {
 
   @Test
   public void testDefaultToolCommandLine() throws OptionsParsingException {
-    OptionsParser parser = OptionsParser.newOptionsParser(CommonCommandOptions.class);
+    OptionsParser parser =
+        OptionsParser.builder().optionsClasses(CommonCommandOptions.class).build();
     ToolCommandLineEvent event = parser.getOptions(CommonCommandOptions.class).toolCommandLine;
     // Test that the actual default value is an empty command line.
     assertThat(event.asStreamProto(null).getStructuredCommandLine())
@@ -438,14 +453,15 @@ public class CommandLineEventTest {
 
   @Test
   public void testLabelessParsingOfCompiledToolCommandLine() throws OptionsParsingException {
-    OptionsParser parser = OptionsParser.newOptionsParser(CommonCommandOptions.class);
+    OptionsParser parser =
+        OptionsParser.builder().optionsClasses(CommonCommandOptions.class).build();
     CommandLine original =
         CommandLine.newBuilder().addSections(CommandLineSection.getDefaultInstance()).build();
     parser.parse(
         "--experimental_tool_command_line=" + BaseEncoding.base64().encode(original.toByteArray()));
 
     ToolCommandLineEvent event = parser.getOptions(CommonCommandOptions.class).toolCommandLine;
-    StructuredCommandLineId id = event.getEventId().asStreamProto().getStructuredCommandLine();
+    StructuredCommandLineId id = event.getEventId().getStructuredCommandLine();
     CommandLine line = event.asStreamProto(null).getStructuredCommandLine();
 
     assertThat(id.getCommandLineLabel()).isEqualTo("tool");
@@ -454,7 +470,8 @@ public class CommandLineEventTest {
 
   @Test
   public void testParsingOfCompiledToolCommandLine() throws OptionsParsingException {
-    OptionsParser parser = OptionsParser.newOptionsParser(CommonCommandOptions.class);
+    OptionsParser parser =
+        OptionsParser.builder().optionsClasses(CommonCommandOptions.class).build();
     CommandLine original =
         CommandLine.newBuilder()
             .setCommandLineLabel("something meaningful")
@@ -475,7 +492,7 @@ public class CommandLineEventTest {
         "--experimental_tool_command_line=" + BaseEncoding.base64().encode(original.toByteArray()));
 
     ToolCommandLineEvent event = parser.getOptions(CommonCommandOptions.class).toolCommandLine;
-    StructuredCommandLineId id = event.getEventId().asStreamProto().getStructuredCommandLine();
+    StructuredCommandLineId id = event.getEventId().getStructuredCommandLine();
     CommandLine line = event.asStreamProto(null).getStructuredCommandLine();
 
     assertThat(id.getCommandLineLabel()).isEqualTo("tool");
@@ -494,11 +511,12 @@ public class CommandLineEventTest {
 
   @Test
   public void testSimpleStringToolCommandLine() throws OptionsParsingException {
-    OptionsParser parser = OptionsParser.newOptionsParser(CommonCommandOptions.class);
+    OptionsParser parser =
+        OptionsParser.builder().optionsClasses(CommonCommandOptions.class).build();
     parser.parse("--experimental_tool_command_line=The quick brown fox jumps over the lazy dog");
 
     ToolCommandLineEvent event = parser.getOptions(CommonCommandOptions.class).toolCommandLine;
-    StructuredCommandLineId id = event.getEventId().asStreamProto().getStructuredCommandLine();
+    StructuredCommandLineId id = event.getEventId().getStructuredCommandLine();
     CommandLine line = event.asStreamProto(null).getStructuredCommandLine();
 
     assertThat(id.getCommandLineLabel()).isEqualTo("tool");

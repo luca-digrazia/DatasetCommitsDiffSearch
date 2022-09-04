@@ -94,7 +94,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "java/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
     scratch.file("java/android/A.java", "package android; public class A {};");
-    setBuildLanguageOptions("--experimental_google_legacy_api");
+    setStarlarkSemanticsOptions("--experimental_google_legacy_api");
   }
 
   @Test
@@ -1400,7 +1400,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
             .getExecutable();
     assertWithMessage("ProGuard implementation was not correctly taken from the configuration")
         .that(proguardAction.getCommandFilename())
-        .endsWith(jkrunchyExecutable.getOutputDirRelativePathString());
+        .isEqualTo(jkrunchyExecutable.getExecPathString());
   }
 
   @Test
@@ -3549,7 +3549,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertThat(getConfiguredTarget("//java/com/google/android/foo:foo")).isNotNull();
     // the package_group is busted, so we would have failed to get this far if we depended on it
     assertNoEvents();
-    // Check time: does this test actually test what we're testing for?
+    // sanity check time: does this test actually test what we're testing for?
     reporter.removeHandler(failFastHandler);
     assertThat(getConfiguredTarget("//tools/allowlists/config_feature_flag:config_feature_flag"))
         .isNull();

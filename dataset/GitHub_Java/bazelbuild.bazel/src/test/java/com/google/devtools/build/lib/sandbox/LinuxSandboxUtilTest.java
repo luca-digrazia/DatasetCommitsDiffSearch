@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.sandbox;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -57,7 +57,7 @@ public final class LinuxSandboxUtilTest {
   }
 
   @Test
-  public void testLinuxSandboxCommandLineBuilder_BuildsWithoutOptionalArguments() {
+  public void testLinuxSandboxCommandLineBuilder_buildsWithoutOptionalArguments() {
     Path linuxSandboxPath = testFS.getPath("/linux-sandbox");
 
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, max");
@@ -76,7 +76,7 @@ public final class LinuxSandboxUtilTest {
   }
 
   @Test
-  public void testLinuxSandboxCommandLineBuilder_BuildsWithOptionalArguments() {
+  public void testLinuxSandboxCommandLineBuilder_buildsWithOptionalArguments() {
     Path linuxSandboxPath = testFS.getPath("/linux-sandbox");
 
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, tom");

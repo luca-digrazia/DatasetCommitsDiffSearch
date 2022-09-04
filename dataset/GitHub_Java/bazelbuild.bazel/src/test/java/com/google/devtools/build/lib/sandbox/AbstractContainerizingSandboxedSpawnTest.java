@@ -20,7 +20,6 @@ import static org.junit.Assert.assertThrows;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.testutil.TestUtils;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -41,7 +40,7 @@ public class AbstractContainerizingSandboxedSpawnTest {
 
   @Test
   public void testMoveOutputs() throws Exception {
-    FileSystem fileSystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
+    FileSystem fileSystem = new InMemoryFileSystem();
     Path testRoot = fileSystem.getPath(TestUtils.tmpDir());
     testRoot.createDirectoryAndParents();
 
@@ -78,7 +77,8 @@ public class AbstractContainerizingSandboxedSpawnTest {
     Path outputsDir = testRoot.getRelative("outputs");
     outputsDir.createDirectory();
     outputsDir.getRelative("very").createDirectory();
-    SandboxHelpers.moveOutputs(SandboxOutputs.create(outputs, outputDirs), execRoot, outputsDir);
+    AbstractContainerizingSandboxedSpawn.moveOutputs(
+        SandboxOutputs.create(outputs, outputDirs), execRoot, outputsDir);
 
     assertThat(outputsDir.getRelative("very/output.txt").isFile(Symlinks.NOFOLLOW)).isTrue();
     assertThat(outputsDir.getRelative("very/output.link").isSymbolicLink()).isTrue();
@@ -115,10 +115,6 @@ public class AbstractContainerizingSandboxedSpawnTest {
   @Test
   public void testMoveOutputs_warnOnceIfCopyHappened() throws Exception {
     class MultipleDeviceFS extends InMemoryFileSystem {
-      MultipleDeviceFS() {
-        super(DigestHashFunction.SHA256);
-      }
-
       @Override
       public void renameTo(Path source, Path target) throws IOException {
         throw new IOException("EXDEV");
@@ -129,7 +125,7 @@ public class AbstractContainerizingSandboxedSpawnTest {
     testRoot.createDirectoryAndParents();
 
     FileCopyWarningTracker tracker = new FileCopyWarningTracker();
-    Logger logger = Logger.getLogger(SandboxHelpers.class.getName());
+    Logger logger = Logger.getLogger(AbstractContainerizingSandboxedSpawn.class.getName());
     logger.setUseParentHandlers(false);
     logger.addHandler(tracker);
 
@@ -152,7 +148,7 @@ public class AbstractContainerizingSandboxedSpawnTest {
     outputsDir.createDirectory();
     outputsDir.getRelative("very").createDirectory();
     outputsDir.getRelative("much").createDirectory();
-    SandboxHelpers.moveOutputs(
+    AbstractContainerizingSandboxedSpawn.moveOutputs(
         SandboxOutputs.create(outputs, ImmutableSet.of()), execRoot, outputsDir);
 
     assertThat(outputsDir.getRelative("very/output1.txt").isFile(Symlinks.NOFOLLOW)).isTrue();

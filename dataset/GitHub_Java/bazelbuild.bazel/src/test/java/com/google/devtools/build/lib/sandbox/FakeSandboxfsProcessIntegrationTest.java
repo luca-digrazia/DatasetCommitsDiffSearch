@@ -15,9 +15,8 @@
 package com.google.devtools.build.lib.sandbox;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -45,7 +44,7 @@ public class FakeSandboxfsProcessIntegrationTest extends BaseSandboxfsProcessInt
   }
 
   @Test
-  public void testMount_NotADirectory() throws IOException {
+  public void testMount_notADirectory() throws IOException {
     FileSystemUtils.createEmptyFile(tmpDir.getRelative("file"));
     IOException expected = assertThrows(
         IOException.class, () -> mount(tmpDir.getRelative("file")));
@@ -53,37 +52,37 @@ public class FakeSandboxfsProcessIntegrationTest extends BaseSandboxfsProcessInt
   }
 
   @Test
-  public void testSandboxCreate_EnforcesNonRepeatedNames() throws IOException {
+  public void testSandboxCreate_enforcesNonRepeatedNames() throws IOException {
     Path mountPoint = tmpDir.getRelative("mnt");
     mountPoint.createDirectory();
     SandboxfsProcess process = mount(mountPoint);
 
-    process.createSandbox("first", ImmutableList.of());
-    process.createSandbox("second", ImmutableList.of());
+    process.createSandbox("first", (mapper) -> {});
+    process.createSandbox("second", (mapper) -> {});
     assertThrows(
-        IllegalArgumentException.class, () -> process.createSandbox("first", ImmutableList.of()));
+        IllegalArgumentException.class, () -> process.createSandbox("first", (mapper) -> {}));
   }
 
   @Test
-  public void testSandboxDestroy_EnforcesExistingName() throws IOException {
+  public void testSandboxDestroy_enforcesExistingName() throws IOException {
     Path mountPoint = tmpDir.getRelative("mnt");
     mountPoint.createDirectory();
     SandboxfsProcess process = mount(mountPoint);
 
-    process.createSandbox("first", ImmutableList.of());
+    process.createSandbox("first", (mapper) -> {});
     process.destroySandbox("first");
     assertThrows(IllegalArgumentException.class, () -> process.destroySandbox("first"));
   }
 
   @Test
-  public void testCreateAndDestroySandbox_ReuseName() throws IOException {
+  public void testCreateAndDestroySandbox_reuseName() throws IOException {
     Path mountPoint = tmpDir.getRelative("mnt");
     mountPoint.createDirectory();
     SandboxfsProcess process = mount(mountPoint);
 
-    process.createSandbox("first", ImmutableList.of());
+    process.createSandbox("first", (mapper) -> {});
     process.destroySandbox("first");
-    process.createSandbox("first", ImmutableList.of());
+    process.createSandbox("first", (mapper) -> {});
     process.destroySandbox("first");
   }
 }

@@ -52,6 +52,13 @@ import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PyProviderUtils;
 import com.google.devtools.build.lib.starlark.util.BazelEvaluationTestCase;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -59,13 +66,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkInt;
-import net.starlark.java.eval.StarlarkList;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,7 +80,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
         getRuleContextForStarlark(getConfiguredTarget(label)), null, getStarlarkSemantics());
   }
 
-  private final BazelEvaluationTestCase ev = new BazelEvaluationTestCase();
+  private final EvaluationTestCase ev = new BazelEvaluationTestCase();
 
   /** A test rule that exercises the semantics of mandatory providers. */
   private static final MockRule TESTING_RULE_FOR_MANDATORY_PROVIDERS =
@@ -231,7 +231,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testMandatoryProvidersListWithStarlark() throws Exception {
-    setBuildLanguageOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/BUILD",
         "load('//test:rules.bzl', 'starlark_rule', 'my_rule', 'my_other_rule')",
@@ -274,7 +274,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testMandatoryProvidersListWithNative() throws Exception {
-    setBuildLanguageOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/BUILD",
         "load('//test:rules.bzl', 'my_rule', 'my_other_rule')",
@@ -918,7 +918,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testDeriveArtifactLegacy() throws Exception {
-    setBuildLanguageOptions("--incompatible_new_actions_api=false");
+    setStarlarkSemanticsOptions("--incompatible_new_actions_api=false");
     setRuleContext(createRuleContext("//foo:foo"));
     Object result = ev.eval("ruleContext.new_file(ruleContext.genfiles_dir," + "  'a/b.txt')");
     PathFragment fragment = ((Artifact) result).getRootRelativePath();
@@ -965,7 +965,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testParamFileLegacy() throws Exception {
-    setBuildLanguageOptions("--incompatible_new_actions_api=false");
+    setStarlarkSemanticsOptions("--incompatible_new_actions_api=false");
     setRuleContext(createRuleContext("//foo:foo"));
     Object result =
         ev.eval(
@@ -976,7 +976,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testParamFileSuffixLegacy() throws Exception {
-    setBuildLanguageOptions("--incompatible_new_actions_api=false");
+    setStarlarkSemanticsOptions("--incompatible_new_actions_api=false");
     setRuleContext(createRuleContext("//foo:foo"));
     Object result =
         ev.eval(
@@ -1191,7 +1191,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testLabelKeyedStringDictAllowsRulesWithRequiredProviders_legacy() throws Exception {
-    setBuildLanguageOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "my_rule.bzl",
         "def _impl(ctx):",
@@ -1609,7 +1609,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testAccessingRunfilesSymlinks_legacy() throws Exception {
-    setBuildLanguageOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file("test/a.py");
     scratch.file("test/b.py");
     scratch.file(
@@ -1702,7 +1702,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testAccessingRunfilesRootSymlinks_legacy() throws Exception {
-    setBuildLanguageOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file("test/a.py");
     scratch.file("test/b.py");
     scratch.file(
@@ -1919,7 +1919,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testAbstractActionInterface() throws Exception {
-    setBuildLanguageOptions(
+    setStarlarkSemanticsOptions(
         "--incompatible_disallow_struct_provider_syntax=false",
         "--incompatible_no_rule_outputs_param=false");
     scratch.file(
@@ -1964,7 +1964,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testCreatedActions() throws Exception {
-    setBuildLanguageOptions(
+    setStarlarkSemanticsOptions(
         "--incompatible_disallow_struct_provider_syntax=false",
         "--incompatible_no_rule_outputs_param=false");
     // createRuleContext() gives us the context for a rule upon entry into its analysis function.
@@ -2042,7 +2042,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
     Object argvUnchecked = ev.eval("action.argv");
     assertThat(argvUnchecked).isInstanceOf(StarlarkList.class);
     StarlarkList<?> argv = (StarlarkList) argvUnchecked;
-    assertThat((List<?>) argv).hasSize(3);
+    assertThat(argv).hasSize(3);
     assertThat(argv.isImmutable()).isTrue();
     Object result = ev.eval("action.argv[2].startswith('echo foo123')");
     assertThat((Boolean) result).isTrue();
@@ -2050,7 +2050,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
   @Test
   public void testRunShellUsesHelperScriptForLongCommand() throws Exception {
-    setBuildLanguageOptions(
+    setStarlarkSemanticsOptions(
         "--incompatible_disallow_struct_provider_syntax=false",
         "--incompatible_no_rule_outputs_param=false");
     // createRuleContext() gives us the context for a rule upon entry into its analysis function.
@@ -2421,14 +2421,13 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
           "actions.run_shell(command = 'foo', outputs = [file])",
           "actions.write(file, 'foo')",
           "check_placeholders('foo', [])",
-          "build_file_path",
           "runfiles()",
           "resolve_command(command = 'foo')",
           "resolve_tools()");
 
   @Test
   public void testFrozenRuleContextHasInaccessibleAttributes() throws Exception {
-    setBuildLanguageOptions("--incompatible_new_actions_api=false");
+    setStarlarkSemanticsOptions("--incompatible_new_actions_api=false");
     scratch.file(
         "test/BUILD",
         "load('//test:rules.bzl', 'main_rule', 'dep_rule')",
@@ -2501,7 +2500,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
           "    'deps': attr.label_list(aspects = [MyAspect])",
           "  },",
           ")");
-      setBuildLanguageOptions("--incompatible_new_actions_api=false");
+      setStarlarkSemanticsOptions("--incompatible_new_actions_api=false");
       invalidatePackages();
 
       AssertionError e =
@@ -2550,7 +2549,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
           "  },",
           "  outputs = {'file': 'output.txt'},",
           ")");
-      setBuildLanguageOptions("--incompatible_new_actions_api=true");
+      setStarlarkSemanticsOptions("--incompatible_new_actions_api=true");
       invalidatePackages();
       AssertionError e =
           assertThrows(
@@ -2616,7 +2615,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
             "BuildSettingInfo");
     StructImpl buildSettingInfo = (StructImpl) buildSetting.get(key);
 
-    assertThat(buildSettingInfo.getValue("value")).isEqualTo(StarlarkInt.of(24));
+    assertThat(buildSettingInfo.getValue("value")).isEqualTo(24);
   }
 
   @Test
@@ -2630,7 +2629,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
             "BuildSettingInfo");
     StructImpl buildSettingInfo = (StructImpl) buildSetting.get(key);
 
-    assertThat(buildSettingInfo.getValue("value")).isEqualTo(StarlarkInt.of(42));
+    assertThat(buildSettingInfo.getValue("value")).isEqualTo(42);
   }
 
   @Test
@@ -2840,7 +2839,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
         "something/BUILD",
         "load('//something:defs.bzl', 'use_exec_groups')",
         "use_exec_groups(name = 'nectarine')");
-    setBuildLanguageOptions("--experimental_exec_groups=true");
+    setStarlarkSemanticsOptions("--experimental_exec_groups=true");
     useConfiguration(
         "--extra_toolchains=//toolchain:foo_toolchain,//toolchain:bar_toolchain",
         "--platforms=//platform:platform_1");
@@ -2901,7 +2900,7 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
         "constraint_value(name = 'extra', constraint_setting = ':setting')",
         "load('//something:defs.bzl', 'use_exec_groups')",
         "use_exec_groups(name = 'nectarine')");
-    setBuildLanguageOptions("--experimental_exec_groups=true");
+    setStarlarkSemanticsOptions("--experimental_exec_groups=true");
     useConfiguration(
         "--extra_toolchains=//toolchain:foo_toolchain,//toolchain:bar_toolchain",
         "--platforms=//platform:platform_1");
@@ -2995,24 +2994,5 @@ public final class StarlarkRuleContextTest extends BuildViewTestCase {
 
     assertThrows(AssertionError.class, () -> getConfiguredTarget("//something:nectarine"));
     assertContainsEvent("Exec group name '" + badName + "' is not a valid name.");
-  }
-
-  @Test
-  public void testBuildFilePath() throws Exception {
-    scratch.file("/foo/WORKSPACE");
-    scratch.file("/foo/bar/BUILD", "genrule(name = 'baz', cmd = 'dummy_cmd', outs = ['a.txt'])");
-
-    scratch.overwriteFile(
-        "WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name='foo', path='/foo')")
-            .build());
-
-    invalidatePackages(false);
-
-    setRuleContext(createRuleContext("@foo//bar:baz"));
-    Object result = ev.eval("ruleContext.build_file_path");
-    assertThat(result).isEqualTo("foo/bar/BUILD");
   }
 }

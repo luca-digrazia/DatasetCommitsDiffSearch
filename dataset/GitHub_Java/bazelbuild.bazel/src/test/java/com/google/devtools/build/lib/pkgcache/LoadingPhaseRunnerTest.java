@@ -45,8 +45,8 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
@@ -1156,10 +1155,7 @@ public class LoadingPhaseRunnerTest {
       TargetParsingException exn =
           assertThrows(TargetParsingException.class, () -> tester.load(patterns));
       assertThat(exn).hasCauseThat().isInstanceOf(BuildFileContainsErrorsException.class);
-      assertThat(exn)
-          .hasCauseThat()
-          .hasMessageThat()
-          .contains("compilation of module 'bad/f1.bzl' failed");
+      assertThat(exn).hasCauseThat().hasMessageThat().contains("Extension 'bad/f1.bzl' has errors");
       DetailedExitCode detailedExitCode = exn.getDetailedExitCode();
       assertThat(detailedExitCode.getExitCode()).isEqualTo(ExitCode.BUILD_FAILURE);
       assertThat(detailedExitCode.getFailureDetail().getPackageLoading().getCode())
@@ -1289,7 +1285,7 @@ public class LoadingPhaseRunnerTest {
       skyframeExecutor.preparePackageLoading(
           pkgLocator,
           packageOptions,
-          Options.getDefaults(BuildLanguageOptions.class),
+          Options.getDefaults(StarlarkSemanticsOptions.class),
           UUID.randomUUID(),
           ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(clock));
@@ -1474,7 +1470,7 @@ public class LoadingPhaseRunnerTest {
     private final Map<Path, IOException> pathsToErrorOnGetInputStream = Maps.newHashMap();
 
     CustomInMemoryFs(ManualClock manualClock) {
-      super(manualClock, DigestHashFunction.SHA256);
+      super(manualClock);
     }
 
     synchronized void throwExceptionOnGetInputStream(Path path, IOException exn) {

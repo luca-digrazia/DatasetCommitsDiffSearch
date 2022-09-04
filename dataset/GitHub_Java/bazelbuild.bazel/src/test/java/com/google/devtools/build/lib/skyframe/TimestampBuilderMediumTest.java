@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -22,8 +23,9 @@ import com.google.devtools.build.lib.actions.cache.CompactPersistentActionCache;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
+import com.google.devtools.build.lib.testutil.Suite;
+import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.UnixGlob;
@@ -37,9 +39,9 @@ import org.junit.runners.JUnit4;
  * These tests belong to {@link TimestampBuilderTest}, but they're in a separate class for now
  * because they are a little slower.
  */
+@TestSpec(size = Suite.MEDIUM_TESTS)
 @RunWith(JUnit4.class)
 public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
-  private final StoredEventHandler storedEventHandler = new StoredEventHandler();
   private Path cacheRoot;
   private CompactPersistentActionCache cache;
 
@@ -52,7 +54,7 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
   }
 
   private CompactPersistentActionCache createCache() throws IOException {
-    return CompactPersistentActionCache.create(cacheRoot, clock, storedEventHandler);
+    return new CompactPersistentActionCache(cacheRoot, clock);
   }
 
   private static NestedSet<Artifact> asNestedSet(Artifact... artifacts) {
@@ -381,12 +383,12 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
 
     // Now first cache creation attempt should cause IOException while renaming corrupted files.
     // Second attempt will initialize empty cache, causing rebuild.
-    assertThat(storedEventHandler.getEvents()).isEmpty();
-    buildArtifacts(persistentBuilder(createCache()), hello);
-    assertThat(storedEventHandler.getEvents()).hasSize(1);
-    assertThat(storedEventHandler.getEvents().get(0).getMessage())
-        .contains("Failed action cache referential integrity check");
+    IOException e = assertThrows(IOException.class, () -> createCache());
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("Failed action cache referential integrity check: empty index");
 
+    buildArtifacts(persistentBuilder(createCache()), hello);
     assertThat(button.pressed).isTrue(); // rebuilt due to the missing filename index
   }
 
@@ -442,12 +444,11 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
 
     // Now first cache creation attempt should cause IOException while renaming corrupted files.
     // Second attempt will initialize empty cache, causing rebuild.
-    assertThat(storedEventHandler.getEvents()).isEmpty();
-    buildArtifacts(persistentBuilder(createCache()), hello);
-    assertThat(storedEventHandler.getEvents()).hasSize(1);
-    assertThat(storedEventHandler.getEvents().get(0).getMessage())
-        .contains("Failed action cache referential integrity check");
+    IOException e = assertThrows(IOException.class, () -> createCache());
+    assertThat(e).hasMessageThat().contains("Failed action cache referential integrity check");
 
+    // Validate cache with incorrect (out-of-date) filename index.
+    buildArtifacts(persistentBuilder(createCache()), hello);
     assertThat(button.pressed).isTrue(); // rebuilt due to the out-of-date index
   }
 }

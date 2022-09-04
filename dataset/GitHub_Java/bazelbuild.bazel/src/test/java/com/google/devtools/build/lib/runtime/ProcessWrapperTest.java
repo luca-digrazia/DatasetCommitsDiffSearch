@@ -39,30 +39,33 @@ public final class ProcessWrapperTest {
     testFS = new InMemoryFileSystem();
   }
 
-  private ProcessWrapper getProcessWrapper(String path) throws IOException {
+  private Path makeProcessWrapperBin(String path) throws IOException {
     Path processWrapperPath = testFS.getPath(path);
     processWrapperPath.getParentDirectory().createDirectoryAndParents();
     processWrapperPath.getOutputStream().close();
-    return new ProcessWrapper(processWrapperPath);
+    return processWrapperPath;
   }
 
   @Test
-  public void testProcessWrapperCommandLineBuilder_BuildsWithoutOptionalArguments()
+  public void testProcessWrapperCommandLineBuilder_buildsWithoutOptionalArguments()
       throws IOException {
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, world");
 
     ImmutableList<String> expectedCommandLine =
-        ImmutableList.<String>builder().add("/some/bin/path").addAll(commandArguments).build();
+        ImmutableList.<String>builder().add("/some/path").addAll(commandArguments).build();
 
-    ProcessWrapper processWrapper = getProcessWrapper("/some/bin/path");
+    ImmutableList<String> extraFlags = ImmutableList.of();
+    ProcessWrapper processWrapper =
+        new ProcessWrapper(makeProcessWrapperBin("/some/path"), /*killDelay=*/ null, extraFlags);
     List<String> commandLine = processWrapper.commandLineBuilder(commandArguments).build();
 
     assertThat(commandLine).containsExactlyElementsIn(expectedCommandLine).inOrder();
   }
 
   @Test
-  public void testProcessWrapperCommandLineBuilder_BuildsWithOptionalArguments()
+  public void testProcessWrapperCommandLineBuilder_buildsWithOptionalArguments()
       throws IOException {
+    ImmutableList<String> extraFlags = ImmutableList.of("--debug");
     ImmutableList<String> commandArguments = ImmutableList.of("echo", "hello, world");
 
     Duration timeout = Duration.ofSeconds(10);
@@ -73,21 +76,23 @@ public final class ProcessWrapperTest {
 
     ImmutableList<String> expectedCommandLine =
         ImmutableList.<String>builder()
-            .add("/path/to/process-wrapper")
+            .add("/path/process-wrapper")
             .add("--timeout=" + timeout.getSeconds())
             .add("--kill_delay=" + killDelay.getSeconds())
             .add("--stdout=" + stdoutPath)
             .add("--stderr=" + stderrPath)
             .add("--stats=" + statisticsPath)
+            .addAll(extraFlags)
             .addAll(commandArguments)
             .build();
 
-    ProcessWrapper processWrapper = getProcessWrapper("/path/to/process-wrapper");
+    ProcessWrapper processWrapper =
+        new ProcessWrapper(makeProcessWrapperBin("/path/process-wrapper"), killDelay, extraFlags);
+
     List<String> commandLine =
         processWrapper
             .commandLineBuilder(commandArguments)
             .setTimeout(timeout)
-            .setKillDelay(killDelay)
             .setStdoutPath(stdoutPath)
             .setStderrPath(stderrPath)
             .setStatisticsPath(statisticsPath)

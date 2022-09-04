@@ -38,8 +38,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunctio
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryParser;
-import com.google.devtools.build.lib.server.FailureDetails.ConfigurableQuery.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.util.Collections;
@@ -103,10 +101,9 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   }
 
   @Override
-  protected EvalThrowsResult evalThrows(String query, boolean unconditionallyThrows)
-      throws Exception {
+  protected String evalThrows(String query, boolean unconditionallyThrows) throws Exception {
     maybeParseUniverseScope(query);
-    EvalThrowsResult queryResult = super.evalThrows(query, unconditionallyThrows);
+    String queryResult = super.evalThrows(query, unconditionallyThrows);
     if (!getHelper().isWholeTestUniverse()) {
       helper.setUniverseScope(getDefaultUniverseScope());
     }
@@ -168,11 +165,9 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   @Test
   public void testBadTargetLiterals() throws Exception {
     getHelper().turnOffFailFast();
-    // Post-analysis query test infrastructure clobbers certain detailed failures.
-    runBadTargetLiteralsTest(/*checkDetailedCode=*/ false);
+    super.testBadTargetLiterals();
   }
 
-  @SuppressWarnings("TruthIncompatibleType")
   @Override
   @Test
   public void testNoImplicitDeps() throws Exception {
@@ -215,11 +210,9 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
         .containsAtLeastElementsIn(evalToListOfStrings(explicits));
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
-        .doesNotContain(
-            /* expected: String, actual: ImmutableList<String> */ evalToListOfStrings(implicits));
+        .doesNotContain(evalToListOfStrings(implicits));
   }
 
-  @SuppressWarnings("TruthIncompatibleType")
   @Test
   public void testNoImplicitDeps_toolchains() throws Exception {
     MockRule ruleWithImplicitDeps =
@@ -266,8 +259,7 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
         .containsAtLeastElementsIn(evalToListOfStrings(explicits));
     assertThat(evalToListOfStrings("deps(//test:my_rule)"))
-        .doesNotContain(
-            /* expected: String, actual: ImmutableList<String> */ evalToListOfStrings(implicits));
+        .doesNotContain(evalToListOfStrings(implicits));
   }
 
   // Regression test for b/148550864
@@ -444,26 +436,22 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   @Test
   public void testVisibleFunctionDoesNotWork() throws Exception {
     writeSimpleTarget();
-    EvalThrowsResult result = evalThrows("visible(//test:target, //test:*)", true);
-    assertThat(result.getMessage()).isEqualTo("visible() is not supported on configured targets");
-    assertConfigurableQueryCode(result.getFailureDetail(), Code.VISIBLE_FUNCTION_NOT_SUPPORTED);
+    assertThat(evalThrows("visible(//test:target, //test:*)", true))
+        .isEqualTo("visible() is not supported on configured targets");
   }
 
   @Test
   public void testSiblingsFunctionDoesNotWork() throws Exception {
     writeSimpleTarget();
-    EvalThrowsResult result = evalThrows("siblings(//test:target)", true);
-    assertThat(result.getMessage()).isEqualTo("siblings() not supported for post analysis queries");
-    assertConfigurableQueryCode(result.getFailureDetail(), Code.SIBLINGS_FUNCTION_NOT_SUPPORTED);
+    assertThat(evalThrows("siblings(//test:target)", true))
+        .isEqualTo("siblings() not supported for post analysis queries");
   }
 
   @Test
   public void testBuildfilesFunctionDoesNotWork() throws Exception {
     writeSimpleTarget();
-    EvalThrowsResult result = evalThrows("buildfiles(//test:target)", true);
-    assertThat(result.getMessage())
+    assertThat(evalThrows("buildfiles(//test:target)", true))
         .isEqualTo("buildfiles() doesn't make sense for the configured target graph");
-    assertConfigurableQueryCode(result.getFailureDetail(), Code.BUILDFILES_FUNCTION_NOT_SUPPORTED);
   }
 
   // LabelListAttr not currently supported.
@@ -697,8 +685,4 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   @Override
   @Test
   public void testDefaultVisibilityReturnedInDeps_nonEmptyDependencyFilter() throws Exception {}
-
-  protected static void assertConfigurableQueryCode(FailureDetail failureDetail, Code code) {
-    assertThat(failureDetail.getConfigurableQuery().getCode()).isEqualTo(code);
-  }
 }
