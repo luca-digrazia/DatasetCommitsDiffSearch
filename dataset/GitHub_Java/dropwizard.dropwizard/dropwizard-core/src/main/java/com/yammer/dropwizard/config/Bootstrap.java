@@ -40,7 +40,6 @@ public class Bootstrap<T extends Configuration> {
     }
 
     public void addBundle(ConfiguredBundle<? super T> bundle) {
-        bundle.initialize(this);
         configuredBundles.add(bundle);
     }
 

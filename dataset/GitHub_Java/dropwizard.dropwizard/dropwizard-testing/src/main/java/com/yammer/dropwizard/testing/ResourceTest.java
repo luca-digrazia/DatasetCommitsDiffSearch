@@ -39,10 +39,6 @@ public abstract class ResourceTest {
         providers.add(klass);
     }
 
-    public void addProvider(Object provider) {
-        singletons.add(provider);
-    }
-
     protected ObjectMapperFactory getObjectMapperFactory() {
         return objectMapperFactory;
     }

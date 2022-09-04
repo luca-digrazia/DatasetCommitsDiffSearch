@@ -9,15 +9,11 @@ import com.fasterxml.jackson.databind.node.TreeTraversingParser;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
-import com.sun.jersey.spi.service.ServiceFinder;
 import com.yammer.dropwizard.json.ObjectMapperFactory;
-import com.yammer.dropwizard.logging.LoggingOutput;
 import com.yammer.dropwizard.validation.Validator;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -35,10 +31,6 @@ public class ConfigurationFactory<T> {
         return new ConfigurationFactory<T>(klass, validator, new ObjectMapperFactory());
     }
 
-    private static final ImmutableList<Class<?>> EXTENSIBLE_CLASSES = ImmutableList.<Class<?>>of(
-            LoggingOutput.class
-    );
-
     private final Class<T> klass;
     private final ObjectMapper mapper;
     private final Validator validator;
@@ -47,22 +39,13 @@ public class ConfigurationFactory<T> {
         this.klass = klass;
         objectMapperFactory.enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         this.mapper = objectMapperFactory.build(new YAMLFactory());
-        for (Class<?> extensibleClass : EXTENSIBLE_CLASSES) {
-            mapper.getSubtypeResolver()
-                  .registerSubtypes(ServiceFinder.find(extensibleClass)
-                                                 .toClassArray());
-        }
         this.validator = validator;
     }
-
-    public T build(String configurationPath, InputStream inputStream) throws IOException, ConfigurationException {
-        final JsonNode node = mapper.readTree(inputStream);
-        return build(node, configurationPath != null ? configurationPath : "InputStream configuration");
-    }
-
-    @Deprecated
+    
     public T build(File file) throws IOException, ConfigurationException {
-        return build(file.toString(), new FileInputStream(file));
+        final JsonNode node = mapper.readTree(file);
+        final String filename = file.toString();
+        return build(node, filename);
     }
 
     public T build() throws IOException, ConfigurationException {
