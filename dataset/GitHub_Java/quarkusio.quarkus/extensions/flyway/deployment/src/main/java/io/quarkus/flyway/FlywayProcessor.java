@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -24,13 +25,11 @@ import java.util.stream.Stream;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.agroal.deployment.JdbcDataSourceBuildItem;
-import io.quarkus.agroal.deployment.JdbcDataSourceSchemaReadyBuildItem;
+import io.quarkus.agroal.deployment.DataSourceInitializedBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
-import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -38,12 +37,15 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.flyway.runtime.FlywayBuildTimeConfig;
 import io.quarkus.flyway.runtime.FlywayProducer;
 import io.quarkus.flyway.runtime.FlywayRecorder;
 import io.quarkus.flyway.runtime.FlywayRuntimeConfig;
+import io.quarkus.flyway.runtime.graal.QuarkusPathLocationScanner;
 
 class FlywayProcessor {
 
@@ -52,7 +54,9 @@ class FlywayProcessor {
     private static final String FILE_APPLICATION_MIGRATIONS_PROTOCOL = "file";
 
     private static final Logger LOGGER = Logger.getLogger(FlywayProcessor.class);
-
+    /**
+     * Flyway build config
+     */
     FlywayBuildTimeConfig flywayBuildConfig;
 
     @BuildStep
@@ -66,65 +70,87 @@ class FlywayProcessor {
             BuildProducer<FeatureBuildItem> featureProducer,
             BuildProducer<NativeImageResourceBuildItem> resourceProducer,
             BuildProducer<BeanContainerListenerBuildItem> containerListenerProducer,
+            BuildProducer<GeneratedResourceBuildItem> generatedResourceProducer,
             FlywayRecorder recorder,
-            List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
-            BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItem) throws IOException, URISyntaxException {
+            DataSourceInitializedBuildItem dataSourceInitializedBuildItem,
+            BuildProducer<GeneratedBeanBuildItem> generatedBeanBuildItem,
+            RecorderContext recorderContext) throws IOException, URISyntaxException {
 
         featureProducer.produce(new FeatureBuildItem(FeatureBuildItem.FLYWAY));
 
         AdditionalBeanBuildItem unremovableProducer = AdditionalBeanBuildItem.unremovableOf(FlywayProducer.class);
         additionalBeanProducer.produce(unremovableProducer);
 
-        Collection<String> dataSourceNames = jdbcDataSourceBuildItems.stream()
-                .map(i -> i.getName())
-                .collect(Collectors.toSet());
+        Collection<String> dataSourceNames = DataSourceInitializedBuildItem.dataSourceNamesOf(dataSourceInitializedBuildItem);
         new FlywayDatasourceBeanGenerator(dataSourceNames, generatedBeanBuildItem).createFlywayProducerBean();
 
-        List<String> applicationMigrations = discoverApplicationMigrations(getMigrationLocations(dataSourceNames));
-        recorder.setApplicationMigrationFiles(applicationMigrations);
+        registerNativeImageResources(resourceProducer, generatedResourceProducer,
+                discoverApplicationMigrations(getMigrationLocations(dataSourceInitializedBuildItem)));
 
-        resourceProducer.produce(new NativeImageResourceBuildItem(applicationMigrations.toArray(new String[0])));
-
-        containerListenerProducer.produce(new BeanContainerListenerBuildItem(recorder.setFlywayBuildConfig(flywayBuildConfig)));
+        containerListenerProducer.produce(
+                new BeanContainerListenerBuildItem(recorder.setFlywayBuildConfig(flywayBuildConfig)));
     }
 
-    @BuildStep
+    /**
+     * Handles all the operations that can be recorded in the RUNTIME_INIT execution time phase
+     *
+     * @param recorder Used to set the runtime config
+     * @param flywayRuntimeConfig The Flyway configuration
+     * @param dataSourceInitializedBuildItem Added this dependency to be sure that Agroal is initialized first
+     */
     @Record(ExecutionTime.RUNTIME_INIT)
+    @BuildStep
     ServiceStartBuildItem configureRuntimeProperties(FlywayRecorder recorder,
             FlywayRuntimeConfig flywayRuntimeConfig,
             BeanContainerBuildItem beanContainer,
-            List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
-            BuildProducer<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) {
+            DataSourceInitializedBuildItem dataSourceInitializedBuildItem) {
         recorder.configureFlywayProperties(flywayRuntimeConfig, beanContainer.getValue());
         recorder.doStartActions(flywayRuntimeConfig, beanContainer.getValue());
-        // once we are done running the migrations, we produce a build item indicating that the
-        // schema is "ready"
-        Collection<String> dataSourceNames = jdbcDataSourceBuildItems.stream()
-                .map(i -> i.getName())
-                .collect(Collectors.toSet());
-        schemaReadyBuildItem.produce(new JdbcDataSourceSchemaReadyBuildItem(dataSourceNames));
         return new ServiceStartBuildItem("flyway");
+    }
+
+    private void registerNativeImageResources(BuildProducer<NativeImageResourceBuildItem> resource,
+            BuildProducer<GeneratedResourceBuildItem> generatedResourceProducer,
+            List<String> applicationMigrations)
+            throws IOException, URISyntaxException {
+        final List<String> nativeResources = new ArrayList<>();
+        nativeResources.addAll(applicationMigrations);
+        // Store application migration in a generated resource that will be accessed later by the Quarkus-Flyway path scanner
+        String resourcesList = applicationMigrations
+                .stream()
+                .collect(Collectors.joining("\n", "", "\n"));
+        generatedResourceProducer.produce(
+                new GeneratedResourceBuildItem(
+                        QuarkusPathLocationScanner.MIGRATIONS_LIST_FILE,
+                        resourcesList.getBytes(StandardCharsets.UTF_8)));
+        nativeResources.add(QuarkusPathLocationScanner.MIGRATIONS_LIST_FILE);
+        resource.produce(new NativeImageResourceBuildItem(nativeResources.toArray(new String[0])));
     }
 
     /**
      * Collects the configured migration locations for the default and all named DataSources.
+     * <p>
+     * A {@link LinkedHashSet} is used to avoid duplications.
+     *
+     * @param dataSourceInitializedBuildItem {@link DataSourceInitializedBuildItem}
+     * @return {@link Collection} of {@link String}s
      */
-    private Collection<String> getMigrationLocations(Collection<String> dataSourceNames) {
+    private Collection<String> getMigrationLocations(DataSourceInitializedBuildItem dataSourceInitializedBuildItem) {
+        Collection<String> dataSourceNames = DataSourceInitializedBuildItem.dataSourceNamesOf(dataSourceInitializedBuildItem);
         Collection<String> migrationLocations = dataSourceNames.stream()
                 .map(flywayBuildConfig::getConfigForDataSourceName)
                 .flatMap(config -> config.locations.stream())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        if (DataSourceUtil.hasDefault(dataSourceNames)) {
+        if (DataSourceInitializedBuildItem.isDefaultDataSourcePresent(dataSourceInitializedBuildItem)) {
             migrationLocations.addAll(flywayBuildConfig.defaultDataSource.locations);
         }
-
         return migrationLocations;
     }
 
-    private List<String> discoverApplicationMigrations(Collection<String> locations) throws IOException, URISyntaxException {
+    private List<String> discoverApplicationMigrations(Collection<String> locations)
+            throws IOException, URISyntaxException {
+        List<String> resources = new ArrayList<>();
         try {
-            List<String> applicationMigrationResources = new ArrayList<>();
             // Locations can be a comma separated list
             for (String location : locations) {
                 // Strip any 'classpath:' protocol prefixes because they are assumed
@@ -151,11 +177,11 @@ class FlywayProcessor {
                         applicationMigrations = null;
                     }
                     if (applicationMigrations != null) {
-                        applicationMigrationResources.addAll(applicationMigrations);
+                        resources.addAll(applicationMigrations);
                     }
                 }
             }
-            return applicationMigrationResources;
+            return resources;
         } catch (IOException | URISyntaxException e) {
             throw e;
         }
