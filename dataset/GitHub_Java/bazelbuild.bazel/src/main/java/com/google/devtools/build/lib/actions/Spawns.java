@@ -42,14 +42,7 @@ public final class Spawns {
 
   /** Returns {@code true} if {@code spawn} may be executed remotely. */
   public static boolean mayBeExecutedRemotely(Spawn spawn) {
-    return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.LOCAL)
-        && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_REMOTE)
-        && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_REMOTE_EXEC);
-  }
-
-  /** Returns {@code true} if {@code spawn} may be executed locally. */
-  public static boolean mayBeExecutedLocally(Spawn spawn) {
-    return !spawn.getExecutionInfo().containsKey(ExecutionRequirements.NO_LOCAL);
+    return ExecutionRequirements.maybeExecutedRemotely(spawn.getExecutionInfo().keySet());
   }
 
   /** Returns whether a Spawn can be executed in a sandbox environment. */
@@ -80,21 +73,8 @@ public final class Spawns {
   }
 
   /**
-   * Returns whether a Spawn claims to support being executed with the persistent multiplex worker
-   * strategy according to its execution info tags.
+   * Parse the timeout key in the spawn execution info, if it exists. Otherwise, return -1.
    */
-  public static boolean supportsMultiplexWorkers(Spawn spawn) {
-    return "1"
-        .equals(spawn.getExecutionInfo().get(ExecutionRequirements.SUPPORTS_MULTIPLEX_WORKERS));
-  }
-
-  /** Returns the mnemonic that should be used in the worker's key. */
-  public static String getWorkerKeyMnemonic(Spawn spawn) {
-    String customValue = spawn.getExecutionInfo().get(ExecutionRequirements.WORKER_KEY_MNEMONIC);
-    return customValue != null ? customValue : spawn.getMnemonic();
-  }
-
-  /** Parse the timeout key in the spawn execution info, if it exists. Otherwise, return -1. */
   public static Duration getTimeout(Spawn spawn) throws ExecException {
     String timeoutStr = spawn.getExecutionInfo().get(ExecutionRequirements.TIMEOUT);
     if (timeoutStr == null) {

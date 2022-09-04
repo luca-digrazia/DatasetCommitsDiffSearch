@@ -20,6 +20,7 @@ import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ExecutionRequirements.ParseableRequirement.ValidationException;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -27,7 +28,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 import java.util.List;
 import java.util.Map;
 
@@ -98,10 +99,7 @@ public class TestTargetProperties {
     ruleContext.getConfiguration().modifyExecutionInfo(executionInfo, TestRunnerAction.MNEMONIC);
     this.executionInfo = ImmutableMap.copyOf(executionInfo);
 
-    isRemotable =
-        !executionInfo.containsKey(ExecutionRequirements.LOCAL)
-            && !executionInfo.containsKey(ExecutionRequirements.NO_REMOTE)
-            && !executionInfo.containsKey(ExecutionRequirements.NO_REMOTE_EXEC);
+    isRemotable = ExecutionRequirements.maybeExecutedRemotely(executionInfo.keySet());
 
     language = TargetUtils.getRuleLanguage(rule);
   }
@@ -171,8 +169,7 @@ public class TestTargetProperties {
   }
 
   /**
-   * Returns a map of execution info. See {@link
-   * com.google.devtools.build.lib.actions.Spawn#getExecutionInfo}.
+   * Returns a map of execution info. See {@link Spawn#getExecutionInfo}.
    */
   public ImmutableMap<String, String> getExecutionInfo() {
     return executionInfo;

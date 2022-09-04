@@ -342,7 +342,7 @@ public class TestRunnerAction extends AbstractAction
     fp.addInt(shardNum);
     fp.addInt(executionSettings.getTotalShards());
     fp.addInt(runNumber);
-    fp.addInt(executionSettings.getTotalRuns());
+    fp.addInt(testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()));
     fp.addInt(configuration.isCodeCoverageEnabled() ? 1 : 0);
     fp.addStringMap(getExecutionInfo());
   }
@@ -386,7 +386,7 @@ public class TestRunnerAction extends AbstractAction
         testConfiguration.cacheTestResults(),
         readCacheStatus(),
         testProperties.isExternal(),
-        executionSettings.getTotalRuns());
+        testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()));
   }
 
   @VisibleForTesting
@@ -510,7 +510,8 @@ public class TestRunnerAction extends AbstractAction
 
     // When we run test multiple times, set different TEST_RANDOM_SEED values for each run.
     // Don't override any previous setting.
-    if (executionSettings.getTotalRuns() > 1 && !env.containsKey("TEST_RANDOM_SEED")) {
+    if (testConfiguration.getRunsPerTestForLabel(getOwner().getLabel()) > 1
+        && !env.containsKey("TEST_RANDOM_SEED")) {
       env.put("TEST_RANDOM_SEED", Integer.toString(getRunNumber() + 1));
     }
 
@@ -580,7 +581,7 @@ public class TestRunnerAction extends AbstractAction
   public String getTestSuffix() {
     int totalShards = executionSettings.getTotalShards();
     // Use a 1-based index for user friendliness.
-    int runsPerTest = executionSettings.getTotalRuns();
+    int runsPerTest = testConfiguration.getRunsPerTestForLabel(getOwner().getLabel());
     if (totalShards > 1 && runsPerTest > 1) {
       return String.format(
           "(shard %d of %d, run %d of %d)", shardNum + 1, totalShards, runNumber + 1, runsPerTest);
