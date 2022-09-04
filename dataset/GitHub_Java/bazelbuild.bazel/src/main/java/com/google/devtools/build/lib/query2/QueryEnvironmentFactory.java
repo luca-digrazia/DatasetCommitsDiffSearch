@@ -51,7 +51,7 @@ public class QueryEnvironmentFactory {
       Predicate<Label> labelFilter,
       ExtendedEventHandler eventHandler,
       Set<Setting> settings,
-      Iterable<QueryFunction> extraFunctions,
+      Iterable<QueryFunction> functions,
       @Nullable PathPackageLocator packagePath,
       boolean blockUniverseEvaluationErrors) {
     Preconditions.checkNotNull(universeScope);
@@ -61,7 +61,7 @@ public class QueryEnvironmentFactory {
           loadingPhaseThreads,
           eventHandler,
           settings,
-          extraFunctions,
+          functions,
           relativeWorkingDirectory.getPathString(),
           graphFactory,
           universeScope,
@@ -80,7 +80,7 @@ public class QueryEnvironmentFactory {
           labelFilter,
           eventHandler,
           settings,
-          extraFunctions);
+          functions);
     }
   }
 

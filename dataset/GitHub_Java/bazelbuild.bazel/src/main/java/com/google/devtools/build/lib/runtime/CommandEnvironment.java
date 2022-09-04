@@ -14,13 +14,12 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
-import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.BuildView.Options;
 import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
@@ -147,7 +146,7 @@ public final class CommandEnvironment {
 
     // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
     // in setupPackageCache(). This leads to NPE if we don't set it here.
-    this.setWorkingDirectory(directories.getWorkspace());
+    this.workingDirectory = directories.getWorkspace();
     this.workspaceName = null;
 
     workspace.getSkyframeExecutor().setEventBus(eventBus);
@@ -555,16 +554,8 @@ public final class CommandEnvironment {
     return commandStartTime;
   }
 
-  @VisibleForTesting
-  public void setWorkingDirectoryForTesting(Path workingDirectory) {
-    setWorkingDirectory(workingDirectory);
-  }
-
-  private void setWorkingDirectory(Path workingDirectory) {
+  void setWorkingDirectory(Path workingDirectory) {
     this.workingDirectory = workingDirectory;
-    if (getWorkspace() != null) {
-      this.relativeWorkingDirectory = workingDirectory.relativeTo(getWorkspace());
-    }
   }
 
   /**
@@ -617,12 +608,13 @@ public final class CommandEnvironment {
       workspace = FileSystemUtils.getWorkingDirectory(getRuntime().getFileSystem());
       workingDirectory = workspace;
     }
-    this.setWorkingDirectory(workingDirectory);
+    this.relativeWorkingDirectory = workingDirectory.relativeTo(workspace);
+    this.workingDirectory = workingDirectory;
 
     // Fail fast in the case where a Blaze command forgets to install the package path correctly.
     skyframeExecutor.setActive(false);
     // Let skyframe figure out how much incremental state it will be keeping.
-    AnalysisOptions viewOptions = options.getOptions(AnalysisOptions.class);
+    Options viewOptions = options.getOptions(Options.class);
     BuildRequestOptions requestOptions = options.getOptions(BuildRequestOptions.class);
     skyframeExecutor.decideKeepIncrementalState(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,

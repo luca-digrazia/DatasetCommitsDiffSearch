@@ -22,9 +22,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
-import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.BuildView;
+import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.LicensesProvider;
 import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
@@ -229,13 +229,14 @@ public class BuildTool {
                   AbortReason.SKIPPED,
                   String.format("Target %s build was skipped.", label), label));
         }
-        postProcessAnalysisResult(request, analysisResult);
+        postProcessAnalysisResult(request, analysisResult, configurations);
         // Execution phase.
         if (needsExecutionPhase(request.getBuildOptions())) {
           executionTool.executeBuild(
               request.getId(),
               analysisResult,
               result,
+              configurations,
               analysisResult.getPackageRoots(),
               request.getTopLevelArtifactContext());
         } else {
@@ -302,10 +303,10 @@ public class BuildTool {
    */
   protected void postProcessAnalysisResult(
       BuildRequest request,
-      AnalysisResult analysisResult)
+      AnalysisResult analysisResult,
+      BuildConfigurationCollection configurations)
       throws InterruptedException, ViewCreationFailedException,
-          PostAnalysisQueryCommandLineException {
-  }
+          PostAnalysisQueryCommandLineException {}
 
   private void reportExceptionError(Exception e) {
     if (e.getMessage() != null) {

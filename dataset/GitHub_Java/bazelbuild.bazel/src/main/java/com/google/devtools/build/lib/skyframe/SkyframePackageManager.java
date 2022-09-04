@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -44,16 +43,15 @@ import java.util.concurrent.atomic.AtomicReference;
 class SkyframePackageManager implements PackageManager, CachingPackageLocator {
 
   private final SkyframePackageLoader packageLoader;
-  private final SkyframeTransitivePackageLoader transitiveLoader;
+  private final SkyframeExecutor.SkyframeTransitivePackageLoader transitiveLoader;
   private final AtomicReference<UnixGlob.FilesystemCalls> syscalls;
   private final AtomicReference<CyclesReporter> skyframeCyclesReporter;
   private final AtomicReference<PathPackageLocator> pkgLocator;
   private final AtomicInteger numPackagesLoaded;
   private final SkyframeExecutor skyframeExecutor;
 
-  public SkyframePackageManager(
-      SkyframePackageLoader packageLoader,
-      SkyframeTransitivePackageLoader transitiveLoader,
+  public SkyframePackageManager(SkyframePackageLoader packageLoader,
+      SkyframeExecutor.SkyframeTransitivePackageLoader transitiveLoader,
       AtomicReference<UnixGlob.FilesystemCalls> syscalls,
       AtomicReference<CyclesReporter> skyframeCyclesReporter,
       AtomicReference<PathPackageLocator> pkgLocator,
@@ -78,8 +76,7 @@ class SkyframePackageManager implements PackageManager, CachingPackageLocator {
   @Override
   public Target getTarget(ExtendedEventHandler eventHandler, Label label)
       throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
-    return Preconditions.checkNotNull(getPackage(eventHandler, label.getPackageIdentifier()), label)
-        .getTarget(label.getName());
+    return getPackage(eventHandler, label.getPackageIdentifier()).getTarget(label.getName());
   }
 
   @Override

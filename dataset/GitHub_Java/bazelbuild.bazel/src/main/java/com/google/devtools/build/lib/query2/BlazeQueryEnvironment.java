@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.query2.engine.MinDepthUniquifier;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
-import com.google.devtools.build.lib.query2.engine.QueryExpressionContext;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.MinDepthUniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.MutableKeyExtractorBackedMapImpl;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMutableKeyExtractorBackedSetImpl;
@@ -244,8 +243,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public Collection<Target> getFwdDeps(
-      Iterable<Target> targets, QueryExpressionContext<Target> context) {
+  public Collection<Target> getFwdDeps(Iterable<Target> targets) {
     ThreadSafeMutableSet<Target> result = createThreadSafeMutableSet();
     for (Target target : targets) {
       result.addAll(getTargetsFromNodes(getNode(target).getSuccessors()));
@@ -254,8 +252,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public Collection<Target> getReverseDeps(
-      Iterable<Target> targets, QueryExpressionContext<Target> context) {
+  public Collection<Target> getReverseDeps(Iterable<Target> targets) {
     ThreadSafeMutableSet<Target> result = createThreadSafeMutableSet();
     for (Target target : targets) {
       result.addAll(getTargetsFromNodes(getNode(target).getPredecessors()));
@@ -265,7 +262,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
 
   @Override
   public ThreadSafeMutableSet<Target> getTransitiveClosure(
-      ThreadSafeMutableSet<Target> targetNodes, QueryExpressionContext<Target> context) {
+      ThreadSafeMutableSet<Target> targetNodes) {
     for (Target node : targetNodes) {
       checkBuilt(node);
     }
@@ -304,8 +301,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public Iterable<Target> getNodesOnPath(
-      Target from, Target to, QueryExpressionContext<Target> context) {
+  public Iterable<Target> getNodesOnPath(Target from, Target to) {
     ImmutableList.Builder<Target> builder = ImmutableList.builder();
     for (Node<Target> node : graph.getShortestPath(getNode(from), getNode(to))) {
       builder.add(node.getLabel());
@@ -393,8 +389,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       final QueryExpression caller,
       ThreadSafeMutableSet<Target> nodes,
       boolean buildFiles,
-      boolean loads,
-      QueryExpressionContext<Target> context)
+      boolean loads)
       throws QueryException {
     ThreadSafeMutableSet<Target> dependentFiles = createThreadSafeMutableSet();
     Set<PackageIdentifier> seenPackages = new HashSet<>();

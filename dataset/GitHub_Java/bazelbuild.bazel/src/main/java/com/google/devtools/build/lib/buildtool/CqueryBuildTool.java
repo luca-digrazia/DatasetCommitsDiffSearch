@@ -14,10 +14,8 @@
 package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.query2.ConfiguredTargetQueryEnvironment;
-import com.google.devtools.build.lib.query2.PostAnalysisQueryEnvironment.TopLevelConfigurations;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.output.CqueryOptions;
@@ -25,7 +23,7 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.skyframe.WalkableGraph;
 
 /** A version of {@link BuildTool} that handles all cquery work. */
-public class CqueryBuildTool extends PostAnalysisQueryBuildTool<ConfiguredTarget> {
+public class CqueryBuildTool extends PostAnalysisQueryBuildTool {
 
   public CqueryBuildTool(CommandEnvironment env, QueryExpression queryExpression) {
     super(env, queryExpression);
@@ -35,7 +33,7 @@ public class CqueryBuildTool extends PostAnalysisQueryBuildTool<ConfiguredTarget
   protected ConfiguredTargetQueryEnvironment getQueryEnvironment(
       BuildRequest request,
       BuildConfiguration hostConfiguration,
-      TopLevelConfigurations configurations,
+      BuildConfiguration targetConfig,
       WalkableGraph walkableGraph) {
     ImmutableList<QueryFunction> extraFunctions =
         new ImmutableList.Builder<QueryFunction>()
@@ -47,7 +45,7 @@ public class CqueryBuildTool extends PostAnalysisQueryBuildTool<ConfiguredTarget
         request.getKeepGoing(),
         env.getReporter(),
         extraFunctions,
-        configurations,
+        targetConfig,
         hostConfiguration,
         env.getRelativeWorkingDirectory().getPathString(),
         env.getPackageManager().getPackagePath(),
