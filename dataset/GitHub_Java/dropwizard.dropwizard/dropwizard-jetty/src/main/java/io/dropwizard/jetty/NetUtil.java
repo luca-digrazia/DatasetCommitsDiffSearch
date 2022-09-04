@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright 2012 The Netty Project
  *
  * The Netty Project licenses this file to you under the Apache License,
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * This class is taken from the Netty project, and all credit goes to them.
  * It has been modified, to remove dependencies on other classes, and to convert to methods, rather than a
  * static value.
- *
+ * 
  * The {@link #getAllLocalIPs()} method was taken from the Apache Curator project
  * which is also under the Apache 2.0 license.
  */
@@ -44,7 +44,7 @@ public class NetUtil {
     public static final int DEFAULT_TCP_BACKLOG_LINUX = 128;
     public static final String TCP_BACKLOG_SETTING_LOCATION = "/proc/sys/net/core/somaxconn";
 
-    private static final AtomicReference<LocalIpFilter> LOCAL_IP_FILTER = new AtomicReference<>((nif, adr) ->
+    private static final AtomicReference<LocalIpFilter> localIpFilter = new AtomicReference<LocalIpFilter>((nif, adr) ->
         (adr != null) && !adr.isLoopbackAddress() && (nif.isPointToPoint() || !adr.isLinkLocalAddress())
     );
 
@@ -66,16 +66,23 @@ public class NetUtil {
         // As a SecurityManager may prevent reading the somaxconn file we wrap this in a privileged block.
         //
         // See https://github.com/netty/netty/issues/3680
-        return AccessController.doPrivileged((PrivilegedAction<Integer>) () -> {
-            // Determine the default somaxconn (server socket backlog) value of the platform.
-            // The known defaults:
-            // - Windows NT Server 4.0+: 200
-            // - Linux and Mac OS X: 128
-            try {
-                String setting = Files.toString(new File(TCP_BACKLOG_SETTING_LOCATION), StandardCharsets.UTF_8);
-                return Integer.parseInt(setting.trim());
-            } catch (SecurityException | IOException | NumberFormatException | NullPointerException e) {
-                return tcpBacklog;
+        return AccessController.doPrivileged(new PrivilegedAction<Integer>() {
+            @Override
+            public Integer run() {
+                // Determine the default somaxconn (server socket backlog) value of the platform.
+                // The known defaults:
+                // - Windows NT Server 4.0+: 200
+                // - Linux and Mac OS X: 128
+                int somaxconn = tcpBacklog;
+                try {
+                    String setting = Files.toString(new File(TCP_BACKLOG_SETTING_LOCATION), StandardCharsets.UTF_8);
+                    somaxconn = Integer.parseInt(setting.trim());
+                } catch (SecurityException | IOException | NumberFormatException | NullPointerException e) {
+                    // file.exists() may throw a SecurityException, in this
+                    // case we are just returning the default somaxconn that was passed in.
+                } finally {
+                    return somaxconn;
+                }
             }
         });
 
@@ -96,7 +103,7 @@ public class NetUtil {
      * @param newLocalIpFilter the new local ip filter
      */
     public static void setLocalIpFilter(LocalIpFilter newLocalIpFilter) {
-        LOCAL_IP_FILTER.set(newLocalIpFilter);
+        localIpFilter.set(newLocalIpFilter);
     }
 
     /**
@@ -105,7 +112,7 @@ public class NetUtil {
      * @return ip filter
      */
     public static LocalIpFilter getLocalIpFilter() {
-        return LOCAL_IP_FILTER.get();
+        return localIpFilter.get();
     }
 
     /**
@@ -124,8 +131,8 @@ public class NetUtil {
      *
      * @return  Returns all IP addresses (can be an empty list in error case
      *          or if network connection is missing).
-     * @see <a href="http://pastebin.com/5X073pUc">getAllLocalIPs</a>
-     * @see <a href="https://github.com/apache/curator/blob/master/curator-x-discovery/src/main/java/org/apache/curator/x/discovery/ServiceInstanceBuilder.java">ServiceInstanceBuilder.java</a>
+     * @see http://pastebin.com/5X073pUc
+     * @see https://github.com/apache/curator/blob/master/curator-x-discovery/src/main/java/org/apache/curator/x/discovery/ServiceInstanceBuilder.java
      * @throws SocketException errors
      */
     public static Collection<InetAddress> getAllLocalIPs() throws SocketException {
@@ -142,7 +149,7 @@ public class NetUtil {
             final Enumeration<InetAddress> adrs = nif.getInetAddresses();
             while (adrs.hasMoreElements()) {
                 final InetAddress adr = adrs.nextElement();
-                if (LOCAL_IP_FILTER.get().use(nif, adr)) {
+                if (localIpFilter.get().use(nif, adr)) {
                     listAdr.add(adr);
                 }
             }
