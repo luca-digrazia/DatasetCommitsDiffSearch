@@ -133,12 +133,10 @@ public class SkylarkSemanticsConsistencyTest {
         "--experimental_platforms_api=" + rand.nextBoolean(),
         "--experimental_starlark_config_transitions=" + rand.nextBoolean(),
         "--experimental_starlark_unused_inputs_list=" + rand.nextBoolean(),
-        "--incompatible_allow_tags_propagation=" + rand.nextBoolean(),
         "--incompatible_bzl_disallow_load_after_statement=" + rand.nextBoolean(),
         "--incompatible_depset_for_libraries_to_link_getter=" + rand.nextBoolean(),
         "--incompatible_depset_is_not_iterable=" + rand.nextBoolean(),
         "--incompatible_depset_union=" + rand.nextBoolean(),
-        "--incompatible_disable_target_provider_fields=" + rand.nextBoolean(),
         "--incompatible_disable_deprecated_attr_params=" + rand.nextBoolean(),
         "--incompatible_disable_objc_provider_resources=" + rand.nextBoolean(),
         "--incompatible_disable_third_party_license_checking=" + rand.nextBoolean(),
@@ -146,11 +144,10 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_disallow_empty_glob=" + rand.nextBoolean(),
         "--incompatible_disallow_legacy_javainfo=" + rand.nextBoolean(),
         "--incompatible_disallow_legacy_java_provider=" + rand.nextBoolean(),
+        "--incompatible_disallow_load_labels_to_cross_package_boundaries=" + rand.nextBoolean(),
         "--incompatible_disallow_old_style_args_add=" + rand.nextBoolean(),
-        "--incompatible_disallow_rule_execution_platform_constraints_allowed=" + rand.nextBoolean(),
-        "--incompatible_disallow_split_empty_separator=" + rand.nextBoolean(),
         "--incompatible_disallow_struct_provider_syntax=" + rand.nextBoolean(),
-        "--incompatible_disallow_unverified_http_downloads=" + rand.nextBoolean(),
+        "--incompatible_disallow_rule_execution_platform_constraints_allowed=" + rand.nextBoolean(),
         "--incompatible_do_not_split_linking_cmdline=" + rand.nextBoolean(),
         "--incompatible_expand_directories=" + rand.nextBoolean(),
         "--incompatible_new_actions_api=" + rand.nextBoolean(),
@@ -168,9 +165,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_run_shell_command_string=" + rand.nextBoolean(),
         "--incompatible_string_join_requires_strings=" + rand.nextBoolean(),
         "--incompatible_restrict_string_escapes=" + rand.nextBoolean(),
-        "--incompatible_disallow_dict_lookup_unhashable_keys=" + rand.nextBoolean(),
-        "--incompatible_disable_partition_default_parameter=" + rand.nextBoolean(),
-        "--incompatible_assignment_identifiers_have_local_scope=" + rand.nextBoolean(),
         "--internal_skylark_flag_test_canary=" + rand.nextBoolean());
   }
 
@@ -192,12 +186,10 @@ public class SkylarkSemanticsConsistencyTest {
         .experimentalPlatformsApi(rand.nextBoolean())
         .experimentalStarlarkConfigTransitions(rand.nextBoolean())
         .experimentalStarlarkUnusedInputsList(rand.nextBoolean())
-        .incompatibleAllowTagsPropagation(rand.nextBoolean())
         .incompatibleBzlDisallowLoadAfterStatement(rand.nextBoolean())
         .incompatibleDepsetForLibrariesToLinkGetter(rand.nextBoolean())
         .incompatibleDepsetIsNotIterable(rand.nextBoolean())
         .incompatibleDepsetUnion(rand.nextBoolean())
-        .incompatibleDisableTargetProviderFields(rand.nextBoolean())
         .incompatibleDisableDeprecatedAttrParams(rand.nextBoolean())
         .incompatibleDisableObjcProviderResources(rand.nextBoolean())
         .incompatibleDisableThirdPartyLicenseChecking(rand.nextBoolean())
@@ -205,11 +197,10 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleDisallowEmptyGlob(rand.nextBoolean())
         .incompatibleDisallowLegacyJavaInfo(rand.nextBoolean())
         .incompatibleDisallowLegacyJavaProvider(rand.nextBoolean())
+        .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(rand.nextBoolean())
         .incompatibleDisallowOldStyleArgsAdd(rand.nextBoolean())
-        .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(rand.nextBoolean())
-        .incompatibleDisallowSplitEmptySeparator(rand.nextBoolean())
         .incompatibleDisallowStructProviderSyntax(rand.nextBoolean())
-        .incompatibleDisallowUnverifiedHttpDownloads(rand.nextBoolean())
+        .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(rand.nextBoolean())
         .incompatibleDoNotSplitLinkingCmdline(rand.nextBoolean())
         .incompatibleExpandDirectories(rand.nextBoolean())
         .incompatibleNewActionsApi(rand.nextBoolean())
@@ -227,9 +218,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleRunShellCommandString(rand.nextBoolean())
         .incompatibleStringJoinRequiresStrings(rand.nextBoolean())
         .incompatibleRestrictStringEscapes(rand.nextBoolean())
-        .incompatibleDisallowDictLookupUnhashableKeys(rand.nextBoolean())
-        .incompatibleDisablePartitionDefaultParameter(rand.nextBoolean())
-        .incompatibleAssignmentIdentifiersHaveLocalScope(rand.nextBoolean())
         .internalSkylarkFlagTestCanary(rand.nextBoolean())
         .build();
   }

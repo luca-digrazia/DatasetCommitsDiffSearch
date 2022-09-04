@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -243,8 +242,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       };
 
   @Override
-  public Provider provider(String doc, Object fields, Location location, Environment env)
-      throws EvalException {
+  public Provider provider(String doc, Object fields, Location location) throws EvalException {
     Iterable<String> fieldNames = null;
     if (fields instanceof SkylarkList<?>) {
       @SuppressWarnings("unchecked")
@@ -261,8 +259,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
           "Expected list of strings or dictionary of string -> string for 'fields'");
       fieldNames = dict.keySet();
     }
-    return SkylarkProvider.createUnexportedSchemaful(
-        fieldNames, location, env.getSemantics().experimentalFunctionEqualityByLocation());
+    return SkylarkProvider.createUnexportedSchemaful(fieldNames, location);
   }
 
   // TODO(bazel-team): implement attribute copy and other rule properties
@@ -357,14 +354,9 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
         funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
-
-    ImmutableMap<RepositoryName, RepositoryName> repoMapping = ImmutableMap.of();
-    if (context instanceof BazelStarlarkContext) {
-      repoMapping = ((BazelStarlarkContext) context).getRepoMapping();
-    }
     builder.addRequiredToolchains(
         collectToolchainLabels(
-            toolchains.getContents(String.class, "toolchains"), ast.getLocation(), repoMapping));
+            toolchains.getContents(String.class, "toolchains"), ast.getLocation()));
 
     if (!buildSetting.equals(Runtime.NONE) && !cfg.equals(Runtime.NONE)) {
       throw new EvalException(
@@ -405,8 +397,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       builder.addExecutionPlatformConstraints(
           collectConstraintLabels(
               execCompatibleWith.getContents(String.class, "exec_compatile_with"),
-              ast.getLocation(),
-              repoMapping));
+              ast.getLocation()));
     }
 
     if (executionPlatformConstraintsAllowed) {
@@ -457,14 +448,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   }
 
   private static ImmutableList<Label> collectToolchainLabels(
-      Iterable<String> rawLabels,
-      Location loc,
-      ImmutableMap<RepositoryName, RepositoryName> mapping)
-      throws EvalException {
+      Iterable<String> rawLabels, Location loc) throws EvalException {
     ImmutableList.Builder<Label> requiredToolchains = new ImmutableList.Builder<>();
     for (String rawLabel : rawLabels) {
       try {
-        Label toolchainLabel = Label.parseAbsolute(rawLabel, mapping);
+        Label toolchainLabel = Label.parseAbsolute(rawLabel, ImmutableMap.of());
         requiredToolchains.add(toolchainLabel);
       } catch (LabelSyntaxException e) {
         throw new EvalException(
@@ -476,14 +464,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
   }
 
   private static ImmutableList<Label> collectConstraintLabels(
-      Iterable<String> rawLabels,
-      Location loc,
-      ImmutableMap<RepositoryName, RepositoryName> mapping)
-      throws EvalException {
+      Iterable<String> rawLabels, Location loc) throws EvalException {
     ImmutableList.Builder<Label> constraintLabels = new ImmutableList.Builder<>();
     for (String rawLabel : rawLabels) {
       try {
-        Label constraintLabel = Label.parseAbsolute(rawLabel, mapping);
+        Label constraintLabel = Label.parseAbsolute(rawLabel, ImmutableMap.of());
         constraintLabels.add(constraintLabel);
       } catch (LabelSyntaxException e) {
         throw new EvalException(
@@ -595,11 +580,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         HostTransition.INSTANCE,
         ImmutableSet.copyOf(hostFragments.getContents(String.class, "host_fragments")),
         collectToolchainLabels(
-            toolchains.getContents(String.class, "toolchains"),
-            ast.getLocation(),
-            // TODO(https://github.com/bazelbuild/bazel/issues/7773): Update to get the
-            // repository mapping from a context, like in rule().
-            ImmutableMap.of()));
+            toolchains.getContents(String.class, "toolchains"), ast.getLocation()));
   }
 
   /**

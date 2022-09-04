@@ -1,4 +1,4 @@
-// Copyright 2019 The Bazel Authors. All rights reserved.
+// Copyright 2017 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 package com.google.devtools.build.lib.syntax;
 
@@ -61,7 +60,6 @@ public abstract class StarlarkSemantics {
     INCOMPATIBLE_OBJC_FRAMEWORK_CLEANUP(StarlarkSemantics::incompatibleObjcFrameworkCleanup),
     INCOMPATIBLE_DISALLOW_RULE_EXECUTION_PLATFORM_CONSTRAINTS_ALLOWED(
         StarlarkSemantics::incompatibleDisallowRuleExecutionPlatformConstraintsAllowed),
-    INCOMPATIBLE_ALLOW_TAGS_PROPAGATION(StarlarkSemantics::incompatibleAllowTagsPropagation),
     NONE(null);
 
     // Using a Function here makes the enum definitions far cleaner, and, since this is
@@ -162,13 +160,13 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisallowLegacyJavaInfo();
 
+  public abstract boolean incompatibleDisallowLoadLabelsToCrossPackageBoundaries();
+
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
 
   public abstract boolean incompatibleDisallowRuleExecutionPlatformConstraintsAllowed();
 
   public abstract boolean incompatibleDisallowStructProviderSyntax();
-
-  public abstract boolean incompatibleDisallowUnverifiedHttpDownloads();
 
   public abstract boolean incompatibleExpandDirectories();
 
@@ -208,12 +206,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleRestrictStringEscapes();
 
-  public abstract boolean incompatibleDisallowSplitEmptySeparator();
-
-  public abstract boolean incompatibleDisallowDictLookupUnhashableKeys();
-
-  public abstract boolean incompatibleAllowTagsPropagation();
-
   @Memoized
   @Override
   public abstract int hashCode();
@@ -249,7 +241,7 @@ public abstract class StarlarkSemantics {
           // <== Add new options here in alphabetic order ==>
           .experimentalBuildSettingApi(true)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
-          .experimentalAllowIncrementalRepositoryUpdates(true)
+          .experimentalAllowIncrementalRepositoryUpdates(false)
           .experimentalEnableAndroidMigrationApis(false)
           .experimentalGoogleLegacyApi(false)
           .experimentalJavaCommonCreateProviderEnabledPackages(ImmutableList.of())
@@ -266,10 +258,10 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowEmptyGlob(false)
           .incompatibleDisallowLegacyJavaProvider(false)
           .incompatibleDisallowLegacyJavaInfo(false)
+          .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(true)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(false)
           .incompatibleDisallowStructProviderSyntax(false)
-          .incompatibleDisallowUnverifiedHttpDownloads(false)
           .incompatibleExpandDirectories(true)
           .incompatibleNewActionsApi(true)
           .incompatibleNoAttrLicense(true)
@@ -289,9 +281,6 @@ public abstract class StarlarkSemantics {
           .incompatibleDoNotSplitLinkingCmdline(true)
           .incompatibleDepsetForLibrariesToLinkGetter(true)
           .incompatibleRestrictStringEscapes(false)
-          .incompatibleDisallowSplitEmptySeparator(false)
-          .incompatibleDisallowDictLookupUnhashableKeys(false)
-          .incompatibleAllowTagsPropagation(false)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
@@ -317,8 +306,6 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder experimentalStarlarkUnusedInputsList(boolean value);
 
-    public abstract Builder incompatibleAllowTagsPropagation(boolean value);
-
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
     public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
@@ -339,14 +326,14 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder incompatibleDisallowLegacyJavaInfo(boolean value);
 
+    public abstract Builder incompatibleDisallowLoadLabelsToCrossPackageBoundaries(boolean value);
+
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
 
     public abstract Builder incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(
         boolean value);
 
     public abstract Builder incompatibleDisallowStructProviderSyntax(boolean value);
-
-    public abstract Builder incompatibleDisallowUnverifiedHttpDownloads(boolean value);
 
     public abstract Builder incompatibleExpandDirectories(boolean value);
 
@@ -385,10 +372,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDepsetForLibrariesToLinkGetter(boolean value);
 
     public abstract Builder incompatibleRestrictStringEscapes(boolean value);
-
-    public abstract Builder incompatibleDisallowSplitEmptySeparator(boolean value);
-
-    public abstract Builder incompatibleDisallowDictLookupUnhashableKeys(boolean value);
 
     public abstract StarlarkSemantics build();
   }

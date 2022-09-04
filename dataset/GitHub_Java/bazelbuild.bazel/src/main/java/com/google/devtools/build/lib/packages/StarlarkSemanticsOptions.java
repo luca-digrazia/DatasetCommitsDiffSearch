@@ -1,4 +1,4 @@
-// Copyright 2019 The Bazel Authors. All rights reserved.
+// Copyright 2017 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 package com.google.devtools.build.lib.packages;
 
@@ -65,13 +64,17 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "experimental_allow_incremental_repository_updates",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
-          "This flag will be removed in Bazel 1.0. Please do not use it.\n"
-              + "Incremental repository updates feature is now enabled without the flag.")
+          "If used, it is possible to define a mapping between external repositories"
+              + " and some (mostly likely ignored by .bazelignore) directories."
+              + " The repository rule can read and update files in those directories,"
+              + " and the changes will be visible in the same build."
+              + " Use attribute 'managed_directories' of the global workspace()"
+              + " function in WORKSPACE file to define the mapping.")
   public boolean experimentalAllowIncrementalRepositoryUpdates;
 
   @Option(
@@ -174,21 +177,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleBzlDisallowLoadAfterStatement;
 
   @Option(
-      name = "incompatible_allow_tags_propagation",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, tags will be propagated from a target to the actions' execution"
-              + " requirements; otherwise tags are not propagated. See"
-              + " https://github.com/bazelbuild/bazel/issues/8830 for details.")
-  public boolean incompatibleAllowTagsPropagation;
-
-  @Option(
       name = "incompatible_depset_union",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -264,20 +252,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleDisableThirdPartyLicenseChecking;
 
   @Option(
-      name = "incompatible_disallow_dict_lookup_unhashable_keys",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, dict key lookups using `in` or `dict.get` will fail with unhashable"
-              + " types.")
-  public boolean incompatibleDisallowDictLookupUnhashableKeys;
-
-  @Option(
       name = "incompatible_disallow_dict_plus",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -327,6 +301,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleDisallowLegacyJavaInfo;
 
   @Option(
+      name = "incompatible_disallow_load_labels_to_cross_package_boundaries",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, the label argument to 'load' cannot cross a package boundary.")
+  public boolean incompatibleDisallowLoadLabelsToCrossPackageBoundaries;
+
+  @Option(
       name = "incompatible_disallow_rule_execution_platform_constraints_allowed",
       defaultValue = "False",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -339,18 +325,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
           "If set to true, disallow the use of the execution_platform_constraints_allowed "
               + "attribute on rule().")
   public boolean incompatibleDisallowRuleExecutionPlatformConstraintsAllowed;
-
-  @Option(
-      name = "incompatible_disallow_split_empty_separator",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, `string.split` will fail if `sep` is the empty string.")
-  public boolean incompatibleDisallowSplitEmptySeparator;
 
   @Option(
       name = "incompatible_string_join_requires_strings",
@@ -394,18 +368,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, vectorized calls to Args#add are disallowed.")
   public boolean incompatibleDisallowOldStyleArgsAdd;
-
-  @Option(
-      name = "incompatible_disallow_unverified_http_downloads",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set, disallow downloads via plain http if no checksum is given")
-  public boolean incompatibleDisallowUnverifiedHttpDownloads;
 
   @Option(
       name = "incompatible_expand_directories",
@@ -681,12 +643,12 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDisallowEmptyGlob(incompatibleDisallowEmptyGlob)
             .incompatibleDisallowLegacyJavaInfo(incompatibleDisallowLegacyJavaInfo)
             .incompatibleDisallowLegacyJavaProvider(incompatibleDisallowLegacyJavaProvider)
+            .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(
+                incompatibleDisallowLoadLabelsToCrossPackageBoundaries)
             .incompatibleDisallowOldStyleArgsAdd(incompatibleDisallowOldStyleArgsAdd)
             .incompatibleDisallowStructProviderSyntax(incompatibleDisallowStructProviderSyntax)
             .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(
                 incompatibleDisallowRuleExecutionPlatformConstraintsAllowed)
-            .incompatibleDisallowUnverifiedHttpDownloads(
-                incompatibleDisallowUnverifiedHttpDownloads)
             .incompatibleExpandDirectories(incompatibleExpandDirectories)
             .incompatibleNewActionsApi(incompatibleNewActionsApi)
             .incompatibleNoAttrLicense(incompatibleNoAttrLicense)
@@ -706,10 +668,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
             .incompatibleDepsetForLibrariesToLinkGetter(incompatibleDepsetForLibrariesToLinkGetter)
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
-            .incompatibleDisallowSplitEmptySeparator(incompatibleDisallowSplitEmptySeparator)
-            .incompatibleDisallowDictLookupUnhashableKeys(
-                incompatibleDisallowDictLookupUnhashableKeys)
-            .incompatibleAllowTagsPropagation(incompatibleAllowTagsPropagation)
             .build();
     return INTERNER.intern(semantics);
   }
