@@ -72,7 +72,7 @@ final class FastbootHibernateProvider extends HibernatePersistenceProvider imple
 		Map integration = Collections.emptyMap();
 
 		//These are pre-parsed during image generation:
-		final List<PersistenceUnitDescriptor> units = PersistenceUnitsHolder.getPersistenceUnitDescriptors();
+		final List<PersistenceUnitDescriptor> units = PersistenceUnitsHolder.units;
 
 		log.debugf( "Located %s persistence units; checking each", units.size() );
 
