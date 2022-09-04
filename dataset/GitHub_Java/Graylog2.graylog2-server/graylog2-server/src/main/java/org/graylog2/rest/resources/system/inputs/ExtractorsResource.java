@@ -211,11 +211,7 @@ public class ExtractorsResource extends RestResource {
         map.put("extractor_config", extractor.getExtractorConfig());
         map.put("creator_user_id", extractor.getCreatorUserId());
         map.put("converters", extractor.converterConfigMap());
-
-        Map<String, Object> metrics = Maps.newHashMap();
-        metrics.put("total",  buildMetricsMap(core.metrics().getTimers().get(extractor.getTotalTimerName())));
-        metrics.put("converters", buildMetricsMap(core.metrics().getTimers().get(extractor.getConverterTimerName())));
-        map.put("metrics", metrics);
+        map.put("metrics", buildMetricsMap(core.metrics().getTimers().get(extractor.getTotalTimerName())));
 
         return map;
     }

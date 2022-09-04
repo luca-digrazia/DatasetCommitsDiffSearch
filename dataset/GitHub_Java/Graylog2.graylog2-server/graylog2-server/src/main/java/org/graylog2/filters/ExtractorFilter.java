@@ -54,7 +54,6 @@ public class ExtractorFilter implements MessageFilter {
             try {
                 extractor.run(msg);
             } catch (Exception e) {
-                extractor.incrementExceptions();
                 LOG.error("Could not apply extractor.", e);
                 timerContext.close();
                 continue;
@@ -62,9 +61,7 @@ public class ExtractorFilter implements MessageFilter {
 
             Timer cTimer = server.metrics().timer(extractor.getConverterTimerName());
             final Timer.Context cTimerContext = cTimer.time();
-
             extractor.runConverters(msg);
-
             cTimerContext.stop();
             timerContext.stop();
         }

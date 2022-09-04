@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -45,16 +44,13 @@ public abstract class Extractor implements EmbeddedPersistable {
     public enum Type {
         SUBSTRING,
         REGEX,
-        SPLIT_AND_INDEX
+        START_END_CHAR
     }
 
     public enum CursorStrategy {
         CUT,
         COPY
     }
-
-    protected final AtomicLong exceptions;
-    protected final AtomicLong converterExceptions;
 
     protected final String id;
     protected final String title;
@@ -75,9 +71,6 @@ public abstract class Extractor implements EmbeddedPersistable {
         if (Message.RESERVED_FIELDS.contains(targetField) && !Message.RESERVED_SETTABLE_FIELDS.contains(targetField)) {
             throw new ReservedFieldException("You cannot apply an extractor on reserved field [" + targetField + "].");
         }
-
-        this.exceptions = new AtomicLong(0);
-        this.converterExceptions = new AtomicLong(0);
 
         this.id = id;
         this.title = title;
@@ -105,7 +98,6 @@ public abstract class Extractor implements EmbeddedPersistable {
                 msg.removeField(targetField);
                 msg.addField(targetField, converter.convert(value));
             } catch (Exception e) {
-                this.converterExceptions.incrementAndGet();
                 LOG.error("Could not apply converter [{}].", converter.getType(), e);
                 continue;
             }
@@ -186,17 +178,4 @@ public abstract class Extractor implements EmbeddedPersistable {
     public String getConverterTimerName() {
         return converterTimerName;
     }
-
-    public long getExceptionCount() {
-        return exceptions.get();
-    }
-
-    public long getConverterExceptionCount() {
-        return converterExceptions.get();
-    }
-
-    public void incrementExceptions() {
-        exceptions.incrementAndGet();
-    }
-
 }
