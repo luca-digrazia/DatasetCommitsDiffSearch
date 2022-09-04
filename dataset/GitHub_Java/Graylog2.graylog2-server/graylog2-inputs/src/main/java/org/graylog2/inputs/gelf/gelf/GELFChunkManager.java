@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,20 +15,22 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.inputs.gelf.gelf;
 
+import java.io.ByteArrayOutputStream;
+import java.util.Map;
+
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.Maps;
-import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
-import java.util.Map;
+import com.google.common.collect.Maps;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -42,21 +44,25 @@ public class GELFChunkManager extends Thread {
     private Map<String, Map<Integer, GELFMessageChunk>> chunks = Maps.newConcurrentMap();
     private GELFProcessor processor;
     
+	private InputHost server;
+
     // The number of seconds a chunk is valid. Every message with chunks older than this will be dropped.
     public static final int SECONDS_VALID = 5;
     private final Meter outdatedMessagesDropped;
 
-    public GELFChunkManager(MetricRegistry metricRegistry, Buffer processBuffer) {
-        this.processor = new GELFProcessor(metricRegistry, processBuffer);
+    public GELFChunkManager(InputHost server) {
 
-        this.outdatedMessagesDropped = metricRegistry.meter(name(GELFChunkManager.class, "outdatedMessagesDropped"));
+        this.processor = new GELFProcessor(server);
+        this.server = server;
+
+        this.outdatedMessagesDropped = server.metrics().meter(name(GELFChunkManager.class, "outdatedMessagesDropped"));
     }
 
     @Override
     public void run() {
         while (true) {
             try {
-                if (!chunks.isEmpty() && LOG.isDebugEnabled()) {
+                if (!chunks.isEmpty()) {
                     LOG.debug("Dumping GELF chunk map [{}]:\n{}", chunks.size(), humanReadableChunkMap());
                 }
                 
