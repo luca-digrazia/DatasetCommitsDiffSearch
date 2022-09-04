@@ -8,13 +8,10 @@ import ch.qos.logback.core.Layout;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.RollingFileAppender;
-import ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP;
-import ch.qos.logback.core.rolling.TimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import io.dropwizard.util.Size;
 import io.dropwizard.validation.ValidationMethod;
 
 import javax.validation.constraints.Min;
@@ -69,16 +66,6 @@ import java.util.TimeZone;
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code maxFileSize}</td>
- *         <td>(unlimited)</td>
- *         <td>
- *             The maximum size of the currently active file before a rollover is triggered. The value can be expressed
- *             in bytes, kilobytes, megabytes, gigabytes, and terabytesyp by appending B, K, MB, GB, or TB to the
- *             numeric value.  Examples include 100MB, 1GB, 1TB.  Sizes can also be spelled out, such as 100 megabytes,
- *             1 gigabyte, 1 terabyte.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code timeZone}</td>
  *         <td>{@code UTC}</td>
  *         <td>The time zone to which event timestamps will be converted.</td>
@@ -107,8 +94,6 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
 
     @Min(1)
     private int archivedFileCount = 5;
-
-    private Size maxFileSize;
 
     @NotNull
     private TimeZone timeZone = TimeZone.getTimeZone("UTC");
@@ -154,16 +139,6 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
     }
 
     @JsonProperty
-    public Size getMaxFileSize() {
-        return maxFileSize;
-    }
-
-    @JsonProperty
-    public void setMaxFileSize(Size maxFileSize) {
-        this.maxFileSize = maxFileSize;
-    }
-
-    @JsonProperty
     public TimeZone getTimeZone() {
         return timeZone;
     }
@@ -179,12 +154,6 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
         return !archive || (archivedLogFilenamePattern != null);
     }
 
-    @JsonIgnore
-    @ValidationMethod(message = "when specifying maxFileSize, archivedLogFilenamePattern must contain %i")
-    public boolean isValidForMaxFileSizeSetting() {
-        return maxFileSize == null || (archive && archivedLogFilenamePattern.contains("%i"));
-    }
-
     @Override
     public Appender<ILoggingEvent> build(LoggerContext context, String applicationName, Layout<ILoggingEvent> layout) {
         final FileAppender<ILoggingEvent> appender = buildAppender(context);
@@ -197,6 +166,7 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
         layoutEncoder.setLayout(layout == null ? buildLayout(context, timeZone) : layout);
         appender.setEncoder(layoutEncoder);
 
+        appender.setFile(currentLogFilename);
         appender.setPrudent(false);
         addThresholdFilter(appender, threshold);
         appender.stop();
@@ -208,16 +178,8 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
     protected FileAppender<ILoggingEvent> buildAppender(LoggerContext context) {
         if (archive) {
             final RollingFileAppender<ILoggingEvent> appender = new RollingFileAppender<>();
-            appender.setFile(currentLogFilename);
-
-            final TimeBasedFileNamingAndTriggeringPolicy<ILoggingEvent> triggeringPolicy;
-            if (maxFileSize == null) {
-                triggeringPolicy = new DefaultTimeBasedFileNamingAndTriggeringPolicy<>();
-            } else {
-                SizeAndTimeBasedFNATP<ILoggingEvent> maxFileSizeTriggeringPolicy = new SizeAndTimeBasedFNATP<>();
-                maxFileSizeTriggeringPolicy.setMaxFileSize(String.valueOf(maxFileSize.toBytes()));
-                triggeringPolicy = maxFileSizeTriggeringPolicy;
-            }
+            final DefaultTimeBasedFileNamingAndTriggeringPolicy<ILoggingEvent> triggeringPolicy =
+                    new DefaultTimeBasedFileNamingAndTriggeringPolicy<>();
             triggeringPolicy.setContext(context);
 
             final TimeBasedRollingPolicy<ILoggingEvent> rollingPolicy = new TimeBasedRollingPolicy<>();
@@ -235,9 +197,6 @@ public class FileAppenderFactory extends AbstractAppenderFactory {
             rollingPolicy.start();
             return appender;
         }
-
-        final FileAppender<ILoggingEvent> appender = new FileAppender<>();
-        appender.setFile(currentLogFilename);
-        return appender;
+        return new FileAppender<>();
     }
 }

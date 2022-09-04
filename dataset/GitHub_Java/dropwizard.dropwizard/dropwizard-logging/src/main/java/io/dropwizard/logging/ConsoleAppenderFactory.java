@@ -109,7 +109,7 @@ public class ConsoleAppenderFactory extends AbstractAppenderFactory {
         appender.setContext(context);
         appender.setTarget(target.get());
 
-        final LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
+        LayoutWrappingEncoder<ILoggingEvent> layoutEncoder = new LayoutWrappingEncoder<>();
         layoutEncoder.setLayout(layout == null ? buildLayout(context, timeZone) : layout);
         appender.setEncoder(layoutEncoder);
 
