@@ -77,6 +77,8 @@ public class VanillaJavaBuilderTest {
       jos.putNextEntry(new JarEntry("B.java"));
       jos.write("class B {}".getBytes(UTF_8));
     }
+    Path resource = temporaryFolder.newFile("resource.properties").toPath();
+    Files.write(resource, "hello".getBytes(UTF_8));
 
     VanillaJavaBuilderResult result =
         run(
@@ -89,6 +91,8 @@ public class VanillaJavaBuilderTest {
                 sourceJar.toString(),
                 "--output",
                 output.toString(),
+                "--classpath_resources",
+                resource.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
                 "--classdir",
@@ -99,7 +103,8 @@ public class VanillaJavaBuilderTest {
 
     ImmutableMap<String, byte[]> outputEntries = readJar(output.toFile());
     assertThat(outputEntries.keySet())
-        .containsExactly("META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class");
+        .containsExactly(
+            "META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class", "resource.properties");
   }
 
   @Test
@@ -195,6 +200,8 @@ public class VanillaJavaBuilderTest {
       jos.putNextEntry(new JarEntry("B.java"));
       jos.write("class B {}".getBytes(UTF_8));
     }
+    Path resource = temporaryFolder.newFile("resource.properties").toPath();
+    Files.write(resource, "hello".getBytes(UTF_8));
 
     Path classDir = temporaryFolder.newFolder().toPath();
     Files.write(
@@ -212,6 +219,8 @@ public class VanillaJavaBuilderTest {
                 sourceJar.toString(),
                 "--output",
                 output.toString(),
+                "--classpath_resources",
+                resource.toString(),
                 "--bootclasspath",
                 Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
                 "--classdir",
@@ -222,46 +231,7 @@ public class VanillaJavaBuilderTest {
 
     ImmutableMap<String, byte[]> outputEntries = readJar(output.toFile());
     assertThat(outputEntries.keySet())
-        .containsExactly("META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class");
-  }
-
-  // suppress unpopular deferred diagnostic notes for sunapi, deprecation, and unchecked
-  @Test
-  public void testDeferredDiagnostics() throws Exception {
-    Path b = temporaryFolder.newFile("B.java").toPath();
-    Path a = temporaryFolder.newFile("A.java").toPath();
-    Path output = temporaryFolder.newFile("out.jar").toPath();
-    Files.write(
-        b,
-        ImmutableList.of(
-            "@Deprecated", //
-            "class B {}"),
-        UTF_8);
-    Files.write(
-        a,
-        ImmutableList.of(
-            "import java.util.*;", //
-            "public class A {",
-            "  sun.misc.Unsafe theUnsafe;",
-            "  B b;",
-            "  List l = new ArrayList<>();",
-            "}"),
-        UTF_8);
-
-    VanillaJavaBuilderResult result =
-        run(
-            ImmutableList.of(
-                "--sources",
-                a.toString(),
-                b.toString(),
-                "--output",
-                output.toString(),
-                "--bootclasspath",
-                Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar").toString(),
-                "--classdir",
-                temporaryFolder.newFolder().toString()));
-
-    assertThat(result.output()).isEmpty();
-    assertThat(result.ok()).isTrue();
+        .containsExactly(
+            "META-INF/", "META-INF/MANIFEST.MF", "A.class", "B.class", "resource.properties");
   }
 }
