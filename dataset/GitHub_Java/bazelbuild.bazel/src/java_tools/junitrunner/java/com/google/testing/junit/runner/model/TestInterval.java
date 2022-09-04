@@ -14,9 +14,10 @@
 
 package com.google.testing.junit.runner.model;
 
-import com.google.testing.junit.runner.util.TestClock.TestInstant;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 
 /**
  * Implementation of an immutable time interval, representing a period of time between two instants.
@@ -24,14 +25,11 @@ import java.time.format.DateTimeFormatterBuilder;
  * <p>This class is thread-safe and immutable.
  */
 public final class TestInterval {
+  private final long startInstant;
+  private final long endInstant;
 
-  private static final DateTimeFormatter ISO8601_WITH_MILLIS_FORMATTER =
-      new DateTimeFormatterBuilder().appendInstant(3).toFormatter();
-  private final TestInstant startInstant;
-  private final TestInstant endInstant;
-
-  public TestInterval(TestInstant startInstant, TestInstant endInstant) {
-    if (startInstant.monotonicTime().compareTo(endInstant.monotonicTime()) > 0) {
+  public TestInterval(long startInstant, long endInstant) {
+    if (startInstant > endInstant) {
       throw new IllegalArgumentException("Start must be before end");
     }
     this.startInstant = startInstant;
@@ -39,37 +37,31 @@ public final class TestInterval {
   }
 
   public long getStartMillis() {
-    return startInstant.wallTime().toEpochMilli();
+    return startInstant;
   }
 
   public long getEndMillis() {
-    return endInstant.wallTime().toEpochMilli();
+    return endInstant;
   }
 
   public long toDurationMillis() {
-    return endInstant.monotonicTime().minus(startInstant.monotonicTime()).toMillis();
+    return endInstant - startInstant;
   }
 
-  public TestInterval withEndMillis(TestInstant now) {
-    return new TestInterval(startInstant, now);
+  public TestInterval withEndMillis(long millis) {
+    return new TestInterval(startInstant, millis);
   }
 
   public String startInstantToString() {
-    // Format as ISO8601 with 3 fractional digits on seconds
-    // This format is not affected by timezones and locale which improves interoperability
-    return ISO8601_WITH_MILLIS_FORMATTER.format(startInstant.wallTime());
+    // Format as ISO8601 string
+    return startInstantToString(TimeZone.getDefault());
   }
 
-  /** Returns a TestInterval that contains both TestIntervals passed as parameter. */
-  public static TestInterval around(TestInterval a, TestInterval b) {
-    TestInstant start =
-        a.startInstant.monotonicTime().compareTo(b.startInstant.monotonicTime()) < 0
-            ? a.startInstant
-            : b.startInstant;
-    TestInstant end =
-        a.endInstant.monotonicTime().compareTo(b.endInstant.monotonicTime()) > 0
-            ? a.endInstant
-            : b.endInstant;
-    return new TestInterval(start, end);
+  /** Exposed for testing because java Date does not allow setting of timezones. */
+  // VisibleForTesting
+  String startInstantToString(TimeZone tz) {
+    DateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+    format.setTimeZone(tz);
+    return format.format(new Date(startInstant));
   }
 }
