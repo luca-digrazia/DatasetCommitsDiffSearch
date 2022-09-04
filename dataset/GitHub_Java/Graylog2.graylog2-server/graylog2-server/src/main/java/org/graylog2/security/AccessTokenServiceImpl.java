@@ -1,47 +1,43 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.security;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
+import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
-import com.mongodb.MongoException;
+import com.mongodb.DuplicateKeyException;
 import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.Tools;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
+import org.graylog2.plugin.database.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 
 public class AccessTokenServiceImpl extends PersistedServiceImpl implements AccessTokenService {
-    private static final Logger log = LoggerFactory.getLogger(AccessTokenServiceImpl.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AccessTokenServiceImpl.class);
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -61,7 +57,7 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
             return null;
         }
         if (objects.size() > 1) {
-            log.error("Multiple access tokens found, this is a serious bug.");
+            LOG.error("Multiple access tokens found, this is a serious bug.");
             throw new IllegalStateException("Access tokens collection has no unique index!");
         }
         final DBObject tokenObject = objects.get(0);
@@ -102,7 +98,7 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
             accessToken = new AccessTokenImpl(fields);
             try {
                 id = saveWithoutValidation(accessToken);
-            } catch (MongoException.DuplicateKey ignore) {
+            } catch (DuplicateKeyException ignore) {
             }
         } while (iterations++ < 10 && id == null);
         if (id == null) {
@@ -113,14 +109,23 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
 
     @Override
     public void touch(AccessToken accessToken) throws ValidationException {
-        accessToken.getFields().put(AccessTokenImpl.LAST_ACCESS, DateTime.now(DateTimeZone.UTC));
+        accessToken.getFields().put(AccessTokenImpl.LAST_ACCESS, Tools.nowUTC());
         save(accessToken);
     }
 
     @Override
     public String save(AccessToken accessToken) throws ValidationException {
         // make sure we cannot overwrite an existing access token
-        collection(AccessTokenImpl.class).ensureIndex(new BasicDBObject(AccessTokenImpl.TOKEN, 1), null, true);
+        collection(AccessTokenImpl.class).createIndex(new BasicDBObject(AccessTokenImpl.TOKEN, 1), new BasicDBObject("unique", true));
         return super.save(accessToken);
+    }
+
+    @Override
+    public int deleteAllForUser(String username) {
+        LOG.debug("Deleting all access tokens of user \"{}\"", username);
+        final DBObject query = BasicDBObjectBuilder.start(AccessTokenImpl.USERNAME, username).get();
+        final int result = destroy(query, AccessTokenImpl.COLLECTION_NAME);
+        LOG.debug("Deleted {} access tokens of user \"{}\"", result, username);
+        return result;
     }
 }
