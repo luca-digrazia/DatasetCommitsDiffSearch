@@ -36,7 +36,8 @@ public class LocalHostResourceManagerLinux {
     return getLogicalCpuCountHelper(content);
   }
 
-  private static double getMemoryInMb() throws IOException {
+  private static double getMemoryInMb()
+      throws IOException, ProcMeminfoParser.KeywordNotFoundException {
     return getMemoryInMbHelper(MEM_INFO_FILE);
   }
 
@@ -48,8 +49,9 @@ public class LocalHostResourceManagerLinux {
       return ResourceSet.create(
           ramMb,
           logicalCpuCount,
+          1.0,
           Integer.MAX_VALUE);
-    } catch (IOException e) {
+    } catch (IOException | ProcMeminfoParser.KeywordNotFoundException e) {
       return null;
     }
   }
@@ -82,7 +84,8 @@ public class LocalHostResourceManagerLinux {
     return count;
   }
 
-  public static double getMemoryInMbHelper(String memInfoFileName) throws IOException {
+  public static double getMemoryInMbHelper(String memInfoFileName)
+      throws IOException, ProcMeminfoParser.KeywordNotFoundException {
     ProcMeminfoParser memInfo = new ProcMeminfoParser(memInfoFileName);
     double ramMb = ProcMeminfoParser.kbToMb(memInfo.getTotalKb());
     return ramMb;
