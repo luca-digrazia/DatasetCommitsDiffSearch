@@ -28,6 +28,7 @@ import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.DropdownField;
 import org.graylog2.plugin.configuration.fields.NumberField;
+import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
 
@@ -48,30 +49,26 @@ public class LocalMetricsInput extends MessageInput {
     private static final String CK_REPORT_INTERVAL = "report_interval";
     private static final String CK_REPORT_UNIT = "report_unit";
     private static final String CK_DURATION_UNIT = "duration_unit";
-    private static final String CK_RATE_UNIT = "duration_unit";
+    private static final String CK_RATE_UNIT = "rate_unit";
+    private static final String CK_SOURCE = "source";
 
     @Override
     public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
         this.config = config;
         this.graylogServer = graylogServer;
 
-        // TODO: READ FROM CONFIG. NEEDS FINISHED DROPDOWN IMPL.
         reporter = Graylog2Reporter.forRegistry(graylogServer.metrics())
-                            .convertDurationsTo(TimeUnit.MILLISECONDS)
-                            .convertRatesTo(TimeUnit.SECONDS)
-                            //.convertDurationsTo(TimeUnit.valueOf(config.getString(CK_DURATION_UNIT)))
-                            //.convertRatesTo(TimeUnit.valueOf(config.getString(CK_RATE_UNIT)))
+                            .useSource(config.getString(CK_SOURCE))
+                            .convertDurationsTo(TimeUnit.valueOf(config.getString(CK_DURATION_UNIT)))
+                            .convertRatesTo(TimeUnit.valueOf(config.getString(CK_RATE_UNIT)))
                             .build(new InProcessMessageWriter(graylogServer, this));
     }
 
     @Override
     public void launch() throws MisfireException {
-        // TODO: READ FROM CONFIG. NEEDS FINISHED DROPDOWN IMPL.
-
         reporter.start(
                 config.getInt(CK_REPORT_INTERVAL),
-                //TimeUnit.valueOf(config.getString(CK_REPORT_UNIT))
-                TimeUnit.SECONDS
+                TimeUnit.valueOf(config.getString(CK_REPORT_UNIT))
         );
     }
 
@@ -83,6 +80,15 @@ public class LocalMetricsInput extends MessageInput {
     @Override
     public ConfigurationRequest getRequestedConfiguration() {
         ConfigurationRequest r = new ConfigurationRequest();
+
+        r.addField(new TextField(
+                CK_SOURCE,
+                "Source",
+                "metrics",
+                "Define a name of the source. For example 'metrics'.",
+                ConfigurationField.Optional.NOT_OPTIONAL
+        ));
+
 
         r.addField(
                 new NumberField(
@@ -109,7 +115,7 @@ public class LocalMetricsInput extends MessageInput {
                 new DropdownField(
                         CK_DURATION_UNIT,
                         "Time unit of measured durations",
-                        TimeUnit.MICROSECONDS.toString(),
+                        TimeUnit.MILLISECONDS.toString(),
                         DropdownField.ValueTemplates.timeUnits(),
                         "The time unit that will be used in for example timer values. Think of: took 15ms",
                         ConfigurationField.Optional.NOT_OPTIONAL
@@ -120,7 +126,7 @@ public class LocalMetricsInput extends MessageInput {
                 new DropdownField(
                         CK_RATE_UNIT,
                         "Time unit of measured rates",
-                        TimeUnit.MICROSECONDS.toString(),
+                        TimeUnit.SECONDS.toString(),
                         DropdownField.ValueTemplates.timeUnits(),
                         "The time unit that will be used in for example meter values. Think of: 7 per second",
                         ConfigurationField.Optional.NOT_OPTIONAL
