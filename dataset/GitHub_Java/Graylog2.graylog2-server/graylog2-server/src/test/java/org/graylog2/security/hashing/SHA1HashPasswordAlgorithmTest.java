@@ -43,6 +43,7 @@ public class SHA1HashPasswordAlgorithmTest {
 
     @Test
     public void testMatches() throws Exception {
-        assertThat(SHA1HashPasswordAlgorithm.matches("baae906e6bbb37ca5033600fcb4824c98b0430fb", "foobar")).isTrue();
+        assertThat(SHA1HashPasswordAlgorithm.matches("baae906e6bbb37ca5033600fcb4824c98b0430fb", "foobar"));
+
     }
 }
