@@ -57,16 +57,15 @@ import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.Runtime.NoneType;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -126,8 +125,8 @@ public abstract class CcModule
   public FeatureConfigurationForStarlark configureFeatures(
       Object ruleContextOrNone,
       CcToolchainProvider toolchain, // <String> expected
-      Sequence<?> requestedFeatures, // <String> expected
-      Sequence<?> unsupportedFeatures)
+      SkylarkList<?> requestedFeatures, // <String> expected
+      SkylarkList<?> unsupportedFeatures)
       throws EvalException {
     SkylarkRuleContext ruleContext = nullIfNone(ruleContextOrNone, SkylarkRuleContext.class);
     if (ruleContext == null
@@ -167,9 +166,9 @@ public abstract class CcModule
   }
 
   @Override
-  public Sequence<String> getExecutionRequirements(
+  public SkylarkList<String> getExecutionRequirements(
       FeatureConfigurationForStarlark featureConfiguration, String actionName) {
-    return StarlarkList.immutableCopyOf(
+    return SkylarkList.createImmutable(
         featureConfiguration.getFeatureConfiguration().getToolRequirementsForAction(actionName));
   }
 
@@ -186,22 +185,22 @@ public abstract class CcModule
   }
 
   @Override
-  public Sequence<String> getCommandLine(
+  public SkylarkList<String> getCommandLine(
       FeatureConfigurationForStarlark featureConfiguration,
       String actionName,
       CcToolchainVariables variables)
       throws EvalException {
-    return StarlarkList.immutableCopyOf(
+    return SkylarkList.createImmutable(
         featureConfiguration.getFeatureConfiguration().getCommandLine(actionName, variables));
   }
 
   @Override
-  public Dict<String, String> getEnvironmentVariable(
+  public SkylarkDict<String, String> getEnvironmentVariable(
       FeatureConfigurationForStarlark featureConfiguration,
       String actionName,
       CcToolchainVariables variables)
       throws EvalException {
-    return Dict.copyOf(
+    return SkylarkDict.copyOf(
         null,
         featureConfiguration
             .getFeatureConfiguration()
@@ -313,22 +312,18 @@ public abstract class CcModule
   /**
    * Converts an object that can be the NoneType to the actual object if it is not or returns the
    * default value if none.
-   *
-   * <p>This operation is wildly unsound. It performs no dymamic checks (casts), it simply lies
-   * about the type.
    */
   @SuppressWarnings("unchecked")
   protected static <T> T convertFromNoneable(Object obj, @Nullable T defaultValue) {
     if (EvalUtils.isNullOrNone(obj)) {
       return defaultValue;
     }
-    return (T) obj; // totally unsafe
+    return (T) obj;
   }
 
   /** Converts an object that can be ether SkylarkNestedSet or None into NestedSet. */
   protected NestedSet<String> asStringNestedSet(Object o) throws SkylarkNestedSet.TypeException {
-    SkylarkNestedSet skylarkNestedSet =
-        convertFromNoneable(o, /* defaultValue= */ (SkylarkNestedSet) null);
+    SkylarkNestedSet skylarkNestedSet = convertFromNoneable(o, /* defaultValue= */ null);
     if (skylarkNestedSet != null) {
       return skylarkNestedSet.getSet(String.class);
     } else {
@@ -336,10 +331,9 @@ public abstract class CcModule
     }
   }
 
-  /** Converts an object that can be either Sequence, or None into ImmutableList. */
+  /** Converts an object that can be either SkylarkList, or None into ImmutableList. */
   protected ImmutableList<String> asStringImmutableList(Object o) {
-    Sequence<String> skylarkList =
-        convertFromNoneable(o, /* defaultValue= */ (Sequence<String>) null);
+    SkylarkList skylarkList = convertFromNoneable(o, /* defaultValue= */ null);
     if (skylarkList != null) {
       return skylarkList.getImmutableList();
     } else {
@@ -347,9 +341,9 @@ public abstract class CcModule
     }
   }
 
-  /** Converts an object that represents user flags as either Sequence or None into Iterable. */
+  /** Converts an object that represents user flags as either SkylarkList or None into Iterable. */
   protected Iterable<String> userFlagsToIterable(Object o) throws EvalException {
-    if (o instanceof Sequence) {
+    if (o instanceof SkylarkList) {
       return asStringImmutableList(o);
     } else if (o instanceof NoneType) {
       return ImmutableList.of();
@@ -509,7 +503,7 @@ public abstract class CcModule
   }
 
   @Override
-  public CcInfo mergeCcInfos(Sequence<?> ccInfos) throws EvalException {
+  public CcInfo mergeCcInfos(SkylarkList<?> ccInfos) throws EvalException {
     return CcInfo.merge(ccInfos.getContents(CcInfo.class, /* description= */ null));
   }
 
@@ -553,7 +547,7 @@ public abstract class CcModule
 
   private static NestedSet<Artifact> toNestedSetOfArtifacts(Object obj, String fieldName)
       throws EvalException {
-    if (obj == Starlark.UNBOUND) {
+    if (obj == Runtime.UNBOUND) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     } else {
       return SkylarkNestedSet.getSetFromNoneableParam(obj, Artifact.class, fieldName);
@@ -562,7 +556,7 @@ public abstract class CcModule
 
   private static NestedSet<String> toNestedSetOfStrings(Object obj, String fieldName)
       throws EvalException {
-    if (obj == Starlark.UNBOUND) {
+    if (obj == Runtime.UNBOUND) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     } else {
       return SkylarkNestedSet.getSetFromNoneableParam(obj, String.class, fieldName);
@@ -611,9 +605,10 @@ public abstract class CcModule
       throws EvalException {
     if (EvalUtils.isNullOrNone(linkerInputs)) {
       @SuppressWarnings("unchecked")
-      Sequence<LibraryToLink> librariesToLink = nullIfNone(librariesToLinkObject, Sequence.class);
+      SkylarkList<LibraryToLink> librariesToLink =
+          nullIfNone(librariesToLinkObject, SkylarkList.class);
       @SuppressWarnings("unchecked")
-      Sequence<String> userLinkFlags = nullIfNone(userLinkFlagsObject, Sequence.class);
+      SkylarkList<String> userLinkFlags = nullIfNone(userLinkFlagsObject, SkylarkList.class);
 
       if (librariesToLink != null || userLinkFlags != null) {
         CcLinkingContext.Builder ccLinkingContextBuilder = CcLinkingContext.builder();
@@ -630,7 +625,7 @@ public abstract class CcModule
                       BazelStarlarkContext.from(thread).getSymbolGenerator())));
         }
         @SuppressWarnings("unchecked")
-        Sequence<String> nonCodeInputs = nullIfNone(nonCodeInputsObject, Sequence.class);
+        SkylarkList<String> nonCodeInputs = nullIfNone(nonCodeInputsObject, SkylarkList.class);
         if (nonCodeInputs != null) {
           ccLinkingContextBuilder.addNonCodeInputs(
               nonCodeInputs.getContents(Artifact.class, "additional_inputs"));
@@ -646,11 +641,12 @@ public abstract class CcModule
               linkerInputs, CcLinkingContext.LinkerInput.class, "linker_inputs"));
 
       @SuppressWarnings("unchecked")
-      Sequence<LibraryToLink> librariesToLink = nullIfNone(librariesToLinkObject, Sequence.class);
+      SkylarkList<LibraryToLink> librariesToLink =
+          nullIfNone(librariesToLinkObject, SkylarkList.class);
       @SuppressWarnings("unchecked")
-      Sequence<String> userLinkFlags = nullIfNone(userLinkFlagsObject, Sequence.class);
+      SkylarkList<String> userLinkFlags = nullIfNone(userLinkFlagsObject, SkylarkList.class);
       @SuppressWarnings("unchecked")
-      Sequence<String> nonCodeInputs = nullIfNone(nonCodeInputsObject, Sequence.class);
+      SkylarkList<String> nonCodeInputs = nullIfNone(nonCodeInputsObject, SkylarkList.class);
 
       if (librariesToLink != null || userLinkFlags != null || nonCodeInputs != null) {
         throw new EvalException(
@@ -672,8 +668,8 @@ public abstract class CcModule
   /** Converts an object that can be the either SkylarkNestedSet or None into NestedSet. */
   @SuppressWarnings("unchecked")
   protected Object skylarkListToSkylarkNestedSet(Object o) throws EvalException {
-    if (o instanceof Sequence) {
-      Sequence<String> list = (Sequence<String>) o;
+    if (o instanceof SkylarkList) {
+      SkylarkList<String> list = (SkylarkList<String>) o;
       SkylarkNestedSet.Builder builder =
           SkylarkNestedSet.builder(Order.STABLE_ORDER, Location.BUILTIN);
       for (Object entry : list) {
@@ -684,25 +680,25 @@ public abstract class CcModule
     return o;
   }
 
-  /** Converts None, or a Sequence, or a SkylarkNestedSet to a NestedSet. */
+  /** Converts None, or a SkylarkList, or a SkylarkNestedSet to a NestedSet. */
   @SuppressWarnings("unchecked")
   private static <T> NestedSet<T> convertToNestedSet(Object o, Class<T> type, String fieldName)
       throws EvalException {
-    if (o == Starlark.NONE) {
+    if (o == Runtime.NONE) {
       return NestedSetBuilder.emptySet(Order.COMPILE_ORDER);
     }
     return o instanceof SkylarkNestedSet
         ? ((SkylarkNestedSet) o).getSetFromParam(type, fieldName)
-        : NestedSetBuilder.wrap(Order.COMPILE_ORDER, (Sequence<T>) o);
+        : NestedSetBuilder.wrap(Order.COMPILE_ORDER, (SkylarkList<T>) o);
   }
 
   @Override
   public CcToolchainConfigInfo ccToolchainConfigInfoFromSkylark(
       SkylarkRuleContext skylarkRuleContext,
-      Sequence<?> features, // <SkylarkInfo> expected
-      Sequence<?> actionConfigs, // <SkylarkInfo> expected
-      Sequence<?> artifactNamePatterns, // <SkylarkInfo> expected
-      Sequence<?> cxxBuiltInIncludeDirectoriesUnchecked, // <String> expected
+      SkylarkList<?> features, // <SkylarkInfo> expected
+      SkylarkList<?> actionConfigs, // <SkylarkInfo> expected
+      SkylarkList<?> artifactNamePatterns, // <SkylarkInfo> expected
+      SkylarkList<?> cxxBuiltInIncludeDirectoriesUnchecked, // <String> expected
       String toolchainIdentifier,
       String hostSystemName,
       String targetSystemName,
@@ -711,8 +707,8 @@ public abstract class CcModule
       String compiler,
       String abiVersion,
       String abiLibcVersion,
-      Sequence<?> toolPaths, // <SkylarkInfo> expected
-      Sequence<?> makeVariables, // <SkylarkInfo> expected
+      SkylarkList<?> toolPaths, // <SkylarkInfo> expected
+      SkylarkList<?> makeVariables, // <SkylarkInfo> expected
       Object builtinSysroot,
       Object ccTargetOs)
       throws EvalException {
@@ -1330,7 +1326,7 @@ public abstract class CcModule
   /** Returns a list of strings from a field of a {@link SkylarkInfo}. */
   private static ImmutableList<String> getStringListFromSkylarkProviderField(
       SkylarkInfo provider, String fieldName) throws EvalException {
-    return Sequence.castSkylarkListOrNoneToList(
+    return SkylarkList.castSkylarkListOrNoneToList(
             provider.getValueOrNull(fieldName), String.class, fieldName)
         .stream()
         .collect(ImmutableList.toImmutableList());
@@ -1339,7 +1335,7 @@ public abstract class CcModule
   /** Returns a set of strings from a field of a {@link SkylarkInfo}. */
   private static ImmutableSet<String> getStringSetFromSkylarkProviderField(
       SkylarkInfo provider, String fieldName) throws EvalException {
-    return Sequence.castSkylarkListOrNoneToList(
+    return SkylarkList.castSkylarkListOrNoneToList(
             provider.getValueOrNull(fieldName), String.class, fieldName)
         .stream()
         .collect(ImmutableSet.toImmutableSet());
@@ -1348,7 +1344,7 @@ public abstract class CcModule
   /** Returns a list of SkylarkInfo providers from a field of a {@link SkylarkInfo}. */
   private static ImmutableList<SkylarkInfo> getSkylarkProviderListFromSkylarkField(
       SkylarkInfo provider, String fieldName) throws EvalException {
-    return Sequence.castSkylarkListOrNoneToList(
+    return SkylarkList.castSkylarkListOrNoneToList(
             provider.getValueOrNull(fieldName), SkylarkInfo.class, fieldName)
         .stream()
         .collect(ImmutableList.toImmutableList());
@@ -1381,7 +1377,7 @@ public abstract class CcModule
 
   @Nullable
   private static <T> T nullIfNone(Object object, Class<T> type) {
-    return object != Starlark.NONE ? type.cast(object) : null;
+    return object != Runtime.NONE ? type.cast(object) : null;
   }
 
   @Override
@@ -1395,12 +1391,12 @@ public abstract class CcModule
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
       CcCompilationOutputs compilationOutputs,
-      Sequence<?> userLinkFlags, // <String> expected
-      Sequence<?> linkingContexts, // <CcLinkingContext> expected
+      SkylarkList<?> userLinkFlags, // <String> expected
+      SkylarkList<?> linkingContexts, // <CcLinkingContext> expected
       String name,
       String language,
       boolean alwayslink, // <Artifact> expected
-      Sequence<?> additionalInputs,
+      SkylarkList<?> additionalInputs,
       boolean disallowStaticLibraries,
       boolean disallowDynamicLibraries,
       Object grepIncludes,
@@ -1519,23 +1515,23 @@ public abstract class CcModule
       SkylarkActionFactory skylarkActionFactoryApi,
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
-      Sequence<?> sourcesUnchecked, // <Artifact> expected
-      Sequence<?> publicHeadersUnchecked, // <Artifact> expected
-      Sequence<?> privateHeadersUnchecked, // <Artifact> expected
-      Sequence<?> includes, // <String> expected
-      Sequence<?> quoteIncludes, // <String> expected
-      Sequence<?> systemIncludes, // <String> expected
-      Sequence<?> frameworkIncludes, // <String> expected
-      Sequence<?> defines, // <String> expected
-      Sequence<?> localDefines, // <String> expected
-      Sequence<?> userCompileFlags, // <String> expected
-      Sequence<?> ccCompilationContexts, // <CcCompilationContext> expected
+      SkylarkList<?> sourcesUnchecked, // <Artifact> expected
+      SkylarkList<?> publicHeadersUnchecked, // <Artifact> expected
+      SkylarkList<?> privateHeadersUnchecked, // <Artifact> expected
+      SkylarkList<?> includes, // <String> expected
+      SkylarkList<?> quoteIncludes, // <String> expected
+      SkylarkList<?> systemIncludes, // <String> expected
+      SkylarkList<?> frameworkIncludes, // <String> expected
+      SkylarkList<?> defines, // <String> expected
+      SkylarkList<?> localDefines, // <String> expected
+      SkylarkList<?> userCompileFlags, // <String> expected
+      SkylarkList<?> ccCompilationContexts, // <CcCompilationContext> expected
       String name,
       boolean disallowPicOutputs,
       boolean disallowNopicOutputs,
       Artifact grepIncludes,
       List<Artifact> headersForClifDoNotUseThisParam,
-      Sequence<?> additionalInputs,
+      SkylarkList<?> additionalInputs,
       Location location,
       @Nullable StarlarkThread thread)
       throws EvalException, InterruptedException {
@@ -1635,13 +1631,13 @@ public abstract class CcModule
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
       CcCompilationOutputs compilationOutputs,
-      Sequence<?> userLinkFlags,
-      Sequence<?> linkingContexts,
+      SkylarkList<?> userLinkFlags,
+      SkylarkList<?> linkingContexts,
       String name,
       String language,
       String outputType,
       boolean linkDepsStatically,
-      Sequence<?> additionalInputs,
+      SkylarkList<?> additionalInputs,
       Object grepIncludes,
       Location location,
       StarlarkThread thread)
