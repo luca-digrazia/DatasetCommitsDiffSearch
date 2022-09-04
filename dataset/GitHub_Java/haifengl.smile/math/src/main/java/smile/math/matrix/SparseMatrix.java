@@ -39,7 +39,7 @@ import smile.math.Math;
  *
  * @author Haifeng Li
  */
-public class SparseMatrix extends Matrix implements MatrixMultiplication<SparseMatrix, SparseMatrix> {
+public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, SparseMatrix> {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -464,6 +464,17 @@ public class SparseMatrix extends Matrix implements MatrixMultiplication<SparseM
         }
 
         return aat;
+    }
+
+    /**
+     * Returns the k largest eigen pairs. Only works for symmetric matrix.
+     */
+    public EigenValueDecomposition eigen(int k) {
+        if (nrows != ncols) {
+            throw new UnsupportedOperationException("The matrix is not square.");
+        }
+
+        return Lanczos.eigen(this, k);
     }
 
     @Override

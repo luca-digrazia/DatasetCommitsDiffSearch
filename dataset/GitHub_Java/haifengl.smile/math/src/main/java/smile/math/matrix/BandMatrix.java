@@ -58,7 +58,7 @@ import java.util.Arrays;
  * 
  * @author Haifeng Li
  */
-public class BandMatrix extends Matrix implements LinearSolver {
+public class BandMatrix implements Matrix, LinearSolver {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -173,6 +173,16 @@ public class BandMatrix extends Matrix implements LinearSolver {
     @Override
     public BandMatrix aat() {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Returns the k largest eigen pairs. Only works for symmetric matrix.
+     */
+    public EigenValueDecomposition eigen(int k) {
+        if (m1 !=  m2) {
+            throw new UnsupportedOperationException("The matrix is not square.");
+        }
+        return Lanczos.eigen(this, k);
     }
 
     /**
