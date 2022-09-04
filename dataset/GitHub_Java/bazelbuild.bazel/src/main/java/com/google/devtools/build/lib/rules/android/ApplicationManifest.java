@@ -603,10 +603,7 @@ public final class ApplicationManifest {
               .setMergedResourcesOut(mergedResources)
               .setManifestOut(manifestOut)
               .setClassJarOut(rJavaClassJar)
-              .setDataBindingInfoZip(dataBindingInfoZip)
-              .setThrowOnResourceConflict(
-                  ruleContext.getConfiguration()
-                      .getFragment(AndroidConfiguration.class).throwOnResourceConflict());
+              .setDataBindingInfoZip(dataBindingInfoZip);
       ResourceContainer merged = resourcesMergerBuilder.build(ruleContext);
 
       processed =
@@ -645,10 +642,7 @@ public final class ApplicationManifest {
               .setVersionCode(manifestValues.get("versionCode"))
               .setVersionName(manifestValues.get("versionName"))
               .setFeatureOf(featureOf)
-              .setFeatureAfter(featureAfter)
-              .setThrowOnResourceConflict(
-                ruleContext.getConfiguration()
-                    .getFragment(AndroidConfiguration.class).throwOnResourceConflict());
+              .setFeatureAfter(featureAfter);
       if (!incremental) {
         builder
             .targetAaptVersion(AndroidAaptVersion.AAPT)

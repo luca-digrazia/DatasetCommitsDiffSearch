@@ -110,7 +110,6 @@ public class AndroidResourcesProcessorBuilder {
   private Artifact featureOf;
   private Artifact featureAfter;
   private AndroidAaptVersion aaptVersion;
-  private boolean throwOnResourceConflict;
 
   /**
    * @param ruleContext The RuleContext that was used to create the SpawnAction.Builder.
@@ -230,12 +229,6 @@ public class AndroidResourcesProcessorBuilder {
 
   public AndroidResourcesProcessorBuilder targetAaptVersion(AndroidAaptVersion aaptVersion) {
     this.aaptVersion = aaptVersion;
-    return this;
-  }
-
-  public AndroidResourcesProcessorBuilder setThrowOnResourceConflict(
-      boolean throwOnResourceConflict) {
-    this.throwOnResourceConflict = throwOnResourceConflict;
     return this;
   }
 
@@ -473,10 +466,6 @@ public class AndroidResourcesProcessorBuilder {
     if (featureAfter != null) {
       builder.addExecPath("--featureAfter", featureAfter);
       inputs.add(featureAfter);
-    }
-
-    if (throwOnResourceConflict) {
-      builder.add("--throwOnResourceConflict");
     }
   }
 }
