@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,7 +17,6 @@ package org.androidannotations.handler;
 
 import com.sun.codemodel.*;
 import org.androidannotations.annotations.CheckedChange;
-import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
@@ -25,7 +24,6 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import java.util.List;
 
@@ -42,11 +40,7 @@ public class CheckedChangeHandler extends AbstractListenerHandler {
 		ExecutableElement executableElement = (ExecutableElement) element;
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		validatorHelper.param.hasZeroOrOneCompoundButtonParameter(executableElement, valid);
-
-		validatorHelper.param.hasZeroOrOneBooleanParameter(executableElement, valid);
-
-		validatorHelper.param.hasNoOtherParameterThanCompoundButtonOrBoolean(executableElement, valid);
+		validatorHelper.param.hasZeroOrOneCompoundButtonOrTwoCompoundButtonBooleanParameters(executableElement, valid);
 	}
 
 	@Override
@@ -58,14 +52,14 @@ public class CheckedChangeHandler extends AbstractListenerHandler {
 	protected void processParameters(JMethod listenerMethod, JInvocation call, List<? extends VariableElement> parameters) {
 		JVar btnParam = listenerMethod.param(classes().COMPOUND_BUTTON, "buttonView");
 		JVar isCheckedParam = listenerMethod.param(codeModel().BOOLEAN, "isChecked");
+		boolean isCheckedParamExists = parameters.size() == 2;
+		boolean btnParamExists = parameters.size() >= 1;
 
-		for (VariableElement parameter : parameters) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.COMPOUND_BUTTON)) {
-				call.arg(btnParam);
-			} else if (parameterType.equals(CanonicalNameConstants.BOOLEAN) || parameter.asType().getKind() == TypeKind.BOOLEAN) {
-				call.arg(isCheckedParam);
-			}
+		if (btnParamExists) {
+			call.arg(btnParam);
+		}
+		if (isCheckedParamExists) {
+			call.arg(isCheckedParam);
 		}
 	}
 

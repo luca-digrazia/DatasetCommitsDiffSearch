@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,7 +17,6 @@ package org.androidannotations.handler;
 
 import com.sun.codemodel.*;
 import org.androidannotations.annotations.ItemLongClick;
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
@@ -33,8 +32,6 @@ import static com.sun.codemodel.JExpr.cast;
 import static com.sun.codemodel.JExpr.invoke;
 
 public class ItemLongClickHandler extends AbstractListenerHandler {
-
-	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public ItemLongClickHandler(ProcessingEnvironment processingEnvironment) {
 		super(ItemLongClick.class, processingEnvironment);
@@ -79,12 +76,8 @@ public class ItemLongClickHandler extends AbstractListenerHandler {
 			if (parameterType.getKind() == TypeKind.INT) {
 				call.arg(onItemClickPositionParam);
 			} else {
-				JClass parameterClass = codeModelHelper.typeMirrorToJClass(parameterType, getHolder());
-				call.arg(cast(parameterClass, invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
-
-				if (parameterClass.isParameterized()) {
-					listenerMethod.annotate(SuppressWarnings.class).param("value", "unchecked");
-				}
+				String parameterTypeQualifiedName = parameterType.toString();
+				call.arg(cast(refClass(parameterTypeQualifiedName), invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
 			}
 		}
 	}
