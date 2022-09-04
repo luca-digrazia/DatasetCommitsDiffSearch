@@ -195,7 +195,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     Instant startTime = Instant.now();
     WorkResponse response =
         execInWorker(spawn, key, context, inputFiles, outputs, flagFiles, inputFileCache);
-    Duration wallTime = Duration.between(startTime, Instant.now());
+    Duration wallTime = Duration.between(Instant.now(), startTime);
 
     FileOutErr outErr = context.getFileOutErr();
     response.getOutputBytes().writeTo(outErr.getErrorStream());
@@ -321,17 +321,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     ActionExecutionMetadata owner = spawn.getResourceOwner();
     try {
-      try {
-        inputFiles.materializeVirtualInputs(execRoot);
-      } catch (IOException e) {
-        throw new UserExecException(
-            ErrorMessage.builder()
-                .message("IOException while materializing virtual inputs:")
-                .exception(e)
-                .build()
-                .toString());
-      }
-
       try {
         worker = workers.borrowObject(key);
         request =

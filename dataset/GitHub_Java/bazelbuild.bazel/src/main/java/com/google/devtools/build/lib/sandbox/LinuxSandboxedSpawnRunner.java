@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
-import com.google.devtools.build.lib.server.FailureDetails.Sandbox.Code;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.OS;
@@ -167,7 +166,11 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
 
     SandboxInputs inputs =
         helpers.processInputFiles(
-            context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
+            context.getInputMapping(
+                getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree),
+            spawn,
+            context.getArtifactExpander(),
+            execRoot);
     SandboxOutputs outputs = helpers.getOutputs(spawn);
 
     Duration timeout = context.getTimeout();
@@ -274,9 +277,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
         bindMounts.put(mountTarget, mountSource);
       } catch (IllegalArgumentException e) {
         throw new UserExecException(
-            createFailureDetail(
-                String.format("Error occurred when analyzing bind mount pairs. %s", e.getMessage()),
-                Code.BIND_MOUNT_ANALYSIS_FAILURE));
+            String.format("Error occurred when analyzing bind mount pairs. %s", e.getMessage()));
       }
     }
     for (Path inaccessiblePath : getInaccessiblePaths()) {
@@ -304,10 +305,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       final Path target = bindMount.getKey();
       // Mount source should exist in the file system
       if (!source.exists()) {
-        throw new UserExecException(
-            createFailureDetail(
-                String.format("Mount source '%s' does not exist.", source),
-                Code.MOUNT_SOURCE_DOES_NOT_EXIST));
+        throw new UserExecException(String.format("Mount source '%s' does not exist.", source));
       }
       // If target exists, but is not of the same type as the source, then we cannot mount it.
       if (target.exists()) {
@@ -318,22 +316,18 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
         if (!(areBothDirectories || areBothFiles)) {
           // Source and target are not of the same type; we cannot mount it.
           throw new UserExecException(
-              createFailureDetail(
-                  String.format(
-                      "Mount target '%s' is not of the same type as mount source '%s'.",
-                      target, source),
-                  Code.MOUNT_SOURCE_TARGET_TYPE_MISMATCH));
+              String.format(
+                  "Mount target '%s' is not of the same type as mount source '%s'.",
+                  target, source));
         }
       } else {
         // Mount target should exist in the file system
         throw new UserExecException(
-            createFailureDetail(
-                String.format(
-                    "Mount target '%s' does not exist. Bazel only supports bind mounting on top of "
-                        + "existing files/directories. Please create an empty file or directory at "
-                        + "the mount target path according to the type of mount source.",
-                    target),
-                Code.MOUNT_TARGET_DOES_NOT_EXIST));
+            String.format(
+                "Mount target '%s' does not exist. Bazel only supports bind mounting on top of "
+                    + "existing files/directories. Please create an empty file or directory at "
+                    + "the mount target path according to the type of mount source.",
+                target));
       }
     }
   }
