@@ -49,11 +49,6 @@ public class EntityOwnershipService {
         registerNewEntity(grn, user);
     }
 
-    public void registerNewEventNotification(String id, User user) {
-        final GRN grn = grnRegistry.newGRN(GRNTypes.EVENT_NOTIFICATION, id);
-        registerNewEntity(grn, user);
-    }
-
     public void registerNewDashboard(String id, User user) {
         final GRN grn = grnRegistry.newGRN(GRNTypes.DASHBOARD, id);
         registerNewEntity(grn, user);
@@ -78,28 +73,13 @@ public class EntityOwnershipService {
                 .build(), user);
     }
 
-    public void unregisterStream(String id) {
-        removeGrantsForTarget(grnRegistry.newGRN(GRNTypes.STREAM, id));
-    }
-
-    public void unregisterDashboard(String id) {
-        removeGrantsForTarget(grnRegistry.newGRN(GRNTypes.DASHBOARD, id));
-    }
-
-    public void unregisterSearch(String id) {
-        removeGrantsForTarget(grnRegistry.newGRN(GRNTypes.SEARCH, id));
+    public void unregisterView(String id) {
+        final GRN grn = grnRegistry.newGRN(GRNTypes.DASHBOARD, id);
+        dbGrantService.deleteForTarget(grn);
     }
 
     public void unregisterEventDefinition(String id) {
-        removeGrantsForTarget(grnRegistry.newGRN(GRNTypes.EVENT_DEFINITION, id));
-    }
-
-    public void unregisterEventNotification(String id) {
-        removeGrantsForTarget(grnRegistry.newGRN(GRNTypes.EVENT_NOTIFICATION, id));
-    }
-
-    private void removeGrantsForTarget(GRN target) {
-        LOG.debug("Removing grants for <{}>", target);
-        dbGrantService.deleteForTarget(target);
+        final GRN grn = grnRegistry.newGRN(GRNTypes.EVENT_DEFINITION, id);
+        dbGrantService.deleteForTarget(grn);
     }
 }
