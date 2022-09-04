@@ -256,9 +256,6 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
   public void somePath(
       Iterable<Target> from, Iterable<Target> to, QueryExpression caller, Callback<Target> callback)
       throws InterruptedException, QueryException {
-    try (SilentCloseable closeable = Profiler.instance().profile("preloadTransitiveClosure")) {
-      preloadTransitiveClosure(from, /*maxDepth=*/ Integer.MAX_VALUE);
-    }
     try {
       callback.process(
           new PathLabelVisitor(targetProvider, dependencyFilter).somePath(eventHandler, from, to));
@@ -272,9 +269,6 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
   public void allPaths(
       Iterable<Target> from, Iterable<Target> to, QueryExpression caller, Callback<Target> callback)
       throws InterruptedException, QueryException {
-    try (SilentCloseable closeable = Profiler.instance().profile("preloadTransitiveClosure")) {
-      preloadTransitiveClosure(from, /*maxDepth=*/ Integer.MAX_VALUE);
-    }
     try {
       callback.process(
           new PathLabelVisitor(targetProvider, dependencyFilter).allPaths(eventHandler, from, to));
@@ -287,13 +281,6 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
   public void samePkgDirectRdeps(
       Iterable<Target> from, QueryExpression caller, Callback<Target> callback)
       throws InterruptedException, QueryException {
-    Set<Target> targetsToPreload = new HashSet<>();
-    for (Target t : from) {
-      targetsToPreload.addAll(getSiblingTargetsInPackage(t));
-    }
-    try (SilentCloseable closeable = Profiler.instance().profile("preloadTransitiveClosure")) {
-      preloadTransitiveClosure(targetsToPreload, /*maxDepth=*/ 1);
-    }
     try {
       callback.process(
           new PathLabelVisitor(targetProvider, dependencyFilter)
@@ -311,9 +298,6 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
       QueryExpression caller,
       Callback<Target> callback)
       throws InterruptedException, QueryException {
-    try (SilentCloseable closeable = Profiler.instance().profile("preloadTransitiveClosure")) {
-      preloadTransitiveClosure(universe, maxDepth);
-    }
     try {
       callback.process(
           new PathLabelVisitor(targetProvider, dependencyFilter)
