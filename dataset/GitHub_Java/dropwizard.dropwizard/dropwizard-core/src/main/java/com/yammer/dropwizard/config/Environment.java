@@ -1,5 +1,6 @@
 package com.yammer.dropwizard.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.sun.jersey.spi.container.servlet.ServletContainer;
@@ -48,7 +49,7 @@ public class Environment {
                        ObjectMapperFactory objectMapperFactory,
                        Validator validator) {
         this.name = name;
-        this.jsonEnvironment = new JsonEnvironment(objectMapperFactory);
+        this.jsonEnvironment = new JsonEnvironment(objectMapperFactory.copy());
         this.validator = validator;
         final DropwizardResourceConfig jerseyConfig = new DropwizardResourceConfig(false);
 
@@ -122,5 +123,9 @@ public class Environment {
 
     ServletContextHandler getAdminContext() {
         return adminContext;
+    }
+
+    ObjectMapper buildObjectMapper() {
+        return jsonEnvironment.buildObjectMapper();
     }
 }

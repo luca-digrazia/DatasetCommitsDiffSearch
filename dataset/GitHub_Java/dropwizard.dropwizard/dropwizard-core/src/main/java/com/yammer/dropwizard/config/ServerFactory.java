@@ -349,8 +349,7 @@ public class ServerFactory {
         final ServletContainer jerseyContainer = env.getJerseyServletContainer();
         if (jerseyContainer != null) {
             env.getJerseyEnvironment().addProvider(
-                    new JacksonMessageBodyProvider(env.getJsonEnvironment().build(),
-                                                   env.getValidator())
+                    new JacksonMessageBodyProvider(env.buildObjectMapper(), env.getValidator())
             );
             final ServletHolder jerseyHolder = new ServletHolder(jerseyContainer);
             jerseyHolder.setInitOrder(Integer.MAX_VALUE);
