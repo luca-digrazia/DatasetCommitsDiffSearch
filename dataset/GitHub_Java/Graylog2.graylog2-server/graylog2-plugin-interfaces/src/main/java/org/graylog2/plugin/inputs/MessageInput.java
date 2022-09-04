@@ -22,7 +22,6 @@
 package org.graylog2.plugin.inputs;
 
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -32,7 +31,6 @@ import org.joda.time.DateTime;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -44,8 +42,6 @@ public abstract class MessageInput {
     protected String inputId;
     protected String persistId;
     protected DateTime createdAt;
-
-    private Map<String, Extractor> extractors = Maps.newConcurrentMap();
 
     public abstract void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException;
 
@@ -113,13 +109,4 @@ public abstract class MessageInput {
 
         return result;
     }
-
-    public void addExtractor(String id, Extractor extractor) {
-        this.extractors.put(id, extractor);
-    }
-
-    public Map<String, Extractor> getExtractors() {
-        return this.extractors;
-    }
-
 }
