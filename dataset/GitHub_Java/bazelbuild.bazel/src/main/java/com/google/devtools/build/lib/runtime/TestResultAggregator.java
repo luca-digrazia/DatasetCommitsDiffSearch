@@ -25,11 +25,11 @@ import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.test.TestAttempt;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.analysis.test.TestProvider.TestParams;
 import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+import com.google.devtools.build.lib.exec.TestAttempt;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
@@ -93,10 +93,7 @@ final class TestResultAggregator {
   synchronized void testEvent(TestResult result) {
     ActionOwner testOwner = result.getTestAction().getOwner();
     ConfiguredTargetKey targetLabel =
-        ConfiguredTargetKey.builder()
-            .setLabel(testOwner.getLabel())
-            .setConfiguration(result.getTestAction().getConfiguration())
-            .build();
+        ConfiguredTargetKey.of(testOwner.getLabel(), result.getTestAction().getConfiguration());
     Preconditions.checkArgument(targetLabel.equals(asKey(testTarget)));
 
     TestResult previousResult = statusMap.put(result.getTestStatusArtifact(), result);
@@ -167,10 +164,11 @@ final class TestResultAggregator {
   }
 
   private static ConfiguredTargetKey asKey(ConfiguredTarget target) {
-    return ConfiguredTargetKey.builder()
-        .setLabel(AliasProvider.getDependencyLabel(target))
-        .setConfigurationKey(target.getConfigurationKey())
-        .build();
+    return ConfiguredTargetKey.of(
+        // A test is never in the host configuration.
+        AliasProvider.getDependencyLabel(target),
+        target.getConfigurationKey(),
+        /*isHostConfiguration=*/ false);
   }
 
   private static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {

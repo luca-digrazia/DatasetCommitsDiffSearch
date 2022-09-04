@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.analysis.test.TestProvider.TestParams;
@@ -38,121 +39,111 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link TestResultAggregator}. */
 @TestSpec(size = Suite.SMALL_TESTS)
 @RunWith(JUnit4.class)
-public final class TestResultAggregatorTest {
-
-  private final TestParams mockParams = mock(TestParams.class);
+public class TestResultAggregatorTest {
+  private TestParams mockParams;
+  private ConfiguredTarget configuredTarget;
   private TestResultAggregator underTest;
 
   @Before
-  public void createAggregator() {
+  public final void createMocks() throws Exception {
+    mockParams = mock(TestParams.class);
     when(mockParams.runsDetectsFlakes()).thenReturn(false);
     when(mockParams.getTimeout()).thenReturn(TestTimeout.LONG);
-    when(mockParams.getTestStatusArtifacts()).thenReturn(ImmutableList.of());
+    when(mockParams.getTestStatusArtifacts())
+        .thenReturn(ImmutableList.<Artifact.DerivedArtifact>of());
+    TestProvider testProvider = new TestProvider(mockParams, ImmutableList.<String>of());
 
     ConfiguredTarget mockTarget = mock(ConfiguredTarget.class);
-    when(mockTarget.getProvider(TestProvider.class)).thenReturn(new TestProvider(mockParams));
+    when(mockTarget.getProvider(TestProvider.class)).thenReturn(testProvider);
+    this.configuredTarget = mockTarget;
 
     underTest =
         new TestResultAggregator(
-            mockTarget,
-            /*configuration=*/ null,
+            configuredTarget,
+            null,
             new AggregationPolicy(
                 new EventBus(),
                 /*testCheckUpToDate=*/ false,
-                /*testVerboseTimeoutWarnings=*/ false),
-            /*skippedThisTest=*/ false);
+                /*testVerboseTimeoutWarnings=*/ false));
   }
 
   @Test
-  public void incrementalAnalyze_nonCachedResult_setsActionRanTrue() {
+  public void testIncrementalAnalyzeSetsActionRanTrueWhenThereAreNonCachedResults() {
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isFalse();
+
+    TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(false).build();
     underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setRemotelyCached(false).build(),
-            /*cached=*/ false,
-            /*systemFailure=*/ null));
-    assertThat(underTest.aggregateAndReportSummary(false).actionRan()).isTrue();
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ false));
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isTrue();
   }
 
   @Test
-  public void incrementalAnalyze_locallyCachedTest_setsActionRanFalse() {
+  public void testIncrementalAnalyzeSetsActionRanFalseForLocallyCachedTests() {
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isFalse();
+
+    TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(false).build();
     underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setRemotelyCached(false).build(),
-            /*cached=*/ true,
-            /*systemFailure=*/ null));
-    assertThat(underTest.aggregateAndReportSummary(false).actionRan()).isFalse();
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ true));
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isFalse();
   }
 
   @Test
-  public void incrementalAnalyze_remotelyCachedTest_setsActionRanFalse() {
+  public void testIncrementalAnalyzeSetsActionRanFalseForRemotelyCachedTests() {
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isFalse();
+
+    TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(true).build();
     underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setRemotelyCached(true).build(),
-            /*cached=*/ false,
-            /*systemFailure=*/ null));
-    assertThat(underTest.aggregateAndReportSummary(false).actionRan()).isFalse();
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ false));
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isFalse();
   }
 
   @Test
-  public void incrementalAnalyze_newCachedResult_keepsActionRanTrueWhenAlreadyTrue() {
+  public void testIncrementalAnalyzeKeepsActionRanTrueWhenAlreadyTrueAndNewCachedResults() {
+    underTest.getCurrentSummaryForTesting().setActionRan(true);
+
+    TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(true).build();
     underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setRemotelyCached(false).build(),
-            /*cached=*/ false,
-            /*systemFailure=*/ null));
-    underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setRemotelyCached(true).build(),
-            /*cached=*/ true,
-            /*systemFailure=*/ null));
-    assertThat(underTest.aggregateAndReportSummary(false).actionRan()).isTrue();
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ true));
+    assertThat(underTest.getCurrentSummaryForTesting().peek().actionRan()).isTrue();
   }
 
   @Test
-  public void timingAggregation() {
-    underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setStartTimeMillisEpoch(7).setRunDurationMillis(10).build(),
-            /*cached=*/ true,
-            /*systemFailure=*/ null));
-    underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setStartTimeMillisEpoch(12).setRunDurationMillis(1).build(),
-            /*cached=*/ true,
-            /*systemFailure=*/ null));
+  public void testTimingAggregation() {
+    underTest.getCurrentSummaryForTesting().setActionRan(true);
 
-    TestSummary summary = underTest.aggregateAndReportSummary(false);
+    TestResultData testResultData =
+        TestResultData.newBuilder().setStartTimeMillisEpoch(7).setRunDurationMillis(10).build();
+    underTest.incrementalAnalyze(
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ true));
+
+    testResultData =
+        TestResultData.newBuilder().setStartTimeMillisEpoch(12).setRunDurationMillis(1).build();
+    underTest.incrementalAnalyze(
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ true));
+    TestSummary summary = underTest.getCurrentSummaryForTesting().build();
+
+    assertThat(summary.actionRan()).isTrue();
     assertThat(summary.getFirstStartTimeMillis()).isEqualTo(7);
     assertThat(summary.getLastStopTimeMillis()).isEqualTo(17);
     assertThat(summary.getTotalRunDurationMillis()).isEqualTo(11);
   }
 
   @Test
-  public void cancelConcurrentTests_cancellationAfterPassIgnored() {
+  public void testCancelledTest() {
     when(mockParams.runsDetectsFlakes()).thenReturn(true);
     when(mockParams.getRuns()).thenReturn(2);
+    underTest.getCurrentSummaryForTesting().setActionRan(true);
 
+    TestResultData testResultData =
+        TestResultData.newBuilder().setStatus(BlazeTestStatus.PASSED).build();
     underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setStatus(BlazeTestStatus.PASSED).build(),
-            /*cached=*/ true,
-            /*systemFailure=*/ null));
-    underTest.incrementalAnalyze(
-        new TestResult(
-            mock(TestRunnerAction.class),
-            TestResultData.newBuilder().setStatus(BlazeTestStatus.INCOMPLETE).build(),
-            /*cached=*/ true,
-            /*systemFailure=*/ null));
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ true));
 
-    assertThat(underTest.aggregateAndReportSummary(false).getStatus())
-        .isEqualTo(BlazeTestStatus.PASSED);
+    testResultData = TestResultData.newBuilder().setStatus(BlazeTestStatus.INCOMPLETE).build();
+    underTest.incrementalAnalyze(
+        new TestResult(mock(TestRunnerAction.class), testResultData, /*cached=*/ true));
+    TestSummary summary = underTest.getCurrentSummaryForTesting().build();
+
+    assertThat(summary.getStatus()).isEqualTo(BlazeTestStatus.PASSED);
   }
 }
