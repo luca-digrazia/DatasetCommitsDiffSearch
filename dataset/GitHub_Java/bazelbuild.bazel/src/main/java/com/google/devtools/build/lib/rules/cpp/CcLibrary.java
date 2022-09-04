@@ -148,6 +148,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
 
     ImmutableList<TransitiveInfoCollection> deps =
         ImmutableList.copyOf(ruleContext.getPrerequisites("deps", Mode.TARGET));
+    CppHelper.checkProtoLibrariesInDeps(ruleContext, deps);
     if (ruleContext.hasErrors()) {
       addEmptyRequiredProviders(targetBuilder);
       return;

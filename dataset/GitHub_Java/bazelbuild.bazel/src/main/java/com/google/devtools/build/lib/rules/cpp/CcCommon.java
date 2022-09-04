@@ -162,17 +162,12 @@ public final class CcCommon {
   private final FdoContext fdoContext;
 
   public CcCommon(RuleContext ruleContext) {
-    this(
-        ruleContext,
-        Preconditions.checkNotNull(
-            CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext)));
-  }
-
-  public CcCommon(RuleContext ruleContext, CcToolchainProvider ccToolchain) {
     this.ruleContext = ruleContext;
+    this.ccToolchain =
+        Preconditions.checkNotNull(
+            CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext));
     this.cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     this.fdoContext = ccToolchain.getFdoContext();
-    this.ccToolchain = ccToolchain;
   }
 
   /**
@@ -838,7 +833,7 @@ public final class CcCommon {
       ImmutableSet<String> unsupportedFeatures,
       CcToolchainProvider toolchain,
       CppSemantics cppSemantics) {
-    cppSemantics.validateLayeringCheckFeatures(ruleContext, toolchain, ImmutableSet.of());
+    cppSemantics.validateLayeringCheckFeatures(ruleContext);
     try {
       return configureFeaturesOrThrowEvalException(
           requestedFeatures,
