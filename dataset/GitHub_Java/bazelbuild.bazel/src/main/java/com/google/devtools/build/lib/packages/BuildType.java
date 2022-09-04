@@ -531,6 +531,11 @@ public final class BuildType {
     }
 
     @Override
+    public boolean isImmutable() {
+      return false;
+    }
+
+    @Override
     public void repr(SkylarkPrinter printer) {
       // Convert to a lib.syntax.SelectorList to guarantee consistency with callers that serialize
       // directly on that type.

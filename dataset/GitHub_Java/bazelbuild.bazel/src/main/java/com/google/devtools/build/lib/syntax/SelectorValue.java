@@ -86,4 +86,9 @@ public final class SelectorValue implements SkylarkValue {
   public void reprLegacy(SkylarkPrinter printer) {
     printer.format("selector(%r)", dictionary);
   }
+
+  @Override
+  public boolean isImmutable() {
+    return false;
+  }
 }
