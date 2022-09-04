@@ -125,11 +125,11 @@ public class Version implements Comparable<Version> {
     }
 
     public Version(int major, int minor, int patch) {
-        this(major, minor, patch, "", "");
+        this(major, minor, patch, null, null);
     }
 
     public Version(int major, int minor, int patch, String additional) {
-        this(major, minor, patch, additional, "");
+        this(major, minor, patch, additional, null);
     }
 
     public Version(int major, int minor, int patch, String additional, String sha1) {
@@ -144,7 +144,8 @@ public class Version implements Comparable<Version> {
             try {
                 final Properties git = new Properties();
                 git.load(new FileReader(Resources.getResource("org/graylog2/restclient/git.properties").getFile()));
-                commitSha = git.getProperty("git.commit.id.abbrev");
+                commitSha = git.getProperty("git.sha1");
+                commitSha = commitSha.substring(0, 7); // 7 chars is enough usually
             } catch (Exception e) {
                 LOG.info("Git commit details are not available, skipping the current sha", e);
                 commitSha = null;
