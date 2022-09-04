@@ -18,14 +18,19 @@ import io.undertow.servlet.api.DeploymentInfo;
  */
 public class UndertowHandlersConfServletExtension implements ServletExtension {
 
-    public static final String META_INF_UNDERTOW_HANDLERS_CONF = "META-INF/undertow-handlers.conf";
+    private static final String META_INF_UNDERTOW_HANDLERS_CONF = "META-INF/undertow-handlers.conf";
+
+    public static boolean existsConfFile() {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        return classLoader.getResource(META_INF_UNDERTOW_HANDLERS_CONF) != null;
+    }
 
     @Override
     public void handleDeployment(DeploymentInfo deploymentInfo, ServletContext servletContext) {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         InputStream handlers = classLoader.getResourceAsStream(META_INF_UNDERTOW_HANDLERS_CONF);
         if (handlers != null) {
-            // From Stuart Douglas: Ideally these would be parsed at deployment time and passed into a recorder,
+            // From Stuart Douglas: Ideally these would be parsed at deployment time and passed into a template,
             // however they are likely not bytecode serialisable. Even though this approach
             // does not 100% align with the Quarkus ethos I think it is ok in this case as
             // the gains would be marginal compared to the cost of attempting to make
