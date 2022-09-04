@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.runtime;
 
 import java.math.BigDecimal;
@@ -31,9 +47,9 @@ public class Timing {
     }
 
     /**
-     * An extension providing the HTTP server should set the current info (port, host, etc.) in a recorder method of a
+     * An extension providing the HTTP server should set the current info (port, host, etc.) in a template method of a
      * RUNTIME_INIT build step. Note that it is not possible to inspect thee RUN_TIME config properties through MP Config.
-     *
+     * 
      * @param info
      */
     public static void setHttpServer(String info) {
