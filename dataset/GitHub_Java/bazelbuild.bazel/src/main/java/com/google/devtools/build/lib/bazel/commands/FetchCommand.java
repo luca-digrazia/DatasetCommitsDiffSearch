@@ -15,18 +15,17 @@ package com.google.devtools.build.lib.bazel.commands;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.common.UniverseScope;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
-import com.google.devtools.build.lib.query2.engine.QuerySyntaxException;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
@@ -111,7 +110,7 @@ public final class FetchCommand implements BlazeCommand {
             env,
             options.getOptions(KeepGoingOption.class).keepGoing,
             false,
-            UniverseScope.EMPTY,
+            Lists.<String>newArrayList(),
             threadsOption.threads,
             EnumSet.noneOf(Setting.class),
             /* useGraphlessQuery= */ true);
@@ -120,10 +119,8 @@ public final class FetchCommand implements BlazeCommand {
     QueryExpression expr;
     try {
       expr = QueryExpression.parse(query, queryEnv);
-    } catch (QuerySyntaxException e) {
-      String errorMessage =
-          String.format(
-              "Error while parsing '%s': %s", QueryExpression.truncate(query), e.getMessage());
+    } catch (QueryException e) {
+      String errorMessage = "Error while parsing '" + query + "': " + e.getMessage();
       env.getReporter().handle(Event.error(null, errorMessage));
       return createFailedBlazeCommandResult(
           ExitCode.COMMAND_LINE_ERROR, Code.QUERY_PARSE_ERROR, errorMessage);
