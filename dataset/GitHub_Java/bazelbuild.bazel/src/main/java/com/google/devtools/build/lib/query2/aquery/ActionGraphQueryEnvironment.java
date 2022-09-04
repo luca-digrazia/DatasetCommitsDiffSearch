@@ -95,10 +95,19 @@ public class ActionGraphQueryEnvironment
         walkableGraphSupplier,
         settings);
     this.configuredTargetKeyExtractor =
-        configuredTargetValue ->
-            ConfiguredTargetKey.builder()
-                .setConfiguredTarget(configuredTargetValue.getConfiguredTarget())
-                .build();
+        configuredTargetValue -> {
+          try {
+            ConfiguredTarget element = configuredTargetValue.getConfiguredTarget();
+            return ConfiguredTargetKey.of(
+                element,
+                element.getConfigurationKey() == null
+                    ? null
+                    : ((BuildConfigurationValue) graph.getValue(element.getConfigurationKey()))
+                        .getConfiguration());
+          } catch (InterruptedException e) {
+            throw new IllegalStateException("Interruption unexpected in configured query", e);
+          }
+        };
     this.accessor =
         new ConfiguredTargetValueAccessor(
             walkableGraphSupplier.get(), this.configuredTargetKeyExtractor);
@@ -228,8 +237,7 @@ public class ActionGraphQueryEnvironment
   @Nullable
   @Override
   protected ConfiguredTargetValue getHostConfiguredTarget(Label label) throws InterruptedException {
-    return this.getConfiguredTargetValue(
-        ConfiguredTargetKey.builder().setLabel(label).setConfiguration(hostConfiguration).build());
+    return this.getConfiguredTargetValue(ConfiguredTargetKey.of(label, hostConfiguration));
   }
 
   @Nullable
@@ -238,19 +246,12 @@ public class ActionGraphQueryEnvironment
       throws InterruptedException {
     if (topLevelConfigurations.isTopLevelTarget(label)) {
       return this.getConfiguredTargetValue(
-          ConfiguredTargetKey.builder()
-              .setLabel(label)
-              .setConfiguration(topLevelConfigurations.getConfigurationForTopLevelTarget(label))
-              .build());
+          ConfiguredTargetKey.of(
+              label, topLevelConfigurations.getConfigurationForTopLevelTarget(label)));
     } else {
       ConfiguredTargetValue toReturn;
       for (BuildConfiguration configuration : topLevelConfigurations.getConfigurations()) {
-        toReturn =
-            this.getConfiguredTargetValue(
-                ConfiguredTargetKey.builder()
-                    .setLabel(label)
-                    .setConfiguration(configuration)
-                    .build());
+        toReturn = this.getConfiguredTargetValue(ConfiguredTargetKey.of(label, configuration));
         if (toReturn != null) {
           return toReturn;
         }
@@ -262,7 +263,8 @@ public class ActionGraphQueryEnvironment
   @Nullable
   @Override
   protected ConfiguredTargetValue getNullConfiguredTarget(Label label) throws InterruptedException {
-    return this.getConfiguredTargetValue(ConfiguredTargetKey.builder().setLabel(label).build());
+    return this.getConfiguredTargetValue(
+        ConfiguredTargetKey.of(label, /* configurationKey= */ null, false));
   }
 
   @Nullable
@@ -299,10 +301,7 @@ public class ActionGraphQueryEnvironment
   @Override
   protected ConfiguredTargetKey getSkyKey(ConfiguredTargetValue configuredTargetValue) {
     ConfiguredTarget target = configuredTargetValue.getConfiguredTarget();
-    return ConfiguredTargetKey.builder()
-        .setConfiguredTarget(target)
-        .setConfiguration(getConfiguration(configuredTargetValue))
-        .build();
+    return ConfiguredTargetKey.of(target, getConfiguration(configuredTargetValue));
   }
 
   @Override
