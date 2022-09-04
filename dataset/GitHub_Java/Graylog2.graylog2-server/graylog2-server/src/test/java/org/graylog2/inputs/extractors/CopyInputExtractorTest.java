@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2013 TORCH UG
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -18,6 +20,7 @@ package org.graylog2.inputs.extractors;
 
 import com.google.common.collect.Lists;
 import org.graylog2.ConfigurationException;
+import org.graylog2.GraylogServerStub;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.Converter;
@@ -30,15 +33,16 @@ import java.util.Map;
 
 import static org.testng.AssertJUnit.assertEquals;
 
-public class CopyInputExtractorTest extends AbstractExtractorTest {
+public class CopyInputExtractorTest {
+
     @Test
     public void testCopy() throws Extractor.ReservedFieldException, ConfigurationException {
         Message msg = new Message("The short message", "TestUnit", Tools.iso8601());
 
         msg.addField("somefield", "foo");
 
-        CopyInputExtractor x = new CopyInputExtractor(metricRegistry, "bar", "bar", 0, Extractor.CursorStrategy.COPY, "somefield", "our_result", noConfig(), "foo", noConverters(), Extractor.ConditionType.NONE, null);
-        x.runExtractor(msg);
+        CopyInputExtractor x = new CopyInputExtractor("bar", "bar", 0, Extractor.CursorStrategy.COPY, "somefield", "our_result", noConfig(), "foo", noConverters(), Extractor.ConditionType.NONE, null);
+        x.runExtractor(new GraylogServerStub(), msg);
 
         assertEquals("foo", msg.getField("our_result"));
         assertEquals("foo", msg.getField("somefield"));
