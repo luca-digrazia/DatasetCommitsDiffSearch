@@ -16,23 +16,15 @@ public abstract class LoggingExceptionMapper<E extends Throwable> implements Exc
 
     @Override
     public Response toResponse(E exception) {
-        final int status;
-        final ErrorMessage errorMessage;
-
         if (exception instanceof WebApplicationException) {
-            status = ((WebApplicationException) exception).getResponse().getStatus();
-            errorMessage = new ErrorMessage(status, exception.getLocalizedMessage());
-        } else {
-            final long id = ThreadLocalRandom.current().nextLong();
-            logException(id, exception);
-
-            status = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
-            errorMessage = new ErrorMessage(formatErrorMessage(id, exception));
+            return ((WebApplicationException) exception).getResponse();
         }
 
-        return Response.status(status)
+        final long id = ThreadLocalRandom.current().nextLong();
+        logException(id, exception);
+        return Response.serverError()
                 .type(MediaType.APPLICATION_JSON_TYPE)
-                .entity(errorMessage)
+                .entity(new ErrorMessage(formatErrorMessage(id, exception)))
                 .build();
     }
 
