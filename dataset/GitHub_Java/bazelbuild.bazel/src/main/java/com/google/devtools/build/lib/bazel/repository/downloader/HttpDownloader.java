@@ -62,11 +62,9 @@ public class HttpDownloader implements Downloader {
       List<URL> urls,
       Map<URI, Map<String, String>> authHeaders,
       Optional<Checksum> checksum,
-      String canonicalId,
       Path destination,
       ExtendedEventHandler eventHandler,
-      Map<String, String> clientEnv,
-      Optional<String> type)
+      Map<String, String> clientEnv)
       throws IOException, InterruptedException {
     Clock clock = new JavaClock();
     Sleeper sleeper = new JavaSleeper();
@@ -90,7 +88,7 @@ public class HttpDownloader implements Downloader {
       semaphore.acquire();
 
       try (HttpStream payload =
-              multiplexer.connect(Collections.singletonList(url), checksum, authHeaders, type);
+              multiplexer.connect(Collections.singletonList(url), checksum, authHeaders);
           OutputStream out = destination.getOutputStream()) {
         try {
           ByteStreams.copy(payload, out);

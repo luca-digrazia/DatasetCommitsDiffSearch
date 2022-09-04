@@ -361,6 +361,8 @@ public class BazelRepositoryModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return ImmutableList.<Class<? extends OptionsBase>>of(RepositoryOptions.class);
+    return ImmutableSet.of("sync", "fetch", "build", "query").contains(command.name())
+        ? ImmutableList.<Class<? extends OptionsBase>>of(RepositoryOptions.class)
+        : ImmutableList.<Class<? extends OptionsBase>>of();
   }
 }

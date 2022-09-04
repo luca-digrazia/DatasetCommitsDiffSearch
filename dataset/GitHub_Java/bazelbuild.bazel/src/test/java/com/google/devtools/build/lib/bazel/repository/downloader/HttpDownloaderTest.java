@@ -25,6 +25,7 @@ import com.google.common.base.Optional;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
+import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionNotSetException;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.DataInputStream;
@@ -65,8 +66,13 @@ public class HttpDownloaderTest {
   private final ExtendedEventHandler eventHandler = mock(ExtendedEventHandler.class);
   private final JavaIoFileSystem fs;
 
-  public HttpDownloaderTest() {
-    fs = new JavaIoFileSystem(DigestHashFunction.SHA256);
+  public HttpDownloaderTest() throws DefaultHashFunctionNotSetException {
+    try {
+      DigestHashFunction.setDefault(DigestHashFunction.SHA256);
+    } catch (DigestHashFunction.DefaultAlreadySetException e) {
+      // Do nothing.
+    }
+    fs = new JavaIoFileSystem();
 
     // Scale timeouts down to make tests fast.
     httpDownloader.setTimeoutScaling(0.1f);

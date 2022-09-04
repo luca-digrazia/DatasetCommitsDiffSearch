@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -38,7 +39,7 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.Path;
@@ -51,9 +52,10 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 
-/** A repository function to delegate work done by Starlark remote repositories. */
+/**
+ * A repository function to delegate work done by skylark remote repositories.
+ */
 public class SkylarkRepositoryFunction extends RepositoryFunction {
-  static final String SEMANTICS = "STARLARK_SEMANTICS";
 
   private final DownloadManager downloadManager;
   private double timeoutScaling = 1.0;
@@ -67,25 +69,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     this.timeoutScaling = timeoutScaling;
   }
 
-  static String describeSemantics(StarlarkSemantics semantics) {
-    // Here we use the hash code provided by AutoValue. This is unique, as long
-    // as the number of bits in the StarlarkSemantics is small enough. We will have to
-    // move to a longer description once the number of flags grows too large.
-    return "" + semantics.hashCode();
-  }
-
-  @Override
-  protected boolean verifySemanticsMarkerData(Map<String, String> markerData, Environment env)
-      throws InterruptedException {
-    StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
-    if (starlarkSemantics == null) {
-      // As it is a precomputed value, it should already be available. If not, returning
-      // false is the safe thing to do.
-      return false;
-    }
-    return describeSemantics(starlarkSemantics).equals(markerData.get(SEMANTICS));
-  }
-
   @Nullable
   @Override
   public RepositoryDirectoryValue.Builder fetch(
@@ -96,11 +79,13 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
       Map<String, String> markerData,
       SkyKey key)
       throws RepositoryFunctionException, InterruptedException {
-
-    String defInfo = RepositoryResolvedEvent.getRuleDefinitionInformation(rule);
-    env.getListener().post(new SkylarkRepositoryDefinitionLocationEvent(rule.getName(), defInfo));
-
-    StarlarkCallable function = rule.getRuleClassObject().getConfiguredTargetFunction();
+    if (rule.getDefinitionInformation() != null) {
+      env.getListener()
+          .post(
+              new SkylarkRepositoryDefinitionLocationEvent(
+                  rule.getName(), rule.getDefinitionInformation()));
+    }
+    StarlarkFunction function = rule.getRuleClassObject().getConfiguredTargetFunction();
     if (declareEnvironmentDependencies(markerData, env, getEnviron(rule)) == null) {
       return null;
     }
@@ -108,7 +93,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     if (env.valuesMissing()) {
       return null;
     }
-    markerData.put(SEMANTICS, describeSemantics(starlarkSemantics));
 
     Set<String> verificationRules =
         RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES.get(env);
@@ -141,7 +125,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
           StarlarkThread.builder(mutability)
               .setSemantics(starlarkSemantics)
               .build();
-      thread.setPrintHandler(Event.makeDebugPrintHandler(env.getListener()));
+      thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(env.getListener()));
 
       // The fetch phase does not need the tools repository
       // or the fragment map because it happens before analysis.
@@ -207,7 +191,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               rule, skylarkRepositoryContext.getAttr(), outputDirectory, result);
       if (resolved.isNewInformationReturned()) {
         env.getListener().handle(Event.debug(resolved.getMessage()));
-        env.getListener().handle(Event.debug(defInfo));
+        env.getListener().handle(Event.debug(rule.getDefinitionInformation()));
       }
 
       String ruleClass =
@@ -243,9 +227,9 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
                       + rule.getName()
                       + "':\n   "
                       + e.getMessage()));
-      env.getListener()
-          .handle(Event.info(RepositoryResolvedEvent.getRuleDefinitionInformation(rule)));
-
+      if (!Strings.isNullOrEmpty(rule.getDefinitionInformation())) {
+        env.getListener().handle(Event.info(rule.getDefinitionInformation()));
+      }
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
