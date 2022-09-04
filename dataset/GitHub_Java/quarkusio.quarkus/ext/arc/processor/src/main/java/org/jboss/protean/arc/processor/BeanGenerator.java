@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_BRIDGE;
@@ -64,13 +48,13 @@ import org.jboss.protean.gizmo.BytecodeCreator;
 import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.ClassOutput;
+import org.jboss.protean.gizmo.ExceptionTable;
 import org.jboss.protean.gizmo.FieldCreator;
 import org.jboss.protean.gizmo.FieldDescriptor;
 import org.jboss.protean.gizmo.FunctionCreator;
 import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
-import org.jboss.protean.gizmo.TryBlock;
 
 /**
  *
@@ -295,7 +279,8 @@ public class BeanGenerator extends AbstractGenerator {
 
         Type providerType = bean.getProviderType();
         String baseName = declaringClassBase + PRODUCER_METHOD_SUFFIX + PRODUCER_INDEX.incrementAndGet();
-        String providerTypeName = providerType.name().toString();
+        ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
+        String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(declaringClass.name());
         String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
 
@@ -362,7 +347,8 @@ public class BeanGenerator extends AbstractGenerator {
 
         Type providerType = bean.getProviderType();
         String baseName = declaringClassBase + PRODUCER_FIELD_SUFFIX + PRODUCER_INDEX.incrementAndGet();
-        String providerTypeName = providerType.name().toString();
+        ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
+        String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(declaringClass.name());
         String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
 
@@ -845,12 +831,13 @@ public class BeanGenerator extends AbstractGenerator {
                 // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
                 ResultHandle invocationContextHandle = create.invokeStaticMethod(MethodDescriptors.INVOCATION_CONTEXT_AROUND_CONSTRUCT, constructorHandle,
                         aroundConstructsHandle, func.getInstance(), bindingsHandle);
-                TryBlock tryCatch = create.tryBlock();
-                CatchBlockCreator exceptionCatch = tryCatch.addCatch(Exception.class);
+                ExceptionTable tryCatch = create.addTryCatch();
+                CatchBlockCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
                 // throw new RuntimeException(e)
                 exceptionCatch.throwException(RuntimeException.class, "Error invoking aroundConstructs", exceptionCatch.getCaughtException());
-                instanceHandle = tryCatch.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
+                instanceHandle = create.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
                         invocationContextHandle);
+                tryCatch.complete();
 
             } else {
                 instanceHandle = newInstanceHandle(bean, beanCreator, create, create, providerTypeName, baseName,
@@ -931,11 +918,12 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle invocationContextHandle = create.invokeStaticMethod(MethodDescriptors.INVOCATION_CONTEXT_POST_CONSTRUCT, instanceHandle,
                         postConstructsHandle, bindingsHandle);
 
-                TryBlock tryCatch = create.tryBlock();
-                CatchBlockCreator exceptionCatch = tryCatch.addCatch(Exception.class);
+                ExceptionTable tryCatch = create.addTryCatch();
+                CatchBlockCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
                 // throw new RuntimeException(e)
                 exceptionCatch.throwException(RuntimeException.class, "Error invoking postConstructs", exceptionCatch.getCaughtException());
-                tryCatch.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class), invocationContextHandle);
+                create.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class), invocationContextHandle);
+                tryCatch.complete();
             }
 
             // PostConstruct callbacks
