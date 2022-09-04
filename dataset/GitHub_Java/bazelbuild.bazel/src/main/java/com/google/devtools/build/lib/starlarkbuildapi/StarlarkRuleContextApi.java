@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.TransitiveInfoCollectionApi;
@@ -30,13 +29,13 @@ import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.ClassObject;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.NoneType;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
+import net.starlark.java.eval.Structure;
 import net.starlark.java.eval.Tuple;
 
 /** Interface for a context object given to rule implementation functions. */
@@ -72,7 +71,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
           + "attribute is not specified in the rule then the corresponding struct value is "
           + "<code>None</code>. If a label type is not marked as <code>executable=True</code>, no "
           + "corresponding struct field is generated. <a "
-          + "href=\"https://github.com/bazelbuild/examples/blob/master/rules/actions_run/"
+          + "href=\"https://github.com/bazelbuild/examples/blob/main/rules/actions_run/"
           + "execute.bzl\">See example of use</a>.";
   String FILES_DOC =
       "A <code>struct</code> containing files defined in <a href='attr.html#label'>label</a>"
@@ -83,22 +82,22 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
           + " other words, use <code>files</code> to access the <a"
           + " href=\"../rules.$DOC_EXT#requesting-output-files\">default outputs</a> of a"
           + " dependency. <a"
-          + " href=\"https://github.com/bazelbuild/examples/blob/master/rules/depsets/foo.bzl\">See"
+          + " href=\"https://github.com/bazelbuild/examples/blob/main/rules/depsets/foo.bzl\">See"
           + " example of use</a>.";
   String FILE_DOC =
       "A <code>struct</code> containing files defined in <a href='attr.html#label'>label type"
           + " attributes</a> marked as <a"
           + " href='attr.html#label.allow_single_file'><code>allow_single_file</code></a>. The"
           + " struct fields correspond to the attribute names. The struct value is always a <a"
-          + " href='File.html'><code>File</code></a> or <code>None</code>. If an optional"
-          + " attribute is not specified in the rule then the corresponding struct value is"
+          + " href='File.html'><code>File</code></a> or <code>None</code>. If an optional attribute"
+          + " is not specified in the rule then the corresponding struct value is"
           + " <code>None</code>. If a label type is not marked as <code>allow_single_file</code>,"
           + " no corresponding struct field is generated. It is a shortcut for:<pre"
           + " class=language-python>list(ctx.attr.&lt;ATTR&gt;.files)[0]</pre>In other words, use"
           + " <code>file</code> to access the (singular) <a"
           + " href=\"../rules.$DOC_EXT#requesting-output-files\">default output</a> of a"
           + " dependency. <a"
-          + " href=\"https://github.com/bazelbuild/examples/blob/master/rules/expand_template/hello.bzl\">See"
+          + " href=\"https://github.com/bazelbuild/examples/blob/main/rules/expand_template/hello.bzl\">See"
           + " example of use</a>.";
   String ATTR_DOC =
       "A struct to access the values of the <a href='../rules.$DOC_EXT#attributes'>attributes</a>. "
@@ -106,7 +105,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
           + "of the struct and the types of their values correspond to the keys and values of the "
           + "<a href='globals.html#rule.attrs'><code>attrs</code> dict</a> provided to the <a "
           + "href='globals.html#rule'><code>rule</code> function</a>. <a "
-          + "href=\"https://github.com/bazelbuild/examples/blob/master/rules/attributes/"
+          + "href=\"https://github.com/bazelbuild/examples/blob/main/rules/attributes/"
           + "printer.bzl\">See example of use</a>.";
   String SPLIT_ATTR_DOC =
       "A struct to access the values of attributes with split configurations. If the attribute is "
@@ -268,7 +267,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       structField = true,
       doc =
           "Returns the set of features that are explicitly enabled by the user for this rule. "
-              + "<a href=\"https://github.com/bazelbuild/examples/blob/master/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/blob/main/rules/"
               + "features/rule.bzl\">See example of use</a>.")
   ImmutableList<String> getFeatures() throws EvalException;
 
@@ -291,7 +290,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
   FileRootApi getGenfilesDirectory() throws EvalException;
 
   @StarlarkMethod(name = "outputs", structField = true, doc = OUTPUTS_DOC)
-  ClassObject outputs() throws EvalException;
+  Structure outputs() throws EvalException;
 
   @StarlarkMethod(
       name = "rule",
@@ -336,10 +335,8 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
   @StarlarkMethod(
       name = "exec_groups",
       structField = true,
-      enableOnlyWithFlag = BuildLanguageOptions.EXPERIMENTAL_EXEC_GROUPS,
-      // TODO(b/151742236) update this doc when this becomes non-experimental.
       doc =
-          "<i>experimental</i> A collection of the execution groups available for this rule,"
+          "A collection of the execution groups available for this rule,"
               + " indexed by their name. Access with <code>ctx.exec_groups[name_of_group]</code>.")
   ExecGroupCollectionApi execGroups() throws EvalException;
 
@@ -356,38 +353,6 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
             doc = "The string to split."),
       })
   Sequence<String> tokenize(String optionString) throws EvalException;
-
-  @StarlarkMethod(
-      name = "expand",
-      doc =
-          "Expands all references to labels embedded within a string for all files using a mapping "
-              + "from definition labels (i.e. the label in the output type attribute) to files. "
-              + "Deprecated.",
-      // TODO(cparsons): Look into flipping this to true.
-      documented = false,
-      parameters = {
-        @Param(
-            name = "expression",
-            positional = true,
-            named = false,
-            doc = "The string expression to expand."),
-        @Param(
-            name = "files",
-            positional = true,
-            named = false,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = FileApi.class)},
-            doc = "The list of files."),
-        @Param(
-            name = "label_resolver",
-            positional = true,
-            named = false,
-            doc = "The label resolver."),
-      })
-  String expand(
-      @Nullable String expression,
-      Sequence<?> artifacts, // <FileT>
-      Label labelResolver)
-      throws EvalException;
 
   @StarlarkMethod(
       name = "new_file",
@@ -548,6 +513,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       },
       allowReturnNones = true,
       useStarlarkThread = true)
+  @Nullable
   String expandLocation(String input, Sequence<?> targets, StarlarkThread thread)
       throws EvalException;
 
@@ -581,19 +547,19 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
             defaultValue = "False",
             named = true,
             doc =
-                "<b>Use of this parameter is not recommended. See "
-                    + "<a href=\"../rules.$DOC_EXT#runfiles\">runfiles guide</a></b>. "
-                    + "<p>Whether to collect the data "
-                    + "runfiles from the dependencies in srcs, data and deps attributes."),
+                "<b>Use of this parameter is not recommended. See <a"
+                    + " href=\"https://docs.bazel.build/skylark/rules.html#runfiles\">runfiles"
+                    + " guide</a></b>. <p>Whether to collect the data runfiles from the"
+                    + " dependencies in srcs, data and deps attributes."),
         @Param(
             name = "collect_default",
             defaultValue = "False",
             named = true,
             doc =
-                "<b>Use of this parameter is not recommended. See "
-                    + "<a href=\"../rules.$DOC_EXT#runfiles\">runfiles guide</a></b>. "
-                    + "<p>Whether to collect the default "
-                    + "runfiles from the dependencies in srcs, data and deps attributes."),
+                "<b>Use of this parameter is not recommended. See <a"
+                    + " href=\"https://docs.bazel.build/skylark/rules.html#runfiles\">runfiles"
+                    + " guide</a></b>. <p>Whether to collect the default runfiles from the"
+                    + " dependencies in srcs, data and deps attributes."),
         @Param(
             name = "symlinks",
             defaultValue = "{}",
@@ -694,7 +660,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
                     + "for useful keys."),
       },
       useStarlarkThread = true)
-  Tuple<Object> resolveCommand(
+  Tuple resolveCommand(
       String command,
       Object attributeUnchecked,
       Boolean expandLocations,
@@ -725,5 +691,5 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
             positional = false,
             doc = "List of tools (list of targets)."),
       })
-  Tuple<Object> resolveTools(Sequence<?> tools) throws EvalException;
+  Tuple resolveTools(Sequence<?> tools) throws EvalException;
 }
