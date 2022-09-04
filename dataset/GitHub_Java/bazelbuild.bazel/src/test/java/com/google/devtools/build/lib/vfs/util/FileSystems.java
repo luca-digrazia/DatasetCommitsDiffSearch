@@ -13,35 +13,69 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.util;
 
+import com.google.common.base.Verify;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.windows.WindowsFileSystem;
 
-/** Convenience factory methods. */
+/**
+ * This static file system singleton manages access to a single default
+ * {@link FileSystem} instance created within the methods of this class.
+ */
+@ThreadSafe
 public final class FileSystems {
 
   private FileSystems() {}
 
-  /** Constructs a platform native (Unix or Windows) file system. */
-  public static FileSystem getNativeFileSystem() {
+  private static FileSystem defaultNativeFileSystem;
+  private static FileSystem defaultJavaIoFileSystem;
+
+  /**
+   * Initializes the default native {@link FileSystem} instance as a platform native
+   * (Unix or Windows) file system. If it's not initialized, then initialize it,
+   * otherwise verify if the type of the instance is correct.
+   */
+  public static synchronized FileSystem getNativeFileSystem() {
     if (OS.getCurrent() == OS.WINDOWS) {
-      return new WindowsFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+      if (defaultNativeFileSystem == null) {
+        defaultNativeFileSystem = new WindowsFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+      } else {
+        Verify.verify(defaultNativeFileSystem instanceof WindowsFileSystem);
+      }
+    } else {
+      if (defaultNativeFileSystem == null) {
+        try {
+          defaultNativeFileSystem =
+              (FileSystem)
+                  Class.forName(TestConstants.TEST_REAL_UNIX_FILE_SYSTEM)
+                      .getDeclaredConstructor(DigestHashFunction.class)
+                      .newInstance(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+        } catch (Exception e) {
+          throw new IllegalStateException(e);
+        }
+      } else {
+        Verify.verify(defaultNativeFileSystem instanceof UnixFileSystem);
+      }
     }
-    try {
-      return Class.forName(TestConstants.TEST_REAL_UNIX_FILE_SYSTEM)
-          .asSubclass(FileSystem.class)
-          .getDeclaredConstructor(DigestHashFunction.class)
-          .newInstance(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
-    } catch (Exception e) {
-      throw new IllegalStateException(e);
-    }
+    return defaultNativeFileSystem;
   }
 
-  /** Constructs a java.io.File file system. */
-  public static FileSystem getJavaIoFileSystem() {
-    return new JavaIoFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+  /**
+   * Initializes the default java {@link FileSystem} instance as a java.io.File
+   * file system. If it's not initialized, then initialize it,
+   * otherwise verify if the type of the instance is correct.
+   */
+  public static synchronized FileSystem getJavaIoFileSystem() {
+    if (defaultJavaIoFileSystem == null) {
+      defaultJavaIoFileSystem = new JavaIoFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+    } else {
+      Verify.verify(defaultJavaIoFileSystem instanceof JavaIoFileSystem);
+    }
+    return defaultJavaIoFileSystem;
   }
 }
