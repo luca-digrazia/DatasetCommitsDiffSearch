@@ -36,8 +36,6 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import java.util.Optional;
-
 import static org.joda.time.Period.minutes;
 import static org.joda.time.Period.seconds;
 import static org.junit.Assert.assertEquals;
@@ -76,7 +74,6 @@ public class TimeBasedRotationStrategyTest {
     @Before
     public void setUp() {
         when(indexSetConfig.id()).thenReturn("index-set-id");
-        when(indexSetConfig.title()).thenReturn("index-set-title");
         rotationStrategy = new TimeBasedRotationStrategy(indices, nodeId, auditEventSender);
     }
 
@@ -147,7 +144,7 @@ public class TimeBasedRotationStrategyTest {
 
         when(indexSet.getConfig()).thenReturn(indexSetConfig);
         when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
-        when(indices.indexCreationDate(anyString())).thenReturn(Optional.of(initialTime.minus(minutes(5))));
+        when(indices.indexCreationDate(anyString())).thenReturn(initialTime.minus(minutes(5)));
 
         // Should not rotate the first index.
         when(indexSet.getNewestIndex()).thenReturn("ignored");
@@ -186,7 +183,7 @@ public class TimeBasedRotationStrategyTest {
         DateTimeUtils.setCurrentMillisProvider(clock);
         when(indexSet.getConfig()).thenReturn(indexSetConfig);
         when(indexSetConfig.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
-        when(indices.indexCreationDate(anyString())).thenReturn(Optional.of(initialTime.minus(minutes(11))));
+        when(indices.indexCreationDate(anyString())).thenReturn(initialTime.minus(minutes(11)));
 
         // Should rotate the first index.
         // time is 01:55:00, index was created at 01:44:00, so we missed one period, and should rotate
@@ -333,7 +330,7 @@ public class TimeBasedRotationStrategyTest {
         when(indexSetConfig1.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
         when(indexSetConfig2.rotationStrategy()).thenReturn(TimeBasedRotationStrategyConfig.create(period));
 
-        when(indices.indexCreationDate(anyString())).thenReturn(Optional.of(initialTime.minus(minutes(5))));
+        when(indices.indexCreationDate(anyString())).thenReturn(initialTime.minus(minutes(5)));
 
         // Should not rotate the initial index.
         when(indexSet1.getNewestIndex()).thenReturn("index1");

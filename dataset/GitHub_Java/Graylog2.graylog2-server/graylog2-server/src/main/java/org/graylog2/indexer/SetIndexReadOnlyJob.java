@@ -62,11 +62,6 @@ public class SetIndexReadOnlyJob extends SystemJob {
 
     @Override
     public void execute() {
-        if (indices.isClosed(index)) {
-            log.debug("Not running job for closed index <{}>", index);
-            return;
-        }
-
         final Optional<IndexSet> indexSet = indexSetRegistry.getForIndex(index);
 
         if (!indexSet.isPresent()) {

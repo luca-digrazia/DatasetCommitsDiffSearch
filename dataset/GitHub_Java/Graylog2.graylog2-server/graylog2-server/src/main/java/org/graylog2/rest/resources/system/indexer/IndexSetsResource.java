@@ -170,22 +170,6 @@ public class IndexSetsResource extends RestResource {
                 .orElseThrow(() -> new NotFoundException("Couldn't load index set with ID <" + id + ">"));
     }
 
-    @GET
-    @Path("{id}/stats")
-    @Timed
-    @ApiOperation(value = "Get index set statistics")
-    @ApiResponses(value = {
-            @ApiResponse(code = 403, message = "Unauthorized"),
-            @ApiResponse(code = 404, message = "Index set not found"),
-    })
-    public IndexSetStats indexSetStatistics(@ApiParam(name = "id", required = true)
-                                            @PathParam("id") String id) {
-        checkPermission(RestPermissions.INDEXSETS_READ, id);
-        return indexSetRegistry.get(id)
-                .map(indexSetStatsCreator::getForIndexSet)
-                .orElseThrow(() -> new NotFoundException("Couldn't load index set with ID <" + id + ">"));
-    }
-
     @POST
     @Timed
     @ApiOperation(value = "Create index set")
@@ -227,20 +211,17 @@ public class IndexSetsResource extends RestResource {
                                   @ApiParam(name = "Index set configuration", required = true)
                                   @Valid @NotNull IndexSetUpdateRequest updateRequest) {
         checkPermission(RestPermissions.INDEXSETS_EDIT, id);
+        if (!id.equals(updateRequest.id())) {
+            throw new ClientErrorException("Mismatch of IDs in URI path and payload", Response.Status.CONFLICT);
+        }
 
         final IndexSetConfig oldConfig = indexSetService.get(id)
                 .orElseThrow(() -> new NotFoundException("Index set <" + id + "> not found"));
 
+        final IndexSetConfig savedObject = indexSetService.save(updateRequest.toIndexSetConfig(oldConfig));
         final IndexSetConfig defaultIndexSet = indexSetService.getDefault();
-        final boolean isDefaultSet = oldConfig.equals(defaultIndexSet);
 
-        if (isDefaultSet && !updateRequest.isWritable()) {
-            throw new ClientErrorException("Default index set must be writable.", Response.Status.CONFLICT);
-        }
-
-        final IndexSetConfig savedObject = indexSetService.save(updateRequest.toIndexSetConfig(id, oldConfig));
-
-        return IndexSetSummary.fromIndexSetConfig(savedObject, isDefaultSet);
+        return IndexSetSummary.fromIndexSetConfig(savedObject, savedObject.equals(defaultIndexSet));
     }
 
     @PUT
@@ -257,10 +238,6 @@ public class IndexSetsResource extends RestResource {
 
         final IndexSetConfig indexSet = indexSetService.get(id)
                 .orElseThrow(() -> new NotFoundException("Index set <" + id + "> does not exist"));
-
-        if (!indexSet.isWritable()) {
-            throw new ClientErrorException("Default index set must be writable.", Response.Status.CONFLICT);
-        }
 
         clusterConfigService.write(DefaultIndexSetConfig.create(indexSet.id()));
 

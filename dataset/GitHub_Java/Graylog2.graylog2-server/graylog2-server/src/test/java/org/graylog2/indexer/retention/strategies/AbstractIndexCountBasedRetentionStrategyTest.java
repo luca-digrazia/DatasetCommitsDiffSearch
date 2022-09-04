@@ -16,6 +16,7 @@
  */
 package org.graylog2.indexer.retention.strategies;
 
+import com.google.common.collect.Sets;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.indexer.retention.RetentionStrategyConfig;
@@ -62,13 +63,14 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
 
     @Before
     public void setUp() throws Exception {
-        indexMap = new HashMap<>();
-        indexMap.put("index1", Collections.emptySet());
-        indexMap.put("index2", Collections.emptySet());
-        indexMap.put("index3", Collections.emptySet());
-        indexMap.put("index4", Collections.emptySet());
-        indexMap.put("index5", Collections.emptySet());
-        indexMap.put("index6", Collections.emptySet());
+        indexMap = new HashMap<String, Set<String>>() {{
+            put("index1", Collections.emptySet());
+            put("index2", Collections.emptySet());
+            put("index3", Collections.emptySet());
+            put("index4", Collections.emptySet());
+            put("index5", Collections.emptySet());
+            put("index6", Collections.emptySet());
+        }};
 
         when(indexSet.getAllIndexAliases()).thenReturn(indexMap);
         when(indexSet.getManagedIndices()).thenReturn(indexMap.keySet().stream().toArray(String[]::new));
@@ -119,8 +121,7 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
 
         final ArgumentCaptor<String> retainedIndexName = ArgumentCaptor.forClass(String.class);
         verify(retentionStrategy, times(2)).retain(retainedIndexName.capture(), eq(indexSet));
-        // Ensure that the oldest indices come first
-        assertThat(retainedIndexName.getAllValues()).containsExactly("index1", "index2");
+        assertThat(retainedIndexName.getAllValues()).contains("index1", "index2");
 
         verify(activityWriter, times(3)).write(any(Activity.class));
     }
@@ -156,7 +157,7 @@ public class AbstractIndexCountBasedRetentionStrategyTest {
         final String writeIndexAlias = "WriteIndexAlias";
 
         when(indexSet.getWriteIndexAlias()).thenReturn(writeIndexAlias);
-        indexMap.put(indexWithWriteIndexAlias, Collections.singleton(writeIndexAlias));
+        indexMap.put(indexWithWriteIndexAlias, Sets.newHashSet(writeIndexAlias));
 
         retentionStrategy.retain(indexSet);
 

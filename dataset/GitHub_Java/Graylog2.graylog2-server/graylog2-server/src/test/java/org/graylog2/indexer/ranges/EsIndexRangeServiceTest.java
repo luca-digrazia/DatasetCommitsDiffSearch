@@ -16,70 +16,103 @@
  */
 package org.graylog2.indexer.ranges;
 
-import com.google.common.collect.ImmutableMap;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.primitives.Ints;
+import com.google.common.eventbus.EventBus;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
-import com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule;
-import com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch;
-import org.assertj.jodatime.api.Assertions;
-import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
-import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
+import com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule;
+import com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.indices.IndexMissingException;
+import org.elasticsearch.common.settings.Settings;
+import org.graylog2.audit.AuditEventSender;
 import org.graylog2.database.NotFoundException;
+import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.TestIndexSet;
+import org.graylog2.indexer.indexset.IndexSetConfig;
 import org.graylog2.indexer.nosqlunit.IndexCreatingLoadStrategyFactory;
-import org.graylog2.indexer.searches.Searches;
-import org.graylog2.indexer.searches.TimestampStats;
-import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
-import org.graylog2.shared.system.activities.NullActivityWriter;
+import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy;
+import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig;
+import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
+import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
+import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import javax.inject.Inject;
+import java.time.ZonedDateTime;
 import java.util.Set;
+import java.util.SortedSet;
 
-import static com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
-import static com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
+import static com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
+import static com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assume.assumeTrue;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class EsIndexRangeServiceTest {
     @ClassRule
-    public static final EmbeddedElasticsearch EMBEDDED_ELASTICSEARCH = newEmbeddedElasticsearchRule().build();
-    private static final String INDEX_NAME = "graylog";
-    private static final ImmutableSet<String> INDEX_NAMES = ImmutableSet.of("graylog", "graylog_1", "graylog_2");
+    public static final EmbeddedElasticsearch EMBEDDED_ELASTICSEARCH = newEmbeddedElasticsearchRule()
+            .settings(Settings.settingsBuilder().put("action.auto_create_index", false).build())
+            .build();
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
+    private static final ImmutableSet<String> INDEX_NAMES = ImmutableSet.of("graylog", "graylog_1", "graylog_2", "graylog_3", "graylog_4", "graylog_5", "ignored");
+
+    private final IndexSetConfig indexSetConfig;
+    private final IndexSet indexSet;
 
     @Rule
     public ElasticsearchRule elasticsearchRule;
 
     @Inject
     private Client client;
-
     @Mock
-    private Searches searches;
+    private EventBus localEventBus;
+    @Mock
+    private AuditEventSender auditEventSender;
+    @Mock
+    private NodeId nodeId;
+    @Mock
+    private IndexSetRegistry indexSetRegistry;
     private EsIndexRangeService indexRangeService;
 
     public EsIndexRangeServiceTest() {
+        this.indexSetConfig = IndexSetConfig.builder()
+                .id("index-set-1")
+                .title("Index set 1")
+                .description("For testing")
+                .indexPrefix("graylog")
+                .creationDate(ZonedDateTime.now())
+                .shards(1)
+                .replicas(0)
+                .rotationStrategyClass(MessageCountRotationStrategy.class.getCanonicalName())
+                .rotationStrategy(MessageCountRotationStrategyConfig.createDefault())
+                .retentionStrategyClass(DeletionRetentionStrategy.class.getCanonicalName())
+                .retentionStrategy(DeletionRetentionStrategyConfig.createDefault())
+                .indexAnalyzer("standard")
+                .indexTemplateName("template-1")
+                .indexOptimizationMaxNumSegments(1)
+                .indexOptimizationDisabled(false)
+                .build();
+        this.indexSet = new TestIndexSet(indexSetConfig);
         this.elasticsearchRule = newElasticsearchRule().defaultEmbeddedElasticsearch();
-        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(INDEX_NAMES));
+        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(indexSet, INDEX_NAMES));
     }
 
     @Before
     public void setUp() throws Exception {
-        indexRangeService = new EsIndexRangeService(client, new NullActivityWriter(), searches, new ObjectMapperProvider().get());
+        when(indexSetRegistry.getManagedIndices()).thenReturn(new String[]{
+                "graylog_1", "graylog_2", "graylog_3", "graylog_4", "graylog_5"});
+       indexRangeService = new EsIndexRangeService(client, indexSetRegistry, localEventBus, new MetricRegistry());
     }
 
     @Test
@@ -99,166 +132,45 @@ public class EsIndexRangeServiceTest {
         indexRangeService.get("does-not-exist");
     }
 
+    /**
+     * Test the following constellation:
+     * <pre>
+     *                        [-        index range       -]
+     * [- graylog_1 -][- graylog_2 -][- graylog_3 -][- graylog_4 -][- graylog_5 -]
+     * </pre>
+     */
     @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromReturnsIndexRangesAfterTimestamp() throws Exception {
-        final long millis = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).getMillis();
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(Ints.saturatedCast(millis / 1000L));
+    @UsingDataSet(locations = "EsIndexRangeServiceTest-distinct.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void findReturnsIndexRangesWithinGivenRange() throws Exception {
+        final DateTime begin = new DateTime(2015, 1, 2, 12, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2015, 1, 4, 12, 0, DateTimeZone.UTC);
+        final SortedSet<IndexRange> indexRanges = indexRangeService.find(begin, end);
 
-        assertThat(indexRanges).hasSize(2);
-    }
-
-    @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromReturnsNothingBeforeTimestamp() throws Exception {
-        final long millis = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC).getMillis();
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(Ints.saturatedCast(millis / 1000L));
-
-        assertThat(indexRanges).isEmpty();
-    }
-
-    @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromWithDateTimeReturnsIndexRangesAfterTimestamp() throws Exception {
-        final DateTime dateTime = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(dateTime);
-
-        assertThat(indexRanges).hasSize(2);
-    }
-
-    @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void getFromWithDateTimeReturnsNothingBeforeTimestamp() throws Exception {
-        final DateTime dateTime = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(dateTime);
-
-        assertThat(indexRanges).isEmpty();
-    }
-
-    @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void destroyRemovesIndexRange() throws Exception {
-        indexRangeService.destroy("graylog_1");
-
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(0);
-
-        assertThat(indexRanges).hasSize(1);
-        assertThat(indexRanges.iterator().next().indexName()).isEqualTo("graylog_2");
-    }
-
-    @Test
-    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void destroyRemovesIgnoresNonExistingIndexRange() throws Exception {
-        indexRangeService.destroy("does-not-exist");
-
-        final long millis = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC).getMillis();
-        Set<IndexRange> indexRanges = indexRangeService.getFrom(Ints.saturatedCast(millis / 1000L));
-
-        assertThat(indexRanges).hasSize(2);
-    }
-
-    @Test
-    public void createReturnsIndexRange() throws Exception {
-        final DateTime dateTime = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        final int timestamp = Ints.saturatedCast(dateTime.getMillis() / 1000L);
-        IndexRange indexRange = indexRangeService.create(ImmutableMap.<String, Object>of(
-                        "index", "graylog_3",
-                        "start", timestamp,
-                        "calculated_at", timestamp,
-                        "took_ms", 42
-                )
+        assertThat(indexRanges).containsExactly(
+                EsIndexRange.create("graylog_2", new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), 42),
+                EsIndexRange.create("graylog_3", new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), 42),
+                EsIndexRange.create("graylog_4", new DateTime(2015, 1, 4, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 5, 0, 0, DateTimeZone.UTC), new DateTime(2015, 1, 5, 0, 0, DateTimeZone.UTC), 42)
         );
-
-        assertThat(indexRange.indexName()).isEqualTo("graylog_3");
-        assertThat(indexRange.end()).isEqualTo(dateTime);
-        assertThat(indexRange.calculatedAt()).isEqualTo(dateTime);
-        assertThat(indexRange.calculationDuration()).isEqualTo(42);
-    }
-
-    @Test
-    public void calculateRangeReturnsIndexRange() throws Exception {
-        final String index = "graylog_test";
-        final DateTime min = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        final DateTime max = new DateTime(2015, 1, 3, 0, 0, DateTimeZone.UTC);
-        final DateTime avg = new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC);
-        final TimestampStats stats = TimestampStats.create(min, max, avg);
-
-        when(searches.timestampStatsOfIndex(index)).thenReturn(stats);
-
-        final IndexRange indexRange = indexRangeService.calculateRange(index);
-
-        assertThat(indexRange.indexName()).isEqualTo(index);
-        assertThat(indexRange.begin()).isEqualTo(min);
-        assertThat(indexRange.end()).isEqualTo(max);
-        Assertions.assertThat(indexRange.calculatedAt()).isEqualToIgnoringHours(DateTime.now(DateTimeZone.UTC));
-    }
-
-    @Test
-    public void testCalculateRangeWithEmptyIndex() throws Exception {
-        final String index = "graylog_test";
-        when(searches.findNewestMessageTimestampOfIndex(index)).thenReturn(null);
-        final IndexRange range = indexRangeService.calculateRange(index);
-
-        assertThat(range).isNotNull();
-        assertThat(range.indexName()).isEqualTo(index);
-        Assertions.assertThat(range.end()).isEqualToIgnoringHours(DateTime.now(DateTimeZone.UTC));
-    }
-
-    @Test(expected = IndexMissingException.class)
-    public void testCalculateRangeWithNonExistingIndex() throws Exception {
-        doThrow(IndexMissingException.class).when(searches).timestampStatsOfIndex(anyString());
-        indexRangeService.calculateRange("does-not-exist");
     }
 
     @Test
     @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void destroyAllKillsAllIndexRanges() throws Exception {
-        indexRangeService.destroyAll();
-        // Refresh indices
-        final RefreshRequest refreshRequest = client.admin().indices().prepareRefresh().request();
-        final RefreshResponse refreshResponse = client.admin().indices().refresh(refreshRequest).actionGet();
-        assumeTrue(refreshResponse.getFailedShards() == 0);
+    public void findReturnsNothingBeforeBegin() throws Exception {
+        final DateTime begin = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
+        final DateTime end = new DateTime(2016, 1, 2, 0, 0, DateTimeZone.UTC);
+        Set<IndexRange> indexRanges = indexRangeService.find(begin, end);
 
-        assertThat(indexRangeService.getFrom(0)).isEmpty();
+        assertThat(indexRanges).isEmpty();
     }
 
     @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
-    public void savePersistsIndexRange() throws Exception {
-        final String indexName = "graylog";
-        final DateTime begin = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        final DateTime end = new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final IndexRange indexRange = IndexRangeImpl.create(indexName, begin, end, now, 42);
-
-        indexRangeService.save(indexRange);
-
-        final IndexRange result = indexRangeService.get(indexName);
-        assertThat(result.indexName()).isEqualTo(indexName);
-        assertThat(result.begin()).isEqualTo(begin);
-        assertThat(result.end()).isEqualTo(end);
-        assertThat(result.calculatedAt()).isEqualTo(now);
-        assertThat(result.calculationDuration()).isEqualTo(42);
+    @UsingDataSet(locations = "EsIndexRangeServiceTest.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void findAllReturnsAllIndexRanges() throws Exception {
+        assertThat(indexRangeService.findAll()).hasSize(2);
     }
 
-    @Test
-    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
-    public void saveOverwritesExistingIndexRange() throws Exception {
-        final String indexName = "graylog";
-        final DateTime begin = new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
-        final DateTime end = new DateTime(2015, 1, 2, 0, 0, DateTimeZone.UTC);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final IndexRange indexRangeBefore = IndexRangeImpl.create(indexName, begin, end, now, 1);
-        final IndexRange indexRangeAfter = IndexRangeImpl.create(indexName, begin, end, now, 2);
-
-        indexRangeService.save(indexRangeBefore);
-
-        final IndexRange before = indexRangeService.get(indexName);
-        assertThat(before.calculationDuration()).isEqualTo(1);
-
-        indexRangeService.save(indexRangeAfter);
-
-        final IndexRange after = indexRangeService.get(indexName);
-        assertThat(after.calculationDuration()).isEqualTo(2);
+    @Test(expected = UnsupportedOperationException.class)
+    public void calculateRangeReturnsIndexRange() throws Exception {
+        indexRangeService.calculateRange("graylog");
     }
 }

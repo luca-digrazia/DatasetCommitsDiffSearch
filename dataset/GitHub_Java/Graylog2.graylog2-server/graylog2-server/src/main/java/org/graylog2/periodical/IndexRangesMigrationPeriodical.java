@@ -16,17 +16,27 @@
  */
 package org.graylog2.periodical;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Uninterruptibles;
+import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.cluster.Cluster;
-import org.graylog2.indexer.indices.Indices;
+import org.graylog2.indexer.ranges.EsIndexRangeService;
+import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
+import org.graylog2.indexer.ranges.LegacyMongoIndexRangeService;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
+import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -35,33 +45,72 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * A {@link Periodical} to check if index ranges need to be recalculated and notify the administrators about it.
  *
  * @see <a href="https://github.com/Graylog2/graylog2-server/pull/1274">Refactor index ranges handling (#1274)</a>
+ * @since 1.2.0
  */
 public class IndexRangesMigrationPeriodical extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(IndexRangesMigrationPeriodical.class);
 
     private final Cluster cluster;
-    private final Indices indices;
+    private final IndexSetRegistry indexSetRegistry;
     private final IndexRangeService indexRangeService;
     private final NotificationService notificationService;
+    private final LegacyMongoIndexRangeService legacyMongoIndexRangeService;
+    private final EsIndexRangeService esIndexRangeService;
+    private final ClusterConfigService clusterConfigService;
 
     @Inject
     public IndexRangesMigrationPeriodical(final Cluster cluster,
-                                          final Indices indices,
+                                          final IndexSetRegistry indexSetRegistry,
                                           final IndexRangeService indexRangeService,
-                                          final NotificationService notificationService) {
+                                          final NotificationService notificationService,
+                                          final LegacyMongoIndexRangeService legacyMongoIndexRangeService,
+                                          final EsIndexRangeService esIndexRangeService,
+                                          final ClusterConfigService clusterConfigService) {
         this.cluster = checkNotNull(cluster);
-        this.indices = checkNotNull(indices);
+        this.indexSetRegistry = checkNotNull(indexSetRegistry);
         this.indexRangeService = checkNotNull(indexRangeService);
         this.notificationService = checkNotNull(notificationService);
+        this.legacyMongoIndexRangeService = checkNotNull(legacyMongoIndexRangeService);
+        this.esIndexRangeService = checkNotNull(esIndexRangeService);
+        this.clusterConfigService = checkNotNull(clusterConfigService);
     }
 
     @Override
     public void doRun() {
+        final MongoIndexRangesMigrationComplete migrationComplete = clusterConfigService.get(MongoIndexRangesMigrationComplete.class);
+        if (migrationComplete != null && migrationComplete.complete) {
+            LOG.debug("Migration of index ranges (pre Graylog 1.2.2) already complete. Skipping migration process.");
+            return;
+        }
+
         while (!cluster.isConnected() || !cluster.isHealthy()) {
             Uninterruptibles.sleepUninterruptibly(5, TimeUnit.SECONDS);
         }
 
-        final int numberOfIndices = indices.getAll().size();
+        final Set<String> indexNames = ImmutableSet.copyOf(indexSetRegistry.getManagedIndices());
+
+        // Migrate old MongoDB index ranges
+        final SortedSet<IndexRange> mongoIndexRanges = legacyMongoIndexRangeService.findAll();
+        for (IndexRange indexRange : mongoIndexRanges) {
+            if(indexNames.contains(indexRange.indexName())) {
+                LOG.info("Migrating index range from MongoDB: {}", indexRange);
+                indexRangeService.save(indexRange);
+            } else {
+                LOG.info("Removing stale index range from MongoDB: {}", indexRange);
+            }
+
+            legacyMongoIndexRangeService.delete(indexRange.indexName());
+        }
+
+        // Migrate old Elasticsearch index ranges
+        final SortedSet<IndexRange> esIndexRanges = esIndexRangeService.findAll();
+        for (IndexRange indexRange : esIndexRanges) {
+            LOG.info("Migrating index range from Elasticsearch: {}", indexRange);
+            indexRangeService.save(indexRange);
+        }
+
+        // Check whether all index ranges have been migrated
+        final int numberOfIndices = indexNames.size();
         final int numberOfIndexRanges = indexRangeService.findAll().size();
         if (numberOfIndices > numberOfIndexRanges) {
             LOG.info("There are more indices ({}) than there are index ranges ({}). Notifying administrator.",
@@ -73,6 +122,8 @@ public class IndexRangesMigrationPeriodical extends Periodical {
                     .addDetail("index_ranges", numberOfIndexRanges);
             notificationService.publishIfFirst(notification);
         }
+
+        clusterConfigService.write(new MongoIndexRangesMigrationComplete(true));
     }
 
     @Override
@@ -97,7 +148,7 @@ public class IndexRangesMigrationPeriodical extends Periodical {
 
     @Override
     public boolean isDaemon() {
-        return false;
+        return true;
     }
 
     @Override
@@ -113,5 +164,16 @@ public class IndexRangesMigrationPeriodical extends Periodical {
     @Override
     protected Logger getLogger() {
         return LOG;
+    }
+
+    @JsonAutoDetect
+    public static class MongoIndexRangesMigrationComplete {
+        @JsonProperty
+        public boolean complete;
+
+        @JsonCreator
+        public MongoIndexRangesMigrationComplete(@JsonProperty("complete") boolean complete) {
+            this.complete = complete;
+        }
     }
 }
