@@ -180,10 +180,11 @@ public final class PyCommon {
         fieldName, expected.getStarlarkName(), actual.getStarlarkName());
   }
 
-  // TODO(bazel-team): validateSources is the result of refactoring while preserving
+  // TODO(bazel-team): validatePackageAndSources is the result of refactoring while preserving
   // legacy behavior across some (but not all) Google-internal uses of PyCommon. Ideally all call
   // sites should be updated to expect the same validation steps.
-  public PyCommon(RuleContext ruleContext, PythonSemantics semantics, boolean validateSources) {
+  public PyCommon(
+      RuleContext ruleContext, PythonSemantics semantics, boolean validatePackageAndSources) {
     this.ruleContext = ruleContext;
     this.semantics = semantics;
     this.version = ruleContext.getFragment(PythonConfiguration.class).getPythonVersion();
@@ -192,7 +193,7 @@ public final class PyCommon {
     this.transitivePythonSources = initTransitivePythonSources(ruleContext);
     this.directPythonSources =
         initAndMaybeValidateDirectPythonSources(
-            ruleContext, semantics, /*validate=*/ validateSources);
+            ruleContext, semantics, /*validate=*/ validatePackageAndSources);
     this.usesSharedLibraries = initUsesSharedLibraries(ruleContext);
     this.imports = initImports(ruleContext, semantics);
     this.hasPy2OnlySources = initHasPy2OnlySources(ruleContext, this.sourcesVersion);
@@ -262,7 +263,7 @@ public final class PyCommon {
           && semantics.prohibitHyphensInPackagePaths()
           && Util.containsHyphen(src.getLabel().getPackageFragment())) {
         ruleContext.attributeError(
-            "srcs", src.getLabel() + ": paths to Python sources may not contain '-'");
+            "srcs", src.getLabel() + ": paths to Python packages may not contain '-'");
       }
       Iterable<Artifact> pySrcs =
           FileType.filter(
