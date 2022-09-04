@@ -27,13 +27,11 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
-import org.graylog2.alerts.AlertCondition;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.Persisted;
 import org.graylog2.database.ValidationException;
 import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
-import org.graylog2.database.validators.MapValidator;
 import org.graylog2.database.validators.Validator;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Tools;
@@ -58,8 +56,6 @@ public class StreamImpl extends Persisted implements Stream {
     private static final Logger LOG = LoggerFactory.getLogger(StreamImpl.class);
 
     private static final String COLLECTION = "streams";
-
-    public static final String EMBEDDED_ALERT_CONDITIONS = "alert_conditions";
 
     public StreamImpl(Map<String, Object> fields, Core core) {
     	super(core, fields);
@@ -139,7 +135,22 @@ public class StreamImpl extends Persisted implements Stream {
     public boolean hasConfiguredOutputs(String typeClass) {
     	return false;
     }
+    
+    public boolean inAlarmGracePeriod() {
+    	return true;
+    }
+    
+    public void setLastAlarm(int timestamp, Core server) {
+    }
+    
+    public Set<String> getAlarmCallbacks() {
+    	return Sets.newHashSet();
+    }
 
+    public static Map<String, String> nameMap(Core server) {
+    	return Maps.newHashMap();
+    }
+    
 	@Override
 	public List<StreamRule> getStreamRules() {
 		// TODO Auto-generated method stub
@@ -157,25 +168,29 @@ public class StreamImpl extends Persisted implements Stream {
         return streamRules;
 	}
 
-    public List<AlertCondition> getAlertConditions() {
-        List<AlertCondition> conditions = Lists.newArrayList();
+	@Override
+	public int getAlarmTimespan() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
 
-        if (fields.containsKey(EMBEDDED_ALERT_CONDITIONS)) {
-            for (BasicDBObject conditionFields : (List<BasicDBObject>) fields.get(EMBEDDED_ALERT_CONDITIONS)) {
-                conditions.add(AlertCondition.fromPersisted(conditionFields));
-            }
-        }
+	@Override
+	public int getAlarmMessageLimit() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
 
-        return conditions;
-    }
+	@Override
+	public int getAlarmPeriod() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
 
-    public void addAlertCondition(AlertCondition condition) throws ValidationException {
-        embed(EMBEDDED_ALERT_CONDITIONS, condition);
-    }
-
-    public void removeAlertCondition(String conditionId) {
-        removeEmbedded(EMBEDDED_ALERT_CONDITIONS, conditionId);
-    }
+	@Override
+	public Set<AlarmReceiver> getAlarmReceivers(GraylogServer server) {
+		// TODO Auto-generated method stub
+		return null;
+	}
 	
     @Override
     public String toString() {
@@ -227,13 +242,6 @@ public class StreamImpl extends Persisted implements Stream {
 
     @Override
     protected Map<String, Validator> getEmbeddedValidations(String key) {
-       if(key.equals(EMBEDDED_ALERT_CONDITIONS)) {
-            return new HashMap<String, Validator>() {{
-                put("id", new FilledStringValidator());
-                put("parameters", new MapValidator());
-            }};
-        }
-
         return Maps.newHashMap();
     }
 
