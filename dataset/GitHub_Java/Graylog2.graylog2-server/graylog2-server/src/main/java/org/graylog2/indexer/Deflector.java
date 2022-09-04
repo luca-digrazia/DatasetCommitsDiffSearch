@@ -22,10 +22,8 @@ package org.graylog2.indexer;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.elasticsearch.indices.InvalidAliasNameException;
 import org.graylog2.Core;
 import org.graylog2.activities.Activity;
-import org.graylog2.indexer.ranges.IndexRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +56,7 @@ public class Deflector {
     }
     
     public boolean isUp() {
-        return this.server.getIndexer().aliasExists(DEFLECTOR_NAME);
+        return this.server.getIndexer().indexExists(DEFLECTOR_NAME);
     }
     
     public void setUp() {
@@ -67,8 +65,7 @@ public class Deflector {
             LOG.info("Found deflector alias <{}>. Using it.", DEFLECTOR_NAME);
         } else {
             LOG.info("Did not find an deflector alias. Setting one up now.");
-
-            try {
+            
             // Do we have a target index to point to?
             try {
                 String currentTarget = getCurrentTargetName();
@@ -81,9 +78,6 @@ public class Deflector {
                 server.getActivityWriter().write(new Activity(msg, Deflector.class));
                 
                 cycle(); // No index, so automatically cycling to a new one.
-            }
-            } catch (InvalidAliasNameException e) {
-                LOG.error("Seems like there already is an index called [{}]", DEFLECTOR_NAME);
             }
         }
     }

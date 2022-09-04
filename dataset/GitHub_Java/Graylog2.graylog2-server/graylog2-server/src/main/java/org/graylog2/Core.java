@@ -21,6 +21,7 @@
 package org.graylog2;
 
 import org.glassfish.grizzly.http.server.HttpServer;
+import org.graylog2.indexer.IndexRangeManager;
 import org.graylog2.plugin.Tools;
 
 import java.io.IOException;
@@ -29,7 +30,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.graylog2.systemjobs.SystemJobManager;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -46,8 +46,6 @@ import org.graylog2.gelf.GELFChunkManager;
 import org.graylog2.plugin.outputs.MessageOutput;
 
 import com.google.common.collect.Lists;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.google.common.collect.Maps;
 import java.util.Map;
@@ -140,14 +138,10 @@ public class Core implements GraylogServer {
     
     private ActivityWriter activityWriter;
 
-    private SystemJobManager systemJobManager;
-
     private String serverId;
     
     private boolean localMode = false;
     private boolean statsMode = false;
-
-    private AtomicBoolean isProcessing = new AtomicBoolean(true);
     
     private DateTime startedAt;
 
@@ -175,9 +169,7 @@ public class Core implements GraylogServer {
         cluster = new Cluster(this);
         
         activityWriter = new ActivityWriter(this);
-
-        systemJobManager = new SystemJobManager(this);
-
+        
         messageCounterManager = new MessageCounterManagerImpl();
         messageCounterManager.register(MASTER_COUNTER_NAME);
 
@@ -344,7 +336,7 @@ public class Core implements GraylogServer {
             }
         }
 
-        activityWriter.write(new Activity("Started up.", Core.class));
+        activityWriter.write(new Activity("Started up.", GraylogServer.class));
         LOG.info("Graylog2 up and running.");
 
         while (true) {
@@ -490,10 +482,6 @@ public class Core implements GraylogServer {
     public ActivityWriter getActivityWriter() {
         return this.activityWriter;
     }
-
-    public SystemJobManager getSystemJobManager() {
-        return this.systemJobManager;
-    }
     
     @Override
     public boolean isMaster() {
@@ -554,19 +542,6 @@ public class Core implements GraylogServer {
     
     public DateTime getStartedAt() {
     	return startedAt;
-    }
-
-    public void pauseMessageProcessing() {
-        // TODO: properly pause and restart AMQP inputs.
-        isProcessing.set(false);
-    }
-
-    public void resumeMessageProcessing() {
-        isProcessing.set(true);
-    }
-
-    public boolean isProcessing() {
-        return isProcessing.get();
     }
     
 }

@@ -19,10 +19,12 @@
  */
 package org.graylog2.periodical;
 
+import java.util.Map;
+
+import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.graylog2.Core;
 import org.graylog2.activities.Activity;
-import org.graylog2.indexer.Deflector;
-import org.graylog2.notifications.Notification;
+import org.graylog2.indexer.NoTargetIndexException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +36,7 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
     private static final Logger LOG = LoggerFactory.getLogger(DeflectorManagerThread.class);
     
     public static final int INITIAL_DELAY = 0;
-    public static final int PERIOD = 10;
+    public static final int PERIOD = 60;
     
     private final Core graylogServer;
     
@@ -46,7 +48,6 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
     public void run() {
         // Point deflector to a new index if required.
         try {
-            checkAndRepair();
             point();
         } catch (Exception e) {
             LOG.error("Couldn't point deflector to a new index", e);
@@ -80,30 +81,6 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
                             graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
                     });
         }
-    }
-
-    private void checkAndRepair() {
-        if (!graylogServer.getDeflector().isUp()) {
-            String msg = "Detected that there is no deflector alias. Trying to set up one now.";
-            LOG.warn(msg);
-            graylogServer.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
-
-            if (graylogServer.getIndexer().indexExists(Deflector.DEFLECTOR_NAME)) {
-                // is there an *index* called graylog2_deflector? if so: raise a user warning, he has to decide what to do:
-                //   options:
-                //     * delete index (stop message processing, delete, setUp(), start processing)
-                //     * rename index (stop message processing and write to master caches, create new index, scan & write to new index, delete old, setUp(), start processing)
-
-                if (Notification.isFirst(graylogServer, Notification.Type.DEFLECTOR_EXISTS_AS_INDEX)) {
-                    Notification.publish(graylogServer, Notification.Type.DEFLECTOR_EXISTS_AS_INDEX, Notification.Severity.URGENT);
-                    LOG.warn("There is an index called [" + Deflector.DEFLECTOR_NAME + "]. Cannot fix this automatically and published a notification.");
-                }
-            } else {
-                graylogServer.getDeflector().setUp();
-            }
-        }
-
-
     }
     
 }

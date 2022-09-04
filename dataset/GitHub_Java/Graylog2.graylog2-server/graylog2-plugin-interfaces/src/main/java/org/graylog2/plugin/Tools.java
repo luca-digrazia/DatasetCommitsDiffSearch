@@ -39,7 +39,6 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.ISODateTimeFormat;
 
 /**
  * Utilty class for various tool/helper functions.
@@ -262,14 +261,6 @@ public final class Tools {
         DateTime dt = formatter.parseDateTime(field.toString());
 
         return (int) (dt.getMillis()/1000);
-    }
-
-    public static String getISO8601String(DateTime time) {
-        return ISODateTimeFormat.dateTime().print(time);
-    }
-
-    public static String getCurrentISO8601String() {
-        return getISO8601String(new DateTime(DateTimeZone.UTC));
     }
  
 }

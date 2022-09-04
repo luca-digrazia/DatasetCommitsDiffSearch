@@ -20,11 +20,14 @@
 
 package org.graylog2.database;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.graylog2.Core;
+import org.graylog2.activities.Activity;
 import org.graylog2.buffers.BufferWatermark;
+import org.graylog2.indexer.IndexRange;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -162,6 +165,16 @@ public class MongoBridge {
         obj.put("server_id", server.getServerId());
 
         getConnection().getMessageCountsColl().insert(obj);
+    }
+
+    public void writeActivity(Activity activity, String nodeId) {
+        BasicDBObject obj = new BasicDBObject();
+        obj.put("timestamp", Tools.getUTCTimestamp());
+        obj.put("content", activity.getMessage());
+        obj.put("caller", activity.getCaller().getCanonicalName());
+        obj.put("node_id", nodeId);
+        
+        connection.getDatabase().getCollection("server_activities").insert(obj);
     }
     
     public void writeDeflectorInformation(Map<String, Object> info) {

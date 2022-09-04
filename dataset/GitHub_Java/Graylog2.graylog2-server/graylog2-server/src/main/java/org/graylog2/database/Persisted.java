@@ -20,7 +20,6 @@
 
 package org.graylog2.database;
 
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -32,15 +31,15 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
+import com.mongodb.WriteResult;
 import org.graylog2.database.validators.Validator;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public abstract class Persisted {
+public class Persisted {
 
     private static final Logger LOG = LoggerFactory.getLogger(Persisted.class);
 
@@ -48,52 +47,52 @@ public abstract class Persisted {
     protected final ObjectId id;
     
     protected final Core core;
+    protected final String collectionName;
+    protected final Map<String, Validator> validations;
 
-    protected Persisted(Core core, Map<String, Object> fields) {
+    protected Persisted(String collectionName, Core core, Map<String, Object> fields) {
         this.id = new ObjectId();
         this.fields = fields;
 
+        this.collectionName = collectionName;
         this.core = core;
+        this.validations = null;
     }
 
-    protected Persisted(Core core, ObjectId id, Map<String, Object> fields) {
+	protected Persisted(String collectionName, Core core, Map<String, Object> fields, Map<String, Validator> validations) {
+        this.id = new ObjectId();
+		this.fields = fields;
+		
+		this.collectionName = collectionName;
+		this.core = core;
+        this.validations = validations;
+	}
+
+    protected Persisted(String collectionName, Core core, ObjectId id, Map<String, Object> fields) {
         this.id = id;
         this.fields = fields;
 
+        this.collectionName = collectionName;
         this.core = core;
+        this.validations = null;
     }
 
+	protected Persisted(String collectionName, Core core, ObjectId id, Map<String, Object> fields,  Map<String, Validator> validations) {
+		this.id = id;
+		this.fields = fields;
+		
+		this.collectionName = collectionName;
+		this.core = core;
+        this.validations = validations;
+	}
+	
 	protected static DBObject get(ObjectId id, Core core, String collectionName) {
 		return collection(core, collectionName).findOne(new BasicDBObject("_id", id));
 	}
-
-    protected List<DBObject> query(DBObject query, String collectionName) {
-        return cursorToList(collection(core, collectionName).find(query));
-    }
-
-    protected static List<DBObject> query(DBObject query, Core core, String collectionName) {
-        return cursorToList(collection(core, collectionName).find(query));
-    }
-
-    protected static List<DBObject> query(DBObject query, DBObject sort, Core core, String collectionName) {
-        return cursorToList(collection(core, collectionName).find(query).sort(sort));
-    }
-
-    protected static List<DBObject> query(DBObject query, DBObject sort, int limit, int offset, Core core, String collectionName) {
-        return cursorToList(
-                collection(core, collectionName)
-                        .find(query)
-                        .sort(sort)
-                        .limit(limit)
-                        .skip(offset));
-    }
-
-    private static List<DBObject> cursorToList(DBCursor cursor) {
+	
+	protected static List<DBObject> query(DBObject query, Core core, String collectionName) {
         List<DBObject> results = Lists.newArrayList();
-
-        if (cursor == null) {
-            return results;
-        }
+        DBCursor cursor = collection(core, collectionName).find(query);
 
         try {
             while(cursor.hasNext()) {
@@ -110,10 +109,6 @@ public abstract class Persisted {
         return collection(core, collectionName).findOne(query);
     }
 
-    public static long totalCount(Core core, String collectionName) {
-        return collection(core, collectionName).count();
-    }
-
 	public void destroy() {
 		collection().remove(new BasicDBObject("_id", id));
 	}
@@ -121,27 +116,14 @@ public abstract class Persisted {
     public static void destroyAll(Core core, String collectionName) {
         collection(core, collectionName).remove(new BasicDBObject());
     }
-
-    public static void destroy(DBObject query, Core core, String collectionName) {
-        collection(core, collectionName).remove(query);
-    }
 	
 	public ObjectId save() throws ValidationException {
-        if(!validate(getValidations(), fields)) {
+        if(!validate(validations, fields)) {
             throw new ValidationException();
         }
 
 		BasicDBObject doc = new BasicDBObject(fields);
 		doc.put("_id", id); // ID was created in constructor or taken from original doc already.
-
-        // Do field transformations
-        for (Map.Entry<String, Object> x : doc.entrySet()) {
-
-            // JodaTime DateTime is not accepted by MongoDB. Convert to java.util.Date...
-            if (x.getValue() instanceof org.joda.time.DateTime) {
-                doc.put(x.getKey(), ((DateTime) x.getValue()).toDate());
-            }
-        }
 
 		/*
 		 * We are running an upsert. This means that the existing
@@ -163,9 +145,9 @@ public abstract class Persisted {
     }
 	
 	protected DBCollection collection() {
-		return collection(this.core, getCollectionName());
+		return collection(this.core, this.collectionName);
 	}
-
+	
 	protected static DBCollection collection(Core core, String collectionName) {
 		return core.getMongoConnection().getDatabase().getCollection(collectionName);
 	}
@@ -193,10 +175,4 @@ public abstract class Persisted {
         return true;
     }
 
-    public ObjectId getId() {
-        return this.id;
-    }
-
-    public abstract String getCollectionName();
-    protected abstract Map<String, Validator> getValidations();
 }

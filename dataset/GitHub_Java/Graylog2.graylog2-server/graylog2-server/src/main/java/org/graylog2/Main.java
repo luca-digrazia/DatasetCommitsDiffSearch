@@ -20,11 +20,6 @@
 
 package org.graylog2;
 
-import com.codahale.metrics.JmxReporter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.log4j.InstrumentedAppender;
-import org.graylog2.cluster.Node;
-import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.plugin.Tools;
 import com.beust.jcommander.JCommander;
 import com.github.joschi.jadconfig.JadConfig;
@@ -35,7 +30,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.graylog2.system.activities.Activity;
+import org.graylog2.activities.Activity;
 import org.graylog2.alarms.transports.EmailTransport;
 import org.graylog2.alarms.transports.JabberTransport;
 import org.graylog2.filters.*;
@@ -51,6 +46,7 @@ import org.graylog2.outputs.ElasticSearchOutput;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
+import org.graylog2.cluster.Cluster;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
 import org.graylog2.plugins.PluginInstaller;
 
@@ -127,18 +123,8 @@ public final class Main {
             logLevel = Level.DEBUG;
         }
 
-        // This is holding all our metrics.
-        final MetricRegistry metrics = new MetricRegistry();
-
-        // Report metrics via JMX.
-        final JmxReporter reporter = JmxReporter.forRegistry(metrics).build();
-        reporter.start();
-
-        InstrumentedAppender logMetrics = new InstrumentedAppender(metrics);
-        logMetrics.activateOptions();
         org.apache.log4j.Logger.getRootLogger().setLevel(logLevel);
         org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(logLevel);
-        org.apache.log4j.Logger.getRootLogger().addAppender(logMetrics);
 
         LOG.info("Graylog2 {} starting up. (JRE: {})", Core.GRAYLOG2_VERSION, Tools.getSystemInformation());
 
@@ -163,25 +149,17 @@ public final class Main {
 
         // Le server object. This is where all the magic happens.
         Core server = new Core();
-        server.initialize(configuration, metrics);
+        server.initialize(configuration);
         
         // Could it be that there is another master instance already?
-        Node.register(server, configuration.isMaster(), configuration.getRestListenUri());
-
-        Node thisNode = null;
-        try {
-            thisNode = Node.thisNode(server);
-        } catch (NodeNotFoundException e) {
-            throw new RuntimeException("Did not find own node. This should never happen.", e);
-        }
-        if (configuration.isMaster() && !thisNode.isOnlyMaster()) {
+        if (configuration.isMaster() && server.cluster().masterCountExcept(server.getServerId()) != 0) {
             LOG.warn("Detected another master in the cluster. Retrying in {} seconds to make sure it is not "
-                    + "an old stale instance.", Node.PING_TIMEOUT);
+                    + "an old stale instance.", Cluster.PING_TIMEOUT);
             try {
-                Thread.sleep(Node.PING_TIMEOUT*1000);
+                Thread.sleep(Cluster.PING_TIMEOUT*1000);
             } catch (InterruptedException e) { /* nope */ }
             
-            if (!thisNode.isOnlyMaster()) {
+            if (server.cluster().masterCountExcept(server.getServerId()) != 0) {
                 // All devils here.
                 String what = "Detected other master node in the cluster! Starting as non-master! "
                         + "This is a mis-configuration you should fix.";
@@ -206,16 +184,16 @@ public final class Main {
             LOG.info("Printing system utilization information.");
             server.setStatsMode(true);
         }
-
+        
         // Register transports.
         if (configuration.isTransportEmailEnabled()) { server.registerTransport(new EmailTransport()); }
         if (configuration.isTransportJabberEnabled()) {  server.registerTransport(new JabberTransport()); }
 
         // Register initializers.
+        server.registerInitializer(new ServerValueWriterInitializer());
         server.registerInitializer(new DroolsInitializer());
         server.registerInitializer(new HostCounterCacheWriterInitializer());
-        server.registerInitializer(new ThroughputCounterInitializer());
-        server.registerInitializer(new NodePingInitializer());
+        server.registerInitializer(new MessageCounterInitializer());
         server.registerInitializer(new AlarmScannerInitializer());
         if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer()); }
         if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer()); }
@@ -227,6 +205,7 @@ public final class Main {
         if (configuration.isAmqpEnabled()) {
             server.registerInitializer(new AMQPSyncInitializer());
         }
+        server.registerInitializer(new BufferWatermarkInitializer());
         if (commandLineArguments.isStats()) { server.registerInitializer(new StatisticsPrinterInitializer()); }
         server.registerInitializer(new MasterCacheWorkersInitializer());
         
@@ -248,14 +227,15 @@ public final class Main {
         if (configuration.isEnableTokenizerFilter()) { server.registerFilter(new TokenizerFilter()); }
         server.registerFilter(new StreamMatcherFilter());
         server.registerFilter(new RewriteFilter());
+        server.registerFilter(new CounterUpdateFilter());
 
         // Register outputs.
-        server.registerOutput(new ElasticSearchOutput(server));
+        server.registerOutput(new ElasticSearchOutput());
         
         try {
         	server.startRestApi();
         } catch(Exception e) {
-        	LOG.error("Could not start REST API on <{}>. Terminating.", configuration.getRestListenUri(), e);
+        	LOG.error("Could not start REST API. Terminating.", e);
         	System.exit(1);
         }
         
