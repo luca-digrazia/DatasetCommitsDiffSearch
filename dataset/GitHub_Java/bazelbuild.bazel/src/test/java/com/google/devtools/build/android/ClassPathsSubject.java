@@ -36,8 +36,10 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
 
-/** A testing utility that allows .java/.class related assertions against Paths. */
-public class ClassPathsSubject extends Subject {
+/**
+ * A testing utility that allows .java/.class related assertions against Paths.
+ */
+public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
 
   private final Path actual;
 
@@ -122,7 +124,7 @@ public class ClassPathsSubject extends Subject {
     return check("class(%s)", className).about(ClassNameSubject.classNames(actual)).that(className);
   }
 
-  static final class ClassNameSubject extends Subject {
+  static final class ClassNameSubject extends Subject<ClassNameSubject, String> {
 
     private final String actual;
     private final Path basePath;
