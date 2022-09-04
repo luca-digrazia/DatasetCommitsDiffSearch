@@ -23,9 +23,10 @@ import com.google.devtools.build.lib.analysis.AnalysisOptions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -477,15 +478,11 @@ public final class CommandEnvironment {
     return workingDirectory;
   }
 
-  /** @return the OutputService in use, or null if none. */
-  @Nullable
+  /**
+   * @return the OutputService in use, or null if none.
+   */
   public OutputService getOutputService() {
     return outputService;
-  }
-
-  @VisibleForTesting
-  public void setOutputServiceForTesting(@Nullable OutputService outputService) {
-    this.outputService = outputService;
   }
 
   public ActionCache getPersistentActionCache() throws IOException {
@@ -570,16 +567,20 @@ public final class CommandEnvironment {
 
   /**
    * Initializes the package cache using the given options, and syncs the package cache. Also
-   * injects the skylark semantics using the options for the {@link BuildConfiguration}.
+   * injects a defaults package and the skylark semantics using the options for the {@link
+   * BuildConfiguration}.
+   *
+   * @see DefaultsPackage
    */
-  public void setupPackageCache(OptionsProvider options)
-      throws InterruptedException, AbruptExitException {
+  public void setupPackageCache(OptionsProvider options,
+      String defaultsPackageContents) throws InterruptedException, AbruptExitException {
     getSkyframeExecutor()
         .sync(
             reporter,
             options.getOptions(PackageCacheOptions.class),
             packageLocator,
-            options.getOptions(StarlarkSemanticsOptions.class),
+            options.getOptions(SkylarkSemanticsOptions.class),
+            defaultsPackageContents,
             getCommandId(),
             clientEnv,
             timestampGranularityMonitor,
@@ -587,13 +588,16 @@ public final class CommandEnvironment {
   }
 
   public void syncPackageLoading(
-      PackageCacheOptions packageCacheOptions, StarlarkSemanticsOptions starlarkSemanticsOptions)
+      PackageCacheOptions packageCacheOptions,
+      SkylarkSemanticsOptions skylarkSemanticsOptions,
+      String defaultsPackageContents)
       throws AbruptExitException {
     getSkyframeExecutor()
         .syncPackageLoading(
             packageCacheOptions,
             packageLocator,
-            starlarkSemanticsOptions,
+            skylarkSemanticsOptions,
+            defaultsPackageContents,
             getCommandId(),
             clientEnv,
             timestampGranularityMonitor);
