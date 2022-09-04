@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
 import com.google.devtools.build.lib.bazel.repository.downloader.DelegatingDownloader;
 import com.google.devtools.build.lib.bazel.repository.downloader.DownloadManager;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
-import com.google.devtools.build.lib.bazel.repository.downloader.UrlRewriter;
 import com.google.devtools.build.lib.bazel.repository.starlark.StarlarkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.starlark.StarlarkRepositoryModule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryFunction;
@@ -281,11 +280,6 @@ public class BazelRepositoryModule extends BlazeModule {
                           + e.getMessage()));
         }
       }
-
-      UrlRewriter rewriter =
-          UrlRewriter.getDownloaderUrlRewriter(
-              repoOptions == null ? null : repoOptions.downloaderConfig, env.getReporter());
-      downloadManager.setUrlRewriter(rewriter);
 
       if (repoOptions.experimentalDistdir != null) {
         downloadManager.setDistdir(
