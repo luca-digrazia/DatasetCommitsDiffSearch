@@ -21,10 +21,12 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Should be used on {@link EActivity} classes that must have no title.
+ * Should be used on Activity classes that must have no title.
  * <p/>
- * <b>Note:</b> This annotation has been deprecated. Please use
- * <code>WindowFeature(Window.FEATURE_NO_TITLE})</code> instead
+ * The activity must be annotated with {@link EActivity}.
+ * <p/>
+ * Note: This annotation has been deprecated. Please use
+ * {@code WindowFeature(Window.FEATURE_NO_TITLE})} instead
  * 
  * @see WindowFeature
  */

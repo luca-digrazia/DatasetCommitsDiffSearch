@@ -42,7 +42,7 @@ public class SystemServiceHandler extends BaseAnnotationHandler<EComponentHolder
 
 		JFieldRef serviceRef = androidSystemServices.getServiceConstant(serviceType, holder);
 
-		JBlock methodBody = holder.getInitBody();
+		JBlock methodBody = holder.getInit().body();
 
 		methodBody.assign(ref(fieldName), cast(holder.refClass(fieldTypeQualifiedName), holder.getContextRef().invoke("getSystemService").arg(serviceRef)));
 	}

@@ -65,7 +65,7 @@ public class ResHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		JFieldRef idRef = annotationHelper.extractOneAnnotationFieldRef(holder, element, resInnerClass, true);
 
-		JBlock methodBody = holder.getInitBody();
+		JBlock methodBody = holder.getInit().body();
 
 		TypeMirror fieldTypeMirror = element.asType();
 		String fieldType = fieldTypeMirror.toString();

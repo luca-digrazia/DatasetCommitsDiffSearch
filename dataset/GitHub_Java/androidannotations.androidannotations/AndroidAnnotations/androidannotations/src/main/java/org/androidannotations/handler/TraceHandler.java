@@ -1,48 +1,18 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.handler;
 
-import static org.androidannotations.helper.AndroidConstants.LOG_DEBUG;
-import static org.androidannotations.helper.AndroidConstants.LOG_ERROR;
-import static org.androidannotations.helper.AndroidConstants.LOG_INFO;
-import static org.androidannotations.helper.AndroidConstants.LOG_VERBOSE;
-import static org.androidannotations.helper.AndroidConstants.LOG_WARN;
+import com.sun.codemodel.*;
+import org.androidannotations.annotations.Trace;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.ProcessHolder;
+import org.androidannotations.process.IsValid;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
-import org.androidannotations.annotations.Trace;
-import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.holder.EComponentHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
-import org.androidannotations.process.ProcessHolder;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JVar;
+import static org.androidannotations.helper.AndroidConstants.*;
 
 public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
@@ -122,35 +92,35 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 	private String logMethodNameFromLevel(int level) {
 		switch (level) {
-		case LOG_DEBUG:
-			return "d";
-		case LOG_VERBOSE:
-			return "v";
-		case LOG_INFO:
-			return "i";
-		case LOG_WARN:
-			return "w";
-		case LOG_ERROR:
-			return "e";
-		default:
-			throw new IllegalArgumentException("Unrecognized Log level : " + level);
+			case LOG_DEBUG:
+				return "d";
+			case LOG_VERBOSE:
+				return "v";
+			case LOG_INFO:
+				return "i";
+			case LOG_WARN:
+				return "w";
+			case LOG_ERROR:
+				return "e";
+			default:
+				throw new IllegalArgumentException("Unrecognized Log level : " + level);
 		}
 	}
 
 	private JFieldRef logLevelFromInt(int level, JClass logClass) {
 		switch (level) {
-		case LOG_DEBUG:
-			return logClass.staticRef("DEBUG");
-		case LOG_VERBOSE:
-			return logClass.staticRef("VERBOSE");
-		case LOG_INFO:
-			return logClass.staticRef("INFO");
-		case LOG_WARN:
-			return logClass.staticRef("WARN");
-		case LOG_ERROR:
-			return logClass.staticRef("ERROR");
-		default:
-			throw new IllegalArgumentException("Unrecognized log level. Given value:" + level);
+			case LOG_DEBUG:
+				return logClass.staticRef("DEBUG");
+			case LOG_VERBOSE:
+				return logClass.staticRef("VERBOSE");
+			case LOG_INFO:
+				return logClass.staticRef("INFO");
+			case LOG_WARN:
+				return logClass.staticRef("WARN");
+			case LOG_ERROR:
+				return logClass.staticRef("ERROR");
+			default:
+				throw new IllegalArgumentException("Unrecognized log level. Given value:" + level);
 		}
 	}
 

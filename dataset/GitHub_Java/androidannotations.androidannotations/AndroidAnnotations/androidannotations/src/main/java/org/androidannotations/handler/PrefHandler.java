@@ -65,7 +65,7 @@ public class PrefHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		}
 
-		JBlock methodBody = holder.getInitBody();
+		JBlock methodBody = holder.getInit().body();
 
 		JFieldRef field = JExpr.ref(fieldName);
 
