@@ -7,12 +7,14 @@ import io.dropwizard.validation.ValidationMethod;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 
+// TODO: 5/15/13 <coda> -- write tests for JerseyClientConfiguration
+
 /**
  * The configuration class used by {@link JerseyClientBuilder}. Extends
  * {@link HttpClientConfiguration}.
  *
  * @see HttpClientConfiguration
- * @see <a href="http://dropwizard.io/0.9.1/docs/manual/configuration.html#jerseyclient">Jersey Client Configuration</a>
+ * @see <a href="http://www.dropwizard.io/manual/client/#man-client-jersey-config">Jersey Client Configuration</a>
  */
 public class JerseyClientConfiguration extends HttpClientConfiguration {
     @Min(1)
