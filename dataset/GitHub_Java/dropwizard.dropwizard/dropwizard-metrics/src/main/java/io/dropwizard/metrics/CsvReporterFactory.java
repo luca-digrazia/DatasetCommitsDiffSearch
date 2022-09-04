@@ -54,9 +54,10 @@ public class CsvReporterFactory extends BaseFormattedReporterFactory {
 
     @Override
     public ScheduledReporter build(MetricRegistry registry) {
-        final boolean creation = file.mkdirs();
+        boolean creation = file.mkdirs();
         if (!creation && !file.exists()) {
-            throw new RuntimeException("Failed to create" + file.getAbsolutePath());
+            String msg = "Failed to create" + file.getAbsolutePath();
+            throw new RuntimeException(msg);
         }
 
         return CsvReporter.forRegistry(registry)
