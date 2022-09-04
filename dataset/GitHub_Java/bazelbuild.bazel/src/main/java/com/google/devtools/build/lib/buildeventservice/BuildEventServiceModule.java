@@ -44,7 +44,7 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -147,8 +147,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   @Nullable
   @VisibleForTesting
   BuildEventStreamer tryCreateStreamer(
-      OptionsParsingResult startupOptionsProvider,
-      OptionsParsingResult optionsProvider,
+      OptionsProvider startupOptionsProvider,
+      OptionsProvider optionsProvider,
       EventHandler commandLineReporter,
       ModuleEnvironment moduleEnvironment,
       Clock clock,
@@ -216,8 +216,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       Clock clock,
       BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap,
       EventHandler commandLineReporter,
-      OptionsParsingResult startupOptionsProvider,
-      OptionsParsingResult optionsProvider)
+      OptionsProvider startupOptionsProvider,
+      OptionsProvider optionsProvider)
       throws IOException, OptionsParsingException {
     T besOptions =
         checkNotNull(
@@ -300,8 +300,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   protected abstract Set<String> whitelistedCommands();
 
-  protected Set<String> keywords(
-      T besOptions, @Nullable OptionsParsingResult startupOptionsProvider) {
+  protected Set<String> keywords(T besOptions, @Nullable OptionsProvider startupOptionsProvider) {
     return besOptions
         .besKeywords
         .stream()
