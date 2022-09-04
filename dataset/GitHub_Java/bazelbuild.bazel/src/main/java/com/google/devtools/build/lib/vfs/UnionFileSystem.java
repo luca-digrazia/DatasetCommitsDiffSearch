@@ -15,14 +15,12 @@
 package com.google.devtools.build.lib.vfs;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -44,21 +42,12 @@ import javax.annotation.Nullable;
  * are not currently supported.
  */
 @ThreadSafety.ThreadSafe
-public final class UnionFileSystem extends FileSystem {
+public class UnionFileSystem extends FileSystem {
 
-  private static class FileSystemAndPrefix {
-    final PathFragment prefix;
-    final FileSystem fileSystem;
-
-    public FileSystemAndPrefix(PathFragment prefix, FileSystem fileSystem) {
-      this.prefix = prefix;
-      this.fileSystem = fileSystem;
-    }
-  }
-
-  // List of file systems and their mappings, sorted by prefix length descending.
-  private final List<FileSystemAndPrefix> fileSystems;
-  private final FileSystem rootFileSystem;
+  // Prefix trie index, allowing children to easily inherit prefix mappings
+  // of their parents.
+  // This does not currently handle unicode filenames.
+  private final PathTrie<FileSystem> pathDelegate;
 
   // True if the file path is case-sensitive on all the FileSystem
   // or False if they are all case-insensitive, otherwise error.
@@ -76,12 +65,11 @@ public final class UnionFileSystem extends FileSystem {
     Preconditions.checkNotNull(rootFileSystem);
     Preconditions.checkArgument(rootFileSystem != this, "Circular root filesystem.");
     Preconditions.checkArgument(
-        prefixMapping.keySet().stream().noneMatch(p -> p.getPathString().equals("/")),
+        !prefixMapping.containsKey(PathFragment.EMPTY_FRAGMENT),
         "Attempted to specify an explicit root prefix mapping; "
             + "please use the rootFileSystem argument instead.");
 
-    this.fileSystems = new ArrayList<>();
-    this.rootFileSystem = rootFileSystem;
+    this.pathDelegate = new PathTrie<>();
     this.isCaseSensitive = rootFileSystem.isFilePathCaseSensitive();
 
     for (Map.Entry<PathFragment, FileSystem> prefix : prefixMapping.entrySet()) {
@@ -92,13 +80,9 @@ public final class UnionFileSystem extends FileSystem {
       PathFragment prefixPath = prefix.getKey();
 
       // Extra slash prevents within-directory mappings, which Path can't handle.
-      fileSystems.add(new FileSystemAndPrefix(prefixPath, delegate));
+      pathDelegate.put(prefixPath, delegate);
     }
-    // Order by length descending. This ensures that more specific mapping takes precedence
-    // when we try to find the file system of a given path.
-    Comparator<FileSystemAndPrefix> comparator =
-        Comparator.comparing(f -> f.prefix.getPathString().length());
-    fileSystems.sort(comparator.reversed());
+    pathDelegate.put(PathFragment.ROOT_FRAGMENT, rootFileSystem);
   }
 
   /**
@@ -108,24 +92,19 @@ public final class UnionFileSystem extends FileSystem {
    * @param path the {@link Path} to map to a filesystem
    * @throws IllegalArgumentException if no delegate exists for the path
    */
-  FileSystem getDelegate(Path path) {
+  protected FileSystem getDelegate(Path path) {
     Preconditions.checkNotNull(path);
-    FileSystem delegate = null;
-    // Linearly iterate over each mapped file system and find the one that handles this path.
-    // For small number of mappings, this will be more efficient than using a trie
-    for (FileSystemAndPrefix fileSystemAndPrefix : this.fileSystems) {
-      if (path.startsWith(fileSystemAndPrefix.prefix)) {
-        delegate = fileSystemAndPrefix.fileSystem;
-        break;
-      }
-    }
-    return delegate != null ? delegate : rootFileSystem;
+    FileSystem immediateDelegate = pathDelegate.get(path.asFragment());
+
+    // Should never actually happen if the root delegate is present.
+    Preconditions.checkNotNull(immediateDelegate, "No delegate filesystem exists for %s", path);
+    return immediateDelegate;
   }
 
   // Associates the path with the root of the given delegate filesystem.
   // Necessary to avoid null pointer problems inside of the delegates.
-  Path adjustPath(Path path, FileSystem delegate) {
-    return delegate.getPath(path.getPathString());
+  protected Path adjustPath(Path path, FileSystem delegate) {
+    return delegate.getPath(path.asFragment());
   }
 
   /**
@@ -193,7 +172,7 @@ public final class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  protected byte[] getDigest(Path path, DigestHashFunction hashFunction) throws IOException {
+  protected byte[] getDigest(Path path, HashFunction hashFunction) throws IOException {
     path = internalResolveSymlink(path);
     FileSystem delegate = getDelegate(path);
     return delegate.getDigest(adjustPath(path, delegate), hashFunction);
@@ -365,7 +344,12 @@ public final class UnionFileSystem extends FileSystem {
     path = internalResolveSymlink(path);
     FileSystem delegate = getDelegate(path);
     Path resolvedPath = adjustPath(path, delegate);
-    return delegate.getDirectoryEntries(resolvedPath);
+    Collection<Path> entries = resolvedPath.getDirectoryEntries();
+    Collection<String> result = Lists.newArrayListWithCapacity(entries.size());
+    for (Path entry : entries) {
+      result.add(entry.getBaseName());
+    }
+    return result;
   }
 
   // No need for the more complex logic of getDirectoryEntries; it calls it implicitly.
@@ -425,7 +409,7 @@ public final class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  protected byte[] getFastDigest(Path path, DigestHashFunction hashFunction) throws IOException {
+  protected byte[] getFastDigest(Path path, HashFunction hashFunction) throws IOException {
     path = internalResolveSymlink(path);
     FileSystem delegate = getDelegate(path);
     return delegate.getFastDigest(adjustPath(path, delegate), hashFunction);
