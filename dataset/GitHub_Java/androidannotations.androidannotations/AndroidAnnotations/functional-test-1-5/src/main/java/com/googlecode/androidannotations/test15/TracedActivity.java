@@ -25,7 +25,6 @@ import android.util.Log;
 
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.Trace;
-import com.googlecode.androidannotations.annotations.UiThread;
 
 @EActivity 
 public class TracedActivity extends Activity {
@@ -37,8 +36,9 @@ public class TracedActivity extends Activity {
 	public boolean voidTracedMethodWarnCalled = false;
 	public boolean voidTracedMethodErrorCalled = false;
 	public boolean voidTracedMethodInfoCalled = false;
-	public boolean overloadedMethodInt = false;
-	public boolean overloadedMethodIntFLoat = false;
+	public boolean overLoaddedMethodInt = false;
+	public boolean overLoaddedMethodIntFLoat = false;
+
 	
 	@Trace
 	Object tracedMethod(List<Map<String, List<Set<Void>>>> param1, Void param2) throws IOException {
@@ -78,17 +78,11 @@ public class TracedActivity extends Activity {
 
 	@Trace
 	void overloadedMethod(int x) {
-		overloadedMethodInt = true;
+		overLoaddedMethodInt = true;
 	}
 
 	@Trace
 	void overloadedMethod(int x, float f) {
-		overloadedMethodIntFLoat = true;
-	}
-	
-	@Trace
-	@UiThread
-	void mixedMethod() {
-		
+		overLoaddedMethodIntFLoat = true;
 	}
 }
