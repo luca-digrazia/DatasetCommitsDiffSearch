@@ -82,7 +82,7 @@ public class SkylarkRepositoryContextTest {
     Package.Builder packageBuilder = Package.newExternalPackageBuilder(
         Package.Builder.DefaultHelper.INSTANCE, workspaceFile, "runfiles");
     FuncallExpression ast =
-        new FuncallExpression(Identifier.of("test"), ImmutableList.<Passed>of());
+        new FuncallExpression(new Identifier("test"), ImmutableList.<Passed>of());
     ast.setLocation(Location.BUILTIN);
     Rule rule =
         WorkspaceFactoryHelper.createAndAddRepositoryRule(
@@ -107,7 +107,7 @@ public class SkylarkRepositoryContextTest {
         ImmutableMap.<String, Object>of("name", "test", "foo", "bar"),
         Attribute.attr("foo", Type.STRING).build());
 
-    assertThat(context.getAttr().getFieldNames()).contains("foo");
+    assertThat(context.getAttr().getKeys()).contains("foo");
     assertThat(context.getAttr().getValue("foo")).isEqualTo("bar");
   }
 
@@ -182,10 +182,10 @@ public class SkylarkRepositoryContextTest {
 
   private void testOutputFile(Path path, String content) throws IOException {
     assertThat(path.exists()).isTrue();
-    try (InputStreamReader reader =
-        new InputStreamReader(path.getInputStream(), StandardCharsets.UTF_8)) {
-      assertThat(CharStreams.toString(reader)).isEqualTo(content);
-    }
+    assertThat(
+            CharStreams.toString(
+                new InputStreamReader(path.getInputStream(), StandardCharsets.UTF_8)))
+        .isEqualTo(content);
   }
 
   @Test
