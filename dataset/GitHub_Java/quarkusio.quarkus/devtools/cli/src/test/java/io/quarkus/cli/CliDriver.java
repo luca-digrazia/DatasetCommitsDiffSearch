@@ -14,8 +14,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Assertions;
 
-import io.quarkus.devtools.project.QuarkusProjectHelper;
-import io.quarkus.registry.config.RegistriesConfigLocator;
 import picocli.CommandLine;
 
 public class CliDriver {
@@ -23,12 +21,6 @@ public class CliDriver {
     static final PrintStream stderr = System.err;
 
     private static final String localRepo = convertToProperty("maven.repo.local");
-
-    public static void afterEachCleanup() {
-        System.clearProperty(RegistriesConfigLocator.CONFIG_FILE_PATH_PROPERTY);
-        System.clearProperty("quarkusRegistryClient");
-        QuarkusProjectHelper.reset();
-    }
 
     public static void preserveLocalRepoSettings(Collection<String> args) {
         if (localRepo != null) {
@@ -167,10 +159,6 @@ public class CliDriver {
 
         Assertions.assertEquals(CommandLine.ExitCode.OK, result.exitCode,
                 "Expected OK return code. Result:\n" + result);
-
-        Assertions.assertFalse(result.stdout.contains("camel-"),
-                "camel extensions should not appear in the list of installable extensions. Found:\n" + result);
-
         return result;
     }
 
@@ -268,8 +256,9 @@ public class CliDriver {
                 "Expected OK return code. Result:\n" + result);
         Assertions.assertTrue(result.stdout.contains("quarkus-hibernate-orm"),
                 "quarkus-hibernate-orm should be listed as an installable extension. Found:\n" + result);
-        Assertions.assertFalse(result.stdout.matches("quarkus-qute"),
+        Assertions.assertFalse(result.stdout.contains("quarkus-qute"),
                 "quarkus-qute should not be listed as an installable extension. Found:\n" + result);
+
         return result;
     }
 
