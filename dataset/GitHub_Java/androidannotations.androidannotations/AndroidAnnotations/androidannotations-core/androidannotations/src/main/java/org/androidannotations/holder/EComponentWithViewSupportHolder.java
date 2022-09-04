@@ -52,9 +52,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	protected ViewNotifierHelper viewNotifierHelper;
 	private JMethod onViewChanged;
 	private JBlock onViewChangedBody;
-	private JBlock onViewChangedBodyInjectionBlock;
-	private JBlock onViewChangedBodyAfterInjectionBlock;
-	private JBlock onViewChangedBodyBeforeInjectionBlock;
+	private JBlock onViewChangedBodyBeforeFindViews;
 	private JVar onViewChangedHasViewsParam;
 	protected Map<String, FoundHolder> foundHolders = new HashMap<>();
 	protected JMethod findNativeFragmentById;
@@ -78,25 +76,11 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		return onViewChangedBody;
 	}
 
-	public JBlock getOnViewChangedBodyBeforeInjectionBlock() {
-		if (onViewChangedBodyBeforeInjectionBlock == null) {
+	public JBlock getOnViewChangedBodyBeforeFindViews() {
+		if (onViewChangedBodyBeforeFindViews == null) {
 			setOnViewChanged();
 		}
-		return onViewChangedBodyBeforeInjectionBlock;
-	}
-
-	public JBlock getOnViewChangedBodyInjectionBlock() {
-		if (onViewChangedBodyInjectionBlock == null) {
-			setOnViewChanged();
-		}
-		return onViewChangedBodyInjectionBlock;
-	}
-
-	public JBlock getOnViewChangedBodyAfterInjectionBlock() {
-		if (onViewChangedBodyAfterInjectionBlock == null) {
-			setOnViewChanged();
-		}
-		return onViewChangedBodyAfterInjectionBlock;
+		return onViewChangedBodyBeforeFindViews;
 	}
 
 	public JVar getOnViewChangedHasViewsParam() {
@@ -111,12 +95,10 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		onViewChanged = getGeneratedClass().method(PUBLIC, getCodeModel().VOID, "onViewChanged");
 		onViewChanged.annotate(Override.class);
 		onViewChangedBody = onViewChanged.body();
-		onViewChangedBodyBeforeInjectionBlock = onViewChangedBody.blockSimple();
-		onViewChangedBodyInjectionBlock = onViewChangedBody.blockSimple();
-		onViewChangedBodyAfterInjectionBlock = onViewChangedBody.blockSimple();
+		onViewChangedBodyBeforeFindViews = onViewChangedBody.blockSimple();
 		onViewChangedHasViewsParam = onViewChanged.param(HasViews.class, "hasViews");
 		AbstractJClass notifierClass = getJClass(OnViewChangedNotifier.class);
-		getInitBodyInjectionBlock().staticInvoke(notifierClass, "registerOnViewChangedListener").arg(_this());
+		getInitBody().staticInvoke(notifierClass, "registerOnViewChangedListener").arg(_this());
 	}
 
 	public JInvocation findViewById(JFieldRef idRef) {
@@ -133,7 +115,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		String idRefString = idRef.name();
 		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
 
-		JBlock block = getOnViewChangedBodyInjectionBlock();
+		JBlock block = getOnViewChangedBody();
 		IJExpression assignExpression;
 
 		if (foundViewHolder != null) {
@@ -165,7 +147,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, AbstractJClass viewClass) {
 		IJExpression findViewExpression = findViewById(idRef);
-		JBlock block = getOnViewChangedBodyInjectionBlock().blockSimple();
+		JBlock block = getOnViewChangedBody().blockSimple();
 
 		if (viewClass == null) {
 			viewClass = getClasses().VIEW;
@@ -274,7 +256,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 			viewClass = getJClass(viewParameterType.toString());
 		}
 
-		JBlock onViewChangedBody = getOnViewChangedBodyInjectionBlock().blockSimple();
+		JBlock onViewChangedBody = getOnViewChangedBody().blockSimple();
 		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
 		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
 		.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -36,7 +35,6 @@ import org.androidannotations.api.sharedpreferences.IntPrefEditorField;
 import org.androidannotations.api.sharedpreferences.LongPrefEditorField;
 import org.androidannotations.api.sharedpreferences.SharedPreferencesHelper;
 import org.androidannotations.api.sharedpreferences.StringPrefEditorField;
-import org.androidannotations.api.sharedpreferences.StringPrefField;
 import org.androidannotations.api.sharedpreferences.StringSetPrefEditorField;
 import org.androidannotations.helper.CanonicalNameConstants;
 
@@ -120,18 +118,8 @@ public class SharedPrefHolder extends BaseGeneratedClassHolder {
 	public void createFieldMethod(Class<?> prefFieldHelperClass, IJExpression keyExpression, String fieldName, String fieldHelperMethodName, IJExpression defaultValue,
 			String docComment, String defaultValueStr) {
 		JMethod fieldMethod = generatedClass.method(PUBLIC, prefFieldHelperClass, fieldName);
-
 		if (defaultValueStr != null) {
-			boolean isStringPrefField = StringPrefField.class == prefFieldHelperClass;
-
-			final String defaultValueJavaDoc;
-			if (isStringPrefField) {
-				defaultValueJavaDoc = "\"" + defaultValueStr + "\"";
-			} else {
-				defaultValueJavaDoc = defaultValueStr;
-			}
-
-			fieldMethod.javadoc().append("<p><b>Defaults to</b>: " + defaultValueJavaDoc + "</p>\n");
+			fieldMethod.javadoc().append("<p><b>Defaults to</b>: " + defaultValueStr + "</p>\n");
 		}
 		codeModelHelper.addTrimmedDocComment(fieldMethod, docComment);
 		fieldMethod.body()._return(JExpr.invoke(fieldHelperMethodName).arg(keyExpression).arg(defaultValue));

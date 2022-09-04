@@ -38,8 +38,7 @@ import com.helger.jcodemodel.JVar;
 
 public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponentWithViewSupportHolder> implements HasPreferences {
 
-	protected JBlock addPreferencesFromResourceInjectionBlock;
-	protected JBlock addPreferencesFromResourceAfterInjectionBlock;
+	protected JBlock addPreferencesFromResourceBlock;
 
 	private boolean usingSupportV7Preference = false;
 	private AbstractJClass basePreferenceClass;
@@ -65,19 +64,11 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 	}
 
 	@Override
-	public JBlock getAddPreferencesFromResourceInjectionBlock() {
-		if (addPreferencesFromResourceInjectionBlock == null) {
+	public JBlock getAddPreferencesFromResourceBlock() {
+		if (addPreferencesFromResourceBlock == null) {
 			setAddPreferencesFromResourceBlock();
 		}
-		return addPreferencesFromResourceInjectionBlock;
-	}
-
-	@Override
-	public JBlock getAddPreferencesFromResourceAfterInjectionBlock() {
-		if (addPreferencesFromResourceAfterInjectionBlock == null) {
-			setAddPreferencesFromResourceBlock();
-		}
-		return addPreferencesFromResourceAfterInjectionBlock;
+		return addPreferencesFromResourceBlock;
 	}
 
 	private void setAddPreferencesFromResourceBlock() {
@@ -85,8 +76,7 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 		method.annotate(Override.class);
 		JVar preferencesResIdParam = method.param(int.class, "preferencesResId");
 		method.body().invoke(JExpr._super(), "addPreferencesFromResource").arg(preferencesResIdParam);
-		addPreferencesFromResourceInjectionBlock = method.body().blockSimple();
-		addPreferencesFromResourceAfterInjectionBlock = method.body().blockSimple();
+		addPreferencesFromResourceBlock = method.body();
 	}
 
 	private JInvocation findPreferenceByKey(JFieldRef idRef) {
@@ -100,7 +90,7 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 		String idRefString = idRef.name();
 		FoundPreferenceHolder foundViewHolder = (FoundPreferenceHolder) holder.foundHolders.get(idRefString);
 
-		JBlock block = getAddPreferencesFromResourceInjectionBlock();
+		JBlock block = getAddPreferencesFromResourceBlock();
 		IJExpression assignExpression;
 
 		if (foundViewHolder != null) {
@@ -139,7 +129,7 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 
 	private FoundPreferenceHolder createFoundPreferenceAndIfNotNullBlock(JFieldRef idRef, AbstractJClass preferenceClass) {
 		IJExpression findPreferenceExpression = findPreferenceByKey(idRef);
-		JBlock block = getAddPreferencesFromResourceInjectionBlock().blockSimple();
+		JBlock block = getAddPreferencesFromResourceBlock().blockSimple();
 
 		if (preferenceClass == null) {
 			preferenceClass = basePreferenceClass;

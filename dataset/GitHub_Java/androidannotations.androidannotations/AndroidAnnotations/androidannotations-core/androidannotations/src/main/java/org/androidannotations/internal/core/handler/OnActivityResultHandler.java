@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -126,7 +125,7 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 		}
 
 		public IJExpression getExtraValue(VariableElement parameter, JVar extras, JBlock block, HasOnActivityResult holder) {
-			return super.getExtraValue(parameter, extras, block, holder.getOnActivityResultMethod(), holder);
+			return super.getExtraValue(parameter, holder.getOnActivityResultDataParam(), extras, block, holder.getOnActivityResultMethod(), holder);
 		}
 	}
 
