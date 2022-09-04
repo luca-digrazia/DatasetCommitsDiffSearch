@@ -17,8 +17,8 @@ import com.android.builder.core.VariantType;
 import com.android.repository.Revision;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.io.ByteStreams;
 import com.google.devtools.build.android.AaptCommandBuilder;
 import com.google.devtools.build.android.AndroidResourceOutputs;
 import com.google.devtools.build.android.Profiler;
@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.zip.ZipFile;
 
 /** Performs linking of {@link CompiledResources} using aapt2. */
 public class ResourceLinker {
@@ -49,16 +50,14 @@ public class ResourceLinker {
   private final Path workingDirectory;
 
   private List<StaticLibrary> linkAgainst = ImmutableList.of();
-
   private Revision buildToolsVersion;
-  private List<String> densities = ImmutableList.of();
+  private List<String> densities;
   private Path androidJar;
   private Profiler profiler = Profiler.empty();
   private List<String> uncompressedExtensions = ImmutableList.of();
   private List<String> resourceConfigs = ImmutableList.of();
   private Path baseApk;
-  private List<CompiledResources> include = ImmutableList.of();
-  private List<Path> assetDirs = ImmutableList.of();
+  private List<StaticLibrary> include;
 
   private ResourceLinker(Path aapt2, Path workingDirectory) {
     this.aapt2 = aapt2;
@@ -66,7 +65,6 @@ public class ResourceLinker {
   }
 
   public static ResourceLinker create(Path aapt2, Path workingDirectory) {
-    Preconditions.checkArgument(Files.exists(workingDirectory));
     return new ResourceLinker(aapt2, workingDirectory);
   }
 
@@ -81,13 +79,9 @@ public class ResourceLinker {
     return this;
   }
 
-  /** Dependent compiled resources to be included in the binary. */
-  public ResourceLinker include(List<CompiledResources> include) {
+  /** Dependent static libraries to be included in the binary. */
+  public ResourceLinker include(List<StaticLibrary> include) {
     this.include = include;
-    return this;
-  }
-  public ResourceLinker withAssets(List<Path> assetDirs) {
-    this.assetDirs = assetDirs;
     return this;
   }
 
@@ -130,12 +124,9 @@ public class ResourceLinker {
               .add("--no-static-lib-packages")
               .whenVersionIsAtLeast(new Revision(23))
               .thenAdd("--no-version-vectors")
-              .add("-R", resources.getZip())
-              .addRepeated("-R",
-                  include.stream()
-                      .map(compiledResources -> compiledResources.getZip().toString())
-                      .collect(Collectors.toList()))
+              .addRepeated("-R", unzipCompiledResources(resources.getZip()))
               .addRepeated("-I", StaticLibrary.toPathStrings(linkAgainst))
+              .add("--java", javaSourceDirectory)
               .add("--auto-add-overlay")
               .add("-o", outPath)
               .add("--java", javaSourceDirectory)
@@ -151,14 +142,13 @@ public class ResourceLinker {
   }
 
   public PackagedResources link(CompiledResources compiled) {
-    try {
-      final Path outPath = workingDirectory.resolve("bin.apk");
-      Path rTxt = workingDirectory.resolve("R.txt");
-      Path proguardConfig = workingDirectory.resolve("proguard.cfg");
-      Path mainDexProguard = workingDirectory.resolve("proguard.maindex.cfg");
-      Path javaSourceDirectory = Files.createDirectories(workingDirectory.resolve("java"));
-      Path resourceIds = workingDirectory.resolve("ids.txt");
+    final Path outPath = workingDirectory.resolve("bin.apk");
+    Path rTxt = workingDirectory.resolve("R.txt");
+    Path proguardConfig = workingDirectory.resolve("proguard.cfg");
+    Path mainDexProguard = workingDirectory.resolve("proguard.maindex.cfg");
+    Path javaSourceDirectory = workingDirectory.resolve("java");
 
+    try {
       profiler.startTask("fulllink");
       logger.finer(
           new AaptCommandBuilder(aapt2)
@@ -167,33 +157,27 @@ public class ResourceLinker {
               .add("link")
               .whenVersionIsAtLeast(new Revision(23))
               .thenAdd("--no-version-vectors")
-              // Turn off namespaced resources
               .add("--no-static-lib-packages")
               .when(Objects.equals(logger.getLevel(), Level.FINE))
               .thenAdd("-v")
               .add("--manifest", compiled.getManifest())
-              // Enables resource redefinition and merging
               .add("--auto-add-overlay")
               .when(densities.size() == 1)
               .thenAddRepeated("--preferred-density", densities)
-              .add("--stable-ids", compiled.getStableIds())
-              .addRepeated("-A",
-                  assetDirs.stream().map(Path::toString).collect(Collectors.toList()))
+              .addRepeated("-A", compiled.getAssetsStrings())
               .addRepeated("-I", StaticLibrary.toPathStrings(linkAgainst))
-              .addRepeated("-R",
-                  include.stream()
-                      .map(compiledResources -> compiledResources.getZip().toString())
-                      .collect(Collectors.toList()))
-              .add("-R", compiled.getZip())
+              .addRepeated("-R", StaticLibrary.toPathStrings(include))
+              .addParameterableRepeated(
+                  "-R", unzipCompiledResources(compiled.getZip()), workingDirectory)
               // Never compress apks.
               .add("-0", "apk")
               // Add custom no-compress extensions.
               .addRepeated("-0", uncompressedExtensions)
+              .addRepeated("-A", StaticLibrary.toAssetPaths(include))
               // Filter by resource configuration type.
               .when(!resourceConfigs.isEmpty())
               .thenAdd("-c", Joiner.on(',').join(resourceConfigs))
               .add("--output-text-symbols", rTxt)
-              .add("--emit-ids", resourceIds)
               .add("--java", javaSourceDirectory)
               .add("--proguard", proguardConfig)
               .add("--proguard-main-dex", mainDexProguard)
@@ -203,7 +187,7 @@ public class ResourceLinker {
       profiler.startTask("optimize");
       if (densities.size() < 2) {
         return PackagedResources.of(
-            outPath, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory, resourceIds);
+            outPath, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory);
       }
       final Path optimized = workingDirectory.resolve("optimized.apk");
       logger.finer(
@@ -217,10 +201,28 @@ public class ResourceLinker {
               .execute(String.format("Optimizing %s", compiled.getManifest())));
       profiler.recordEndOf("optimize");
       return PackagedResources.of(
-          optimized, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory, resourceIds);
+          optimized, rTxt, proguardConfig, mainDexProguard, javaSourceDirectory);
     } catch (IOException e) {
       throw new LinkError(e);
     }
+  }
+
+  private List<String> unzipCompiledResources(Path resourceZip) throws IOException {
+    final ZipFile zipFile = new ZipFile(resourceZip.toFile());
+    return zipFile
+        .stream()
+        .map(
+            entry -> {
+              final Path resolve = workingDirectory.resolve(entry.getName());
+              try {
+                Files.createDirectories(resolve.getParent());
+                return Files.write(resolve, ByteStreams.toByteArray(zipFile.getInputStream(entry)));
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            })
+        .map(Path::toString)
+        .collect(Collectors.toList());
   }
 
   public ResourceLinker storeUncompressed(List<String> uncompressedExtensions) {
