@@ -453,19 +453,17 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   @Override
   public synchronized boolean signalDep() {
-    return signalDep(/*childVersion=*/ IntVersion.of(Long.MAX_VALUE), /*childForDebugging=*/ null);
+    return signalDep(/*childVersion=*/ IntVersion.of(Long.MAX_VALUE));
   }
 
   @Override
-  public synchronized boolean signalDep(Version childVersion, @Nullable SkyKey childForDebugging) {
-    Preconditions.checkState(
-        !isDone(), "Value must not be done in signalDep %s child=%s", this, childForDebugging);
-    Preconditions.checkState(isEvaluating(), "%s %s", this, childForDebugging);
+  public synchronized boolean signalDep(Version childVersion) {
+    Preconditions.checkState(!isDone(), "Value must not be done in signalDep %s", this);
+    Preconditions.checkState(isEvaluating(), this);
     signaledDeps++;
     if (isDirty()) {
       dirtyBuildingState.signalDepInternal(
-          childCausesReevaluation(lastEvaluatedVersion, childVersion, childForDebugging),
-          isReady());
+          childCausesReevaluation(lastEvaluatedVersion, childVersion), isReady());
     }
     return isReady();
   }
@@ -657,10 +655,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   /** True if the child should cause re-evaluation of this node. */
-  protected boolean childCausesReevaluation(
-      Version lastEvaluatedVersion,
-      Version childVersion,
-      @Nullable SkyKey unusedChildForDebugging) {
+  protected boolean childCausesReevaluation(Version lastEvaluatedVersion, Version childVersion) {
     // childVersion > lastEvaluatedVersion
     return !childVersion.atMost(lastEvaluatedVersion);
   }
