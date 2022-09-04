@@ -909,7 +909,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         ImmutableSet<Artifact> modularHeaders = ImmutableSet.copyOf(this.modularHeaders);
         NestedSet<Artifact> transitiveModules = this.transitiveModules.build();
         if (headerModule != null) {
-          transitiveModuleHeaders.add(new TransitiveModuleHeaders(headerModule, modularHeaders));
+          transitiveModuleHeaders.add(
+              new TransitiveModuleHeaders(headerModule, modularHeaders, transitiveModules));
         }
         return new ModuleInfo(
             headerModule,
@@ -935,13 +936,27 @@ public final class CcCompilationContext implements CcCompilationContextApi {
      */
     private final ImmutableSet<Artifact> headers;
 
-    public TransitiveModuleHeaders(Artifact module, ImmutableSet<Artifact> headers) {
+    /**
+     * This nested set contains 'module' as well as all targets it transitively depends on.
+     * If any of the 'headers' is used, all of these modules a required for the compilation.
+     */
+    private final NestedSet<Artifact> transitiveModules;
+
+    public TransitiveModuleHeaders(
+        Artifact module,
+        ImmutableSet<Artifact> headers,
+        NestedSet<Artifact> transitiveModules) {
       this.module = module;
       this.headers = headers;
+      this.transitiveModules = transitiveModules;
     }
 
     public Artifact getModule() {
       return module;
+    }
+
+    public Collection<Artifact> getTransitiveModules() {
+      return transitiveModules.toCollection();
     }
   }
 }
