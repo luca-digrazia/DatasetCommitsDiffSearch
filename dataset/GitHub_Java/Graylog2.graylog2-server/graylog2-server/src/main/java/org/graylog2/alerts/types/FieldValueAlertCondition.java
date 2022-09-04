@@ -146,7 +146,7 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
                         + thresholdType + " than " + decimalFormat.format(threshold) + ". "
                         + "(Current grace time: " + grace + " minutes)";
 
-                if (getBacklog() > 0) {
+                if (getBacklogSize() > 0) {
                     for (ResultMessage resultMessage : fieldStatsResult.getSearchHits()) {
                         final Message msg = new Message(resultMessage.getMessage());
                         summaries.add(new MessageSummary(resultMessage.getIndex(), msg));

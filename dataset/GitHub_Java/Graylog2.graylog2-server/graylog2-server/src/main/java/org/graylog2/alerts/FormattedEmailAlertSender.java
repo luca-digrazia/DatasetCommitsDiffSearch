@@ -66,7 +66,6 @@ public class FormattedEmailAlertSender extends StaticEmailAlertSender implements
     @Override
     public void initialize(Configuration configuration) {
         this.pluginConfig = configuration;
-        super.initialize(configuration);
     }
 
     @Override

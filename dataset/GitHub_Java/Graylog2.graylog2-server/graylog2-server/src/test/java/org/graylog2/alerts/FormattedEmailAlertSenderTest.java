@@ -76,10 +76,9 @@ public class FormattedEmailAlertSenderTest {
         when(stream.getTitle()).thenReturn("Stream Title");
 
         AlertCondition.CheckResult checkResult = mock(AbstractAlertCondition.CheckResult.class);
-        when(checkResult.getResultDescription()).thenReturn("This is the alert description.");
         String subject = emailAlertSender.buildSubject(stream, checkResult, Collections.<Message>emptyList());
 
-        assertThat(subject).isEqualTo("Graylog alert for stream: Stream Title: This is the alert description.");
+        assertThat(subject).isEqualTo("Graylog alert for stream: Stream Title");
     }
 
     @Test
