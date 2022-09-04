@@ -110,7 +110,6 @@ public class J2ObjcLibrary implements RuleConfiguredTargetFactory {
         .addProvider(J2ObjcEntryClassProvider.class, j2ObjcEntryClassProvider)
         .addProvider(J2ObjcMappingFileProvider.class, j2ObjcMappingFileProvider)
         .addProvider(ObjcProvider.class, objcProvider)
-        .addNativeDeclaredProvider(objcProvider)
         .build();
   }
 
