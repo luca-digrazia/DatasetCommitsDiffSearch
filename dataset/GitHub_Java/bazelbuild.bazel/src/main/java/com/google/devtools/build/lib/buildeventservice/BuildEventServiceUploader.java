@@ -29,7 +29,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceUploaderCommands.AckReceivedCommand;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceUploaderCommands.EventLoopCommand;
 import com.google.devtools.build.lib.buildeventservice.BuildEventServiceUploaderCommands.OpenStreamCommand;
@@ -65,10 +64,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -103,11 +99,6 @@ public final class BuildEventServiceUploader implements Runnable {
   private final ArtifactGroupNamer namer;
   private final EventBus eventBus;
   private boolean startedClose = false;
-
-  private final ScheduledExecutorService timeoutExecutor =
-      MoreExecutors.listeningDecorator(
-          Executors.newSingleThreadScheduledExecutor(
-              new ThreadFactoryBuilder().setNameFormat("bes-uploader-timeout-%d").build()));
 
   /**
    * The event queue contains two types of events: - Build events, sorted by sequence number, that
@@ -318,7 +309,6 @@ public final class BuildEventServiceUploader implements Runnable {
       throw e;
     } finally {
       localFileUploader.shutdown();
-      MoreExecutors.shutdownAndAwaitTermination(timeoutExecutor, 0, TimeUnit.MILLISECONDS);
       closeFuture.set(null);
     }
   }
@@ -408,7 +398,7 @@ public final class BuildEventServiceUploader implements Runnable {
               SendRegularBuildEventCommand buildEvent = (SendRegularBuildEventCommand) event;
               ackQueue.addLast(buildEvent);
 
-              PathConverter pathConverter = waitForUploads(buildEvent);
+              PathConverter pathConverter = waitForLocalFileUploads(buildEvent);
 
               BuildEventStreamProtos.BuildEvent serializedRegularBuildEvent =
                   createSerializedRegularBuildEvent(pathConverter, buildEvent);
@@ -609,28 +599,16 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 
-  private PathConverter waitForUploads(SendRegularBuildEventCommand orderedBuildEvent)
+  private PathConverter waitForLocalFileUploads(SendRegularBuildEventCommand orderedBuildEvent)
       throws LocalFileUploadException, InterruptedException {
     try {
-      // Wait for the local file and pending remote uploads to complete.
-      ListenableFuture<?> remoteUploads =
-          Futures.successfulAsList(orderedBuildEvent.getEvent().remoteUploads());
-
-      if (localFileUploader.timeout() != null) {
-        remoteUploads =
-            Futures.withTimeout(
-                remoteUploads,
-                localFileUploader.timeout().toMillis(),
-                TimeUnit.MILLISECONDS,
-                timeoutExecutor);
-      }
-      // TODO(bazel-team): Consider failing softy if remote upload fails.
-      remoteUploads.get();
+      // Wait for the local file upload to have been completed.
       return orderedBuildEvent.localFileUploadProgress().get();
     } catch (ExecutionException e) {
       logger.log(
           Level.WARNING,
-          String.format("Failed to upload files referenced by build event: %s", e.getMessage()),
+          String.format(
+              "Failed to upload local files referenced by build event: %s", e.getMessage()),
           e);
       Throwables.throwIfUnchecked(e.getCause());
       throw new LocalFileUploadException(e.getCause());
