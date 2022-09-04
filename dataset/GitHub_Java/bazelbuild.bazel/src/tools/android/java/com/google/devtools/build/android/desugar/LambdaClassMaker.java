@@ -57,7 +57,7 @@ class LambdaClassMaker {
    * Returns absolute paths to .class files generated since the last call to this method together
    * with a string descriptor of the factory method.
    */
-  public ImmutableMap<Path, LambdaInfo> drain() {
+  public Map<Path, LambdaInfo> drain() {
     ImmutableMap<Path, LambdaInfo> result = ImmutableMap.copyOf(generatedClasses);
     generatedClasses.clear();
     return result;

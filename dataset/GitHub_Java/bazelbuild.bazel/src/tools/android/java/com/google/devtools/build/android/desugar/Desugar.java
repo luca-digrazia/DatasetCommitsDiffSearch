@@ -16,7 +16,6 @@ package com.google.devtools.build.android.desugar;
 import static com.google.common.base.Preconditions.checkState;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
@@ -35,7 +34,6 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Enumeration;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.CRC32;
@@ -56,16 +54,13 @@ class Desugar {
   public static class Options extends OptionsBase {
     @Option(
       name = "input",
-      allowMultiple = true,
-      defaultValue = "",
+      defaultValue = "null",
       category = "input",
       converter = ExistingPathConverter.class,
       abbrev = 'i',
-      help =
-          "Input Jar with classes to desugar (required, the n-th input is paired with the n-th "
-              + "output)."
+      help = "Input Jar with classes to desugar (required)."
     )
-    public List<Path> inputJars;
+    public Path inputJar;
 
     @Option(
       name = "classpath_entry",
@@ -97,16 +92,13 @@ class Desugar {
 
     @Option(
       name = "output",
-      allowMultiple = true,
-      defaultValue = "",
+      defaultValue = "null",
       category = "output",
       converter = PathConverter.class,
       abbrev = 'o',
-      help =
-          "Output Jar to write desugared classes into (required, the n-th output is paired with "
-              + "the n-th input)."
+      help = "Output Jar to write desugared classes into (required)."
     )
-    public List<Path> outputJars;
+    public Path outputJar;
 
     @Option(
       name = "verbose",
@@ -165,12 +157,10 @@ class Desugar {
     optionsParser.parseAndExitUponError(args);
     Options options = optionsParser.getOptions(Options.class);
 
-    checkState(!options.inputJars.isEmpty(), "--input is required");
-    checkState(
-        options.inputJars.size() == options.outputJars.size(),
-        "Desugar requires the same number of inputs and outputs to pair them");
+    checkState(options.inputJar != null, "--input is required");
+    checkState(options.outputJar != null, "--output is required");
     checkState(!options.bootclasspath.isEmpty() || options.allowEmptyBootclasspath,
-        "At least one --bootclasspath_entry is required");
+        "Bootclasspath required to desugar %s", options.inputJar);
 
     if (options.verbose) {
       System.out.printf("Lambda classes will be written under %s%n", dumpDirectory);
@@ -179,127 +169,108 @@ class Desugar {
     CoreLibraryRewriter rewriter =
         new CoreLibraryRewriter(options.coreLibrary ? "__desugar__/" : "");
 
+    IndexedJars appIndexedJar = new IndexedJars(ImmutableList.of(options.inputJar));
+    IndexedJars appAndClasspathIndexedJars = new IndexedJars(options.classpath, appIndexedJar);
+    ClassLoader loader =
+        createClassLoader(rewriter, options.bootclasspath, appAndClasspathIndexedJars);
     boolean allowDefaultMethods = options.minSdkVersion >= 24;
     boolean allowCallsToObjectsNonNull = options.minSdkVersion >= 19;
+    try (ZipFile in = new ZipFile(options.inputJar.toFile());
+        ZipOutputStream out =
+            new ZipOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(options.outputJar)))) {
+      LambdaClassMaker lambdas = new LambdaClassMaker(dumpDirectory);
+      ClassReaderFactory readerFactory =
+          new ClassReaderFactory(
+              (options.copyBridgesFromClasspath && !allowDefaultMethods)
+                  ? appAndClasspathIndexedJars
+                  : appIndexedJar,
+              rewriter);
 
-    LambdaClassMaker lambdas = new LambdaClassMaker(dumpDirectory);
+      ImmutableSet.Builder<String> interfaceLambdaMethodCollector = ImmutableSet.builder();
 
-    // Process each input separately
-    for (InputOutputPair inputOutputPair : toInputOutputPairs(options)) {
-      Path inputJar = inputOutputPair.getInput();
-      IndexedJars appIndexedJar = new IndexedJars(ImmutableList.of(inputJar));
-      IndexedJars appAndClasspathIndexedJars = new IndexedJars(options.classpath, appIndexedJar);
-      ClassLoader loader =
-          createClassLoader(rewriter, options.bootclasspath, appAndClasspathIndexedJars);
-
-      try (ZipFile in = new ZipFile(inputJar.toFile());
-          ZipOutputStream out =
-              new ZipOutputStream(
-                  new BufferedOutputStream(Files.newOutputStream(inputOutputPair.getOutput())))) {
-        ClassReaderFactory readerFactory =
-            new ClassReaderFactory(
-                (options.copyBridgesFromClasspath && !allowDefaultMethods)
-                    ? appAndClasspathIndexedJars
-                    : appIndexedJar,
-                rewriter);
-
-        ImmutableSet.Builder<String> interfaceLambdaMethodCollector = ImmutableSet.builder();
-
-        // Process input Jar, desugaring as we go
-        for (Enumeration<? extends ZipEntry> entries = in.entries(); entries.hasMoreElements(); ) {
-          ZipEntry entry = entries.nextElement();
-          try (InputStream content = in.getInputStream(entry)) {
-            // We can write classes uncompressed since they need to be converted to .dex format for
-            // Android anyways. Resources are written as they were in the input jar to avoid any
-            // danger of accidentally uncompressed resources ending up in an .apk.
-            if (entry.getName().endsWith(".class")) {
-              ClassReader reader = rewriter.reader(content);
-              CoreLibraryRewriter.UnprefixingClassWriter writer =
-                  rewriter.writer(ClassWriter.COMPUTE_MAXS /*for bridge methods*/);
-              ClassVisitor visitor = writer;
-              if (!allowDefaultMethods) {
-                visitor = new Java7Compatibility(visitor, readerFactory);
-              }
-
-              visitor =
-                  new LambdaDesugaring(
-                      visitor, loader, lambdas, interfaceLambdaMethodCollector,
-                      allowDefaultMethods);
-
-              if (!allowCallsToObjectsNonNull) {
-                visitor = new ObjectsRequireNonNullMethodInliner(visitor);
-              }
-              reader.accept(visitor, 0);
-
-              writeStoredEntry(out, entry.getName(), writer.toByteArray());
-            } else {
-              // TODO(bazel-team): Avoid de- and re-compressing resource files
-              ZipEntry destEntry = new ZipEntry(entry);
-              destEntry.setCompressedSize(-1);
-              out.putNextEntry(destEntry);
-              ByteStreams.copy(content, out);
-              out.closeEntry();
-            }
-          }
-        }
-
-        ImmutableSet<String> interfaceLambdaMethods = interfaceLambdaMethodCollector.build();
-        if (allowDefaultMethods) {
-          checkState(
-              interfaceLambdaMethods.isEmpty(),
-              "Desugaring with default methods enabled moved interface lambdas");
-        }
-
-        // Write out the lambda classes we generated along the way
-        for (Map.Entry<Path, LambdaInfo> lambdaClass : lambdas.drain().entrySet()) {
-          try (InputStream bytecode =
-              Files.newInputStream(dumpDirectory.resolve(lambdaClass.getKey()))) {
-            ClassReader reader = rewriter.reader(bytecode);
+      // Process input Jar, desugaring as we go
+      for (Enumeration<? extends ZipEntry> entries = in.entries(); entries.hasMoreElements(); ) {
+        ZipEntry entry = entries.nextElement();
+        try (InputStream content = in.getInputStream(entry)) {
+          // We can write classes uncompressed since they need to be converted to .dex format for
+          // Android anyways. Resources are written as they were in the input jar to avoid any
+          // danger of accidentally uncompressed resources ending up in an .apk.
+          if (entry.getName().endsWith(".class")) {
+            ClassReader reader = rewriter.reader(content);
             CoreLibraryRewriter.UnprefixingClassWriter writer =
-                rewriter.writer(ClassWriter.COMPUTE_MAXS /*for invoking bridges*/);
+                rewriter.writer(ClassWriter.COMPUTE_MAXS /*for bridge methods*/);
             ClassVisitor visitor = writer;
-
             if (!allowDefaultMethods) {
-              // null ClassReaderFactory b/c we don't expect to need it for lambda classes
-              visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null);
+              visitor = new Java7Compatibility(visitor, readerFactory);
             }
 
             visitor =
-                new LambdaClassFixer(
-                    visitor,
-                    lambdaClass.getValue(),
-                    readerFactory,
-                    interfaceLambdaMethods,
-                    allowDefaultMethods);
-            // Send lambda classes through desugaring to make sure there's no invokedynamic
-            // instructions in generated lambda classes (checkState below will fail)
-            visitor = new LambdaDesugaring(visitor, loader, lambdas, null, allowDefaultMethods);
+                new LambdaDesugaring(
+                    visitor, loader, lambdas, interfaceLambdaMethodCollector, allowDefaultMethods);
+
             if (!allowCallsToObjectsNonNull) {
-              // Not sure whether there will be implicit null check emitted by javac, so we rerun
-              // the inliner again
               visitor = new ObjectsRequireNonNullMethodInliner(visitor);
             }
             reader.accept(visitor, 0);
-            String filename =
-                rewriter.unprefix(lambdaClass.getValue().desiredInternalName()) + ".class";
-            writeStoredEntry(out, filename, writer.toByteArray());
+
+            writeStoredEntry(out, entry.getName(), writer.toByteArray());
+          } else {
+            // TODO(bazel-team): Avoid de- and re-compressing resource files
+            ZipEntry destEntry = new ZipEntry(entry);
+            destEntry.setCompressedSize(-1);
+            out.putNextEntry(destEntry);
+            ByteStreams.copy(content, out);
+            out.closeEntry();
           }
         }
-
-        Map<Path, LambdaInfo> leftBehind = lambdas.drain();
-        checkState(leftBehind.isEmpty(), "Didn't process %s", leftBehind);
       }
-    }
-  }
 
-   private static List<InputOutputPair> toInputOutputPairs(Options options) {
-    final ImmutableList.Builder<InputOutputPair> ioPairListbuilder = ImmutableList.builder();
-    for (Iterator<Path> inputIt = options.inputJars.iterator(),
-                outputIt = options.outputJars.iterator();
-                inputIt.hasNext();) {
-      ioPairListbuilder.add(InputOutputPair.create(inputIt.next(), outputIt.next()));
+      ImmutableSet<String> interfaceLambdaMethods = interfaceLambdaMethodCollector.build();
+      if (allowDefaultMethods) {
+        checkState(
+            interfaceLambdaMethods.isEmpty(),
+            "Desugaring with default methods enabled moved interface lambdas");
+      }
+
+      // Write out the lambda classes we generated along the way
+      for (Map.Entry<Path, LambdaInfo> lambdaClass : lambdas.drain().entrySet()) {
+        try (InputStream bytecode = Files.newInputStream(lambdaClass.getKey())) {
+          ClassReader reader = rewriter.reader(bytecode);
+          CoreLibraryRewriter.UnprefixingClassWriter writer =
+              rewriter.writer(ClassWriter.COMPUTE_MAXS /*for invoking bridges*/);
+          ClassVisitor visitor = writer;
+
+          if (!allowDefaultMethods) {
+            // null ClassReaderFactory b/c we don't expect to need it for lambda classes
+            visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null);
+          }
+
+          visitor =
+              new LambdaClassFixer(
+                  visitor,
+                  lambdaClass.getValue(),
+                  readerFactory,
+                  interfaceLambdaMethods,
+                  allowDefaultMethods);
+          // Send lambda classes through desugaring to make sure there's no invokedynamic
+          // instructions in generated lambda classes (checkState below will fail)
+          visitor = new LambdaDesugaring(visitor, loader, lambdas, null, allowDefaultMethods);
+          if (!allowCallsToObjectsNonNull) {
+            // Not sure whether there will be implicit null check emitted by javac, so we rerun the
+            // inliner again
+            visitor = new ObjectsRequireNonNullMethodInliner(visitor);
+          }
+          reader.accept(visitor, 0);
+          String filename =
+              rewriter.unprefix(lambdaClass.getValue().desiredInternalName()) + ".class";
+          writeStoredEntry(out, filename, writer.toByteArray());
+        }
+      }
+
+      Map<Path, LambdaInfo> leftBehind = lambdas.drain();
+      checkState(leftBehind.isEmpty(), "Didn't process %s", leftBehind);
     }
-    return ioPairListbuilder.build();
   }
 
   private static void writeStoredEntry(ZipOutputStream out, String filename, byte[] content)
@@ -384,20 +355,5 @@ class Desugar {
             }
           });
     }
-  }
-
-  /**
-   * Pair input and output.
-   */
-  @AutoValue
-  abstract static class InputOutputPair {
-
-    static InputOutputPair create(Path input, Path output) {
-      return new AutoValue_Desugar_InputOutputPair(input, output);
-    }
-
-    abstract Path getInput();
-
-    abstract Path getOutput();
   }
 }
