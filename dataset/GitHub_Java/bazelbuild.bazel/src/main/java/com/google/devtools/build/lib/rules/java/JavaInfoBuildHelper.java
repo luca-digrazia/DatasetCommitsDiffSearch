@@ -277,8 +277,8 @@ final class JavaInfoBuildHelper {
         actionRegistry,
         actions.getActionConstructionContext(),
         javaSemantics,
-        NestedSetBuilder.<Artifact>wrap(Order.STABLE_ORDER, sourceFiles),
-        NestedSetBuilder.<Artifact>wrap(Order.STABLE_ORDER, sourceJars),
+        ImmutableList.copyOf(sourceFiles),
+        NestedSetBuilder.<Artifact>stableOrder().addAll(sourceJars).build(),
         outputSrcJar,
         javaToolchainProvider,
         javaRuntimeInfo);

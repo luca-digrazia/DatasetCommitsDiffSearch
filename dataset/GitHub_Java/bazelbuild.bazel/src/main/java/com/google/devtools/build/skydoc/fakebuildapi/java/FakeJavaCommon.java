@@ -138,9 +138,4 @@ public class FakeJavaCommon
   public ProviderApi getJavaRuntimeProvider() {
     return new FakeProviderApi();
   }
-
-  @Override
-  public boolean isJavaToolchainResolutionEnabled(SkylarkRuleContextApi ruleContext) {
-    return false;
-  }
 }
