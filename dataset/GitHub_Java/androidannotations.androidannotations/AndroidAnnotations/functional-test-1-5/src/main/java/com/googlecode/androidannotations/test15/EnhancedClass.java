@@ -20,14 +20,6 @@ import com.googlecode.androidannotations.annotations.UiThread;
 import com.googlecode.androidannotations.annotations.UiThreadDelayed;
 import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.annotations.res.StringRes;
-import com.googlecode.androidannotations.annotations.sharedpreferences.Pref;
-import com.googlecode.androidannotations.test15.prefs.ActivityDefaultPrefs_;
-import com.googlecode.androidannotations.test15.prefs.ActivityPrefs_;
-import com.googlecode.androidannotations.test15.prefs.ApplicationDefaultPrefs_;
-import com.googlecode.androidannotations.test15.prefs.DefaultPrefs_;
-import com.googlecode.androidannotations.test15.prefs.PublicPrefs_;
-import com.googlecode.androidannotations.test15.prefs.SomePrefs_;
-import com.googlecode.androidannotations.test15.prefs.UniquePrefs_;
 import com.googlecode.androidannotations.test15.roboguice.SampleRoboApplication;
 
 /**
@@ -81,27 +73,6 @@ public class EnhancedClass {
 	void background() {
 
 	}
-
-	@Pref
-	SomePrefs_ somePrefs;
-
-	@Pref
-	ActivityDefaultPrefs_ activityDefaultPrefs;
-
-	@Pref
-	ActivityPrefs_ activityPrefs;
-
-	@Pref
-	ApplicationDefaultPrefs_ applicationDefaultPrefs;
-
-	@Pref
-	DefaultPrefs_ defaultPrefs;
-
-	@Pref
-	PublicPrefs_ publicPrefs;
-
-	@Pref
-	UniquePrefs_ uniquePrefs;
 
 	@SystemService
 	ActivityManager activityManager;
