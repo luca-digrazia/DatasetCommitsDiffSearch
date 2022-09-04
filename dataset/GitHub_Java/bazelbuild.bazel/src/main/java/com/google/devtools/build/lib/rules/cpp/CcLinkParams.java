@@ -248,13 +248,13 @@ public final class CcLinkParams implements CcLinkParamsApi {
           nonCodeInputs);
     }
 
-    public boolean add(CcLinkingInfo ccLinkingInfo) {
+    public boolean add(AbstractCcLinkParamsStore store) {
       Preconditions.checkState(linkingStaticallyLinkSharedSet);
-      if (ccLinkingInfo != null) {
-        CcLinkParams args = ccLinkingInfo.getCcLinkParams(linkingStatically, linkShared);
+      if (store != null) {
+        CcLinkParams args = store.get(linkingStatically, linkShared);
         addTransitiveArgs(args);
       }
-      return ccLinkingInfo != null;
+      return store != null;
     }
 
     /**
@@ -275,8 +275,10 @@ public final class CcLinkParams implements CcLinkParamsApi {
      */
     public Builder addTransitiveTarget(TransitiveInfoCollection target) {
       CcLinkingInfo ccLinkingInfo = target.get(CcLinkingInfo.PROVIDER);
-      if (ccLinkingInfo != null) {
-        add(ccLinkingInfo);
+      CcLinkParamsStore ccLinkParamsStore =
+          ccLinkingInfo == null ? null : ccLinkingInfo.getCcLinkParamsStore();
+      if (ccLinkParamsStore != null) {
+        add(ccLinkParamsStore);
       }
       return this;
     }
@@ -289,13 +291,14 @@ public final class CcLinkParams implements CcLinkParamsApi {
     @SafeVarargs
     public final Builder addTransitiveTarget(
         TransitiveInfoCollection target,
-        Function<TransitiveInfoCollection, CcLinkingInfo> firstMapping,
+        Function<TransitiveInfoCollection, AbstractCcLinkParamsStore> firstMapping,
         @SuppressWarnings("unchecked") // Java arrays don't preserve generic arguments.
-            Function<TransitiveInfoCollection, CcLinkingInfo>... remainingMappings) {
+            Function<TransitiveInfoCollection, AbstractCcLinkParamsStore>... remainingMappings) {
       if (add(firstMapping.apply(target))) {
         return this;
       }
-      for (Function<TransitiveInfoCollection, CcLinkingInfo> mapping : remainingMappings) {
+      for (Function<TransitiveInfoCollection, AbstractCcLinkParamsStore> mapping :
+          remainingMappings) {
         if (add(mapping.apply(target))) {
           return this;
         }
@@ -311,9 +314,9 @@ public final class CcLinkParams implements CcLinkParamsApi {
     @SafeVarargs
     public final Builder addTransitiveTargets(
         Iterable<? extends TransitiveInfoCollection> targets,
-        Function<TransitiveInfoCollection, CcLinkingInfo> firstMapping,
+        Function<TransitiveInfoCollection, AbstractCcLinkParamsStore> firstMapping,
         @SuppressWarnings("unchecked") // Java arrays don't preserve generic arguments.
-            Function<TransitiveInfoCollection, CcLinkingInfo>... remainingMappings) {
+            Function<TransitiveInfoCollection, AbstractCcLinkParamsStore>... remainingMappings) {
       for (TransitiveInfoCollection target : targets) {
         addTransitiveTarget(target, firstMapping, remainingMappings);
       }

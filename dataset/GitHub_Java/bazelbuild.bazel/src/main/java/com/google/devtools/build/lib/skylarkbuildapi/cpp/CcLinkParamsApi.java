@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
     doc = "Parameters that affect linking actions.")
 public interface CcLinkParamsApi {
   @SkylarkCallable(
-      name = "user_link_flags",
+      name = "linkopts",
       documented = false,
       allowReturnNones = true,
       structField = true)

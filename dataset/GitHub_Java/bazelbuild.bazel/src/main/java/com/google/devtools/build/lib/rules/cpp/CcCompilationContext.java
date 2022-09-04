@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CppHelper.PregreppedHeader;
-import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
@@ -198,44 +197,43 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     return headerInfo.textualHeaders;
   }
 
-  public IncludeScanningHeaderData createIncludeScanningHeaderData(
-      boolean usePic, boolean createModularHeaders) {
-    // We'd prefer for these types to use ImmutableSet/ImmutableMap. However, constructing these is
-    // substantially more costly in a way that shows up in profiles.
-    Map<PathFragment, Artifact> pathToLegalOutputArtifact = new HashMap<>();
-    Map<Artifact, Artifact> pregreppedHeaders = new HashMap<>();
-    Set<Artifact> modularHeaders = new HashSet<>();
+  public Map<Artifact, Artifact> createLegalGeneratedScannerFileMap() {
+    Map<Artifact, Artifact> legalOuts = new HashMap<>();
     for (HeaderInfo transitiveHeaderInfo : transitiveHeaderInfos) {
-      boolean isModule = createModularHeaders && transitiveHeaderInfo.getModule(usePic) != null;
       for (Artifact a : transitiveHeaderInfo.modularHeaders) {
         if (!a.isSourceArtifact()) {
-          pathToLegalOutputArtifact.put(a.getExecPath(), a);
-        }
-        if (isModule) {
-          modularHeaders.add(a);
+          legalOuts.put(a, null);
         }
       }
       for (Artifact a : transitiveHeaderInfo.textualHeaders) {
         if (!a.isSourceArtifact()) {
-          pathToLegalOutputArtifact.put(a.getExecPath(), a);
+          legalOuts.put(a, null);
         }
       }
       for (PregreppedHeader pregreppedHeader : transitiveHeaderInfo.pregreppedHeaders) {
         Artifact hdr = pregreppedHeader.originalHeader();
         Preconditions.checkState(!hdr.isSourceArtifact(), hdr);
-        pregreppedHeaders.put(hdr, pregreppedHeader.greppedHeader());
+        legalOuts.put(hdr, pregreppedHeader.greppedHeader());
       }
     }
-    modularHeaders.removeAll(headerInfo.modularHeaders);
-    modularHeaders.removeAll(headerInfo.textualHeaders);
-    return new IncludeScanningHeaderData(
-        Collections.unmodifiableMap(pathToLegalOutputArtifact),
-        Collections.unmodifiableSet(modularHeaders),
-        Collections.unmodifiableMap(pregreppedHeaders));
+    return Collections.unmodifiableMap(legalOuts);
   }
 
   public NestedSet<Artifact> getTransitiveModules(boolean usePic) {
     return usePic ? transitivePicModules : transitiveModules;
+  }
+
+  public Set<Artifact> getModularHeaders(boolean usePic) {
+    Set<Artifact> result = new HashSet<>();
+    for (HeaderInfo transitiveHeaderInfo : transitiveHeaderInfos) {
+      if (transitiveHeaderInfo.getModule(usePic) != null) {
+        result.addAll(transitiveHeaderInfo.modularHeaders);
+      }
+    }
+    // Remove headers belonging to this module.
+    result.removeAll(headerInfo.modularHeaders);
+    result.removeAll(headerInfo.textualHeaders);
+    return Collections.unmodifiableSet(result);
   }
 
   public ImmutableSet<Artifact> getUsedModules(boolean usePic, Set<Artifact> usedHeaders) {
