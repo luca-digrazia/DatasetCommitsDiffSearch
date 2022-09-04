@@ -151,7 +151,7 @@ public final class GELF {
             rawGELFHeader[i] = message.getData()[i];
         }
 
-        // Make sure that GELF header begins with 30,15 (<3 Boris Erdmann)
+        // Make sure that GELF header begins with 30,15 (<3 boris erdmann)
         if (rawGELFHeader[0] != 30 || rawGELFHeader[1] != 15) {
             throw new InvalidGELFHeaderException("Invalid GELF ID.");
         }
