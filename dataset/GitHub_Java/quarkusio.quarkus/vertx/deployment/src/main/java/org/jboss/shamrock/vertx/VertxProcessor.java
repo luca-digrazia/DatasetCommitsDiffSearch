@@ -18,20 +18,10 @@ package org.jboss.shamrock.vertx;
 
 import javax.inject.Inject;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.ExecutionTime;
-import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import org.jboss.shamrock.deployment.cdi.BeanContainerListenerBuildItem;
-import org.jboss.shamrock.vertx.runtime.VertxConfiguration;
-import org.jboss.shamrock.vertx.runtime.VertxProducer;
-import org.jboss.shamrock.vertx.runtime.VertxTemplate;
-
-import java.util.Optional;
 
 class VertxProcessor {
 
@@ -39,7 +29,9 @@ class VertxProcessor {
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
 
     @BuildStep
-    SubstrateConfigBuildItem build() {
+    SubstrateConfigBuildItem build() throws Exception {
+
+
         // This one may not be required after Vert.x 3.6.0 lands
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
 
@@ -51,30 +43,5 @@ class VertxProcessor {
                 .addRuntimeInitializedClass("io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder")
                 .build();
     }
-
-
-    /**
-     * The Vert.x configuration, if set.
-     */
-    @ConfigProperty(name = "shamrock.vertx")
-    Optional<VertxConfiguration> vertxConfig;
-
-    @BuildStep
-    AdditionalBeanBuildItem registerBean() {
-        return new AdditionalBeanBuildItem(VertxProducer.class);
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    BeanContainerListenerBuildItem build(VertxTemplate template) {
-        return vertxConfig
-                .map(conf -> new BeanContainerListenerBuildItem(template.configureVertx(conf)))
-                .orElseGet(() -> new BeanContainerListenerBuildItem(template.configureVertx(null)));
-    }
-
-
-
-
-
 
 }
