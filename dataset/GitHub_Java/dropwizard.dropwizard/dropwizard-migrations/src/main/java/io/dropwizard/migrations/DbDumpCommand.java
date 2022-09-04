@@ -1,6 +1,5 @@
 package io.dropwizard.migrations;
 
-import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.Configuration;
 import io.dropwizard.db.DatabaseConfiguration;
 import liquibase.CatalogAndSchema;
@@ -40,14 +39,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class DbDumpCommand<T extends Configuration> extends AbstractLiquibaseCommand<T> {
-
-    private PrintStream outputStream = System.out;
-
-    @VisibleForTesting
-    void setOutputStream(PrintStream outputStream) {
-        this.outputStream = outputStream;
-    }
-
     public DbDumpCommand(DatabaseConfiguration<T> strategy, Class<T> configurationClass) {
         super("dump",
               "Generate a dump of the existing database state.",
@@ -161,31 +152,31 @@ public class DbDumpCommand<T extends Configuration> extends AbstractLiquibaseCom
     public void run(Namespace namespace, Liquibase liquibase) throws Exception {
         final Set<Class<? extends DatabaseObject>> compareTypes = new HashSet<>();
 
-        if (isTrue(namespace.getBoolean("columns"))) {
+        if (namespace.getBoolean("columns")) {
             compareTypes.add(Column.class);
         }
-        if (isTrue(namespace.getBoolean("data"))) {
+        if (namespace.getBoolean("data")) {
             compareTypes.add(Data.class);
         }
-        if (isTrue(namespace.getBoolean("foreign-keys"))) {
+        if (namespace.getBoolean("foreign-keys")) {
             compareTypes.add(ForeignKey.class);
         }
-        if (isTrue(namespace.getBoolean("indexes"))) {
+        if (namespace.getBoolean("indexes")) {
             compareTypes.add(Index.class);
         }
-        if (isTrue(namespace.getBoolean("primary-keys"))) {
+        if (namespace.getBoolean("primary-keys")) {
             compareTypes.add(PrimaryKey.class);
         }
-        if (isTrue(namespace.getBoolean("sequences"))) {
+        if (namespace.getBoolean("sequences")) {
             compareTypes.add(Sequence.class);
         }
-        if (isTrue(namespace.getBoolean("tables"))) {
+        if (namespace.getBoolean("tables")) {
             compareTypes.add(Table.class);
         }
-        if (isTrue(namespace.getBoolean("unique-constraints"))) {
+        if (namespace.getBoolean("unique-constraints")) {
             compareTypes.add(UniqueConstraint.class);
         }
-        if (isTrue(namespace.getBoolean("views"))) {
+        if (namespace.getBoolean("views")) {
             compareTypes.add(View.class);
         }
 
@@ -198,7 +189,7 @@ public class DbDumpCommand<T extends Configuration> extends AbstractLiquibaseCom
                 generateChangeLog(database, database.getDefaultSchema(), diffToChangeLog, file, compareTypes);
             }
         } else {
-            generateChangeLog(database, database.getDefaultSchema(), diffToChangeLog, outputStream, compareTypes);
+            generateChangeLog(database, database.getDefaultSchema(), diffToChangeLog, System.out, compareTypes);
         }
     }
 
@@ -220,9 +211,5 @@ public class DbDumpCommand<T extends Configuration> extends AbstractLiquibaseCom
         } catch (InvalidExampleException e) {
             throw new UnexpectedLiquibaseException(e);
         }
-    }
-
-    private static boolean isTrue(Boolean nullableCondition) {
-        return nullableCondition != null && nullableCondition;
     }
 }
