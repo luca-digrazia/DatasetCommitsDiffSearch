@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,33 +13,27 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.blas;
 
 /** Matrix transpose. */
 public enum Transpose {
     /** Normal operation on the matrix. */
-    NO_TRANSPOSE(111, (byte) 'N'),
+    NO_TRANSPOSE((byte) 111),
     /** Transpose operation on the matrix. */
-    TRANSPOSE(112, (byte) 'T'),
+    TRANSPOSE((byte) 112),
     /** Conjugate transpose operation on the matrix. */
-    CONJUGATE_TRANSPOSE(113, (byte) 'C');
+    CONJUGATE_TRANSPOSE((byte) 113);
 
-    /** Byte value passed to BLAS. */
-    private final int blas;
-    /** Byte value passed to LAPACK. */
-    private final byte lapack;
+    /** Byte value passed to CBLAS. */
+    private final byte value;
 
     /** Constructor. */
-    Transpose(int blas, byte lapack) {
-        this.blas = blas;
-        this.lapack = lapack;
+    Transpose(byte value) {
+        this.value = value;
     }
 
     /** Returns the byte value for BLAS. */
-    public int blas() { return blas; }
-
-    /** Returns the byte value for LAPACK. */
-    public byte lapack() { return lapack; }
+    public byte getValue() { return value; }
 }

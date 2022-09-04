@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.blas;
 
@@ -32,7 +32,7 @@ public enum UPLO {
      * This is the case when the matrix is upper triangular, lower triangular,
      * symmetric, or Hermitian.
      */
-    UPPER(121, (byte) 'U'),
+    UPPER((byte) 121),
     /**
      * Lower triangle is stored. The packed storage format compactly stores
      * matrix elements when only one part of the matrix, the upper or lower
@@ -40,22 +40,16 @@ public enum UPLO {
      * This is the case when the matrix is upper triangular, lower triangular,
      * symmetric, or Hermitian.
      */
-    LOWER(122, (byte) 'L');
+    LOWER((byte) 122);
 
-    /** Byte value passed to BLAS. */
-    private final int blas;
-    /** Byte value passed to LAPACK. */
-    private final byte lapack;
+    /** Byte value passed to CBLAS/LAPACKE. */
+    private final byte value;
 
     /** Constructor. */
-    UPLO(int blas, byte lapack) {
-        this.blas = blas;
-        this.lapack = lapack;
+    UPLO(byte value) {
+        this.value = value;
     }
 
     /** Returns the byte value for BLAS. */
-    public int blas() { return blas; }
-
-    /** Returns the byte value for LAPACK. */
-    public byte lapack() { return lapack; }
+    public byte getValue() { return value; }
 }

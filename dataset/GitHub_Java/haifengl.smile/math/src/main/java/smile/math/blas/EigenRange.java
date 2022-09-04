@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.blas;
 
@@ -22,25 +22,25 @@ public enum EigenRange {
     /**
      * All eigenvalues will be found.
      */
-    ALL((byte) 'A'),
+    ALL((byte) 65),
     /**
      * All eigenvalues in the half-open interval (VL,VU]
      * will be found.
      */
-    VALUE((byte) 'V'),
+    VALUE((byte) 86),
     /**
      * The IL-th through IU-th eigenvalues will be found.
      */
-    INDEX((byte) 'I');
+    INDEX((byte) 73);
 
     /** Byte value passed to LAPACK. */
-    private final byte lapack;
+    private final byte value;
 
     /** Constructor. */
-    EigenRange(byte lapack) {
-        this.lapack = lapack;
+    EigenRange(byte value) {
+        this.value = value;
     }
 
     /** Returns the byte value for LAPACK. */
-    public byte lapack() { return lapack; }
+    public byte getValue() { return value; }
 }

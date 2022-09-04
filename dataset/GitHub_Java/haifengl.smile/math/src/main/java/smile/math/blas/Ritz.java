@@ -17,24 +17,26 @@
 
 package smile.math.blas;
 
-/**
- * The flag if the symmetric  matrix A appears on the left or right
- * in the matrix-matrix operation.
- */
-public enum Side {
-    /** A * B */
-    LEFT((byte) 141),
-    /** B * A */
-    RIGHT((byte) 142);
-
-    /** Integer value passed to CBLAS. */
-    private final byte value;
-
-    /** Constructor. */
-    Side(byte value) {
-        this.value = value;
-    }
-
-    /** Returns the byte value for BLAS. */
-    public byte getValue() { return value; }
+/** The option which Ritz values to compute. */
+public enum Ritz {
+    /**
+     * compute the largest (algebraic) eigenvalues.
+     */
+    LA,
+    /**
+     * compute the smallest (algebraic) eigenvalues.
+     */
+    SA,
+    /**
+     * compute the largest (in magnitude) eigenvalues.
+     */
+    LM,
+    /**
+     * compute the smallest (in magnitude) eigenvalues.
+     */
+    SM,
+    /**
+     * compute eigenvalues, half from each end of the spectrum
+     */
+    BE
 }

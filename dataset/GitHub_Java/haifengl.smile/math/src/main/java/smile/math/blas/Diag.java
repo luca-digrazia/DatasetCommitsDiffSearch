@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.blas;
 
@@ -29,24 +29,18 @@ package smile.math.blas;
  */
 public enum Diag {
     /** Non-unit triangular. */
-    NON_UNIT(131, (byte) 'N'),
+    NON_UNIT((byte) 131),
     /** Unit triangular. */
-    UNIT(132, (byte) 'U');
+    UNIT((byte) 132);
 
-    /** Byte value passed to BLAS. */
-    private final int blas;
-    /** Byte value passed to LAPACK. */
-    private final byte lapack;
+    /** Integer value passed to CBLAS. */
+    private final byte value;
 
     /** Constructor. */
-    Diag(int blas, byte lapack) {
-        this.blas = blas;
-        this.lapack = lapack;
+    Diag(byte value) {
+        this.value = value;
     }
 
     /** Returns the byte value for BLAS. */
-    public int blas() { return blas; }
-
-    /** Returns the byte value for LAPACK. */
-    public byte lapack() { return lapack; }
+    public byte getValue() { return value; }
 }

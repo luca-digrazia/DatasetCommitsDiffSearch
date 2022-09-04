@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,25 +13,25 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.math.blas;
 
 /** The option if computing eigen vectors. */
 public enum EVDJob {
     /** Eigenvalues only are computed. */
-    NO_VECTORS((byte) 'N'),
+    NO_VECTORS((byte) 78),
     /** Both eigen values and vectors are computed. */
-    VECTORS((byte) 'V');
+    VECTORS((byte) 86);
 
     /** Byte value passed to LAPACK. */
-    private final byte lapack;
+    private final byte value;
 
     /** Constructor. */
-    EVDJob(byte lapack) {
-        this.lapack = lapack;
+    EVDJob(byte value) {
+        this.value = value;
     }
 
     /** Returns the byte value for LAPACK. */
-    public byte lapack() { return lapack; }
+    public byte getValue() { return value; }
 }

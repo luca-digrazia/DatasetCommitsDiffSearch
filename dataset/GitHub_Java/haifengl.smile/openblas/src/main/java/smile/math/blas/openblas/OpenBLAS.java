@@ -15,20 +15,20 @@
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  ******************************************************************************/
 
-package smile.math.blas.mkl;
+package smile.math.blas.openblas;
 
 import smile.math.blas.*;
 import org.bytedeco.javacpp.*;
 import org.bytedeco.javacpp.indexer.*;
-import static org.bytedeco.mkl.global.mkl_rt.*;
+import static org.bytedeco.openblas.global.openblas.*;
 
 /**
- * Intel MKL library wrapper.
+ * OpenBLAS library wrapper.
  *
  * @author Haifeng Li
  */
-public class MKL implements BLAS, LAPACK {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(MKL.class);
+public class OpenBLAS implements BLAS, LAPACK {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OpenBLAS.class);
 
     @Override
     public double asum(int n, double[] x, int incx) {
