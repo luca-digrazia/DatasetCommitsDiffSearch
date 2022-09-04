@@ -13,22 +13,52 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
 /**
  * A {@link TransitiveInfoProvider} so that {@code cc_toolchain} can pass {@link FdoSupport} to the
  * C++ rules.
  */
 @Immutable
+@AutoCodec
 public class FdoSupportProvider implements TransitiveInfoProvider {
   private final FdoSupport fdoSupport;
+  private final FdoMode fdoMode;
+  private final String fdoInstrument;
+  private final Artifact profileArtifact;
+  private final Artifact prefetchHintsArtifact;
 
-  public FdoSupportProvider(FdoSupport fdoSupport) {
+  @AutoCodec.Instantiator
+  public FdoSupportProvider(FdoSupport fdoSupport, FdoMode fdoMode, String fdoInstrument,
+      Artifact profileArtifact, Artifact prefetchHintsArtifact) {
     this.fdoSupport = fdoSupport;
+    this.fdoMode = fdoMode;
+    this.fdoInstrument = fdoInstrument;
+    this.profileArtifact = profileArtifact;
+    this.prefetchHintsArtifact = prefetchHintsArtifact;
   }
 
   public FdoSupport getFdoSupport() {
     return fdoSupport;
+  }
+
+  public String getFdoInstrument() {
+    return fdoInstrument;
+  }
+
+  public FdoMode getFdoMode() {
+    return fdoMode;
+  }
+
+  public Artifact getProfileArtifact() {
+    return profileArtifact;
+  }
+
+  public Artifact getPrefetchHintsArtifact() {
+    return prefetchHintsArtifact;
   }
 }

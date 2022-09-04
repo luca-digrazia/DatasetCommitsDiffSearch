@@ -112,7 +112,7 @@ public enum LinkBuildVariables {
       String interfaceLibraryOutput,
       PathFragment ltoOutputRootPrefix,
       String defFile,
-      FdoProvider fdoProvider,
+      FdoSupportProvider fdoSupport,
       Iterable<String> runtimeLibrarySearchDirectories,
       SequenceBuilder librariesToLink,
       Iterable<String> librarySearchDirectories,
@@ -234,7 +234,7 @@ public enum LinkBuildVariables {
     }
 
     if (featureConfiguration.isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
-      buildVariables.addStringVariable("fdo_instrument_path", fdoProvider.getFdoInstrument());
+      buildVariables.addStringVariable("fdo_instrument_path", fdoSupport.getFdoInstrument());
     }
 
     Iterable<String> userLinkFlagsWithLtoIndexingIfNeeded;
@@ -324,7 +324,7 @@ public enum LinkBuildVariables {
     }
 
     if (!cppConfiguration.enableLinkoptsInUserLinkFlags()) {
-      result.addAll(cppConfiguration.getLinkopts());
+      result.addAll(ccToolchainProvider.getLinkOptions());
     }
 
     // -pie is not compatible with shared and should be
@@ -338,10 +338,7 @@ public enum LinkBuildVariables {
   private static Iterable<String> removePieIfCreatingSharedLibrary(
       boolean isCreatingSharedLibrary, Iterable<String> flags) {
     if (isCreatingSharedLibrary) {
-      return Iterables.filter(
-          flags,
-          Predicates.not(
-              Predicates.or(Predicates.equalTo("-pie"), Predicates.equalTo("-Wl,-pie"))));
+      return Iterables.filter(flags, Predicates.not(Predicates.equalTo("-pie")));
     } else {
       return flags;
     }

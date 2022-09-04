@@ -54,9 +54,10 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
-import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
+import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -231,7 +232,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     Artifact rawProfileArtifact;
 
-    if (CppFileTypes.LLVM_PROFILE_ZIP.matches(fdoProfile)) {
+    if (fdoProfile.getBaseName().endsWith(".zip")) {
       // Get the zipper binary for unzipping the profile.
       Artifact zipperBinaryArtifact = ruleContext.getPrerequisiteArtifact(":zipper", Mode.HOST);
       if (zipperBinaryArtifact == null) {
@@ -370,22 +371,29 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       }
     }
 
+    FileTypeSet validExtensions =
+        FileTypeSet.of(
+            CppFileTypes.GCC_AUTO_PROFILE,
+            CppFileTypes.XBINARY_PROFILE,
+            CppFileTypes.LLVM_PROFILE,
+            CppFileTypes.LLVM_PROFILE_RAW,
+            FileType.of(".zip"));
+    if (fdoZip != null && !validExtensions.matches(fdoZip.getPathString())) {
+      ruleContext.ruleError("invalid extension for FDO profile file.");
+      return null;
+    }
+
     FdoMode fdoMode;
     if (fdoZip == null) {
       fdoMode = FdoMode.OFF;
-    } else if (CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip)) {
+    } else if (CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip.getBaseName())) {
       fdoMode = FdoMode.AUTO_FDO;
-    } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoZip)) {
+    } else if (isLLVMOptimizedFdo(toolchainInfo.isLLVMCompiler(), fdoZip)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoZip.getBaseName())) {
       fdoMode = FdoMode.XBINARY_FDO;
-    } else if (CppFileTypes.LLVM_PROFILE.matches(fdoZip)) {
-      fdoMode = FdoMode.LLVM_FDO;
-    } else if (CppFileTypes.LLVM_PROFILE_RAW.matches(fdoZip)) {
-      fdoMode = FdoMode.LLVM_FDO;
-    } else if (CppFileTypes.LLVM_PROFILE_ZIP.matches(fdoZip)) {
-      fdoMode = FdoMode.LLVM_FDO;
     } else {
-      ruleContext.ruleError("invalid extension for FDO profile file.");
-      return null;
+      fdoMode = FdoMode.VANILLA;
     }
 
     SkyKey fdoKey = FdoSupportValue.key(fdoZip);
@@ -529,12 +537,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     if (fdoMode == FdoMode.LLVM_FDO) {
       profileArtifact =
           convertLLVMRawProfileToIndexed(
-              fdoSupport.getFdoProfile().asFragment(), toolchainInfo, ruleContext);
+              fdoSupport.getFdoSupport().getFdoProfile().asFragment(), toolchainInfo, ruleContext);
       if (ruleContext.hasErrors()) {
         return null;
       }
     } else if (fdoMode == FdoMode.AUTO_FDO || fdoMode == FdoMode.XBINARY_FDO) {
-      Path fdoProfile = fdoSupport.getFdoProfile();
+      Path fdoProfile = fdoSupport.getFdoSupport().getFdoProfile();
       profileArtifact = ruleContext.getUniqueDirectoryArtifact(
               "fdo",
               fdoProfile.getBaseName(),
@@ -597,8 +605,8 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         new RuleConfiguredTargetBuilder(ruleContext)
             .addNativeDeclaredProvider(ccProvider)
             .addNativeDeclaredProvider(templateVariableInfo)
-            .addProvider(new FdoProvider(
-                fdoSupport.getFdoProfile(), fdoMode, cppConfiguration.getFdoInstrument(),
+            .addProvider(new FdoSupportProvider(
+                fdoSupport.getFdoSupport(), fdoMode, cppConfiguration.getFdoInstrument(),
                 profileArtifact, prefetchHintsArtifact))
             .setFilesToBuild(crosstool)
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
@@ -621,6 +629,14 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     }
 
     return builder.build();
+  }
+
+  /** Returns true if LLVM FDO Optimization should be applied for this configuration. */
+  private boolean isLLVMOptimizedFdo(boolean isLLVMCompiler, PathFragment fdoProfilePath) {
+    return fdoProfilePath != null
+        && (CppFileTypes.LLVM_PROFILE.matches(fdoProfilePath)
+            || CppFileTypes.LLVM_PROFILE_RAW.matches(fdoProfilePath)
+            || (isLLVMCompiler && fdoProfilePath.toString().endsWith(".zip")));
   }
 
   /** Finds an appropriate {@link CppToolchainInfo} for this target. */
