@@ -141,15 +141,12 @@ import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.BuildInfoCollectionFunction;
-import com.google.devtools.build.lib.skyframe.BzlLoadFunction;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.ManagedDirectoriesKnowledge;
-import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.PackageRootsNoSymlinkCreation;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
@@ -165,7 +162,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.ErrorInfo;
-import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -264,7 +260,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     starlarkSemanticsOptions = parseStarlarkSemanticsOptions();
     workspaceStatusActionFactory = new AnalysisTestUtil.DummyWorkspaceStatusActionFactory();
     mutableActionGraph = new MapBasedActionGraph(actionKeyContext);
-    ruleClassProvider = createRuleClassProvider();
+    ruleClassProvider = getRuleClassProvider();
     getOutputPath().createDirectoryAndParents();
     ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues =
         ImmutableList.of(
@@ -306,9 +302,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
             .setManagedDirectoriesKnowledge(getManagedDirectoriesKnowledge())
             .build();
-    if (usesInliningBzlLoadFunction()) {
-      injectInliningBzlLoadFunction(skyframeExecutor, ruleClassProvider, pkgFactory);
-    }
     SkyframeExecutorTestHelper.process(skyframeExecutor);
     skyframeExecutor.injectExtraPrecomputedValues(extraPrecomputedValues);
     packageOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
@@ -333,36 +326,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             directories.getPersistentActionOutsDirectory(getExecRoot()));
   }
 
-  private static void injectInliningBzlLoadFunction(
-      SkyframeExecutor skyframeExecutor,
-      ConfiguredRuleClassProvider ruleClassProvider,
-      PackageFactory packageFactory) {
-    ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions =
-        ((InMemoryMemoizingEvaluator) skyframeExecutor.getEvaluatorForTesting())
-            .getSkyFunctionsForTesting();
-    BzlLoadFunction bzlLoadFunction =
-        BzlLoadFunction.createForInlining(
-            ruleClassProvider,
-            packageFactory,
-            // Use a cache size of 2 for testing to balance coverage for where loads are present and
-            // aren't present in the cache.
-            /*bzlLoadValueCacheSize=*/ 2);
-    bzlLoadFunction.resetInliningCache();
-    // This doesn't override the BZL_LOAD -> BzlLoadFunction mapping, but nothing besides
-    // PackageFunction should be requesting that key while using the inlining code path.
-    ((PackageFunction) skyFunctions.get(SkyFunctions.PACKAGE))
-        .setBzlLoadFunctionForInliningForTesting(bzlLoadFunction);
-  }
-
-  /**
-   * Returns whether or not to use the inlined version of BzlLoadFunction in this test.
-   *
-   * @see BzlLoadFunction#computeInline
-   */
-  protected boolean usesInliningBzlLoadFunction() {
-    return false;
-  }
-
   public void initializeMockClient() throws IOException {
     analysisMock.setupMockClient(mockToolsConfig);
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
@@ -372,25 +335,16 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return AnalysisMock.get();
   }
 
-  /**
-   * Called to create the rule class provider used in this test.
-   *
-   * <p>This function is called only once. (Multiple calls could lead to subtle identity bugs
-   * between native objects.)
-   */
-  protected ConfiguredRuleClassProvider createRuleClassProvider() {
+  /** Creates or retrieves the rule class provider used in this test. */
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
     return getAnalysisMock().createRuleClassProvider();
-  }
-
-  protected final ConfiguredRuleClassProvider getRuleClassProvider() {
-    return ruleClassProvider;
   }
 
   protected ManagedDirectoriesKnowledge getManagedDirectoriesKnowledge() {
     return null;
   }
 
-  protected final PackageFactory getPackageFactory() {
+  protected PackageFactory getPackageFactory() {
     return pkgFactory;
   }
 

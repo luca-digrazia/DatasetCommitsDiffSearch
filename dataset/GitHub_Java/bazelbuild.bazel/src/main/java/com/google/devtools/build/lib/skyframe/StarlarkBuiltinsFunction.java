@@ -19,14 +19,12 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.StructProvider;
-import com.google.devtools.build.lib.skyframe.BzlLoadFunction.BzlLoadFailedException;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
-import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.LinkedHashMap;
@@ -113,14 +111,7 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
       throws StarlarkBuiltinsFunctionException, InterruptedException {
     // skyKey is a singleton, unused.
 
-    BzlLoadValue exportsValue;
-    try {
-      exportsValue =
-          (BzlLoadValue) env.getValueOrThrow(EXPORTS_ENTRYPOINT_KEY, BzlLoadFailedException.class);
-    } catch (BzlLoadFailedException ex) {
-      throw new StarlarkBuiltinsFunctionException(
-          BuiltinsFailedException.errorEvaluatingBuiltinsBzls(ex));
-    }
+    BzlLoadValue exportsValue = (BzlLoadValue) env.getValue(EXPORTS_ENTRYPOINT_KEY);
     if (exportsValue == null) {
       return null;
     }
@@ -137,7 +128,7 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
       return new StarlarkBuiltinsValue(predeclared, exportedToJava, transitiveDigest);
     } catch (EvalException ex) {
       ex.ensureLocation(EXPORTS_ENTRYPOINT_LOC);
-      throw new StarlarkBuiltinsFunctionException(BuiltinsFailedException.errorApplyingExports(ex));
+      throw new StarlarkBuiltinsFunctionException(ex);
     }
   }
 
@@ -254,40 +245,11 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
     return null;
   }
 
-  /** An exception that occurs while trying to determine the injected builtins. */
-  static final class BuiltinsFailedException extends Exception implements SaneAnalysisException {
-
-    private final Transience transience;
-
-    private BuiltinsFailedException(String errorMessage, Exception cause, Transience transience) {
-      super(errorMessage, cause);
-      this.transience = transience;
-    }
-
-    Transience getTransience() {
-      return transience;
-    }
-
-    static BuiltinsFailedException errorEvaluatingBuiltinsBzls(BzlLoadFailedException cause) {
-      return new BuiltinsFailedException(
-          String.format("Failed to load builtins sources: %s", cause.getMessage()),
-          cause,
-          cause.getTransience());
-    }
-
-    static BuiltinsFailedException errorApplyingExports(EvalException cause) {
-      return new BuiltinsFailedException(
-          String.format("Failed to apply declared builtins: %s", cause.getMessage()),
-          cause,
-          Transience.PERSISTENT);
-    }
-  }
-
   /** The exception type thrown by {@link StarlarkBuiltinsFunction}. */
   static final class StarlarkBuiltinsFunctionException extends SkyFunctionException {
 
-    private StarlarkBuiltinsFunctionException(BuiltinsFailedException cause) {
-      super(cause, cause.transience);
+    private StarlarkBuiltinsFunctionException(Exception cause) {
+      super(cause, Transience.PERSISTENT);
     }
   }
 }
