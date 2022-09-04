@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.FsUtils;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -34,19 +31,9 @@ public class FileValueTest {
             // Assume we have adequate coverage for FileStateValue serialization.
             new FileValue.RegularFileValue(
                 FsUtils.TEST_ROOT, FileStateValue.NONEXISTENT_FILE_STATE_NODE),
-            new FileValue.DifferentRealPathFileValueWithStoredChain(
-                FsUtils.TEST_ROOT,
-                FileStateValue.DIRECTORY_FILE_STATE_NODE,
-                ImmutableList.of(FsUtils.TEST_ROOT)),
-            new FileValue.DifferentRealPathFileValueWithoutStoredChain(
+            new FileValue.DifferentRealPathFileValue(
                 FsUtils.TEST_ROOT, FileStateValue.DIRECTORY_FILE_STATE_NODE),
-            new FileValue.SymlinkFileValueWithStoredChain(
-                FsUtils.TEST_ROOT,
-                new FileStateValue.RegularFileStateValue(
-                    /*size=*/ 100, /*digest=*/ new byte[] {1, 2, 3, 4, 5}, /*contentsProxy=*/ null),
-                ImmutableList.of(FsUtils.TEST_ROOT),
-                PathFragment.create("somewhere/else")),
-            new FileValue.SymlinkFileValueWithoutStoredChain(
+            new FileValue.SymlinkFileValue(
                 FsUtils.TEST_ROOT,
                 new FileStateValue.RegularFileStateValue(
                     /*size=*/ 100, /*digest=*/ new byte[] {1, 2, 3, 4, 5}, /*contentsProxy=*/ null),

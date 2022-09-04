@@ -13,31 +13,50 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.vfs.FileStatus;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * In case we can't get a fast digest from the filesystem, we store this metadata as a proxy to
- * the file contents. Currently it is a pair of the mtime and "value id" (which is right now just
- * the ivalue number). We may wish to augment this object with the following data:
- * a. the device number
- * b. the ctime, which cannot be tampered with in userspace
+ * In case we can't get a fast digest from the filesystem, we store this metadata as a proxy to the
+ * file contents. Currently it is a pair of a relevant timestamp and a "node id". On Linux the
+ * former is the ctime and the latter is the inode number. We might want to add the device number in
+ * the future.
  *
- * <p>For an example of why mtime alone is insufficient, note that 'mv' preserves timestamps. So if
- * files 'a' and 'b' initially have the same timestamp, then we would think 'b' is unchanged after
- * the user executes `mv a b` between two builds.
+ * <p>For a Linux example of why mtime alone is insufficient, note that 'mv' preserves timestamps.
+ * So if files 'a' and 'b' initially have the same timestamp, then we would think 'b' is unchanged
+ * after the user executes `mv a b` between two builds.
  */
+@AutoCodec
 public final class FileContentsProxy implements Serializable {
-  private final long mtime;
-  private final long valueId;
+  private final long ctime;
+  private final long nodeId;
 
-  private FileContentsProxy(long mtime, long valueId) {
-    this.mtime = mtime;
-    this.valueId = valueId;
+  /**
+   * Visible for serialization / deserialization. Do not use this method, but call {@link #create}
+   * instead.
+   */
+  public FileContentsProxy(long ctime, long nodeId) {
+    this.ctime = ctime;
+    this.nodeId = nodeId;
   }
 
-  public static FileContentsProxy create(long mtime, long valueId) {
-    return new FileContentsProxy(mtime, valueId);
+  public static FileContentsProxy create(FileStatus stat) throws IOException {
+    // Note: there are file systems that return mtime for this call instead of ctime, such as the
+    // WindowsFileSystem.
+    return new FileContentsProxy(stat.getLastChangeTime(), stat.getNodeId());
+  }
+
+  /** Visible for serialization / deserialization. Do not use this method; use {@link #equals}. */
+  public long getCTime() {
+    return ctime;
+  }
+
+  /** Visible for serialization / deserialization. Do not use this method; use {@link #equals}. */
+  public long getNodeId() {
+    return nodeId;
   }
 
   @Override
@@ -51,12 +70,12 @@ public final class FileContentsProxy implements Serializable {
     }
 
     FileContentsProxy that = (FileContentsProxy) other;
-    return mtime == that.mtime && valueId == that.valueId;
+    return ctime == that.ctime && nodeId == that.nodeId;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(mtime, valueId);
+    return Objects.hash(ctime, nodeId);
   }
 
   @Override
@@ -65,6 +84,7 @@ public final class FileContentsProxy implements Serializable {
   }
 
   public String prettyPrint() {
-    return String.format("mtime of %d and nodeId of %d", mtime, valueId);
+    return String.format("ctime of %d and nodeId of %d", ctime, nodeId);
   }
 }
+
