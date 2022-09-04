@@ -86,9 +86,7 @@ public class QuarkusTestExtension
         if (Files.isDirectory(testClassLocation)) {
             testWiringClassesDir = testClassLocation;
         } else {
-            if (!appClassLocation.equals(testClassLocation)) {
-                runnerBuilder.addAdditionalArchive(testClassLocation);
-            }
+            runnerBuilder.addAdditionalArchive(testClassLocation);
             testWiringClassesDir = Paths.get("").normalize().toAbsolutePath().resolve("target").resolve("test-classes");
             if (Files.exists(testWiringClassesDir)) {
                 IoUtils.recursiveDelete(testWiringClassesDir);
