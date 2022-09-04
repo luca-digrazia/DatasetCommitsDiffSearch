@@ -16,9 +16,9 @@
  */
 package org.graylog2.indexer.counts;
 
+import com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule;
+import com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import com.google.common.collect.ImmutableMap;
-import com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule;
-import com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexResponse;
@@ -26,8 +26,7 @@ import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.unit.TimeValue;
-import org.graylog2.indexer.LegacyDeflectorRegistry;
-import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.Deflector;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -40,8 +39,8 @@ import org.mockito.junit.MockitoRule;
 import javax.inject.Inject;
 import java.util.Map;
 
-import static com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
-import static com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
+import static com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
+import static com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.when;
@@ -59,7 +58,7 @@ public class CountsTest {
     private Client client;
 
     @Mock
-    private IndexSet indexSet;
+    private Deflector deflector;
     private Counts counts;
 
     @Before
@@ -82,9 +81,9 @@ public class CountsTest {
                 .get();
         assumeTrue(clusterHealthResponse.getStatus() == ClusterHealthStatus.GREEN);
 
-        when(indexSet.getManagedIndicesNames()).thenReturn(new String[]{INDEX_NAME});
+        when(deflector.getAllGraylogIndexNames()).thenReturn(new String[]{INDEX_NAME});
 
-        counts = new Counts(client, new LegacyDeflectorRegistry(indexSet));
+        counts = new Counts(client, deflector);
     }
 
     @After

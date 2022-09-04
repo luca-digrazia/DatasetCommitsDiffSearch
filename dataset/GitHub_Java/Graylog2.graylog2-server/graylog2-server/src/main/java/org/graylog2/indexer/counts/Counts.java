@@ -18,7 +18,7 @@ package org.graylog2.indexer.counts;
 
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.client.Client;
-import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.Deflector;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -26,16 +26,16 @@ import javax.inject.Singleton;
 @Singleton
 public class Counts {
     private final Client c;
-    private final IndexSetRegistry indexSetRegistry;
+    private final Deflector deflector;
 
     @Inject
-    public Counts(Client client, IndexSetRegistry indexSetRegistry) {
+    public Counts(Client client, Deflector deflector) {
         this.c = client;
-        this.indexSetRegistry = indexSetRegistry;
+        this.deflector = deflector;
     }
 
     public long total() {
-        final SearchRequest request = c.prepareSearch(indexSetRegistry.getManagedIndicesNames())
+        final SearchRequest request = c.prepareSearch(deflector.getAllGraylogIndexNames())
                 .setSize(0)
                 .request();
         return c.search(request).actionGet().getHits().totalHits();

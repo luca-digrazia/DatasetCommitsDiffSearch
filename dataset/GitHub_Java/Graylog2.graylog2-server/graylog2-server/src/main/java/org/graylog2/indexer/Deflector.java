@@ -16,6 +16,9 @@
  */
 package org.graylog2.indexer;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.indices.InvalidAliasNameException;
 import org.graylog2.indexer.indices.Indices;
@@ -31,12 +34,11 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -180,31 +182,29 @@ public class Deflector { // extends Ablenkblech
     }
 
     public int getNewestTargetNumber() throws NoTargetIndexException {
-        final Set<String> indexNames = indices.getIndexNamesAndAliases(getDeflectorWildcard()).keySet();
-
-        if (indexNames.isEmpty()) {
+        final Map<String, IndexStats> indices = this.indices.getAll();
+        if (indices.isEmpty()) {
             throw new NoTargetIndexException();
         }
 
-        int highestIndexNumber = -1;
-        for (String indexName : indexNames) {
+        final List<Integer> indexNumbers = Lists.newArrayListWithExpectedSize(indices.size());
+        for (String indexName : indices.keySet()) {
             if (!isGraylogDeflectorIndex(indexName)) {
                 continue;
             }
 
             try {
-                final int indexNumber = extractIndexNumber(indexName);
-                highestIndexNumber = Math.max(indexNumber, highestIndexNumber);
+                indexNumbers.add(extractIndexNumber(indexName));
             } catch (NumberFormatException ex) {
-                LOG.warn("Couldn't extract index number from index name " + indexName, ex);
+                LOG.debug("Couldn't extract index number from index name " + indexName, ex);
             }
         }
 
-        if (highestIndexNumber == -1) {
+        if (indexNumbers.isEmpty()) {
             throw new NoTargetIndexException();
         }
 
-        return highestIndexNumber;
+        return Collections.max(indexNumbers);
     }
 
     /**
@@ -213,11 +213,13 @@ public class Deflector { // extends Ablenkblech
      * @return list of managed indices
      */
     public String[] getAllGraylogIndexNames() {
-        final Set<String> indexNames = indices.getIndexNamesAndAliases(getDeflectorWildcard()).keySet();
-        // also allow restore archives to be returned
-        final List<String> result = indexNames.stream()
-                .filter(this::isGraylogIndex)
-                .collect(Collectors.toList());
+        final Map<String, IndexStats> indices = this.indices.getAll();
+        final List<String> result = Lists.newArrayListWithExpectedSize(indices.size());
+        for (String indexName : indices.keySet()) {
+            if (isGraylogIndex(indexName)) {
+                result.add(indexName);
+            }
+        }
 
         return result.toArray(new String[result.size()]);
     }
@@ -225,15 +227,18 @@ public class Deflector { // extends Ablenkblech
     /**
      * Returns all Graylog deflector indices.
      *
-     * @return index name and aliases of that index
+     * @return index name and index stats
      */
-    public Map<String, Set<String>> getAllGraylogDeflectorIndices() {
-        final Map<String, Set<String>> indexNamesAndAliases = indices.getIndexNamesAndAliases(getDeflectorWildcard());
+    public Map<String, IndexStats> getAllGraylogDeflectorIndices() {
+        final ImmutableMap.Builder<String, IndexStats> result = ImmutableMap.builder();
+        for (Map.Entry<String, IndexStats> e : indices.getAll().entrySet()) {
+            final String name = e.getKey();
 
-        // filter out the restored archives from the result set
-        return indexNamesAndAliases.entrySet().stream()
-                .filter(e -> isGraylogDeflectorIndex(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            if (isGraylogDeflectorIndex(name)) {
+                result.put(name, e.getValue());
+            }
+        }
+        return result.build();
     }
 
     public String getNewestTargetName() throws NoTargetIndexException {
