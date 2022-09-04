@@ -32,6 +32,6 @@ import org.graylog2.streams.StreamRule;
  */
 public interface StreamRuleMatcherIF {
 
-    boolean match(GELFMessage msg, StreamRule rule);
+    public boolean match(GELFMessage msg, StreamRule rule);
 
 }

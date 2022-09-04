@@ -109,7 +109,7 @@ public final class GELF {
         try {
             gelfType = GELF.getGELFType(message.getData());
         } catch (InvalidGELFCompressionMethodException e) {
-            throw new InvalidGELFTypeException("Unknown compression method.", e);
+            throw new InvalidGELFTypeException("Unknown compression method.");
         }
 
         switch(gelfType) {

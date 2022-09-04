@@ -27,10 +27,12 @@ package org.graylog2.messagehandlers.gelf;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class EmptyGELFMessageException extends GELFException {
+public class EmptyGELFMessageException extends Exception {
 
+    /**
+     *
+     */
     public EmptyGELFMessageException() {
-        super();
     }
 
 }

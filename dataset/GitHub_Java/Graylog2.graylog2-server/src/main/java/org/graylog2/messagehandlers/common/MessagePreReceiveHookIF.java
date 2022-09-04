@@ -31,9 +31,7 @@ public interface MessagePreReceiveHookIF {
 
     /**
      * Process the hook.
-     *
-     * @param payload
      */
-    void process(GELFMessage payload);
+    public void process(GELFMessage payload);
 
 }

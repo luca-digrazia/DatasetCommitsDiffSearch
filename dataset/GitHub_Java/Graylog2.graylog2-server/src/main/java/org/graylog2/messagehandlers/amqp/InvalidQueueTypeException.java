@@ -18,16 +18,19 @@
  *
  */
 
-package org.graylog2.forwarders;
+package org.graylog2.messagehandlers.amqp;
 
 /**
- * InvalidStreamRuleTypeException.java: Mar 27, 2011 4:55:18 PM
- *
- * Exception thrown in case of an invalid endpoint type. Allowed types are
- * defined in ForwardEndpoint.
+ * InvalidQueueTypeException.java: Jan 21, 2011 7:59:46 PM
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class InvalidEndpointTypeException extends Exception {
+public class InvalidQueueTypeException extends Exception {
+
+    /**
+     *
+     */
+    public InvalidQueueTypeException() {
+    }
 
 }

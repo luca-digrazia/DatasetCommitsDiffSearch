@@ -20,20 +20,21 @@
 
 package org.graylog2.indexer;
 
-import org.apache.log4j.Logger;
-import org.bson.types.ObjectId;
-import org.graylog2.Tools;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
-import org.json.simple.JSONValue;
-
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.apache.log4j.Logger;
+import org.bson.types.ObjectId;
+import org.graylog2.Tools;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.json.simple.JSONValue;
 
 /**
  * Indexer.java: Sep 05, 2011 9:13:03 PM
@@ -101,7 +102,7 @@ public class Indexer {
      * @return
      */
     public static boolean index(GELFMessage message) {
-        Map<String, Object> obj = new HashMap<String, Object>();
+        Map obj = new HashMap();
         obj.put("message", message.getShortMessage());
         obj.put("full_message", message.getFullMessage());
         obj.put("file", message.getFile());
@@ -111,8 +112,13 @@ public class Indexer {
         obj.put("level", message.getLevel());
 
         // Add additional fields. XXX PERFORMANCE
-        for(Map.Entry<String, Object> entry : message.getAdditionalData().entrySet()) {
-            obj.put(entry.getKey(), entry.getValue());
+        Map<String,Object> additionalFields = message.getAdditionalData();
+        Set<String> set = additionalFields.keySet();
+        Iterator<String> iter = set.iterator();
+        while(iter.hasNext()) {
+            String key = iter.next();
+            Object value = additionalFields.get(key);
+            obj.put(key, value);
         }
 
         if (message.getCreatedAt() <= 0) {

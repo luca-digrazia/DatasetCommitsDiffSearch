@@ -20,14 +20,14 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import java.util.HashMap;
+import java.util.Map;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 /**
  * ChunkedGELFMessageTest.java: Sep 24, 2010 4:10:24 PM
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ChunkedGELFMessageTest {
 
@@ -54,7 +54,7 @@ public class ChunkedGELFMessageTest {
             i++;
         }
 
-        HashMap<Integer, GELFClientChunk> chunks = message.getChunkMap();
+        Map<Integer, GELFClientChunk> chunks = message.getChunkMap();
 
         assertTrue(chunks.size() == howManyChunks);
     }

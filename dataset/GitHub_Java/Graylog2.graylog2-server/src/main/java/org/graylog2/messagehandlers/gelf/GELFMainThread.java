@@ -20,13 +20,11 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import org.apache.log4j.Logger;
+
 import java.net.DatagramPacket;
-import java.net.InetSocketAddress;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
 
 /**
  * GELFMainThread.java: Jun 23, 2010 6:43:21 PM
@@ -39,20 +37,17 @@ public class GELFMainThread extends Thread {
 
     private static final Logger LOG = Logger.getLogger(GELFMainThread.class);
 
-    private InetSocketAddress socketAddress;
+    private int port = 0;
 
     private ExecutorService threadPool = Executors.newCachedThreadPool();
-
-    private final GraylogServer graylogServer;
 
     /**
      * Thread responsible for listening for GELF messages.
      *
-     * @param socketAddress The {@link InetSocketAddress} to bind to
+     * @param port The TCP port to listen on
      */
-    public GELFMainThread(GraylogServer graylogServer, InetSocketAddress socketAddress) {
-        this.graylogServer = graylogServer;
-        this.socketAddress = socketAddress;
+    public GELFMainThread(int port) {
+        this.port = port;
     }
 
     /**
@@ -60,8 +55,8 @@ public class GELFMainThread extends Thread {
      */
     @Override public void run() {
         GELFServer server = new GELFServer();
-        if (!server.create(socketAddress)) {
-            throw new RuntimeException("Could not start GELF server. Do you have permissions to bind to " + socketAddress + "?");
+        if (!server.create(this.port)) {
+            throw new RuntimeException("Could not start GELF server. Do you have permissions to listen on UDP port " + this.port + "?");
         }
 
         // Run forever.
@@ -76,7 +71,7 @@ public class GELFMainThread extends Thread {
                 }
 
                 // We got a connected client. Start a GELFClientHandlerThread() in our thread pool and wait for next client.
-                threadPool.execute(new GELFClientHandlerThread(graylogServer, receivedGelfSentence));
+                threadPool.execute(new GELFClientHandlerThread(receivedGelfSentence));
             } catch (Exception e) {
                 LOG.error("Skipping GELF client. Error: " + e.getMessage(), e);
             }

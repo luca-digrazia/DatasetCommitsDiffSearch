@@ -27,7 +27,7 @@ package org.graylog2.messagehandlers.gelf;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-class ForeignGELFChunkException extends GELFException {
+class ForeignGELFChunkException extends Exception {
 
     public ForeignGELFChunkException(String msg) {
         super(msg);

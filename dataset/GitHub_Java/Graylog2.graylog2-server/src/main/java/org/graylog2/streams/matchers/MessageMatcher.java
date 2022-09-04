@@ -21,16 +21,19 @@
 package org.graylog2.streams.matchers;
 
 import java.util.regex.Pattern;
-import org.graylog2.logmessage.LogMessage;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.graylog2.streams.StreamRule;
 
 /**
+ * MessageMatcher.java: Mar 27, 2011 4:50:34 PM
+ *
+ * [description]
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class MessageMatcher implements StreamRuleMatcher {
+public class MessageMatcher implements StreamRuleMatcherIF {
 
-    @Override
-    public boolean match(LogMessage msg, StreamRule rule) {
+    public boolean match(GELFMessage msg, StreamRule rule) {
         return Pattern.compile(rule.getValue(), Pattern.DOTALL).matcher(msg.getShortMessage()).matches();
     }
 

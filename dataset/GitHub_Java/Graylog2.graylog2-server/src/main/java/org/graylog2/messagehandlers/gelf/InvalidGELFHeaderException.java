@@ -27,17 +27,13 @@ package org.graylog2.messagehandlers.gelf;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-class InvalidGELFHeaderException extends GELFException {
+class InvalidGELFHeaderException extends Exception {
 
     public InvalidGELFHeaderException() {
-        super();
     }
 
     public InvalidGELFHeaderException(String msg) {
         super(msg);
     }
 
-    InvalidGELFHeaderException(String s, Throwable throwable) {
-        super(s, throwable);
-    }
 }

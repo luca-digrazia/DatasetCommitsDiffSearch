@@ -43,7 +43,7 @@ public final class ChunkedGELFClientManager {
      *
      * @return
      */
-    public static synchronized ChunkedGELFClientManager getInstance() {
+    public synchronized static ChunkedGELFClientManager getInstance() {
         if (instance == null) {
             instance = new ChunkedGELFClientManager();
         }

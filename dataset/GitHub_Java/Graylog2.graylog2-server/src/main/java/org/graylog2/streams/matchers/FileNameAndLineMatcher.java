@@ -21,16 +21,19 @@
 package org.graylog2.streams.matchers;
 
 import java.util.regex.Pattern;
-import org.graylog2.logmessage.LogMessage;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.graylog2.streams.StreamRule;
 
 /**
+ * FileNameAndLineMatcher.java: Oct 09, 2011 11:04:19 AM
+ *
+ * [description]
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class FileNameAndLineMatcher implements StreamRuleMatcher {
+public class FileNameAndLineMatcher implements StreamRuleMatcherIF {
 
-    @Override
-    public boolean match(LogMessage msg, StreamRule rule) {
+    public boolean match(GELFMessage msg, StreamRule rule) {
         String file = msg.getFile();
         if (msg.getLine() != 0) {
             file += ":" + msg.getLine();

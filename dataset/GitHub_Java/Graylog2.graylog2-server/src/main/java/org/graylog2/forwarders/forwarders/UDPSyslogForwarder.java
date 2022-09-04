@@ -21,10 +21,12 @@
 package org.graylog2.forwarders.forwarders;
 
 import org.apache.log4j.Logger;
-import org.graylog2.logmessage.LogMessage;
 import org.graylog2.forwarders.MessageForwarderIF;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 /**
+ * SyslogForwarder.java: Apr 5, 2011 8:23:14 PM
+ *
  * Forwards syslog messages to other syslog endpoints.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -40,8 +42,8 @@ public class UDPSyslogForwarder extends UDPForwarder implements MessageForwarder
         this.setPort(port);
     }
 
-    public boolean forward(LogMessage message) throws MessageForwarderConfigurationException {
-        /*if (this.host.isEmpty() || this.port <= 0) {
+    public boolean forward(GELFMessage message) throws MessageForwarderConfigurationException {
+        if (this.host.isEmpty() || this.port <= 0) {
             throw new MessageForwarderConfigurationException("Host is empty or port is invalid.");
         }
 
@@ -52,8 +54,7 @@ public class UDPSyslogForwarder extends UDPForwarder implements MessageForwarder
             this.succeeded = false;
         }
         
-        return this.succeeded();*/
-        return false;
+        return this.succeeded();
     }
 
     /**

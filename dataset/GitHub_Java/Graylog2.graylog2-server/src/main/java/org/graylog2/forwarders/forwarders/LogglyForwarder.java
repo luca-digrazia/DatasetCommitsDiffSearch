@@ -22,13 +22,15 @@ package org.graylog2.forwarders.forwarders;
 
 import org.apache.log4j.Logger;
 import org.graylog2.forwarders.MessageForwarderIF;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 import java.io.DataOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import org.graylog2.logmessage.LogMessage;
 
 /**
+ * LogglyForwarder.java: Mar 18, 2011 9:32:24 PM
+ *
  * Forwards messages to Logg.ly. (via HTTP/S API)
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -64,11 +66,10 @@ public class LogglyForwarder implements MessageForwarderIF {
      * @param message The message to forward
      * @return true in case of success, otherwise false
      */
-    public boolean forward(LogMessage message) {
-/*
+    public boolean forward(GELFMessage message) {
+
         this.succeeded = this.send(message.toOneLiner());
-        return this.succeeded();*/
-        return false;
+        return this.succeeded();
     }
 
     private boolean send(String what) {

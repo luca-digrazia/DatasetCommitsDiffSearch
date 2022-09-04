@@ -34,7 +34,6 @@ import org.productivity.java.syslog4j.server.SyslogServerIF;
 public class SyslogServerThread extends Thread {
 
     private int port;
-    private String host;
     private String syslogProtocol;
 
     private Thread coreThread = null;
@@ -45,10 +44,9 @@ public class SyslogServerThread extends Thread {
      * @param syslogProtocol Protocol to use for the Syslog server (tcp/udp)
      * @param port On which port to listen?
      */
-    public SyslogServerThread(String syslogProtocol, int port, String host) {
+    public SyslogServerThread(String syslogProtocol, int port) {
         this.syslogProtocol = syslogProtocol;
         this.port = port;
-        this.host = host;
     }
 
     /**
@@ -60,7 +58,6 @@ public class SyslogServerThread extends Thread {
         SyslogServerConfigIF syslogServerConfig = syslogServer.getConfig();
         
         syslogServerConfig.setPort(port);
-        syslogServerConfig.setHost(host);
         syslogServerConfig.setUseStructuredData(true);
         syslogServerConfig.addEventHandler(new SyslogEventHandler());
 

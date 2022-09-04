@@ -27,33 +27,34 @@ import org.graylog2.database.MongoBridge;
 
 /**
  * HostCounterCacheWriterThread.java: Feb 23, 2011 5:59:58 PM
- * <p/>
+ *
  * Periodically writes host counter cache to hosts collection.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class HostCounterCacheWriterThread implements Runnable {
+public class HostCounterCacheWriterThread extends Thread {
 
     private static final Logger LOG = Logger.getLogger(HostCounterCacheWriterThread.class);
-
-    public static final int PERIOD = 5;
-    public static final int INITIAL_DELAY = 5;
 
     /**
      * Start the thread. Runs forever.
      */
-    @Override
-    public void run() {
-        try {
-            MongoBridge m = new MongoBridge();
-            for (String host : HostCounterCache.getInstance().getAllHosts()) {
-                m.upsertHostCount(host, HostCounterCache.getInstance().getCount(host));
-                HostCounterCache.getInstance().reset(host);
+    @Override public void run() {
+        // Run forever.
+        while (true) {
+            try {
+                MongoBridge m = new MongoBridge();
+                for (String host : HostCounterCache.getInstance().getAllHosts()) {
+                    m.upsertHostCount(host, HostCounterCache.getInstance().getCount(host));
+                    HostCounterCache.getInstance().reset(host);
+                }
+            } catch (Exception e) {
+                LOG.warn("Error in HostCounterCacheWriterThread: " + e.getMessage(), e);
             }
-        } catch (Exception e) {
-            LOG.warn("Error in HostCounterCacheWriterThread: " + e.getMessage(), e);
+            
+           // Run every 5 seconds.
+           try { Thread.sleep(5000); } catch(InterruptedException e) {}
         }
-
     }
 
 }

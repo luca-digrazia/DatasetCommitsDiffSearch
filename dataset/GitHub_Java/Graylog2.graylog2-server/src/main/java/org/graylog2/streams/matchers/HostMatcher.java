@@ -20,16 +20,19 @@
 
 package org.graylog2.streams.matchers;
 
-import org.graylog2.logmessage.LogMessage;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.graylog2.streams.StreamRule;
 
 /**
+ * HostMatcher.java: Mar 27, 2011 5:22:05 PM
+ *
+ * [description]
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class HostMatcher implements StreamRuleMatcher {
+public class HostMatcher implements StreamRuleMatcherIF {
 
-    @Override
-    public boolean match(LogMessage msg, StreamRule rule) {
+    public boolean match(GELFMessage msg, StreamRule rule) {
         return msg.getHost().equals(rule.getValue());
     }
 

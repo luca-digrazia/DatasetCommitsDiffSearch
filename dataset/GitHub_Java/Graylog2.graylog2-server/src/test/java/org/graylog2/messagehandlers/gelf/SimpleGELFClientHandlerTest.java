@@ -20,11 +20,9 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import static org.junit.Assert.assertEquals;
-
 import java.net.DatagramPacket;
-
 import org.junit.Test;
+import static org.junit.Assert.*;
 
 /**
  * SimpleGELFClientHandlerTest.java: Sep 17, 2010 6:50:42 PM
@@ -34,7 +32,7 @@ import org.junit.Test;
 public class SimpleGELFClientHandlerTest {
 
     private String originalMessage = "{\"short_message\":\"something.\",\"full_message\":\"lol!\",\"host\":\"somehost\",\"level\":2,\"file\":\"example.php\",\"line\":1337}";
-
+    
     /**
      * Test if ZLIB compressed non-chunked GELF messages are correctly decompressed.
      */
@@ -44,7 +42,7 @@ public class SimpleGELFClientHandlerTest {
         DatagramPacket gelfMessage = GELFTestHelper.buildZLIBCompressedDatagramPacket(this.originalMessage);
 
         // Let the decompression take place.
-        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(null, gelfMessage);
+        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage);
 
         assertEquals(handler.getClientMessage(), this.originalMessage);
     }
@@ -58,7 +56,7 @@ public class SimpleGELFClientHandlerTest {
         DatagramPacket gelfMessage = GELFTestHelper.buildGZIPCompressedDatagramPacket(this.originalMessage);
 
         // Let the decompression take place.
-        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(null, gelfMessage);
+        SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage);
 
         assertEquals(handler.getClientMessage(), this.originalMessage);
     }

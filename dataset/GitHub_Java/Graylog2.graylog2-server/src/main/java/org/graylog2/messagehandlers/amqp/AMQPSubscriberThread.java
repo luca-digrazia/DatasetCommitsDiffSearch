@@ -29,6 +29,8 @@ import org.graylog2.messagehandlers.gelf.InvalidGELFCompressionMethodException;
 import org.graylog2.messagehandlers.gelf.SimpleGELFClientHandler;
 import org.graylog2.messagehandlers.syslog.GraylogSyslogServerEvent;
 import org.graylog2.messagehandlers.syslog.SyslogEventHandler;
+import org.productivity.java.syslog4j.server.SyslogServer;
+import org.productivity.java.syslog4j.server.SyslogServerIF;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;

@@ -36,17 +36,18 @@ public interface MessageForwarderIF {
      * Forward the message to the given destination. The implementation
      * may require different destination formats.
      *
+     * @param where Destination
      * @param message The message to forward
      * @return true in case of success, otherwise false
      * @throws MessageForwarderConfigurationException
      */
-    boolean forward(GELFMessage message) throws MessageForwarderConfigurationException;
+    public boolean forward(GELFMessage message) throws MessageForwarderConfigurationException;
 
     /**
      * Indicates if the last forward has succeeded.
      * 
      * @return
      */
-    boolean succeeded();
+    public boolean succeeded();
 
 }

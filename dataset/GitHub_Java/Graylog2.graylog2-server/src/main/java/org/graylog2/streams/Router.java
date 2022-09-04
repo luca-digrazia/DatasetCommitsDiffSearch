@@ -42,8 +42,13 @@ public class Router {
     private Router() { }
 
     public static List<Stream> route(GELFMessage msg) {
-        List<Stream> matches = new ArrayList<Stream>();
-        List<Stream> streams = Stream.fetchAllEnabled();
+        ArrayList<Stream> matches = new ArrayList<Stream>();
+        ArrayList<Stream> streams = null;
+        try {
+            streams = Stream.fetchAllEnabled();
+        } catch (Exception e) {
+            LOG.error("Could not fetch streams: " + e.getMessage(), e);
+        }
 
         for (Stream stream : streams) {
             boolean missed = false;

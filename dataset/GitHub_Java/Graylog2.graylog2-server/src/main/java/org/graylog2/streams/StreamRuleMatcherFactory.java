@@ -23,12 +23,16 @@ package org.graylog2.streams;
 import org.graylog2.streams.matchers.*;
 
 /**
+ * StreamRuleMatcherFactory.java: Mar 27, 2011 4:49:32 PM
+ *
+ * [description]
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamRuleMatcherFactory {
 
-    public static StreamRuleMatcher build(int ruleType) throws InvalidStreamRuleTypeException {
-        StreamRuleMatcher matcher = null;
+    public static StreamRuleMatcherIF build(int ruleType) throws InvalidStreamRuleTypeException {
+        StreamRuleMatcherIF matcher = null;
 
         // IMPORTANT: Also add every new rule type to the unit test.
         switch (ruleType) {

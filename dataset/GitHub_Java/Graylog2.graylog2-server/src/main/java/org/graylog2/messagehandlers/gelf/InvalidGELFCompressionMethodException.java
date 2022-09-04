@@ -27,9 +27,8 @@ package org.graylog2.messagehandlers.gelf;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class InvalidGELFCompressionMethodException extends GELFException {
+public class InvalidGELFCompressionMethodException extends Exception {
     public InvalidGELFCompressionMethodException() {
-        super();
     }
 
     public InvalidGELFCompressionMethodException(String msg) {

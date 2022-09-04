@@ -198,7 +198,7 @@ public final class Tools {
      *
      * @return The current UTC UNIX timestamp with milliseconds.
      */
-    public static double getUTCTimestampWithMilliseconds() {
+    public static double getUTCTimestampWithMilliseconds() throws NumberFormatException {
         // Use JodaTime to easy get the milliseconds and construct a float. (This looks dumb but is the easiest and safest way)
         long now = System.currentTimeMillis();
         DateTime jt = new DateTime(now);

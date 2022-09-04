@@ -20,9 +20,8 @@
 
 package org.graylog2.streams;
 
+import java.util.ArrayList;
 import org.graylog2.SimpleObjectCache;
-
-import java.util.List;
 
 /**
  * StreamCache.java: Mar 26, 2011 11:25:41 PM
@@ -31,7 +30,7 @@ import java.util.List;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class StreamCache extends SimpleObjectCache<List<Stream>> {
+public class StreamCache extends SimpleObjectCache {
 
     private static StreamCache instance;
 
@@ -44,4 +43,14 @@ public class StreamCache extends SimpleObjectCache<List<Stream>> {
         
         return instance;
     }
+
+    @Override
+    public ArrayList<Stream> get() {
+        return (ArrayList<Stream>) super.get();
+    }
+
+    public void set(ArrayList<Stream> streams) {
+        super.set(streams);
+    }
+
 }

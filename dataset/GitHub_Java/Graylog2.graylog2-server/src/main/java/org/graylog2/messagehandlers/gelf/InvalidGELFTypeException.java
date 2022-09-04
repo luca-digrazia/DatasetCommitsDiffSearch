@@ -28,13 +28,20 @@ package org.graylog2.messagehandlers.gelf;
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class InvalidGELFTypeException extends GELFException {
+public class InvalidGELFTypeException extends Exception {
 
+    /**
+     * 
+     */
     public InvalidGELFTypeException() {
-        super();
+
     }
 
-    public InvalidGELFTypeException(String s, Throwable throwable) {
-        super(s, throwable);
+    /**
+     *
+     * @param msg
+     */
+    public InvalidGELFTypeException(String msg) {
+        super(msg);
     }
 }

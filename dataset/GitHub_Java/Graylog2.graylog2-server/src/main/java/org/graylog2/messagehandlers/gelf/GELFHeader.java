@@ -27,7 +27,7 @@ import java.io.IOException;
  *
  * Representing the header of chunked GELF messages
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFHeader {
 
@@ -37,15 +37,43 @@ public class GELFHeader {
     private int sequenceNumber = -1;
     private int sequenceCount = -1;
 
-    public static final int HEADER_PART_SEQNUM_START = 34;
-    public static final int HEADER_PART_SEQNUM_LENGTH = 2;
-    public static final int HEADER_PART_SEQCNT_START = 36;
-    public static final int HEADER_PART_SEQCNT_LENGTH = 2;
-    public static final int HEADER_PART_HASH_START = 2;
-    public static final int HEADER_PART_HASH_LENGTH = 32;
+    /**
+     * The start byte of the sequence number
+     */
+    public static final int HEADER_PART_SEQNUM_START = 10;
 
+    /**
+     * The length of the sequence number
+     */
+    public static final int HEADER_PART_SEQNUM_LENGTH = 1;
+
+    /**
+     * The start byte of the sequence count
+     */
+    public static final int HEADER_PART_SEQCNT_START = 11;
+
+    /**
+     * The length of the sequence count
+     */
+    public static final int HEADER_PART_SEQCNT_LENGTH = 1;
+
+    /**
+     * The start byte of the message hash
+     */
+    public static final int HEADER_PART_HASH_START = 2;
+
+    /**
+     * The length of the message hash
+     */
+    public static final int HEADER_PART_HASH_LENGTH = 8;
+
+    /**
+     * Representing the header of chunked GELF messages
+     *
+     * @param rawHeader The raw byte array of the header
+     */
     public GELFHeader(byte[] rawHeader) {
-        this.rawHeader = rawHeader;
+        this.rawHeader = rawHeader.clone();
     }
 
     private int extract(int start, int length) {
@@ -56,12 +84,19 @@ public class GELFHeader {
         return Integer.parseInt(tmp);
     }
 
+    /**
+     * Get the message hash identifying this message
+     *
+     * @return
+     * @throws InvalidGELFHeaderException
+     * @throws IOException
+     */
     public String getHash() throws InvalidGELFHeaderException, IOException {
 
         if (this.hash == null) {
             String tmp = "";
             for (int i = 0; i < GELFHeader.HEADER_PART_HASH_LENGTH; i++) {
-                tmp += Integer.toString( ( this.rawHeader[i+GELFHeader.HEADER_PART_HASH_START] & 0xff ) + 0x100, 16).substring( 1 );
+                tmp = tmp.concat(Integer.toString( ( this.rawHeader[i+GELFHeader.HEADER_PART_HASH_START] & 0xff ) + 0x100, 16).substring(1));
             }
             this.hash = tmp;
         }
@@ -69,6 +104,12 @@ public class GELFHeader {
         return this.hash;
     }
 
+    /**
+     * Get the sequence number
+     *
+     * @return
+     * @throws InvalidGELFHeaderException
+     */
     public int getSequenceNumber() throws InvalidGELFHeaderException {
         // Lazy calculate sequence number.
         if (this.sequenceNumber == -1) {
@@ -83,6 +124,12 @@ public class GELFHeader {
         return this.sequenceNumber;
     }
 
+    /**
+     * Get the sequence count
+     * 
+     * @return
+     * @throws InvalidGELFHeaderException
+     */
     public int getSequenceCount() throws InvalidGELFHeaderException {
         // Lazy calculate sequence count.
         if (this.sequenceCount == -1) {
