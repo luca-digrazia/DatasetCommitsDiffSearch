@@ -316,6 +316,10 @@ public final class ObjcCommon {
         objcProvider.addAllDirect(HEADER, headerProvider.getDeclaredIncludeSrcs().toList());
       }
 
+      for (ObjcProvider provider : runtimeDepObjcProviders) {
+        objcProvider.addTransitiveAndPropagate(ObjcProvider.MERGE_ZIP, provider);
+      }
+
       for (CcLinkingContext linkProvider : depCcLinkProviders) {
         ImmutableList<String> linkOpts = linkProvider.getFlattenedUserLinkFlags();
         ImmutableSet.Builder<SdkFramework> frameworkLinkOpts = new ImmutableSet.Builder<>();

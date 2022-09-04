@@ -207,7 +207,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   @Override
-  protected void initializeMockClient() throws IOException {
+  public void initializeMockClient() throws IOException {
     super.initializeMockClient();
     MockObjcSupport.setup(mockToolsConfig);
     MockProtoSupport.setup(mockToolsConfig);
