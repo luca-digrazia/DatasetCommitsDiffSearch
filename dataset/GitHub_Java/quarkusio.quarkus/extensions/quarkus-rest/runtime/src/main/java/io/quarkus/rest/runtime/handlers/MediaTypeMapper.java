@@ -80,7 +80,7 @@ public class MediaTypeMapper implements RestHandler {
             selectedResource = selectedHolder.mtWithoutParamsToResource.values().iterator().next();
         } else {
             MediaType produces = selectMediaType(requestContext, selectedHolder);
-            requestContext.setResponseContentType(produces);
+            requestContext.setProducesMediaType(produces);
             MediaType key = produces;
             if (!key.getParameters().isEmpty()) {
                 key = new MediaType(key.getType(), key.getSubtype());
