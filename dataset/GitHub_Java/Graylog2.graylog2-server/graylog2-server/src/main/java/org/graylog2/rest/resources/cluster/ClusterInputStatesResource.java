@@ -34,11 +34,10 @@ import org.graylog2.rest.models.system.inputs.responses.InputDeleted;
 import org.graylog2.rest.models.system.inputs.responses.InputStateSummary;
 import org.graylog2.rest.models.system.inputs.responses.InputStatesList;
 import org.graylog2.rest.resources.system.inputs.RemoteInputStatesResource;
-import org.graylog2.shared.rest.resources.ProxiedResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import retrofit2.Response;
+import retrofit.Response;
 
 import javax.inject.Inject;
 import javax.ws.rs.DELETE;
@@ -52,6 +51,7 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -60,19 +60,26 @@ import java.util.stream.Collectors;
 @Api(value = "Cluster/InputState", description = "Cluster-wide input states")
 @Path("/cluster/inputstates")
 @Produces(MediaType.APPLICATION_JSON)
-public class ClusterInputStatesResource extends ProxiedResource {
+public class ClusterInputStatesResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterInputStatesResource.class);
 
     private final NodeService nodeService;
     private final RemoteInterfaceProvider remoteInterfaceProvider;
+    private final String authenticationToken;
 
     @Inject
     public ClusterInputStatesResource(NodeService nodeService,
                                       RemoteInterfaceProvider remoteInterfaceProvider,
                                       @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders);
         this.nodeService = nodeService;
         this.remoteInterfaceProvider = remoteInterfaceProvider;
+
+        final List<String> authenticationTokens = httpHeaders.getRequestHeader("Authorization");
+        if (authenticationTokens != null && authenticationTokens.size() >= 1) {
+            this.authenticationToken = authenticationTokens.get(0);
+        } else {
+            this.authenticationToken = null;
+        }
     }
 
     @GET
@@ -81,10 +88,10 @@ public class ClusterInputStatesResource extends ProxiedResource {
     @RequiresPermissions(RestPermissions.INPUTS_READ)
     public Map<String, Set<InputStateSummary>> get() {
         final Map<String, Node> nodes = nodeService.allActive();
-        return nodes.entrySet()
+        final Map<String, Set<InputStateSummary>> result = nodes.entrySet()
                 .stream()
                 .parallel()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> {
                     final RemoteInputStatesResource remoteInputStatesResource = remoteInterfaceProvider.get(entry.getValue(),
                             this.authenticationToken,
                             RemoteInputStatesResource.class);
@@ -100,6 +107,7 @@ public class ClusterInputStatesResource extends ProxiedResource {
                     }
                     return Collections.emptySet();
                 }));
+        return result;
     }
 
     @PUT
@@ -111,10 +119,10 @@ public class ClusterInputStatesResource extends ProxiedResource {
     })
     public Map<String, Optional<InputCreated>> start(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
         final Map<String, Node> nodes = nodeService.allActive();
-        return nodes.entrySet()
+        final Map<String, Optional<InputCreated>> result = nodes.entrySet()
                 .stream()
                 .parallel()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> {
                     final RemoteInputStatesResource remoteInputStatesResource = remoteInterfaceProvider.get(entry.getValue(),
                             this.authenticationToken,
                             RemoteInputStatesResource.class);
@@ -130,6 +138,7 @@ public class ClusterInputStatesResource extends ProxiedResource {
                     }
                     return Optional.absent();
                 }));
+        return result;
     }
 
     @DELETE
@@ -141,10 +150,10 @@ public class ClusterInputStatesResource extends ProxiedResource {
     })
     public Map<String, Optional<InputDeleted>> stop(@ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) {
         final Map<String, Node> nodes = nodeService.allActive();
-        return nodes.entrySet()
+        final Map<String, Optional<InputDeleted>> result = nodes.entrySet()
                 .stream()
                 .parallel()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> {
                     final RemoteInputStatesResource remoteInputStatesResource = remoteInterfaceProvider.get(entry.getValue(),
                             this.authenticationToken,
                             RemoteInputStatesResource.class);
@@ -160,5 +169,6 @@ public class ClusterInputStatesResource extends ProxiedResource {
                     }
                     return Optional.absent();
                 }));
+        return result;
     }
 }
