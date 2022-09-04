@@ -2,23 +2,22 @@ package io.dropwizard.views.mustache;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
+import com.sun.jersey.api.client.UniformInterfaceException;
+import com.sun.jersey.api.core.DefaultResourceConfig;
+import com.sun.jersey.test.framework.AppDescriptor;
+import com.sun.jersey.test.framework.JerseyTest;
+import com.sun.jersey.test.framework.LowLevelAppDescriptor;
 import io.dropwizard.logging.LoggingFactory;
 import io.dropwizard.views.ViewMessageBodyWriter;
 import io.dropwizard.views.ViewRenderer;
-import org.glassfish.jersey.server.ResourceConfig;
-import org.glassfish.jersey.test.JerseyTest;
-import org.glassfish.jersey.test.TestProperties;
 import org.junit.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.fest.assertions.api.Assertions.assertThat;
 
 public class MustacheViewRendererTest extends JerseyTest {
     static {
@@ -48,25 +47,24 @@ public class MustacheViewRendererTest extends JerseyTest {
     }
 
     @Override
-    protected Application configure() {
-        forceSet(TestProperties.CONTAINER_PORT, "0");
-        ResourceConfig config = new ResourceConfig();
+    protected AppDescriptor configure() {
+        final DefaultResourceConfig config = new DefaultResourceConfig();
         final ViewRenderer renderer = new MustacheViewRenderer();
-        config.register(new ViewMessageBodyWriter(new MetricRegistry(), ImmutableList.of(renderer)));
-        config.register(new ExampleResource());
-        return config;
+        config.getSingletons().add(new ViewMessageBodyWriter(new MetricRegistry(), ImmutableList.of(renderer)));
+        config.getSingletons().add(new ExampleResource());
+        return new LowLevelAppDescriptor.Builder(config).build();
     }
 
     @Test
     public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
-        final String response = target("/test/absolute").request().get(String.class);
+        final String response = client().resource(getBaseURI() + "test/absolute").get(String.class);
         assertThat(response)
                 .isEqualTo("Woop woop. yay" + System.lineSeparator());
     }
 
     @Test
     public void rendersViewsWithRelativeTemplatePaths() throws Exception {
-        final String response = target("/test/relative").request().get(String.class);
+        final String response = client().resource(getBaseURI() + "test/relative").get(String.class);
         assertThat(response)
                 .isEqualTo("Ok." + System.lineSeparator());
     }
@@ -74,14 +72,13 @@ public class MustacheViewRendererTest extends JerseyTest {
     @Test
     public void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
         try {
-            target("/test/bad").request().get(String.class);
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-        } catch (WebApplicationException e) {
+            client().resource(getBaseURI() + "test/bad").get(String.class);
+        } catch (UniformInterfaceException e) {
             assertThat(e.getResponse().getStatus())
                     .isEqualTo(500);
 
-            assertThat(e.getResponse().readEntity(String.class))
-                    .isEqualTo("<html><head><title>Missing Template</title></head><body><h1>Missing Template</h1><p>Template \"/woo-oo-ahh.txt.mustache\" not found.</p></body></html>");
+            assertThat(e.getResponse().getEntity(String.class))
+                    .isEqualTo("<html><head><title>Missing Template</title></head><body><h1>Missing Template</h1><p>Template /woo-oo-ahh.txt.mustache not found.</p></body></html>");
         }
     }
 }
