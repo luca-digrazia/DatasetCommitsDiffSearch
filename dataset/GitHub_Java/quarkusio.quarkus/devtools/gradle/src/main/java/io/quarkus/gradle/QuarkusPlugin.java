@@ -5,13 +5,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
-import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.UnknownTaskException;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.plugins.BasePlugin;
@@ -70,7 +69,6 @@ public class QuarkusPlugin implements Plugin<Project> {
         registerTasks(project, quarkusExt);
     }
 
-    @SuppressWarnings("Convert2Lambda")
     private void registerTasks(Project project, QuarkusPluginExtension quarkusExt) {
         TaskContainer tasks = project.getTasks();
         tasks.create(LIST_EXTENSIONS_TASK_NAME, QuarkusListExtensions.class);
@@ -92,13 +90,7 @@ public class QuarkusPlugin implements Plugin<Project> {
 
         final Consumer<Test> configureTestTask = t -> {
             // Quarkus test configuration action which should be executed before any Quarkus test
-            // Use anonymous classes in order to leverage task avoidance.
-            t.doFirst(new Action<Task>() {
-                @Override
-                public void execute(Task test) {
-                    quarkusExt.beforeTest(t);
-                }
-            });
+            t.doFirst((test) -> quarkusExt.beforeTest(t));
             // also make each task use the JUnit platform since it's the only supported test environment
             t.useJUnitPlatform();
             // quarkusBuild is expected to run after the project has passed the tests
@@ -193,23 +185,29 @@ public class QuarkusPlugin implements Plugin<Project> {
             return;
         }
         project.getLogger().debug("Configuring {} task dependencies on {} tasks", project, dep);
-
-        final Task jarTask = dep.getTasks().findByName(JavaPlugin.JAR_TASK_NAME);
-        if (jarTask != null) {
-            final Task quarkusBuild = project.getTasks().findByName(QUARKUS_BUILD_TASK_NAME);
+        try {
+            final Task jarTask = dep.getTasks().getByName(JavaPlugin.JAR_TASK_NAME);
+            final Task quarkusBuild = findTask(project.getTasks(), QUARKUS_BUILD_TASK_NAME);
             if (quarkusBuild != null) {
                 quarkusBuild.dependsOn(jarTask);
             }
+        } catch (UnknownTaskException e) {
+            project.getLogger().debug("Project {} does not include {} task", dep, JavaPlugin.JAR_TASK_NAME, e);
         }
+        dep.getConfigurations().getByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME)
+                .getIncoming().getDependencies()
+                .forEach(d -> {
+                    if (d instanceof ProjectDependency) {
+                        visitProjectDep(project, ((ProjectDependency) d).getDependencyProject(), visited);
+                    }
+                });
+    }
 
-        final Configuration compileConfig = dep.getConfigurations().findByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME);
-        if (compileConfig != null) {
-            compileConfig.getIncoming().getDependencies()
-                    .forEach(d -> {
-                        if (d instanceof ProjectDependency) {
-                            visitProjectDep(project, ((ProjectDependency) d).getDependencyProject(), visited);
-                        }
-                    });
+    private static Task findTask(TaskContainer tasks, String name) {
+        try {
+            return tasks.findByName(name);
+        } catch (UnknownTaskException e) {
+            return null;
         }
     }
 }
