@@ -22,14 +22,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.util.Elements;
+import javax.tools.Diagnostic.Kind;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 import org.androidannotations.helper.FileHelper.FileHolder;
-import org.androidannotations.logger.Logger;
-import org.androidannotations.logger.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -40,7 +40,6 @@ public class AndroidManifestFinder {
 
 	public static final String ANDROID_MANIFEST_FILE_OPTION = "androidManifestFile";
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(AndroidManifestFinder.class);
 	private static final int MAX_PARENTS_FROM_SOURCE_FOLDER = 10;
 
 	private ProcessingEnvironment processingEnv;
@@ -71,7 +70,8 @@ public class AndroidManifestFinder {
 					String androidLibraryProperty = properties.getProperty("android.library");
 					libraryProject = androidLibraryProperty.equals("true");
 
-					LOGGER.info("Found android.library property in project.properties, value: {}", libraryProject);
+					Messager messager = processingEnv.getMessager();
+					messager.printMessage(Kind.NOTE, "Found android.library property in project.properties, value: " + libraryProject);
 				}
 			} catch (IOException ignored) {
 			}
@@ -91,11 +91,12 @@ public class AndroidManifestFinder {
 	private Option<File> findManifestInSpecifiedPath() {
 		String path = processingEnv.getOptions().get(ANDROID_MANIFEST_FILE_OPTION);
 		File androidManifestFile = new File(path);
+		Messager messager = processingEnv.getMessager();
 		if (!androidManifestFile.exists()) {
-			LOGGER.error("Could not find the AndroidManifest.xml file in specified path : {}", path);
+			messager.printMessage(Kind.ERROR, "Could not find the AndroidManifest.xml file in specified path : " + path);
 			return Option.absent();
 		} else {
-			LOGGER.info("AndroidManifest.xml file found: {}", androidManifestFile.toString());
+			messager.printMessage(Kind.NOTE, "AndroidManifest.xml file found: " + androidManifestFile.toString());
 		}
 		return Option.of(androidManifestFile);
 	}
@@ -130,11 +131,12 @@ public class AndroidManifestFinder {
 			}
 		}
 
+		Messager messager = processingEnv.getMessager();
 		if (!androidManifestFile.exists()) {
-			LOGGER.error("Could not find the AndroidManifest.xml file, going up from path [{}] found using dummy file [] (max atempts: {})", projectRootHolder.sourcesGenerationFolder.getAbsolutePath(), projectRootHolder.dummySourceFilePath, MAX_PARENTS_FROM_SOURCE_FOLDER);
+			messager.printMessage(Kind.ERROR, "Could not find the AndroidManifest.xml file, going up from path [" + projectRootHolder.sourcesGenerationFolder.getAbsolutePath() + "] found using dummy file [" + projectRootHolder.dummySourceFilePath + "] (max atempts: " + MAX_PARENTS_FROM_SOURCE_FOLDER + ")");
 			return Option.absent();
 		} else {
-			LOGGER.info("AndroidManifest.xml file found: {}", androidManifestFile.toString());
+			messager.printMessage(Kind.NOTE, "AndroidManifest.xml file found: " + androidManifestFile.toString());
 		}
 
 		return Option.of(androidManifestFile);
@@ -148,7 +150,8 @@ public class AndroidManifestFinder {
 			DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder();
 			doc = docBuilder.parse(androidManifestFile);
 		} catch (Exception e) {
-			LOGGER.error("Could not parse the AndroidManifest.xml file at path {}", androidManifestFile, e);
+			Messager messager = processingEnv.getMessager();
+			messager.printMessage(Kind.ERROR, "Could not parse the AndroidManifest.xml file at path " + androidManifestFile);
 			return Option.absent();
 		}
 
@@ -184,8 +187,9 @@ public class AndroidManifestFinder {
 			applicationClassQualifiedName = manifestNameToValidQualifiedName(applicationPackage, nameAttribute);
 
 			if (applicationClassQualifiedName == null) {
+				Messager messager = processingEnv.getMessager();
 				if (nameAttribute != null) {
-					LOGGER.info("The class application declared in the AndroidManifest.xml cannot be found in the compile path: [{}]", nameAttribute.getNodeValue());
+					messager.printMessage(Kind.NOTE, String.format("The class application declared in the AndroidManifest.xml cannot be found in the compile path: [%s]", nameAttribute.getNodeValue()));
 				}
 			}
 
@@ -248,10 +252,11 @@ public class AndroidManifestFinder {
 			if (qualifiedName != null) {
 				componentQualifiedNames.add(qualifiedName);
 			} else {
+				Messager messager = processingEnv.getMessager();
 				if (nameAttribute != null) {
-					LOGGER.info("A class activity declared in the AndroidManifest.xml cannot be found in the compile path: [{}]", nameAttribute.getNodeValue());
+					messager.printMessage(Kind.NOTE, String.format("A class activity declared in the AndroidManifest.xml cannot be found in the compile path: [%s]", nameAttribute.getNodeValue()));
 				} else {
-					LOGGER.info("The {} activity node in the AndroidManifest.xml has no android:name attribute", i);
+					messager.printMessage(Kind.NOTE, String.format("The %d activity node in the AndroidManifest.xml has no android:name attribute", i));
 				}
 			}
 		}
