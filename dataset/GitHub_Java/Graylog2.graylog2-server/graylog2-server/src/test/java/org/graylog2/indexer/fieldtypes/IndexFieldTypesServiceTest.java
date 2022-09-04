@@ -18,11 +18,12 @@ package org.graylog2.indexer.fieldtypes;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
-import org.graylog.testing.mongodb.MongoDBInstance;
+import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
-import org.graylog2.streams.StreamService;
+import org.graylog2.database.MongoConnectionRule;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -30,25 +31,26 @@ import java.util.Collections;
 import java.util.Set;
 
 import static com.google.common.collect.ImmutableSet.of;
+import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 public class IndexFieldTypesServiceTest {
+    @ClassRule
+    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
     @Rule
-    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
+    public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
 
     private IndexFieldTypesService dbService;
 
     @Before
     public void setUp() throws Exception {
         final MongoJackObjectMapperProvider objectMapperProvider = new MongoJackObjectMapperProvider(new ObjectMapper());
-        final StreamService streamService = mock(StreamService.class);
-        this.dbService = new IndexFieldTypesService(mongodb.mongoConnection(), streamService, objectMapperProvider);
+        this.dbService = new IndexFieldTypesService(mongoRule.getMongoConnection(), objectMapperProvider);
     }
 
     @After
     public void tearDown() {
-        mongodb.mongoConnection().getMongoDatabase().drop();
+        mongoRule.getMongoConnection().getMongoDatabase().drop();
     }
 
     private IndexFieldTypesDTO createDto(String indexName, String indexSetId, Set<FieldTypeDTO> fields) {

@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.ranges;
 
@@ -54,7 +54,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.graylog2.audit.AuditEventTypes.ES_INDEX_RANGE_CREATE;
 import static org.graylog2.audit.AuditEventTypes.ES_INDEX_RANGE_DELETE;
-import static org.graylog2.indexer.indices.Indices.checkIfHealthy;
 
 public class MongoIndexRangeService implements IndexRangeService {
     private static final Logger LOG = LoggerFactory.getLogger(MongoIndexRangeService.class);
@@ -135,8 +134,7 @@ public class MongoIndexRangeService implements IndexRangeService {
 
     @Override
     public IndexRange calculateRange(String index) {
-        checkIfHealthy(indices.waitForRecovery(index),
-                (status) -> new RuntimeException("Unable to calculate range for index <" + index + ">, index is unhealthy: " + status));
+        indices.waitForRecovery(index);
         final DateTime now = DateTime.now(DateTimeZone.UTC);
         final Stopwatch sw = Stopwatch.createStarted();
         final IndexRangeStats stats = indices.indexRangeStatsOfIndex(index);
@@ -207,7 +205,7 @@ public class MongoIndexRangeService implements IndexRangeService {
             }
             LOG.debug("Index \"{}\" has been reopened. Calculating index range.", index);
 
-            checkIfHealthy(indices.waitForRecovery(index), (status) -> new RuntimeException("Not handling reopened index <" + index + ">, index is unhealthy: " + status));
+            indices.waitForRecovery(index);
 
             final IndexRange indexRange;
             try {

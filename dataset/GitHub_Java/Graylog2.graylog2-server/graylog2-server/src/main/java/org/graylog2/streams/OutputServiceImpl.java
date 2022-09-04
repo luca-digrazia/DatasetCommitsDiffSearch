@@ -1,79 +1,141 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.streams;
 
+import com.google.common.collect.ImmutableSet;
 import com.mongodb.BasicDBObject;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
+import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
+import org.graylog2.database.CollectionName;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.database.ValidationException;
+import org.graylog2.outputs.OutputRegistry;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Output;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.streams.outputs.CreateOutputRequest;
-import org.joda.time.DateTime;
+import org.graylog2.rest.models.streams.outputs.requests.CreateOutputRequest;
+import org.mongojack.DBQuery;
+import org.mongojack.DBUpdate;
+import org.mongojack.JacksonDBCollection;
+import org.mongojack.WriteResult;
 
 import javax.inject.Inject;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
-public class OutputServiceImpl extends PersistedServiceImpl implements OutputService {
+public class OutputServiceImpl implements OutputService {
+    private final JacksonDBCollection<OutputImpl, String> coll;
+    private final DBCollection dbCollection;
+    private final StreamService streamService;
+    private final OutputRegistry outputRegistry;
+
     @Inject
-    public OutputServiceImpl(MongoConnection mongoConnection) {
-        super(mongoConnection);
+    public OutputServiceImpl(MongoConnection mongoConnection,
+                             MongoJackObjectMapperProvider mapperProvider,
+                             StreamService streamService,
+                             OutputRegistry outputRegistry) {
+        this.streamService = streamService;
+        final String collectionName = OutputImpl.class.getAnnotation(CollectionName.class).value();
+        this.dbCollection = mongoConnection.getDatabase().getCollection(collectionName);
+        this.coll = JacksonDBCollection.wrap(dbCollection, OutputImpl.class, String.class, mapperProvider.get());
+        this.outputRegistry = outputRegistry;
     }
 
     @Override
     public Output load(String streamOutputId) throws NotFoundException {
-        DBObject o = get(OutputImpl.class, streamOutputId);
-
-        if (o == null) {
-            throw new NotFoundException("Output <" + streamOutputId + "> not found!");
+        final Output output = coll.findOneById(streamOutputId);
+        if (output == null) {
+            throw new NotFoundException("Couldn't find output with id " + streamOutputId);
         }
 
-        return new OutputImpl((ObjectId)o.get("_id"), o.toMap());
+        return output;
     }
 
     @Override
     public Set<Output> loadAll() {
-        return loadAll(new HashMap<String, Object>());
-    }
-
-    protected Set<Output> loadAll(Map<String, Object> additionalQueryOpts) {
-        Set<Output> outputs = new HashSet<>();
-
-        DBObject query = new BasicDBObject();
-
-        // putAll() is not working with BasicDBObject.
-        for (Map.Entry<String, Object> o : additionalQueryOpts.entrySet()) {
-            query.put(o.getKey(), o.getValue());
+        try (org.mongojack.DBCursor<OutputImpl> outputs = coll.find()) {
+            return ImmutableSet.copyOf((Iterable<OutputImpl>) outputs);
         }
-
-        List<DBObject> results = query(OutputImpl.class, query);
-        for (DBObject o : results)
-            outputs.add(new OutputImpl((ObjectId) o.get("_id"), o.toMap()));
-
-        return outputs;
-    }
-
-    @Override
-    public Set<Output> loadForStream(Stream stream) {
-        return stream.getOutputs();
     }
 
     @Override
     public Output create(Output request) throws ValidationException {
-        final String id = save(request);
-        if (request instanceof OutputImpl) {
-            OutputImpl impl = OutputImpl.class.cast(request);
-            impl.setId(id);
-        }
-        return request;
+        final OutputImpl outputImpl = implOrFail(request);
+        final WriteResult<OutputImpl, String> writeResult = coll.save(outputImpl);
+
+        return writeResult.getSavedObject();
     }
 
     @Override
-    public Output create(CreateOutputRequest request) throws ValidationException {
-        return create(new OutputImpl(request.title, request.type, request.configuration, DateTime.now().toDate(), request.creatorUserId));
+    public Output create(CreateOutputRequest request, String userId) throws ValidationException {
+        return create(OutputImpl.create(new ObjectId().toHexString(), request.title(), request.type(), userId, request.configuration(),
+                Tools.nowUTC().toDate(), request.contentPack()));
+    }
+
+    @Override
+    public void destroy(Output model) throws NotFoundException {
+        coll.removeById(model.getId());
+        outputRegistry.removeOutput(model);
+        streamService.removeOutputFromAllStreams(model);
+    }
+
+    @Override
+    public Output update(String id, Map<String, Object> deltas) {
+        DBUpdate.Builder update = new DBUpdate.Builder();
+        for (Map.Entry<String, Object> fields : deltas.entrySet())
+            update = update.set(fields.getKey(), fields.getValue());
+
+        return coll.findAndModify(DBQuery.is(OutputImpl.FIELD_CREATOR_USER_ID, id), update);
+    }
+
+    @Override
+    public long count() {
+        return coll.count();
+    }
+
+    @Override
+    public Map<String, Long> countByType() {
+        final Map<String, Long> outputsCountByType = new HashMap<>();
+        try (DBCursor outputTypes = dbCollection.find(null, new BasicDBObject(OutputImpl.FIELD_TYPE, 1))) {
+
+            for (DBObject outputType : outputTypes) {
+                final String type = (String) outputType.get(OutputImpl.FIELD_TYPE);
+                if (type != null) {
+                    final Long oldValue = outputsCountByType.get(type);
+                    final Long newValue = (oldValue == null) ? 1 : oldValue + 1;
+                    outputsCountByType.put(type, newValue);
+                }
+            }
+        }
+
+        return outputsCountByType;
+    }
+
+    private OutputImpl implOrFail(Output output) {
+        final OutputImpl outputImpl;
+        if (output instanceof OutputImpl) {
+            outputImpl = (OutputImpl) output;
+            return outputImpl;
+        } else {
+            throw new IllegalArgumentException("Supplied output must be of implementation type OutputImpl, not " + output.getClass());
+        }
     }
 }
