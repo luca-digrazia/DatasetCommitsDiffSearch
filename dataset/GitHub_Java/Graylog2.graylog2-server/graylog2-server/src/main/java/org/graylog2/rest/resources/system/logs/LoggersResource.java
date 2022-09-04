@@ -17,14 +17,13 @@
 package org.graylog2.rest.resources.system.logs;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Marker;
@@ -98,8 +97,7 @@ public class LoggersResource extends RestResource {
         return LoggersSummary.create(loggers);
     }
 
-    @VisibleForTesting
-    protected Collection<LoggerConfig> getLoggerConfigs() {
+    private Collection<LoggerConfig> getLoggerConfigs() {
         final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
         final Configuration configuration = loggerContext.getConfiguration();
         return configuration.getLoggers().values();
@@ -136,8 +134,7 @@ public class LoggersResource extends RestResource {
         return SubsystemSummary.create(subsystems);
     }
 
-    @VisibleForTesting
-    protected Level getLoggerLevel(final String loggerName) {
+    private Level getLoggerLevel(final String loggerName) {
         final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
         final Configuration configuration = loggerContext.getConfiguration();
         final LoggerConfig loggerConfig = configuration.getLoggerConfig(loggerName);
@@ -145,19 +142,12 @@ public class LoggersResource extends RestResource {
         return loggerConfig.getLevel();
     }
 
-    @VisibleForTesting
-    protected void setLoggerLevel(final String loggerName, final Level level) {
+    private void setLoggerLevel(final String loggerName, final Level level) {
         final LoggerContext context = (LoggerContext) LogManager.getContext(false);
         final Configuration config = context.getConfiguration();
-        final LoggerConfig loggerConfig = config.getLoggerConfig(loggerName);
-        if(loggerName.equals(loggerConfig.getName())) {
-            loggerConfig.setLevel(level);
-        } else {
-            final LoggerConfig newLoggerConfig = new LoggerConfig(loggerName, level, loggerConfig.isAdditive());
-            newLoggerConfig.setLevel(level);
-            config.addLogger(loggerName, newLoggerConfig);
-        }
-        context.updateLoggers();
+
+        config.getLoggerConfig(loggerName).setLevel(level);
+        context.updateLoggers(config);
     }
 
     @PUT
