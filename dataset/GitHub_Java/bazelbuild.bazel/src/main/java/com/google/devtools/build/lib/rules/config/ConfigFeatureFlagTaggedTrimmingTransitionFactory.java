@@ -19,20 +19,20 @@ import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Ordering;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 
 /**
  * A transition factory for trimming feature flags manually via an attribute which specifies the
  * feature flags used by transitive dependencies.
  */
-public class ConfigFeatureFlagTaggedTrimmingTransitionFactory implements TransitionFactory<Rule> {
+public class ConfigFeatureFlagTaggedTrimmingTransitionFactory implements RuleTransitionFactory {
 
   private static final class ConfigFeatureFlagTaggedTrimmingTransition implements PatchTransition {
     public static final ConfigFeatureFlagTaggedTrimmingTransition EMPTY =
@@ -51,10 +51,14 @@ public class ConfigFeatureFlagTaggedTrimmingTransitionFactory implements Transit
       if (!(options.contains(ConfigFeatureFlagOptions.class)
           && options.get(ConfigFeatureFlagOptions.class)
               .enforceTransitiveConfigsForConfigFeatureFlag
-          && options.get(CoreOptions.class).useDistinctHostConfiguration)) {
+          && options.get(BuildConfiguration.Options.class)
+              .useDistinctHostConfiguration
+          && options.get(ConfigFeatureFlagOptions.class).requiresTrimming(flags))) {
         return options;
       }
-      return FeatureFlagValue.trimFlagValues(options, flags);
+      BuildOptions result = options.clone();
+      result.get(ConfigFeatureFlagOptions.class).trimFlagValues(flags);
+      return result;
     }
 
     @Override
@@ -81,7 +85,7 @@ public class ConfigFeatureFlagTaggedTrimmingTransitionFactory implements Transit
   }
 
   @Override
-  public PatchTransition create(Rule rule) {
+  public PatchTransition buildTransitionFor(Rule rule) {
     NonconfigurableAttributeMapper attrs = NonconfigurableAttributeMapper.of(rule);
     RuleClass ruleClass = rule.getRuleClassObject();
     if (ruleClass.getName().equals(ConfigRuleClasses.ConfigFeatureFlagRule.RULE_NAME)) {
