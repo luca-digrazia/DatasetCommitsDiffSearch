@@ -373,7 +373,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
     reporter.removeHandler(failFastHandler); // expecting an error
     useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     overwriteFile(
-        "tools/allowlists/config_feature_flag/BUILD",
+        "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
         "    packages = ['//flag'])");
@@ -410,7 +410,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   public void testFeatureFlagPolicyDoesNotBlockRuleIfInPolicy() throws Exception {
     useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     overwriteFile(
-        "tools/allowlists/config_feature_flag/BUILD",
+        "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
         "    packages = ['//flag', '//java/com/google/android/foo'])");
@@ -441,7 +441,7 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
   @Test
   public void testFeatureFlagPolicyIsNotUsedIfFlagValuesNotUsed() throws Exception {
     overwriteFile(
-        "tools/allowlists/config_feature_flag/BUILD",
+        "tools/whitelists/config_feature_flag/BUILD",
         "package_group(",
         "    name = 'config_feature_flag',",
         "    packages = ['*super* busted package group'])");
@@ -454,9 +454,9 @@ public abstract class AbstractAndroidLocalTestTestBase extends AndroidBuildViewT
     assertThat(getConfiguredTarget("//java/com/google/android/foo:foo")).isNotNull();
     // the package_group is busted, so we would have failed to get this far if we depended on it
     assertNoEvents();
-    // NOTE: someone should verify that this test actually does what we think it does.
+    // sanity check time: does this test actually test what we're testing for?
     reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//tools/allowlists/config_feature_flag:config_feature_flag"))
+    assertThat(getConfiguredTarget("//tools/whitelists/config_feature_flag:config_feature_flag"))
         .isNull();
     assertContainsEvent("*super* busted package group");
   }
