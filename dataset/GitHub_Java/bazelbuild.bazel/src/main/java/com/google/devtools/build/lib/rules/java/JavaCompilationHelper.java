@@ -243,12 +243,10 @@ public final class JavaCompilationHelper {
   }
 
   private ImmutableMap<String, String> getExecutionInfo() {
-    return getConfiguration()
-        .modifiedExecutionInfo(
-            javaToolchain.getJavacSupportsWorkers()
-                ? ExecutionRequirements.WORKER_MODE_ENABLED
-                : ImmutableMap.of(),
-            JavaCompileAction.MNEMONIC);
+    if (javaToolchain.getJavacSupportsWorkers()) {
+      return ExecutionRequirements.WORKER_MODE_ENABLED;
+    }
+    return ImmutableMap.of();
   }
 
   /** Returns the bootclasspath explicit set in attributes if present, or else the default. */
@@ -374,16 +372,6 @@ public final class JavaCompilationHelper {
                   javaToolchain.getToolchainLabel()));
       return false;
     }
-    if (getJavaConfiguration().requireJavaToolchainHeaderCompilerDirect()
-        && javaToolchain.getHeaderCompilerDirect() == null) {
-      getRuleContext()
-          .ruleError(
-              String.format(
-                  "header compilation was requested but it is not supported by the current Java"
-                      + " toolchain '%s'; see the java_toolchain.header_compiler_direct attribute",
-                  javaToolchain.getToolchainLabel()));
-      return false;
-    }
     return true;
   }
 
@@ -408,7 +396,8 @@ public final class JavaCompilationHelper {
                 runtimeJar.getRoot());
 
     JavaTargetAttributes attributes = getAttributes();
-    JavaHeaderCompileActionBuilder builder = new JavaHeaderCompileActionBuilder(getRuleContext());
+    JavaHeaderCompileAction.Builder builder =
+        new JavaHeaderCompileAction.Builder(getRuleContext());
     builder.setSourceFiles(attributes.getSourceFiles());
     builder.addSourceJars(attributes.getSourceJars());
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
