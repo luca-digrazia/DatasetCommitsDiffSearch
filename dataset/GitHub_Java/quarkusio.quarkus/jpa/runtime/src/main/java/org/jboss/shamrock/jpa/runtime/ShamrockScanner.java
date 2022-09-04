@@ -14,9 +14,6 @@ import org.hibernate.boot.archive.scan.spi.ScanResult;
 import org.hibernate.boot.archive.scan.spi.Scanner;
 import org.hibernate.boot.archive.spi.InputStreamAccess;
 
-/**
- * A hard coded scanner. This scanner is serialized to bytecode, and used to avoid scanning on hibernate startup
- */
 public class ShamrockScanner implements Scanner {
 
     private Set<ClassDescriptor> classDescriptors;

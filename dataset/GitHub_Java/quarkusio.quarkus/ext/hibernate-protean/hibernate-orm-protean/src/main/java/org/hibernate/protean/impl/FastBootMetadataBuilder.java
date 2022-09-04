@@ -119,9 +119,7 @@ class FastBootMetadataBuilder {
 		addPUManagedClassNamesToMetadataSources(persistenceUnit, metadataSources);
 
 		this.metamodelBuilder = (MetadataBuilderImplementor) metadataSources.getMetadataBuilder( standardServiceRegistry );
-		if( scanner != null ) {
-			this.metamodelBuilder.applyScanner( scanner );
-		}
+		this.metamodelBuilder.applyScanner(scanner);
 		populate( metamodelBuilder, mergedSettings, standardServiceRegistry );
 
 		this.managedResources = MetadataBuildingProcess.prepare(
@@ -172,9 +170,6 @@ class FastBootMetadataBuilder {
 	private MergedSettings mergeSettings(PersistenceUnitDescriptor persistenceUnit) {
 		final MergedSettings mergedSettings = new MergedSettings();
 
-		if(persistenceUnit.getJtaDataSource() != null) {
-			mergedSettings.configurationValues.put("hibernate.connection.datasource", persistenceUnit.getJtaDataSource());
-		}
 		// Protean specific!
 		mergedSettings.configurationValues.put( "hibernate.temp.use_jdbc_metadata_defaults", "false" );
 
