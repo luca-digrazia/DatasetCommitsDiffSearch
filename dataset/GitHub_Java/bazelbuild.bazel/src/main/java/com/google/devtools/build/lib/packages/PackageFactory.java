@@ -386,7 +386,8 @@ public final class PackageFactory {
             ruleClass,
             new BuildLangTypedAttributeValuesMap(kwargs),
             thread.getSemantics(),
-            thread.getCallStack());
+            thread.getCallStack(),
+            new AttributeContainer(ruleClass));
       } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
         throw new EvalException(null, e.getMessage());
       }
@@ -555,13 +556,13 @@ public final class PackageFactory {
   public LegacyGlobber createLegacyGlobber(
       Path packageDirectory,
       PackageIdentifier packageId,
-      ImmutableSet<PathFragment> ignoredGlobPrefixes,
+      ImmutableSet<PathFragment> blacklistedGlobPrefixes,
       CachingPackageLocator locator) {
     return createLegacyGlobber(
         new GlobCache(
             packageDirectory,
             packageId,
-            ignoredGlobPrefixes,
+            blacklistedGlobPrefixes,
             locator,
             syscalls,
             executor,

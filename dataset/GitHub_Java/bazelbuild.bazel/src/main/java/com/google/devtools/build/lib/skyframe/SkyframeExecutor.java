@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
+import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompletionContext.PathResolverFactory;
@@ -82,7 +83,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiffForReconstruction;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
@@ -93,8 +93,8 @@ import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTr
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -117,7 +117,6 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.Package.Builder.PackageSettings;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
@@ -261,10 +260,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       // performance.
       System.getenv("TEST_TMPDIR") == null ? 200 : 5;
 
-  // The limit of how many times we will traverse through an exception chain when catching a
-  // target parsing exception.
-  private static final int EXCEPTION_TRAVERSAL_LIMIT = 10;
-
   // Cache of partially constructed Package instances, stored between reruns of the PackageFunction
   // (because of missing dependencies, within the same evaluate() run) to avoid loading the same
   // package twice (first time loading to find load()ed bzl files and declare Skyframe
@@ -302,7 +297,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   protected final AtomicReference<TimestampGranularityMonitor> tsgm = new AtomicReference<>();
   protected final AtomicReference<Map<String, String>> clientEnv = new AtomicReference<>();
 
-  private final ArtifactFactory artifactFactory;
+  // Under normal circumstances, the artifact factory persists for the life of a Blaze server, but
+  // since it is not yet created when we create the value builders, we have to use a supplier,
+  // initialized when the build view is created.
+  private final MutableArtifactFactorySupplier artifactFactory;
   private final ActionKeyContext actionKeyContext;
 
   protected boolean active = true;
@@ -327,7 +325,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   protected SkyframeIncrementalBuildMonitor incrementalBuildMonitor =
       new SkyframeIncrementalBuildMonitor();
 
-  private final SkyFunction ignoredPackagePrefixesFunction;
+  private final SkyFunction blacklistedPackagePrefixesFunction;
 
   private final ConfiguredRuleClassProvider ruleClassProvider;
 
@@ -355,6 +353,21 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       new TrimmedConfigurationProgressReceiver(trimmingCache);
 
   private boolean siblingRepositoryLayout = false;
+
+  /** An {@link ArtifactResolverSupplier} that supports setting of an {@link ArtifactFactory}. */
+  public static class MutableArtifactFactorySupplier implements ArtifactResolverSupplier {
+
+    private ArtifactFactory artifactFactory;
+
+    void set(ArtifactFactory artifactFactory) {
+      this.artifactFactory = artifactFactory;
+    }
+
+    @Override
+    public ArtifactFactory get() {
+      return artifactFactory;
+    }
+  }
 
   class PathResolverFactoryImpl implements PathResolverFactory {
     @Override
@@ -391,7 +404,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       Factory workspaceStatusActionFactory,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ExternalFileAction externalFileAction,
-      SkyFunction ignoredPackagePrefixesFunction,
+      SkyFunction blacklistedPackagePrefixesFunction,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       ImmutableList<BuildFileName> buildFilesByPriority,
       ExternalPackageHelper externalPackageHelper,
@@ -400,6 +413,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       GraphInconsistencyReceiver graphInconsistencyReceiver,
       BuildOptions defaultBuildOptions,
       @Nullable PackageProgressReceiver packageProgress,
+      MutableArtifactFactorySupplier artifactResolverSupplier,
       @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress,
       @Nullable NonexistentFileReceiver nonexistentFileReceiver,
       @Nullable ManagedDirectoriesKnowledge managedDirectoriesKnowledge) {
@@ -425,7 +439,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     this.fileSystem = fileSystem;
     this.directories = Preconditions.checkNotNull(directories);
     this.actionKeyContext = Preconditions.checkNotNull(actionKeyContext);
-    this.ignoredPackagePrefixesFunction = ignoredPackagePrefixesFunction;
+    this.blacklistedPackagePrefixesFunction = blacklistedPackagePrefixesFunction;
     this.extraSkyFunctions = extraSkyFunctions;
 
     this.ruleClassProvider = (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
@@ -434,7 +448,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
         new SkyframeActionExecutor(actionKeyContext, statusReporterRef, this::getPathEntries);
     this.skyframeBuildView =
         new SkyframeBuildView(directories, this, ruleClassProvider, actionKeyContext);
-    this.artifactFactory = skyframeBuildView.getArtifactFactory();
+    this.artifactFactory = artifactResolverSupplier;
+    this.artifactFactory.set(skyframeBuildView.getArtifactFactory());
     this.externalFilesHelper =
         ExternalFilesHelper.create(
             pkgLocator,
@@ -509,7 +524,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     map.put(
         SkyFunctions.COLLECT_PACKAGES_UNDER_DIRECTORY,
         newCollectPackagesUnderDirectoryFunction(directories));
-    map.put(SkyFunctions.IGNORED_PACKAGE_PREFIXES, ignoredPackagePrefixesFunction);
+    map.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES, blacklistedPackagePrefixesFunction);
     map.put(SkyFunctions.TESTS_IN_SUITE, new TestExpansionFunction());
     map.put(SkyFunctions.TEST_SUITE_EXPANSION, new TestsForTargetPatternFunction());
     map.put(
@@ -587,7 +602,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
             () -> !skyframeActionExecutor.actionFileSystemType().inMemoryFileSystem()));
     map.put(
         SkyFunctions.BUILD_INFO_COLLECTION,
-        new BuildInfoCollectionFunction(actionKeyContext, artifactFactory));
+        new BuildInfoCollectionFunction(actionKeyContext, artifactFactory::get));
     map.put(SkyFunctions.BUILD_INFO, new WorkspaceStatusFunction(this::makeWorkspaceStatusAction));
     map.put(SkyFunctions.COVERAGE_REPORT, new CoverageReportFunction(actionKeyContext));
     ActionExecutionFunction actionExecutionFunction =
@@ -1105,6 +1120,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   }
 
   @VisibleForTesting
+  public ArtifactResolverSupplier getArtifactResolverSupplierForTesting() {
+    return artifactFactory;
+  }
+
+  @VisibleForTesting
   @Nullable
   public WorkspaceStatusAction getLastWorkspaceStatusAction() throws InterruptedException {
     WorkspaceStatusValue workspaceStatusValue =
@@ -1410,7 +1430,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
 
   private void setSiblingDirectoryLayout(boolean experimentalSiblingRepositoryLayout) {
     this.siblingRepositoryLayout = experimentalSiblingRepositoryLayout;
-    this.artifactFactory.setSiblingRepositoryLayout(experimentalSiblingRepositoryLayout);
+    this.artifactFactory.get().setSiblingRepositoryLayout(experimentalSiblingRepositoryLayout);
   }
 
   public StarlarkSemantics getEffectiveStarlarkSemantics(
@@ -1433,6 +1453,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       // (Some of the additional steps are carried out by ConfiguredTargetValueInvalidationListener,
       // and some by BuildView#buildHasIncompatiblePackageRoots and #updateSkyframe.)
       artifactFactory
+          .get()
           .setSourceArtifactRoots(
               createSourceArtifactRootMapOnNewPkgLocator(oldLocator, pkgLocator));
     }
@@ -1517,12 +1538,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     BuildConfiguration firstTargetConfig = topLevelTargetConfigs.get(0);
 
     BuildOptions targetOptions = firstTargetConfig.getOptions();
-    BuildOptionsView hostTransitionOptionsView =
-        new BuildOptionsView(
-            firstTargetConfig.getOptions(), HostTransition.INSTANCE.requiresOptionFragments());
     BuildOptions hostOptions =
         targetOptions.get(CoreOptions.class).useDistinctHostConfiguration
-            ? HostTransition.INSTANCE.patch(hostTransitionOptionsView, eventHandler)
+            ? HostTransition.INSTANCE.patch(targetOptions, eventHandler)
             : targetOptions;
     BuildConfiguration hostConfig = getConfiguration(eventHandler, hostOptions, keepGoing);
 
@@ -2631,8 +2649,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
   }
 
   @VisibleForTesting
-  public PackageSettings getPackageSettingsForTesting() {
-    return pkgFactory.getPackageSettingsForTesting();
+  public Package.Builder.Helper getPackageBuilderHelperForTesting() {
+    return pkgFactory.getPackageBuilderHelperForTesting();
   }
 
   @VisibleForTesting
@@ -2882,17 +2900,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
     EvaluationResult<TargetPatternPhaseValue> evalResult =
         evaluate(ImmutableList.of(key), keepGoing, threadCount, eventHandler);
-    tryThrowTargetParsingException(eventHandler, targetPatterns, key, evalResult);
-    eventHandler.post(new TargetParsingPhaseTimeEvent(timer.stop().elapsed().toMillis()));
-    return evalResult.get(key);
-  }
-
-  private void tryThrowTargetParsingException(
-      ExtendedEventHandler eventHandler,
-      List<String> targetPatterns,
-      SkyKey key,
-      EvaluationResult<TargetPatternPhaseValue> evalResult)
-      throws TargetParsingException {
     if (evalResult.hasError()) {
       ErrorInfo errorInfo = evalResult.getError(key);
       TargetParsingException exc;
@@ -2903,47 +2910,24 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
         // set as being in error.
         eventHandler.post(PatternExpandingError.failed(targetPatterns, exc.getMessage()));
       } else {
-        exc = constructNoCycleTargetParsingException(eventHandler, targetPatterns, errorInfo);
+        Exception e = Preconditions.checkNotNull(errorInfo.getException());
+
+        // Following SkyframeTargetPatternEvaluator, we convert any exception into a
+        // TargetParsingException.
+        exc =
+            (e instanceof TargetParsingException)
+                ? (TargetParsingException) e
+                : new TargetParsingException(e.getMessage(), e);
+        if (!(e instanceof TargetParsingException)) {
+          // If it's a TargetParsingException, then the TargetPatternPhaseFunction has already
+          // reported the error, so we don't need to report it again.
+          eventHandler.post(PatternExpandingError.failed(targetPatterns, exc.getMessage()));
+        }
       }
       throw exc;
     }
-  }
-
-  private static TargetParsingException constructNoCycleTargetParsingException(
-      ExtendedEventHandler eventHandler, List<String> targetPatterns, ErrorInfo errorInfo) {
-    Exception e = Preconditions.checkNotNull(errorInfo.getException());
-    DetailedExitCode detailedExitCode = traverseExceptionChain(e);
-    if (!(e instanceof TargetParsingException)) {
-      // If it's a TargetParsingException, then the TargetPatternPhaseFunction has already
-      // reported the error, so we don't need to report it again.
-      eventHandler.post(PatternExpandingError.failed(targetPatterns, e.getMessage()));
-    }
-
-    // Following SkyframeTargetPatternEvaluator, we convert any exception into a
-    // TargetParsingException or DetailedTargetParsingException if DetailedExitCode is
-    // available.
-    return detailedExitCode != null
-        ? new DetailedTargetParsingException(
-            (e instanceof TargetParsingException) ? e.getCause() : e, detailedExitCode)
-        : (e instanceof TargetParsingException)
-            ? (TargetParsingException) e
-            : new TargetParsingException(e.getMessage(), e);
-  }
-
-  @Nullable
-  private static DetailedExitCode traverseExceptionChain(Exception topLevelException) {
-    Exception traverseException = topLevelException;
-    DetailedExitCode detailedExitCode = null;
-    int traverseLevel = 0;
-    while (traverseLevel < EXCEPTION_TRAVERSAL_LIMIT) {
-      traverseLevel++;
-      detailedExitCode = DetailedException.getDetailedExitCode(traverseException);
-      if (detailedExitCode != null || traverseException.getCause() == null) {
-        break;
-      }
-      traverseException = (Exception) traverseException.getCause();
-    }
-    return detailedExitCode;
+    eventHandler.post(new TargetParsingPhaseTimeEvent(timer.stop().elapsed().toMillis()));
+    return evalResult.get(key);
   }
 
   public PrepareAnalysisPhaseValue prepareAnalysisPhase(

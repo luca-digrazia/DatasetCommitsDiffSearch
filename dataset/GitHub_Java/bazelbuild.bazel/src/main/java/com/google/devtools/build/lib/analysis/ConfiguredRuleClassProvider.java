@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
 import com.google.devtools.build.lib.analysis.constraints.RuleContextConstraintSemantics;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkModules;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkModules;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -660,8 +660,9 @@ public /*final*/ class ConfiguredRuleClassProvider implements FragmentProvider {
     return factoryMapBuilder.build();
   }
 
-  /** Returns the set of configuration fragments provided by this module. */
-  @Override
+  /**
+   * Returns the set of configuration fragments provided by this module.
+   */
   public ImmutableList<ConfigurationFragmentFactory> getConfigurationFragments() {
     return configurationFragmentFactories;
   }
