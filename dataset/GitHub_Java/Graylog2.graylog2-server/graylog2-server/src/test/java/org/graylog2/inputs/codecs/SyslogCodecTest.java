@@ -24,28 +24,26 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.journal.RawMessage;
-import org.graylog2.shared.SuppressForbidden;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class SyslogCodecTest {
     private static final int YEAR = Tools.nowUTC().getYear();
     public static String STRUCTURED = "<165>1 2012-12-25T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"] BOMAn application event log entry";
@@ -54,9 +52,6 @@ public class SyslogCodecTest {
     // The folowing message from issue 549 is from a Juniper SRX 240 device.
     public static String STRUCTURED_ISSUE_549 = "<14>1 2014-05-01T08:26:51.179Z fw01 RT_FLOW - RT_FLOW_SESSION_DENY [junos@2636.1.1.1.2.39 source-address=\"1.2.3.4\" source-port=\"56639\" destination-address=\"5.6.7.8\" destination-port=\"2003\" service-name=\"None\" protocol-id=\"6\" icmp-type=\"0\" policy-name=\"log-all-else\" source-zone-name=\"campus\" destination-zone-name=\"mngmt\" application=\"UNKNOWN\" nested-application=\"UNKNOWN\" username=\"N/A\" roles=\"N/A\" packet-incoming-interface=\"reth6.0\" encrypted=\"No\"]";
     private final String UNSTRUCTURED = "<45>Oct 21 12:09:37 c4dc57ba1ebb syslog-ng[7208]: syslog-ng starting up; version='3.5.3'";
-
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
     @Mock
     private Configuration configuration;
@@ -214,6 +209,7 @@ public class SyslogCodecTest {
         assertEquals(message.getField("full_message"), UNSTRUCTURED);
     }
 
+
     @Test
     public void rfc3164_section5_4_messages() {
         // See https://tools.ietf.org/html/rfc3164#section-5.4
@@ -263,7 +259,6 @@ public class SyslogCodecTest {
     }
 
     @Test
-    @SuppressForbidden("Deliberate invocation")
     public void rfc5424_section6_5_messages() {
         // See https://tools.ietf.org/html/rfc5424#section-6.5
         final Map<String, Map<String, Object>> rfc3164messages = ImmutableMap.of(
@@ -322,21 +317,7 @@ public class SyslogCodecTest {
         }
     }
 
-    @Test
-    public void testIssue2954() throws Exception {
-        // https://github.com/Graylog2/graylog2-server/issues/2954
-        final RawMessage rawMessage = buildRawMessage("<6>2016-10-12T14:10:18Z hostname testmsg[20]: Test");
-        final Message message = codec.decode(rawMessage);
-
-        assertNotNull(message);
-        assertEquals("hostname testmsg[20]: Test", message.getMessage());
-        assertEquals(new DateTime(2016, 10, 12, 14, 10, 18, DateTimeZone.UTC), message.getTimestamp());
-        assertEquals("hostname", message.getSource());
-        assertEquals(6, message.getField("level"));
-        assertEquals("kernel", message.getField("facility"));
-    }
-
     private RawMessage buildRawMessage(String message) {
-        return new RawMessage(message.getBytes(StandardCharsets.UTF_8), new InetSocketAddress(5140));
+        return new RawMessage(message.getBytes(), new InetSocketAddress(5140));
     }
 }
