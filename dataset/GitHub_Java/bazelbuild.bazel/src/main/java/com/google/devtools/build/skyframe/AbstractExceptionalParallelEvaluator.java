@@ -32,7 +32,6 @@ import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -528,10 +527,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         // Clear interrupted status. We're not listening to interrupts here.
         Thread.interrupted();
       }
-      // TODO(b/149495181): remove when resolved.
-      if (completedRun
-          && error.getException() != null
-          && error.getException() instanceof IOException) {
+      if (completedRun) {
         logger.info(
             "SkyFunction did not rethrow error, may be a bug that it did not expect one: "
                 + errorKey
