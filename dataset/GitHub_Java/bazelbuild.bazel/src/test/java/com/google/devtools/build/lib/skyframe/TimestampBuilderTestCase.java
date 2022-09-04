@@ -17,7 +17,6 @@ import static com.google.devtools.build.lib.actions.util.ActionCacheTestHelper.A
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -33,8 +32,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
-import com.google.devtools.build.lib.actions.ActionLookupData;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
@@ -104,7 +101,7 @@ import org.junit.Before;
 public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   protected static final ActionLookupValue.ActionLookupKey ALL_OWNER =
       new SingletonActionLookupKey();
-  protected static final SkyKey OWNER_KEY = SkyKey.create(SkyFunctions.ACTION_LOOKUP, ALL_OWNER);
+  private static final SkyKey OWNER_KEY = SkyKey.create(SkyFunctions.ACTION_LOOKUP, ALL_OWNER);
   protected static final Predicate<Action> ALWAYS_EXECUTE_FILTER = Predicates.alwaysTrue();
   protected static final String CYCLE_MSG = "Yarrrr, there be a cycle up in here";
 
@@ -121,8 +118,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     tsgm = new TimestampGranularityMonitor(clock);
     ResourceManager.instance().setAvailableResources(ResourceSet.createWithRamCpuIo(100, 1, 1));
     actions = new HashSet<>();
-    actionTemplateExpansionFunction =
-        new ActionTemplateExpansionFunction(Suppliers.ofInstance(false));
+    actionTemplateExpansionFunction = new ActionTemplateExpansionFunction();
   }
 
   protected void clearActions() {
@@ -222,8 +218,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
       private void setGeneratingActions() {
         if (evaluator.getExistingValueForTesting(OWNER_KEY) == null) {
           differencer.inject(
-              ImmutableMap.of(
-                  OWNER_KEY, new ActionLookupValue(ImmutableList.copyOf(actions), false)));
+              ImmutableMap.of(OWNER_KEY, new ActionLookupValue(ImmutableList.copyOf(actions))));
         }
       }
 
@@ -309,7 +304,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   Artifact createSourceArtifact(FileSystem fs, String name) {
     Path root = fs.getPath(TestUtils.tmpDir());
-    return new Artifact(PathFragment.create(name), Root.asSourceRoot(root));
+    return new Artifact(new PathFragment(name), Root.asSourceRoot(root));
   }
 
   protected Artifact createDerivedArtifact(String name) {
@@ -318,7 +313,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   Artifact createDerivedArtifact(FileSystem fs, String name) {
     Path execRoot = fs.getPath(TestUtils.tmpDir());
-    PathFragment execPath = PathFragment.create("out").getRelative(name);
+    PathFragment execPath = new PathFragment("out").getRelative(name);
     Path path = execRoot.getRelative(execPath);
     return new Artifact(
         path, Root.asDerivedRoot(execRoot, execRoot.getRelative("out")), execPath, ALL_OWNER);
@@ -448,12 +443,12 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   private static class SingletonActionLookupKey extends ActionLookupValue.ActionLookupKey {
     @Override
-    protected SkyKey getSkyKeyInternal() {
+    SkyKey getSkyKeyInternal() {
       return OWNER_KEY;
     }
 
     @Override
-    protected SkyFunctionName getType() {
+    SkyFunctionName getType() {
       throw new UnsupportedOperationException();
     }
   }
@@ -482,9 +477,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   private static final ActionCompletedReceiver EMPTY_COMPLETION_RECEIVER =
       new ActionCompletedReceiver() {
         @Override
-        public void actionCompleted(ActionLookupData actionLookupData) {}
-
-        @Override
-        public void noteActionEvaluationStarted(ActionLookupData actionLookupData, Action action) {}
+        public void actionCompleted(Action action) {}
       };
 }

@@ -577,7 +577,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertEquals(CYCLE_MSG, e.getMessage());
+      assertEquals(e.getMessage(), CYCLE_MSG);
     }
   }
 
@@ -590,7 +590,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertEquals(CYCLE_MSG, e.getMessage());
+      assertEquals(e.getMessage(), CYCLE_MSG);
     }
   }
 
@@ -612,7 +612,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo1, foo2);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertEquals(CYCLE_MSG, e.getMessage());
+      assertEquals(e.getMessage(), CYCLE_MSG);
     }
   }
 
@@ -634,7 +634,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertEquals(CYCLE_MSG, e.getMessage());
+      assertEquals(e.getMessage(), CYCLE_MSG);
     }
   }
 
