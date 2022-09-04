@@ -1,22 +1,23 @@
 package org.jboss.shamrock.maven.it.assertions;
 
-import org.apache.maven.model.Model;
-import org.apache.maven.model.Plugin;
-import org.apache.maven.model.Profile;
-import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.project.MavenProject;
-import org.codehaus.plexus.util.xml.Xpp3Dom;
-import org.jboss.shamrock.maven.CreateProjectMojo;
-import org.jboss.shamrock.maven.utilities.MojoUtils;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.Profile;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
+import org.jboss.shamrock.maven.CreateProjectMojo;
+import org.jboss.shamrock.maven.utilities.MojoUtils;
 
 public class SetupVerifier {
 
@@ -53,14 +54,14 @@ public class SetupVerifier {
 
         //Check if the properties have been set correctly
         Properties properties = model.getProperties();
-        assertThat(properties.containsKey(MojoUtils.SHAMROCK_VERSION_PROPERTY_NAME)).isTrue();
+        assertThat(properties.containsKey("shamrock.version")).isTrue();
 
         // Check plugin is set
         Plugin plugin = maybe.orElseThrow(() -> new AssertionError("Plugin expected"));
         assertThat(plugin).isNotNull().satisfies(p -> {
-            assertThat(p.getArtifactId()).isEqualTo(MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID);
-            assertThat(p.getGroupId()).isEqualTo(MojoUtils.SHAMROCK_GROUP_ID);
-            assertThat(p.getVersion()).isEqualTo(MojoUtils.SHAMROCK_VERSION_VARIABLE);
+            assertThat(p.getArtifactId()).isEqualTo(MojoUtils.getPluginArtifactId());
+            assertThat(p.getGroupId()).isEqualTo(MojoUtils.getPluginGroupId());
+            assertThat(p.getVersion()).isEqualTo(MojoUtils.SHAMROCK_VERSION_PROPERTY);
         });
 
         // Check build execution Configuration
@@ -73,7 +74,7 @@ public class SetupVerifier {
         // Check profile
         assertThat(model.getProfiles()).hasSize(1);
         Profile profile = model.getProfiles().get(0);
-        assertThat(profile.getId()).isEqualTo("native-image");
+        assertThat(profile.getId()).isEqualTo("native");
         Plugin actual = profile.getBuild().getPluginsAsMap().get(CreateProjectMojo.PLUGIN_KEY);
         assertThat(actual).isNotNull();
         assertThat(actual.getExecutions()).hasSize(1).allSatisfy(exec -> {
@@ -91,7 +92,7 @@ public class SetupVerifier {
         Properties projectProps = project.getProperties();
         assertNotNull(projectProps);
         assertFalse(projectProps.isEmpty());
-        assertEquals(MojoUtils.SHAMROCK_VERSION, projectProps.getProperty("shamrock.version"));
+        assertEquals(MojoUtils.getPluginVersion(), projectProps.getProperty("shamrock.version"));
     }
 
 }
