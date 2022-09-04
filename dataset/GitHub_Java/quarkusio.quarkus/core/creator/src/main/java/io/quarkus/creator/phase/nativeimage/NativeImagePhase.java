@@ -38,7 +38,6 @@ import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.creator.AppCreationPhase;
 import io.quarkus.creator.AppCreator;
 import io.quarkus.creator.AppCreatorException;
@@ -47,6 +46,7 @@ import io.quarkus.creator.config.reader.PropertyContext;
 import io.quarkus.creator.outcome.OutcomeProviderRegistration;
 import io.quarkus.creator.phase.augment.AugmentOutcome;
 import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
+import io.quarkus.creator.util.IoUtils;
 import io.smallrye.config.SmallRyeConfigProviderResolver;
 
 /**
@@ -98,11 +98,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
     private String nativeImageXmx;
 
-    private String builderImage = "quay.io/quarkus/centos-quarkus-native-image:graalvm-1.0.0-rc14";
-
-    private String containerRuntime = "";
-
-    private List<String> containerRuntimeOptions = new ArrayList<>();
+    private String dockerBuild;
 
     private boolean enableVMInspection;
 
@@ -205,41 +201,7 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     }
 
     public NativeImagePhase setDockerBuild(String dockerBuild) {
-        if (dockerBuild == null) {
-            return this;
-        }
-
-        if ("false".equals(dockerBuild.toLowerCase())) {
-            this.containerRuntime = "";
-        } else {
-            this.containerRuntime = "docker";
-
-            // TODO: use an 'official' image
-            if (!"true".equals(dockerBuild.toLowerCase())) {
-                this.builderImage = dockerBuild;
-            }
-        }
-
-        return this;
-    }
-
-    public NativeImagePhase setContainerRuntime(String containerRuntime) {
-        if (containerRuntime == null) {
-            return this;
-        }
-        if ("podman".equals(containerRuntime) || "docker".equals(containerRuntime)) {
-            this.containerRuntime = containerRuntime;
-        } else {
-            log.warn("container runtime is not docker or podman. fallback to docker");
-            this.containerRuntime = "docker";
-        }
-        return this;
-    }
-
-    public NativeImagePhase setContainerRuntimeOptions(String containerRuntimeOptions) {
-        if (containerRuntimeOptions != null) {
-            this.containerRuntimeOptions = Arrays.asList(containerRuntimeOptions.split(","));
-        }
+        this.dockerBuild = dockerBuild;
         return this;
     }
 
@@ -309,12 +271,19 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
 
         String noPIE = "";
 
-        if (!"".equals(containerRuntime)) {
+        if (dockerBuild != null && !dockerBuild.toLowerCase().equals("false")) {
+
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm quarkus/graalvm-native-image"
             nativeImage = new ArrayList<>();
-            Collections.addAll(nativeImage, containerRuntime, "run", "-v", outputDir.toAbsolutePath() + ":/project:z", "--rm");
-            nativeImage.addAll(containerRuntimeOptions);
-            nativeImage.add(this.builderImage);
+            //TODO: use an 'official' image
+            String image;
+            if (dockerBuild.toLowerCase().equals("true")) {
+                image = "quay.io/quarkus/centos-quarkus-native-image:graalvm-1.0.0-rc13";
+            } else {
+                //allow the use of a custom image
+                image = dockerBuild;
+            }
+            Collections.addAll(nativeImage, "docker", "run", "-v", outputDir.toAbsolutePath() + ":/project:z", "--rm", image);
         } else {
             if (IS_LINUX) {
                 noPIE = detectNoPIE();
@@ -497,10 +466,8 @@ public class NativeImagePhase implements AppCreationPhase<NativeImagePhase>, Nat
     private boolean isThisGraalVMRCObsolete() {
         final String vmName = System.getProperty("java.vm.name");
         log.info("Running Quarkus native-image plugin on " + vmName);
-        final List<String> obsoleteGraalVmVersions = Arrays.asList("-rc9", "-rc10", "-rc11", "-rc12", "-rc13");
-        final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(vmName::contains);
-        if (vmVersionIsObsolete) {
-            log.error("Out of date RC build of GraalVM detected! Please upgrade to RC14");
+        if (vmName.contains("-rc9") || vmName.contains("-rc10") || vmName.contains("-rc11") || vmName.contains("-rc12")) {
+            log.error("Out of date RC build of GraalVM detected! Please upgrade to RC13");
             return true;
         }
         return false;
