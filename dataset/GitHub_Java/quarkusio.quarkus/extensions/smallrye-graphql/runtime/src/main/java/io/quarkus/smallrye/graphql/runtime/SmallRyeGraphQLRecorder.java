@@ -9,19 +9,20 @@ import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.smallrye.graphql.runtime.spi.QuarkusClassloadingService;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
-import io.smallrye.graphql.cdi.config.GraphQLConfig;
 import io.smallrye.graphql.cdi.producer.GraphQLProducer;
 import io.smallrye.graphql.schema.model.Schema;
 import io.vertx.core.Handler;
+import io.vertx.core.http.HttpHeaders;
 import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.StaticHandler;
 
 @Recorder
 public class SmallRyeGraphQLRecorder {
 
     public void createExecutionService(BeanContainer beanContainer, Schema schema) {
         GraphQLProducer graphQLProducer = beanContainer.instance(GraphQLProducer.class);
-        GraphQLConfig graphQLConfig = beanContainer.instance(GraphQLConfig.class);
-        graphQLProducer.initialize(schema, graphQLConfig);
+        graphQLProducer.setSchema(schema);
+        graphQLProducer.initialize();
     }
 
     public Handler<RoutingContext> executionHandler(boolean allowGet) {
@@ -41,14 +42,29 @@ public class SmallRyeGraphQLRecorder {
         return new SmallRyeGraphQLSchemaHandler();
     }
 
-    public Handler<RoutingContext> uiHandler(String graphqlUiFinalDestination,
-            String graphqlUiPath, SmallRyeGraphQLRuntimeConfig runtimeConfig) {
+    public Handler<RoutingContext> uiHandler(String graphqlUiFinalDestination, String graphqlUiPath) {
 
-        if (runtimeConfig.enable) {
-            return new SmallRyeGraphQLStaticHandler(graphqlUiFinalDestination, graphqlUiPath);
-        } else {
-            return new SmallRyeGraphQLNotFoundHandler();
-        }
+        StaticHandler staticHandler = StaticHandler.create().setAllowRootFileSystemAccess(true)
+                .setWebRoot(graphqlUiFinalDestination)
+                .setDefaultContentEncoding("UTF-8");
+
+        return new Handler<RoutingContext>() {
+            @Override
+            public void handle(RoutingContext event) {
+                if (event.normalisedPath().length() == graphqlUiPath.length()) {
+
+                    event.response().setStatusCode(302);
+                    event.response().headers().set(HttpHeaders.LOCATION, graphqlUiPath + "/");
+                    event.response().end();
+                    return;
+                } else if (event.normalisedPath().length() == graphqlUiPath.length() + 1) {
+                    event.reroute(graphqlUiPath + "/index.html");
+                    return;
+                }
+
+                staticHandler.handle(event);
+            }
+        };
     }
 
     public void setupClDevMode(ShutdownContext shutdownContext) {
