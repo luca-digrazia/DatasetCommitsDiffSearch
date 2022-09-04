@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.bazel.repository.downloader;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.bazel.repository.downloader.DownloaderTestUtils.makeUrl;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
@@ -81,8 +81,12 @@ public class ProgressInputStreamTest {
   @Test
   public void readThrowsException_passesThrough() throws Exception {
     when(delegate.read()).thenThrow(new IOException());
-    assertThrows(IOException.class, () -> stream.read());
-    verify(delegate).read();
+    try {
+      stream.read();
+      fail("Expected IOException");
+    } catch (IOException expected) {
+      verify(delegate).read();
+    }
   }
 
   @Test
