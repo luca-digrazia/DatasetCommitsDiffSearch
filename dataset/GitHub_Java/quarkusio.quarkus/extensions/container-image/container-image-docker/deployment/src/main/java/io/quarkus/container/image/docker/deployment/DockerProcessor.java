@@ -46,9 +46,8 @@ public class DockerProcessor {
     private static final String DOCKERFILE_JVM = "Dockerfile.jvm";
     private static final String DOCKERFILE_FAST_JAR = "Dockerfile.fast-jar";
     private static final String DOCKERFILE_NATIVE = "Dockerfile.native";
-    private static final String DOCKER_DIRECTORY_NAME = "docker";
-
-    static final String DOCKER_CONTAINER_IMAGE_NAME = "docker";
+    public static final String DOCKER_BINARY_NAME = "docker";
+    public static final String DOCKER = "docker";
 
     private final DockerWorking dockerWorking = new DockerWorking();
 
@@ -128,10 +127,9 @@ public class DockerProcessor {
 
         DockerfilePaths dockerfilePaths = getDockerfilePaths(dockerConfig, forNative, packageConfig, out);
         String[] dockerArgs = getDockerArgs(containerImageInfo.getImage(), dockerfilePaths, dockerConfig);
-        log.infof("Executing the following command to build docker image: '%s %s'", dockerConfig.executableName,
+        log.infof("Executing the following command to build docker image: '%s %s'", DOCKER_BINARY_NAME,
                 String.join(" ", dockerArgs));
-        boolean buildSuccessful = ExecUtil.exec(out.getOutputDirectory().toFile(), reader, dockerConfig.executableName,
-                dockerArgs);
+        boolean buildSuccessful = ExecUtil.exec(out.getOutputDirectory().toFile(), reader, DOCKER_BINARY_NAME, dockerArgs);
         if (!buildSuccessful) {
             throw dockerException(dockerArgs);
         }
@@ -139,7 +137,7 @@ public class DockerProcessor {
         log.infof("Built container image %s (%s)\n", containerImageInfo.getImage(), reader.getImageId());
 
         if (!containerImageInfo.getAdditionalImageTags().isEmpty()) {
-            createAdditionalTags(containerImageInfo.getImage(), containerImageInfo.getAdditionalImageTags(), dockerConfig);
+            createAdditionalTags(containerImageInfo.getImage(), containerImageInfo.getAdditionalImageTags());
         }
 
         if (pushRequested || containerImageConfig.push) {
@@ -151,8 +149,7 @@ public class DockerProcessor {
             }
             // Check if we need to login first
             if (containerImageConfig.username.isPresent() && containerImageConfig.password.isPresent()) {
-                boolean loginSuccessful = ExecUtil.exec(dockerConfig.executableName, "login", registry, "-u",
-                        containerImageConfig.username.get(),
+                boolean loginSuccessful = ExecUtil.exec("docker", "login", registry, "-u", containerImageConfig.username.get(),
                         "-p" + containerImageConfig.password.get());
                 if (!loginSuccessful) {
                     throw dockerException(new String[] { "-u", containerImageConfig.username.get(), "-p", "********" });
@@ -162,7 +159,7 @@ public class DockerProcessor {
             List<String> imagesToPush = new ArrayList<>(containerImageInfo.getAdditionalImageTags());
             imagesToPush.add(containerImageInfo.getImage());
             for (String imageToPush : imagesToPush) {
-                pushImage(imageToPush, dockerConfig);
+                pushImage(imageToPush);
             }
         }
     }
@@ -185,19 +182,19 @@ public class DockerProcessor {
         return dockerArgs.toArray(new String[0]);
     }
 
-    private void createAdditionalTags(String image, List<String> additionalImageTags, DockerConfig dockerConfig) {
+    private void createAdditionalTags(String image, List<String> additionalImageTags) {
         for (String additionalTag : additionalImageTags) {
             String[] tagArgs = { "tag", image, additionalTag };
-            boolean tagSuccessful = ExecUtil.exec(dockerConfig.executableName, tagArgs);
+            boolean tagSuccessful = ExecUtil.exec("docker", tagArgs);
             if (!tagSuccessful) {
                 throw dockerException(tagArgs);
             }
         }
     }
 
-    private void pushImage(String image, DockerConfig dockerConfig) {
+    private void pushImage(String image) {
         String[] pushArgs = { "push", image };
-        boolean pushSuccessful = ExecUtil.exec(dockerConfig.executableName, pushArgs);
+        boolean pushSuccessful = ExecUtil.exec("docker", pushArgs);
         if (!pushSuccessful) {
             throw dockerException(pushArgs);
         }
@@ -309,7 +306,7 @@ public class DockerProcessor {
             if (mainSourcesRoot == null) {
                 return null;
             }
-            Path dockerfilesRoot = mainSourcesRoot.getKey().resolve(DOCKER_DIRECTORY_NAME);
+            Path dockerfilesRoot = mainSourcesRoot.getKey().resolve("docker");
             if (!dockerfilesRoot.toFile().exists()) {
                 return null;
             }
