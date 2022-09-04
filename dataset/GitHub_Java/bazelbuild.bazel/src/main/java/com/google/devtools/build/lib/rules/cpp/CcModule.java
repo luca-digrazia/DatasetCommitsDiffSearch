@@ -683,7 +683,10 @@ public abstract class CcModule
   }
 
   private static void validateSymlinkPath(
-      String attrName, PathFragment symlinkPath, FileTypeSet filetypes, StringBuilder errorsBuilder)
+      String attrName,
+      PathFragment symlinkPath,
+      FileTypeSet filetypes,
+      StringBuilder errorsBuilder)
       throws EvalException {
     if (symlinkPath.isEmpty()
         || symlinkPath.isAbsolute()
@@ -720,7 +723,8 @@ public abstract class CcModule
       Object purposeNoneable,
       StarlarkThread thread)
       throws EvalException {
-    if (checkObjectsBound(purposeNoneable)) {
+    if (checkObjectsBound(
+        purposeNoneable)) {
       checkPrivateStarlarkificationAllowlist(thread);
     }
     CcCompilationContext.Builder ccCompilationContext =
@@ -750,7 +754,9 @@ public abstract class CcModule
             .map(x -> PathFragment.create(x))
             .collect(ImmutableList.toImmutableList()));
     ccCompilationContext.addFrameworkIncludeDirs(
-        toNestedSetOfStrings(frameworkIncludes, "framework_includes").toList().stream()
+        toNestedSetOfStrings(frameworkIncludes, "framework_includes")
+            .toList()
+            .stream()
             .map(x -> PathFragment.create(x))
             .collect(ImmutableList.toImmutableList()));
     ccCompilationContext.addDefines(toNestedSetOfStrings(defines, "defines").toList());
@@ -1814,6 +1820,12 @@ public abstract class CcModule
     checkPrivateStarlarkificationAllowlist(thread);
     return CcDebugInfoContext.merge(
         Sequence.cast(debugInfos, CcDebugInfoContext.class, "debug_infos"));
+  }
+
+  @Override
+  public Object getCcNativeLibraryProvider(StarlarkThread thread) throws EvalException {
+    checkPrivateStarlarkificationAllowlist(thread);
+    return CcNativeLibraryProvider.PROVIDER;
   }
 
   public static void checkPrivateStarlarkificationAllowlist(StarlarkThread thread)
