@@ -20,14 +20,13 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
 import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -40,19 +39,18 @@ import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.Attribute.LabelListLateBoundDefault;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault.Resolver;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
+import com.google.devtools.build.lib.packages.RuleClass.ExecutionPlatformConstraintsAllowed;
 import com.google.devtools.build.lib.packages.TestSize;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
  * Rule class definitions used by (almost) every rule.
  */
 public class BaseRuleClasses {
-
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final Attribute.ComputedDefault testonlyDefault =
       new Attribute.ComputedDefault() {
@@ -198,7 +196,7 @@ public class BaseRuleClasses {
           .add(
               attr("$test_runtime", LABEL_LIST)
                   .cfg(HostTransition.createFactory())
-                  .value(getTestRuntimeLabelList(env)))
+                  .value(ImmutableList.of(env.getToolsLabel("//tools/test:runtime"))))
           .add(
               attr("$test_setup_script", LABEL)
                   .cfg(HostTransition.createFactory())
@@ -239,21 +237,6 @@ public class BaseRuleClasses {
           .ancestors(RootRule.class, MakeVariableExpandingRule.class)
           .build();
     }
-  }
-
-  private static final String TOOLS_TEST_RUNTIME_TARGET_PATTERN = "//tools/test:runtime";
-  private static ImmutableList<Label> testRuntimeLabelList = null;
-
-  // Always return the same ImmutableList<Label> for every $test_runtime attribute's default value.
-  public static synchronized ImmutableList<Label> getTestRuntimeLabelList(
-      RuleDefinitionContext env) {
-    if (testRuntimeLabelList == null) {
-      testRuntimeLabelList =
-          ImmutableList.of(
-              Label.parseAbsoluteUnchecked(
-                  env.getToolsRepository() + TOOLS_TEST_RUNTIME_TARGET_PATTERN));
-    }
-    return testRuntimeLabelList;
   }
 
   /**
@@ -423,12 +406,7 @@ public class BaseRuleClasses {
               attr("data", LABEL_LIST)
                   .allowedFileTypes(FileTypeSet.ANY_FILE)
                   .dontCheckConstraints())
-          .add(attr(RuleClass.EXEC_PROPERTIES, Type.STRING_DICT).value(ImmutableMap.of()))
-          .add(
-              attr(RuleClass.EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
-                  .allowedFileTypes()
-                  .nonconfigurable("Used in toolchain resolution")
-                  .value(ImmutableList.of()))
+          .executionPlatformConstraintsAllowed(ExecutionPlatformConstraintsAllowed.PER_TARGET)
           .build();
     }
 
