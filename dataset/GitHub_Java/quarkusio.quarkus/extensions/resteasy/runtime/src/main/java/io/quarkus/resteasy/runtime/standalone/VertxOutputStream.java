@@ -1,13 +1,16 @@
 package io.quarkus.resteasy.runtime.standalone;
 
 import java.io.IOException;
-import java.io.OutputStream;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import javax.ws.rs.core.HttpHeaders;
 
+import org.jboss.resteasy.spi.AsyncOutputStream;
+
 import io.netty.buffer.ByteBuf;
 
-public class VertxOutputStream extends OutputStream {
+public class VertxOutputStream extends AsyncOutputStream {
 
     private final VertxHttpResponse response;
     private final BufferAllocator allocator;
@@ -66,12 +69,13 @@ public class VertxOutputStream extends OutputStream {
                 rem -= toWrite;
                 idx += toWrite;
                 if (!buffer.isWritable()) {
-                    response.writeBlocking(buffer, false);
+                    ByteBuf tmpBuf = buffer;
                     this.pooledBuffer = buffer = allocator.allocateBuffer();
+                    response.writeBlocking(tmpBuf, false);
                 }
             }
         } catch (Exception e) {
-            if (buffer != null) {
+            if (buffer != null && buffer.refCnt() > 0) {
                 buffer.release();
             }
             throw new IOException(e);
@@ -124,4 +128,64 @@ public class VertxOutputStream extends OutputStream {
         }
     }
 
+    @Override
+    public CompletionStage<Void> asyncFlush() {
+        return asyncFlush(false);
+    }
+
+    private CompletionStage<Void> asyncFlush(boolean isLast) {
+        if (closed) {
+            CompletableFuture<Void> ret = new CompletableFuture<>();
+            ret.completeExceptionally(new IOException("Stream is closed"));
+            return ret;
+        }
+        if (pooledBuffer != null) {
+            ByteBuf sentBuffer = pooledBuffer;
+            pooledBuffer = null;
+            return response.writeNonBlocking(sentBuffer, isLast);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletionStage<Void> asyncWrite(final byte[] b, final int off, final int len) {
+        if (len < 1) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (closed) {
+            CompletableFuture<Void> ret = new CompletableFuture<>();
+            ret.completeExceptionally(new IOException("Stream is closed"));
+            return ret;
+        }
+
+        int rem = len;
+        int idx = off;
+        ByteBuf buffer = pooledBuffer;
+        CompletionStage<Void> ret = CompletableFuture.completedFuture(null);
+        if (buffer == null) {
+            pooledBuffer = buffer = allocator.allocateBuffer();
+        }
+        while (rem > 0) {
+            int toWrite = Math.min(rem, buffer.writableBytes());
+            buffer.writeBytes(b, idx, toWrite);
+            rem -= toWrite;
+            idx += toWrite;
+            if (!buffer.isWritable()) {
+                ByteBuf tmpBuf = buffer;
+                this.pooledBuffer = buffer = allocator.allocateBuffer();
+                ret = ret.thenCompose(v -> response.writeNonBlocking(tmpBuf, false));
+            }
+        }
+        return ret.thenCompose(v -> asyncUpdateWritten(len));
+    }
+
+    CompletionStage<Void> asyncUpdateWritten(final long len) {
+        this.written += len;
+        if (contentLength != -1 && this.written >= contentLength) {
+            return asyncFlush(true).thenAccept(v -> {
+                closed = true;
+            });
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 }
