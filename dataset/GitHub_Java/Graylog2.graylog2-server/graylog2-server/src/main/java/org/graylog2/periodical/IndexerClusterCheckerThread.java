@@ -21,10 +21,8 @@ package org.graylog2.periodical;
 
 import com.google.inject.Inject;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
-import org.graylog2.indexer.Indexer;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.periodical.Periodical;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,21 +36,18 @@ public class IndexerClusterCheckerThread extends Periodical {
     public static final int MINIMUM_OPEN_FILES_LIMIT = 64000;
 
     private NotificationService notificationService;
-    private final Indexer indexer;
 
     @Inject
-    public IndexerClusterCheckerThread(NotificationService notificationService,
-                                       Indexer indexer) {
+    public IndexerClusterCheckerThread(NotificationService notificationService) {
         this.notificationService = notificationService;
-        this.indexer = indexer;
     }
 
     @Override
-    public void doRun() {
+    public void run() {
         if (!notificationService.isFirst(Notification.Type.ES_OPEN_FILES))
             return;
         boolean allHigher = true;
-        for (NodeInfo node : indexer.cluster().getDataNodes()) {
+        for (NodeInfo node : core.getIndexer().cluster().getDataNodes()) {
             // Check number of maximum open files.
             if (node.getProcess().getMaxFileDescriptors() < MINIMUM_OPEN_FILES_LIMIT) {
 
@@ -63,9 +58,11 @@ public class IndexerClusterCheckerThread extends Periodical {
                 final boolean published = notificationService.publishIfFirst(notification);
                 if (published) {
                     LOG.warn("Indexer node <{}> open file limit is too low: [{}]. Set it to at least {}.",
-                             node.getNode().getName(),
-                             node.getProcess().getMaxFileDescriptors(),
-                             MINIMUM_OPEN_FILES_LIMIT);
+                             new Object[] {
+                                     node.getNode().getName(),
+                                     node.getProcess().getMaxFileDescriptors(),
+                                     MINIMUM_OPEN_FILES_LIMIT
+                             });
                 }
                 allHigher = false;
             }
@@ -74,11 +71,6 @@ public class IndexerClusterCheckerThread extends Periodical {
             Notification notification = notificationService.build().addType(Notification.Type.ES_OPEN_FILES);
             notificationService.fixed(notification);
         }
-    }
-
-    @Override
-    protected Logger getLogger() {
-        return LOG;
     }
 
     @Override

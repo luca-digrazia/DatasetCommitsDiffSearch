@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.periodical;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,12 +32,11 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.graylog2.Configuration;
+import org.graylog2.Core;
 import org.graylog2.ServerVersion;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.Version;
-import org.graylog2.plugin.periodical.Periodical;
-import org.graylog2.shared.ServerStatus;
 import org.graylog2.versioncheck.VersionCheckResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,15 +54,11 @@ public class VersionCheckThread extends Periodical {
 
     private static final Logger LOG = LoggerFactory.getLogger(VersionCheckThread.class);
     private final NotificationService notificationService;
-    private final ServerStatus serverStatus;
     private final Configuration configuration;
 
     @Inject
-    public VersionCheckThread(NotificationService notificationService,
-                              ServerStatus serverStatus,
-                              Configuration configuration) {
+    public VersionCheckThread(NotificationService notificationService, Configuration configuration) {
         this.notificationService = notificationService;
-        this.serverStatus = serverStatus;
         this.configuration = configuration;
     }
 
@@ -74,7 +68,7 @@ public class VersionCheckThread extends Periodical {
         final HttpGet get;
         try {
             uri = new URIBuilder(configuration.getVersionchecksUri());
-            uri.addParameter("anonid", DigestUtils.sha256Hex(serverStatus.getNodeId().toString()));
+            uri.addParameter("anonid", DigestUtils.sha256Hex(core.getNodeId()));
             uri.addParameter("version", ServerVersion.VERSION.toString());
 
             get = new HttpGet(uri.build());
@@ -89,9 +83,9 @@ public class VersionCheckThread extends Periodical {
                     .append(")");
             get.setHeader("User-Agent", userAgent.toString());
             final RequestConfig.Builder configBuilder = RequestConfig.custom()
-                    .setConnectTimeout(configuration.getVersionchecksConnectTimeOut())
-                    .setSocketTimeout(configuration.getVersionchecksSocketTimeOut())
-                    .setConnectionRequestTimeout(configuration.getVersionchecksConnectionRequestTimeOut());
+                    .setConnectTimeout(10000)
+                    .setSocketTimeout(10000)
+                    .setConnectionRequestTimeout(10000);
             if (configuration.getHttpProxyUri() != null) {
                 try {
                     final URIBuilder uriBuilder = new URIBuilder(configuration.getHttpProxyUri());
@@ -130,8 +124,8 @@ public class VersionCheckThread extends Periodical {
 
             LOG.debug("Version check reports current version: " + parsedResponse);
 
-            if (reportedVersion.greaterMinor(ServerVersion.VERSION)) {
-                LOG.debug("Reported version is higher than ours ({}). Writing notification.", ServerVersion.VERSION);
+            if (reportedVersion.greaterMinor(Core.GRAYLOG2_VERSION)) {
+                LOG.debug("Reported version is higher than ours ({}). Writing notification.", Core.GRAYLOG2_VERSION);
 
                 Notification notification = notificationService.buildNow()
                         .addSeverity(Notification.Severity.NORMAL)
@@ -139,7 +133,7 @@ public class VersionCheckThread extends Periodical {
                         .addDetail("current_version", parsedResponse.toString());
                 notificationService.publishIfFirst(notification);
             } else {
-                LOG.debug("Reported version is not higher than ours ({}).", ServerVersion.VERSION);
+                LOG.debug("Reported version is not higher than ours ({}).", Core.GRAYLOG2_VERSION);
                 notificationService.fixed(Notification.Type.OUTDATED_VERSION);
             }
 
@@ -180,7 +174,7 @@ public class VersionCheckThread extends Periodical {
 
     @Override
     public boolean startOnThisNode() {
-        return configuration.isVersionchecks() && !serverStatus.hasCapability(ServerStatus.Capability.LOCALMODE);
+        return core.getConfiguration().isVersionchecks() && !core.isLocalMode();
     }
 
     @Override

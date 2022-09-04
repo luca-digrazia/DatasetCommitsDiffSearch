@@ -22,6 +22,7 @@ package org.graylog2.radio;
 import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
@@ -64,7 +65,6 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
