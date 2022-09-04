@@ -1,42 +1,60 @@
 package com.example.gsyvideoplayer;
 
-import android.content.pm.ActivityInfo;
+import android.Manifest;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.os.Bundle;
-import android.support.v4.widget.NestedScrollView;
-import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
+import android.widget.Toast;
 
-import com.example.gsyvideoplayer.listener.SampleListener;
-import com.example.gsyvideoplayer.model.SwitchVideoModel;
+import androidx.annotation.NonNull;
+import androidx.core.widget.NestedScrollView;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.RequestOptions;
+import com.example.gsyvideoplayer.utils.CommonUtil;
+import com.example.gsyvideoplayer.utils.JumpUtils;
 import com.example.gsyvideoplayer.video.SampleControlVideo;
-import com.example.gsyvideoplayer.video.SampleVideo;
+import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
+import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
+import com.shuyu.gsyvideoplayer.listener.GSYVideoGifSaveListener;
+import com.shuyu.gsyvideoplayer.listener.GSYVideoShotListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
-import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
-import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
+import com.shuyu.gsyvideoplayer.utils.Debuger;
+import com.shuyu.gsyvideoplayer.utils.FileUtils;
+import com.shuyu.gsyvideoplayer.utils.GifCreateHelper;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
-import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.File;
+import java.io.FileNotFoundException;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
+import permissions.dispatcher.NeedsPermission;
+import permissions.dispatcher.OnNeverAskAgain;
+import permissions.dispatcher.OnPermissionDenied;
+import permissions.dispatcher.OnShowRationale;
+import permissions.dispatcher.PermissionRequest;
+import permissions.dispatcher.RuntimePermissions;
 
 /**
- * Created by guoshuyu on 2017/6/18.
  * sampleVideo支持全屏与非全屏切换的清晰度，旋转，镜像等功能.
+ * Activity可以继承GSYBaseActivityDetail实现详情模式的页面
+ * 或者参考DetailPlayer、DetailListPlayer实现
+ * <p>
+ * Created by guoshuyu on 2017/6/18.
  */
+@RuntimePermissions
+public class DetailControlActivity extends GSYBaseActivityDetail<StandardGSYVideoPlayer> {
 
-public class DetailControlActivity extends AppCompatActivity {
     @BindView(R.id.post_detail_nested_scroll)
     NestedScrollView postDetailNestedScroll;
 
-    //推荐使用StandardGSYVideoPlayer，功能一致
-    //CustomGSYVideoPlayer部分功能处于试验阶段
     @BindView(R.id.detail_player)
     SampleControlVideo detailPlayer;
 
@@ -47,10 +65,28 @@ public class DetailControlActivity extends AppCompatActivity {
     Button changeSpeed;
 
 
-    private boolean isPlay;
-    private boolean isPause;
+    @BindView(R.id.jump)
+    Button jump;
 
-    private OrientationUtils orientationUtils;
+    @BindView(R.id.shot)
+    Button shot;
+
+    @BindView(R.id.start_gif)
+    Button startGif;
+
+    @BindView(R.id.stop_gif)
+    Button stopGif;
+
+    @BindView(R.id.loadingView)
+    View loadingView;
+
+    private final String url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
+    //private String url = "http://livecdn1.news.cn/Live_MajorEvent01Phone/manifest.m3u8";
+    //private String url = "https://ruigongkao.oss-cn-shenzhen.aliyuncs.com/transcode/video/source/video/8908d124aa839d0d3fa9593855ef5957.m3u8";
+    //private String url2 = "http://ruigongkao.oss-cn-shenzhen.aliyuncs.com/transcode/video/source/video/3aca1a0db8db9418dcbc765848c8903e.m3u8";
+
+
+    private GifCreateHelper mGifCreateHelper;
 
     private float speed = 1;
 
@@ -60,78 +96,19 @@ public class DetailControlActivity extends AppCompatActivity {
         setContentView(R.layout.activity_detail_control);
         ButterKnife.bind(this);
 
-        String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
-
-        detailPlayer.setUp(url, true, "");
-
-        //增加封面
-        ImageView imageView = new ImageView(this);
-        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        imageView.setImageResource(R.mipmap.xxx1);
-        detailPlayer.setThumbImageView(imageView);
-
         resolveNormalVideoUI();
 
-        //外部辅助的旋转，帮助全屏
-        orientationUtils = new OrientationUtils(this, detailPlayer);
-        //初始化不打开外部的旋转
-        orientationUtils.setEnable(false);
+        initVideoBuilderMode();
 
-        detailPlayer.setIsTouchWiget(true);
-        //detailPlayer.setIsTouchWigetFull(false);
-        //关闭自动旋转
-        detailPlayer.setRotateViewAuto(false);
-        detailPlayer.setLockLand(false);
-        detailPlayer.setShowFullAnimation(false);
-        detailPlayer.setNeedLockFull(true);
-        detailPlayer.setSeekRatio(1);
-        //detailPlayer.setOpenPreView(false);
-        detailPlayer.getFullscreenButton().setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //直接横屏
-                orientationUtils.resolveByClick();
-
-                //第一个true是否需要隐藏actionbar，第二个true是否需要隐藏statusbar
-                detailPlayer.startWindowFullscreen(DetailControlActivity.this, true, true);
-            }
-        });
-
-        detailPlayer.setStandardVideoAllCallBack(new SampleListener() {
-            @Override
-            public void onPrepared(String url, Object... objects) {
-                super.onPrepared(url, objects);
-                //开始播放了才能旋转和全屏
-                orientationUtils.setEnable(true);
-                isPlay = true;
-            }
-
-            @Override
-            public void onAutoComplete(String url, Object... objects) {
-                super.onAutoComplete(url, objects);
-            }
-
-            @Override
-            public void onClickStartError(String url, Object... objects) {
-                super.onClickStartError(url, objects);
-            }
-
-            @Override
-            public void onQuitFullscreen(String url, Object... objects) {
-                super.onQuitFullscreen(url, objects);
-                if (orientationUtils != null) {
-                    orientationUtils.backToProtVideo();
-                }
-            }
-        });
+        initGifHelper();
 
         detailPlayer.setLockClickListener(new LockClickListener() {
             @Override
             public void onClick(View view, boolean lock) {
-                if (orientationUtils != null) {
-                    //配合下方的onConfigurationChanged
-                    orientationUtils.setEnable(!lock);
-                }
+                //if (orientationUtils != null) {
+                //配合下方的onConfigurationChanged
+                //orientationUtils.setEnable(!lock);
+                //}
             }
         });
 
@@ -142,72 +119,248 @@ public class DetailControlActivity extends AppCompatActivity {
             }
         });
 
+        /*VideoOptionModel videoOptionModel =
+                new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_clear", 1);
+        List<VideoOptionModel> list = new ArrayList<>();
+        list.add(videoOptionModel);
+        videoOptionModel =
+                new VideoOptionModel(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "rtsp_transport", "tcp");
+        list.add(videoOptionModel);
+        GSYVideoManager.instance().setOptionModelList(list);*/
+
+        jump.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                JumpUtils.gotoControl(DetailControlActivity.this);
+                //startActivity(new Intent(DetailControlActivity.this, MainActivity.class));
+            }
+        });
+
+        shot.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                DetailControlActivityPermissionsDispatcher.shotImageWithPermissionCheck(DetailControlActivity.this, v);
+            }
+        });
+
+
+        startGif.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                DetailControlActivityPermissionsDispatcher.startGifWithPermissionCheck(DetailControlActivity.this);
+            }
+        });
+
+        stopGif.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                stopGif();
+            }
+        });
+
+        loadingView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //do nothing
+            }
+        });
     }
 
     @Override
-    public void onBackPressed() {
-
-        if (orientationUtils != null) {
-            orientationUtils.backToProtVideo();
-        }
-
-        if (StandardGSYVideoPlayer.backFromWindowFull(this)) {
-            return;
-        }
-        super.onBackPressed();
-    }
-
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        isPause = true;
+    public StandardGSYVideoPlayer getGSYVideoPlayer() {
+        return detailPlayer;
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        isPause = false;
+    public GSYVideoOptionBuilder getGSYVideoOptionBuilder() {
+        //内置封面可参考SampleCoverVideo
+        ImageView imageView = new ImageView(this);
+        loadCover(imageView, url);
+        return new GSYVideoOptionBuilder()
+                .setThumbImageView(imageView)
+                .setUrl(url)
+                .setCacheWithPlay(true)
+                .setVideoTitle(" ")
+                .setIsTouchWiget(true)
+                .setRotateViewAuto(false)
+                .setLockLand(false)
+                .setShowFullAnimation(true)//打开动画
+                .setNeedLockFull(true)
+                .setSeekRatio(1);
+    }
+
+    @Override
+    public void clickForFullScreen() {
+
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        GSYVideoPlayer.releaseAllVideos();
-        //GSYPreViewManager.instance().releaseMediaPlayer();
-        if (orientationUtils != null)
-            orientationUtils.releaseListener();
+        mGifCreateHelper.cancelTask();
     }
 
+
+    /*******************************竖屏全屏开始************************************/
+
     @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        //如果旋转了就全屏
-        if (isPlay && !isPause) {
-            if (newConfig.orientation == ActivityInfo.SCREEN_ORIENTATION_USER) {
-                if (!detailPlayer.isIfCurrentIsFullscreen()) {
-                    detailPlayer.startWindowFullscreen(DetailControlActivity.this, true, true);
+    public void initVideo() {
+        super.initVideo();
+        //重载后实现点击，不横屏
+        if (getGSYVideoPlayer().getFullscreenButton() != null) {
+            getGSYVideoPlayer().getFullscreenButton().setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    //第一个true是否需要隐藏actionbar，第二个true是否需要隐藏statusbar
+                    getGSYVideoPlayer().startWindowFullscreen(DetailControlActivity.this, true, true);
                 }
-            } else {
-                //新版本isIfCurrentIsFullscreen的标志位内部提前设置了，所以不会和手动点击冲突
-                if (detailPlayer.isIfCurrentIsFullscreen()) {
-                    StandardGSYVideoPlayer.backFromWindowFull(this);
-                }
-                if (orientationUtils != null) {
-                    orientationUtils.setEnable(true);
-                }
-            }
+            });
         }
     }
 
 
+    /**
+     * 是否启动旋转横屏，true表示启动
+     *
+     * @return true
+     */
+    @Override
+    public boolean getDetailOrientationRotateAuto() {
+        return false;
+    }
+
+    //重载后关闭重力旋转
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        orientationUtils.setEnable(false);
+    }
+
+    //重载后不做任何事情，实现竖屏全屏
+    @Override
+    public void onQuitFullscreen(String url, Object... objects) {
+        super.onQuitFullscreen(url, objects);
+    }
+
+    /*******************************竖屏全屏结束************************************/
+
+    private void initGifHelper() {
+        mGifCreateHelper = new GifCreateHelper(detailPlayer, new GSYVideoGifSaveListener() {
+            @Override
+            public void result(boolean success, File file) {
+                detailPlayer.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        loadingView.setVisibility(View.GONE);
+                        Toast.makeText(detailPlayer.getContext(), "创建成功", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+
+            @Override
+            public void process(int curPosition, int total) {
+                Debuger.printfError(" current " + curPosition + " total " + total);
+            }
+        });
+    }
+
+
+    /**
+     * 开始gif截图
+     */
+    @NeedsPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    void startGif() {
+        //开始缓存各个帧
+        mGifCreateHelper.startGif(new File(FileUtils.getPath()));
+
+    }
+
+    /**
+     * 生成gif
+     */
+    void stopGif() {
+        loadingView.setVisibility(View.VISIBLE);
+        mGifCreateHelper.stopGif(new File(FileUtils.getPath(), "GSY-Z-" + System.currentTimeMillis() + ".gif"));
+    }
+
+    @OnShowRationale(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    void showRationaleForCamera(final PermissionRequest request) {
+        new AlertDialog.Builder(this)
+                .setMessage("快给我权限")
+                .setPositiveButton("允许", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        request.proceed();
+                    }
+                })
+                .setNegativeButton("拒绝", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        request.cancel();
+                    }
+                })
+                .show();
+    }
+
+    @OnPermissionDenied(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    void showDeniedForCamera() {
+        Toast.makeText(this, "没有权限啊", Toast.LENGTH_SHORT).show();
+    }
+
+    @OnNeverAskAgain(Manifest.permission.CAMERA)
+    void showNeverAskForCamera() {
+        Toast.makeText(this, "再次授权", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 视频截图
+     * 这里没有做读写本地sd卡的权限处理，记得实际使用要加上
+     */
+    @NeedsPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    void shotImage(final View v) {
+        //获取截图
+        detailPlayer.taskShotPic(new GSYVideoShotListener() {
+            @Override
+            public void getBitmap(Bitmap bitmap) {
+                if (bitmap != null) {
+                    try {
+                        CommonUtil.saveBitmap(bitmap);
+                    } catch (FileNotFoundException e) {
+                        showToast("save fail ");
+                        e.printStackTrace();
+                        return;
+                    }
+                    showToast("save success ");
+                } else {
+                    showToast("get bitmap fail ");
+                }
+            }
+        });
+
+    }
+
+
+    private void loadCover(ImageView imageView, String url) {
+
+        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        imageView.setImageResource(R.mipmap.xxx1);
+
+        Glide.with(this.getApplicationContext())
+                .setDefaultRequestOptions(
+                        new RequestOptions()
+                                .frame(3000000)
+                                .centerCrop()
+                                .error(R.mipmap.xxx2)
+                                .placeholder(R.mipmap.xxx1))
+                .load(url)
+                .into(imageView);
+    }
+
     private void resolveNormalVideoUI() {
         //增加title
         detailPlayer.getTitleTextView().setVisibility(View.GONE);
-        detailPlayer.getTitleTextView().setText("测试视频");
         detailPlayer.getBackButton().setVisibility(View.GONE);
     }
-
 
     /**
      * 显示比例
@@ -229,5 +382,21 @@ public class DetailControlActivity extends AppCompatActivity {
         detailPlayer.setSpeedPlaying(speed, true);
     }
 
+
+    private void showToast(final String tip) {
+        detailPlayer.post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(DetailControlActivity.this, tip, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        // NOTE: delegate the permission handling to generated method
+        DetailControlActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
+    }
 
 }

@@ -2,22 +2,20 @@ package com.example.gsyvideoplayer;
 
 
 import android.os.Build;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.transition.Explode;
 import android.view.Window;
 
-import com.example.gsyvideoplayer.adapter.ListNormalAdapter;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.example.gsyvideoplayer.adapter.RecyclerBaseAdapter;
 import com.example.gsyvideoplayer.adapter.RecyclerNormalAdapter;
-
 import com.example.gsyvideoplayer.holder.RecyclerItemNormalHolder;
 import com.example.gsyvideoplayer.model.VideoModel;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
-import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +34,7 @@ public class RecyclerViewActivity extends AppCompatActivity {
     RecyclerBaseAdapter recyclerBaseAdapter;
 
     List<VideoModel> dataList = new ArrayList<>();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,14 +60,14 @@ public class RecyclerViewActivity extends AppCompatActivity {
             int firstVisibleItem, lastVisibleItem;
 
             @Override
-            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
             }
 
             @Override
-            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
-                firstVisibleItem   = linearLayoutManager.findFirstVisibleItemPosition();
+                firstVisibleItem = linearLayoutManager.findFirstVisibleItemPosition();
                 lastVisibleItem = linearLayoutManager.findLastVisibleItemPosition();
                 //大于0说明有播放
                 if (GSYVideoManager.instance().getPlayPosition() >= 0) {
@@ -79,8 +78,11 @@ public class RecyclerViewActivity extends AppCompatActivity {
                             && (position < firstVisibleItem || position > lastVisibleItem)) {
 
                         //如果滑出去了上面和下面就是否，和今日头条一样
-                        GSYVideoPlayer.releaseAllVideos();
-                        recyclerNormalAdapter.notifyDataSetChanged();
+                        //是否全屏
+                        if(!GSYVideoManager.isFullState(RecyclerViewActivity.this)) {
+                            GSYVideoManager.releaseAllVideos();
+                            recyclerNormalAdapter.notifyItemChanged(position);
+                        }
                     }
                 }
             }
@@ -90,7 +92,7 @@ public class RecyclerViewActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (StandardGSYVideoPlayer.backFromWindowFull(this)) {
+        if (GSYVideoManager.backFromWindowFull(this)) {
             return;
         }
         super.onBackPressed();
@@ -105,13 +107,13 @@ public class RecyclerViewActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        GSYVideoManager.onResume();
+        GSYVideoManager.onResume(false);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        GSYVideoPlayer.releaseAllVideos();
+        GSYVideoManager.releaseAllVideos();
     }
 
 

@@ -2,9 +2,11 @@ package com.example.gsyvideoplayer.simple;
 
 import android.content.res.Configuration;
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.ImageView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
@@ -34,7 +36,7 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
 
         detailPlayer = (StandardGSYVideoPlayer) findViewById(R.id.detail_player);
 
-        String url = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
+        String url = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -55,7 +57,7 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
                 .setIsTouchWiget(true)
                 .setRotateViewAuto(false)
                 .setLockLand(false)
-                .setAutoFullWithSize(true)
+                .setAutoFullWithSize(false)
                 .setShowFullAnimation(false)
                 .setNeedLockFull(true)
                 .setUrl(url)
@@ -66,7 +68,7 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
                     public void onPrepared(String url, Object... objects) {
                         super.onPrepared(url, objects);
                         //开始播放了才能旋转和全屏
-                        orientationUtils.setEnable(true);
+                        orientationUtils.setEnable(detailPlayer.isRotateWithSystem());
                         isPlay = true;
                     }
 
@@ -135,9 +137,11 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
     }
 
 
-
+    /**
+     * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
+     */
     @Override
-    public void onConfigurationChanged(Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
         if (isPlay && !isPause) {

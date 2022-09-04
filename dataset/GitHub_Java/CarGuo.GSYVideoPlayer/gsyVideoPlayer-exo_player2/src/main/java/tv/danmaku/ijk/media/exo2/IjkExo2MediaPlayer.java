@@ -50,11 +50,11 @@ import tv.danmaku.ijk.media.player.misc.IjkTrackInfo;
 public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Listener, AnalyticsListener {
 
 
-    public static final int ON_POSITION_DISCOUNTINUITY = 2702;
+    public static int ON_POSITION_DISCOUNTINUITY = 2702;
 
     private static final String TAG = "IjkExo2MediaPlayer";
 
-    protected final Context mAppContext;
+    protected Context mAppContext;
     protected SimpleExoPlayer mInternalPlayer;
     protected EventLogger mEventLogger;
     protected DefaultRenderersFactory mRendererFactory;
@@ -83,7 +83,7 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
     /**
      * dataSource等的帮组类
      */
-    protected final ExoSourceManager mExoHelper;
+    protected ExoSourceManager mExoHelper;
     /**
      * 缓存目录，可以为空
      */
@@ -336,39 +336,42 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
 
     protected void prepareAsyncInternal() {
         new Handler(Looper.myLooper()).post(
-                () -> {
-                    if (mTrackSelector == null) {
-                        mTrackSelector = new DefaultTrackSelector(mAppContext);
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mTrackSelector == null) {
+                            mTrackSelector = new DefaultTrackSelector(mAppContext);
+                        }
+                        mEventLogger = new EventLogger(mTrackSelector);
+                        boolean preferExtensionDecoders = true;
+                        boolean useExtensionRenderers = true;//是否开启扩展
+                        @DefaultRenderersFactory.ExtensionRendererMode int extensionRendererMode = useExtensionRenderers
+                                ? (preferExtensionDecoders ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
+                                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF;
+                        if (mRendererFactory == null) {
+                            mRendererFactory = new DefaultRenderersFactory(mAppContext);
+                            mRendererFactory.setExtensionRendererMode(extensionRendererMode);
+                        }
+                        if (mLoadControl == null) {
+                            mLoadControl = new DefaultLoadControl();
+                        }
+                        mInternalPlayer = new SimpleExoPlayer.Builder(mAppContext, mRendererFactory)
+                                .setLooper(Looper.myLooper())
+                                .setTrackSelector(mTrackSelector)
+                                .setLoadControl(mLoadControl).build();
+                        mInternalPlayer.addListener(IjkExo2MediaPlayer.this);
+                        mInternalPlayer.addAnalyticsListener(IjkExo2MediaPlayer.this);
+                        mInternalPlayer.addListener(mEventLogger);
+                        if (mSpeedPlaybackParameters != null) {
+                            mInternalPlayer.setPlaybackParameters(mSpeedPlaybackParameters);
+                        }
+                        if (mSurface != null)
+                            mInternalPlayer.setVideoSurface(mSurface);
+                        mInternalPlayer.setMediaSource(mMediaSource);
+                        mInternalPlayer.prepare();
+                        mInternalPlayer.setPlayWhenReady(false);
                     }
-                    mEventLogger = new EventLogger(mTrackSelector);
-                    boolean preferExtensionDecoders = true;
-                    boolean useExtensionRenderers = true;//是否开启扩展
-                    @DefaultRenderersFactory.ExtensionRendererMode int extensionRendererMode = useExtensionRenderers
-                            ? (preferExtensionDecoders ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-                            : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-                            : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF;
-                    if (mRendererFactory == null) {
-                        mRendererFactory = new DefaultRenderersFactory(mAppContext);
-                        mRendererFactory.setExtensionRendererMode(extensionRendererMode);
-                    }
-                    if (mLoadControl == null) {
-                        mLoadControl = new DefaultLoadControl();
-                    }
-                    mInternalPlayer = new SimpleExoPlayer.Builder(mAppContext, mRendererFactory)
-                            .setLooper(Looper.myLooper())
-                            .setTrackSelector(mTrackSelector)
-                            .setLoadControl(mLoadControl).build();
-                    mInternalPlayer.addListener(IjkExo2MediaPlayer.this);
-                    mInternalPlayer.addAnalyticsListener(IjkExo2MediaPlayer.this);
-                    mInternalPlayer.addListener(mEventLogger);
-                    if (mSpeedPlaybackParameters != null) {
-                        mInternalPlayer.setPlaybackParameters(mSpeedPlaybackParameters);
-                    }
-                    if (mSurface != null)
-                        mInternalPlayer.setVideoSurface(mSurface);
-                    mInternalPlayer.setMediaSource(mMediaSource);
-                    mInternalPlayer.prepare();
-                    mInternalPlayer.setPlayWhenReady(false);
                 }
         );
     }
@@ -388,6 +391,8 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
     /**
      * 是否需要带上header
      * setDataSource之前生效
+     *
+     * @param preview
      */
     public void setPreview(boolean preview) {
         isPreview = preview;
@@ -413,6 +418,8 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
     /**
      * 是否开启cache
      * setDataSource之前生效
+     *
+     * @param cache
      */
     public void setCache(boolean cache) {
         isCache = cache;
@@ -425,6 +432,8 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
     /**
      * cache文件的目录
      * setDataSource之前生效
+     *
+     * @param cacheDir
      */
     public void setCacheDir(File cacheDir) {
         this.mCacheDir = cacheDir;
@@ -516,9 +525,11 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
             }
 
             if (isPreparing) {
-                if (playbackState == Player.STATE_READY) {
-                    notifyOnPrepared();
-                    isPreparing = false;
+                switch (playbackState) {
+                    case Player.STATE_READY:
+                        notifyOnPrepared();
+                        isPreparing = false;
+                        break;
                 }
             }
 
@@ -526,6 +537,8 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
                 case Player.STATE_BUFFERING:
                     notifyOnInfo(IMediaPlayer.MEDIA_INFO_BUFFERING_START, buffer);
                     isBuffering = true;
+                    break;
+                case Player.STATE_READY:
                     break;
                 case Player.STATE_ENDED:
                     notifyOnCompletion();

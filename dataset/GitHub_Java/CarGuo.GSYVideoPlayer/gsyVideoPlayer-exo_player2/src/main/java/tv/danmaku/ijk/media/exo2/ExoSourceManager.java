@@ -122,7 +122,13 @@ public class ExoSourceManager {
             } catch (RawResourceDataSource.RawResourceDataSourceException e) {
                 e.printStackTrace();
             }
-            DataSource.Factory factory = () -> rawResourceDataSource;
+            DataSource.Factory factory = new DataSource.Factory() {
+                @NonNull
+                @Override
+                public DataSource createDataSource() {
+                    return rawResourceDataSource;
+                }
+            };
             return new ProgressiveMediaSource.Factory(
                     factory).createMediaSource(mediaItem);
 
@@ -229,6 +235,10 @@ public class ExoSourceManager {
 
     /**
      * Cache需要release之后才能clear
+     *
+     * @param context
+     * @param cacheDir
+     * @param url
      */
     public static void clearCache(Context context, File cacheDir, String url) {
         try {
@@ -263,7 +273,8 @@ public class ExoSourceManager {
 
     public static String buildCacheKey(String url) {
         DataSpec dataSpec = new DataSpec(Uri.parse(url));
-        return CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec);
+        String key = CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec);
+        return key;
     }
 
     public static boolean cachePreView(Context context, File cacheDir, String url) {
@@ -378,6 +389,8 @@ public class ExoSourceManager {
 
     /**
      * 根据缓存块判断是否缓存成功
+     *
+     * @param cache
      */
     private static boolean resolveCacheState(Cache cache, String url) {
         boolean isCache = true;

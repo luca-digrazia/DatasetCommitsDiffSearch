@@ -31,7 +31,6 @@ import com.google.android.exoplayer2.RendererCapabilities;
 import com.google.android.exoplayer2.Timeline;
 import com.google.android.exoplayer2.audio.AudioRendererEventListener;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
-import com.google.android.exoplayer2.decoder.DecoderReuseEvaluation;
 import com.google.android.exoplayer2.metadata.Metadata;
 import com.google.android.exoplayer2.metadata.MetadataOutput;
 import com.google.android.exoplayer2.metadata.emsg.EventMessage;
@@ -85,13 +84,12 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
     // Player.EventListener
 
     @Override
-    public void onIsLoadingChanged(boolean isLoading) {
+    public void onLoadingChanged(boolean isLoading) {
         Log.d(TAG, "loading [" + isLoading + "]");
     }
 
     @Override
-    public void onPlaybackStateChanged(int state) {
-        boolean playWhenReady = state == Player.STATE_READY;
+    public void onPlayerStateChanged(boolean playWhenReady, int state) {
         Log.d(TAG, "state [" + getSessionTimeString() + ", " + playWhenReady + ", "
                 + getStateString(state) + "]");
     }
@@ -151,6 +149,14 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
                     String adaptiveSupport = getAdaptiveSupportString(trackGroup.length,
                             mappedTrackInfo.getAdaptiveSupport(rendererIndex, groupIndex, false));
                     Log.d(TAG, "    Group:" + groupIndex + ", adaptive_supported=" + adaptiveSupport + " [");
+                    for (int trackIndex = 0; trackIndex < trackGroup.length; trackIndex++) {
+                        String status = getTrackStatusString(trackSelection, trackGroup, trackIndex);
+                        /*String formatSupport = getFormatSupportString(
+                                mappedTrackInfo.getTrackFormatSupport(rendererIndex, groupIndex, trackIndex));
+                        Log.d(TAG, "      " + status + " Track:" + trackIndex + ", "
+                                + Format.toLogString(trackGroup.getFormat(trackIndex))
+                                + ", supported=" + formatSupport);*/
+                    }
                     Log.d(TAG, "    ]");
                 }
                 // Log metadata for at most one of the tracks selected for the renderer.
@@ -218,7 +224,7 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
     }
 
     @Override
-    public void onAudioInputFormatChanged(Format format, @Nullable DecoderReuseEvaluation decoderReuseEvaluation) {
+    public void onAudioInputFormatChanged(Format format) {
         Log.d(TAG, "audioFormatChanged [" + getSessionTimeString() + ", " + Format.toLogString(format)
                 + "]");
     }
@@ -242,7 +248,7 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
     }
 
     @Override
-    public void onVideoInputFormatChanged(Format format, @Nullable DecoderReuseEvaluation decoderReuseEvaluation) {
+    public void onVideoInputFormatChanged(Format format) {
         Log.d(TAG, "videoFormatChanged [" + getSessionTimeString() + ", " + Format.toLogString(format)
                 + "]");
     }
@@ -274,7 +280,7 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
     //MediaSourceEventListener
 
     @Override
-    public void onTimelineChanged(Timeline timeline, int reason) {
+    public void onTimelineChanged(Timeline timeline, @Nullable Object manifest, int reason) {
         int periodCount = timeline.getPeriodCount();
         int windowCount = timeline.getWindowCount();
         Log.d(TAG, "sourceInfo [periodCount=" + periodCount + ", windowCount=" + windowCount);
@@ -294,6 +300,12 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
             Log.d(TAG, "  ...");
         }
         Log.d(TAG, "]");
+    }
+
+    // Internal methods
+
+    private void printInternalError(String type, Exception e) {
+        Log.e(TAG, "internalError [" + getSessionTimeString() + ", " + type + "]", e);
     }
 
     private void printMetadata(Metadata metadata, String prefix) {

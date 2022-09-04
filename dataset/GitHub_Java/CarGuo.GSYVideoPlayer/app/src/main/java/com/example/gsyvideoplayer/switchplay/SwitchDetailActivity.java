@@ -4,11 +4,13 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.view.View;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.view.ViewCompat;
-import androidx.appcompat.app.AppCompatActivity;
-import android.view.View;
 
 import com.example.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
@@ -25,7 +27,7 @@ public class SwitchDetailActivity extends AppCompatActivity {
 
     SwitchVideo detailPlayer;
 
-    private boolean isPlay = true;
+    private final boolean isPlay = true;
     private boolean isPause;
 
     private OrientationUtils orientationUtils;
@@ -65,7 +67,7 @@ public class SwitchDetailActivity extends AppCompatActivity {
                     public void onPrepared(String url, Object... objects) {
                         super.onPrepared(url, objects);
                         //开始播放了才能旋转和全屏
-                        orientationUtils.setEnable(true);
+                        orientationUtils.setEnable(detailPlayer.isRotateWithSystem());
                     }
 
                     @Override
@@ -133,12 +135,11 @@ public class SwitchDetailActivity extends AppCompatActivity {
     }
 
 
-
     /**
      * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
      */
     @Override
-    public void onConfigurationChanged(Configuration newConfig) {
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
         if (isPlay && !isPause) {
