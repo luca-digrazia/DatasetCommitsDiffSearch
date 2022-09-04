@@ -306,22 +306,19 @@ public class Worker implements Executor {
         while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
           try {
             Thread.sleep(heartbeatInterval);
+            try {
+              heartbeat();
+            } catch (YarnRuntimeException e) {
+              LOG.error("Error communicating with AM: " + e.getMessage(), e);
+              return;
+            } catch (Exception e) {
+              LOG.error("ERROR IN CONTACTING RM. ", e);
+            }
           } catch (InterruptedException e) {
             if (!stopped.get()) {
               LOG.warn("Allocated thread interrupted. Returning.");
             }
             return;
-          }
-
-          try {
-            if(!stopped.get()) {
-              heartbeat();
-            }
-          } catch (YarnRuntimeException e) {
-            LOG.error("Error communicating with AM: " + e.getMessage(), e);
-            return;
-          } catch (Exception e) {
-            LOG.error("ERROR IN CONTACTING RM. ", e);
           }
         }
       }
@@ -360,15 +357,11 @@ public class Worker implements Executor {
           // todo
           register();
           break;
-
         case W_SHUTDOWN:
           // if worker timeout, it may be knocked off.
           LOG.fatal("received SHUTDOWN command from am! to exit......");
-          if(!stopped.get()) {
-            System.exit(-1);
-          }
+          System.exit(-1);
           break;
-
         default:
           int activeTaskNum = response.getActiveTaskNum();
           if (activeTaskNum < getActiveTaskNum()) {
@@ -460,6 +453,7 @@ public class Worker implements Executor {
         psAgent.stop();
         psAgent = null;
       }
+
 
       LOG.info("stop heartbeat thread");
       if (heartbeatThread != null) {
