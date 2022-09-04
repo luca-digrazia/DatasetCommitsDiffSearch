@@ -241,10 +241,7 @@ public final class LtoBackendArtifacts {
               FileSystemUtils.replaceExtension(objectFile.getRootRelativePath(), ".dwo"));
       builder.addOutput(dwoFile);
       buildVariablesBuilder.addStringVariable(
-          CompileBuildVariables.PER_OBJECT_DEBUG_INFO_FILE.getVariableName(),
-          dwoFile.getExecPathString());
-      buildVariablesBuilder.addStringVariable(
-          CompileBuildVariables.IS_USING_FISSION.getVariableName(), "");
+          "per_object_debug_info_file", dwoFile.getExecPathString());
     }
 
     List<String> execArgs = new ArrayList<>(commandLine);
