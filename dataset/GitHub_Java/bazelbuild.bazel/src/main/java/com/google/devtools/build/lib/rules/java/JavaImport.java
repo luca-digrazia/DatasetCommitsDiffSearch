@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
@@ -45,9 +46,10 @@ public class JavaImport implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
+    JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
     ImmutableList<Artifact> srcJars = ImmutableList.of();
     ImmutableList<Artifact> jars = collectJars(ruleContext);
-    Artifact srcJar = ruleContext.getPrerequisiteArtifact("srcjar");
+    Artifact srcJar = ruleContext.getPrerequisiteArtifact("srcjar", Mode.TARGET);
 
     if (ruleContext.hasErrors()) {
       return null;
@@ -55,8 +57,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
 
     ImmutableList<TransitiveInfoCollection> targets =
         ImmutableList.<TransitiveInfoCollection>builder()
-            .addAll(ruleContext.getPrerequisites("deps"))
-            .addAll(ruleContext.getPrerequisites("exports"))
+            .addAll(ruleContext.getPrerequisites("deps", Mode.TARGET))
+            .addAll(ruleContext.getPrerequisites("exports", Mode.TARGET))
             .build();
     final JavaCommon common =
         new JavaCommon(
@@ -151,9 +153,13 @@ public class JavaImport implements RuleConfiguredTargetFactory {
 
     return ruleBuilder
         .setFilesToBuild(filesToBuild)
+        .addSkylarkTransitiveInfo(
+            JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addNativeDeclaredProvider(javaInfo)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .addNativeDeclaredProvider(new JavaNativeLibraryInfo(transitiveJavaNativeLibraries))
+        .add(
+            JavaNativeLibraryProvider.class,
+            new JavaNativeLibraryProvider(transitiveJavaNativeLibraries))
         .addNativeDeclaredProvider(new ProguardSpecProvider(proguardSpecs))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveJavaSourceJars)
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, proguardSpecs)
@@ -168,7 +174,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     }
     for (JavaSourceJarsProvider other :
         JavaInfo.getProvidersFromListOfTargets(
-            JavaSourceJarsProvider.class, ruleContext.getPrerequisites("exports"))) {
+            JavaSourceJarsProvider.class, ruleContext.getPrerequisites("exports", Mode.TARGET))) {
       transitiveJavaSourceJarBuilder.addTransitive(other.getTransitiveSourceJars());
     }
     return transitiveJavaSourceJarBuilder.build();
@@ -186,7 +192,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
 
   private ImmutableList<Artifact> collectJars(RuleContext ruleContext) {
     Set<Artifact> jars = new LinkedHashSet<>();
-    for (TransitiveInfoCollection info : ruleContext.getPrerequisites("jars")) {
+    for (TransitiveInfoCollection info : ruleContext.getPrerequisites("jars", Mode.TARGET)) {
       if (JavaInfo.getProvider(JavaCompilationArgsProvider.class, info) != null) {
         ruleContext.attributeError("jars", "should not refer to Java rules");
       }

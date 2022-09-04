@@ -25,8 +25,9 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaRuleClasses.JavaHostRuntimeBaseRule;
 
 /** A base rule for building the java_import rule. */
 public class JavaImportBaseRule implements RuleDefinition {
@@ -64,7 +65,7 @@ public class JavaImportBaseRule implements RuleDefinition {
                 .nonconfigurable(
                     "used in Attribute.validityPredicate implementations (loading time)"))
         .advertiseProvider(JavaSourceInfoProvider.class)
-        .advertiseStarlarkProvider(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
+        .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
         .build();
   }
 
@@ -73,7 +74,10 @@ public class JavaImportBaseRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("$java_import_base")
         .type(RuleClassType.ABSTRACT)
-        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class, ProguardLibraryRule.class)
+        .ancestors(
+            BaseRuleClasses.RuleBase.class,
+            ProguardLibraryRule.class,
+            JavaHostRuntimeBaseRule.class)
         .build();
   }
 }
