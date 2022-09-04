@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ForwardingList;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Iterables;
-
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,7 +34,11 @@ import java.util.List;
  *
  * @param <E> the element this List contains (generally either String or Label)
  */
-public class GlobList<E> extends ForwardingList<E> {
+@SkylarkModule(
+    name = "glob list",
+    doc = "",
+    documented = false)
+public final class GlobList<E> extends ForwardingList<E> implements SkylarkValue {
 
   /** Include/exclude criteria. */
   private final ImmutableList<GlobCriteria> criteria;
@@ -75,7 +80,7 @@ public class GlobList<E> extends ForwardingList<E> {
   public static <T> GlobList<T> concat(
       List<? extends T> list1, List<? extends T> list2) {
     // we add the list to both includes and matches, preserving order
-    Builder<GlobCriteria> criteriaBuilder = ImmutableList.<GlobCriteria>builder();
+    ImmutableList.Builder<GlobCriteria> criteriaBuilder = ImmutableList.builder();
     if (list1 instanceof GlobList<?>) {
       criteriaBuilder.addAll(((GlobList<?>) list1).criteria);
     } else {
@@ -118,5 +123,10 @@ public class GlobList<E> extends ForwardingList<E> {
   @Override
   protected ImmutableList<E> delegate() {
     return matches;
+  }
+
+  @Override
+  public void repr(SkylarkPrinter printer) {
+    printer.printList(this, false);
   }
 }

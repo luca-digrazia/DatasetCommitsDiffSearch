@@ -82,10 +82,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
           /* linkDynamicLibraryTool= */ null,
           /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
           /* sysroot= */ null,
-          FdoMode.OFF,
-          /* useLLVMCoverageMapFormat= */ false,
-          /* codeCoverageEnabled= */ false,
-          /* isHostConfiguration= */ false);
+          FdoMode.OFF);
 
   @Nullable private final CppConfiguration cppConfiguration;
   private final CppToolchainInfo toolchainInfo;
@@ -117,9 +114,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
   private final ImmutableList<PathFragment> builtInIncludeDirectories;
   @Nullable private final PathFragment sysroot;
   private final FdoMode fdoMode;
-  private final boolean useLLVMCoverageMapFormat;
-  private final boolean codeCoverageEnabled;
-  private final boolean isHostConfiguration;
 
   public CcToolchainProvider(
       ImmutableMap<String, Object> values,
@@ -152,10 +146,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
       Artifact linkDynamicLibraryTool,
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot,
-      FdoMode fdoMode,
-      boolean useLLVMCoverageMapFormat,
-      boolean codeCoverageEnabled,
-      boolean isHostConfiguration) {
+      FdoMode fdoMode) {
     super(values, Location.BUILTIN);
     this.cppConfiguration = cppConfiguration;
     this.toolchainInfo = toolchainInfo;
@@ -187,9 +178,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
     this.fdoMode = fdoMode;
-    this.useLLVMCoverageMapFormat = useLLVMCoverageMapFormat;
-    this.codeCoverageEnabled = codeCoverageEnabled;
-    this.isHostConfiguration = isHostConfiguration;
   }
 
   /** Returns c++ Make variables. */
@@ -838,18 +826,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
   @Override
   public int hashCode() {
     return System.identityHashCode(this);
-  }
-
-  public boolean useLLVMCoverageMapFormat() {
-    return useLLVMCoverageMapFormat;
-  }
-
-  public boolean isCodeCoverageEnabled() {
-    return codeCoverageEnabled;
-  }
-
-  public boolean isHostConfiguration() {
-    return isHostConfiguration;
   }
 }
 

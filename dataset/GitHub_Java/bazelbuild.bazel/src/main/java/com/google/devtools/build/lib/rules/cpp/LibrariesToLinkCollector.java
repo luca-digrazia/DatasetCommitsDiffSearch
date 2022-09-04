@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSet.Builder;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -25,7 +24,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.Lib
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.SequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,7 +32,7 @@ import java.util.Map;
 public class LibrariesToLinkCollector {
 
   private final boolean isNativeDeps;
-  private final PathFragment toolchainLibrariesSolibDir;
+  private final PathFragment runtimeSolibDir;
   private final CppConfiguration cppConfiguration;
   private final CcToolchainProvider ccToolchainProvider;
   private final Artifact outputArtifact;
@@ -44,23 +42,25 @@ public class LibrariesToLinkCollector {
   private final Iterable<LtoBackendArtifacts> allLtoArtifacts;
   private final boolean allowLtoIndexing;
   private final Artifact thinltoParamFile;
+  private final Iterable<? extends LinkerInput> runtimeLinkerInputs;
   private final FeatureConfiguration featureConfiguration;
   private final boolean needWholeArchive;
   private final String rpathRoot;
-  private final boolean needToolchainLibrariesRpath;
+  private final boolean runtimeRpath;
   private final Map<Artifact, Artifact> ltoMap;
 
   public LibrariesToLinkCollector(
       boolean isNativeDeps,
       CppConfiguration cppConfiguration,
       CcToolchainProvider toolchain,
-      PathFragment toolchainLibrariesSolibDir,
+      PathFragment runtimeSolibDir,
       LinkTargetType linkType,
       LinkStaticness linkStaticness,
       Artifact output,
       PathFragment solibDir,
       boolean isLtoIndexing,
       Iterable<LtoBackendArtifacts> allLtoArtifacts,
+      ImmutableList<LinkerInput> runtimeLinkerInputs,
       FeatureConfiguration featureConfiguration,
       Artifact thinltoParamFile,
       boolean allowLtoIndexing,
@@ -69,28 +69,29 @@ public class LibrariesToLinkCollector {
     this.isNativeDeps = isNativeDeps;
     this.cppConfiguration = cppConfiguration;
     this.ccToolchainProvider = toolchain;
-    this.toolchainLibrariesSolibDir = toolchainLibrariesSolibDir;
+    this.runtimeSolibDir = runtimeSolibDir;
     this.outputArtifact = output;
     this.solibDir = solibDir;
     this.isLtoIndexing = isLtoIndexing;
     this.allLtoArtifacts = allLtoArtifacts;
+    this.runtimeLinkerInputs = runtimeLinkerInputs;
     this.featureConfiguration = featureConfiguration;
     this.thinltoParamFile = thinltoParamFile;
     this.allowLtoIndexing = allowLtoIndexing;
     this.linkerInputs = linkerInputs;
     this.needWholeArchive = needWholeArchive;
 
-    needToolchainLibrariesRpath =
-        toolchainLibrariesSolibDir != null
+    runtimeRpath =
+        runtimeSolibDir != null
             && (linkType.isDynamicLibrary()
-                || (linkType == LinkTargetType.EXECUTABLE
-                    && linkStaticness == LinkStaticness.DYNAMIC));
+            || (linkType == LinkTargetType.EXECUTABLE
+            && linkStaticness == LinkStaticness.DYNAMIC));
 
     // Calculate the correct relative value for the "-rpath" link option (which sets
     // the search path for finding shared libraries).
     if (isNativeDeps && cppConfiguration.shareNativeDeps()) {
       // For shared native libraries, special symlinking is applied to ensure C++
-      // toolchain libraries are available under $ORIGIN/_solib_[arch]. So we set the RPATH to find
+      // runtimes are available under $ORIGIN/_solib_[arch]. So we set the RPATH to find
       // them.
       //
       // Note that we have to do this because $ORIGIN points to different paths for
@@ -159,43 +160,43 @@ public class LibrariesToLinkCollector {
     // --whole-archive ... --no-whole-archive.
     SequenceBuilder librariesToLink = new SequenceBuilder();
 
-    String toolchainLibrariesSolibName =
-        toolchainLibrariesSolibDir != null ? toolchainLibrariesSolibDir.getBaseName() : null;
+    String runtimeSolibName = runtimeSolibDir != null ? runtimeSolibDir.getBaseName() : null;
     if (isNativeDeps && cppConfiguration.shareNativeDeps()) {
-      if (needToolchainLibrariesRpath) {
-        runtimeLibrarySearchDirectories.add("../" + toolchainLibrariesSolibName + "/");
+      if (runtimeRpath) {
+        runtimeLibrarySearchDirectories.add("../" + runtimeSolibName + "/");
       }
     } else {
       // For all other links, calculate the relative path from the output file to _solib_[arch]
       // (the directory where all shared libraries are stored, which resides under the blaze-bin
       // directory. In other words, given blaze-bin/my/package/binary, rpathRoot would be
       // "../../_solib_[arch]".
-      if (needToolchainLibrariesRpath) {
+      if (runtimeRpath) {
         runtimeLibrarySearchDirectories.add(
             Strings.repeat("../", outputArtifact.getRootRelativePath().segmentCount() - 1)
-                + toolchainLibrariesSolibName
+                + runtimeSolibName
                 + "/");
       }
       if (isNativeDeps) {
         // We also retain the $ORIGIN/ path to solibs that are in _solib_<arch>, as opposed to
         // the package directory)
-        if (needToolchainLibrariesRpath) {
-          runtimeLibrarySearchDirectories.add("../" + toolchainLibrariesSolibName + "/");
+        if (runtimeRpath) {
+          runtimeLibrarySearchDirectories.add("../" + runtimeSolibName + "/");
         }
       }
     }
 
-    if (needToolchainLibrariesRpath) {
+    if (runtimeRpath) {
       if (isNativeDeps) {
         runtimeLibrarySearchDirectories.add(".");
       }
-      runtimeLibrarySearchDirectories.add(toolchainLibrariesSolibName + "/");
+      runtimeLibrarySearchDirectories.add(runtimeSolibName + "/");
     }
 
-    Pair<Boolean, Boolean> includeSolibsPair =
+    boolean includeSolibDir =
         addLinkerInputs(librarySearchDirectories, rpathRootsForExplicitSoDeps, librariesToLink);
-    boolean includeSolibDir = includeSolibsPair.first;
-    boolean includeToolchainLibrariesSolibDir = includeSolibsPair.second;
+    boolean includeRuntimeSolibDir =
+        addRuntimeLinkerInputs(
+            librarySearchDirectories, rpathRootsForExplicitSoDeps, librariesToLink);
     Preconditions.checkState(
         ltoMap == null || ltoMap.isEmpty(), "Still have LTO objects left: %s", ltoMap);
 
@@ -205,7 +206,7 @@ public class LibrariesToLinkCollector {
       allRuntimeLibrarySearchDirectories.add(rpathRoot);
     }
     allRuntimeLibrarySearchDirectories.addAll(rpathRootsForExplicitSoDeps.build());
-    if (includeToolchainLibrariesSolibDir) {
+    if (includeRuntimeSolibDir) {
       allRuntimeLibrarySearchDirectories.addAll(runtimeLibrarySearchDirectories.build());
     }
 
@@ -215,12 +216,11 @@ public class LibrariesToLinkCollector {
         allRuntimeLibrarySearchDirectories.build());
   }
 
-  private Pair<Boolean, Boolean> addLinkerInputs(
-      Builder<String> librarySearchDirectories,
-      Builder<String> rpathEntries,
+  private boolean addLinkerInputs(
+      ImmutableSet.Builder<String> librarySearchDirectories,
+      ImmutableSet.Builder<String> rpathEntries,
       SequenceBuilder librariesToLink) {
     boolean includeSolibDir = false;
-    boolean includeToolchainLibrariesSolibDir = false;
     for (LinkerInput input : linkerInputs) {
       if (input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY
           || input.getArtifactCategory() == ArtifactCategory.INTERFACE_LIBRARY) {
@@ -229,25 +229,20 @@ public class LibrariesToLinkCollector {
         // under solibDir, so don't check it and don't include solibDir.
         if (!featureConfiguration.isEnabled(CppRuleClasses.COPY_DYNAMIC_LIBRARIES_TO_BINARY)) {
           Preconditions.checkState(
-              libDir.startsWith(solibDir) || libDir.startsWith(toolchainLibrariesSolibDir),
-              "Artifact '%s' is not under directory expected '%s',"
-                  + " neither it is in directory for toolchain libraries '%'.",
+              libDir.startsWith(solibDir),
+              "Artifact '%s' is not under directory '%s'.",
               input.getArtifact(),
-              solibDir,
-              toolchainLibrariesSolibDir);
+              solibDir);
           if (libDir.equals(solibDir)) {
             includeSolibDir = true;
-          }
-          if (libDir.equals(toolchainLibrariesSolibDir)) {
-            includeToolchainLibrariesSolibDir = true;
           }
         }
         addDynamicInputLinkOptions(input, librariesToLink, librarySearchDirectories, rpathEntries);
       } else {
-        addStaticInputLinkOptions(input, librariesToLink);
+        addStaticInputLinkOptions(input, librariesToLink, false);
       }
     }
-    return Pair.of(includeSolibDir, includeToolchainLibrariesSolibDir);
+    return includeSolibDir;
   }
 
   /**
@@ -269,8 +264,7 @@ public class LibrariesToLinkCollector {
 
     Artifact inputArtifact = input.getArtifact();
     PathFragment libDir = inputArtifact.getExecPath().getParentDirectory();
-    if (!libDir.equals(solibDir)
-        && (toolchainLibrariesSolibDir == null || !toolchainLibrariesSolibDir.equals(libDir))) {
+    if (!libDir.equals(solibDir) && (runtimeSolibDir == null || !runtimeSolibDir.equals(libDir))) {
       String dotdots = "";
       PathFragment commonParent = solibDir;
       while (!libDir.startsWith(commonParent)) {
@@ -309,7 +303,8 @@ public class LibrariesToLinkCollector {
    *
    * @param librariesToLink - a collection that will be exposed as a build variable.
    */
-  private void addStaticInputLinkOptions(LinkerInput input, SequenceBuilder librariesToLink) {
+  private void addStaticInputLinkOptions(
+      LinkerInput input, SequenceBuilder librariesToLink, boolean isRuntimeLinkerInput) {
     ArtifactCategory artifactCategory = input.getArtifactCategory();
     Preconditions.checkState(artifactCategory != ArtifactCategory.DYNAMIC_LIBRARY);
     // If we had any LTO artifacts, ltoMap whould be non-null. In that case,
@@ -345,8 +340,9 @@ public class LibrariesToLinkCollector {
         }
         ImmutableList<Artifact> nonLtoArchiveMembers = nonLtoArchiveMembersBuilder.build();
         if (!nonLtoArchiveMembers.isEmpty()) {
+          boolean inputIsWholeArchive = !isRuntimeLinkerInput && needWholeArchive;
           librariesToLink.addValue(
-              LibraryToLinkValue.forObjectFileGroup(nonLtoArchiveMembers, needWholeArchive));
+              LibraryToLinkValue.forObjectFileGroup(nonLtoArchiveMembers, inputIsWholeArchive));
         }
       }
     } else {
@@ -357,7 +353,8 @@ public class LibrariesToLinkCollector {
       boolean isAlwaysLinkStaticLibrary =
           artifactCategory == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY;
       boolean inputIsWholeArchive =
-          !input.disableWholeArchive() && (isAlwaysLinkStaticLibrary || needWholeArchive);
+          (!isRuntimeLinkerInput && (isAlwaysLinkStaticLibrary || needWholeArchive))
+              || (isRuntimeLinkerInput && isAlwaysLinkStaticLibrary && !needWholeArchive);
 
       Artifact inputArtifact = input.getArtifact();
       Artifact a;
@@ -409,6 +406,32 @@ public class LibrariesToLinkCollector {
         && !a.getRootRelativePath()
         .startsWith(
             PathFragment.create(CppLinkActionBuilder.SHARED_NONLTO_BACKEND_ROOT_PREFIX));
+  }
+
+  private boolean addRuntimeLinkerInputs(
+      ImmutableSet.Builder<String> librarySearchDirectories,
+      ImmutableSet.Builder<String> rpathRootsForExplicitSoDeps,
+      SequenceBuilder librariesToLink) {
+    boolean includeRuntimeSolibDir = false;
+    for (LinkerInput input : runtimeLinkerInputs) {
+      if (input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY
+          || input.getArtifactCategory() == ArtifactCategory.INTERFACE_LIBRARY) {
+        PathFragment libDir = input.getArtifact().getExecPath().getParentDirectory();
+        if (!featureConfiguration.isEnabled(CppRuleClasses.COPY_DYNAMIC_LIBRARIES_TO_BINARY)) {
+          Preconditions.checkState(
+              runtimeSolibDir != null && libDir.equals(runtimeSolibDir),
+              "Artifact '%s' is not under directory '%s'.",
+              input.getArtifact(),
+              solibDir);
+          includeRuntimeSolibDir = true;
+        }
+        addDynamicInputLinkOptions(
+            input, librariesToLink, librarySearchDirectories, rpathRootsForExplicitSoDeps);
+      } else {
+        addStaticInputLinkOptions(input, librariesToLink, true);
+      }
+    }
+    return includeRuntimeSolibDir;
   }
 
   private Map<Artifact, Artifact> generateLtoMap() {
