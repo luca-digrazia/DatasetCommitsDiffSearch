@@ -137,10 +137,15 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
                 }
             }
         }
-        // Finally process beans that are not dependencies
+        // Finally process beans and interceptors that are not dependencies
         for (BeanInfo bean : beanDeployment.getBeans()) {
             if (!processed.contains(bean)) {
                 addBean(getComponents, beansHandle, bean, beanToGeneratedName, beanToResultHandle);
+            }
+        }
+        for (BeanInfo interceptor : beanDeployment.getInterceptors()) {
+            if (!processed.contains(interceptor)) {
+                addBean(getComponents, beansHandle, interceptor, beanToGeneratedName, beanToResultHandle);
             }
         }
 
@@ -196,14 +201,14 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
             params.add(beanToResultHandle.get(bean.getDeclaringBean()));
             paramTypes.add(Type.getDescriptor(InjectableBean.class));
         }
-        for (InjectionPointInfo injetionPoint : injectionPoints) {
-            ResultHandle resultHandle = beanToResultHandle.get(injetionPoint.getResolvedBean());
+        for (InjectionPointInfo injectionPoint : injectionPoints) {
+            ResultHandle resultHandle = beanToResultHandle.get(injectionPoint.getResolvedBean());
             params.add(resultHandle);
             paramTypes.add(Type.getDescriptor(InjectableReferenceProvider.class));
         }
         if (bean.getDisposer() != null) {
-            for (InjectionPointInfo injetionPoint : bean.getDisposer().getInjection().injectionPoints) {
-                ResultHandle resultHandle = beanToResultHandle.get(injetionPoint.getResolvedBean());
+            for (InjectionPointInfo injectionPoint : bean.getDisposer().getInjection().injectionPoints) {
+                ResultHandle resultHandle = beanToResultHandle.get(injectionPoint.getResolvedBean());
                 params.add(resultHandle);
                 paramTypes.add(Type.getDescriptor(InjectableReferenceProvider.class));
             }

@@ -106,7 +106,7 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public void fireEvent(Object event, Annotation... qualifiers) {
-        throw new UnsupportedOperationException();
+        getEvent().select(qualifiers).fire(event);
     }
 
     @Override
@@ -121,7 +121,7 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public List<Interceptor<?>> resolveInterceptors(InterceptionType type, Annotation... interceptorBindings) {
-        throw new UnsupportedOperationException();
+        return ArcContainerImpl.instance().resolveInterceptors(Objects.requireNonNull(type), interceptorBindings);
     }
 
     @Override

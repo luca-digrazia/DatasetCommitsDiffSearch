@@ -148,7 +148,18 @@ class ArcContainerImpl implements ArcContainer {
         return new Supplier<InstanceHandle<T>>() {
             @Override
             public InstanceHandle<T> get() {
-                return beanInstanceHandle(bean, null); 
+                CreationalContextImpl<T> creationalContext = new CreationalContextImpl<>();
+                InjectionPoint prev = InjectionPointProvider.CURRENT.get();
+                InjectionPointProvider.CURRENT.set(CurrentInjectionPointProvider.EMPTY);
+                try {
+                    return new InstanceHandleImpl<T>(bean, bean.get(creationalContext), creationalContext, creationalContext);
+                } finally {
+                    if (prev != null) {
+                        InjectionPointProvider.CURRENT.set(prev);
+                    } else {
+                        InjectionPointProvider.CURRENT.remove();
+                    }
+                }
             }
         };
     }
@@ -231,25 +242,28 @@ class ArcContainerImpl implements ArcContainer {
                 + contexts.size() + "]";
     }
 
-    synchronized void shutdown() {
-        if (running.get()) {
-            // Make sure all dependent bean instances obtained via CDI.current() are destroyed correctly
-            CDI<?> cdi = CDI.current();
-            if (cdi instanceof ArcCDI) {
-                ArcCDI arcCdi = (ArcCDI) cdi;
-                arcCdi.destroy();
+    void shutdown() {
+        if (running.compareAndSet(true, false)) {
+            synchronized (this) {
+                // Make sure all dependent bean instances obtained via CDI.current() are destroyed correctly
+                CDI<?> cdi = CDI.current();
+                if (cdi instanceof ArcCDI) {
+                    ArcCDI arcCdi = (ArcCDI) cdi;
+                    arcCdi.destroy();
+                }
+                // Destroy contexts
+                contexts.get(ApplicationScoped.class)
+                        .destroy();
+                contexts.get(Singleton.class)
+                        .destroy();
+                ((RequestContext) contexts.get(RequestScoped.class)).terminate();
+                // Clear caches
+                contexts.clear();
+                beans.clear();
+                resolved.clear();
+                observers.clear();
+                LOGGER.debugf("ArC DI container shut down");
             }
-            // Destroy contexts
-            contexts.get(ApplicationScoped.class).destroy();
-            contexts.get(Singleton.class).destroy();
-            ((RequestContext) contexts.get(RequestScoped.class)).terminate();
-            // Clear caches
-            contexts.clear();
-            beans.clear();
-            resolved.clear();
-            observers.clear();
-            running.set(false);
-            LOGGER.debugf("ArC DI container shut down");
         }
     }
 
