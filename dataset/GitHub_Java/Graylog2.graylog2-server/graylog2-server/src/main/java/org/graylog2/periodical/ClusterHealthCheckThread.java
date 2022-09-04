@@ -1,32 +1,32 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.periodical;
 
-import com.google.inject.Inject;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
+import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.inject.Inject;
+import javax.inject.Named;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -36,18 +36,25 @@ public class ClusterHealthCheckThread extends Periodical {
     private NotificationService notificationService;
     private final InputRegistry inputRegistry;
     private final NodeId nodeId;
+    private boolean isCloud;
 
     @Inject
     public ClusterHealthCheckThread(NotificationService notificationService,
                                     InputRegistry inputRegistry,
-                                    NodeId nodeId) {
+                                    NodeId nodeId,
+                                    @Named("is_cloud") boolean isCloud) {
         this.notificationService = notificationService;
         this.inputRegistry = inputRegistry;
         this.nodeId = nodeId;
+        this.isCloud = isCloud;
     }
 
     @Override
-    public void run() {
+    public void doRun() {
+        if (isCloud) {
+            LOG.debug("Skipping run of ClusterHealthCheckThread, since contained checks are not applicable for Cloud.");
+            return;
+        }
         try {
             if (inputRegistry.runningCount() == 0) {
                 LOG.debug("No input running in cluster!");
@@ -59,6 +66,11 @@ public class ClusterHealthCheckThread extends Periodical {
         } catch (NodeNotFoundException e) {
             LOG.error("Unable to find own node: ", e.getMessage(), e);
         }
+    }
+
+    @Override
+    protected Logger getLogger() {
+        return LOG;
     }
 
     protected Notification getNotification() throws NodeNotFoundException {
@@ -97,7 +109,9 @@ public class ClusterHealthCheckThread extends Periodical {
 
     @Override
     public int getInitialDelaySeconds() {
-        return 0;
+        // Wait some time until all inputs have been started otherwise this will trigger a notification on every
+        // startup of the server.
+        return 120;
     }
 
     @Override
