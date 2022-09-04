@@ -52,7 +52,8 @@ public final class EnvironmentBackedRecursivePackageProvider
 
   private final Environment env;
 
-  EnvironmentBackedRecursivePackageProvider(Environment env) {
+  EnvironmentBackedRecursivePackageProvider(Environment env, PathPackageLocator pkgPath) {
+    super(pkgPath);
     this.env = env;
   }
 

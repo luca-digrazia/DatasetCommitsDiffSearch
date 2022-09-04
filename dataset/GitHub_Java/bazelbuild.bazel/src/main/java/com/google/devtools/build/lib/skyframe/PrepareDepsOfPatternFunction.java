@@ -140,12 +140,12 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
 
     private final EnvironmentBackedRecursivePackageProvider packageProvider;
     private final Environment env;
-    private final ImmutableList<Root> pkgRoots;
+    private final PathPackageLocator pkgPath;
 
     public DepsOfPatternPreparer(Environment env, PathPackageLocator pkgPath) {
       this.env = env;
-      this.packageProvider = new EnvironmentBackedRecursivePackageProvider(env);
-      this.pkgRoots = pkgPath.getPathEntries();
+      this.packageProvider = new EnvironmentBackedRecursivePackageProvider(env, pkgPath);
+      this.pkgPath = pkgPath;
     }
 
     @Override
@@ -248,7 +248,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
       List<Root> roots = new ArrayList<>();
       if (repository.isMain()) {
-        roots.addAll(pkgRoots);
+        roots.addAll(pkgPath.getPathEntries());
       } else {
         RepositoryDirectoryValue repositoryValue =
             (RepositoryDirectoryValue) env.getValue(RepositoryDirectoryValue.key(repository));
