@@ -43,7 +43,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -299,10 +298,7 @@ class ArtifactFunction implements SkyFunction {
       }
     }
     return (action.getActionType() == MiddlemanType.AGGREGATING_MIDDLEMAN)
-        ? new AggregatingArtifactValue(
-            ImmutableList.sortedCopyOf(
-                Comparator.comparing(pair -> pair.first.getExecPathString()), inputs.build()),
-            value)
+        ? new AggregatingArtifactValue(inputs.build(), value)
         : new RunfilesArtifactValue(inputs.build(), value);
   }
 
