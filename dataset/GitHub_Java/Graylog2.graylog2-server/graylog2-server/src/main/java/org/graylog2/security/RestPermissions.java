@@ -122,7 +122,6 @@ public class RestPermissions {
             throw new IllegalArgumentException("Username was null or empty when getting reader permissions.");
         }
         perms.add(perInstance(USERS_EDIT, username));
-        perms.add(perInstance(USERS_PASSWORDCHANGE, username));
         return perms;
     }
 
