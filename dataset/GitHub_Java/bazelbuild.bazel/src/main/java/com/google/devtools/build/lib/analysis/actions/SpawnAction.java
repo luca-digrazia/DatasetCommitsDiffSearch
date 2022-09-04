@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.AbstractAction;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionContinuationOrResult;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -81,6 +82,7 @@ import com.google.errorprone.annotations.DoNotCall;
 import com.google.errorprone.annotations.FormatMethod;
 import com.google.errorprone.annotations.FormatString;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -358,11 +360,10 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       throws CommandLineExpansionException, InterruptedException {
     return new ActionSpawn(
         commandLines.allArguments(),
-        /*env=*/ ImmutableMap.of(),
-        /*envResolved=*/ false,
+        ImmutableMap.of(),
         inputs,
-        /*additionalInputs=*/ ImmutableList.of(),
-        /*filesetMappings=*/ ImmutableMap.of());
+        ImmutableList.of(),
+        ImmutableMap.of());
   }
 
   /**
@@ -374,30 +375,19 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     return getSpawn(
         actionExecutionContext.getArtifactExpander(),
         actionExecutionContext.getClientEnv(),
-        /*envResolved=*/ false,
         actionExecutionContext.getTopLevelFilesets());
   }
 
-  /**
-   * Return a spawn that is representative of the command that this Action will execute in the given
-   * environment.
-   *
-   * @param envResolved If set to true, the passed environment variables will be used as the Spawn
-   *     effective environment. Otherwise they will be used as client environment to resolve the
-   *     action env.
-   */
   Spawn getSpawn(
       ArtifactExpander artifactExpander,
-      Map<String, String> env,
-      boolean envResolved,
+      Map<String, String> clientEnv,
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings)
       throws CommandLineExpansionException, InterruptedException {
     ExpandedCommandLines expandedCommandLines =
         commandLines.expand(artifactExpander, getPrimaryOutput().getExecPath(), commandLineLimits);
     return new ActionSpawn(
         ImmutableList.copyOf(expandedCommandLines.arguments()),
-        env,
-        envResolved,
+        clientEnv,
         getInputs(),
         expandedCommandLines.getParamFiles(),
         filesetMappings);
@@ -550,12 +540,10 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      */
     private ActionSpawn(
         ImmutableList<String> arguments,
-        Map<String, String> env,
-        boolean envResolved,
+        Map<String, String> clientEnv,
         NestedSet<Artifact> inputs,
         Iterable<? extends ActionInput> additionalInputs,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings)
-        throws CommandLineExpansionException {
+        Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings) {
       super(
           arguments,
           ImmutableMap.<String, String>of(),
@@ -573,17 +561,9 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       inputsBuilder.addAll(additionalInputs);
       this.inputs = inputsBuilder.build();
       this.filesetMappings = filesetMappings;
-
-      /**
-       * If the action environment is already resolved using the client environment, the given
-       * environment variables are used as they are. Otherwise, they are used as clientEnv to
-       * resolve the action environment variables
-       */
-      if (envResolved) {
-        effectiveEnvironment = ImmutableMap.copyOf(env);
-      } else {
-        effectiveEnvironment = SpawnAction.this.getEffectiveEnvironment(env);
-      }
+      LinkedHashMap<String, String> env = new LinkedHashMap<>(SpawnAction.this.env.size());
+      SpawnAction.this.env.resolve(env, clientEnv);
+      effectiveEnvironment = ImmutableMap.copyOf(env);
     }
 
     @Override
@@ -656,7 +636,9 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     }
 
     /**
-     * Builds the SpawnAction using the passed-in action configuration.
+     * Builds the SpawnAction and ParameterFileWriteAction (if param file is used) using the passed-
+     * in action configuration. The first item of the returned array is always the SpawnAction
+     * itself.
      *
      * <p>This method makes a copy of all the collections, so it is safe to reuse the builder after
      * this method returns.
@@ -667,16 +649,17 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      * This logic was removed, but if people don't notice and still rely on the side-effect, things
      * may break.
      *
-     * @return the SpawnAction.
+     * @return the SpawnAction and any actions required by it, with the first item always being the
+     *      SpawnAction itself.
      */
     @CheckReturnValue
-    public SpawnAction build(ActionConstructionContext context) {
+    public Action[] build(ActionConstructionContext context) {
       return build(context.getActionOwner(execGroup), context.getConfiguration());
     }
 
-    @VisibleForTesting
-    @CheckReturnValue
-    public SpawnAction build(ActionOwner owner, BuildConfiguration configuration) {
+    @VisibleForTesting @CheckReturnValue
+    public Action[] build(ActionOwner owner, BuildConfiguration configuration) {
+      Action[] actions = new Action[1];
       CommandLines.Builder result = CommandLines.builder();
       result.addCommandLine(executableArgs.build());
       for (CommandLineAndParamFileInfo pair : this.commandLines) {
@@ -689,8 +672,11 @@ public class SpawnAction extends AbstractAction implements CommandAction {
               : useDefaultShellEnvironment
                   ? configuration.getActionEnvironment()
                   : ActionEnvironment.create(environment, inheritedEnvironment);
-      return buildSpawnAction(
-          owner, commandLines, configuration.getCommandLineLimits(), configuration, env);
+      Action spawnAction =
+          buildSpawnAction(
+              owner, commandLines, configuration.getCommandLineLimits(), configuration, env);
+      actions[0] = spawnAction;
+      return actions;
     }
 
     @CheckReturnValue
