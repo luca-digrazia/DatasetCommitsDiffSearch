@@ -44,7 +44,7 @@ public interface CcModuleApi<
       name = "CcToolchainInfo",
       doc =
           "The key used to retrieve the provider that contains information about the C++ "
-              + "toolchain being used",
+              + "toolchain being usCced",
       structField = true)
   ProviderApi getCcToolchainProvider();
 

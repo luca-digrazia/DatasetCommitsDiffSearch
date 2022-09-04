@@ -35,12 +35,21 @@ public interface BazelCcModuleApi<
         CcToolchainProviderT extends CcToolchainProviderApi,
         FeatureConfigurationT extends FeatureConfigurationApi,
         CompilationInfoT extends CompilationInfoApi,
-        CcCompilationContextT extends CcCompilationContextApi,
+        CcCompilationInfoT extends CcCompilationInfoApi,
         CcCompilationOutputsT extends CcCompilationOutputsApi,
         LinkingInfoT extends LinkingInfoApi,
         CcLinkingInfoT extends CcLinkingInfoApi,
-        CcToolchainVariablesT extends CcToolchainVariablesApi>
-    extends CcModuleApi<CcToolchainProviderT, FeatureConfigurationT, CcToolchainVariablesT> {
+        CcToolchainVariablesT extends CcToolchainVariablesApi,
+        LibraryToLinkT extends LibraryToLinkApi,
+        CcLinkParamsT extends CcLinkParamsApi,
+        CcSkylarkInfoT extends CcSkylarkInfoApi>
+    extends CcModuleApi<
+        CcToolchainProviderT,
+        FeatureConfigurationT,
+        CcToolchainVariablesT,
+        LibraryToLinkT,
+        CcLinkParamsT,
+        CcSkylarkInfoT> {
 
   @SkylarkCallable(
       name = "compile",
@@ -101,8 +110,8 @@ public interface BazelCcModuleApi<
               @ParamType(type = NoneType.class)
             }),
         @Param(
-            name = "compilation_contexts",
-            doc = "compilation_context instances affecting compilation, e.g. from dependencies",
+            name = "cc_compilation_infos",
+            doc = "cc_compilation_info instances affecting compilation, e.g. from dependencies",
             positional = false,
             named = true,
             defaultValue = "[]",
@@ -116,7 +125,7 @@ public interface BazelCcModuleApi<
       SkylarkList<Artifact> headers,
       Object skylarkIncludes,
       Object skylarkCopts,
-      SkylarkList<CcCompilationContextT> ccCompilationContexts)
+      SkylarkList<CcCompilationInfoT> ccCompilationInfos)
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -168,8 +177,8 @@ public interface BazelCcModuleApi<
             noneable = true,
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Artifact.class)}),
         @Param(
-            name = "linking_contexts",
-            doc = "linking_context instances affecting linking, e.g. from dependencies",
+            name = "cc_linking_infos",
+            doc = "cc_linking_info instances affecting linking, e.g. from dependencies",
             positional = false,
             named = true,
             noneable = true,
