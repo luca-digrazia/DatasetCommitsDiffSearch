@@ -14,17 +14,40 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.platform;
 
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 
-/**
- * Info object representing data about a specific toolchain.
- */
-@SkylarkModule(
+/** Info object representing data about a specific toolchain. */
+@StarlarkBuiltin(
     name = "ToolchainInfo",
-    doc = "Provides access to data about a specific toolchain.",
-    category = SkylarkModuleCategory.PROVIDER
-)
+    doc =
+        "Provider returned by <a href=\"../../toolchains.html#defining-toolchains\">toolchain "
+            + "rules</a> to share data with "
+            + "<a href=\"../../toolchains.html#writing-rules-that-use-toolchains\">rules which "
+            + "depend on toolchains</a>. Read about <a href='../../toolchains.html'>"
+            + "toolchains</a> for more information.",
+    category = StarlarkDocumentationCategory.PROVIDER)
 public interface ToolchainInfoApi extends StructApi {
+
+  /** Provider for {@link ToolchainInfoApi} objects. */
+  @StarlarkBuiltin(name = "Provider", documented = false, doc = "")
+  interface Provider extends ProviderApi {
+
+    @SkylarkCallable(
+        name = "ToolchainInfo",
+        doc = "The <code>ToolchainInfo</code> constructor.",
+        documented = false,
+        extraKeywords = @Param(name = "kwargs", doc = "Dictionary of additional entries."),
+        selfCall = true,
+        useStarlarkThread = true)
+    ToolchainInfoApi toolchainInfo(Dict<String, Object> kwargs, StarlarkThread thread)
+        throws EvalException;
+  }
 }
