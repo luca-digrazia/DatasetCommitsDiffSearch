@@ -988,7 +988,8 @@ public final class BlazeRuntime {
     BlazeRuntime runtime = runtimeBuilder.build();
 
     BlazeDirectories directories =
-        new BlazeDirectories(serverDirectories, workspaceDirectoryPath, productName);
+        new BlazeDirectories(
+            serverDirectories, workspaceDirectoryPath, startupOptions.deepExecRoot, productName);
     BinTools binTools;
     try {
       binTools = BinTools.forProduction(directories);

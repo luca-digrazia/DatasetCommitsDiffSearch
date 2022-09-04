@@ -210,7 +210,7 @@ public class OptionDefinition {
    *
    * <p>Memoizes the converter-finding logic to avoid repeating the computation.
    */
-  public Converter<?> getConverter() {
+  Converter<?> getConverter() {
     if (converter != null) {
       return converter;
     }
@@ -240,7 +240,7 @@ public class OptionDefinition {
    *
    * <p>Can be used for usage help and controlling whether the "no" prefix is allowed.
    */
-  public boolean usesBooleanValueSyntax() {
+  boolean isBooleanField() {
     return getType().equals(boolean.class)
         || getType().equals(TriState.class)
         || getConverter() instanceof BoolOrEnumConverter;

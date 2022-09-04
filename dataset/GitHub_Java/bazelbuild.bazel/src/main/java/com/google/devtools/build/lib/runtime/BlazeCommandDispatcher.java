@@ -620,10 +620,10 @@ public class BlazeCommandDispatcher {
       System.setOut(savedOut);
       System.setErr(savedErr);
       reporter.removeHandler(handler);
-      releaseHandler(handler);
+      releaseHandler(handler, eventHandlerOptions);
       if (!eventHandlerOptions.useColor()) {
         reporter.removeHandler(ansiAllowingHandler);
-        releaseHandler(ansiAllowingHandler);
+        releaseHandler(ansiAllowingHandler, eventHandlerOptions);
       }
       env.getTimestampGranularityMonitor().waitForTimestampGranularity(outErr);
     }
@@ -976,12 +976,19 @@ public class BlazeCommandDispatcher {
     return RateLimitingEventHandler.create(eventHandler, eventOptions.showProgressRateLimit);
   }
 
-  /** Unsets the event handler. */
-  private void releaseHandler(EventHandler eventHandler) {
+  /**
+   * Unsets the event handler.
+   */
+  private void releaseHandler(EventHandler eventHandler,
+      BlazeCommandEventHandler.Options eventOptions) {
     if (eventHandler instanceof FancyTerminalEventHandler) {
       // Make sure that the terminal state of the old event handler is clear
       // before creating a new one.
       ((FancyTerminalEventHandler) eventHandler).resetTerminal();
+    }
+    if ((eventHandler instanceof ExperimentalEventHandler)
+        && (eventOptions.useColor())) {
+      ((ExperimentalEventHandler) eventHandler).resetTerminal();
     }
   }
 
