@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.BuildSetting;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithCallback;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithMap;
@@ -73,7 +72,6 @@ import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleFunctionsApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -277,19 +275,25 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       Object analysisTest,
       Object buildSetting,
       FuncallExpression ast,
-      Environment funcallEnv,
-      StarlarkContext context)
+      Environment funcallEnv)
       throws EvalException, ConversionException {
     SkylarkUtils.checkLoadingOrWorkspacePhase(funcallEnv, "rule", ast.getLocation());
 
-    BazelStarlarkContext bazelContext = (BazelStarlarkContext) context;
+    if (analysisTest != Runtime.UNBOUND
+        && !funcallEnv.getSemantics().experimentalAnalysisTestingImprovements()) {
+      throw new EvalException(
+          ast.getLocation(),
+          "analysis_test parameter is experimental and not available for "
+              + "general use. It is subject to change at any time. It may be enabled by specifying "
+              + "--experimental_analysis_testing_improvements");
+    }
     // analysis_test=true implies test=true.
     test |= Boolean.TRUE.equals(analysisTest);
 
     RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
     RuleClass parent =
         test
-            ? getTestBaseRule(bazelContext.getToolsRepository())
+            ? getTestBaseRule(SkylarkUtils.getToolsRepository(funcallEnv))
             : (executable ? binaryBaseRule : baseRule);
 
     // We'll set the name later, pass the empty string for now.
@@ -653,63 +657,17 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         throw new EvalException(definitionLocation, "Invalid rule class name '" + ruleClassName
             + "', test rule class names must end with '_test' and other rule classes must not");
       }
-      boolean hasStarlarkDefinedTransition = false;
-      boolean hasFunctionTransitionWhitelist = false;
       for (Pair<String, SkylarkAttr.Descriptor> attribute : attributes) {
         String name = attribute.getFirst();
         SkylarkAttr.Descriptor descriptor = attribute.getSecond();
 
-        Attribute attr = descriptor.build(name);
+        addAttribute(definitionLocation, builder, descriptor.build(name));
 
-        hasStarlarkDefinedTransition |= attr.hasStarlarkDefinedTransition();
-        if (attr.hasAnalysisTestTransition() && !builder.isAnalysisTest()) {
-          throw new EvalException(
-              location,
-              "Only rule definitions with analysis_test=True may have attributes with "
-                  + "analysis_test_transition transitions");
-        }
         // Check for existence of the function transition whitelist attribute.
-        // TODO(b/121385274): remove when we stop whitelisting starlark transitions
         if (name.equals(FunctionSplitTransitionWhitelist.WHITELIST_ATTRIBUTE_NAME)) {
-          if (!BuildType.isLabelType(attr.getType())) {
-            throw new EvalException(
-                location, "_whitelist_function_transition attribute must be a label type");
-          }
-          if (attr.getDefaultValueUnchecked() == null) {
-            throw new EvalException(
-                location, "_whitelist_function_transition attribute must have a default value");
-          }
-          if (!attr.getDefaultValueUnchecked()
-              .equals(FunctionSplitTransitionWhitelist.WHITELIST_LABEL)) {
-            throw new EvalException(
-                location,
-                "_whitelist_function_transition attribute does not have the expected value "
-                    + FunctionSplitTransitionWhitelist.WHITELIST_LABEL);
-          }
-          hasFunctionTransitionWhitelist = true;
           builder.setHasFunctionTransitionWhitelist();
         }
-        addAttribute(definitionLocation, builder, attr);
       }
-      // TODO(b/121385274): remove when we stop whitelisting starlark transitions
-      if (hasStarlarkDefinedTransition) {
-        if (!hasFunctionTransitionWhitelist) {
-          throw new EvalException(
-              location,
-              String.format(
-                  "Use of function-based split transition without whitelist: %s %s",
-                  builder.getRuleDefinitionEnvironmentLabel(), builder.getType()));
-        }
-      } else {
-        if (hasFunctionTransitionWhitelist) {
-          throw new EvalException(
-              location,
-              String.format(
-                  "Unused function-based split transition whitelist: %s %s",
-                  builder.getRuleDefinitionEnvironmentLabel(), builder.getType()));
-        }
-      }
-
       try {
         this.ruleClass = builder.build(ruleClassName, skylarkLabel + "%" + ruleClassName);
       } catch (IllegalArgumentException | IllegalStateException ex) {
