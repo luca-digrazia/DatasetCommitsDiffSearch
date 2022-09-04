@@ -41,8 +41,6 @@ import org.graylog2.radio.buffers.ProcessBuffer;
 import org.graylog2.radio.cluster.Ping;
 import org.graylog2.radio.inputs.InputRegistry;
 import org.graylog2.radio.periodical.ThroughputCounterManagerThread;
-import org.graylog2.radio.transports.RadioTransport;
-import org.graylog2.radio.transports.kafka.KafkaProducer;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -57,7 +55,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -84,11 +85,7 @@ public class Radio implements InputHost {
     private Counter throughputCounter = new Counter();
     private long throughput = 0;
 
-    private Ping.Pinger pinger;
-
     private final AsyncHttpClient httpClient;
-
-    private RadioTransport transport;
 
     private String nodeId;
 
@@ -111,9 +108,8 @@ public class Radio implements InputHost {
         processBuffer = new ProcessBuffer(this, inputCache);
         processBuffer.initialize();
 
-        transport = new KafkaProducer(this);
-
         this.inputs = new InputRegistry(this);
+
 
         if (this.configuration.getRestTransportUri() == null) {
             String guessedIf;
@@ -129,22 +125,12 @@ public class Radio implements InputHost {
             this.configuration.setRestTransportUri(transportStr);
         }
 
-        pinger = new Ping.Pinger(httpClient, nodeId, configuration.getRestTransportUri(), configuration.getGraylog2ServerUri());
-
         scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
                 new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
         );
 
         ThroughputCounterManagerThread tt = new ThroughputCounterManagerThread(this);
         scheduler.scheduleAtFixedRate(tt, 0, 1, TimeUnit.SECONDS);
-    }
-
-    public void run() {
-        try {
-            inputs.launchPersisted();
-        } catch (Exception e) {
-            LOG.error("Could not load persisted inputs from server cluster.", e);
-        }
     }
 
     public void startRestApi() throws IOException {
@@ -196,11 +182,8 @@ public class Radio implements InputHost {
 
     public void startPings() {
         // Start regular pings.
+        Ping.Pinger pinger = new Ping.Pinger(httpClient, nodeId, configuration.getRestTransportUri(), configuration.getGraylog2ServerUri());
         scheduler.scheduleAtFixedRate(pinger, 0, 1, TimeUnit.SECONDS);
-    }
-
-    public void ping() {
-        pinger.ping();
     }
 
     private class Graylog2Binder extends AbstractBinder {
@@ -264,11 +247,4 @@ public class Radio implements InputHost {
         return this.throughput;
     }
 
-    public RadioTransport getTransport() {
-        return transport;
-    }
-
-    public AsyncHttpClient getHttpClient() {
-        return httpClient;
-    }
 }

@@ -17,33 +17,24 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package org.graylog2.radio.rest.resources.system;
+package org.graylog2.radio.periodical;
 
-import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.Maps;
-import org.graylog2.radio.rest.resources.RestResource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import java.util.Map;
+import org.graylog2.radio.Radio;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Path("/system/throughput")
-public class ThroughputResource extends RestResource {
+public class ThroughputCounterManagerThread implements Runnable {
 
-    @GET @Timed
-    @Produces(MediaType.APPLICATION_JSON)
-    public String total() {
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("throughput", radio.getCurrentThroughput());
+    private final Radio radio;
 
-        return json(result);
+    public ThroughputCounterManagerThread(Radio radio) {
+        this.radio = radio;
     }
 
+    @Override
+    public void run() {
+        radio.setCurrentThroughput(radio.getThroughputCounter().get());
+        radio.getThroughputCounter().set(0);
+    }
 }
