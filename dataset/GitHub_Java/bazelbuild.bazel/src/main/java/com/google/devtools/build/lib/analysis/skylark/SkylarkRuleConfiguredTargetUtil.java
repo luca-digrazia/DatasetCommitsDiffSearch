@@ -143,8 +143,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
           && !(target instanceof Iterable)) {
         ruleContext.ruleError(
             String.format(
-                "Rule should return a struct or a list, but got %s",
-                EvalUtils.getDataTypeName(target)));
+                "Rule should return a struct or a list, but got %s", SkylarkType.typeOf(target)));
         return null;
       } else if (!expectFailure.isEmpty()) {
         ruleContext.ruleError("Expected failure not found: " + expectFailure);
@@ -278,6 +277,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
 
   public static NestedSet<Artifact> convertToOutputGroupValue(Location loc, String outputGroup,
       Object objects) throws EvalException {
+    NestedSet<Artifact> artifacts;
+
     String typeErrorMessage =
         "Output group '%s' is of unexpected type. "
             + "Should be list or set of Files, but got '%s' instead.";
@@ -296,7 +297,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
                   "list with an element of " + EvalUtils.getDataTypeNameFromClass(o.getClass())));
         }
       }
-      return nestedSetBuilder.build();
+      artifacts = nestedSetBuilder.build();
     } else {
       SkylarkNestedSet artifactsSet =
           SkylarkType.cast(
@@ -319,6 +320,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
             exception);
       }
     }
+    return artifacts;
   }
 
   private static void addProviders(
@@ -349,7 +351,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
         oldStyleProviders = struct;
 
         if (struct.hasField("providers")) {
-          Iterable<?> iterable = cast("providers", struct, Iterable.class, loc);
+          Iterable iterable = cast("providers", struct, Iterable.class, loc);
           for (Object o : iterable) {
             InfoInterface declaredProvider =
                 SkylarkType.cast(
@@ -421,72 +423,18 @@ public final class SkylarkRuleConfiguredTargetUtil {
       } else if (field.equals("instrumented_files")) {
         StructImpl insStruct = cast("instrumented_files", oldStyleProviders, StructImpl.class, loc);
         addInstrumentedFiles(insStruct, context.getRuleContext(), builder);
-      } else if (!field.equals("providers")) { // "providers" already handled above.
-        addProviderFromLegacySyntax(
-            builder, oldStyleProviders, field, oldStyleProviders.getValue(field));
+      } else if (isNativeDeclaredProviderWithLegacySkylarkName(oldStyleProviders.getValue(field))) {
+        InfoInterface infoInterface = (InfoInterface) oldStyleProviders.getValue(field);
+        NativeProvider.WithLegacySkylarkName provider =
+            (NativeProvider.WithLegacySkylarkName) infoInterface.getProvider();
+        // Add the provider under its proper provider key as well as its legacy name.
+        builder.addNativeDeclaredProvider(infoInterface);
+        builder.addSkylarkTransitiveInfo(provider.getSkylarkName(), infoInterface);
+      } else if (!field.equals("providers")) {
+        // We handled providers already.
+        builder.addSkylarkTransitiveInfo(field, oldStyleProviders.getValue(field), loc);
       }
     }
-  }
-
-  @SuppressWarnings("deprecation") // For legacy migrations
-  private static void addProviderFromLegacySyntax(
-      RuleConfiguredTargetBuilder builder,
-      StructImpl oldStyleProviders,
-      String fieldName,
-      Object value)
-      throws EvalException {
-    builder.addSkylarkTransitiveInfo(fieldName, value);
-
-    if (value instanceof InfoInterface) {
-      InfoInterface info = (InfoInterface) value;
-
-      // To facilitate migration off legacy provider syntax, implicitly set the modern provider key
-      // and the canonical legacy provider key if applicable.
-      if (shouldAddWithModernKey(builder, oldStyleProviders, fieldName, info)) {
-        builder.addNativeDeclaredProvider(info);
-      }
-
-      if (info.getProvider() instanceof NativeProvider.WithLegacySkylarkName) {
-        NativeProvider.WithLegacySkylarkName providerWithLegacyName =
-            (NativeProvider.WithLegacySkylarkName) info.getProvider();
-        if (shouldAddWithLegacyKey(oldStyleProviders, providerWithLegacyName)) {
-          builder.addSkylarkTransitiveInfo(providerWithLegacyName.getSkylarkName(), info);
-        }
-      }
-    }
-  }
-
-  @SuppressWarnings("deprecation") // For legacy migrations
-  private static boolean shouldAddWithModernKey(
-      RuleConfiguredTargetBuilder builder,
-      StructImpl oldStyleProviders,
-      String fieldName,
-      InfoInterface info)
-      throws EvalException {
-    // If the modern key is already set, do nothing.
-    if (builder.containsProviderKey(info.getProvider().getKey())) {
-      return false;
-    }
-    if (info.getProvider() instanceof NativeProvider.WithLegacySkylarkName) {
-      String canonicalLegacyKey =
-          ((NativeProvider.WithLegacySkylarkName) info.getProvider()).getSkylarkName();
-      // Add info using its modern key if it was specified using its canonical legacy key, or
-      // if no provider was used using that canonical legacy key.
-      return fieldName.equals(canonicalLegacyKey)
-          || oldStyleProviders.getValue(canonicalLegacyKey) == null;
-    } else {
-      return true;
-    }
-  }
-
-  @SuppressWarnings("deprecation") // For legacy migrations
-  private static boolean shouldAddWithLegacyKey(
-      StructImpl oldStyleProviders, NativeProvider.WithLegacySkylarkName provider)
-      throws EvalException {
-    String canonicalLegacyKey = provider.getSkylarkName();
-    // Add info using its canonical legacy key if no provider was specified using that canonical
-    // legacy key.
-    return oldStyleProviders.getValue(canonicalLegacyKey) == null;
   }
 
   /**
@@ -507,6 +455,13 @@ public final class SkylarkRuleConfiguredTargetUtil {
               + " must be defined outside of a function scope.");
     }
     return infoObject.getProvider().getKey();
+  }
+
+  private static boolean isNativeDeclaredProviderWithLegacySkylarkName(Object value) {
+    if (!(value instanceof InfoInterface)) {
+      return false;
+    }
+    return ((InfoInterface) value).getProvider() instanceof NativeProvider.WithLegacySkylarkName;
   }
 
   /**

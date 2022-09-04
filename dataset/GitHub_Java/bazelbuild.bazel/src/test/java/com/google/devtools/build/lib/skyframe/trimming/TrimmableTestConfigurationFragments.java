@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe.trimming;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -32,15 +33,15 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
@@ -48,8 +49,6 @@ import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -61,10 +60,9 @@ import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.repository.BindRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.common.options.Option;
@@ -404,7 +402,7 @@ public final class TrimmableTestConfigurationFragments {
 
   /** General purpose fragment loader for the test fragments in this file. */
   private static final class FragmentLoader<
-          OptionsT extends FragmentOptions, FragmentT extends Fragment>
+          OptionsT extends FragmentOptions, FragmentT extends BuildConfiguration.Fragment>
       implements ConfigurationFragmentFactory {
     private final Class<FragmentT> fragmentType;
     private final Class<OptionsT> optionsType;
@@ -420,7 +418,7 @@ public final class TrimmableTestConfigurationFragments {
     }
 
     @Override
-    public Class<? extends Fragment> creates() {
+    public Class<? extends BuildConfiguration.Fragment> creates() {
       return fragmentType;
     }
 
@@ -430,7 +428,7 @@ public final class TrimmableTestConfigurationFragments {
     }
 
     @Override
-    public Fragment create(BuildOptions buildOptions) {
+    public BuildConfiguration.Fragment create(BuildOptions buildOptions) {
       return fragmentMaker.apply(buildOptions.get(optionsType));
     }
   }
@@ -447,7 +445,7 @@ public final class TrimmableTestConfigurationFragments {
 
   /** Test configuration fragment. */
   @SkylarkModule(name = "alpha", doc = "Test config fragment.")
-  public static final class AConfig extends Fragment implements StarlarkValue {
+  public static final class AConfig extends BuildConfiguration.Fragment {
     public static final ConfigurationFragmentFactory FACTORY =
         new FragmentLoader<>(
             AConfig.class, AOptions.class, (options) -> new AConfig(options.alpha));
@@ -476,7 +474,7 @@ public final class TrimmableTestConfigurationFragments {
 
   /** Test configuration fragment. */
   @SkylarkModule(name = "bravo", doc = "Test config fragment.")
-  public static final class BConfig extends Fragment implements StarlarkValue {
+  public static final class BConfig extends BuildConfiguration.Fragment {
     public static final ConfigurationFragmentFactory FACTORY =
         new FragmentLoader<>(
             BConfig.class, BOptions.class, (options) -> new BConfig(options.bravo));
@@ -505,7 +503,7 @@ public final class TrimmableTestConfigurationFragments {
 
   /** Test configuration fragment. */
   @SkylarkModule(name = "charlie", doc = "Test config fragment.")
-  public static final class CConfig extends Fragment implements StarlarkValue {
+  public static final class CConfig extends BuildConfiguration.Fragment {
     public static final ConfigurationFragmentFactory FACTORY =
         new FragmentLoader<>(
             CConfig.class, COptions.class, (options) -> new CConfig(options.charlie));
@@ -534,7 +532,7 @@ public final class TrimmableTestConfigurationFragments {
 
   /** Test configuration fragment. */
   @SkylarkModule(name = "delta", doc = "Test config fragment.")
-  public static final class DConfig extends Fragment implements StarlarkValue {
+  public static final class DConfig extends BuildConfiguration.Fragment {
     public static final ConfigurationFragmentFactory FACTORY =
         new FragmentLoader<>(
             DConfig.class, DOptions.class, (options) -> new DConfig(options.delta));
@@ -566,7 +564,7 @@ public final class TrimmableTestConfigurationFragments {
 
   /** Test configuration fragment. */
   @SkylarkModule(name = "echo", doc = "Test config fragment.")
-  public static final class EConfig extends Fragment implements StarlarkValue {
+  public static final class EConfig extends BuildConfiguration.Fragment {
     public static final ConfigurationFragmentFactory FACTORY =
         new FragmentLoader<>(EConfig.class, EOptions.class, (options) -> new EConfig(options.echo));
 
@@ -613,7 +611,7 @@ public final class TrimmableTestConfigurationFragments {
       }
 
       @Override
-      public BuildOptions patch(BuildOptions target, EventHandler eventHandler) {
+      public BuildOptions patch(BuildOptions target) {
         BuildOptions output = target.clone();
         if (alpha != null) {
           output.get(AOptions.class).alpha = alpha;
@@ -666,15 +664,13 @@ public final class TrimmableTestConfigurationFragments {
       NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
       filesToBuild.addAll(ruleContext.getOutputArtifacts());
       for (FileProvider dep :
-          ruleContext.getPrerequisites("deps", TransitionMode.TARGET, FileProvider.class)) {
+          ruleContext.getPrerequisites("deps", Mode.TARGET, FileProvider.class)) {
         filesToBuild.addTransitive(dep.getFilesToBuild());
       }
       for (Artifact artifact : ruleContext.getOutputArtifacts()) {
         ruleContext.registerAction(
             FileWriteAction.createEmptyWithInputs(
-                ruleContext.getActionOwner(),
-                NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-                artifact));
+                ruleContext.getActionOwner(), ImmutableList.of(), artifact));
       }
       if (ruleContext.getToolchainContext() != null) {
         ResolvedToolchainContext toolchainContext = ruleContext.getToolchainContext();
@@ -682,8 +678,8 @@ public final class TrimmableTestConfigurationFragments {
           ToolchainInfo toolchainInfo = toolchainContext.forToolchainType(toolchainType);
           try {
             filesToBuild.addTransitive(
-                ((Depset) toolchainInfo.getValue("files")).getSet(Artifact.class));
-          } catch (EvalException | Depset.TypeException ex) {
+                ((SkylarkNestedSet) toolchainInfo.getValue("files")).getSet(Artifact.class));
+          } catch (EvalException | SkylarkNestedSet.TypeException ex) {
             throw new AssertionError(ex);
           }
         }

@@ -621,13 +621,9 @@ public abstract class CcModule
     return o;
   }
 
-  /** Converts None, or a SkylarkList, or a SkylarkNestedSet to a NestedSet. */
   @SuppressWarnings("unchecked")
-  private static <T> NestedSet<T> convertToNestedSet(Object o, Class<T> type, String fieldName)
-      throws EvalException {
-    if (o == Runtime.NONE) {
-      return NestedSetBuilder.emptySet(Order.COMPILE_ORDER);
-    }
+  private static <T> NestedSet<T> convertSkylarkListOrNestedSetToNestedSet(
+      Object o, Class<T> type, String fieldName) throws EvalException {
     return o instanceof SkylarkNestedSet
         ? ((SkylarkNestedSet) o).getSetFromParam(type, fieldName)
         : NestedSetBuilder.wrap(Order.COMPILE_ORDER, (SkylarkList<T>) o);
@@ -1515,7 +1511,6 @@ public abstract class CcModule
       boolean disallowNopicOutputs,
       Artifact grepIncludes,
       SkylarkList<Artifact> headersForClifDoNotUseThisParam,
-      SkylarkList<Artifact> additionalInputs,
       Location location,
       @Nullable StarlarkThread thread)
       throws EvalException, InterruptedException {
@@ -1585,8 +1580,6 @@ public abstract class CcModule
             .addNonTransitiveDefines(localDefines)
             .setCopts(userCompileFlags)
             .addAdditionalCompilationInputs(headersForClifDoNotUseThisParam)
-            .addAdditionalCompilationInputs(
-                additionalInputs.getContents(Artifact.class, "additional_inputs"))
             .addAditionalIncludeScanningRoots(headersForClifDoNotUseThisParam);
     if (disallowNopicOutputs) {
       helper.setGenerateNoPicAction(false);
@@ -1690,11 +1683,12 @@ public abstract class CcModule
   protected CcCompilationOutputs createCompilationOutputsFromSkylark(
       Object objectsObject, Object picObjectsObject, Location location) throws EvalException {
     CcCompilationOutputs.Builder ccCompilationOutputsBuilder = CcCompilationOutputs.builder();
-    NestedSet<Artifact> objects = convertToNestedSet(objectsObject, Artifact.class, "objects");
+    NestedSet<Artifact> objects =
+        convertSkylarkListOrNestedSetToNestedSet(objectsObject, Artifact.class, "objects");
     validateExtensions(
         location, "objects", objects.toList(), Link.OBJECT_FILETYPES, Link.OBJECT_FILETYPES);
     NestedSet<Artifact> picObjects =
-        convertToNestedSet(picObjectsObject, Artifact.class, "pic_objects");
+        convertSkylarkListOrNestedSetToNestedSet(picObjectsObject, Artifact.class, "pic_objects");
     validateExtensions(
         location, "pic_objects", picObjects.toList(), Link.OBJECT_FILETYPES, Link.OBJECT_FILETYPES);
     ccCompilationOutputsBuilder.addObjectFiles(objects);

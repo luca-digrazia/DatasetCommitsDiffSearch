@@ -322,8 +322,8 @@ public final class AndroidIdeInfoProvider extends NativeInfo
         Object manifest,
         Object generatedManifest,
         Object idlImportRoot,
-        SkylarkList<?> idlSrcs, // <Artifact>
-        SkylarkList<?> idlGeneratedJavaFiles, // <Artifact>
+        SkylarkList<Artifact> idlSrcs,
+        SkylarkList<Artifact> idlGeneratedJavaFiles,
         Object idlSourceJar,
         Object idlClassJar,
         boolean definesAndroidResources,
@@ -331,8 +331,8 @@ public final class AndroidIdeInfoProvider extends NativeInfo
         Object resourceApk,
         Object signedApk,
         Object aar,
-        SkylarkList<?> apksUnderTest, // <Artifact>
-        SkylarkDict<?, ?> nativeLibs) // <String, SkylarkNestedSet>
+        SkylarkList<Artifact> apksUnderTest,
+        SkylarkDict<String, SkylarkNestedSet> nativeLibs)
         throws EvalException {
       Map<String, SkylarkNestedSet> nativeLibsMap =
           nativeLibs.getContents(String.class, SkylarkNestedSet.class, "native_libs");
@@ -353,10 +353,9 @@ public final class AndroidIdeInfoProvider extends NativeInfo
           fromNoneable(resourceJar, OutputJar.class),
           definesAndroidResources,
           fromNoneable(aar, Artifact.class),
-          ImmutableList.copyOf(idlSrcs.getContents(Artifact.class, "idl_srcs")),
-          ImmutableList.copyOf(
-              idlGeneratedJavaFiles.getContents(Artifact.class, "idl_generated_java_files")),
-          ImmutableList.copyOf(apksUnderTest.getContents(Artifact.class, "apks_under_test")),
+          idlSrcs.getImmutableList(),
+          idlGeneratedJavaFiles.getImmutableList(),
+          apksUnderTest.getImmutableList(),
           builder.build(),
           fromNoneable(resourceApk, Artifact.class));
     }

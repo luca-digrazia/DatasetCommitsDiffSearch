@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidIdlProviderApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkType;
 
 /**
  * Configured targets implementing this provider can contribute Android IDL information to the
@@ -52,38 +51,22 @@ public final class AndroidIdlProvider extends NativeInfo
   }
 
   @Override
-  public SkylarkNestedSet /*<String>*/ getTransitiveIdlImportRootsForStarlark() {
-    return SkylarkNestedSet.of(SkylarkType.STRING, transitiveIdlImportRoots);
-  }
-
-  NestedSet<String> getTransitiveIdlImportRoots() {
+  public NestedSet<String> getTransitiveIdlImportRoots() {
     return transitiveIdlImportRoots;
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveIdlImportsForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, transitiveIdlImports);
-  }
-
-  NestedSet<Artifact> getTransitiveIdlImports() {
+  public NestedSet<Artifact> getTransitiveIdlImports() {
     return transitiveIdlImports;
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveIdlJarsForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, transitiveIdlJars);
-  }
-
-  NestedSet<Artifact> getTransitiveIdlJars() {
+  public NestedSet<Artifact> getTransitiveIdlJars() {
     return transitiveIdlJars;
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveIdlPreprocessedForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, transitiveIdlPreprocessed);
-  }
-
-  NestedSet<Artifact> getTransitiveIdlPreprocessed() {
+  public NestedSet<Artifact> getTransitiveIdlPreprocessed() {
     return transitiveIdlPreprocessed;
   }
 

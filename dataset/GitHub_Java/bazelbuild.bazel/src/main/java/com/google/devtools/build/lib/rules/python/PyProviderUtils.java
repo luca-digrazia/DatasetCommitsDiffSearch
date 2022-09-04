@@ -86,7 +86,7 @@ public class PyProviderUtils {
   public static NestedSet<Artifact> getTransitiveSources(TransitiveInfoCollection target)
       throws EvalException {
     if (hasModernProvider(target)) {
-      return getModernProvider(target).getTransitiveSources().getSet(Artifact.class);
+      return getModernProvider(target).getTransitiveSourcesSet();
     } else if (hasLegacyProvider(target)) {
       return PyStructUtils.getTransitiveSources(getLegacyProvider(target));
     } else {
@@ -121,18 +121,16 @@ public class PyProviderUtils {
   /**
    * Returns the transitive import paths of a target.
    *
-   * <p>Imports are not currently propagated correctly (#7054). Currently the behavior is to return
-   * the imports contained in the target's {@link PythonImportsProvider}, ignoring the py provider,
-   * or no imports if there is no {@code PythonImportsProvider}. When #7054 is fixed, we'll instead
-   * return the imports specified by the py provider, or those from {@code PythonImportsProvider} if
-   * the py provider is not present, with an eventual goal of removing {@code
-   * PythonImportsProvider}.
+   * <p>If the target has a py provider, the value from that provider is used. Otherwise, we default
+   * to an empty set.
+   *
+   * @throws EvalException if the legacy struct provider is present but malformed
    */
-  // TODO(#7054) Implement the above change.
   public static NestedSet<String> getImports(TransitiveInfoCollection target) throws EvalException {
-    PythonImportsProvider importsProvider = target.getProvider(PythonImportsProvider.class);
-    if (importsProvider != null) {
-      return importsProvider.getTransitivePythonImports();
+    if (hasModernProvider(target)) {
+      return getModernProvider(target).getImportsSet();
+    } else if (hasLegacyProvider(target)) {
+      return PyStructUtils.getImports(getLegacyProvider(target));
     } else {
       return NestedSetBuilder.emptySet(Order.COMPILE_ORDER);
     }
@@ -170,17 +168,27 @@ public class PyProviderUtils {
     }
   }
 
-  public static Builder builder() {
-    return new Builder();
+  /**
+   * Returns a builder to construct the legacy and/or modern Python providers and add them to a
+   * configured target.
+   *
+   * <p>If {@code createLegacy} is false, only the modern {@code PyInfo} provider is produced.
+   * Otherwise both {@code PyInfo} and the "py" provider are produced.
+   */
+  public static Builder builder(boolean createLegacy) {
+    return new Builder(createLegacy);
   }
 
   /** A builder to add both the legacy and modern providers to a configured target. */
   public static class Builder {
     private final PyInfo.Builder modernBuilder = PyInfo.builder();
     private final PyStructUtils.Builder legacyBuilder = PyStructUtils.builder();
+    private final boolean createLegacy;
 
     // Use the static builder() method instead.
-    private Builder() {}
+    private Builder(boolean createLegacy) {
+      this.createLegacy = createLegacy;
+    }
 
     public Builder setTransitiveSources(NestedSet<Artifact> transitiveSources) {
       modernBuilder.setTransitiveSources(transitiveSources);
@@ -214,8 +222,10 @@ public class PyProviderUtils {
 
     public RuleConfiguredTargetBuilder buildAndAddToTarget(
         RuleConfiguredTargetBuilder targetBuilder) {
-      targetBuilder.addSkylarkTransitiveInfo(PyStructUtils.PROVIDER_NAME, legacyBuilder.build());
       targetBuilder.addNativeDeclaredProvider(modernBuilder.build());
+      if (createLegacy) {
+        targetBuilder.addSkylarkTransitiveInfo(PyStructUtils.PROVIDER_NAME, legacyBuilder.build());
+      }
       return targetBuilder;
     }
   }

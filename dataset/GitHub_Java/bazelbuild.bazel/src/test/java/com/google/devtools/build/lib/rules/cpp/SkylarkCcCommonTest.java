@@ -1221,20 +1221,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testCreateCompilationOutputs_empty() throws Exception {
-    scratch.file("test/BUILD", "load(':my_rule.bzl', 'my_rule')", "my_rule(name='x')");
-    scratch.file(
-        "test/my_rule.bzl",
-        "def _impl(ctx):",
-        "  cc_common.create_compilation_outputs()",
-        "my_rule = rule(",
-        "  _impl,",
-        ");");
-
-    assertThat(getConfiguredTarget("//test:x")).isNotNull();
-  }
-
-  @Test
   public void testCcLinkingContextOnWindows() throws Exception {
     AnalysisMock.get()
         .ccSupport()
@@ -5337,24 +5323,12 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testAdditionalLinkingInputs() throws Exception {
+  public void testAdditionalInputs() throws Exception {
     createFilesForTestingLinking(
         scratch, "tools/build_defs/foo", "additional_inputs=ctx.files._additional_inputs");
     ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
     assertThat(target).isNotNull();
     assertThat(target.get(CcInfo.PROVIDER).getCcLinkingContext().getNonCodeInputs()).hasSize(1);
-  }
-
-  @Test
-  public void testAdditionalCompilationInputs() throws Exception {
-    createFilesForTestingCompilation(
-        scratch, "tools/build_defs/foo", "additional_inputs=ctx.files._additional_compiler_inputs");
-    ConfiguredTarget target = getConfiguredTarget("//foo:skylark_lib");
-    assertThat(target).isNotNull();
-    CppCompileAction action =
-        (CppCompileAction) getGeneratingAction(artifactByPath(getFilesToBuild(target), ".o"));
-    assertThat(artifactsToStrings(action.getMandatoryInputs()))
-        .contains("src foo/extra_compiler_input");
   }
 
   @Test
@@ -5603,8 +5577,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "      'private_hdrs': attr.label_list(allow_files=True),",
         "      '_additional_inputs': attr.label_list(allow_files=True,"
             + " default=['//foo:script.lds']),",
-        "      '_additional_compiler_inputs': attr.label_list(allow_files=True,"
-            + " default=['//foo:extra_compiler_input']),",
         "      '_deps': attr.label_list(default=['//foo:dep1', '//foo:dep2']),",
         "      'aspect_deps': attr.label_list(aspects=[_cc_aspect]),",
         "      '_cc_toolchain': attr.label(default =",

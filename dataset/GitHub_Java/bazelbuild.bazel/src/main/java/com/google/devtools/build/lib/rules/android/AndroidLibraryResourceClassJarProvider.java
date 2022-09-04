@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidLibraryResourceClassJarProviderApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import javax.annotation.Nonnull;
 
 /**
  * A provider which contains the resource class jars from android_library rules. See {@link
@@ -51,11 +52,8 @@ public final class AndroidLibraryResourceClassJarProvider extends NativeInfo
         target.get(AndroidLibraryResourceClassJarProvider.PROVIDER.getKey());
   }
 
+  @Nonnull
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getResourceClassJarsForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, resourceClassJars);
-  }
-
   public NestedSet<Artifact> getResourceClassJars() {
     return resourceClassJars;
   }

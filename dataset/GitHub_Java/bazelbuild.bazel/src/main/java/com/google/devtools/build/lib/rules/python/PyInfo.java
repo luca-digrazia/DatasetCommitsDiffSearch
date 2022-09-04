@@ -25,10 +25,9 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.skylarkbuildapi.python.PyInfoApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet.TypeException;
-import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
@@ -40,13 +39,13 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
   public static final PyInfoProvider PROVIDER = new PyInfoProvider();
 
   /**
-   * Returns true if the given depset has the given content type and order compatible with the given
-   * order.
+   * Returns true if the given depset has a content type that is a subtype of the given class, and
+   * has an order compatible with the given order.
    */
   private static boolean depsetHasTypeAndCompatibleOrder(
-      SkylarkNestedSet depset, SkylarkType type, Order order) {
+      SkylarkNestedSet depset, Class<?> clazz, Order order) {
     // Work around #7266 by special-casing the empty set in the type check.
-    boolean typeOk = depset.isEmpty() || depset.getContentType().equals(type);
+    boolean typeOk = depset.isEmpty() || depset.getContentType().canBeCastTo(clazz);
     boolean orderOk = depset.getOrder().isCompatible(order);
     return typeOk && orderOk;
   }
@@ -82,12 +81,12 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
       boolean hasPy3OnlySources) {
     super(PROVIDER, location);
     Preconditions.checkArgument(
-        depsetHasTypeAndCompatibleOrder(transitiveSources, Artifact.TYPE, Order.COMPILE_ORDER));
+        depsetHasTypeAndCompatibleOrder(transitiveSources, Artifact.class, Order.COMPILE_ORDER));
     // TODO(brandjon): PyCommon currently requires COMPILE_ORDER, but we'll probably want to change
     // that to NAIVE_LINK (preorder). In the meantime, order isn't an invariant of the provider
     // itself, so we use STABLE here to accept any order.
     Preconditions.checkArgument(
-        depsetHasTypeAndCompatibleOrder(imports, SkylarkType.STRING, Order.STABLE_ORDER));
+        depsetHasTypeAndCompatibleOrder(imports, String.class, Order.STABLE_ORDER));
     this.transitiveSources = transitiveSources;
     this.usesSharedLibraries = usesSharedLibraries;
     this.imports = imports;
@@ -182,11 +181,12 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
         Location loc)
         throws EvalException {
       SkylarkNestedSet imports =
-          importsUncast.equals(Starlark.UNBOUND)
+          importsUncast.equals(Runtime.UNBOUND)
               ? SkylarkNestedSet.of(String.class, NestedSetBuilder.emptySet(Order.COMPILE_ORDER))
               : (SkylarkNestedSet) importsUncast;
 
-      if (!depsetHasTypeAndCompatibleOrder(transitiveSources, Artifact.TYPE, Order.COMPILE_ORDER)) {
+      if (!depsetHasTypeAndCompatibleOrder(
+          transitiveSources, Artifact.class, Order.COMPILE_ORDER)) {
         throw new EvalException(
             loc,
             String.format(
@@ -194,7 +194,7 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
                     + "a '%s')",
                 describeType(transitiveSources)));
       }
-      if (!depsetHasTypeAndCompatibleOrder(imports, SkylarkType.STRING, Order.STABLE_ORDER)) {
+      if (!depsetHasTypeAndCompatibleOrder(imports, String.class, Order.STABLE_ORDER)) {
         throw new EvalException(
             loc,
             String.format(

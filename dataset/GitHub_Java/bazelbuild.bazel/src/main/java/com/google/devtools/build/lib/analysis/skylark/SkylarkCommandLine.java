@@ -17,17 +17,17 @@ package com.google.devtools.build.lib.analysis.skylark;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkCommandLineApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
-/** A Starlark module class to create memory efficient command lines. */
+/** A Skylark module class to create memory efficient command lines. */
 public class SkylarkCommandLine implements SkylarkCommandLineApi {
 
   @Override
-  public String joinPaths(String separator, Depset files) throws EvalException {
-    NestedSet<Artifact> artifacts = Depset.cast(files, Artifact.class, "files");
+  public String joinPaths(String separator, SkylarkNestedSet files) throws EvalException {
+    NestedSet<Artifact> artifacts = files.getSetFromParam(Artifact.class, "files");
     // TODO(bazel-team): This method should be deprecated and strongly discouraged, as it
     // flattens a depset during analysis.
-    return Artifact.joinExecPaths(separator, artifacts.toList());
+    return Artifact.joinExecPaths(separator, artifacts);
   }
 }

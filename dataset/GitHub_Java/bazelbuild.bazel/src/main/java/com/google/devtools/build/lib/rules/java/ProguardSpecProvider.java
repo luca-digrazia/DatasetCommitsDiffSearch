@@ -39,10 +39,6 @@ public final class ProguardSpecProvider extends NativeInfo
   }
 
   @Override
-  public SkylarkNestedSet /*<Artifact>*/ getTransitiveProguardSpecsForStarlark() {
-    return SkylarkNestedSet.of(Artifact.TYPE, transitiveProguardSpecs);
-  }
-
   public NestedSet<Artifact> getTransitiveProguardSpecs() {
     return transitiveProguardSpecs;
   }

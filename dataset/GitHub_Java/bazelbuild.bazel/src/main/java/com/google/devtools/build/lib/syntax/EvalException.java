@@ -17,10 +17,13 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.util.LoggingUtil;
+import java.util.logging.Level;
 import javax.annotation.Nullable;
 
 /**
- * Exceptions thrown during evaluation of BUILD ASTs or Starlark extensions.
+ * Exceptions thrown during evaluation of BUILD ASTs or Skylark extensions.
  *
  * <p>This exception must always correspond to a repeatable, permanent error, i.e. evaluating the
  * same package again must yield the same exception. Notably, do not use this for reporting I/O
@@ -41,7 +44,7 @@ public class EvalException extends Exception {
    * @param location the location where evaluation/execution failed.
    * @param message the error message.
    */
-  public EvalException(@Nullable Location location, String message) {
+  public EvalException(Location location, String message) {
     this.location = location;
     this.message = Preconditions.checkNotNull(message);
   }
@@ -51,10 +54,10 @@ public class EvalException extends Exception {
    * @param message the error message.
    * @param cause a Throwable that caused this exception.
    */
-  public EvalException(@Nullable Location location, String message, Throwable cause) {
+  public EvalException(Location location, String message, Throwable cause) {
     super(cause);
     this.location = location;
-    // This is only used from Starlark, it's useful for debugging.
+    // This is only used from Skylark, it's useful for debugging.
     this.message = FIELD_JOINER.join(message, getCauseMessage(message));
     if (this.message.isEmpty()) {
       String details;
@@ -63,11 +66,12 @@ public class EvalException extends Exception {
       } else {
         details = "Invalid EvalException:\n" + Throwables.getStackTraceAsString(cause);
       }
+      LoggingUtil.logToRemote(Level.SEVERE, details, cause);
       throw new IllegalArgumentException(details);
     }
   }
 
-  public EvalException(@Nullable Location location, Throwable cause) {
+  public EvalException(Location location, Throwable cause) {
     this(location, null, cause);
   }
 
