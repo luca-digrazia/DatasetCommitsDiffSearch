@@ -147,7 +147,7 @@ public class SpawnInputExpander {
       PathFragment location;
       int pos = line.indexOf(' ');
       if (pos == -1) {
-        location = PathFragment.create(line);
+        location = new PathFragment(line);
         artifact = EMPTY_FILE;
       } else {
         String targetPath = line.substring(pos + 1);
@@ -156,7 +156,7 @@ public class SpawnInputExpander {
         }
         artifact = targetPath.isEmpty() ? EMPTY_FILE : ActionInputHelper.fromPath(targetPath);
 
-        location = PathFragment.create(line.substring(0, pos));
+        location = new PathFragment(line.substring(0, pos));
         if (!workspaceName.isEmpty()) {
           if (!location.getSegment(0).equals(workspaceName)) {
             throw new IOException(
@@ -196,24 +196,12 @@ public class SpawnInputExpander {
       Spawn spawn, ArtifactExpander artifactExpander, ActionInputFileCache actionInputFileCache,
       FilesetActionContext filesetContext)
           throws IOException {
-    return getInputMapping(
-        spawn, artifactExpander, actionInputFileCache, filesetContext.getWorkspaceName());
-  }
-
-  /**
-   * Convert the inputs of the given spawn to a map from exec-root relative paths to action inputs.
-   * In some cases, this generates empty files, for which it uses {@code null}.
-   */
-  public SortedMap<PathFragment, ActionInput> getInputMapping(
-      Spawn spawn, ArtifactExpander artifactExpander, ActionInputFileCache actionInputFileCache,
-      String workspaceName)
-          throws IOException {
     TreeMap<PathFragment, ActionInput> inputMap = new TreeMap<>();
     addInputs(inputMap, spawn, artifactExpander);
     addRunfilesToInputs(
         inputMap, spawn.getRunfilesSupplier(), actionInputFileCache);
     for (Artifact manifest : spawn.getFilesetManifests()) {
-      parseFilesetManifest(inputMap, manifest, workspaceName);
+      parseFilesetManifest(inputMap, manifest, filesetContext.getWorkspaceName());
     }
     return inputMap;
   }

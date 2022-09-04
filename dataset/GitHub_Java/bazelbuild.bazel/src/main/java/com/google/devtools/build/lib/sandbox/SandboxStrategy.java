@@ -16,17 +16,11 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSet.Builder;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
@@ -53,6 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
 abstract class SandboxStrategy implements SandboxedSpawnActionContext {
 
   private final BuildRequest buildRequest;
+  private final BlazeDirectories blazeDirs;
   private final Path execRoot;
   private final boolean verboseFailures;
   private final SandboxOptions sandboxOptions;
@@ -64,46 +59,12 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
       boolean verboseFailures,
       SandboxOptions sandboxOptions) {
     this.buildRequest = buildRequest;
+    this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
     this.sandboxOptions = sandboxOptions;
     this.spawnInputExpander = new SpawnInputExpander(/*strict=*/false);
   }
-
-  /** Executes the given {@code spawn}. */
-  @Override
-  public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException {
-    exec(spawn, actionExecutionContext, null);
-  }
-
-  @Override
-  public void exec(
-      Spawn spawn,
-      ActionExecutionContext actionExecutionContext,
-      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws ExecException, InterruptedException {
-    Executor executor = actionExecutionContext.getExecutor();
-    // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
-    if (!spawn.isRemotable() || spawn.hasNoSandbox()) {
-      SandboxHelpers.fallbackToNonSandboxedExecution(spawn, actionExecutionContext, executor);
-      return;
-    }
-
-    EventBus eventBus = actionExecutionContext.getExecutor().getEventBus();
-    ActionExecutionMetadata owner = spawn.getResourceOwner();
-    eventBus.post(ActionStatusMessage.schedulingStrategy(owner));
-    try (ResourceHandle ignored =
-        ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
-      actuallyExec(spawn, actionExecutionContext, writeOutputFiles);
-    }
-  }
-
-  protected abstract void actuallyExec(
-      Spawn spawn,
-      ActionExecutionContext actionExecutionContext,
-      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws ExecException, InterruptedException;
 
   protected void runSpawn(
       Spawn spawn,
@@ -125,8 +86,7 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
           Spawns.getTimeoutSeconds(spawn),
           SandboxHelpers.shouldAllowNetwork(buildRequest, spawn),
           sandboxOptions.sandboxDebug,
-          sandboxOptions.sandboxFakeHostname,
-          sandboxOptions.sandboxFakeUsername);
+          sandboxOptions.sandboxFakeHostname);
     } catch (ExecException e) {
       execException = e;
     }
@@ -161,19 +121,22 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
     }
   }
 
-  /**
-   * Gets the list of directories that the spawn will assume to be writable.
-   *
-   * @throws IOException because we might resolve symlinks, which throws {@link IOException}.
-   */
-  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env)
-      throws IOException {
+  /** Gets the list of directories that the spawn will assume to be writable. */
+  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env) {
     Builder<Path> writableDirs = ImmutableSet.builder();
     // We have to make the TEST_TMPDIR directory writable if it is specified.
     if (env.containsKey("TEST_TMPDIR")) {
       writableDirs.add(sandboxExecRoot.getRelative(env.get("TEST_TMPDIR")));
     }
     return writableDirs.build();
+  }
+
+  protected ImmutableSet<Path> getInaccessiblePaths() {
+    ImmutableSet.Builder<Path> inaccessiblePaths = ImmutableSet.builder();
+    for (String path : sandboxOptions.sandboxBlockPath) {
+      inaccessiblePaths.add(blazeDirs.getFileSystem().getPath(path));
+    }
+    return inaccessiblePaths.build();
   }
 
   @Override
