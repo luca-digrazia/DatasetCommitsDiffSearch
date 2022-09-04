@@ -217,7 +217,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             && (appearsToHaveObjectFiles(ruleContext.attributes())
                 || featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_CODEGEN));
     if (soFilename != null) {
-      if (!soFilename.getPathString().endsWith(".so")) {
+      if (!soFilename.getPathString().endsWith(".so")) { // Sanity check.
         ruleContext.attributeError("outs", "file name must end in '.so'");
       }
       if (createDynamicLibrary) {
@@ -306,8 +306,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
               Code.SOURCE_FILES_MISSING));
     }
 
-    CompilationInfo compilationInfo =
-        compilationHelper.compile(ruleContext, ruleContext::ruleError);
+    CompilationInfo compilationInfo = compilationHelper.compile(ruleContext::ruleError);
     CcCompilationOutputs precompiledFilesObjects =
         CcCompilationOutputs.builder()
             .addObjectFiles(precompiledFiles.getObjectFiles(/* usePic= */ true))
