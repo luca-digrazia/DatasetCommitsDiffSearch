@@ -83,8 +83,10 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     NestedSet<LinkerInput> transitiveJavaNativeLibraries =
         common.collectTransitiveJavaNativeLibraries();
     boolean neverLink = JavaCommon.isNeverLink(ruleContext);
-    JavaCompilationArgsProvider javaCompilationArgs =
-        common.collectJavaCompilationArgs(neverLink, false);
+    JavaCompilationArgs javaCompilationArgs =
+        common.collectJavaCompilationArgs(false, neverLink, false);
+    JavaCompilationArgs recursiveJavaCompilationArgs =
+        common.collectJavaCompilationArgs(true, neverLink, false);
     NestedSet<Artifact> transitiveJavaSourceJars =
         collectTransitiveJavaSourceJars(ruleContext, srcJar);
     if (srcJar != null) {
@@ -134,7 +136,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = ruleOutputJarsProviderBuilder.build();
     JavaSourceJarsProvider sourceJarsProvider =
         JavaSourceJarsProvider.create(transitiveJavaSourceJars, srcJars);
-    JavaCompilationArgsProvider compilationArgsProvider = javaCompilationArgs;
+    JavaCompilationArgsProvider compilationArgsProvider =
+        JavaCompilationArgsProvider.create(javaCompilationArgs, recursiveJavaCompilationArgs);
 
     JavaInfo.Builder javaInfoBuilder = JavaInfo.Builder.create();
     common.addTransitiveInfoProviders(ruleBuilder, javaInfoBuilder, filesToBuild, null);
@@ -144,7 +147,6 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
         .setRuntimeJars(javaArtifacts.getRuntimeJars())
-        .setJavaConstraints(JavaCommon.getConstraints(ruleContext))
         .setNeverlink(neverLink)
         .build();
 
@@ -158,7 +160,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
             JavaNativeLibraryProvider.class,
             new JavaNativeLibraryProvider(transitiveJavaNativeLibraries))
         .add(JavaSourceInfoProvider.class, javaSourceInfoProvider)
-        .addNativeDeclaredProvider(new ProguardSpecProvider(proguardSpecs))
+        .add(ProguardSpecProvider.class, new ProguardSpecProvider(proguardSpecs))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveJavaSourceJars)
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, proguardSpecs)
         .build();
