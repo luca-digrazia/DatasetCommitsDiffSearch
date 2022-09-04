@@ -479,8 +479,7 @@ public class ArtifactTest {
             Root.fromPath(
                 scratch
                     .dir("/output_base")
-                    .getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION)
-                    .getRelative("foo")));
+                    .getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION)));
 
     // --experimental_sibling_repository_layout not set
     assertThat(

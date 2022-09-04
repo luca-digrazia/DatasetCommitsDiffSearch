@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContaine
 import com.google.devtools.build.lib.analysis.AspectValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
@@ -61,6 +60,7 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
+import com.google.devtools.build.lib.query2.aquery.AqueryActionFilter;
 import com.google.devtools.build.lib.repository.ExternalPackageHelper;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
@@ -227,9 +227,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     return recordingDiffer;
   }
 
-  @Nullable
   @Override
-  public WorkspaceInfoFromDiff sync(
+  public void sync(
       ExtendedEventHandler eventHandler,
       PackageOptions packageOptions,
       PathPackageLocator packageLocator,
@@ -264,13 +263,26 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         tsgm,
         options);
     long startTime = System.nanoTime();
-    WorkspaceInfoFromDiff workspaceInfo =
-        handleDiffs(eventHandler, packageOptions.checkOutputFiles, options);
+    handleDiffs(eventHandler, packageOptions.checkOutputFiles, options);
     long stopTime = System.nanoTime();
     Profiler.instance().logSimpleTask(startTime, stopTime, ProfilerTask.INFO, "handleDiffs");
     long duration = stopTime - startTime;
     sourceDiffCheckingDuration = duration > 0 ? Duration.ofNanos(duration) : Duration.ZERO;
-    return workspaceInfo;
+  }
+
+  /**
+   * Updates ArtifactNestedSetFunction options if the flags' values changed.
+   *
+   * @return whether an update was made.
+   */
+  private static boolean nestedSetAsSkyKeyOptionsChanged(OptionsProvider options) {
+    BuildRequestOptions buildRequestOptions = options.getOptions(BuildRequestOptions.class);
+    if (buildRequestOptions == null) {
+      return false;
+    }
+
+    return ArtifactNestedSetFunction.sizeThresholdUpdated(
+        buildRequestOptions.nestedSetAsSkyKeyThreshold);
   }
 
   /**
@@ -330,8 +342,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     handleDiffs(eventHandler, /*checkOutputFiles=*/false, OptionsProvider.EMPTY);
   }
 
-  @Nullable
-  private WorkspaceInfoFromDiff handleDiffs(
+  private void handleDiffs(
       ExtendedEventHandler eventHandler, boolean checkOutputFiles, OptionsProvider options)
       throws InterruptedException, AbruptExitException {
     TimestampGranularityMonitor tsgm = this.tsgm.get();
@@ -344,18 +355,13 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       invalidateCachedWorkspacePathsStates();
     }
 
-    WorkspaceInfoFromDiff workspaceInfo = null;
     Map<Root, DiffAwarenessManager.ProcessableModifiedFileSet> modifiedFilesByPathEntry =
         Maps.newHashMap();
     Set<Pair<Root, DiffAwarenessManager.ProcessableModifiedFileSet>>
         pathEntriesWithoutDiffInformation = Sets.newHashSet();
-    ImmutableList<Root> pkgRoots = pkgLocator.get().getPathEntries();
-    for (Root pathEntry : pkgRoots) {
+    for (Root pathEntry : pkgLocator.get().getPathEntries()) {
       DiffAwarenessManager.ProcessableModifiedFileSet modifiedFileSet =
           diffAwarenessManager.getDiff(eventHandler, pathEntry, options);
-      if (pkgRoots.size() == 1) {
-        workspaceInfo = modifiedFileSet.getWorkspaceInfo();
-      }
       if (modifiedFileSet.getModifiedFileSet().treatEverythingAsModified()) {
         pathEntriesWithoutDiffInformation.add(Pair.of(pathEntry, modifiedFileSet));
       } else {
@@ -376,7 +382,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         managedDirectoriesChanged,
         fsvcThreads);
     handleClientEnvironmentChanges();
-    return workspaceInfo;
   }
 
   /**
@@ -797,6 +802,19 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     return buildActionGraphContainerFromDump(actionGraphDump);
   }
 
+  /** Get ActionGraphContainer from the Skyframe evaluator. Used for aquery. */
+  public ActionGraphContainer getActionGraphContainer(
+      boolean includeActionCmdLine,
+      AqueryActionFilter aqueryActionFilter,
+      boolean includeParamFiles,
+      boolean includeArtifacts)
+      throws CommandLineExpansionException {
+    ActionGraphDump actionGraphDump =
+        new ActionGraphDump(
+            includeActionCmdLine, includeArtifacts, aqueryActionFilter, includeParamFiles);
+    return buildActionGraphContainerFromDump(actionGraphDump);
+  }
+
   private ActionGraphContainer buildActionGraphContainerFromDump(ActionGraphDump actionGraphDump)
       throws CommandLineExpansionException {
     for (Map.Entry<SkyKey, SkyValue> skyKeyAndValue :
@@ -826,7 +844,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     return actionGraphDump.build();
   }
 
-  /** Support for aquery output. */
+  /** Support for aquery output with --incompatible_proto_output_v2. */
   public void dumpSkyframeState(
       com.google.devtools.build.lib.skyframe.actiongraph.v2.ActionGraphDump actionGraphDump)
       throws CommandLineExpansionException, IOException {
@@ -908,20 +926,21 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   @Override
-  protected ExecutionFinishedEvent.Builder createExecutionFinishedEventInternal() {
-    ExecutionFinishedEvent.Builder builder =
+  public ExecutionFinishedEvent createExecutionFinishedEvent() {
+    ExecutionFinishedEvent result =
         ExecutionFinishedEvent.builder()
             .setOutputDirtyFiles(outputDirtyFiles)
             .setOutputModifiedFilesDuringPreviousBuild(modifiedFilesDuringPreviousBuild)
             .setSourceDiffCheckingDuration(sourceDiffCheckingDuration)
             .setNumSourceFilesCheckedBecauseOfMissingDiffs(
                 numSourceFilesCheckedBecauseOfMissingDiffs)
-            .setOutputTreeDiffCheckingDuration(outputTreeDiffCheckingDuration);
+            .setOutputTreeDiffCheckingDuration(outputTreeDiffCheckingDuration)
+            .build();
     outputDirtyFiles = 0;
     modifiedFilesDuringPreviousBuild = 0;
     sourceDiffCheckingDuration = Duration.ZERO;
     outputTreeDiffCheckingDuration = Duration.ZERO;
-    return builder;
+    return result;
   }
 
   @Override
