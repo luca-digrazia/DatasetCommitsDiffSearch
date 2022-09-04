@@ -58,9 +58,9 @@ public class DockerProcessor {
 
     @BuildStep(onlyIf = { IsNormal.class, DockerBuild.class }, onlyIfNot = NativeBuild.class)
     public void dockerBuildFromJar(DockerConfig dockerConfig,
-            ContainerImageConfig containerImageConfig,
+            ContainerImageConfig containerImageConfig, // TODO: use to check whether we need to also push to registry
             OutputTargetBuildItem out,
-            ContainerImageInfoBuildItem containerImageInfo,
+            ContainerImageInfoBuildItem containerImage,
             Optional<ContainerImageBuildRequestBuildItem> buildRequest,
             Optional<ContainerImagePushRequestBuildItem> pushRequest,
             BuildProducer<ArtifactResultBuildItem> artifactResultProducer,
@@ -79,8 +79,11 @@ public class DockerProcessor {
 
         log.info("Building docker image for jar.");
 
+        String image = containerImage.getImage();
+        List<String> additionalImageTags = containerImage.getAdditionalImageTags();
+
         ImageIdReader reader = new ImageIdReader();
-        createContainerImage(containerImageConfig, dockerConfig, containerImageInfo, out, reader, false,
+        createContainerImage(containerImageConfig, dockerConfig, image, additionalImageTags, out, reader, false,
                 pushRequest.isPresent(), packageConfig);
 
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
@@ -114,19 +117,22 @@ public class DockerProcessor {
 
         log.info("Starting docker image build");
 
+        String image = containerImage.getImage();
+        List<String> additionalImageTags = containerImage.getAdditionalImageTags();
+
         ImageIdReader reader = new ImageIdReader();
-        createContainerImage(containerImageConfig, dockerConfig, containerImage, out, reader, true,
+        createContainerImage(containerImageConfig, dockerConfig, image, additionalImageTags, out, reader, true,
                 pushRequest.isPresent(), packageConfig);
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
     }
 
-    private void createContainerImage(ContainerImageConfig containerImageConfig, DockerConfig dockerConfig,
-            ContainerImageInfoBuildItem containerImageInfo,
+    private void createContainerImage(ContainerImageConfig containerImageConfig, DockerConfig dockerConfig, String image,
+            List<String> additionalImageTags,
             OutputTargetBuildItem out, ImageIdReader reader, boolean forNative, boolean pushRequested,
             PackageConfig packageConfig) {
 
         DockerfilePaths dockerfilePaths = getDockerfilePaths(dockerConfig, forNative, packageConfig, out);
-        String[] dockerArgs = getDockerArgs(containerImageInfo.getImage(), dockerfilePaths, dockerConfig);
+        String[] dockerArgs = getDockerArgs(image, dockerfilePaths, dockerConfig);
         log.infof("Executing the following command to build docker image: '%s %s'", DOCKER_BINARY_NAME,
                 String.join(" ", dockerArgs));
         boolean buildSuccessful = ExecUtil.exec(out.getOutputDirectory().toFile(), reader, DOCKER_BINARY_NAME, dockerArgs);
@@ -134,18 +140,18 @@ public class DockerProcessor {
             throw dockerException(dockerArgs);
         }
 
-        log.infof("Built container image %s (%s)\n", containerImageInfo.getImage(), reader.getImageId());
+        log.infof("Built container image %s (%s)\n", image, reader.getImageId());
 
-        if (!containerImageInfo.getAdditionalImageTags().isEmpty()) {
-            createAdditionalTags(containerImageInfo.getImage(), containerImageInfo.getAdditionalImageTags());
+        if (!additionalImageTags.isEmpty()) {
+            createAdditionalTags(image, additionalImageTags);
         }
 
         if (pushRequested || containerImageConfig.push) {
             String registry = "docker.io";
-            if (!containerImageInfo.getRegistry().isPresent()) {
+            if (!containerImageConfig.registry.isPresent()) {
                 log.info("No container image registry was set, so 'docker.io' will be used");
             } else {
-                registry = containerImageInfo.getRegistry().get();
+                registry = containerImageConfig.registry.get();
             }
             // Check if we need to login first
             if (containerImageConfig.username.isPresent() && containerImageConfig.password.isPresent()) {
@@ -156,8 +162,8 @@ public class DockerProcessor {
                 }
             }
 
-            List<String> imagesToPush = new ArrayList<>(containerImageInfo.getAdditionalImageTags());
-            imagesToPush.add(containerImageInfo.getImage());
+            List<String> imagesToPush = new ArrayList<>(additionalImageTags);
+            imagesToPush.add(image);
             for (String imageToPush : imagesToPush) {
                 pushImage(imageToPush);
             }

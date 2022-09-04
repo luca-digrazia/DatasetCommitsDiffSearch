@@ -40,10 +40,4 @@ public class DockerConfig {
      */
     @ConfigItem
     public Optional<List<String>> cacheFrom;
-
-    /**
-     * Name of binary used to execute the docker commands.
-     */
-    @ConfigItem(defaultValue = "docker")
-    public String executableName;
 }
