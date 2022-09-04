@@ -47,7 +47,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.impl.Http1xServerConnection;
 import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.impl.VertxInternal;
@@ -67,14 +66,13 @@ public class VertxHttpRecorder {
 
     private static volatile Handler<RoutingContext> hotReplacementHandler;
 
+    private static volatile Router router;
+
     private static volatile Runnable closeTask;
-
-    private static volatile Handler<HttpServerRequest> rootHandler;
-
-    private static final Handler<HttpServerRequest> ACTUAL_ROOT = new Handler<HttpServerRequest>() {
+    private static final Runnable cleanupRouterTask = new Runnable() {
         @Override
-        public void handle(HttpServerRequest httpServerRequest) {
-            rootHandler.handle(httpServerRequest);
+        public void run() {
+            router = null;
         }
     };
 
@@ -85,7 +83,7 @@ public class VertxHttpRecorder {
     public static void shutDownDevMode() {
         closeTask.run();
         closeTask = null;
-        rootHandler = null;
+        cleanupRouterTask.run();
         hotReplacementHandler = null;
     }
 
@@ -98,11 +96,10 @@ public class VertxHttpRecorder {
             HttpConfiguration config = new HttpConfiguration();
             ConfigInstantiator.handleObject(config);
 
-            Router router = Router.router(VertxCoreRecorder.getWebVertx());
+            router = Router.router(VertxCoreRecorder.getWebVertx());
             if (hotReplacementHandler != null) {
-                router.route().order(Integer.MIN_VALUE).blockingHandler(hotReplacementHandler);
+                router.route().blockingHandler(hotReplacementHandler);
             }
-            rootHandler = router;
 
             //we can't really do
             doServerStart(VertxCoreRecorder.getWebVertx(), config, LaunchMode.DEVELOPMENT, new Supplier<Integer>() {
@@ -121,9 +118,14 @@ public class VertxHttpRecorder {
             final LaunchMode launchMode, final ShutdownContext shutdownContext) {
 
         Vertx vertx = vertxRuntimeValue.getValue();
-        Router router = Router.router(vertx);
-        if (hotReplacementHandler != null) {
-            router.route().order(Integer.MIN_VALUE).handler(hotReplacementHandler);
+        if (router == null) {
+            router = Router.router(vertx);
+            if (launchMode != LaunchMode.DEVELOPMENT) {
+                shutdownContext.addShutdownTask(cleanupRouterTask);
+            }
+            if (hotReplacementHandler != null) {
+                router.route().handler(hotReplacementHandler);
+            }
         }
 
         return new RuntimeValue<>(router);
@@ -149,8 +151,8 @@ public class VertxHttpRecorder {
     }
 
     public void finalizeRouter(BeanContainer container, Consumer<Route> defaultRouteHandler,
-            List<Filter> filterList, RuntimeValue<Vertx> vertx,
-            RuntimeValue<Router> runtimeValue, String rootPath, LaunchMode launchMode) {
+            List<Filter> filterList, LaunchMode launchMode, ShutdownContext shutdown,
+            RuntimeValue<Router> runtimeValue) {
         // install the default route at the end
         Router router = runtimeValue.getValue();
 
@@ -175,32 +177,30 @@ public class VertxHttpRecorder {
         }
 
         if (defaultRouteHandler != null) {
-            defaultRouteHandler.accept(router.route().order(10_000));
+            defaultRouteHandler.accept(router.route());
+        }
+
+        if (launchMode == LaunchMode.DEVELOPMENT) {
+            shutdown.addShutdownTask(new Runnable() {
+                @Override
+                public void run() {
+                    List<Route> routes = router.getRoutes();
+                    // if the hot replacement handler has been installed, we keep it
+                    for (int i = (hotReplacementHandler != null ? 1 : 0); i < routes.size(); i++) {
+                        routes.get(i).remove();
+                    }
+                }
+            });
         }
 
         container.instance(RouterProducer.class).initialize(router);
-        router.route().last().failureHandler(new QuarkusErrorHandler(launchMode.isDevOrTest()));
-
-        if (rootPath.equals("/")) {
-            if (hotReplacementHandler != null) {
-                router.route().order(-1).handler(hotReplacementHandler);
-            }
-            rootHandler = router;
-        } else {
-            Router mainRouter = Router.router(vertx.getValue());
-            mainRouter.mountSubRouter(rootPath, router);
-            if (hotReplacementHandler != null) {
-                mainRouter.route().order(-1).handler(hotReplacementHandler);
-            }
-            rootHandler = mainRouter;
-        }
-
     }
 
     private static void doServerStart(Vertx vertx, HttpConfiguration httpConfiguration, LaunchMode launchMode,
             Supplier<Integer> eventLoops)
             throws IOException {
         // Http server configuration
+        router.route().last().failureHandler(new QuarkusErrorHandler(launchMode.isDevOrTest()));
         HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode);
         HttpServerOptions sslConfig = createSslOptions(httpConfiguration, launchMode);
 
@@ -217,7 +217,8 @@ public class VertxHttpRecorder {
             public Verticle get() {
                 return new WebDeploymentVerticle(httpConfiguration.determinePort(launchMode),
                         httpConfiguration.determineSslPort(launchMode), httpConfiguration.host, httpServerOptions,
-                        sslConfig, launchMode);
+                        sslConfig,
+                        router);
             }
         }, new DeploymentOptions().setInstances(ioThreads), new Handler<AsyncResult<String>>() {
             @Override
@@ -418,36 +419,29 @@ public class VertxHttpRecorder {
         private HttpServer httpsServer;
         private final HttpServerOptions httpOptions;
         private final HttpServerOptions httpsOptions;
-        private final LaunchMode launchMode;
+        private final Router router;
 
         public WebDeploymentVerticle(int port, int httpsPort, String host, HttpServerOptions httpOptions,
-                HttpServerOptions httpsOptions, LaunchMode launchMode) {
+                HttpServerOptions httpsOptions, Router router) {
             this.port = port;
             this.httpsPort = httpsPort;
             this.host = host;
             this.httpOptions = httpOptions;
             this.httpsOptions = httpsOptions;
-            this.launchMode = launchMode;
+            this.router = router;
         }
 
         @Override
         public void start(Future<Void> startFuture) {
             final AtomicInteger remainingCount = new AtomicInteger(httpsOptions != null ? 2 : 1);
             httpServer = vertx.createHttpServer(httpOptions);
-            httpServer.requestHandler(ACTUAL_ROOT);
+            httpServer.requestHandler(router);
             httpServer.listen(port, host, event -> {
                 if (event.cause() != null) {
                     startFuture.fail(event.cause());
                 } else {
                     // Port may be random, so set the actual port
-                    int actualPort = event.result().actualPort();
-                    if (actualPort != port) {
-                        // Override quarkus.http.(test-)?port
-                        System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port",
-                                String.valueOf(actualPort));
-                        // Set in HttpOptions to output the port in the Timing class
-                        httpOptions.setPort(actualPort);
-                    }
+                    httpOptions.setPort(event.result().actualPort());
                     if (remainingCount.decrementAndGet() == 0) {
                         startFuture.complete(null);
                     }
@@ -455,19 +449,12 @@ public class VertxHttpRecorder {
             });
             if (httpsOptions != null) {
                 httpsServer = vertx.createHttpServer(httpsOptions);
-                httpsServer.requestHandler(ACTUAL_ROOT);
+                httpsServer.requestHandler(router);
                 httpsServer.listen(httpsPort, host, event -> {
                     if (event.cause() != null) {
                         startFuture.fail(event.cause());
                     } else {
-                        int actualPort = event.result().actualPort();
-                        if (actualPort != httpsPort) {
-                            // Override quarkus.https.(test-)?port
-                            System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port",
-                                    String.valueOf(actualPort));
-                            // Set in HttpOptions to output the port in the Timing class
-                            httpsOptions.setPort(actualPort);
-                        }
+                        httpsOptions.setPort(event.result().actualPort());
                         if (remainingCount.decrementAndGet() == 0) {
                             startFuture.complete();
                         }
@@ -529,7 +516,7 @@ public class VertxHttpRecorder {
                                     context,
                                     "localhost",
                                     null);
-                            conn.handler(ACTUAL_ROOT);
+                            conn.handler(router);
                             return conn;
                         });
 
@@ -546,8 +533,8 @@ public class VertxHttpRecorder {
 
     }
 
-    public static Handler<HttpServerRequest> getRootHandler() {
-        return ACTUAL_ROOT;
+    public static Router getRouter() {
+        return router;
     }
 
 }

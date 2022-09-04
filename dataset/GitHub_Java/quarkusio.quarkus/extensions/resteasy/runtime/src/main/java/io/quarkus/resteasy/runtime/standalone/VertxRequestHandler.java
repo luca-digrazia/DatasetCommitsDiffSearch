@@ -34,7 +34,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
 
     protected final Vertx vertx;
     protected final RequestDispatcher dispatcher;
-    protected final String rootPath;
+    protected final String servletMappingPrefix;
     protected final BufferAllocator allocator;
     protected final BeanContainer beanContainer;
     protected final CurrentIdentityAssociation association;
@@ -42,13 +42,13 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     public VertxRequestHandler(Vertx vertx,
             BeanContainer beanContainer,
             ResteasyDeployment deployment,
-            String rootPath,
+            String servletMappingPrefix,
             BufferAllocator allocator) {
         this.vertx = vertx;
         this.beanContainer = beanContainer;
         this.dispatcher = new RequestDispatcher((SynchronousDispatcher) deployment.getDispatcher(),
                 deployment.getProviderFactory(), null);
-        this.rootPath = rootPath;
+        this.servletMappingPrefix = servletMappingPrefix;
         this.allocator = allocator;
         Instance<CurrentIdentityAssociation> association = CDI.current().select(CurrentIdentityAssociation.class);
         this.association = association.isResolvable() ? association.get() : null;
@@ -58,14 +58,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     public void handle(RoutingContext request) {
         // have to create input stream here.  Cannot execute in another thread
         // otherwise request handlers may not get set up before request ends
-        VertxInputStream is;
-        try {
-            is = new VertxInputStream(request.request());
-        } catch (IOException e) {
-            request.fail(e);
-            return;
-        }
-
+        VertxInputStream is = new VertxInputStream(request.request());
         vertx.executeBlocking(event -> {
             dispatchRequestContext(request, is, new VertxBlockingOutput(request.request()));
         }, false, event -> {
@@ -90,7 +83,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
         try {
             Context ctx = vertx.getOrCreateContext();
             HttpServerRequest request = routingContext.request();
-            ResteasyUriInfo uriInfo = VertxUtil.extractUriInfo(request, rootPath);
+            ResteasyUriInfo uriInfo = VertxUtil.extractUriInfo(request, servletMappingPrefix);
             ResteasyHttpHeaders headers = VertxUtil.extractHttpHeaders(request);
             HttpServerResponse response = request.response();
             VertxHttpResponse vertxResponse = new VertxHttpResponse(request, dispatcher.getProviderFactory(),

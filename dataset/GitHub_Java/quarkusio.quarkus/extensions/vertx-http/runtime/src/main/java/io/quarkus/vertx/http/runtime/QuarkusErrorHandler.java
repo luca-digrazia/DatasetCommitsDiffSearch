@@ -62,11 +62,7 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
         } else {
             //We default to HTML representation
             event.response().headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=utf-8");
-            final TemplateHtmlBuilder htmlBuilder = new TemplateHtmlBuilder("Internal Server Error", details, details);
-            if (showStack && exception != null) {
-                htmlBuilder.stack(exception);
-            }
-            event.response().end(htmlBuilder.toString());
+            event.response().end(new TemplateHtmlBuilder("Internal Server Error", details, details).stack(stack).toString());
         }
     }
 
