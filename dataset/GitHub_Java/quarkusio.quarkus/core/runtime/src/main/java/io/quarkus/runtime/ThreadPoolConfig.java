@@ -70,9 +70,9 @@ public class ThreadPoolConfig {
     public Optional<Duration> shutdownCheckInterval;
 
     /**
-     * The amount of time a thread will stay alive with no work.
+     * The amount of time in milliseconds a thread will stay alive with no work. Defaults to 1 second
      */
-    @ConfigItem(defaultValue = "PT30S")
+    @ConfigItem(defaultValue = "PT1S")
     public Duration keepAliveTime;
 
 }
