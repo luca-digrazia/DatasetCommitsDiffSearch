@@ -131,7 +131,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
         differencer, Optional.<RootedPath>absent());
   }
 
-  private static SkyKey createKey(RootedPath directory) {
+  private SkyKey createKey(RootedPath directory) {
     return LocalRepositoryLookupValue.key(directory);
   }
 
