@@ -14,9 +14,11 @@
 
 package com.google.devtools.build.lib.runtime;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -28,6 +30,7 @@ import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.util.ArrayList;
@@ -54,6 +57,7 @@ final class TestResultAggregator {
   }
 
   private final AggregationPolicy policy;
+  private final ConfiguredTarget testTarget;
   private final TestSummary.Builder summary;
   private int remainingRuns;
   private boolean summaryPosted = false;
@@ -63,13 +67,19 @@ final class TestResultAggregator {
       BuildConfiguration configuration,
       AggregationPolicy policy,
       boolean skippedThisTest) {
+    this.testTarget = target;
     this.policy = policy;
-    this.summary =
-        TestSummary.newBuilder()
-            .setTarget(target)
-            .setConfiguration(configuration)
-            .setStatus(BlazeTestStatus.NO_STATUS)
-            .setSkipped(skippedThisTest);
+
+    // And create an empty summary suitable for incremental analysis.
+    // Also has the nice side effect of mapping labels to RuleConfiguredTargets.
+    this.summary = TestSummary.newBuilder();
+    this.summary.setTarget(target);
+    if (configuration != null) {
+      // This can be null for testing.
+      this.summary.setConfiguration(configuration);
+    }
+    this.summary.setStatus(BlazeTestStatus.NO_STATUS);
+    this.summary.setSkipped(skippedThisTest);
     this.remainingRuns = TestProvider.getTestStatusArtifacts(target).size();
   }
 
@@ -78,6 +88,14 @@ final class TestResultAggregator {
    * upon completion of executed test runs.
    */
   synchronized void testEvent(TestResult result) {
+    ActionOwner testOwner = result.getTestAction().getOwner();
+    ConfiguredTargetKey targetLabel =
+        ConfiguredTargetKey.builder()
+            .setLabel(testOwner.getLabel())
+            .setConfiguration(result.getTestAction().getConfiguration())
+            .build();
+    Preconditions.checkArgument(targetLabel.equals(asKey(testTarget)));
+
     // If a test result was cached, then post the cached attempts to the event bus.
     if (result.isCached()) {
       for (TestAttempt attempt : result.getCachedTestAttempts()) {
@@ -135,6 +153,13 @@ final class TestResultAggregator {
     postSummary();
   }
 
+  private static ConfiguredTargetKey asKey(ConfiguredTarget target) {
+    return ConfiguredTargetKey.builder()
+        .setLabel(AliasProvider.getDependencyLabel(target))
+        .setConfigurationKey(target.getConfigurationKey())
+        .build();
+  }
+
   private static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
     return status.getNumber() > other.getNumber() ? status : other;
   }
@@ -163,8 +188,10 @@ final class TestResultAggregator {
    *
    * @param result New test result to aggregate into the summary.
    */
-  private void incrementalAnalyze(TestResult result) {
+  @VisibleForTesting
+  synchronized void incrementalAnalyze(TestResult result) {
     // Cache retrieval should have been performed already.
+    Preconditions.checkNotNull(result);
     TestSummary existingSummary = Preconditions.checkNotNull(summary.peek());
 
     BlazeTestStatus status = existingSummary.getStatus();
