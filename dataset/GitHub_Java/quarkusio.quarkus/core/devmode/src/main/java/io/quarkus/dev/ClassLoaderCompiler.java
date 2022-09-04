@@ -40,7 +40,7 @@ import org.jboss.logging.Logger;
 
 /**
  * Class that handles compilation of source files
- * 
+ *
  * @author Stuart Douglas
  */
 public class ClassLoaderCompiler {
@@ -123,17 +123,14 @@ public class ClassLoaderCompiler {
             }
         }
         for (DevModeContext.ModuleInfo i : context.getModules()) {
-            if (!i.getSourcePaths().isEmpty()) {
+            if (i.getSourcePath() != null) {
                 if (i.getClassesPath() == null) {
                     log.warn("No classes directory found for module '" + i.getName()
                             + "'. It is advised that this module be compiled before launching dev mode");
                     continue;
                 }
-                i.getSourcePaths().forEach(s -> {
-                    this.compilationContexts.put(s,
-                            new CompilationProvider.Context(
-                                    classPathElements, new File(i.getClassesPath())));
-                });
+                this.compilationContexts.put(i.getSourcePath(),
+                        new CompilationProvider.Context(classPathElements, new File(i.getClassesPath())));
             }
         }
         this.allHandledExtensions = new HashSet<>();

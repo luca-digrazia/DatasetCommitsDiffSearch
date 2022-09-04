@@ -1,7 +1,6 @@
 package io.quarkus.kotlin.deployment;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -48,12 +47,6 @@ public class KotlinCompilationProvider implements CompilationProvider {
         }
     }
 
-    @Override
-    public Path getSourcePath(Path classFilePath, Set<String> sourcePaths, String classesPath) {
-        // return same class so it is not removed
-        return classFilePath;
-    }
-
     private static class SimpleKotlinCompilerMessageCollector implements MessageCollector {
 
         private final List<String> errors = new ArrayList<>();
@@ -71,7 +64,7 @@ public class KotlinCompilationProvider implements CompilationProvider {
         public void report(CompilerMessageSeverity severity, String s, CompilerMessageLocation location) {
             if (severity.isError()) {
                 if ((location != null) && (location.getLineContent() != null)) {
-                    errors.add(String.format("%s%n%s:%d:%d", location.getLineContent(), location.getPath(), location.getLine(),
+                    errors.add(String.format("%s\n%s:%d:%d", location.getLineContent(), location.getPath(), location.getLine(),
                             location.getColumn()));
                 } else {
                     errors.add(s);
