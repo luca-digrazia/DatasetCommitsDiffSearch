@@ -1,17 +1,9 @@
 package org.jboss.shamrock.maven;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
-import java.util.jar.JarFile;
-import java.util.zip.ZipEntry;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -43,63 +35,34 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean debugSymbols;
 
-    @Parameter(defaultValue = "${native-image.debug-build-process}")
-    private boolean debugBuildProcess;
-
     @Parameter(readonly = true, required = true, defaultValue = "${project.build.finalName}")
     private String finalName;
 
     @Parameter(defaultValue = "${native-image.new-server}")
     private boolean cleanupServer;
 
-    @Parameter
-    private boolean enableHttpUrlHandler;
-
-    @Parameter
-    private boolean enableRetainedHeapReporting;
-
-    @Parameter
-    private boolean enableCodeSizeReporting;
-
-    @Parameter(defaultValue = "${env.GRAALVM_HOME}")
-    private String graalvmHome;
-
-    @Parameter(defaultValue = "false")
-    private boolean enableServer;
-
-    @Parameter(defaultValue = "false")
-    private boolean enableJni;
-
-    @Parameter(defaultValue = "${native-image.xmx}")
-    private String nativeImageXmx;
-
-    @Parameter(defaultValue = "${native-image.docker-build}")
-    private boolean dockerBuild;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
 
-        HashMap<String, String> env = new HashMap<>(System.getenv());
         List<String> nativeImage;
-        if (dockerBuild) {
-
+        String graalvmCmd = System.getenv("GRAALVM_NATIVE_IMAGE_CMD");
+        if (graalvmCmd != null) {
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm protean/graalvm-native-image"
             nativeImage = new ArrayList<>();
-            //TODO: use an 'official' image
-            Collections.addAll(nativeImage, "docker", "run", "-v",outputDirectory.getAbsolutePath() + ":/project:z", "--rm", "swd847/centos-graal-native-image");
-
+            Collections.addAll(nativeImage, graalvmCmd.replace("{{PROJECT_DIR}}", outputDirectory.getAbsolutePath()).split(" "));
         } else {
+            String graalvmHome = System.getenv("GRAALVM_HOME");
             if (graalvmHome == null) {
                 throw new MojoFailureException("GRAALVM_HOME was not set");
             }
-            env.put("GRAALVM_HOME", graalvmHome);
             nativeImage = Collections.singletonList(graalvmHome + File.separator + "bin" + File.separator + "native-image");
         }
 
         try {
             List<String> command = new ArrayList<>();
             command.addAll(nativeImage);
-            if (cleanupServer) {
+            if(cleanupServer) {
                 List<String> cleanup = new ArrayList<>(nativeImage);
                 cleanup.add("--server-shutdown");
                 Process process = Runtime.getRuntime().exec(cleanup.toArray(new String[0]), null, outputDirectory);
@@ -107,58 +70,14 @@ public class NativeImageMojo extends AbstractMojo {
                 new Thread(new ProcessReader(process.getErrorStream(), true)).start();
                 process.waitFor();
             }
-            // TODO this is a temp hack
-            final File propsFile = new File(outputDirectory, "classes/native-image.properties");
-            if (propsFile.exists()) {
-                final Properties properties = new Properties();
-                try (FileInputStream is = new FileInputStream(propsFile)) {
-                    try (InputStreamReader isr = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-                        properties.load(isr);
-                    }
-                }
-                for (String propertyName : properties.stringPropertyNames()) {
-                    final String propertyValue = properties.getProperty(propertyName);
-                    // todo maybe just -D is better than -J-D in this case
-                    if (propertyValue == null) {
-                        command.add("-J-D" + propertyName);
-                    } else {
-                        command.add("-J-D" + propertyName + "=" + propertyValue);
-                    }
-                }
-            }
             command.add("-jar");
             command.add(finalName + "-runner.jar");
-            //https://github.com/oracle/graal/issues/660
-            command.add("-J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1");
+            command.add("-H:IncludeResources=META-INF/resources/.*");
             if (reportErrorsAtRuntime) {
                 command.add("-H:+ReportUnsupportedElementsAtRuntime");
             }
             if (debugSymbols) {
                 command.add("-g");
-            }
-            if (debugBuildProcess) {
-                command.add("-J-Xdebug");
-                command.add("-J-Xnoagent");
-                command.add("-J-Djava.compiler=NONE");
-                command.add("-J-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=y");
-            }
-            if(nativeImageXmx != null) {
-                command.add("-J-Xmx" + nativeImageXmx);
-            }
-            if(enableHttpUrlHandler) {
-                command.add("-H:EnableURLProtocols=http");
-            }
-            if (enableRetainedHeapReporting) {
-                command.add("-H:+PrintRetainedHeapHistogram");
-            }
-            if (enableCodeSizeReporting) {
-                command.add("-H:+PrintCodeSizeReport");
-            }
-            if (enableJni) {
-                command.add("-H:+JNI");
-            }
-            if(!enableServer) {
-                command.add("--no-server");
             }
             //command.add("-H:+AllowVMInspection");
             System.out.println(command);

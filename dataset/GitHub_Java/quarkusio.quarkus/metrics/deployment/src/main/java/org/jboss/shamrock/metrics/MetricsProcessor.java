@@ -3,19 +3,15 @@ package org.jboss.shamrock.metrics;
 import java.util.Collection;
 
 import javax.inject.Inject;
-import javax.interceptor.Interceptor;
 
 import org.eclipse.microprofile.metrics.annotation.Counted;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.shamrock.deployment.ArchiveContext;
-import org.jboss.shamrock.deployment.BeanArchiveIndex;
-import org.jboss.shamrock.deployment.BeanDeployment;
 import org.jboss.shamrock.deployment.ProcessorContext;
 import org.jboss.shamrock.deployment.ResourceProcessor;
 import org.jboss.shamrock.deployment.RuntimePriority;
@@ -25,6 +21,7 @@ import org.jboss.shamrock.metrics.runtime.MetricsDeploymentTemplate;
 import org.jboss.shamrock.metrics.runtime.MetricsServlet;
 import org.jboss.shamrock.undertow.ServletData;
 import org.jboss.shamrock.undertow.ServletDeployment;
+import org.jboss.shamrock.weld.deployment.WeldDeployment;
 
 import io.smallrye.metrics.MetricProducer;
 import io.smallrye.metrics.MetricRegistries;
@@ -36,11 +33,13 @@ import io.smallrye.metrics.interceptors.MetricsBinding;
 import io.smallrye.metrics.interceptors.MetricsInterceptor;
 import io.smallrye.metrics.interceptors.TimedInterceptor;
 
+//import io.smallrye.health.SmallRyeHealthReporter;
+
 public class MetricsProcessor implements ResourceProcessor {
 
 
     @Inject
-    private BeanDeployment beanDeployment;
+    private WeldDeployment weldDeployment;
 
     @Inject
     private ShamrockConfig config;
@@ -48,25 +47,26 @@ public class MetricsProcessor implements ResourceProcessor {
     @Inject
     private ServletDeployment servletDeployment;
 
-    @Inject
-    private BeanArchiveIndex beanArchiveIndex;
-
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
         ServletData servletData = new ServletData("metrics", MetricsServlet.class.getName());
         servletData.getMapings().add(config.getConfig("metrics.path", "/metrics"));
         servletDeployment.addServlet(servletData);
 
-        beanDeployment.addAdditionalBean(MetricProducer.class,
+        weldDeployment.addAdditionalBean(MetricProducer.class,
                 MetricNameFactory.class,
                 MetricRegistries.class);
 
-        beanDeployment.addAdditionalBean(MetricsInterceptor.class,
+        weldDeployment.addAdditionalBean(MetricsInterceptor.class,
                 MeteredInterceptor.class,
                 CountedInterceptor.class,
                 TimedInterceptor.class);
 
-        beanDeployment.addAdditionalBean(MetricsRequestHandler.class, MetricsServlet.class);
+        weldDeployment.addAdditionalBean(MetricsRequestHandler.class, MetricsServlet.class);
+        //weldDeployment.addInterceptor(MetricsInterceptor.class);
+        //weldDeployment.addInterceptor(MeteredInterceptor.class);
+        //weldDeployment.addInterceptor(CountedInterceptor.class);
+        //weldDeployment.addInterceptor(TimedInterceptor.class);
 
         processorContext.addReflectiveClass(false, false, Counted.class.getName(), MetricsBinding.class.getName());
 
@@ -76,27 +76,19 @@ public class MetricsProcessor implements ResourceProcessor {
 
             metrics.createRegistries(null);
 
-            IndexView index = beanArchiveIndex.getIndex();
+            IndexView index = archiveContext.getIndex();
             Collection<AnnotationInstance> annos = index.getAnnotations(DotName.createSimple(Counted.class.getName()));
 
             for (AnnotationInstance anno : annos) {
                 AnnotationTarget target = anno.target();
 
-                // We need to exclude metrics interceptors
-                if (Kind.CLASS.equals(target.kind())
-                        && target.asClass().classAnnotations().stream().anyMatch(a -> a.name().equals(DotName.createSimple(Interceptor.class.getName())))) {
-                    continue;
-                }
-
                 MethodInfo methodInfo = target.asMethod();
-                String name = methodInfo.name();
-                if(anno.value("name") != null) {
-                    name = anno.value("name").asString();
-                }
                 ClassInfo classInfo = methodInfo.declaringClass();
 
                 metrics.registerCounted(classInfo.name().toString(),
-                        name);
+                        methodInfo.name().toString());
+
+                processorContext.addReflectiveClass(true, false, classInfo.name().toString());
             }
 
         }
