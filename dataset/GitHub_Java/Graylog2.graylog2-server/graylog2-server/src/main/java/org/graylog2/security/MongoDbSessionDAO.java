@@ -1,42 +1,45 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.security;
+
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 import com.github.rholder.retry.RetryException;
 import com.github.rholder.retry.Retryer;
 import com.github.rholder.retry.RetryerBuilder;
 import com.github.rholder.retry.StopStrategies;
 import com.github.rholder.retry.WaitStrategies;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.mongodb.DuplicateKeyException;
+
 import org.apache.shiro.session.Session;
 import org.apache.shiro.session.mgt.SimpleSession;
 import org.apache.shiro.session.mgt.eis.CachingSessionDAO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+
+import javax.inject.Inject;
 
 public class MongoDbSessionDAO extends CachingSessionDAO {
     private static final Logger LOG = LoggerFactory.getLogger(MongoDbSessionDAO.class);
@@ -74,6 +77,7 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
     @Override
     protected Session doReadSession(Serializable sessionId) {
         final MongoDbSession dbSession = mongoDBSessionService.load(sessionId.toString());
+        LOG.debug("Reading session for id {} from MongoDB: {}", sessionId, dbSession);
         if (dbSession == null) {
             // expired session or it was never there to begin with
             return null;
@@ -98,10 +102,10 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
         final MongoDbSession dbSession = mongoDBSessionService.load(session.getId().toString());
 
         if (null == dbSession) {
-            throw new RuntimeException("Couldn't load session");
+            throw new RuntimeException("Couldn't load session <" + session.getId() + ">");
         }
 
-        LOG.debug("Updating session");
+        LOG.debug("Updating session {}", session);
         dbSession.setHost(session.getHost());
         dbSession.setTimeout(session.getTimeout());
         dbSession.setStartTimestamp(session.getStartTimestamp());
@@ -135,14 +139,14 @@ public class MongoDbSessionDAO extends CachingSessionDAO {
 
     @Override
     protected void doDelete(Session session) {
-        LOG.debug("Deleting session");
+        LOG.debug("Deleting session {}", session);
         final Serializable id = session.getId();
         final MongoDbSession dbSession = mongoDBSessionService.load(id.toString());
         if (dbSession != null) {
             final int deleted = mongoDBSessionService.destroy(dbSession);
-            LOG.debug("Deleted {} sessions from database", deleted);
+            LOG.debug("Deleted {} sessions with ID {} from database", deleted, id);
         } else {
-            LOG.debug("Session not found in database");
+            LOG.debug("Session {} not found in database", id);
         }
     }
 
