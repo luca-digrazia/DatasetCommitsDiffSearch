@@ -783,6 +783,7 @@ public final class CcCompilationHelper {
       ccOutputs =
           new CcCompilationOutputs.Builder()
               .merge(ccOutputs)
+              .addLtoBitcodeFile(ccOutputs.getLtoBitcodeFiles())
               .addObjectFiles(objectFiles)
               .addPicObjectFiles(picObjectFiles)
               .build();
