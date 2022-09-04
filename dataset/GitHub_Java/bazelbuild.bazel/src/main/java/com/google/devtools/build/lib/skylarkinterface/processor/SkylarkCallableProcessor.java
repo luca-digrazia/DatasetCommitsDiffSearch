@@ -33,10 +33,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.MirroredTypeException;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.type.WildcardType;
 import javax.tools.Diagnostic;
 
 /**
@@ -52,13 +49,11 @@ import javax.tools.Diagnostic;
  *       <pre>method([positionals]*[other user-args](Location)(FuncallExpression)(Environment))
  *       </pre>
  *       where Location, FuncallExpression, and Environment are supplied by the interpreter if and
- *       only if useLocation, useAst, and useStarlarkThread are specified, respectively.
+ *       only if useLocation, useAst, and useEnvironment are specified, respectively.
  *   <li>The number of method parameters must match the number of annotation-declared parameters
  *       plus the number of interpreter-supplied parameters.
  *   <li>Each parameter, if explicitly typed, may only use either 'type' or 'allowedTypes', not
  *       both.
- *   <li>Parameters may not specify their generic types (they must use the <code>?</code> wildcard
- *       exclusively.
  *   <li>Each parameter must be positional or named (or both).
  *   <li>Positional-only parameters must be specified before any named parameters.
  *   <li>Positional parameters must be specified before any non-positional parameters.
@@ -87,9 +82,11 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       "com.google.devtools.build.lib.syntax.SkylarkDict<?,?>";
   private static final String LOCATION = "com.google.devtools.build.lib.events.Location";
   private static final String AST = "com.google.devtools.build.lib.syntax.FuncallExpression";
-  private static final String ENVIRONMENT = "com.google.devtools.build.lib.syntax.StarlarkThread";
+  private static final String ENVIRONMENT = "com.google.devtools.build.lib.syntax.Environment";
   private static final String STARLARK_SEMANTICS =
       "com.google.devtools.build.lib.syntax.StarlarkSemantics";
+  private static final String STARLARK_CONTEXT =
+      "com.google.devtools.build.lib.skylarkinterface.StarlarkContext";
 
   @Override
   public SourceVersion getSupportedSourceVersion() {
@@ -126,7 +123,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
         verifyNotStructFieldWithParams(methodElement, annotation);
         verifyParamSemantics(methodElement, annotation);
         verifyParamFlagSemantics(methodElement, annotation);
-        verifyParamGenericTypes(methodElement);
         verifyNumberOfParameters(methodElement, annotation);
         verifyExtraInterpreterParams(methodElement, annotation);
         verifyIfSelfCall(methodElement, annotation);
@@ -374,26 +370,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     }
   }
 
-  private static void verifyParamGenericTypes(ExecutableElement methodElement)
-      throws SkylarkCallableProcessorException {
-    for (VariableElement methodParam : methodElement.getParameters()) {
-      if (methodParam.asType() instanceof DeclaredType) {
-        DeclaredType declaredType = (DeclaredType) methodParam.asType();
-        for (TypeMirror typeArg : declaredType.getTypeArguments()) {
-          if (!(typeArg instanceof WildcardType)) {
-            throw new SkylarkCallableProcessorException(
-                methodElement,
-                String.format(
-                    "Parameter %s has generic type %s, but may only wildcard type parameters are "
-                        + "allowed. Type inference in a Starlark-exposed method is unsafe. See "
-                        + "@SkylarkCallable class documentation for details.",
-                    methodParam.getSimpleName(), methodParam.asType()));
-          }
-        }
-      }
-    }
-  }
-
   private void verifyExtraInterpreterParams(ExecutableElement methodElement,
       SkylarkCallable annotation) throws SkylarkCallableProcessorException {
     List<? extends VariableElement> methodSignatureParams = methodElement.getParameters();
@@ -450,12 +426,12 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       }
       currentIndex++;
     }
-    if (annotation.useStarlarkThread()) {
+    if (annotation.useEnvironment()) {
       if (!ENVIRONMENT.equals(methodSignatureParams.get(currentIndex).asType().toString())) {
         throw new SkylarkCallableProcessorException(
             methodElement,
             String.format(
-                "Expected parameter index %d to be the %s type, matching useStarlarkThread, "
+                "Expected parameter index %d to be the %s type, matching useEnvironment, "
                     + "but was %s",
                 currentIndex,
                 ENVIRONMENT,
@@ -463,18 +439,28 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       }
       currentIndex++;
     }
-    if (annotation.useStarlarkSemantics()) {
+    if (annotation.useSkylarkSemantics()) {
       if (!STARLARK_SEMANTICS.equals(methodSignatureParams.get(currentIndex).asType().toString())) {
         throw new SkylarkCallableProcessorException(
             methodElement,
             String.format(
-                "Expected parameter index %d to be the %s type, matching useStarlarkSemantics, "
+                "Expected parameter index %d to be the %s type, matching useSkylarkSemantics, "
                     + "but was %s",
                 currentIndex,
                 STARLARK_SEMANTICS,
-                methodSignatureParams.get(currentIndex).asType()));
+                methodSignatureParams.get(currentIndex).asType().toString()));
       }
       currentIndex++;
+    }
+    if (annotation.useContext()) {
+      if (!STARLARK_CONTEXT.equals(methodSignatureParams.get(currentIndex).asType().toString())) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format(
+                "Expected parameter index %d to be the %s type, matching useContext, "
+                    + "but was %s",
+                currentIndex, STARLARK_CONTEXT, methodSignatureParams.get(currentIndex).asType()));
+      }
     }
   }
 
@@ -484,8 +470,9 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     numExtraInterpreterParams += annotation.extraKeywords().name().isEmpty() ? 0 : 1;
     numExtraInterpreterParams += annotation.useLocation() ? 1 : 0;
     numExtraInterpreterParams += annotation.useAst() ? 1 : 0;
-    numExtraInterpreterParams += annotation.useStarlarkThread() ? 1 : 0;
-    numExtraInterpreterParams += annotation.useStarlarkSemantics() ? 1 : 0;
+    numExtraInterpreterParams += annotation.useEnvironment() ? 1 : 0;
+    numExtraInterpreterParams += annotation.useSkylarkSemantics() ? 1 : 0;
+    numExtraInterpreterParams += annotation.useContext() ? 1 : 0;
     return numExtraInterpreterParams;
   }
 

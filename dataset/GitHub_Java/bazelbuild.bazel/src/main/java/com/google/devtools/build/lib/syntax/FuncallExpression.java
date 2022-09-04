@@ -465,7 +465,7 @@ public final class FuncallExpression extends Expression {
         methodDescriptor.isStructField(), "Can only be invoked on structField callables");
     Preconditions.checkArgument(
         !methodDescriptor.isUseEnvironment()
-            || !methodDescriptor.isUseStarlarkSemantics()
+            || !methodDescriptor.isUseSkylarkSemantics()
             || !methodDescriptor.isUseLocation()
             || !methodDescriptor.isUseContext(),
         "Cannot be invoked on structField callables with extra interpreter params");
@@ -660,7 +660,7 @@ public final class FuncallExpression extends Expression {
         String.format(
             "unexpected keyword%s %s",
             unexpectedKeywords.size() > 1 ? "s" : "",
-            Joiner.on(", ").join(Iterables.transform(unexpectedKeywords, s -> "'" + s + "'"))),
+            Joiner.on(",").join(Iterables.transform(unexpectedKeywords, s -> "'" + s + "'"))),
         method,
         objClass);
   }
@@ -731,7 +731,7 @@ public final class FuncallExpression extends Expression {
     if (method.isUseEnvironment()) {
       builder.add(env);
     }
-    if (method.isUseStarlarkSemantics()) {
+    if (method.isUseSkylarkSemantics()) {
       builder.add(env.getSemantics());
     }
     if (method.isUseContext()) {
