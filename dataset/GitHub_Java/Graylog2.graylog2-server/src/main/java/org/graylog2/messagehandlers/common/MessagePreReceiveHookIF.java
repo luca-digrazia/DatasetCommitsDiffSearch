@@ -20,16 +20,20 @@
 
 package org.graylog2.messagehandlers.common;
 
+import org.graylog2.messagehandlers.gelf.GELFMessage;
+
 /**
  * MessagePostReceiveHookIF.java: Aug 19, 2010 5:46:32 PM
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public interface MessagePreReceiveHookIF {
 
     /**
      * Process the hook.
+     *
+     * @param payload
      */
-    public void process(Object payload);
+    void process(GELFMessage payload);
 
 }

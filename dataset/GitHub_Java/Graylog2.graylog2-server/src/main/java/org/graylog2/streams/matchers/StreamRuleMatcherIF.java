@@ -18,35 +18,20 @@
  *
  */
 
-package org.graylog2.forwarders;
+package org.graylog2.streams.matchers;
 
-import org.graylog2.forwarders.forwarders.MessageForwarderConfigurationException;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.graylog2.streams.StreamRule;
 
 /**
- * MessageForwarderIF.java: Mar 18, 2011 9:31:05 PM
+ * StreamRuleMatcherIF.java: Mar 27, 2011 4:42:31 PM
  *
- * Interface for message forwarders to other endpoints.
+ * [description]
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public interface MessageForwarderIF {
+public interface StreamRuleMatcherIF {
 
-    /**
-     * Forward the message to the given destination. The implementation
-     * may require different destination formats.
-     *
-     * @param message The message to forward
-     * @return true in case of success, otherwise false
-     * @throws MessageForwarderConfigurationException
-     */
-    boolean forward(GELFMessage message) throws MessageForwarderConfigurationException;
-
-    /**
-     * Indicates if the last forward has succeeded.
-     * 
-     * @return
-     */
-    boolean succeeded();
+    boolean match(GELFMessage msg, StreamRule rule);
 
 }

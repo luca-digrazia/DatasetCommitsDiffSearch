@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <llennart@socketfeed.com>
+ * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -18,22 +18,23 @@
  *
  */
 
-package org.graylog2.messagehandlers.common;
-
-import org.graylog2.messagehandlers.gelf.GELFMessage;
+package org.graylog2.messagehandlers.gelf;
 
 /**
- * MessagePostReceiveHookIF.java: Aug 19, 2010 5:46:32 PM
+ * GELFClientIF.java: Sep 14, 2010 6:35:13 PM
+ *
+ * Representing a GELF client. Allows i.e. decoding of sent data.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public interface MessagePostReceiveHookIF {
+public interface GELFClientHandlerIF {
+
 
     /**
-     * Process the hook.
+     * Handles the client: Decodes JSON, Stores in MongoDB, ReceiveHooks
      *
-     * @param payload
+     * @return boolean
      */
-    void process(GELFMessage payload);
+    boolean handle();
 
 }
