@@ -147,7 +147,6 @@ public class Retrier {
           case INTERNAL:
           case UNAVAILABLE:
           case UNAUTHENTICATED:
-          case RESOURCE_EXHAUSTED:
             return true;
           default:
             return false;
