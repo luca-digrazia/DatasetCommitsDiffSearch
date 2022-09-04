@@ -26,7 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public class DashboardWidget implements EmbeddedPersistable {
+public final class DashboardWidget implements EmbeddedPersistable {
     public static final String FIELD_ID = "id";
     public static final String FIELD_TYPE = "type";
     public static final String FIELD_DESCRIPTION = "description";
@@ -89,7 +89,6 @@ public class DashboardWidget implements EmbeddedPersistable {
         return creatorUserId;
     }
 
-    @Override
     public Map<String, Object> getPersistedFields() {
         return ImmutableMap.<String, Object>builder()
                 .put(FIELD_ID, id)
@@ -119,9 +118,9 @@ public class DashboardWidget implements EmbeddedPersistable {
 
 
     @Override
-    public final boolean equals(Object o) {
+    public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof DashboardWidget)) return false;
+        if (o == null || getClass() != o.getClass()) return false;
         DashboardWidget that = (DashboardWidget) o;
         return cacheTime == that.cacheTime &&
             Objects.equals(type, that.type) &&
@@ -133,7 +132,7 @@ public class DashboardWidget implements EmbeddedPersistable {
     }
 
     @Override
-    public final int hashCode() {
+    public int hashCode() {
         return Objects.hash(type, id, timeRange, config, creatorUserId, cacheTime, description);
     }
 
