@@ -28,16 +28,15 @@ import com.tencent.angel.psagent.matrix.ResponseType;
 import com.tencent.angel.psagent.matrix.transport.FutureResult;
 import com.tencent.angel.psagent.matrix.transport.adapter.MatrixClientAdapter;
 import com.tencent.angel.psagent.task.TaskContext;
+
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectAVLTreeMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -526,8 +525,6 @@ public class MatrixOpLogCache {
         case T_FLOAT_SPARSE:
           return new SparseFloatMatrixOpLog(matrixId, enableFilter);
         case T_DOUBLE_SPARSE_LONGKEY:
-          return new SparseDoubleLongKeyMatrixOpLog(matrixId, enableFilter);
-        case T_DOUBLE_SPARSE_LONGKEY_COMPONENT:
           return new CompSparseDoubleLongKeyMatrixOpLog(matrixId, enableFilter);
         case T_DOUBLE_SPARSE_COMPONENT:
           return new CompSparseDoubleMatrixOpLog(matrixId, enableFilter);
@@ -552,7 +549,7 @@ public class MatrixOpLogCache {
         case SPARSE_FLOAT:
           return new SparseFloatMatrixOpLog(matrixId, enableFilter);
         case SPARSE_DOUBLE_LONGKEY:
-          return new SparseDoubleLongKeyMatrixOpLog(matrixId, enableFilter);
+          return new CompSparseDoubleLongKeyMatrixOpLog(matrixId, enableFilter);
         case COMPONENT_SPARSE_DOUBLE:
           return new CompSparseDoubleMatrixOpLog(matrixId, enableFilter);
         case COMPONENT_SPARSE_FLOAT:
