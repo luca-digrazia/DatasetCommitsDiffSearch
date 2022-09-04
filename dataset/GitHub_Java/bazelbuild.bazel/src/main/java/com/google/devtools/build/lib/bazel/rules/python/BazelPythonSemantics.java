@@ -74,7 +74,6 @@ public class BazelPythonSemantics implements PythonSemantics {
 
   @Override
   public void collectDefaultRunfilesForBinary(RuleContext ruleContext, Builder builder) {
-    addRuntime(ruleContext, builder);
   }
 
   @Override
@@ -277,7 +276,7 @@ public class BazelPythonSemantics implements PythonSemantics {
 
     // Read each runfile from execute path, add them into zip file at the right runfiles path.
     // Filter the executable file, cause we are building it.
-    for (Artifact artifact : runfilesSupport.getRunfilesArtifacts()) {
+    for (Artifact artifact : runfilesSupport.getRunfilesArtifactsWithoutMiddlemen()) {
       if (!artifact.equals(executable) && !artifact.equals(zipFile)) {
         argv.addDynamicString(
             getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)
@@ -349,10 +348,7 @@ public class BazelPythonSemantics implements PythonSemantics {
         pythonBinary = provider.interpreterPath();
       } else {
         // checked in Python interpreter in py_runtime
-        PathFragment workspaceName =
-            PathFragment.create(ruleContext.getRule().getPackage().getWorkspaceName());
-        pythonBinary =
-            workspaceName.getRelative(provider.interpreter().getRunfilesPath()).getPathString();
+        pythonBinary = provider.interpreter().getExecPathString();
       }
     } else  {
       // make use of the Python interpreter in an absolute path

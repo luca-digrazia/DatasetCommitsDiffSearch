@@ -35,15 +35,13 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class RunfilesSupplierImplTest {
 
-  private Path execRoot;
   private Root rootDir;
   private Root middlemanRoot;
 
   @Before
   public final void setRoot() throws IOException {
     Scratch scratch = new Scratch();
-    execRoot = scratch.getFileSystem().getPath("/");
-    rootDir = Root.asDerivedRoot(execRoot, scratch.dir("/fake/root/dont/matter"));
+    rootDir = Root.asDerivedRoot(scratch.dir("/fake/root/dont/matter"));
 
     Path middlemanExecPath = scratch.dir("/still/fake/root/dont/matter");
     middlemanRoot = Root.middlemanRoot(middlemanExecPath, middlemanExecPath.getChild("subdir"));

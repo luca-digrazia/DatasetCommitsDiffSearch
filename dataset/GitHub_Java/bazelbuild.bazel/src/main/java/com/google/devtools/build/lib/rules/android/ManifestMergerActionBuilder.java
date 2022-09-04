@@ -32,7 +32,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
-/** Builder for creating manifest merger actions. */
+/**
+ * Builder for creating manifest merger actions.
+ */
 public class ManifestMergerActionBuilder {
   private final RuleContext ruleContext;
   private final SpawnAction.Builder spawnActionBuilder;
@@ -161,8 +163,7 @@ public class ManifestMergerActionBuilder {
     return mapToDictionaryString(map, Functions.toStringFunction(), Functions.toStringFunction());
   }
 
-  private <K, V> String mapToDictionaryString(
-      Map<K, V> map,
+  private <K, V> String mapToDictionaryString(Map<K, V> map,
       Function<? super K, String> keyConverter,
       Function<? super V, String> valueConverter) {
     if (keyConverter == null) {
@@ -186,3 +187,4 @@ public class ManifestMergerActionBuilder {
     return sb.toString();
   }
 }
+
