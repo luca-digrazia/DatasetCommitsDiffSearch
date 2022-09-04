@@ -68,18 +68,18 @@ public class ClusterStatsService {
         return ClusterStats.create(
                 elasticsearchStats(),
                 mongoStats(),
-                streamService.count(),
+                streamService.streamCount(),
                 streamRuleService.totalStreamRuleCount(),
                 streamRuleService.streamRuleCountByStream(),
-                userService.count(),
-                outputService.count(),
-                outputService.countByType(),
-                dashboardService.count(),
-                inputService.totalCount(),
-                inputService.globalCount(),
+                userService.userCount(),
+                outputService.outputCount(),
+                outputService.outputCountByType(),
+                dashboardService.dashboardCount(),
+                inputService.totalInputCount(),
+                inputService.globalInputCount(),
                 inputService.totalExtractorCount(),
                 inputService.totalExtractorCountByType(),
-                bundleService.count()
+                bundleService.bundleCount()
         );
     }
 

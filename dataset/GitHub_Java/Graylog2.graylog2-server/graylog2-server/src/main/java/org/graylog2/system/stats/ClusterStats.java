@@ -62,9 +62,6 @@ public abstract class ClusterStats {
     public abstract long globalInputCount();
 
     @JsonProperty
-    public abstract Map<String, Long> inputCountByType();
-
-    @JsonProperty
     public abstract long extractorCount();
 
     @JsonProperty
@@ -84,7 +81,6 @@ public abstract class ClusterStats {
                                       long dashboardCount,
                                       long inputCount,
                                       long globalInputCount,
-                                      Map<String, Long> inputCountByType,
                                       long extractorCount,
                                       Map<Extractor.Type, Long> extractorCountByType,
                                       long contentPackCount) {
@@ -100,7 +96,6 @@ public abstract class ClusterStats {
                 dashboardCount,
                 inputCount,
                 globalInputCount,
-                inputCountByType,
                 extractorCount,
                 extractorCountByType,
                 contentPackCount);
