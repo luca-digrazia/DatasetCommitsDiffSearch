@@ -89,13 +89,10 @@ public interface SkylarkNativeModuleApi {
   @SkylarkCallable(
     name = "existing_rule",
     doc =
-        "Returns a dictionary representing the attributes of a previously defined target, or "
-            + "<code>None</code> if the target does not exist."
-            + ""
-            + "<p><i>Note: If possible, avoid using this function. It makes BUILD files brittle "
-            + "and order-dependent.",
+        "Returns a dictionary representing the attributes of a previously defined rule, "
+            + "or None if the rule does not exist.",
     parameters = {
-      @Param(name = "name", type = String.class, doc = "The name of the target.")
+      @Param(name = "name", type = String.class, doc = "The name of the rule.")
     },
     useAst = true,
     useEnvironment = true
@@ -106,12 +103,9 @@ public interface SkylarkNativeModuleApi {
   @SkylarkCallable(
     name = "existing_rules",
     doc =
-        "Returns a dictionary containing all the targets instantiated so far. The map key is the "
-            + "name of the target. The map value is equivalent to the <code>existing_rule</code> "
-            + "output for that target."
-            + ""
-            + "<p><i>Note: If possible, avoid using this function. It makes BUILD files brittle "
-            + "and order-dependent.",
+        "Returns a dict containing all the rules instantiated so far. "
+            + "The map key is the name of the rule. The map value is equivalent to the "
+            + "existing_rule output for that rule.",
     useAst = true,
     useEnvironment = true
   )

@@ -266,30 +266,6 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
                 + "It is an error if a provider is listed here and the rule "
                 + "implementation function does not return it."
       ),
-      @Param(
-        name = "execution_platform_constraints_allowed",
-        type = Boolean.class,
-        named = true,
-        positional = false,
-        defaultValue = "False",
-        doc =
-            "If true, a special attribute named <code>exec_compatible_with</code> of "
-                + "label-list type is added, which must not already exist in "
-                + "<code>attrs</code>. Targets may use this attribute to specify additional "
-                + "constraints on the execution platform beyond those given in the "
-                + "<code>exec_compatible_with</code> argument to <code>rule()</code>."
-      ),
-      @Param(
-        name = "exec_compatible_with",
-        type = SkylarkList.class,
-        generic1 = String.class,
-        named = true,
-        positional = false,
-        defaultValue = "[]",
-        doc =
-            "A list of constraints on the execution platform that apply to all targets of "
-                + "this rule type."
-      )
     },
     useAst = true,
     useEnvironment = true
@@ -304,11 +280,9 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
       SkylarkList<?> fragments,
       SkylarkList<?> hostFragments,
       Boolean skylarkTestable,
-      SkylarkList<?> toolchains,
+      SkylarkList<String> toolchains,
       String doc,
       SkylarkList<?> providesArg,
-      Boolean executionPlatformConstraintsAllowed,
-      SkylarkList<?> execCompatibleWith,
       FuncallExpression ast,
       Environment funcallEnv)
       throws EvalException;
@@ -435,7 +409,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
       SkylarkList providesArg,
       SkylarkList fragments,
       SkylarkList hostFragments,
-      SkylarkList<?> toolchains,
+      SkylarkList<String> toolchains,
       String doc,
       FuncallExpression ast,
       Environment funcallEnv)
