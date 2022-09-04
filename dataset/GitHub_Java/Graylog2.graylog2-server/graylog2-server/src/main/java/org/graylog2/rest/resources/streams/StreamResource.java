@@ -18,7 +18,6 @@ package org.graylog2.rest.resources.streams;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -30,14 +29,14 @@ import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.bson.types.ObjectId;
 import org.cliffc.high_scale_lib.Counter;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CloneStreamRequest;
 import org.graylog2.rest.resources.streams.requests.CreateStreamRequest;
 import org.graylog2.rest.resources.streams.requests.UpdateStreamRequest;
@@ -46,7 +45,7 @@ import org.graylog2.rest.resources.streams.responses.TestMatchResponse;
 import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.stats.ThroughputStats;
-import org.graylog2.streams.StreamRouterEngine;
+import org.graylog2.streams.StreamRouter;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
 import org.hibernate.validator.constraints.NotEmpty;
@@ -73,7 +72,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
@@ -85,18 +83,18 @@ public class StreamResource extends RestResource {
 
     private final StreamService streamService;
     private final StreamRuleService streamRuleService;
-    private final StreamRouterEngine.Factory streamRouterEngineFactory;
     private final ThroughputStats throughputStats;
+    private final StreamRouter streamRouter;
 
     @Inject
     public StreamResource(StreamService streamService,
                           StreamRuleService streamRuleService,
-                          StreamRouterEngine.Factory streamRouterEngineFactory,
-                          ThroughputStats throughputStats) {
+                          ThroughputStats throughputStats,
+                          StreamRouter streamRouter) {
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
-        this.streamRouterEngineFactory = streamRouterEngineFactory;
         this.throughputStats = throughputStats;
+        this.streamRouter = streamRouter;
     }
 
     @POST
@@ -106,6 +104,8 @@ public class StreamResource extends RestResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response create(@ApiParam(name = "JSON body", required = true) final CreateStreamRequest cr) throws ValidationException {
+        checkPermission(RestPermissions.STREAMS_CREATE);
+
         // Create stream.
         final Stream stream = streamService.create(cr, getCurrentUser().getName());
         stream.setDisabled(true);
@@ -179,6 +179,7 @@ public class StreamResource extends RestResource {
     @Timed
     @Path("/{streamId}")
     @ApiOperation(value = "Update a stream")
+    @RequiresPermissions(RestPermissions.STREAMS_EDIT)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
@@ -264,23 +265,21 @@ public class StreamResource extends RestResource {
         final Stream stream = streamService.load(streamId);
         final Message message = new Message(serialisedMessage.get("message"));
 
-        final StreamRouterEngine streamRouterEngine = streamRouterEngineFactory.create(Lists.newArrayList(stream), Executors.newSingleThreadExecutor());
-        final List<StreamRouterEngine.StreamTestMatch> streamTestMatches = streamRouterEngine.testMatch(message);
-        final StreamRouterEngine.StreamTestMatch streamTestMatch = streamTestMatches.get(0);
+        final Map<StreamRule, Boolean> ruleMatches = streamRouter.getRuleMatches(stream, message);
 
         final Map<String, Boolean> rules = Maps.newHashMap();
-
-        for (Map.Entry<StreamRule, Boolean> match : streamTestMatch.getMatches().entrySet()) {
-            rules.put(match.getKey().getId(), match.getValue());
+        for (StreamRule ruleMatch : ruleMatches.keySet()) {
+            rules.put(ruleMatch.getId(), ruleMatches.get(ruleMatch));
         }
 
-        return TestMatchResponse.create(streamTestMatch.isMatched(), rules);
+        return TestMatchResponse.create(streamRouter.doesStreamMatch(ruleMatches), rules);
     }
 
     @POST
     @Path("/{streamId}/clone")
     @Timed
     @ApiOperation(value = "Clone a stream")
+    @RequiresPermissions(RestPermissions.STREAMS_CREATE)
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid or missing Stream id.")

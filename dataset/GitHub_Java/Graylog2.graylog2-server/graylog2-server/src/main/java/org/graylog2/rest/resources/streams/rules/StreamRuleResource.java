@@ -114,7 +114,7 @@ public class StreamRuleResource extends RestResource {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
         final StreamRule streamRule;
-        streamRule = streamRuleService.load(streamRuleId);
+        streamRule = streamRuleService.load(loadObjectId(streamRuleId));
 
         if (!streamRule.getStreamId().equals(streamid)) {
             throw new NotFoundException();
@@ -171,7 +171,7 @@ public class StreamRuleResource extends RestResource {
                           @ApiParam(name = "streamRuleId", value = "The stream rule id we are getting", required = true) @PathParam("streamRuleId") String streamRuleId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
-        return streamRuleService.load(streamRuleId);
+        return streamRuleService.load(loadObjectId(streamRuleId));
     }
 
     @DELETE
@@ -188,7 +188,7 @@ public class StreamRuleResource extends RestResource {
                        @PathParam("streamRuleId") @NotEmpty String streamRuleId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
-        final StreamRule streamRule = streamRuleService.load(streamRuleId);
+        final StreamRule streamRule = streamRuleService.load(loadObjectId(streamRuleId));
         if (streamRule.getStreamId().equals(streamid)) {
             streamRuleService.destroy(streamRule);
         } else {
