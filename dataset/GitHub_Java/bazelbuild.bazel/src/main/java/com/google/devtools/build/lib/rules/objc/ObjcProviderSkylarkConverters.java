@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -53,8 +52,7 @@ public class ObjcProviderSkylarkConverters {
   }
 
   /** Returns a value for a java ObjcProvider given a key and a corresponding skylark value. */
-  public static NestedSet<?> convertToJava(Key<?> javaKey, Object skylarkValue)
-      throws EvalException {
+  public static NestedSet<?> convertToJava(Key<?> javaKey, Object skylarkValue) {
     return CONVERTERS.get(javaKey.getType()).valueForJava(javaKey, skylarkValue);
   }
 
@@ -76,7 +74,7 @@ public class ObjcProviderSkylarkConverters {
     Object valueForSkylark(Key<?> javaKey, NestedSet<?> javaValue);
 
     /** Translates a skylark ObjcProvider value to a java ObjcProvider value. */
-    NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) throws EvalException;
+    NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue);
   }
 
   /**
@@ -91,7 +89,7 @@ public class ObjcProviderSkylarkConverters {
     }
 
     @Override
-    public NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) throws EvalException {
+    public NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) {
       validateTypes(skylarkValue, javaKey.getType(), javaKey.getSkylarkKeyName());
       return ((SkylarkNestedSet) skylarkValue).getSet(javaKey.getType());
     }
@@ -110,7 +108,7 @@ public class ObjcProviderSkylarkConverters {
 
     @SuppressWarnings("unchecked")
     @Override
-    public NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) throws EvalException {
+    public NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) {
       validateTypes(skylarkValue, String.class, javaKey.getSkylarkKeyName());
       NestedSetBuilder<PathFragment> result = NestedSetBuilder.stableOrder();
       for (String path : ((SkylarkNestedSet) skylarkValue).toCollection(String.class)) {
@@ -119,7 +117,7 @@ public class ObjcProviderSkylarkConverters {
       return result.build();
     }
   }
-
+  
   /**
    * A converter that that translates between a java {@link SdkFramework} and a skylark string.
    */
@@ -137,7 +135,7 @@ public class ObjcProviderSkylarkConverters {
 
     @SuppressWarnings("unchecked")
     @Override
-    public NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) throws EvalException {
+    public NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) {
       validateTypes(skylarkValue, String.class, javaKey.getSkylarkKeyName());
       NestedSetBuilder<SdkFramework> result = NestedSetBuilder.stableOrder();
       for (String path : ((SkylarkNestedSet) skylarkValue).toCollection(String.class)) {
@@ -147,15 +145,15 @@ public class ObjcProviderSkylarkConverters {
     }
   }
 
-  /** Throws an error if the given object is not a nested set of the given type. */
-  private static void validateTypes(Object toCheck, Class<?> expectedSetType, String keyName)
-      throws EvalException {
+  /**
+   * Throws an error if the given object is not a nested set of the given type.
+   */
+  private static void validateTypes(Object toCheck, Class<?> expectedSetType, String keyName) {
     if (!(toCheck instanceof SkylarkNestedSet)) {
-      throw new EvalException(
-          null, String.format(NOT_SET_ERROR, keyName, EvalUtils.getDataTypeName(toCheck)));
+      throw new IllegalArgumentException(
+          String.format(NOT_SET_ERROR, keyName, EvalUtils.getDataTypeName(toCheck)));
     } else if (!((SkylarkNestedSet) toCheck).getContentType().canBeCastTo(expectedSetType)) {
-      throw new EvalException(
-          null,
+      throw new IllegalArgumentException(
           String.format(
               BAD_SET_TYPE_ERROR,
               keyName,
