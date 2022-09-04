@@ -166,11 +166,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         .add(attr("args", STRING_LIST))
         // Input files for every test action
         .add(
-            attr("$test_wrapper", LABEL)
-                .cfg(HostTransition.INSTANCE)
-                .singleArtifact()
-                .value(labelCache.getUnchecked(toolsRepository + "//tools/test:test_wrapper")))
-        .add(
             attr("$test_runtime", LABEL_LIST)
                 .cfg(HostTransition.INSTANCE)
                 .value(
@@ -181,12 +176,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                 .cfg(HostTransition.INSTANCE)
                 .singleArtifact()
                 .value(labelCache.getUnchecked(toolsRepository + "//tools/test:test_setup")))
-        .add(
-            attr("$xml_generator_script", LABEL)
-                .cfg(HostTransition.INSTANCE)
-                .singleArtifact()
-                .value(
-                    labelCache.getUnchecked(toolsRepository + "//tools/test:test_xml_generator")))
         .add(
             attr("$collect_coverage_script", LABEL)
                 .cfg(HostTransition.INSTANCE)
@@ -208,7 +197,8 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                     BaseRuleClasses.coverageReportGeneratorAttribute(
                         labelCache.getUnchecked(
                             toolsRepository
-                                + BaseRuleClasses.DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE))))
+                                + BaseRuleClasses.DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE)))
+                .singleArtifact())
         .add(attr(":run_under", LABEL).value(RUN_UNDER))
         .executionPlatformConstraintsAllowed(ExecutionPlatformConstraintsAllowed.PER_TARGET)
         .build();
@@ -599,7 +589,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       BuildLangTypedAttributeValuesMap attributeValues =
           new BuildLangTypedAttributeValuesMap((Map<String, Object>) args[0]);
       try {
-        PackageContext pkgContext = (PackageContext) env.dynamicLookup(PackageFactory.PKG_CONTEXT);
+        PackageContext pkgContext = (PackageContext) env.lookup(PackageFactory.PKG_CONTEXT);
         if (pkgContext == null) {
           throw new EvalException(ast.getLocation(),
               "Cannot instantiate a rule when loading a .bzl file. Rules can only be called from "

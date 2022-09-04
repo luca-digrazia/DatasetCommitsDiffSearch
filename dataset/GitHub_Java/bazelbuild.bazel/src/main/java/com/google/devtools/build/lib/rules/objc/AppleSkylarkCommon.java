@@ -27,12 +27,12 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransitionProvider;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkInfo;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
@@ -83,8 +83,8 @@ public class AppleSkylarkCommon
   @VisibleForTesting
   public static final String MISSING_KEY_ERROR = "No value for required key %s was present.";
 
-  @Nullable private StructImpl platformType;
-  @Nullable private StructImpl platform;
+  @Nullable private Info platformType;
+  @Nullable private Info platform;
 
   private ObjcProtoAspect objcProtoAspect;
 
@@ -98,7 +98,7 @@ public class AppleSkylarkCommon
   }
 
   @Override
-  public StructImpl getPlatformTypeStruct() {
+  public Info getPlatformTypeStruct() {
     if (platformType == null) {
       platformType = PlatformType.getSkylarkStruct();
     }
@@ -106,7 +106,7 @@ public class AppleSkylarkCommon
   }
 
   @Override
-  public StructImpl getPlatformStruct() {
+  public Info getPlatformStruct() {
     if (platform == null) {
       platform = ApplePlatform.getSkylarkStruct();
     }
@@ -233,7 +233,7 @@ public class AppleSkylarkCommon
   }
 
   @Override
-  public StructImpl linkMultiArchBinary(
+  public Info linkMultiArchBinary(
       SkylarkRuleContextApi skylarkRuleContextApi, Environment environment)
       throws EvalException, InterruptedException {
     SkylarkRuleContext skylarkRuleContext = (SkylarkRuleContext) skylarkRuleContextApi;
@@ -260,10 +260,9 @@ public class AppleSkylarkCommon
    * Creates a Skylark struct that contains the results of the {@code link_multi_arch_binary}
    * function.
    */
-  private StructImpl createAppleBinaryOutputSkylarkStruct(
+  private Info createAppleBinaryOutputSkylarkStruct(
       AppleBinaryOutput output, Environment environment) {
-    Provider constructor =
-        new NativeProvider<StructImpl>(StructImpl.class, "apple_binary_output") {};
+    Provider constructor = new NativeProvider<Info>(Info.class, "apple_binary_output") {};
     // We have to transform the output group dictionary into one that contains SkylarkValues instead
     // of plain NestedSets because the Skylark caller may want to return this directly from their
     // implementation function.
