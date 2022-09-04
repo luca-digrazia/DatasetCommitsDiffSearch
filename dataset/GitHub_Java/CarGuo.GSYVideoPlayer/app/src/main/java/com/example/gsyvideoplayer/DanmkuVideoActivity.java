@@ -168,7 +168,19 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
         if (isPlay && !isPause) {
-            danmakuVideoPlayer.onConfigurationChanged(this, newConfig, orientationUtils);
+            if (newConfig.orientation == ActivityInfo.SCREEN_ORIENTATION_USER) {
+                if (!danmakuVideoPlayer.isIfCurrentIsFullscreen()) {
+                    danmakuVideoPlayer.startWindowFullscreen(DanmkuVideoActivity.this, true, true);
+                }
+            } else {
+                //新版本isIfCurrentIsFullscreen的标志位内部提前设置了，所以不会和手动点击冲突
+                if (danmakuVideoPlayer.isIfCurrentIsFullscreen()) {
+                    StandardGSYVideoPlayer.backFromWindowFull(this);
+                }
+                if (orientationUtils != null) {
+                    orientationUtils.setEnable(true);
+                }
+            }
         }
     }
 
