@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,12 +15,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models.api.requests;
 
 import models.User;
-import models.api.requests.ChangeUserRequest;
+import org.joda.time.DateTimeZone;
 
 import static play.data.validation.Constraints.Required;
 
@@ -37,6 +36,10 @@ public class CreateUserRequest extends ChangeUserRequest {
         this.fullname = user.getFullName();
         this.email = user.getEmail();
         this.password = "";
-        this.permissions = user.getPermissions();
+        this.permissions  = user.getPermissions();
+        final DateTimeZone timeZone = user.getTimeZone();
+        if (timezone != null) {
+            this.timezone = timeZone.getID();
+        }
     }
 }
