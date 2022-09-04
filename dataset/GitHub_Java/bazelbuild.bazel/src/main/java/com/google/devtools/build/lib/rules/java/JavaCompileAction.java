@@ -523,7 +523,6 @@ public final class JavaCompileAction extends SpawnAction {
     private final List<String> processorFlags = new ArrayList<>();
     private String ruleKind;
     private Label targetLabel;
-    private boolean testOnly = false;
 
     /**
      * Creates a Builder from an owner and a build configuration.
@@ -736,9 +735,6 @@ public final class JavaCompileAction extends SpawnAction {
           // {@link JavaLibraryBuildRequest}, so add an extra &at; to escape it.
           result.add("@" + targetLabel);
         }
-      }
-      if (testOnly) {
-        result.add("--testonly");
       }
 
       if (!classpathEntries.isEmpty()) {
@@ -976,11 +972,6 @@ public final class JavaCompileAction extends SpawnAction {
 
     public Builder setTargetLabel(Label targetLabel) {
       this.targetLabel = targetLabel;
-      return this;
-    }
-    
-    public Builder setTestOnly(boolean testOnly) {
-      this.testOnly = testOnly;
       return this;
     }
   }
