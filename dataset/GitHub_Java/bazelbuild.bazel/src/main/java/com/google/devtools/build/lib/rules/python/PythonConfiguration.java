@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.rules.python;
 
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.common.options.TriState;
 
 /**
  * The configuration fragment containing information about the various pieces of infrastructure
@@ -26,13 +24,10 @@ import com.google.devtools.common.options.TriState;
 public class PythonConfiguration extends BuildConfiguration.Fragment {
   private final boolean ignorePythonVersionAttribute;
   private final PythonVersion defaultPythonVersion;
-  private final TriState buildPythonZip;
 
-  PythonConfiguration(
-      PythonVersion pythonVersion, boolean ignorePythonVersionAttribute, TriState buildPythonZip) {
+  PythonConfiguration(PythonVersion pythonVersion, boolean ignorePythonVersionAttribute) {
     this.ignorePythonVersionAttribute = ignorePythonVersionAttribute;
     this.defaultPythonVersion = pythonVersion;
-    this.buildPythonZip = buildPythonZip;
   }
 
   /**
@@ -48,18 +43,6 @@ public class PythonConfiguration extends BuildConfiguration.Fragment {
   @Override
   public String getOutputDirectoryName() {
     return (defaultPythonVersion == PythonVersion.PY3) ? "py3" : null;
-  }
-
-  /** Returns whether to build the executable zip file for Python binaries. */
-  public boolean buildPythonZip() {
-    switch (buildPythonZip) {
-      case YES:
-        return true;
-      case NO:
-        return false;
-      default:
-        return OS.getCurrent() == OS.WINDOWS;
-    }
   }
 }
 
