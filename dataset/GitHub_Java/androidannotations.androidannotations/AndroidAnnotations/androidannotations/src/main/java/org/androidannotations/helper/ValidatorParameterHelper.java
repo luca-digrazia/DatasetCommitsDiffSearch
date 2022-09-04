@@ -111,20 +111,38 @@ public class ValidatorParameterHelper {
 		}
 	}
 
+	public void hasZeroOrOneViewOrTwoViewBooleanParameters(ExecutableElement executableElement, IsValid valid) {
+		List<? extends VariableElement> parameters = executableElement.getParameters();
+
+		if (parameters.size() == 0) {
+			return;
+		} else if (parameters.size() > 2) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with 0 or 1(View) or 2(View, boolean) parameter, instead of " + parameters.size());
+		} else {
+			VariableElement firstParameter = parameters.get(0);
+			String firstParameterType = firstParameter.asType().toString();
+			if (!firstParameterType.equals(CanonicalNameConstants.VIEW)) {
+				valid.invalidate();
+				annotationHelper.printAnnotationError(executableElement, "the first parameter must be a " + CanonicalNameConstants.VIEW + ", not a " + firstParameterType);
+			}
+			if (parameters.size() == 2) {
+				VariableElement secondParameter = parameters.get(1);
+				String secondParameterType = secondParameter.asType().toString();
+				if (!secondParameterType.equals(CanonicalNameConstants.BOOLEAN) && !secondParameterType.equals("boolean")) {
+					valid.invalidate();
+					annotationHelper.printAnnotationError(executableElement, "the second parameter must be a " + CanonicalNameConstants.BOOLEAN + " or boolean, not a " + secondParameterType);
+				}
+			}
+		}
+	}
+
 	public void hasZeroOrOneCompoundButtonParameter(ExecutableElement executableElement, IsValid valid) {
 		hasZeroOrOneParameterOfType(CanonicalNameConstants.COMPOUND_BUTTON, executableElement, valid);
 	}
 
 	public void hasZeroOrOneBooleanParameter(ExecutableElement executableElement, IsValid valid) {
 		hasZeroOrOneParameterOfPrimitiveType(CanonicalNameConstants.BOOLEAN, TypeKind.BOOLEAN, executableElement, valid);
-	}
-
-	public void hasZeroOrOneMotionEventParameter(ExecutableElement executableElement, IsValid valid) {
-		hasZeroOrOneParameterOfType(CanonicalNameConstants.MOTION_EVENT, executableElement, valid);
-	}
-
-	public void hasZeroOrOneViewParameter(ExecutableElement executableElement, IsValid valid) {
-		hasZeroOrOneParameterOfType(CanonicalNameConstants.VIEW, executableElement, valid);
 	}
 
 	private void hasZeroOrOneParameterOfType(String typeCanonicalName, ExecutableElement executableElement, IsValid valid) {
@@ -159,16 +177,6 @@ public class ValidatorParameterHelper {
 		hasNotOtherParameterThanTypes(types, executableElement, valid);
 	}
 
-	public void hasNoOtherParameterThanMotionEventOrView(ExecutableElement executableElement, IsValid valid) {
-		String[] types = new String[]{CanonicalNameConstants.MOTION_EVENT, CanonicalNameConstants.VIEW};
-		hasNotOtherParameterThanTypes(types, executableElement, valid);
-	}
-
-	public void hasNoOtherParameterThanViewOrBoolean(ExecutableElement executableElement, IsValid valid) {
-		String[] types = new String[]{CanonicalNameConstants.VIEW, CanonicalNameConstants.BOOLEAN, "boolean"};
-		hasNotOtherParameterThanTypes(types, executableElement, valid);
-	}
-
 	private void hasNotOtherParameterThanTypes(String[] typesCanonicalNames, ExecutableElement executableElement, IsValid valid) {
 		Collection<String> types = Arrays.asList(typesCanonicalNames);
 		for (VariableElement parameter : executableElement.getParameters()) {
@@ -176,6 +184,34 @@ public class ValidatorParameterHelper {
 			if (!types.contains(parameterType)) {
 				annotationHelper.printAnnotationError(executableElement, "You can declare only parameters of type "+Arrays.toString(typesCanonicalNames));
 				valid.invalidate();
+			}
+		}
+	}
+
+	public void hasOneMotionEventOrTwoMotionEventViewParameters(ExecutableElement executableElement, IsValid valid) {
+		List<? extends VariableElement> parameters = executableElement.getParameters();
+
+		if (parameters.size() < 1 || parameters.size() > 2) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with 1 (MotionEvent) or 2 (MotionEvent, View) parameters, instead of " + parameters.size());
+		} else {
+			VariableElement firstParameter = parameters.get(0);
+			String firstParameterType = firstParameter.asType().toString();
+			if (parameters.size() == 1 && !firstParameterType.equals(CanonicalNameConstants.MOTION_EVENT)) {
+				valid.invalidate();
+				annotationHelper.printAnnotationError(executableElement, "the parameter must be a " + CanonicalNameConstants.MOTION_EVENT + ", not a " + firstParameterType);
+			}
+			if (parameters.size() == 2) {
+				VariableElement secondParameter = parameters.get(1);
+				String secondParameterType = secondParameter.asType().toString();
+
+				boolean isViewAndMotion = firstParameterType.equals(CanonicalNameConstants.VIEW) && secondParameterType.equals(CanonicalNameConstants.MOTION_EVENT);
+				boolean isMotionAndView = firstParameterType.equals(CanonicalNameConstants.MOTION_EVENT) && secondParameterType.equals(CanonicalNameConstants.VIEW);
+
+				if (!isViewAndMotion && !isMotionAndView) {
+					valid.invalidate();
+					annotationHelper.printAnnotationError(executableElement, "the parameters must be a " + CanonicalNameConstants.VIEW + " and a " + CanonicalNameConstants.MOTION_EVENT + ", not a " + firstParameterType + " and a " + secondParameterType);
+				}
 			}
 		}
 	}
