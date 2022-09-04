@@ -88,8 +88,10 @@ public class GELFHttpHandler extends SimpleChannelHandler {
             new DefaultHttpResponse(httpRequestVersion, status);
 
         response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, 0);
-        response.headers().set(HttpHeaders.Names.CONNECTION,
-                               keepAlive ? HttpHeaders.Values.KEEP_ALIVE : HttpHeaders.Values.CLOSE);
+
+        if (keepAlive) {
+            response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
+        }
 
         final ChannelFuture channelFuture = channel.write(response);
         if (!keepAlive) {
