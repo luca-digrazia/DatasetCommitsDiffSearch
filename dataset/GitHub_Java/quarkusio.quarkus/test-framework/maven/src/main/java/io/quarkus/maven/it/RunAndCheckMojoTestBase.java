@@ -29,13 +29,11 @@ public class RunAndCheckMojoTestBase extends MojoTestBase {
         awaitUntilServerDown();
     }
 
-    protected void run(boolean performCompile, String... options) throws FileNotFoundException, MavenInvocationException {
+    protected void run(String... options) throws FileNotFoundException, MavenInvocationException {
         assertThat(testDir).isDirectory();
         running = new RunningInvoker(testDir, false);
         final List<String> args = new ArrayList<>(2 + options.length);
-        if (performCompile) {
-            args.add("compile");
-        }
+        args.add("compile");
         args.add("quarkus:dev");
         boolean hasDebugOptions = false;
         for (String option : options) {
@@ -58,12 +56,7 @@ public class RunAndCheckMojoTestBase extends MojoTestBase {
     }
 
     protected void runAndCheck(String... options) throws FileNotFoundException, MavenInvocationException {
-        runAndCheck(true, options);
-    }
-
-    protected void runAndCheck(boolean performCompile, String... options)
-            throws FileNotFoundException, MavenInvocationException {
-        run(performCompile, options);
+        run(options);
 
         String resp = getHttpResponse();
 
