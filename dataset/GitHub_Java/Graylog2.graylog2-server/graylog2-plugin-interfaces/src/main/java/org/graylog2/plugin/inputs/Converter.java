@@ -39,8 +39,7 @@ public abstract class Converter {
         IP_ANONYMIZER,
         CSV,
         LOWERCASE,
-        UPPERCASE,
-        FLEXDATE
+        UPPERCASE
     }
 
     private final Type type;
