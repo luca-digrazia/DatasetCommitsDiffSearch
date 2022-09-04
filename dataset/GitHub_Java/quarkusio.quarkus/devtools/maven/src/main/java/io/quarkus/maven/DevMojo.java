@@ -37,7 +37,6 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Plugin;
-import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.BuildPluginManager;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -108,7 +107,6 @@ public class DevMojo extends AbstractMojo {
 
     private static final String ORG_APACHE_MAVEN_PLUGINS = "org.apache.maven.plugins";
     private static final String MAVEN_COMPILER_PLUGIN = "maven-compiler-plugin";
-    private static final String MAVEN_RESOURCES_PLUGIN = "maven-resources-plugin";
 
     private static final String ORG_JETBRAINS_KOTLIN = "org.jetbrains.kotlin";
     private static final String KOTLIN_MAVEN_PLUGIN = "kotlin-maven-plugin";
@@ -310,7 +308,7 @@ public class DevMojo extends AbstractMojo {
             }
 
             if (jvmArgs != null) {
-                args.addAll(Arrays.asList(CommandLineUtils.translateCommandline(jvmArgs)));
+                args.addAll(Arrays.asList(jvmArgs.split(" ")));
             }
 
             // the following flags reduce startup time and are acceptable only for dev purposes
@@ -385,8 +383,6 @@ public class DevMojo extends AbstractMojo {
     }
 
     private void triggerCompile() throws MojoExecutionException {
-        handleResources();
-
         // compile the Kotlin sources if needed
         final String kotlinMavenPluginKey = ORG_JETBRAINS_KOTLIN + ":" + KOTLIN_MAVEN_PLUGIN;
         final Plugin kotlinMavenPlugin = project.getPlugin(kotlinMavenPluginKey);
@@ -402,44 +398,7 @@ public class DevMojo extends AbstractMojo {
         }
     }
 
-    /**
-     * Execute the resources:resources goal if resources have been configured on the project
-     */
-    private void handleResources() throws MojoExecutionException {
-        List<Resource> resources = project.getResources();
-        if (!resources.isEmpty()) {
-            Plugin resourcesPlugin = project.getPlugin(ORG_APACHE_MAVEN_PLUGINS + ":" + MAVEN_RESOURCES_PLUGIN);
-            MojoExecutor.executeMojo(
-                    MojoExecutor.plugin(
-                            MojoExecutor.groupId(ORG_APACHE_MAVEN_PLUGINS),
-                            MojoExecutor.artifactId(MAVEN_RESOURCES_PLUGIN),
-                            MojoExecutor.version(resourcesPlugin.getVersion()),
-                            resourcesPlugin.getDependencies()),
-                    MojoExecutor.goal("resources"),
-                    getPluginConfig(resourcesPlugin),
-                    MojoExecutor.executionEnvironment(
-                            project,
-                            session,
-                            pluginManager));
-        }
-    }
-
     private void executeCompileGoal(Plugin plugin, String groupId, String artifactId) throws MojoExecutionException {
-        MojoExecutor.executeMojo(
-                MojoExecutor.plugin(
-                        MojoExecutor.groupId(groupId),
-                        MojoExecutor.artifactId(artifactId),
-                        MojoExecutor.version(plugin.getVersion()),
-                        plugin.getDependencies()),
-                MojoExecutor.goal("compile"),
-                getPluginConfig(plugin),
-                MojoExecutor.executionEnvironment(
-                        project,
-                        session,
-                        pluginManager));
-    }
-
-    private Xpp3Dom getPluginConfig(Plugin plugin) {
         Xpp3Dom configuration = MojoExecutor.configuration();
         Xpp3Dom pluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
         if (pluginConfiguration != null) {
@@ -450,7 +409,18 @@ public class DevMojo extends AbstractMojo {
                 }
             }
         }
-        return configuration;
+        MojoExecutor.executeMojo(
+                MojoExecutor.plugin(
+                        MojoExecutor.groupId(groupId),
+                        MojoExecutor.artifactId(artifactId),
+                        MojoExecutor.version(plugin.getVersion()),
+                        plugin.getDependencies()),
+                MojoExecutor.goal("compile"),
+                configuration,
+                MojoExecutor.executionEnvironment(
+                        project,
+                        session,
+                        pluginManager));
     }
 
     private Map<Path, Long> readPomFileTimestamps(DevModeRunner runner) throws IOException {
@@ -505,7 +475,7 @@ public class DevMojo extends AbstractMojo {
         if (Files.isDirectory(resourcesSourcesDir)) {
             resourcePath = resourcesSourcesDir.toAbsolutePath().toString();
         }
-        DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(localProject.getKey(),
+        DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(
                 localProject.getArtifactId(),
                 projectDirectory,
                 sourcePaths,
@@ -638,15 +608,11 @@ public class DevMojo extends AbstractMojo {
                 localProject = LocalProject.load(outputDirectory.toPath());
                 addProject(devModeContext, localProject, true);
                 pomFiles.add(localProject.getDir().resolve("pom.xml"));
-                devModeContext.getLocalArtifacts()
-                        .add(new AppArtifactKey(localProject.getGroupId(), localProject.getArtifactId(), null, "jar"));
             } else {
                 localProject = LocalProject.loadWorkspace(outputDirectory.toPath());
                 for (LocalProject project : filterExtensionDependencies(localProject)) {
                     addProject(devModeContext, project, project == localProject);
                     pomFiles.add(project.getDir().resolve("pom.xml"));
-                    devModeContext.getLocalArtifacts()
-                            .add(new AppArtifactKey(project.getGroupId(), project.getArtifactId(), null, "jar"));
                 }
             }
 
@@ -670,14 +636,10 @@ public class DevMojo extends AbstractMojo {
             }
             getLog().debug("Executable jar: " + tempFile.getAbsolutePath());
 
-            devModeContext.setBaseName(project.getBuild().getFinalName());
             devModeContext.setCacheDir(new File(buildDir, "transformer-cache").getAbsoluteFile());
 
             // this is the jar file we will use to launch the dev mode main class
             devModeContext.setDevModeRunnerJarFile(tempFile);
-
-            modifyDevModeContext(devModeContext);
-
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
                 out.putNextEntry(new ZipEntry("META-INF/"));
                 Manifest manifest = new Manifest();
@@ -856,10 +818,6 @@ public class DevMojo extends AbstractMojo {
             process.destroy();
             process.waitFor();
         }
-
-    }
-
-    protected void modifyDevModeContext(DevModeContext devModeContext) {
 
     }
 
