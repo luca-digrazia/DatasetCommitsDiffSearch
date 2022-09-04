@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -33,15 +32,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BazelModuleContext;
-import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
-import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration.AppleCpus;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CppConfigurationApi;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.EnumMap;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.EvalException;
@@ -54,7 +47,7 @@ import net.starlark.java.eval.StarlarkThread;
  * architecture, target architecture, compiler version, and a standard library version.
  */
 @Immutable
-@RequiresOptions(options = {AppleCommandLineOptions.class, CppOptions.class})
+@RequiresOptions(options = {CppOptions.class})
 public final class CppConfiguration extends Fragment
     implements CppConfigurationApi<InvalidConfigurationException> {
   /**
@@ -188,7 +181,6 @@ public final class CppConfiguration extends Fragment
   private final boolean isToolConfigurationDoNotUseWillBeRemovedFor129045294;
 
   private final boolean appleGenerateDsym;
-  private final AppleBitcodeMode appleBitcodeMode;
 
   public CppConfiguration(BuildOptions options) throws InvalidConfigurationException {
     CppOptions cppOptions = options.get(CppOptions.class);
@@ -296,20 +288,6 @@ public final class CppConfiguration extends Fragment
     this.appleGenerateDsym =
         (cppOptions.appleGenerateDsym
             || (cppOptions.appleEnableAutoDsymDbg && compilationMode == CompilationMode.DBG));
-    this.appleBitcodeMode =
-        computeAppleBitcodeMode(options.get(AppleCommandLineOptions.class), commonOptions);
-  }
-
-  private static AppleBitcodeMode computeAppleBitcodeMode(
-      AppleCommandLineOptions options, CoreOptions commonOptions) {
-    ApplePlatform.PlatformType applePlatformType =
-        Preconditions.checkNotNull(options.applePlatformType, "applePlatformType");
-    AppleCpus appleCpus = AppleCpus.create(options, commonOptions);
-    EnumMap<ApplePlatform.PlatformType, AppleBitcodeMode> platformBitcodeModes =
-        AppleConfiguration.collectBitcodeModes(options.appleBitcodeMode);
-
-    return AppleConfiguration.getAppleBitcodeMode(
-        applePlatformType, appleCpus, platformBitcodeModes);
   }
 
   /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
@@ -792,14 +770,6 @@ public final class CppConfiguration extends Fragment
     return cppOptions.generateLlvmLcov;
   }
 
-  public boolean objcShouldScanIncludes() {
-    return cppOptions.objcScanIncludes;
-  }
-
-  public boolean objcShouldGenerateDotdFiles() {
-    return cppOptions.objcGenerateDotdFiles;
-  }
-
   @Override
   public boolean macosSetInstallName() {
     return cppOptions.macosSetInstallName;
@@ -852,16 +822,5 @@ public final class CppConfiguration extends Fragment
       throws EvalException {
     checkInExpandedApiAllowlist(thread, "fission_active_for_current_compilation_mode");
     return fissionIsActiveForCurrentCompilationMode();
-  }
-
-  /**
-   * Returns the bitcode mode to use for compilation.
-   *
-   * <p>Users can control bitcode mode using the {@code apple_bitcode} build flag, but bitcode will
-   * be disabled for all simulator architectures regardless of this flag.
-   */
-  @Override
-  public AppleBitcodeMode getAppleBitcodeMode() {
-    return appleBitcodeMode;
   }
 }
