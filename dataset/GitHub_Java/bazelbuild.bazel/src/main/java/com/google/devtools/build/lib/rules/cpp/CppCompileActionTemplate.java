@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyCacher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -261,9 +262,10 @@ public final class CppCompileActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  public NestedSet<Artifact> getInputFilesForExtraAction(
-      ActionExecutionContext actionExecutionContext) {
-    return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+  public Iterable<Artifact> getInputFilesForExtraAction(
+      ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
+    return ImmutableList.of();
   }
 
   @Override

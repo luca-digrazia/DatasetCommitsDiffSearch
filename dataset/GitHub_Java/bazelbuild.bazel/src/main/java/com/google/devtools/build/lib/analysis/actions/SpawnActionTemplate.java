@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Map;
@@ -203,9 +202,9 @@ public final class SpawnActionTemplate extends ActionKeyCacher
   }
 
   @Override
-  public NestedSet<Artifact> getInputFilesForExtraAction(
+  public Iterable<Artifact> getInputFilesForExtraAction(
       ActionExecutionContext actionExecutionContext) {
-    return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    return ImmutableList.of();
   }
 
   @Override
