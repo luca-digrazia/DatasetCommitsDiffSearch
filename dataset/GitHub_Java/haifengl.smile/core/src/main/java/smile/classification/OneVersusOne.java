@@ -44,7 +44,7 @@ import smile.util.IntSet;
  *
  * @author Haifeng Li
  */
-public class OneVersusOne<T> extends AbstractClassifier<T> {
+public class OneVersusOne<T> implements SoftClassifier<T> {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OneVersusOne.class);
 
@@ -54,6 +54,8 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
     private final Classifier<T>[][] classifiers;
     /** The binary classifier. */
     private final PlattScaling[][] platt;
+    /** The class label encoder. */
+    private final IntSet labels;
 
     /**
      * Constructor.
@@ -73,10 +75,10 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
      * @param labels the class label encoder.
      */
     public OneVersusOne(Classifier<T>[][] classifiers, PlattScaling[][] platt, IntSet labels) {
-        super(labels);
         this.classifiers = classifiers;
         this.platt = platt;
         this.k = classifiers.length;
+        this.labels = labels;
     }
 
     /**
@@ -169,7 +171,6 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
      * @param trainer the lambda to train binary classifiers.
      * @return the model.
      */
-    /*
     @SuppressWarnings("unchecked")
     public static DataFrameClassifier fit(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
         Tuple[] x = data.stream().toArray(Tuple[]::new);
@@ -197,7 +198,6 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
             }
         };
     }
-     */
 
     /** Prediction is based on voting. */
     @Override

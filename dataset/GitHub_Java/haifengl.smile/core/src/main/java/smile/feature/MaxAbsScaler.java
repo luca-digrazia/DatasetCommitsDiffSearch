@@ -18,11 +18,15 @@
 package smile.feature;
 
 import smile.data.DataFrame;
+import smile.data.Tuple;
+import smile.data.type.StructField;
 import smile.data.type.StructType;
+import smile.data.vector.BaseVector;
+import smile.data.vector.DoubleVector;
 import smile.math.MathEx;
 
-import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 
 /**
@@ -39,25 +43,11 @@ public class MaxAbsScaler implements FeatureTransform {
     /**
      * The schema of data.
      */
-    protected StructType schema;
+    protected final StructType schema;
     /**
      * Scaling factor.
      */
-    private double[] scale;
-
-    /**
-     * Constructor.
-     * @param scale the scaling factor.
-     */
-    public MaxAbsScaler(double[] scale) {
-        this.scale = scale;
-
-        for (int i = 0; i < scale.length; i++) {
-            if (MathEx.isZero(scale[i])) {
-                scale[i] = 1.0;
-            }
-        }
-    }
+    private final double[] scale;
 
     /**
      * Constructor.
@@ -65,15 +55,17 @@ public class MaxAbsScaler implements FeatureTransform {
      * @param scale the scaling factor.
      */
     public MaxAbsScaler(StructType schema, double[] scale) {
-        this(scale);
         if (schema.length() != scale.length) {
             throw new IllegalArgumentException("Schema and scaling factor size don't match");
         }
-    }
+        this.schema = schema;
+        this.scale = scale;
 
-    @Override
-    public Optional<StructType> schema() {
-        return Optional.ofNullable(schema);
+        for (int i = 0; i < scale.length; i++) {
+            if (MathEx.isZero(scale[i])) {
+                scale[i] = 1.0;
+            }
+        }
     }
 
     /**
@@ -104,38 +96,70 @@ public class MaxAbsScaler implements FeatureTransform {
      * @return the model.
      */
     public static MaxAbsScaler fit(double[][] data) {
-        int p = data[0].length;
-        double[] scale = new double[p];
-
-        for (int i = 0; i < data.length; i++) {
-            for (int j = 0; j < p; j++) {
-                scale[j] = Math.max(scale[j], Math.abs(data[i][j]));
-            }
-        }
-
-        return new MaxAbsScaler(scale);
+        return fit(DataFrame.of(data));
     }
 
-    @Override
-    public double transform(double x, int i) {
+    /** Scales a value with i-th column parameters. */
+    private double scale(double x, int i) {
         return x / scale[i];
     }
 
     @Override
-    public double invert(double x, int i) {
-        return x * scale[i];
+    public double[] transform(double[] x) {
+        double[] y = new double[x.length];
+        for (int i = 0; i < y.length; i++) {
+            y[i] = scale(x[i], i);
+        }
+        return y;
     }
 
-    /** Returns the string representation of i-th column scaling factor. */
-    private String toString(int i) {
-        String field = schema == null ? String.format("V%d", i+1) : schema.field(i).name;
-        return String.format("%s[%.4f]", field, scale[i]);
+    @Override
+    public Tuple transform(Tuple x) {
+        if (!schema.equals(x.schema())) {
+            throw new IllegalArgumentException(String.format("Invalid schema %s, expected %s", x.schema(), schema));
+        }
+
+        return new smile.data.AbstractTuple() {
+            @Override
+            public Object get(int i) {
+                if (schema.field(i).isNumeric()) {
+                    return scale(x.getDouble(i), i);
+                } else {
+                    return x.get(i);
+                }
+            }
+
+            @Override
+            public StructType schema() {
+                return schema;
+            }
+        };
+    }
+
+    @Override
+    public DataFrame transform(DataFrame data) {
+        if (!schema.equals(data.schema())) {
+            throw new IllegalArgumentException(String.format("Invalid schema %s, expected %s", data.schema(), schema));
+        }
+
+        BaseVector[] vectors = new BaseVector[schema.length()];
+        for (int i = 0; i < scale.length; i++) {
+            StructField field = schema.field(i);
+            if (field.isNumeric()) {
+                final int col = i;
+                DoubleStream stream = data.stream().mapToDouble(t -> scale(t.getDouble(col), col));
+                vectors[i] = DoubleVector.of(field, stream);
+            } else {
+                vectors[i] = data.column(i);
+            }
+        }
+        return DataFrame.of(vectors);
     }
 
     @Override
     public String toString() {
         return IntStream.range(0, scale.length)
-                .mapToObj(this::toString)
+                .mapToObj(i -> String.format("%s[%.4f]", schema.field(i).name, scale[i]))
                 .collect(Collectors.joining(",", "MaxAbsScaler(", ")"));
     }
 }

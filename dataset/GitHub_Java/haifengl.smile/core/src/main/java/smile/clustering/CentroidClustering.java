@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,10 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.clustering;
 
+import java.util.Arrays;
 import java.util.function.ToDoubleBiFunction;
 import java.util.stream.IntStream;
 
@@ -27,12 +28,12 @@ import java.util.stream.IntStream;
  * an optimization problem: find the k cluster centers and assign the objects
  * to the nearest cluster center, such that the squared distances from the
  * cluster are minimized.
- *
+ * <p>
  * Variations of k-means include restricting the centroids to members of
  * the data set (k-medoids), choosing medians (k-medians clustering),
  * choosing the initial centers less randomly (k-means++) or allowing a
  * fuzzy cluster assignment (fuzzy c-means), etc.
- *
+ * <p>
  * Most k-means-type algorithms require the number of clusters to be
  * specified in advance, which is considered to be one of the biggest
  * drawbacks of these algorithms. Furthermore, the algorithms prefer
@@ -58,29 +59,31 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
      * The centroids of each cluster.
      */
     public final T[] centroids;
-    /**
-     * The lambda of distance measure.
-     */
-    public final ToDoubleBiFunction<T, U> distance;
 
     /**
      * Constructor.
      * @param distortion the total distortion.
      * @param centroids the centroids of each cluster.
      * @param y the cluster labels.
-     * @param distance the lambda of distance measure.
      */
-    public CentroidClustering(double distortion, T[] centroids, int[] y, ToDoubleBiFunction<T, U> distance) {
+    public CentroidClustering(double distortion, T[] centroids, int[] y) {
         super(centroids.length, y);
         this.distortion = distortion;
         this.centroids = centroids;
-        this.distance = distance;
     }
 
     @Override
     public int compareTo(CentroidClustering<T, U> o) {
         return Double.compare(distortion, o.distortion);
     }
+
+    /**
+     * The distance function.
+     * @param x an observation.
+     * @param y the other observation.
+     * @return the distance.
+     */
+    protected abstract double distance(T x, U y);
 
     /**
      * Classifies a new observation.
@@ -92,7 +95,7 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
         int label = 0;
 
         for (int i = 0; i < k; i++) {
-            double dist = distance.applyAsDouble(centroids[i], x);
+            double dist = distance(centroids[i], x);
             if (dist < nearest) {
                 nearest = dist;
                 label = i;
@@ -110,9 +113,10 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
     /**
      * Assigns each observation to the nearest centroid.
      */
-    public static <T> double assign(int[] y, T[] data, T[] centroids, ToDoubleBiFunction<T, T> distance) {
+    static <T> double assign(int[] y, T[] data, T[] centroids, ToDoubleBiFunction<T, T> distance) {
         int k = centroids.length;
-        double wcss = IntStream.range(0, data.length).parallel().mapToDouble(i -> {
+
+        return IntStream.range(0, data.length).parallel().mapToDouble(i -> {
             double nearest = Double.MAX_VALUE;
             for (int j = 0; j < k; j++) {
                 double dist = distance.applyAsDouble(data[i], centroids[j]);
@@ -123,7 +127,61 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
             }
             return nearest;
         }).sum();
+    }
 
-        return wcss;
+    /**
+     * Calculates the new centroids in the new clusters.
+     */
+    static void updateCentroids(double[][] centroids, double[][] data, int[] y, int[] size) {
+        int n = data.length;
+        int k = centroids.length;
+        int d = centroids[0].length;
+
+        Arrays.fill(size, 0);
+        IntStream.range(0, k).parallel().forEach(cluster -> {
+            Arrays.fill(centroids[cluster], 0.0);
+            for (int i = 0; i < n; i++) {
+                if (y[i] == cluster) {
+                    size[cluster]++;
+                    for (int j = 0; j < d; j++) {
+                        centroids[cluster][j] += data[i][j];
+                    }
+                }
+            }
+
+            for (int j = 0; j < d; j++) {
+                centroids[cluster][j] /= size[cluster];
+            }
+        });
+    }
+
+    /**
+     * Calculates the new centroids in the new clusters with missing values.
+     * @param notNaN the number of non-missing values per cluster per variable.
+     */
+    static void updateCentroidsWithMissingValues(double[][] centroids, double[][] data, int[] y, int[] size, int[][] notNaN) {
+        int n = data.length;
+        int k = centroids.length;
+        int d = centroids[0].length;
+
+        IntStream.range(0, k).parallel().forEach(cluster -> {
+            Arrays.fill(centroids[cluster], 0);
+            Arrays.fill(notNaN[cluster], 0);
+            for (int i = 0; i < n; i++) {
+                if (y[i] == cluster) {
+                    size[cluster]++;
+                    for (int j = 0; j < d; j++) {
+                        if (!Double.isNaN(data[i][j])) {
+                            centroids[cluster][j] += data[i][j];
+                            notNaN[cluster][j]++;
+                        }
+                    }
+                }
+            }
+
+            for (int j = 0; j < d; j++) {
+                centroids[cluster][j] /= notNaN[cluster][j];
+            }
+        });
     }
 }

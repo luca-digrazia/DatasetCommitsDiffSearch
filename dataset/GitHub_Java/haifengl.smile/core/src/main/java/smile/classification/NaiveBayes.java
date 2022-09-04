@@ -50,7 +50,7 @@ import smile.util.IntSet;
  *
  * @author Haifeng Li
  */
-public class NaiveBayes extends AbstractClassifier<double[]> {
+public class NaiveBayes implements SoftClassifier<double[]> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -69,6 +69,10 @@ public class NaiveBayes extends AbstractClassifier<double[]> {
      * The conditional distribution for general purpose naive Bayes classifier.
      */
     private final Distribution[][] prob;
+    /**
+     * The class label encoder.
+     */
+    private final IntSet labels;
 
     /**
      * Constructor of general naive Bayes classifier.
@@ -92,8 +96,6 @@ public class NaiveBayes extends AbstractClassifier<double[]> {
      * @param labels the class label encoder.
      */
     public NaiveBayes(double[] priori, Distribution[][] condprob, IntSet labels) {
-        super(labels);
-
         if (priori.length != condprob.length) {
             throw new IllegalArgumentException("The number of priori probabilities and that of the classes are not same.");
         }
@@ -114,6 +116,7 @@ public class NaiveBayes extends AbstractClassifier<double[]> {
         this.p = condprob[0].length;
         this.priori = priori;
         this.prob = condprob;
+        this.labels = labels;
     }
 
     /**

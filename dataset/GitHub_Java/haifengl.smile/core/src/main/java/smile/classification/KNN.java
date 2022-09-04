@@ -69,7 +69,7 @@ import smile.util.IntSet;
  * 
  * @author Haifeng Li
  */
-public class KNN<T> extends AbstractClassifier<T> {
+public class KNN<T> implements SoftClassifier<T> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -84,6 +84,10 @@ public class KNN<T> extends AbstractClassifier<T> {
      * The number of neighbors for decision.
      */
     private final int k;
+    /**
+     * The class labels.
+     */
+    private final IntSet labels;
 
     /**
      * Constructor.
@@ -92,17 +96,17 @@ public class KNN<T> extends AbstractClassifier<T> {
      * @param k the number of neighbors for classification.
      */
     public KNN(KNNSearch<T, T> knn, int[] y, int k) {
-        super(y);
         this.knn = knn;
         this.k = k;
         this.y = y;
+        labels = ClassLabels.fit(y).labels;
     }
 
     /**
      * Fits the 1-NN classifier.
      * @param x training samples.
      * @param y training labels.
-     * @param distance the distance function.
+     * @param distance the distance measure for finding nearest neighbors.
      * @param <T> the data type.
      * @return the model.
      */
@@ -115,7 +119,7 @@ public class KNN<T> extends AbstractClassifier<T> {
      * @param k the number of neighbors.
      * @param x training samples.
      * @param y training labels.
-     * @param distance the distance function.
+     * @param distance the distance measure for finding nearest neighbors.
      * @param <T> the data type.
      * @return the model.
      */

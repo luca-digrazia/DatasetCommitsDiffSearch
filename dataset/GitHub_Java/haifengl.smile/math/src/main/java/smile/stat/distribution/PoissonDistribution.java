@@ -47,9 +47,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
 
     /** The average number of events per interval. */
     public final double lambda;
-    /** Shannon entropy. */
     private final double entropy;
-    /** The random number generator. */
     private RandomNumberGenerator rng;
 
     /**

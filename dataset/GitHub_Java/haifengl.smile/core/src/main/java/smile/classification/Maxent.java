@@ -51,7 +51,7 @@ import smile.validation.ModelSelection;
  * 
  * @author Haifeng Li
  */
-public abstract class Maxent extends AbstractClassifier<int[]> implements OnlineClassifier<int[]> {
+public abstract class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -80,6 +80,11 @@ public abstract class Maxent extends AbstractClassifier<int[]> implements Online
     double eta = 0.1;
 
     /**
+     * The class label encoder.
+     */
+    final IntSet labels;
+
+    /**
      * Constructor.
      * @param p the dimension of input data.
      * @param L the log-likelihood of learned model.
@@ -89,11 +94,11 @@ public abstract class Maxent extends AbstractClassifier<int[]> implements Online
      * @param labels the class label encoder.
      */
     public Maxent(int p, double L, double lambda, IntSet labels) {
-        super(labels);
         this.k = labels.size();
         this.p = p;
         this.L = L;
         this.lambda = lambda;
+        this.labels = labels;
     }
 
     /** Binomial maximum entropy classifier. The dependent variable is nominal of two levels. */
@@ -150,7 +155,7 @@ public abstract class Maxent extends AbstractClassifier<int[]> implements Online
             y = labels.indexOf(y);
             // calculate gradient for incoming data
             double wx = dot(x, w);
-            double err = y - MathEx.sigmoid(wx);
+            double err = y - MathEx.logistic(wx);
 
             // update the weights
             w[p] += eta * err;
@@ -531,7 +536,7 @@ public abstract class Maxent extends AbstractClassifier<int[]> implements Online
 
                 return IntStream.range(begin, end).sequential().mapToDouble(i -> {
                     double wx = dot(x[i], w);
-                    double err = y[i] - MathEx.sigmoid(wx);
+                    double err = y[i] - MathEx.logistic(wx);
                     for (int j : x[i]) {
                         gradient[j] -= err;
                     }

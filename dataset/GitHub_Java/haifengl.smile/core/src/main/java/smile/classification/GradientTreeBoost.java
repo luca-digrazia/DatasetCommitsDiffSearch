@@ -108,7 +108,7 @@ import smile.util.Strings;
  * 
  * @author Haifeng Li
  */
-public class GradientTreeBoost extends AbstractClassifier<Tuple> implements DataFrameClassifier, SHAP<Tuple> {
+public class GradientTreeBoost implements SoftClassifier<Tuple>, DataFrameClassifier, SHAP<Tuple> {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GradientTreeBoost.class);
 
@@ -143,6 +143,10 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
      * The shrinkage parameter in (0, 1] controls the learning rate of procedure.
      */
     private final double shrinkage;
+    /**
+     * The class label encoder.
+     */
+    private final IntSet labels;
 
     /**
      * Constructor of binary class.
@@ -168,13 +172,13 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
      * @param labels     class labels
      */
     public GradientTreeBoost(Formula formula, RegressionTree[] trees, double b, double shrinkage, double[] importance, IntSet labels) {
-        super(labels);
         this.formula = formula;
         this.k = 2;
         this.trees = trees;
         this.b = b;
         this.shrinkage = shrinkage;
         this.importance = importance;
+        this.labels = labels;
     }
 
     /**
@@ -196,15 +200,15 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
      * @param forest     forest of regression trees.
      * @param shrinkage  the shrinkage pparameter in (0, 1] controls the learning rate of procedure.
      * @param importance variable importance
-     * @param labels     the class label encoder.
+     * @param labels     class labels
      */
     public GradientTreeBoost(Formula formula, RegressionTree[][] forest, double shrinkage, double[] importance, IntSet labels) {
-        super(labels);
         this.formula = formula;
         this.k = forest.length;
         this.forest = forest;
         this.shrinkage = shrinkage;
         this.importance = importance;
+        this.labels = labels;
     }
 
     /**
@@ -308,7 +312,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
      * Train L2 tree boost.
      */
     private static GradientTreeBoost train2(Formula formula, DataFrame x, ClassLabels codec, int[][] order, int ntrees, int maxDepth, int maxNodes, int nodeSize, double shrinkage, double subsample) {
-        int n = x.nrow();
+        int n = x.nrows();
         int k = codec.k;
         int[] y = codec.y;
 
@@ -329,7 +333,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
             sampling(samples, permutation, nc, y, subsample);
 
             logger.info("Training {} tree", Strings.ordinal(t+1));
-            RegressionTree tree = new RegressionTree(x, loss, field, maxDepth, maxNodes, nodeSize, x.ncol(), samples, order);
+            RegressionTree tree = new RegressionTree(x, loss, field, maxDepth, maxNodes, nodeSize, x.ncols(), samples, order);
             trees[t] = tree;
 
             for (int i = 0; i < n; i++) {
@@ -337,7 +341,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
             }
         }
 
-        double[] importance = new double[x.ncol()];
+        double[] importance = new double[x.ncols()];
         for (RegressionTree tree : trees) {
             double[] imp = tree.importance();
             for (int i = 0; i < imp.length; i++) {
@@ -354,7 +358,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
     private static GradientTreeBoost traink(Formula formula, DataFrame x, ClassLabels codec, int[][] order,
                                             int ntrees, int maxDepth, int maxNodes, int nodeSize,
                                             double shrinkage, double subsample) {
-        int n = x.nrow();
+        int n = x.nrows();
         int k = codec.k;
         int[] y = codec.y;
 
@@ -387,7 +391,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
             for (int j = 0; j < k; j++) {
                 sampling(samples, permutation, nc, y, subsample);
 
-                RegressionTree tree = new RegressionTree(x, loss[j], field, maxDepth, maxNodes, nodeSize, x.ncol(), samples, order);
+                RegressionTree tree = new RegressionTree(x, loss[j], field, maxDepth, maxNodes, nodeSize, x.ncols(), samples, order);
                 forest[j][t] = tree;
 
                 double[] hj = h[j];
@@ -397,7 +401,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
             }
         }
 
-        double[] importance = new double[x.ncol()];
+        double[] importance = new double[x.ncols()];
         for (RegressionTree[] grove : forest) {
             for (RegressionTree tree : grove) {
                 double[] imp = tree.importance();
@@ -571,7 +575,7 @@ public class GradientTreeBoost extends AbstractClassifier<Tuple> implements Data
     public int[][] test(DataFrame data) {
         DataFrame x = formula.x(data);
 
-        int n = x.nrow();
+        int n = x.nrows();
         int ntrees = trees != null ? trees.length : forest[0].length;
         int[][] prediction = new int[ntrees][n];
 

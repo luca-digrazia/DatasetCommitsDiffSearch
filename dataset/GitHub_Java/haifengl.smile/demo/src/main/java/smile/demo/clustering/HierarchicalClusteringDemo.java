@@ -109,7 +109,7 @@ public class HierarchicalClusteringDemo extends ClusteringDemo {
         return "Hierarchical Agglomerative Clustering";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClusteringDemo demo = new HierarchicalClusteringDemo();
         JFrame f = new JFrame("Agglomerative Hierarchical Clustering");
         f.setSize(new Dimension(1000, 1000));

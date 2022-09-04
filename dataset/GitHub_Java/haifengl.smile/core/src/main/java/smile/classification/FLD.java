@@ -26,7 +26,6 @@ import smile.math.matrix.Matrix;
 import smile.projection.Projection;
 import smile.sort.QuickSort;
 import smile.util.IntSet;
-import smile.util.Strings;
 
 /**
  * Fisher's linear discriminant. Fisher defined the separation between two
@@ -116,7 +115,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
         this.scaling = scaling;
         this.labels = labels;
 
-        int L = scaling.ncol();
+        int L = scaling.ncols();
         this.mean = new double[L];
         scaling.tv(mean, this.mean);
 
@@ -161,19 +160,6 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      */
     public static FLD fit (double[][] x, int[] y) {
         return fit(x, y, -1, 1E-4);
-    }
-
-    /**
-     * Learn Fisher's linear discriminant.
-     * @param x training samples.
-     * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model
-     */
-    public static FLD fit (double[][] x, int[] y, Properties prop) {
-        int L = Integer.parseInt(prop.getProperty("smile.fld.dimension", "-1"));
-        double tol = Double.parseDouble(prop.getProperty("smile.fld.tolerance", "1E-4"));
-        return fit(x, y, L, tol);
     }
 
     /**
@@ -371,7 +357,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
 
     @Override
     public double[][] project(double[][] x) {
-        double[][] y = new double[x.length][scaling.ncol()];
+        double[][] y = new double[x.length][scaling.ncols()];
         
         for (int i = 0; i < x.length; i++) {
             if (x[i].length != p) {

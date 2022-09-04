@@ -20,7 +20,6 @@ package smile.classification;
 import java.io.Serializable;
 import java.util.Arrays;
 import smile.base.mlp.*;
-import smile.data.measure.NominalScale;
 import smile.math.MathEx;
 import smile.util.IntSet;
 
@@ -157,25 +156,6 @@ public class MLP extends MultilayerPerceptron implements OnlineClassifier<double
         }
 
         return net;
-    }
-
-    @Override
-    public int numClasses() {
-        return labels.size();
-    }
-
-    @Override
-    public int[] labels() {
-        return labels.values;
-    }
-
-    @Override
-    public NominalScale scale() {
-        String[] values = new String[labels.size()];
-        for (int i = 0; i < labels.size(); i++) {
-            values[i] = String.valueOf(labels.valueOf(i));
-        }
-        return new NominalScale(values);
     }
 
     @Override

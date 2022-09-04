@@ -76,7 +76,6 @@ public class LASSO {
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      *             NO NEED to include a constant column of 1s for bias.
-     * @return the model.
      */
     public static LinearModel fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
@@ -109,7 +108,6 @@ public class LASSO {
      * @param data the data frame of the explanatory and response variables.
      *             NO NEED to include a constant column of 1s for bias.
      * @param lambda the shrinkage/regularization parameter.
-     * @return the model.
      */
     public static LinearModel fit(Formula formula, DataFrame data, double lambda) {
         return fit(formula, data, lambda, 1E-4, 1000);
@@ -123,7 +121,6 @@ public class LASSO {
      * @param lambda the shrinkage/regularization parameter.
      * @param tol the tolerance for stopping iterations (relative target duality gap).
      * @param maxIter the maximum number of IPM (Newton) iterations.
-     * @return the model.
      */
     public static LinearModel fit(Formula formula, DataFrame data, double lambda, double tol, int maxIter) {
         formula = formula.expand(data.schema());
@@ -179,8 +176,8 @@ public class LASSO {
         final double eta = 1E-3;  // tolerance for PCG termination
 
         int pitr = 0;
-        int n = x.nrow();
-        int p = x.ncol();
+        int n = x.nrows();
+        int p = x.ncols();
 
         double[] Y = new double[n];
         double ym = MathEx.mean(y);
@@ -395,23 +392,23 @@ public class LASSO {
             this.prb = prb;
             this.prs = prs;
 
-            int n = A.nrow();
-            p = A.ncol();
+            int n = A.nrows();
+            p = A.ncols();
             ax = new double[n];
             atax = new double[p];
 
-            if (A.ncol() < 10000) {
+            if (A.ncols() < 10000) {
                 AtA = A.ata();
             }
         }
 
         @Override
-        public int nrow() {
+        public int nrows() {
             return 2 * p;
         }
 
         @Override
-        public int ncol() {
+        public int ncols() {
             return 2 * p;
         }
 

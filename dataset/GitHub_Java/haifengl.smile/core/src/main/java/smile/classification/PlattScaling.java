@@ -102,7 +102,7 @@ public class PlattScaling implements Serializable {
             else prior0 += 1;
         }
 
-        double minStep = 1e-10;    // Minimal step taken in line search
+        double min_step = 1e-10;    // Minimal step taken in line search
         double sigma = 1e-12;    // For numerically strict PD of Hessian
         double eps = 1e-5;
         double hiTarget = (prior1 + 1.0) / (prior1 + 2.0);
@@ -164,10 +164,10 @@ public class PlattScaling implements Serializable {
             double gd = g1 * dA + g2 * dB;
 
 
-            double stepSize = 1.0;        // Line Search
-            while (stepSize >= minStep) {
-                double newA = alpha + stepSize * dA;
-                double newB = beta + stepSize * dB;
+            double stepsize = 1;        // Line Search
+            while (stepsize >= min_step) {
+                double newA = alpha + stepsize * dA;
+                double newB = beta + stepsize * dB;
 
                 // New function value
                 double newf = 0.0;
@@ -179,16 +179,16 @@ public class PlattScaling implements Serializable {
                         newf += (t[i] - 1) * fApB + log(1 + exp(fApB));
                 }
                 // Check sufficient decrease
-                if (newf < fval + 0.0001 * stepSize * gd) {
+                if (newf < fval + 0.0001 * stepsize * gd) {
                     alpha = newA;
                     beta = newB;
                     fval = newf;
                     break;
                 } else
-                    stepSize = stepSize / 2.0;
+                    stepsize = stepsize / 2.0;
             }
 
-            if (stepSize < minStep) {
+            if (stepsize < min_step) {
                 logger.error("Line search fails.");
                 break;
             }

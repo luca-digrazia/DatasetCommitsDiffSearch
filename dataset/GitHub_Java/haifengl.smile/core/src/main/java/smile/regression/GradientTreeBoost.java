@@ -142,7 +142,6 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
      * @param formula a symbolic description of the model to be fitted.
      * @param trees forest of regression trees.
      * @param b the intercept
-     * @param shrinkage the shrinkage parameter in (0, 1] controls the learning rate of procedure.
      * @param importance variable importance
      */
     public GradientTreeBoost(Formula formula, RegressionTree[] trees, double b, double shrinkage, double[] importance) {
@@ -158,7 +157,6 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @return the model.
      */
     public static GradientTreeBoost fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
@@ -197,7 +195,6 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
      *                 not split, setting nodeSize = 5 generally gives good results.
      * @param shrinkage the shrinkage parameter in (0, 1] controls the learning rate of procedure.
      * @param subsample the sampling fraction for stochastic tree boosting.
-     * @return the model.
      */
     public static GradientTreeBoost fit(Formula formula, DataFrame data, Loss loss, int ntrees, int maxDepth, int maxNodes, int nodeSize, double shrinkage, double subsample) {
         if (ntrees < 1) {
@@ -216,7 +213,7 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
         DataFrame x = formula.x(data);
         double[] y = formula.y(data).toDoubleArray();
 
-        final int n = x.nrow();
+        final int n = x.nrows();
         final int N = (int) Math.round(n * subsample);
         final int[][] order = CART.order(x);
 
@@ -237,14 +234,14 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
             }
 
             logger.info("Training {} tree", Strings.ordinal(t+1));
-            trees[t] = new RegressionTree(x, loss, field, maxDepth, maxNodes, nodeSize, x.ncol(), samples, order);
+            trees[t] = new RegressionTree(x, loss, field, maxDepth, maxNodes, nodeSize, x.ncols(), samples, order);
 
             for (int i = 0; i < n; i++) {
                 residual[i] -= shrinkage * trees[t].predict(x.get(i));
             }
         }
         
-        double[] importance = new double[x.ncol()];
+        double[] importance = new double[x.ncols()];
         for (RegressionTree tree : trees) {
             double[] imp = tree.importance();
             for (int i = 0; i < imp.length; i++) {
@@ -332,7 +329,7 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
     public double[][] test(DataFrame data) {
         DataFrame x = formula.x(data);
 
-        int n = x.nrow();
+        int n = x.nrows();
         int ntrees = trees.length;
         double[][] prediction = new double[ntrees][n];
 

@@ -59,7 +59,7 @@ import smile.util.Strings;
  * 
  * @author Haifeng Li
  */
-public class LDA extends AbstractClassifier<double[]> {
+public class LDA implements SoftClassifier<double[]> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -92,6 +92,10 @@ public class LDA extends AbstractClassifier<double[]> {
      * matrix is spherical.
      */
     private final Matrix scaling;
+    /**
+     * The class label encoder.
+     */
+    private final IntSet labels;
 
     /**
      * Constructor.
@@ -113,13 +117,13 @@ public class LDA extends AbstractClassifier<double[]> {
      * @param labels the class label encoder.
      */
     public LDA(double[] priori, double[][] mu, double[] eigen, Matrix scaling, IntSet labels) {
-        super(labels);
         this.k = priori.length;
         this.p = mu[0].length;
         this.priori = priori;
         this.mu = mu;
         this.eigen = eigen;
         this.scaling = scaling;
+        this.labels = labels;
 
         logppriori = new double[k];
         for (int i = 0; i < k; i++) {

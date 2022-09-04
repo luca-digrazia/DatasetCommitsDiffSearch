@@ -78,7 +78,7 @@ import smile.validation.ModelSelection;
  * 
  * @author Haifeng Li
  */
-public abstract class LogisticRegression extends AbstractClassifier<double[]> implements OnlineClassifier<double[]> {
+public abstract class LogisticRegression implements SoftClassifier<double[]>, OnlineClassifier<double[]> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -107,6 +107,11 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> im
     double eta = 0.1;
 
     /**
+     * The class label encoder.
+     */
+    final IntSet labels;
+
+    /**
      * Constructor.
      * @param p the dimension of input data.
      * @param L the log-likelihood of learned model.
@@ -116,11 +121,11 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> im
      * @param labels the class label encoder.
      */
     public LogisticRegression(int p, double L, double lambda, IntSet labels) {
-        super(labels);
         this.k = labels.size();
         this.p = p;
         this.L = L;
         this.lambda = lambda;
+        this.labels = labels;
     }
 
     /** Binomial logistic regression. The dependent variable is nominal of two levels. */
@@ -188,7 +193,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> im
 
             // calculate gradient for incoming data
             double wx = dot(x, w);
-            double err = y - MathEx.sigmoid(wx);
+            double err = y - MathEx.logistic(wx);
 
             // update the weights
             w[p] += eta * err;
@@ -645,7 +650,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> im
                 return IntStream.range(begin, end).sequential().mapToDouble(i -> {
                     double[] xi = x[i];
                     double wx = dot(xi, w);
-                    double err = y[i] - MathEx.sigmoid(wx);
+                    double err = y[i] - MathEx.logistic(wx);
                     for (int j = 0; j < p; j++) {
                         gradient[j] -= err * xi[j];
                     }

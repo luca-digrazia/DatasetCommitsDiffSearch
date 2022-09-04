@@ -36,7 +36,7 @@ import smile.validation.ModelSelection;
  *
  * @author Haifeng Li
  */
-public abstract class SparseLogisticRegression extends AbstractClassifier<SparseArray> implements OnlineClassifier<SparseArray> {
+public abstract class SparseLogisticRegression implements SoftClassifier<SparseArray>, OnlineClassifier<SparseArray> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -65,6 +65,11 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
     double eta = 0.1;
 
     /**
+     * The class label encoder.
+     */
+    final IntSet labels;
+
+    /**
      * Constructor.
      * @param p the dimension of input data.
      * @param L the log-likelihood of learned model.
@@ -74,11 +79,11 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
      * @param labels the class label encoder.
      */
     public SparseLogisticRegression(int p, double L, double lambda, IntSet labels) {
-        super(labels);
         this.k = labels.size();
         this.p = p;
         this.L = L;
         this.lambda = lambda;
+        this.labels = labels;
     }
 
     /** Binomial logistic regression. The dependent variable is nominal of two levels. */
@@ -138,7 +143,7 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
 
             // calculate gradient for incoming data
             double wx = dot(x, w);
-            double err = y - MathEx.sigmoid(wx);
+            double err = y - MathEx.logistic(wx);
 
             // update the weights
             w[p] += eta * err;
@@ -290,7 +295,7 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
             throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
         }
 
-        int p = x.ncol();
+        int p = x.ncols();
         ClassLabels codec = ClassLabels.fit(y);
         int k = codec.k;
         y = codec.y;
@@ -361,7 +366,7 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
             throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
         }
 
-        int p = x.ncol();
+        int p = x.ncols();
         ClassLabels codec = ClassLabels.fit(y);
         int k = codec.k;
         y = codec.y;
@@ -470,7 +475,7 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
             this.x = x;
             this.y = y;
             this.lambda = lambda;
-            this.p = x.ncol();
+            this.p = x.ncols();
 
             partitionSize = Integer.parseInt(System.getProperty("smile.data.partition.size", "1000"));
             partitions = x.size() / partitionSize + (x.size() % partitionSize == 0 ? 0 : 1);
@@ -509,7 +514,7 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
                 return IntStream.range(begin, end).sequential().mapToDouble(i -> {
                     SparseArray xi = x.get(i);
                     double wx = dot(xi, w);
-                    double err = y[i] - MathEx.sigmoid(wx);
+                    double err = y[i] - MathEx.logistic(wx);
                     for (SparseArray.Entry e : xi) {
                         gradient[e.i] -= err * e.x;
                     }
@@ -588,7 +593,7 @@ public abstract class SparseLogisticRegression extends AbstractClassifier<Sparse
             this.y = y;
             this.k = k;
             this.lambda = lambda;
-            this.p = x.ncol();
+            this.p = x.ncols();
 
             partitionSize = Integer.parseInt(System.getProperty("smile.data.partition.size", "1000"));
             partitions = x.size() / partitionSize + (x.size() % partitionSize == 0 ? 0 : 1);

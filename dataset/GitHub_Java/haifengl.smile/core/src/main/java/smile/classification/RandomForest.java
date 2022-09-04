@@ -75,7 +75,7 @@ import smile.validation.metric.Error;
  * 
  * @author Haifeng Li
  */
-public class RandomForest extends AbstractClassifier<Tuple> implements DataFrameClassifier, TreeSHAP {
+public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier, TreeSHAP {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RandomForest.class);
 
@@ -133,6 +133,11 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
     private final double[] importance;
 
     /**
+     * The class label encoder.
+     */
+    private final IntSet labels;
+
+    /**
      * Constructor.
      *
      * @param formula a symbolic description of the model to be fitted.
@@ -156,12 +161,12 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
      * @param labels the class label encoder.
      */
     public RandomForest(Formula formula, int k, Model[] models, ClassificationMetrics metrics, double[] importance, IntSet labels) {
-        super(labels);
         this.formula = formula;
         this.k = k;
         this.models = models;
         this.metrics = metrics;
         this.importance = importance;
+        this.labels = labels;
     }
 
     /**
@@ -294,15 +299,15 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
         DataFrame x = formula.x(data);
         BaseVector y = formula.y(data);
 
-        if (mtry > x.ncol()) {
+        if (mtry > x.ncols()) {
             throw new IllegalArgumentException("Invalid number of variables to split on at a node of the tree: " + mtry);
         }
 
-        int mtryFinal = mtry > 0 ? mtry : (int) Math.sqrt(x.ncol());
+        int mtryFinal = mtry > 0 ? mtry : (int) Math.sqrt(x.ncols());
 
         ClassLabels codec = ClassLabels.fit(y);
         final int k = codec.k;
-        final int n = x.nrow();
+        final int n = x.nrows();
 
         final int[] weight = classWeight != null ? classWeight : Collections.nCopies(k, 1).stream().mapToInt(i -> i).toArray();
 
