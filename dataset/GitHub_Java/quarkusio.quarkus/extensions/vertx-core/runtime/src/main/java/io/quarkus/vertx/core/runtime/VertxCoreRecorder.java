@@ -71,23 +71,20 @@ public class VertxCoreRecorder {
     private static volatile String webDeploymentId;
 
     public Supplier<Vertx> configureVertx(VertxConfiguration config,
-            LaunchMode launchMode, ShutdownContext shutdown, List<Consumer<VertxOptions>> customizers,
-            ExecutorService executorProxy) {
-        QuarkusExecutorFactory.sharedExecutor = executorProxy;
+            LaunchMode launchMode, ShutdownContext shutdown, List<Consumer<VertxOptions>> customizers) {
         if (launchMode != LaunchMode.DEVELOPMENT) {
-            vertx = new VertxSupplier(launchMode, config, customizers, shutdown);
+            vertx = new VertxSupplier(config, customizers, shutdown);
             // we need this to be part of the last shutdown tasks because closing it early (basically before Arc)
             // could cause problem to beans that rely on Vert.x and contain shutdown tasks
             shutdown.addLastShutdownTask(new Runnable() {
                 @Override
                 public void run() {
                     destroy();
-                    QuarkusExecutorFactory.sharedExecutor = null;
                 }
             });
         } else {
             if (vertx == null) {
-                vertx = new VertxSupplier(launchMode, config, customizers, shutdown);
+                vertx = new VertxSupplier(config, customizers, shutdown);
             } else if (vertx.v != null) {
                 tryCleanTccl(vertx.v);
             }
@@ -117,7 +114,6 @@ public class VertxCoreRecorder {
                             }
                         }
                     }
-                    QuarkusExecutorFactory.sharedExecutor = null;
                 }
             });
         }
@@ -184,8 +180,7 @@ public class VertxCoreRecorder {
         return vertx;
     }
 
-    public static Vertx initialize(VertxConfiguration conf, VertxOptionsCustomizer customizer, ShutdownContext shutdown,
-            LaunchMode launchMode) {
+    public static Vertx initialize(VertxConfiguration conf, VertxOptionsCustomizer customizer, ShutdownContext shutdown) {
 
         VertxOptions options = new VertxOptions();
 
@@ -203,7 +198,7 @@ public class VertxCoreRecorder {
         if (conf != null && conf.cluster != null && conf.cluster.clustered) {
             CompletableFuture<Vertx> latch = new CompletableFuture<>();
             new VertxBuilder(options)
-                    .executorServiceFactory(new QuarkusExecutorFactory(conf, launchMode))
+                    .executorServiceFactory(new QuarkusExecutorFactory(conf))
                     .init().clusteredVertx(new Handler<AsyncResult<Vertx>>() {
                         @Override
                         public void handle(AsyncResult<Vertx> ar) {
@@ -217,7 +212,7 @@ public class VertxCoreRecorder {
             vertx = latch.join();
         } else {
             vertx = new VertxBuilder(options)
-                    .executorServiceFactory(new QuarkusExecutorFactory(conf, launchMode))
+                    .executorServiceFactory(new QuarkusExecutorFactory(conf))
                     .init().vertx();
         }
 
@@ -462,21 +457,23 @@ public class VertxCoreRecorder {
         };
     }
 
+    public void setupExecutorFactory(ExecutorService executorProxy) {
+        QuarkusExecutorFactory.sharedExecutor = executorProxy;
+    }
+
     public static Supplier<Vertx> recoverFailedStart(VertxConfiguration config) {
-        return vertx = new VertxSupplier(LaunchMode.DEVELOPMENT, config, Collections.emptyList(), null);
+        return vertx = new VertxSupplier(config, Collections.emptyList(), null);
 
     }
 
     static class VertxSupplier implements Supplier<Vertx> {
-        final LaunchMode launchMode;
         final VertxConfiguration config;
         final VertxOptionsCustomizer customizer;
         final ShutdownContext shutdown;
         Vertx v;
 
-        VertxSupplier(LaunchMode launchMode, VertxConfiguration config, List<Consumer<VertxOptions>> customizers,
+        VertxSupplier(VertxConfiguration config, List<Consumer<VertxOptions>> customizers,
                 ShutdownContext shutdown) {
-            this.launchMode = launchMode;
             this.config = config;
             this.customizer = new VertxOptionsCustomizer(customizers);
             this.shutdown = shutdown;
@@ -485,7 +482,7 @@ public class VertxCoreRecorder {
         @Override
         public synchronized Vertx get() {
             if (v == null) {
-                v = initialize(config, customizer, shutdown, launchMode);
+                v = initialize(config, customizer, shutdown);
             }
             return v;
         }
