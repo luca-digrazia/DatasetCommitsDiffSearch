@@ -223,30 +223,18 @@ public abstract class SearchResource extends RestResource {
         }
     }
 
-    protected ChunkedOutput<ScrollResult.ScrollChunk> buildChunkedOutput(final ScrollResult scroll, int limit) {
-        final ChunkedOutput<ScrollResult.ScrollChunk> output = new ChunkedOutput<>(ScrollResult.ScrollChunk.class);
-
-        LOG.debug("[{}] Scroll result contains a total of {} messages", scroll.getQueryHash(), scroll.totalHits());
-        Runnable scrollIterationAction = createScrollChunkProducer(scroll, output, limit);
-        // TODO use a shared executor for async responses here instead of a single thread that's not limited
-        new Thread(scrollIterationAction).start();
-        return output;
-    }
-
     protected BadRequestException createRequestExceptionForParseFailure(String query, SearchPhaseExecutionException e) {
         LOG.warn("Unable to execute search: {}", e.getMessage());
 
         QueryParseError errorMessage = QueryParseError.create(query, "Unable to execute search", e.getClass().getCanonicalName());
 
         // We're so going to hell for this…
-        if (e.toString().contains("nested: QueryParsingException")) {
+        if (e.getMessage().contains("nested: ParseException")) {
             final QueryParser queryParser = new QueryParser("", new StandardAnalyzer());
             try {
                 queryParser.parse(query);
             } catch (ParseException parseException) {
-                // FIXME I have no idea why this is necessary but without that call currentToken will be null.
-                final ParseException exception = queryParser.generateParseException();
-                Token currentToken = exception.currentToken;
+                Token currentToken = parseException.currentToken;
                 if (currentToken == null) {
                     LOG.warn("No position/token available for ParseException.", parseException);
                     errorMessage = QueryParseError.create(
