@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,30 +15,32 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
+
 package org.graylog2.inputs.syslog;
 
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.google.common.collect.Maps;
-import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.syslog4j.server.SyslogServerEventIF;
-import org.graylog2.syslog4j.server.impl.event.SyslogServerEvent;
-import org.graylog2.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.Message;
+import org.productivity.java.syslog4j.server.impl.event.SyslogServerEvent;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.regex.Pattern;
+import com.google.common.collect.Maps;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import org.productivity.java.syslog4j.server.SyslogServerEventIF;
+import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -46,7 +50,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class SyslogProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogProcessor.class);
-    private final Buffer processBuffer;
+    private final InputHost server;
     private final Configuration config;
 
     private final MessageInput sourceInput;
@@ -59,21 +63,18 @@ public class SyslogProcessor {
     private final Meter processedMessages;
     private final Timer syslogParsedTime;
 
-    public SyslogProcessor(MetricRegistry metricRegistry,
-                           Buffer processBuffer,
-                           Configuration config,
-                           MessageInput sourceInput) {
-        this.processBuffer = processBuffer;
+    public SyslogProcessor(InputHost server, Configuration config, MessageInput sourceInput) {
+        this.server = server;
         this.config = config;
 
         this.sourceInput = sourceInput;
 
         String metricsId = sourceInput.getUniqueReadableId();
-        this.incomingMessages = metricRegistry.meter(name(metricsId, "incomingMessages"));
-        this.parsingFailures = metricRegistry.meter(name(metricsId, "parsingFailures"));
-        this.processedMessages = metricRegistry.meter(name(metricsId, "processedMessages"));
-        this.incompleteMessages = metricRegistry.meter(name(metricsId, "incompleteMessages"));
-        this.syslogParsedTime = metricRegistry.timer(name(metricsId, "syslogParsedTime"));
+        this.incomingMessages = server.metrics().meter(name(metricsId, "incomingMessages"));
+        this.parsingFailures = server.metrics().meter(name(metricsId, "parsingFailures"));
+        this.processedMessages = server.metrics().meter(name(metricsId, "processedMessages"));
+        this.incompleteMessages = server.metrics().meter(name(metricsId, "incompleteMessages"));
+        this.syslogParsedTime = server.metrics().timer(name(metricsId, "syslogParsedTime"));
     }
 
     public void messageReceived(String msg, InetAddress remoteAddress) throws BufferOutOfCapacityException {
@@ -98,7 +99,7 @@ public class SyslogProcessor {
         // Add to process buffer.
         LOG.debug("Adding received syslog message <{}> to process buffer: {}", lm.getId(), lm);
         processedMessages.mark();
-        processBuffer.insertCached(lm, sourceInput);
+        server.getProcessBuffer().insertCached(lm, sourceInput);
     }
 
     private Message parse(String msg, InetAddress remoteAddress) throws UnknownHostException {
