@@ -1,12 +1,18 @@
 package com.codahale.dropwizard.config;
 
-import com.codahale.dropwizard.jersey.JacksonMessageBodyProvider;
-import com.codahale.dropwizard.jetty.*;
+import com.codahale.dropwizard.configuration.ConfigurationException;
+import com.codahale.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import com.codahale.dropwizard.jetty.BiDiGzipHandler;
+import com.codahale.dropwizard.jetty.ContextRoutingHandler;
+import com.codahale.dropwizard.jetty.NonblockingServletHolder;
+import com.codahale.dropwizard.jetty.RoutingHandler;
 import com.codahale.dropwizard.servlets.ThreadNameFilter;
 import com.codahale.dropwizard.util.Duration;
 import com.codahale.dropwizard.util.Size;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck;
+import com.codahale.metrics.jetty9.InstrumentedConnectionFactory;
 import com.codahale.metrics.jetty9.InstrumentedQueuedThreadPool;
 import com.codahale.metrics.servlets.AdminServlet;
 import com.codahale.metrics.servlets.HealthCheckServlet;
@@ -23,12 +29,11 @@ import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.security.SecurityHandler;
 import org.eclipse.jetty.security.authentication.BasicAuthenticator;
 import org.eclipse.jetty.server.*;
+import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.BlockingArrayQueue;
-import org.eclipse.jetty.util.component.AbstractLifeCycle;
-import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.security.Credential;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -41,6 +46,8 @@ import org.slf4j.LoggerFactory;
 import javax.servlet.DispatcherType;
 import java.util.EnumSet;
 import java.util.concurrent.BlockingQueue;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /*
  * A factory for creating instances of {@link org.eclipse.jetty.server.Server} and configuring Servlets
@@ -67,33 +74,20 @@ public class ServerFactory {
         this.requestLogHandlerFactory = new RequestLogHandlerFactory(config.getRequestLogConfiguration(), name);
     }
 
-    public Server buildServer(Environment env) throws ConfigurationException {
+    public Server build(Environment env) throws ConfigurationException {
         env.getHealthCheckRegistry().register("deadlocks", new ThreadDeadlockHealthCheck());
         return createServer(env);
     }
 
-    private Server createServer(final Environment env) {
+    private Server createServer(Environment env) {
         final ThreadPool threadPool = createThreadPool(env.getMetricRegistry());
         final Server server = new Server(threadPool);
-        for (Object bean : env.getManagedObjects()) {
-            server.addBean(bean);
-        }
-
-        for (LifeCycle.Listener listener : env.getLifecycleListeners()) {
-            server.addLifeCycleListener(listener);
-        }
-
-        server.addLifeCycleListener(new AbstractLifeCycle.AbstractLifeCycleListener() {
-            @Override
-            public void lifeCycleStarting(LifeCycle event) {
-                LOGGER.debug("managed objects = {}", env.getManagedObjects());
-            }
-        });
+        env.getLifecycleEnvironment().attach(server);
 
         final ServletContextHandler applicationHandler = createExternalServlet(env);
         final ServletContextHandler adminHandler = createInternalServlet(env);
 
-        final Connector applicationConnector = createApplicationConnector(server);
+        final Connector applicationConnector = createApplicationConnector(server, env);
         server.addConnector(applicationConnector);
 
         final Connector adminConnector;
@@ -115,14 +109,16 @@ public class ServerFactory {
                                               adminConnector,
                                               adminHandler);
         if (requestLogHandlerFactory.isEnabled()) {
-            server.setHandler(handler);
-        } else {
             final RequestLogHandler requestLogHandler = requestLogHandlerFactory.build();
             requestLogHandler.setHandler(handler);
             server.setHandler(requestLogHandler);
+        } else {
+            server.setHandler(handler);
         }
 
-        server.addBean(new UnbrandedErrorHandler());
+        final ErrorHandler errorHandler = new ErrorHandler();
+        errorHandler.setShowStacks(false);
+        server.addBean(errorHandler);
 
         server.setStopAtShutdown(true);
 
@@ -175,7 +171,7 @@ public class ServerFactory {
         final ServletContainer jerseyContainer = env.getJerseyServletContainer();
         if (jerseyContainer != null) {
             env.getJerseyEnvironment().addProvider(
-                    new JacksonMessageBodyProvider(env.getJsonEnvironment().build(),
+                    new JacksonMessageBodyProvider(env.getObjectMapper(),
                                                    env.getValidator())
             );
             final ServletHolder jerseyHolder = new NonblockingServletHolder(jerseyContainer);
@@ -217,7 +213,7 @@ public class ServerFactory {
         return connector;
     }
 
-    private Connector createApplicationConnector(Server server) {
+    private Connector createApplicationConnector(Server server, Environment env) {
         // TODO: 4/24/13 <coda> -- add support for SSL, SPDY, etc.
 
         final HttpConfiguration httpConfig = new HttpConfiguration();
@@ -243,13 +239,20 @@ public class ServerFactory {
                                         (int) config.getBufferPoolIncrement().toBytes(),
                                         (int) config.getMaxBufferPoolSize().toBytes());
 
+        final Timer httpTimer = env.getMetricRegistry()
+                                   .timer(name(HttpConnectionFactory.class,
+                                               Integer.toString(config.getPort()),
+                                               "connections"));
+        final InstrumentedConnectionFactory instrumentedHttp = new InstrumentedConnectionFactory(
+                httpConnectionFactory,
+                httpTimer);
         final ServerConnector connector = new ServerConnector(server,
                                                               null,
                                                               scheduler,
                                                               bufferPool,
                                                               config.getAcceptorThreads(),
                                                               config.getSelectorThreads(),
-                                                              httpConnectionFactory);
+                                                              instrumentedHttp);
         connector.setPort(config.getPort());
         connector.setHost(config.getBindHost().orNull());
         connector.setAcceptQueueSize(config.getAcceptQueueSize());
@@ -260,19 +263,6 @@ public class ServerFactory {
         connector.setIdleTimeout(config.getIdleTimeout().toMilliseconds());
         connector.setName("application");
         return connector;
-    }
-
-    private ThreadPool createThreadPool() {
-        final BlockingQueue<Runnable> queue = new BlockingArrayQueue<>(config.getMinThreads(),
-                                                                       config.getMaxThreads(),
-                                                                       config.getMaxQueuedRequests()
-                                                                             .or(Integer.MAX_VALUE));
-        final QueuedThreadPool pool = new QueuedThreadPool(config.getMaxThreads(),
-                                                           config.getMinThreads(),
-                                                           60000,
-                                                           queue);
-        pool.setName("dw");
-        return pool;
     }
 
     private Handler createHandler(Connector applicationConnector,
@@ -313,10 +303,15 @@ public class ServerFactory {
     }
 
     private ThreadPool createThreadPool(MetricRegistry metricRegistry) {
-        // TODO: 4/24/13 <coda> -- add support for idle time and max queue size
+        final BlockingQueue<Runnable> queue = new BlockingArrayQueue<>(config.getMinThreads(),
+                                                                       config.getMaxThreads(),
+                                                                       config.getMaxQueuedRequests()
+                                                                             .or(Integer.MAX_VALUE));
         return new InstrumentedQueuedThreadPool(metricRegistry,
                                                 "dw",
                                                 config.getMaxThreads(),
-                                                config.getMinThreads());
+                                                config.getMinThreads(),
+                                                60000,
+                                                queue);
     }
 }
