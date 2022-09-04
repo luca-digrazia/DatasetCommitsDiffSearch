@@ -79,10 +79,7 @@ public class NinjaLexerTest {
 
   @Test
   public void testDisallowedSymbols() {
-    assertError(
-        createLexer("^"),
-        "Symbol '^' is not allowed in the identifier, the text fragment with the symbol:\n^\n",
-        "^");
+    assertError(createLexer("^"), "Symbol is not allowed in the identifier.", "^");
   }
 
   @Test

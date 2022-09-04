@@ -19,7 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.FileFragment;
+import com.google.devtools.build.lib.bazel.rules.ninja.file.ByteBufferFragment;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.Arrays;
 import java.util.List;
@@ -39,7 +39,7 @@ public class NinjaLexer {
               NinjaToken.POOL)
           .collect(ImmutableMap.toImmutableMap(token -> token.getBytes()[0], nt -> nt));
 
-  private final FileFragment fragment;
+  private final ByteBufferFragment fragment;
   private NinjaLexerStep step;
   private final List<Pair<Integer, Integer>> ranges;
   private final List<NinjaToken> tokens;
@@ -49,7 +49,7 @@ public class NinjaLexer {
   private boolean interpretPoolAsVariable = false;
 
   /** @param fragment fragment to do the lexing on */
-  public NinjaLexer(FileFragment fragment) {
+  public NinjaLexer(ByteBufferFragment fragment) {
     this.fragment = fragment;
     step = new NinjaLexerStep(fragment, 0);
     ranges = Lists.newArrayList();
@@ -223,7 +223,7 @@ public class NinjaLexer {
     return step.getError();
   }
 
-  public FileFragment getFragment() {
+  public ByteBufferFragment getFragment() {
     return fragment;
   }
 
