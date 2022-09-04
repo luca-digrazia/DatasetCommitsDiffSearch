@@ -219,8 +219,6 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
             log.warn("Unable to set proper permissions on " + runnerJar);
         }
 
-        originalJar = outputDir.resolve(finalName + ".jar");
-
         // when using uberJar, we rename the standard jar to include the .original suffix
         // this greatly aids tools (such as s2i) that look for a single jar in the output directory to work OOTB.
         // we only do this if the standard jar was present in the output dir in the first place.
@@ -235,6 +233,8 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
             } catch (IOException e) {
                 throw new AppCreatorException("Unable to build uberjar", e);
             }
+        } else {
+            originalJar = outputDir.resolve(finalName + ".jar");
         }
 
         ctx.pushOutcome(RunnerJarOutcome.class, this);
@@ -372,7 +372,6 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
         if (Files.exists(augmentOutcome.getConfigDir())) {
             copyFiles(augmentOutcome.getConfigDir(), runnerZipFs, services);
         }
-        // needs to be done after copying the app classes in order for the transformed classes to replace the app classes
         copyFiles(augmentOutcome.getTransformedClassesDir(), runnerZipFs, services);
 
         generateManifest(runnerZipFs, classPath.toString());
@@ -450,7 +449,6 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
 
     /**
      * Copy files from {@code dir} to {@code fs}, filtering out service providers into the given map.
-     * Replaces files if they already exist
      *
      * @param dir the source directory
      * @param fs the destination filesystem
