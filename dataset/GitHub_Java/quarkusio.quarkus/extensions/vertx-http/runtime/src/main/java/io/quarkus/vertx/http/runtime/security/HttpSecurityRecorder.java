@@ -16,9 +16,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.BeanContainerListener;
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.security.AuthenticationCompletionException;
 import io.quarkus.security.AuthenticationFailedException;
-import io.quarkus.security.AuthenticationRedirectException;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.request.AnonymousAuthenticationRequest;
 import io.quarkus.vertx.http.runtime.FormAuthConfig;
@@ -72,9 +70,7 @@ public class HttpSecurityRecorder {
                             authenticator.sendChallenge(event).subscribe().with(new Consumer<Boolean>() {
                                 @Override
                                 public void accept(Boolean aBoolean) {
-                                    if (!event.response().ended()) {
-                                        event.response().end();
-                                    }
+                                    event.response().end();
                                 }
                             }, new Consumer<Throwable>() {
                                 @Override
