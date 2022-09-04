@@ -279,7 +279,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     } else {
       resourceApk =
           ResourceApk.fromAndroidApplicationResourceInfo(
-              ruleContext, dataContext.getAndroidConfig(), androidApplicationResourceInfo);
+              dataContext, androidApplicationResourceInfo);
     }
 
     if (dataContext.useResourcePathShortening()) {
