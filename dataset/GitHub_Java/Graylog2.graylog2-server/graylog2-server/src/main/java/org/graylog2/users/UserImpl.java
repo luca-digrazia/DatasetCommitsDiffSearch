@@ -170,8 +170,6 @@ public class UserImpl extends PersistedImpl implements User {
 
     @Override
     public void setPermissions(final List<String> permissions) {
-        // Do not store the dynamic user self edit permissions
-        permissions.removeAll(this.permissions.userSelfEditPermissions(getName()));
         fields.put(PERMISSIONS, permissions);
     }
 

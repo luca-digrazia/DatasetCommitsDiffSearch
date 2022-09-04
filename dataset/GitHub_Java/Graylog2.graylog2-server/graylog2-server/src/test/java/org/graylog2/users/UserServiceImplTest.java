@@ -68,8 +68,6 @@ public class UserServiceImplTest {
     private RoleService roleService;
     @Mock
     private InMemoryRolePermissionResolver permissionsResolver;
-    @Mock
-    private Permissions permissions;
 
     @Before
     public void setUp() throws Exception {
@@ -156,12 +154,12 @@ public class UserServiceImplTest {
 
         @Override
         public UserImpl create(Map<String, Object> fields) {
-            return new UserImpl(passwordAlgorithmFactory, permissions, fields);
+            return new UserImpl(passwordAlgorithmFactory, null, fields);
         }
 
         @Override
         public UserImpl create(ObjectId id, Map<String, Object> fields) {
-            return new UserImpl(passwordAlgorithmFactory, permissions, id, fields);
+            return new UserImpl(passwordAlgorithmFactory, null, id, fields);
         }
 
         @Override
@@ -208,10 +206,8 @@ public class UserServiceImplTest {
         user.setRoleIds(Sets.newHashSet(role.getId()));
         user.setPermissions(Lists.newArrayList("hello:world"));
 
-
         when(permissionsResolver.resolveStringPermission(role.getId())).thenReturn(Sets.newHashSet("foo:bar"));
-        when(permissions.userSelfEditPermissions(user.getName())).thenReturn(Sets.newHashSet("foo:baz"));
 
-        assertThat(userService.getPermissionsForUser(user)).containsOnly("foo:bar", "hello:world", "foo:baz");
+        assertThat(userService.getPermissionsForUser(user)).containsOnly("foo:bar", "hello:world");
     }
 }
