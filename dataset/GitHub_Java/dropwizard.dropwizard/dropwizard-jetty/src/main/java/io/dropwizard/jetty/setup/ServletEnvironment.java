@@ -31,6 +31,15 @@ public class ServletEnvironment {
     }
 
     /**
+     * Set the base servlet resource.
+     *
+     * @param resource base resource to use
+     */
+    public void setBaseResource(Resource resource) {
+        handler.setBaseResource(resource);
+    }
+
+    /**
      * Add a servlet instance.
      *
      * @param name    the servlet's name
@@ -120,10 +129,6 @@ public class ServletEnvironment {
 
     public void setProtectedTargets(String... targets) {
         handler.setProtectedTargets(Arrays.copyOf(targets, targets.length));
-    }
-
-    public void setBaseResource(Resource baseResource) {
-        handler.setBaseResource(baseResource);
     }
 
     public void setResourceBase(String resourceBase) {
