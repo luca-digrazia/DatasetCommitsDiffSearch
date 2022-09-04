@@ -252,14 +252,7 @@ public class QuarkusTestExtension
         if (isNativeTest(extensionContext)) {
             return invocation.proceed();
         }
-        T result;
-        ClassLoader old = Thread.currentThread().getContextClassLoader();
-        try {
-            Thread.currentThread().setContextClassLoader(extensionContext.getRequiredTestClass().getClassLoader());
-            result = invocation.proceed();
-        } finally {
-            Thread.currentThread().setContextClassLoader(old);
-        }
+        T result = invocation.proceed();
         ExtensionState state = ensureStarted(extensionContext);
         initTestState(extensionContext, state);
         return result;
