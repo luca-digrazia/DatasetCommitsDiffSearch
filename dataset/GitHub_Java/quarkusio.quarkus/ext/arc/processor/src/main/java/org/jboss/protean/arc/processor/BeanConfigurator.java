@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import java.util.Collections;
@@ -43,6 +59,8 @@ public final class BeanConfigurator<T> {
     private ScopeInfo scope;
 
     private Integer alternativePriority;
+    
+    private String name;
 
     private Consumer<MethodCreator> creatorConsumer;
 
@@ -56,7 +74,7 @@ public final class BeanConfigurator<T> {
      * @param beanDeployment
      * @param beanConsumer
      */
-    BeanConfigurator(Class<T> implClass, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
+    BeanConfigurator(Class<?> implClass, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
         this.beanDeployment = beanDeployment;
         this.beanConsumer = beanConsumer;
         this.implClass = beanDeployment.getIndex().getClassByName(DotName.createSimple(implClass.getName()));
@@ -68,6 +86,7 @@ public final class BeanConfigurator<T> {
         this.qualifiers = new HashSet<>();
         this.scope = ScopeInfo.DEPENDENT;
         this.params = new HashMap<>();
+        this.name = null;
     }
 
     public BeanConfigurator<T> param(String name, Class<?> value) {
@@ -123,13 +142,18 @@ public final class BeanConfigurator<T> {
         this.scope = scope;
         return this;
     }
+    
+    public BeanConfigurator<T> name(String name) {
+        this.name = name;
+        return this;
+    }
 
     public BeanConfigurator<T> alternativePriority(int priority) {
         this.alternativePriority = priority;
         return this;
     }
 
-    public BeanConfigurator<T> creator(Class<? extends BeanCreator<T>> creatorClazz) {
+    public <U extends T> BeanConfigurator<U> creator(Class<? extends BeanCreator<U>> creatorClazz) {
         return creator(mc -> {
             // return new FooBeanCreator().create(context, params)
             // TODO verify, optimize, etc.
@@ -143,12 +167,12 @@ public final class BeanConfigurator<T> {
         });
     }
 
-    public BeanConfigurator<T> creator(Consumer<MethodCreator> methodCreatorConsumer) {
+    public <U extends T> BeanConfigurator<U> creator(Consumer<MethodCreator> methodCreatorConsumer) {
         this.creatorConsumer = methodCreatorConsumer;
-        return this;
+        return cast(this);
     }
 
-    public BeanConfigurator<T> destroyer(Class<? extends BeanDestroyer<T>> destroyerClazz) {
+    public <U extends T> BeanConfigurator<U> destroyer(Class<? extends BeanDestroyer<U>> destroyerClazz) {
         return destroyer(mc -> {
             // new FooBeanDestroyer().destroy(instance, context, params)
             // TODO verify, optimize, etc.
@@ -162,9 +186,9 @@ public final class BeanConfigurator<T> {
         });
     }
 
-    public BeanConfigurator<T> destroyer(Consumer<MethodCreator> methodCreatorConsumer) {
+    public <U extends T> BeanConfigurator<U> destroyer(Consumer<MethodCreator> methodCreatorConsumer) {
         this.destroyerConsumer = methodCreatorConsumer;
-        return this;
+        return cast(this);
     }
 
     // TODO stereotypes?
@@ -175,7 +199,12 @@ public final class BeanConfigurator<T> {
     public void done() {
         // TODO sanity checks
         beanConsumer.accept(new BeanInfo.Builder().implClazz(implClass).beanDeployment(beanDeployment).scope(scope).types(types).qualifiers(qualifiers)
-                .alternativePriority(alternativePriority).creator(creatorConsumer).destroyer(destroyerConsumer).params(params).build());
+                .alternativePriority(alternativePriority).name(name).creator(creatorConsumer).destroyer(destroyerConsumer).params(params).build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T cast(Object obj) {
+        return (T) obj;
     }
 
 }

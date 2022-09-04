@@ -119,7 +119,6 @@ class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
         }
     }
 
-    @Override
     public boolean isInterceptor() {
         return true;
     }
