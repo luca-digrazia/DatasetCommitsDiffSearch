@@ -14,6 +14,7 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import org.objectweb.asm.ClassVisitor;
@@ -32,7 +33,7 @@ public class CoreLibraryInvocationRewriter extends ClassVisitor {
   private final CoreLibrarySupport support;
 
   public CoreLibraryInvocationRewriter(ClassVisitor cv, CoreLibrarySupport support) {
-    super(Opcodes.ASM6, cv);
+    super(Opcodes.ASM8, cv);
     this.support = support;
   }
 
@@ -44,36 +45,56 @@ public class CoreLibraryInvocationRewriter extends ClassVisitor {
   }
 
   private class CoreLibraryMethodInvocationRewriter extends MethodVisitor {
+
     public CoreLibraryMethodInvocationRewriter(MethodVisitor mv) {
-      super(Opcodes.ASM6, mv);
+      super(Opcodes.ASM8, mv);
     }
 
     @Override
     public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
       Class<?> coreInterface =
-          support.getEmulatedCoreLibraryInvocationTarget(opcode, owner, name, desc, itf);
+          support.getCoreInterfaceRewritingTarget(opcode, owner, name, desc, itf);
       if (coreInterface != null) {
         String coreInterfaceName = coreInterface.getName().replace('.', '/');
-        name =
-            InterfaceDesugaring.normalizeInterfaceMethodName(
-                name, name.startsWith("lambda$"), opcode == Opcodes.INVOKESTATIC);
         if (opcode == Opcodes.INVOKESTATIC) {
           checkState(owner.equals(coreInterfaceName));
         } else {
-          desc =
-              InterfaceDesugaring.companionDefaultMethodDescriptor(
-                  opcode == Opcodes.INVOKESPECIAL ? owner : coreInterfaceName, desc);
+          desc = InterfaceDesugaring.companionDefaultMethodDescriptor(coreInterfaceName, desc);
         }
 
         if (opcode == Opcodes.INVOKESTATIC || opcode == Opcodes.INVOKESPECIAL) {
-          checkArgument(itf, "Expected interface to rewrite %s.%s : %s", owner, name, desc);
-          owner = InterfaceDesugaring.getCompanionClassName(owner);
+          checkArgument(
+              itf || opcode == Opcodes.INVOKESPECIAL,
+              "Expected interface to rewrite %s.%s : %s",
+              owner,
+              name,
+              desc);
+          if (coreInterface.isInterface()) {
+            owner = InterfaceDesugaring.getCompanionClassName(coreInterfaceName);
+            name =
+                InterfaceDesugaring.normalizeInterfaceMethodName(
+                    name, name.startsWith("lambda$"), opcode);
+          } else {
+            owner = checkNotNull(support.getMoveTarget(coreInterfaceName, name));
+          }
         } else {
-          // TODO(kmb): Simulate dynamic dispatch instead of calling most general default method
-          owner = InterfaceDesugaring.getCompanionClassName(coreInterfaceName);
+          checkState(coreInterface.isInterface());
+          owner = coreInterfaceName + "$$Dispatch";
         }
+
         opcode = Opcodes.INVOKESTATIC;
         itf = false;
+      } else {
+        String newOwner = support.getMoveTarget(owner, name);
+        if (newOwner != null) {
+          if (opcode != Opcodes.INVOKESTATIC) {
+            // assuming a static method
+            desc = InterfaceDesugaring.companionDefaultMethodDescriptor(owner, desc);
+            opcode = Opcodes.INVOKESTATIC;
+          }
+          owner = newOwner;
+          itf = false; // assuming a class
+        }
       }
       super.visitMethodInsn(opcode, owner, name, desc, itf);
     }
