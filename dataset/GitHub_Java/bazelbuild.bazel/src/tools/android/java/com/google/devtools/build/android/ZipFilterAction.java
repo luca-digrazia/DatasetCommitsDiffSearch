@@ -36,7 +36,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -191,7 +191,7 @@ public class ZipFilterAction {
   static Multimap<String, Long> getEntriesToOmit(
       Collection<Path> filterZips, Collection<String> filterTypes) throws IOException {
     // Escape filter types to prevent regex abuse
-    Set<String> escapedFilterTypes = new LinkedHashSet<>();
+    Set<String> escapedFilterTypes = new HashSet<>();
     for (String filterType : filterTypes) {
       escapedFilterTypes.add(Pattern.quote(filterType));
     }
