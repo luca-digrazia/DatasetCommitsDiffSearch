@@ -37,16 +37,15 @@ public class AllConfigGenerator {
     public static void main(String[] args)
             throws AppModelResolverException, JsonParseException, JsonMappingException, IOException {
         if (args.length != 1) {
-            // exit 1 will break Maven
-            throw new IllegalArgumentException("Missing version parameter.");
+            System.err.println("Missing version parameter.");
+            System.exit(1);
         }
         String version = args[0];
 
         // This is where we produce the entire list of extensions
-        File jsonFile = new File("devtools/bom-descriptor-json/target/extensions.json");
+        File jsonFile = new File("devtools/core-extensions-json/target/extensions.json");
         if (!jsonFile.exists()) {
             System.err.println("WARNING: could not generate all-config file because extensions list is missing: " + jsonFile);
-            // exit 0 will break Maven
             return;
         }
         ObjectMapper mapper = new ObjectMapper();
