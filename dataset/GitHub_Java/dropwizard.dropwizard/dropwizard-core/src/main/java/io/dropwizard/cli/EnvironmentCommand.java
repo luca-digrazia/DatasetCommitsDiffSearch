@@ -31,7 +31,7 @@ public abstract class EnvironmentCommand<T extends Configuration> extends Config
     protected void run(Bootstrap<T> bootstrap, Namespace namespace, T configuration) throws Exception {
         final Environment environment = new Environment(bootstrap.getApplication().getName(),
                                                         bootstrap.getObjectMapper(),
-                                                        bootstrap.getValidatorFactory(),
+                                                        bootstrap.getValidatorFactory().getValidator(),
                                                         bootstrap.getMetricRegistry(),
                                                         bootstrap.getClassLoader(),
                                                         bootstrap.getHealthCheckRegistry());
