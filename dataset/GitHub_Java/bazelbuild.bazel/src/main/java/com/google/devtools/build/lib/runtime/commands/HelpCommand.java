@@ -125,7 +125,7 @@ public final class HelpCommand implements BlazeCommand {
     if (options.getResidue().isEmpty()) {
       emitBlazeVersionInfo(outErr, runtime.getProductName());
       emitGenericHelp(outErr, runtime);
-      return BlazeCommandResult.success();
+      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
     }
     if (options.getResidue().size() != 1) {
       env.getReporter().handle(Event.error("You must specify exactly one command"));
@@ -138,24 +138,24 @@ public final class HelpCommand implements BlazeCommand {
       case "startup_options":
         emitBlazeVersionInfo(outErr, runtime.getProductName());
         emitStartupOptions(outErr, helpOptions.helpVerbosity, runtime);
-        return BlazeCommandResult.success();
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       case "target-syntax":
         emitBlazeVersionInfo(outErr, runtime.getProductName());
         emitTargetSyntaxHelp(outErr, productName);
 
-        return BlazeCommandResult.success();
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       case "info-keys":
         emitInfoKeysHelp(env, outErr);
-        return BlazeCommandResult.success();
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       case "completion":
         emitCompletionHelp(runtime, outErr);
-        return BlazeCommandResult.success();
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       case "flags-as-proto":
         emitFlagsAsProtoHelp(runtime, outErr);
-        return BlazeCommandResult.success();
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       case "everything-as-html":
         new HtmlEmitter(runtime).emit(outErr);
-        return BlazeCommandResult.success();
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
       default: // fall out
     }
 
@@ -173,7 +173,7 @@ public final class HelpCommand implements BlazeCommand {
             runtime.getRuleClassProvider(),
             productName));
 
-    return BlazeCommandResult.success();
+    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
   private void emitBlazeVersionInfo(OutErr outErr, String productName) {

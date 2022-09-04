@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.Option;
@@ -84,14 +83,15 @@ public final class PrintActionCommand implements BlazeCommand {
    */
   public static class PrintActionOptions extends OptionsBase {
     @Option(
-        name = "print_action_mnemonics",
-        allowMultiple = true,
-        defaultValue = "null",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "Lists which mnemonics to filter print_action data by, no filtering takes place "
-                + "when left empty.")
+      name = "print_action_mnemonics",
+      allowMultiple = true,
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Lists which mnemonics to filter print_action data by, no filtering takes place "
+              + "when left empty."
+    )
     public List<String> printActionMnemonics = new ArrayList<>();
   }
 
@@ -104,7 +104,7 @@ public final class PrintActionCommand implements BlazeCommand {
     PrintActionRunner runner = new PrintActionRunner(loadingOptions.compileOneDependency, options,
         env.getReporter().getOutErr(),
         options.getResidue(), Sets.newHashSet(printActionOptions.printActionMnemonics));
-    return BlazeCommandResult.detailedExitCode(runner.printActionsForTargets(env));
+    return BlazeCommandResult.exitCode(runner.printActionsForTargets(env));
   }
 
   /**
@@ -141,22 +141,22 @@ public final class PrintActionCommand implements BlazeCommand {
       };
     }
 
-    private DetailedExitCode printActionsForTargets(CommandEnvironment env) {
+    private ExitCode printActionsForTargets(CommandEnvironment env) {
       BuildResult result = gatherActionsForTargets(env, requestedTargets);
       if (result == null) {
-        return DetailedExitCode.justExitCode(ExitCode.PARSING_FAILURE);
+        return ExitCode.PARSING_FAILURE;
       }
       if (hasFatalBuildFailure(result)) {
         env.getReporter().handle(Event.error("Build failed when printing actions"));
-        return result.getDetailedExitCode();
+        return result.getExitCondition();
       }
       String action = TextFormat.printToString(summaryBuilder);
       if (!action.isEmpty()) {
         outErr.printOut(action);
-        return result.getDetailedExitCode();
+        return result.getExitCondition();
       } else {
         env.getReporter().handle(Event.error("no actions to print were found"));
-        return DetailedExitCode.justExitCode(ExitCode.PARSING_FAILURE);
+        return ExitCode.PARSING_FAILURE;
       }
     }
 

@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
-import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.util.List;
 
@@ -47,7 +47,7 @@ import java.util.List;
       BuildRequestOptions.class,
       ExecutionOptions.class,
       LocalExecutionOptions.class,
-      PackageOptions.class,
+      PackageCacheOptions.class,
       AnalysisOptions.class,
       LoadingOptions.class,
       KeepGoingOption.class,
@@ -65,11 +65,9 @@ public final class BuildCommand implements BlazeCommand {
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
     BlazeRuntime runtime = env.getRuntime();
     List<String> targets;
-    try {
-      targets = TargetPatternsHelper.readFrom(env, options);
-    } catch (TargetPatternsHelper.TargetPatternsHelperException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
-      return BlazeCommandResult.failureDetail(e.getFailureDetail());
+    try (SilentCloseable closeable = Profiler.instance().profile("ProjectFileSupport.getTargets")) {
+      // only takes {@code options} to get options.getResidue()
+      targets = ProjectFileSupport.getTargets(runtime.getProjectFileProvider(), options);
     }
     if (targets.isEmpty()) {
       env.getReporter()
@@ -87,20 +85,13 @@ public final class BuildCommand implements BlazeCommand {
 
     BuildRequest request;
     try (SilentCloseable closeable = Profiler.instance().profile("BuildRequest.create")) {
-
-      request =
-          BuildRequest.builder()
-              .setCommandName(getClass().getAnnotation(Command.class).name())
-              .setId(env.getCommandId())
-              .setOptions(options)
-              .setStartupOptions(runtime.getStartupOptionsProvider())
-              .setOutErr(env.getReporter().getOutErr())
-              .setTargets(targets)
-              .setStartTimeMillis(env.getCommandStartTime())
-              .build();
+      request = BuildRequest.create(
+          getClass().getAnnotation(Command.class).name(), options,
+          runtime.getStartupOptionsProvider(),
+          targets,
+          env.getReporter().getOutErr(), env.getCommandId(), env.getCommandStartTime());
     }
-    DetailedExitCode detailedExitCode =
-        new BuildTool(env).processRequest(request, null).getDetailedExitCode();
-    return BlazeCommandResult.detailedExitCode(detailedExitCode);
+    ExitCode exitCode = new BuildTool(env).processRequest(request, null).getExitCondition();
+    return BlazeCommandResult.exitCode(exitCode);
   }
 }
