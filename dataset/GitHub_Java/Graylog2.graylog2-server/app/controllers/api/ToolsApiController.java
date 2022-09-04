@@ -18,7 +18,6 @@
 package controllers.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.google.common.net.MediaType;
 import com.google.inject.Inject;
 import controllers.AuthenticatedController;
 import lib.NaturalDateTest;
@@ -26,12 +25,12 @@ import lib.extractors.testers.GrokTest;
 import lib.extractors.testers.RegexTest;
 import lib.extractors.testers.SplitAndIndexTest;
 import lib.extractors.testers.SubstringTest;
-import lib.json.Json;
-import org.graylog2.rest.models.tools.requests.GrokTestRequest;
+import org.graylog2.restclient.lib.APIException;
 import org.graylog2.rest.models.tools.requests.RegexTestRequest;
+import org.graylog2.rest.models.tools.requests.GrokTestRequest;
 import org.graylog2.rest.models.tools.requests.SplitAndIndexTestRequest;
 import org.graylog2.rest.models.tools.requests.SubstringTestRequest;
-import org.graylog2.restclient.lib.APIException;
+import play.libs.Json;
 import play.mvc.Result;
 
 import java.io.IOException;
@@ -66,7 +65,7 @@ public class ToolsApiController extends AuthenticatedController {
                 return badRequest();
             }
 
-            return ok(Json.toJsonString(regexTest.test(request))).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(regexTest.test(request)));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -82,7 +81,7 @@ public class ToolsApiController extends AuthenticatedController {
                 return badRequest();
             }
 
-            return ok(Json.toJsonString(substringTest.test(request))).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(substringTest.test(request)));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -99,7 +98,7 @@ public class ToolsApiController extends AuthenticatedController {
                 return badRequest();
             }
 
-            return ok(Json.toJsonString(splitAndIndexTest.test(request))).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(splitAndIndexTest.test(request)));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -113,7 +112,7 @@ public class ToolsApiController extends AuthenticatedController {
         }
 
         try {
-            return ok(Json.toJsonString(naturalDateTest.test(string))).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(naturalDateTest.test(string)));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
@@ -133,7 +132,7 @@ public class ToolsApiController extends AuthenticatedController {
         }
 
         try {
-            return ok(Json.toJsonString(grokTest.test(request))).as(MediaType.JSON_UTF_8.toString());
+            return ok(Json.toJson(grokTest.test(request)));
         } catch (IOException e) {
             return internalServerError("io exception");
         } catch (APIException e) {
