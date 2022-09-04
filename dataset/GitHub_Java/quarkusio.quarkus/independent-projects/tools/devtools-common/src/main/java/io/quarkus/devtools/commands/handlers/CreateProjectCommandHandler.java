@@ -41,7 +41,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -51,6 +50,9 @@ import java.util.stream.Collectors;
  * of {@link QuarkusCommandInvocation}.
  */
 public class CreateProjectCommandHandler implements QuarkusCommandHandler {
+
+    private static final String QUARKUS_PLATFORM_GROUP_ID_EXPR = "${quarkus.platform.group-id}";
+    private static final String QUARKUS_PLATFORM_VERSION_EXPR = "${quarkus.platform.version}";
 
     @Override
     public QuarkusCommandOutcome execute(QuarkusCommandInvocation invocation) throws QuarkusCommandException {
@@ -177,6 +179,7 @@ public class CreateProjectCommandHandler implements QuarkusCommandHandler {
         return extensionsToAdd;
     }
 
+    @SuppressWarnings("unchecked")
     private List<ExtensionCatalog> getExtensionOrigins(ExtensionCatalog extensionCatalog, List<Extension> extensionsToAdd)
             throws QuarkusCommandException {
         final ElementCatalog<ExtensionCatalog> ec = ElementCatalogBuilder.getElementCatalog(extensionCatalog,
@@ -186,20 +189,19 @@ public class CreateProjectCommandHandler implements QuarkusCommandHandler {
         }
         // we add quarkus-core as a selected extension here only to include the quarkus-bom
         // in the list of platforms. quarkus-core won't be added to the generated POM though.
-        final Optional<Extension> quarkusCore = extensionCatalog.getExtensions().stream()
-                .filter(e -> e.getArtifact().getArtifactId().equals("quarkus-core")).findFirst();
-        if (!quarkusCore.isPresent()) {
+        final Extension quarkusCore = extensionCatalog.getExtensions().stream()
+                .filter(e -> e.getArtifact().getArtifactId().equals("quarkus-core")).findFirst().get();
+        if (quarkusCore == null) {
             throw new QuarkusCommandException("Failed to locate quarkus-core in the extension catalog");
         }
-        final ArtifactCoords quarkusCoreCoords = quarkusCore.get().getArtifact();
         final List<String> eKeys;
         if (extensionsToAdd.isEmpty()) {
             eKeys = Collections.singletonList(
-                    quarkusCoreCoords.getGroupId() + ":" + quarkusCoreCoords.getArtifactId());
+                    quarkusCore.getArtifact().getGroupId() + ":" + quarkusCore.getArtifact().getArtifactId());
         } else {
-            eKeys = new ArrayList<>(extensionsToAdd.size() + 1);
-            eKeys.add(quarkusCoreCoords.getGroupId() + ":" + quarkusCoreCoords.getArtifactId());
-            extensionsToAdd.forEach(e -> eKeys.add(e.getArtifact().getGroupId() + ":" + e.getArtifact().getArtifactId()));
+            eKeys = extensionsToAdd.stream().map(e -> e.getArtifact().getGroupId() + ":" + e.getArtifact().getArtifactId())
+                    .collect(Collectors.toList());
+            eKeys.add(quarkusCore.getArtifact().getGroupId() + ":" + quarkusCore.getArtifact().getArtifactId());
         }
         return ElementCatalogBuilder.getMembersForElements(ec, eKeys);
     }

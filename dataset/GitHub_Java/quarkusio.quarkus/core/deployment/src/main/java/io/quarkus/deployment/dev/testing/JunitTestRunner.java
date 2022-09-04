@@ -327,24 +327,6 @@ public class JunitTestRunner {
                                 for (TestRunListener listener : listeners) {
                                     listener.testComplete(result);
                                 }
-                            } else if (testExecutionResult.getStatus() == TestExecutionResult.Status.FAILED) {
-                                //if a parent fails we fail the children
-                                Set<TestIdentifier> children = testPlan.getChildren(testIdentifier);
-                                for (TestIdentifier child : children) {
-                                    UniqueId childId = UniqueId.parse(child.getUniqueId());
-                                    result = new TestResult(child.getDisplayName(), testClass.getName(),
-                                            childId,
-                                            testExecutionResult,
-                                            logHandler.captureOutput(), child.isTest(), runId,
-                                            System.currentTimeMillis() - startTimes.get(testIdentifier));
-                                    results.put(childId, result);
-                                    if (child.isTest()) {
-                                        for (TestRunListener listener : listeners) {
-                                            listener.testStarted(child, testClass.getName());
-                                            listener.testComplete(result);
-                                        }
-                                    }
-                                }
                             }
                         }
                         if (testExecutionResult.getStatus() == TestExecutionResult.Status.FAILED) {

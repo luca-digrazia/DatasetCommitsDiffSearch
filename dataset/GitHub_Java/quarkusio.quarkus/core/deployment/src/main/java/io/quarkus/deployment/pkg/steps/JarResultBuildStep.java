@@ -4,7 +4,6 @@ import static io.quarkus.bootstrap.util.ZipUtils.wrapForJDK8232879;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,7 +11,6 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitOption;
@@ -706,7 +704,6 @@ public class JarResultBuildStep {
             if (packageConfig.type.equalsIgnoreCase(PackageConfig.MUTABLE_JAR)) {
 
                 Path deploymentLib = libDir.resolve(DEPLOYMENT_LIB);
-                Path buildSystemProps = quarkus.resolve(BUILD_SYSTEM_PROPERTIES);
                 Files.createDirectories(deploymentLib);
                 for (AppDependency appDep : curateOutcomeBuildItem.getEffectiveModel().getFullDeploymentDeps()) {
                     copyDependency(parentFirstKeys, outputTargetBuildItem, copiedArtifacts, deploymentLib, baseLib, jars,
@@ -750,17 +747,9 @@ public class JarResultBuildStep {
                     obj.writeObject(paths);
                     obj.close();
                 }
-                //we output the properties in a reproducible manner, so we remove the date comment
-                //and sort them
-                //we still use Properties to get the escaping right though, so basically we write out the lines
-                //to memory, split them, discard comments, sort them, then write them to disk
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                outputTargetBuildItem.getBuildSystemProperties().store(out, null);
-                List<String> lines = Arrays.stream(new String(out.toByteArray(), StandardCharsets.UTF_8).split("\n"))
-                        .filter(s -> !s.startsWith("#")).sorted().collect(Collectors.toList());
-
-                try (OutputStream fileOutput = Files.newOutputStream(buildSystemProps)) {
-                    fileOutput.write(String.join("\n", lines).getBytes(StandardCharsets.UTF_8));
+                Path buildSystemProps = deploymentLib.resolve(BUILD_SYSTEM_PROPERTIES);
+                try (OutputStream out = Files.newOutputStream(buildSystemProps)) {
+                    outputTargetBuildItem.getBuildSystemProperties().store(out, "The original build properties");
                 }
             }
 
@@ -1235,7 +1224,6 @@ public class JarResultBuildStep {
                     while (entries.hasMoreElements()) {
                         ZipEntry entry = entries.nextElement();
                         if (!transformedFromThisArchive.contains(entry.getName())) {
-                            entry.setCompressedSize(-1);
                             out.putNextEntry(entry);
                             try (InputStream inStream = in.getInputStream(entry)) {
                                 int r = 0;

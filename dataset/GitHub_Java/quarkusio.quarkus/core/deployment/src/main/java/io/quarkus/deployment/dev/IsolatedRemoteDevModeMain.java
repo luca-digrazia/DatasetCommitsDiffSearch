@@ -179,7 +179,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
     @Override
     public void accept(CuratedApplication o, Map<String, Object> o2) {
         LoggingSetupRecorder.handleFailedStart(); //we are not going to actually run an app
-        Timing.staticInitStarted(o.getBaseRuntimeClassLoader());
+        Timing.staticInitStarted(o.getBaseRuntimeClassLoader(), false);
         try {
             curatedApplication = o;
             Object potentialContext = o2.get(DevModeContext.class.getName());
@@ -316,7 +316,7 @@ public class IsolatedRemoteDevModeMain implements BiConsumer<CuratedApplication,
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                hashes.put(appRoot.relativize(file).toString().replace("\\", "/"),
+                hashes.put(appRoot.relativize(file).toString().replace('\\', '/'),
                         HashUtil.sha1(Files.readAllBytes(file)));
                 return FileVisitResult.CONTINUE;
             }

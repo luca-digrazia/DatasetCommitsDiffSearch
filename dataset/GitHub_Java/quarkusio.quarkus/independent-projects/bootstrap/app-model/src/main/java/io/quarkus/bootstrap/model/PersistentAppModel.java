@@ -9,10 +9,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A representation of AppModel, that has been serialized to disk for an existing application.
- *
+ * <p>
  * This needs a slightly different representation than AppModel
  */
 public class PersistentAppModel implements Serializable {
@@ -28,6 +29,7 @@ public class PersistentAppModel implements Serializable {
     private Set<AppArtifactKey> lesserPriorityArtifacts;
     private Set<AppArtifactKey> localProjectArtifacts;
     private Map<String, String> platformProperties;
+    private Map<String, CapabilityContract> capabilitiesContracts;
     private String userProvidersDirectory;
 
     public PersistentAppModel(String baseName, Map<AppArtifactKey, List<String>> paths, AppModel appModel,
@@ -35,7 +37,7 @@ public class PersistentAppModel implements Serializable {
         this.baseName = baseName;
         this.userProvidersDirectory = userProvidersDirectory;
         appArtifact = new SerializedDep(appModel.getAppArtifact(), paths);
-        appArtifact.paths = Collections.singletonList(appArchivePath);
+        appArtifact.paths = Collections.singletonList(appArchivePath.replace('\\', '/'));
         deploymentDeps = new ArrayList<>(appModel.getDeploymentDependencies().size());
         for (AppDependency i : appModel.getDeploymentDependencies()) {
             deploymentDeps.add(new SerializedDep(i, paths));
@@ -53,6 +55,7 @@ public class PersistentAppModel implements Serializable {
         parentFirstArtifacts = new HashSet<>(appModel.getParentFirstArtifacts());
         runnerParentFirstArtifacts = new HashSet<>(appModel.getRunnerParentFirstArtifacts());
         lesserPriorityArtifacts = new HashSet<>(appModel.getLesserPriorityArtifacts());
+        capabilitiesContracts = new HashMap<>(appModel.getCapabilityContracts());
     }
 
     public String getUserProvidersDirectory() {
@@ -84,7 +87,10 @@ public class PersistentAppModel implements Serializable {
         for (AppArtifactKey i : localProjectArtifacts) {
             model.addLocalProjectArtifact(i);
         }
-        model.addPlatformProperties(platformProperties);
+        model.setCapabilitiesContracts(capabilitiesContracts);
+        final PlatformImportsImpl pi = new PlatformImportsImpl();
+        pi.setPlatformProperties(platformProperties);
+        model.setPlatformImports(pi);
         return model.build();
     }
 
@@ -100,7 +106,11 @@ public class PersistentAppModel implements Serializable {
             super(dependency.getGroupId(), dependency.getArtifactId(),
                     dependency.getClassifier(), dependency.getType(),
                     dependency.getVersion());
-            this.paths = paths.get(dependency.getKey());
+            List<String> pathList = paths.get(dependency.getKey());
+            if (pathList == null) {
+                pathList = Collections.emptyList();
+            }
+            this.paths = pathList.stream().map(s -> s.replace('\\', '/')).collect(Collectors.toList());
         }
 
         public SerializedDep(AppDependency dependency, Map<AppArtifactKey, List<String>> paths) {
