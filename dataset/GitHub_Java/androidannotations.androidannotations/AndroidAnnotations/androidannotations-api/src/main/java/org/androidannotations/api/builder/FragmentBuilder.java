@@ -15,23 +15,21 @@
  */
 package org.androidannotations.api.builder;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.SparseArray;
 
+import java.io.Serializable;
+import java.util.ArrayList;
+
 @SuppressWarnings("unchecked")
-public abstract class FragmentBuilder<I extends FragmentBuilder<I, F>, F> extends Builder {
+public class FragmentBuilder<I extends FragmentBuilder<I>> extends Builder {
 
 	protected Bundle args;
 
 	public FragmentBuilder() {
 		args = new Bundle();
 	}
-
-	public abstract F build();
 
 	public I arg(Bundle map) {
 		args.putAll(map);
