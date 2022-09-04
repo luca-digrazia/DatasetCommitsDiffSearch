@@ -15,6 +15,7 @@ package com.google.devtools.build.android.resources;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Collection;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.commons.InstructionAdapter;
 
@@ -22,20 +23,27 @@ import org.objectweb.asm.commons.InstructionAdapter;
  * Represents a field and its initializer (where initialization is either part of the field
  * definition, or done via code in the static clinit function).
  */
-public interface FieldInitializer {
+public interface FieldInitializer extends Comparable<FieldInitializer> {
   /**
    * Write the bytecode for the field definition.
    *
    * @return true if the initializer is deferred to clinit code.
    */
-  boolean writeFieldDefinition(String fieldName, ClassWriter cw, int accessLevel, boolean isFinal);
+  boolean writeFieldDefinition(ClassWriter cw, int accessLevel, boolean isFinal);
 
   /**
    * Write the bytecode for the clinit portion of initializer.
+   *
    * @return the number of stack slots needed for the code.
    */
-  int writeCLInit(String fieldName, InstructionAdapter insts, String className);
+  int writeCLInit(InstructionAdapter insts, String className);
 
   /** Write the source code for the initializer to the given writer. */
-  void writeInitSource(String fieldName, Writer writer, boolean finalFields) throws IOException;
+  void writeInitSource(Writer writer, boolean finalFields) throws IOException;
+
+  /** Tests if the field's name is in the provided collection. */
+  boolean nameIsIn(Collection<String> fieldNames);
+
+  /** Adds fieldName to the provided set. */
+  void addTo(Collection<String> fieldNames);
 }
