@@ -88,14 +88,11 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   private final Environment env;
   private Block block;
   private int loopCount;
-  /** In BUILD files, we have a slightly different behavior for legacy reasons. */
-  private final boolean isBuildFile;
 
   /** Create a ValidationEnvironment for a given global Environment (containing builtins). */
-  private ValidationEnvironment(Environment env, boolean isBuildFile) {
+  ValidationEnvironment(Environment env) {
     Preconditions.checkArgument(env.isGlobal());
     this.env = env;
-    this.isBuildFile = isBuildFile;
     block = new Block(Scope.Universe, null);
     Set<String> builtinVariables = env.getVariableNames();
     block.variables.addAll(builtinVariables);
@@ -176,17 +173,12 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
       // If this is the case, output a more helpful error message than 'not found'.
       FlagGuardedValue result = env.getRestrictedBindings().get(node.getName());
       if (result != null) {
-        throw new ValidationException(
-            result.getEvalExceptionFromAttemptingAccess(
-                node.getLocation(), env.getSemantics(), node.getName()));
+        throw new ValidationException(result.getEvalExceptionFromAttemptingAccess(
+            node.getLocation(), env.getSemantics(), node.getName()));
       }
       throw new ValidationException(node.createInvalidIdentifierException(getAllSymbols()));
     }
-    // TODO(laurentlb): In BUILD files, calling setScope will throw an exception. This happens
-    // because some AST nodes are shared across multipe ASTs (due to the prelude file).
-    if (!isBuildFile) {
-      node.setScope(b.scope);
-    }
+    node.setScope(b.scope);
   }
 
   @Override
@@ -279,8 +271,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   /** Declare a variable and add it to the environment. */
   private void declare(String varname, Location location) {
-    // TODO(laurentlb): Forbid reassignment in BUILD files.
-    if (!isBuildFile && block.scope == Scope.Module && block.variables.contains(varname)) {
+    if (block.scope == Scope.Module && block.variables.contains(varname)) {
       // Symbols defined in the module scope cannot be reassigned.
       throw new ValidationException(
           location,
@@ -342,7 +333,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   /** Validates the AST and runs static checks. */
   private void validateAst(List<Statement> statements) {
     // Check that load() statements are on top.
-    if (!isBuildFile && env.getSemantics().incompatibleBzlDisallowLoadAfterStatement()) {
+    if (env.getSemantics().incompatibleBzlDisallowLoadAfterStatement()) {
       checkLoadAfterStatement(statements);
     }
 
@@ -359,7 +350,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   public static void validateAst(Environment env, List<Statement> statements) throws EvalException {
     try {
-      ValidationEnvironment venv = new ValidationEnvironment(env, false);
+      ValidationEnvironment venv = new ValidationEnvironment(env);
       venv.validateAst(statements);
       // Check that no closeBlock was forgotten.
       Preconditions.checkState(venv.block.parent == null);
@@ -401,15 +392,6 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
       List<Statement> statements, final EventHandler eventHandler, Environment env) {
     // Wrap the boolean inside an array so that the inner class can modify it.
     final boolean[] success = new boolean[] {true};
-
-    ValidationEnvironment venv = new ValidationEnvironment(env, true);
-    try {
-      venv.validateAst(statements);
-    } catch (ValidationException e) {
-      eventHandler.handle(Event.error(e.exception.getLocation(), e.exception.getMessage()));
-      return false;
-    }
-
     // TODO(laurentlb): Merge with the visitor above when possible (i.e. when BUILD files use it).
     SyntaxTreeVisitor checker =
         new SyntaxTreeVisitor() {

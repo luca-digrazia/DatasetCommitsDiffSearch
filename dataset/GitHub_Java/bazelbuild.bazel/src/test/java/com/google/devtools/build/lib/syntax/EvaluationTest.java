@@ -680,16 +680,6 @@ public class EvaluationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testStaticNameResolution() throws Exception {
-    newTest("--incompatible_static_name_resolution_in_build_files=true")
-        .testIfErrorContains("name 'foo' is not defined", "[foo for x in []]");
-
-    // legacy
-    new BuildTest("--incompatible_static_name_resolution_in_build_files=false")
-        .testStatement("str([foo for x in []])", "[]");
-  }
-
-  @Test
   public void testDefInBuild() throws Exception {
     new BuildTest()
         .testIfErrorContains(
@@ -703,19 +693,20 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testIfStatementForbiddenInBuild() throws Exception {
-    new BuildTest().testIfErrorContains("if statements are not allowed", "if False: pass");
+    new BuildTest()
+        .testIfErrorContains("if statements are not allowed in BUILD files", "if False: pass");
   }
 
   @Test
   public void testKwargsForbiddenInBuild() throws Exception {
     new BuildTest()
-        .testIfErrorContains("**kwargs arguments are not allowed in BUILD files", "print(**dict)");
+        .testIfErrorContains("**kwargs arguments are not allowed in BUILD files", "func(**dict)");
   }
 
   @Test
   public void testArgsForbiddenInBuild() throws Exception {
     new BuildTest()
-        .testIfErrorContains("*args arguments are not allowed in BUILD files", "print(*['a'])");
+        .testIfErrorContains("*args arguments are not allowed in BUILD files", "func(*array)");
   }
 
   @Test
