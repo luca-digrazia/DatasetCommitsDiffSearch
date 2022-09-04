@@ -114,15 +114,6 @@ public class SandboxOptions extends OptionsBase {
   public boolean sandboxFakeUsername;
 
   @Option(
-    name = "sandbox_block_path",
-    allowMultiple = true,
-    defaultValue = "",
-    category = "config",
-    help = "For sandboxed actions, disallow access to this path."
-  )
-  public List<String> sandboxBlockPath;
-
-  @Option(
       name = "sandbox_tmpfs_path",
       allowMultiple = true,
       defaultValue = "",
@@ -131,16 +122,6 @@ public class SandboxOptions extends OptionsBase {
           + " (if supported by the sandboxing implementation, ignored otherwise)."
   )
   public List<String> sandboxTmpfsPath;
-
-  @Option(
-      name = "sandbox_writable_path",
-      allowMultiple = true,
-      defaultValue = "",
-      category = "config",
-      help = "For sandboxed actions, make an existing directory writable in the sandbox"
-          + " (if supported by the sandboxing implementation, ignored otherwise)."
-  )
-  public List<String> sandboxWritablePath;
 
   @Option(
     name = "sandbox_add_mount_pair",

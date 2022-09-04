@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSet.Builder;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
@@ -183,11 +184,12 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
    */
   protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env)
       throws IOException {
+    Builder<Path> writableDirs = ImmutableSet.builder();
     // We have to make the TEST_TMPDIR directory writable if it is specified.
     if (env.containsKey("TEST_TMPDIR")) {
-      return ImmutableSet.of(sandboxExecRoot.getRelative(env.get("TEST_TMPDIR")));
+      writableDirs.add(sandboxExecRoot.getRelative(env.get("TEST_TMPDIR")));
     }
-    return ImmutableSet.of();
+    return writableDirs.build();
   }
 
   @Override
