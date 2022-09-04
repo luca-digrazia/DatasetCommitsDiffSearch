@@ -28,7 +28,7 @@ import java.util.Queue;
 import java.util.regex.Pattern;
 
 public final class Document extends ThreadBoundProxy {
-  private final DocumentProvider.Factory mFactory;
+  private final DocumentProviderFactory mFactory;
   private final ObjectIdMapper mObjectIdMapper;
   private final Queue<Object> mCachedUpdateQueue;
 
@@ -42,7 +42,7 @@ public final class Document extends ThreadBoundProxy {
   @GuardedBy("this")
   private int mReferenceCounter;
 
-  public Document(DocumentProvider.Factory factory) {
+  public Document(DocumentProviderFactory factory) {
     super(factory);
 
     mFactory = factory;
@@ -138,12 +138,6 @@ public final class Document extends ThreadBoundProxy {
   public void setAttributesAsText(Object element, String text) {
     verifyThreadAccess();
     mDocumentProvider.setAttributesAsText(element, text);
-  }
-
-  public void getElementStyles(Object element, StyleAccumulator styleAccumulator) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.getStyles(element, styleAccumulator);
   }
 
   public DocumentView getDocumentView() {
@@ -286,10 +280,28 @@ public final class Document extends ThreadBoundProxy {
       NodeDescriptor descriptor = mDocumentProvider.getNodeDescriptor(element);
       mObjectIdMapper.putObject(element);
       descriptor.getChildren(element, childrenAccumulator);
-      updateBuilder.setElementChildren(element, childrenAccumulator);
-      for (int i = 0, N = childrenAccumulator.size(); i < N; ++i) {
-        mCachedUpdateQueue.add(childrenAccumulator.get(i));
+
+      for (int i = 0, size = childrenAccumulator.size(); i < size; ++i) {
+        Object child = childrenAccumulator.get(i);
+        if (child != null) {
+          mCachedUpdateQueue.add(child);
+        } else {
+          // This could be indicative of a bug in Stetho code, but could also be caused by a
+          // custom element of some kind, e.g. ViewGroup. Let's not allow it to kill the hosting
+          // app.
+          LogUtil.e(
+              "%s.getChildren() emitted a null child at position %s for element %s",
+              descriptor.getClass().getName(),
+              Integer.toString(i),
+              element);
+
+          childrenAccumulator.remove(i);
+          --i;
+          --size;
+        }
       }
+
+      updateBuilder.setElementChildren(element, childrenAccumulator);
       childrenAccumulator.clear();
     }
 
@@ -622,7 +634,7 @@ public final class Document extends ThreadBoundProxy {
     }
   }
 
-  private final class ProviderListener implements DocumentProvider.Listener {
+  private final class ProviderListener implements DocumentProviderListener {
     @Override
     public void onPossiblyChanged() {
       updateTree();
