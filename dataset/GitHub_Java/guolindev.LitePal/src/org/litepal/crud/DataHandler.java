@@ -2,8 +2,11 @@ package org.litepal.crud;
 
 import static org.litepal.util.BaseUtility.changeCase;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -14,9 +17,9 @@ import org.litepal.exceptions.DatabaseGenerateException;
 import org.litepal.util.BaseUtility;
 import org.litepal.util.Const;
 import org.litepal.util.DBUtility;
-import org.litepal.util.DSUtility;
 
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 /**
@@ -41,6 +44,95 @@ abstract class DataHandler extends LitePalBase {
 	private DataSupport tempEmptyModel;
 
 	/**
+	 * Query the table of the given model, returning a model list over the
+	 * result set.
+	 * 
+	 * @param modelClass
+	 *            The model to compile the query against.
+	 * @param columns
+	 *            A list of which columns to return. Passing null will return
+	 *            all columns, which is discouraged to prevent reading data from
+	 *            storage that isn't going to be used.
+	 * @param selection
+	 *            A filter declaring which rows to return, formatted as an SQL
+	 *            WHERE clause (excluding the WHERE itself). Passing null will
+	 *            return all rows for the given table.
+	 * @param selectionArgs
+	 *            You may include ?s in selection, which will be replaced by the
+	 *            values from selectionArgs, in order that they appear in the
+	 *            selection. The values will be bound as Strings.
+	 * @param groupBy
+	 *            A filter declaring how to group rows, formatted as an SQL
+	 *            GROUP BY clause (excluding the GROUP BY itself). Passing null
+	 *            will cause the rows to not be grouped.
+	 * @param having
+	 *            A filter declare which row groups to include in the cursor, if
+	 *            row grouping is being used, formatted as an SQL HAVING clause
+	 *            (excluding the HAVING itself). Passing null will cause all row
+	 *            groups to be included, and is required when row grouping is
+	 *            not being used.
+	 * @param orderBy
+	 *            How to order the rows, formatted as an SQL ORDER BY clause
+	 *            (excluding the ORDER BY itself). Passing null will use the
+	 *            default sort order, which may be unordered.
+	 * @param limit
+	 *            Limits the number of rows returned by the query, formatted as
+	 *            LIMIT clause. Passing null denotes no LIMIT clause.
+	 * @param foreignKeyAssociations
+	 *            Associated classes which have foreign keys in the current
+	 *            model's table.
+	 * @return A model list. The list may be empty.
+	 */
+	@SuppressWarnings("unchecked")
+	protected <T> List<T> query(Class<T> modelClass, String[] columns, String selection,
+			String[] selectionArgs, String groupBy, String having, String orderBy, String limit,
+			List<AssociationsInfo> foreignKeyAssociations) {
+		List<T> dataList = new ArrayList<T>();
+		Cursor cursor = null;
+		try {
+			List<Field> supportedFields = getSupportedFields(modelClass.getName());
+			String tableName = getTableName(modelClass);
+			String[] customizedColumns = getCustomizedColumns(columns, foreignKeyAssociations);
+			cursor = mDatabase.query(tableName, customizedColumns, selection, selectionArgs,
+					groupBy, having, orderBy, limit);
+			if (cursor.moveToFirst()) {
+				do {
+					Constructor<?> constructor = findBestSuitConstructor(modelClass);
+					T modelInstance = (T) constructor
+							.newInstance(getConstructorParams(constructor));
+					giveBaseObjIdValue((DataSupport) modelInstance,
+							cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+					setValueToModel(modelInstance, supportedFields, foreignKeyAssociations, cursor);
+					dataList.add(modelInstance);
+				} while (cursor.moveToNext());
+			}
+			return dataList;
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
+		} finally {
+			if (cursor != null) {
+				cursor.close();
+			}
+		}
+	}
+
+	/**
+	 * Assign the generated id value to {@link DataSupport#baseObjId}. This
+	 * value will be used as identify of this model for system use.
+	 * 
+	 * @param baseObj
+	 *            The class of base object.
+	 * @param id
+	 *            The value of id.
+	 */
+	protected void giveBaseObjIdValue(DataSupport baseObj, long id) throws SecurityException,
+			NoSuchFieldException, IllegalArgumentException, IllegalAccessException {
+		if (id > 0) {
+			DynamicExecutor.setField(baseObj, "baseObjId", id, DataSupport.class);
+		}
+	}
+
+	/**
 	 * Iterate all the fields passed in. Each field calls
 	 * {@link #putFieldsValueDependsOnSaveOrUpdate(DataSupport, Field, ContentValues)}
 	 * if it's not id field.
@@ -50,22 +142,18 @@ abstract class DataHandler extends LitePalBase {
 	 * @param supportedFields
 	 *            List of all supported fields.
 	 * @param values
-	 *           To store data of current model for persisting or updating.
-	 * @throws SecurityException
-	 * @throws IllegalArgumentException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalAccessException
-	 * @throws InvocationTargetException
-	 * @throws InstantiationException
-	 * @throws ClassNotFoundException
+	 *            To store data of current model for persisting or updating.
 	 */
 	protected void putFieldsValue(DataSupport baseObj, List<Field> supportedFields,
-			ContentValues values) throws SecurityException, IllegalArgumentException,
-			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-		for (Field field : supportedFields) {
-			if (!isIdColumn(field.getName())) {
-				putFieldsValueDependsOnSaveOrUpdate(baseObj, field, values);
+			ContentValues values) {
+		try {
+			for (Field field : supportedFields) {
+				if (!isIdColumn(field.getName())) {
+					putFieldsValueDependsOnSaveOrUpdate(baseObj, field, values);
+				}
 			}
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
 		}
 	}
 
@@ -117,13 +205,7 @@ abstract class DataHandler extends LitePalBase {
 			throws SecurityException, NoSuchMethodException, IllegalArgumentException,
 			IllegalAccessException, InvocationTargetException {
 		if (shouldGetOrSet(dataSupport, field)) {
-			String getterMethodPrefix;
-			if (isPrimitiveBooleanType(field)) {
-				getterMethodPrefix = "is";
-			} else {
-				getterMethodPrefix = "get";
-			}
-			String getMethodName = getterMethodPrefix + BaseUtility.capitalize(field.getName());
+			String getMethodName = makeGetterMethodName(field);
 			return DynamicExecutor.send(dataSupport, getMethodName, null, dataSupport.getClass(),
 					null);
 		}
@@ -151,13 +233,12 @@ abstract class DataHandler extends LitePalBase {
 			throws SecurityException, NoSuchMethodException, IllegalArgumentException,
 			IllegalAccessException, InvocationTargetException {
 		if (shouldGetOrSet(dataSupport, field)) {
-			String setterMethodPrefix = "set";
-			String setMethodName = setterMethodPrefix + BaseUtility.capitalize(field.getName());
+			String setMethodName = makeSetterMethodName(field);
 			DynamicExecutor.send(dataSupport, setMethodName, new Object[] { parameter },
 					dataSupport.getClass(), new Class[] { field.getType() });
 		}
 	}
-	
+
 	/**
 	 * Find all the associated models of currently model. Then add all the
 	 * associated models into {@link DataSupport#associatedModels} of baseObj.
@@ -166,24 +247,21 @@ abstract class DataHandler extends LitePalBase {
 	 *            The class of base object.
 	 * @param foreignKeyId
 	 *            The id value of foreign key.
-	 * @throws SecurityException
-	 * @throws IllegalArgumentException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalAccessException
-	 * @throws InvocationTargetException
 	 */
 	protected void analyzeAssociatedModels(DataSupport baseObj,
-			Collection<AssociationsInfo> associationInfos) throws SecurityException,
-			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
-			InvocationTargetException {
-		for (AssociationsInfo associationInfo : associationInfos) {
-			if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE) {
-				new Many2OneAnalyzer().analyze(baseObj, associationInfo);
-			} else if (associationInfo.getAssociationType() == Const.Model.ONE_TO_ONE) {
-				new One2OneAnalyzer().analyze(baseObj, associationInfo);
-			} else if (associationInfo.getAssociationType() == Const.Model.MANY_TO_MANY) {
-				new Many2ManyAnalyzer().analyze(baseObj, associationInfo);
+			Collection<AssociationsInfo> associationInfos) {
+		try {
+			for (AssociationsInfo associationInfo : associationInfos) {
+				if (associationInfo.getAssociationType() == Const.Model.MANY_TO_ONE) {
+					new Many2OneAnalyzer().analyze(baseObj, associationInfo);
+				} else if (associationInfo.getAssociationType() == Const.Model.ONE_TO_ONE) {
+					new One2OneAnalyzer().analyze(baseObj, associationInfo);
+				} else if (associationInfo.getAssociationType() == Const.Model.MANY_TO_MANY) {
+					new Many2ManyAnalyzer().analyze(baseObj, associationInfo);
+				}
 			}
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
 		}
 	}
 
@@ -195,11 +273,8 @@ abstract class DataHandler extends LitePalBase {
 	 * @param baseObj
 	 *            Current model to update.
 	 * @return An empty instance of baseObj.
-	 * @throws IllegalAccessException
-	 * @throws DatabaseGenerateException
-	 * @throws DataSupportException
 	 */
-	protected DataSupport getEmptyModel(DataSupport baseObj) throws IllegalAccessException {
+	protected DataSupport getEmptyModel(DataSupport baseObj) {
 		if (tempEmptyModel != null) {
 			return tempEmptyModel;
 		}
@@ -214,7 +289,108 @@ abstract class DataHandler extends LitePalBase {
 					+ className);
 		} catch (InstantiationException e) {
 			throw new DataSupportException(className + DataSupportException.INSTANTIATION_EXCEPTION);
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
 		}
+	}
+
+	/**
+	 * Get the WHERE clause to apply when updating or deleting multiple rows.
+	 * 
+	 * @param conditions
+	 *            A string array representing the WHERE part of an SQL
+	 *            statement.
+	 * @return The WHERE clause to apply when updating or deleting multiple
+	 *         rows.
+	 */
+	protected String getWhereClause(String... conditions) {
+		if (isAffectAllLines((Object) conditions)) {
+			return null;
+		}
+		if (conditions != null && conditions.length > 0) {
+			return conditions[0];
+		}
+		return null;
+	}
+
+	/**
+	 * Get the WHERE arguments to fill into where clause when updating or
+	 * deleting multiple rows.
+	 * 
+	 * @param conditions
+	 *            A string array representing the WHERE part of an SQL
+	 *            statement.
+	 * @return The WHERE arguments to fill into where clause when updating or
+	 *         deleting multiple rows.
+	 */
+	protected String[] getWhereArgs(String... conditions) {
+		if (isAffectAllLines((Object) conditions)) {
+			return null;
+		}
+		if (conditions != null && conditions.length > 1) {
+			String[] whereArgs = new String[conditions.length - 1];
+			System.arraycopy(conditions, 1, whereArgs, 0, conditions.length - 1);
+			return whereArgs;
+		}
+		return null;
+	}
+
+	/**
+	 * Check the passing conditions represent to affect all lines or not. <br>
+	 * Do not pass anything to the conditions parameter means affect all lines.
+	 * 
+	 * @param conditions
+	 *            An array representing the WHERE part of an SQL statement.
+	 * @return Affect all lines or not.
+	 */
+	protected boolean isAffectAllLines(Object... conditions) {
+		if (conditions != null && conditions.length == 0) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Get the where clause by the passed in id collection to apply multiple
+	 * rows.
+	 * 
+	 * @param ids
+	 *            The id collection.
+	 * @return The where clause to execute.
+	 */
+	protected String getWhereOfIdsWithOr(Collection<Long> ids) {
+		StringBuilder whereClause = new StringBuilder();
+		boolean needOr = false;
+		for (long id : ids) {
+			if (needOr) {
+				whereClause.append(" or ");
+			}
+			needOr = true;
+			whereClause.append("id = ");
+			whereClause.append(id);
+		}
+		return changeCase(whereClause.toString());
+	}
+
+	/**
+	 * Get the where clause by the passed in id array to apply multiple rows.
+	 * 
+	 * @param ids
+	 *            The id collection.
+	 * @return The where clause to execute.
+	 */
+	protected String getWhereOfIdsWithOr(long... ids) {
+		StringBuilder whereClause = new StringBuilder();
+		boolean needOr = false;
+		for (long id : ids) {
+			if (needOr) {
+				whereClause.append(" or ");
+			}
+			needOr = true;
+			whereClause.append("id = ");
+			whereClause.append(id);
+		}
+		return changeCase(whereClause.toString());
 	}
 
 	/**
@@ -275,7 +451,135 @@ abstract class DataHandler extends LitePalBase {
 		return changeCase(DBUtility.getIntermediateTableName(baseObj.getTableName(),
 				associatedTableName));
 	}
+
+	/**
+	 * Get the simple name of modelClass. Then change the case by the setting
+	 * rule in litepal.xml as table name.
+	 * 
+	 * @param modelClass
+	 *            Class of model to get table name from.
+	 * @return The table name of model.
+	 */
+	protected String getTableName(Class<?> modelClass) {
+		return BaseUtility.changeCase(modelClass.getSimpleName());
+	}
+
+	/**
+	 * Finds the best suit constructor for creating an instance of a class. The
+	 * principle is that constructor with least parameters will be the best suit
+	 * one to create instance. So this method will find the constructor with
+	 * least parameters of the class passed in.
+	 * 
+	 * @param modelClass
+	 *            To get constructors from.
+	 * @return The best suit constructor with least parameters.
+	 */
+	protected Constructor<?> findBestSuitConstructor(Class<?> modelClass) {
+		Constructor<?> finalConstructor = null;
+		Constructor<?>[] constructors = modelClass.getConstructors();
+		for (Constructor<?> constructor : constructors) {
+			if (finalConstructor == null) {
+				finalConstructor = constructor;
+			} else {
+				int finalParamLength = finalConstructor.getParameterTypes().length;
+				int newParamLength = constructor.getParameterTypes().length;
+				if (newParamLength < finalParamLength) {
+					finalConstructor = constructor;
+				}
+			}
+		}
+		finalConstructor.setAccessible(true);
+		return finalConstructor;
+	}
+
+	/**
+	 * Depends on the passed in constructor, creating a parameters array with
+	 * initialized values for the constructor.
+	 * 
+	 * @param constructor
+	 *            The constructor to get parameters for it.
+	 * 
+	 * @return A parameters array with initialized values.
+	 */
+	protected Object[] getConstructorParams(Constructor<?> constructor) {
+		Class<?>[] paramTypes = constructor.getParameterTypes();
+		Object[] params = new Object[paramTypes.length];
+		for (int i = 0; i < paramTypes.length; i++) {
+			params[i] = getInitParamValue(paramTypes[i]);
+		}
+		return params;
+	}
 	
+	/**
+	 * Get value from database by cursor, then set the value into modelInstance.
+	 * 
+	 * @param modelInstance
+	 *            The model to set into.
+	 * @param supportedFields
+	 *            Corresponding to each column in database.
+	 * @param foreignKeyAssociations
+	 *            Associated classes which have foreign keys in the current
+	 *            model's table.
+	 * @param cursor
+	 *            Use to get value from database.
+	 * @throws SecurityException
+	 * @throws IllegalArgumentException
+	 * @throws NoSuchMethodException
+	 * @throws IllegalAccessException
+	 * @throws InvocationTargetException
+	 */
+	protected void setValueToModel(Object modelInstance, List<Field> supportedFields,
+			List<AssociationsInfo> foreignKeyAssociations, Cursor cursor) throws SecurityException,
+			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
+			InvocationTargetException {
+		for (Field field : supportedFields) {
+			String getMethodName = genGetColumnMethod(field);
+			String columnName = isIdColumn(field.getName()) ? "id" : field.getName();
+			int columnIndex = cursor.getColumnIndex(BaseUtility.changeCase(columnName));
+			if (columnIndex != -1) {
+				Class<?> cursorClass = cursor.getClass();
+				Method method = cursorClass.getMethod(getMethodName, int.class);
+				Object value = method.invoke(cursor, columnIndex);
+				if (isIdColumn(field.getName())) {
+					DynamicExecutor.setField(modelInstance, field.getName(), value,
+							modelInstance.getClass());
+				} else {
+					if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+						if ("0".equals(String.valueOf(value))) {
+							value = false;
+						} else if ("1".equals(String.valueOf(value))) {
+							value = true;
+						}
+					} else if (field.getType() == char.class || field.getType() == Character.class) {
+						value = ((String) value).charAt(0);
+					}
+					putSetMethodValueByField((DataSupport) modelInstance, field, value);
+				}
+			}
+		}
+		if (foreignKeyAssociations != null) {
+			for (AssociationsInfo associationInfo : foreignKeyAssociations) {
+				String foreignKeyColumn = getForeignKeyColumnName(DBUtility
+						.getTableNameByClassName(associationInfo.getAssociatedClassName()));
+				int columnIndex = cursor.getColumnIndex(foreignKeyColumn);
+				if (columnIndex != -1) {
+					long associatedClassId = cursor.getLong(columnIndex);
+					try {
+						DataSupport associatedObj = (DataSupport) DataSupport.find(
+								Class.forName(associationInfo.getAssociatedClassName()),
+								associatedClassId);
+						if (associatedObj != null) {
+							putSetMethodValueByField((DataSupport) modelInstance,
+									associationInfo.getAssociateOtherModelFromSelf(), associatedObj);
+						}
+					} catch (ClassNotFoundException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
+	}
+
 	/**
 	 * Get the types of parameters for {@link ContentValues#put}. Need two
 	 * parameters. First is String type for key. Second is depend on field for
@@ -297,13 +601,84 @@ abstract class DataHandler extends LitePalBase {
 			parameterTypes = new Class[] { String.class, String.class };
 		} else {
 			if (field.getType().isPrimitive()) {
-				parameterTypes = new Class[] { String.class,
-						DSUtility.getObjectType(field.getType()) };
+				parameterTypes = new Class[] { String.class, getObjectType(field.getType()) };
 			} else {
 				parameterTypes = new Class[] { String.class, field.getType() };
 			}
 		}
 		return parameterTypes;
+	}
+
+	/**
+	 * Each primitive type has a corresponding object type. For example int and
+	 * Integer, boolean and Boolean. This method gives a way to turn primitive
+	 * type into object type.
+	 * 
+	 * @param primitiveType
+	 *            The class of primitive type.
+	 * @return If the passed in parameter is primitive type, return a
+	 *         corresponding object type. Otherwise return null.
+	 */
+	private Class<?> getObjectType(Class<?> primitiveType) {
+		if (primitiveType != null) {
+			if (primitiveType.isPrimitive()) {
+				String basicTypeName = primitiveType.getName();
+				if ("int".equals(basicTypeName)) {
+					return Integer.class;
+				} else if ("short".equals(basicTypeName)) {
+					return Short.class;
+				} else if ("long".equals(basicTypeName)) {
+					return Long.class;
+				} else if ("float".equals(basicTypeName)) {
+					return Float.class;
+				} else if ("double".equals(basicTypeName)) {
+					return Double.class;
+				} else if ("boolean".equals(basicTypeName)) {
+					return Boolean.class;
+				} else if ("char".equals(basicTypeName)) {
+					return Character.class;
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Gives the passed in parameter an initialized value. If the parameter is
+	 * basic data type or the corresponding object data type, return the default
+	 * data. Or return null.
+	 * 
+	 * @param paramType
+	 *            Parameter to get initialized value.
+	 * @return Default data of basic data type or null.
+	 */
+	private Object getInitParamValue(Class<?> paramType) {
+		String paramTypeName = paramType.getName();
+		if ("boolean".equals(paramTypeName) || "java.lang.Boolean".equals(paramTypeName)) {
+			return false;
+		}
+		if ("float".equals(paramTypeName) || "java.lang.Float".equals(paramTypeName)) {
+			return 0f;
+		}
+		if ("double".equals(paramTypeName) || "java.lang.Double".equals(paramTypeName)) {
+			return 0.0;
+		}
+		if ("int".equals(paramTypeName) || "java.lang.Integer".equals(paramTypeName)) {
+			return 0;
+		}
+		if ("long".equals(paramTypeName) || "java.lang.Long".equals(paramTypeName)) {
+			return 0l;
+		}
+		if ("short".equals(paramTypeName) || "java.lang.Short".equals(paramTypeName)) {
+			return 0;
+		}
+		if ("char".equals(paramTypeName) || "java.lang.Character".equals(paramTypeName)) {
+			return ' ';
+		}
+		if ("java.lang.String".equals(paramTypeName)) {
+			return "";
+		}
+		return null;
 	}
 
 	/**
@@ -417,6 +792,114 @@ abstract class DataHandler extends LitePalBase {
 			return realFieldValue.equals(defaultFieldValue);
 		}
 		return realReturn == defaultReturn;
+	}
+
+	/**
+	 * Generate the getter method name by field, following the eclipse rule.
+	 * 
+	 * @param field
+	 *            The field to generate getter method from.
+	 * @return The generated getter method name.
+	 */
+	private String makeGetterMethodName(Field field) {
+		String getterMethodPrefix;
+		String fieldName = field.getName();
+		if (isPrimitiveBooleanType(field)) {
+			if (fieldName.matches("^is[A-Z]{1}.*$")) {
+				fieldName = fieldName.substring(2);
+			}
+			getterMethodPrefix = "is";
+		} else {
+			getterMethodPrefix = "get";
+		}
+		return getterMethodPrefix + BaseUtility.capitalize(fieldName);
+	}
+
+	/**
+	 * Generate the setter method name by field, following the eclipse rule.
+	 * 
+	 * @param field
+	 *            The field to generate setter method from.
+	 * @return The generated setter method name.
+	 */
+	private String makeSetterMethodName(Field field) {
+		String setterMethodName;
+		String setterMethodPrefix = "set";
+		if (isPrimitiveBooleanType(field) && field.getName().matches("^is[A-Z]{1}.*$")) {
+			setterMethodName = setterMethodPrefix + field.getName().substring(2);
+		} else {
+			setterMethodName = setterMethodPrefix + BaseUtility.capitalize(field.getName());
+		}
+		return setterMethodName;
+	}
+
+	/**
+	 * Generates the getType method for cursor based on field. There're two
+	 * unusual conditions. If field type is boolean, generate getInt method. If
+	 * field type is char, generate getString method.
+	 * 
+	 * @param field
+	 *            To generate getType method for cursor.
+	 * @return The getType method for cursor.
+	 */
+	private String genGetColumnMethod(Field field) {
+		String typeName;
+		Class<?> fieldType = field.getType();
+		if (fieldType.isPrimitive()) {
+			typeName = BaseUtility.capitalize(fieldType.getName());
+		} else {
+			typeName = fieldType.getSimpleName();
+		}
+		String methodName = "get" + typeName;
+		if ("getBoolean".equals(methodName)) {
+			methodName = "getInt";
+		} else if ("getChar".equals(methodName)) {
+			methodName = "getString";
+		}
+		return methodName;
+	}
+
+	/**
+	 * Customize the passed in columns. If the columns contains an id column
+	 * already, just return it. If contains an _id column, rename it to id. If
+	 * not, an add id column then return.
+	 * 
+	 * @param columns
+	 *            The original columns that passed in.
+	 * @param foreignKeyAssociations
+	 *            Associated classes which have foreign keys in the current
+	 *            model's table.
+	 * @return Customized columns with id column always.
+	 */
+	private String[] getCustomizedColumns(String[] columns,
+			List<AssociationsInfo> foreignKeyAssociations) {
+		if (columns != null) {
+			if (foreignKeyAssociations != null && foreignKeyAssociations.size() > 0) {
+				String[] tempColumns = new String[columns.length + foreignKeyAssociations.size()];
+				System.arraycopy(columns, 0, tempColumns, 0, columns.length);
+				for (int i = 0; i < foreignKeyAssociations.size(); i++) {
+					String associatedTable = DBUtility
+							.getTableNameByClassName(foreignKeyAssociations.get(i)
+									.getAssociatedClassName());
+					tempColumns[columns.length + i] = getForeignKeyColumnName(associatedTable);
+				}
+				columns = tempColumns;
+			}
+			for (int i = 0; i < columns.length; i++) {
+				String columnName = columns[i];
+				if (isIdColumn(columnName)) {
+					if ("_id".equalsIgnoreCase(columnName)) {
+						columns[i] = BaseUtility.changeCase("id");
+					}
+					return columns;
+				}
+			}
+			String[] customizedColumns = new String[columns.length + 1];
+			System.arraycopy(columns, 0, customizedColumns, 0, columns.length);
+			customizedColumns[columns.length] = BaseUtility.changeCase("id");
+			return customizedColumns;
+		}
+		return null;
 	}
 
 }
