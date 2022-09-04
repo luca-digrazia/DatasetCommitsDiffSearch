@@ -208,11 +208,6 @@ public class User extends Persisted {
         }
 
         @Override
-        public List<String> getPermissions() {
-            return Lists.newArrayList("*");
-        }
-
-        @Override
         public ObjectId save() throws ValidationException {
             throw new IllegalStateException("Cannot modify local root user, this is a bug.");
         }
