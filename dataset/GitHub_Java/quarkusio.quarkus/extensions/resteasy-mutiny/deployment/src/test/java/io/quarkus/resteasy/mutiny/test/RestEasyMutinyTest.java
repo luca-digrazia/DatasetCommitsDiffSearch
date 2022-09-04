@@ -1,6 +1,7 @@
 package io.quarkus.resteasy.mutiny.test;
 
 import java.net.URL;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -43,6 +44,7 @@ public class RestEasyMutinyTest {
                 .connectTimeout(5, TimeUnit.SECONDS)
                 .build();
         value.set(null);
+        CountDownLatch latch = new CountDownLatch(1);
     }
 
     @AfterEach
