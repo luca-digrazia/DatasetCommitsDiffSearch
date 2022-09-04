@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.classification;
@@ -30,13 +29,10 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
-import org.apache.commons.csv.CSVFormat;
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
-import smile.data.type.DataTypes;
-import smile.data.type.StructType;
-import smile.data.type.StructField;
-import smile.io.DatasetReader;
+
+import smile.data.AttributeDataset;
+import smile.data.NominalAttribute;
+import smile.data.parser.DelimitedTextParser;
 import smile.plot.Contour;
 import smile.plot.Palette;
 import smile.plot.PlotCanvas;
@@ -54,15 +50,9 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         "classification/toy/toy-train.txt",
         "classification/toy/toy-test.txt"
     };
-
-    static CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t');
-    static StructType schema = DataTypes.struct(
-            new StructField("class", DataTypes.IntegerType),
-            new StructField("V1", DataTypes.DoubleType),
-            new StructField("V2", DataTypes.DoubleType)
-    );
-    static Formula formula = Formula.lhs("class");
-    static DataFrame[] dataset;
+    
+    protected static DelimitedTextParser parser = null;
+    static AttributeDataset[] dataset = null;
     static int datasetIndex = 0;
 
     JPanel optionPane;
@@ -75,9 +65,14 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
      */
     public ClassificationDemo() {
         if (dataset == null) {
-            dataset = new DataFrame[datasource.length];
+            dataset = new AttributeDataset[datasetName.length];
+            if(parser == null) {
+                parser = new DelimitedTextParser();
+                parser.setDelimiter("[\t ]+");
+                parser.setResponseIndex(new NominalAttribute("class"), 0);            	
+            }
             try {
-                dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format, schema);
+                dataset[datasetIndex] = parser.parse(datasetName[datasetIndex], smile.data.parser.IOUtils.getTestDataFile(datasource[datasetIndex]));
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                 System.err.println(e);
@@ -107,8 +102,8 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         setLayout(new BorderLayout());
         add(optionPane, BorderLayout.NORTH);
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray();
-        int[] label = formula.y(dataset[datasetIndex]).toIntArray();
+        double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+        int[] label = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
         
         if (data.length < 500) {
             pointLegend = 'o';
@@ -138,7 +133,7 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
      * @return
      */
     protected double[] getContourLevels() {
-        return new double[]{0.5};
+        return new double[]{0.5};	
     }
     
     /**
@@ -167,8 +162,8 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         startButton.setEnabled(false);
         datasetBox.setEnabled(false);
 
-        double[][] data = formula.x(dataset[datasetIndex]).toArray();
-        int[] label = formula.y(dataset[datasetIndex]).toIntArray();
+        double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+        int[] label = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
         
         if (data.length < 500) {
             pointLegend = 'o';
@@ -194,28 +189,28 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         }
         
         try {
-            double[][] f = learn(x, y);
+        	double[][] f = learn(x, y);
 
-            if (f != null) {
-                for (int i = 0; i < y.length; i++) {
-                    for (int j = 0; j < x.length; j++) {
-                        double[] p = {x[j], y[i]};
-                        canvas.point('.', Palette.COLORS[(int) f[i][j]], p);
-                    }
-                }
+        	if (f != null) {
+        		for (int i = 0; i < y.length; i++) {
+        			for (int j = 0; j < x.length; j++) {
+        				double[] p = {x[j], y[i]};
+        				canvas.point('.', Palette.COLORS[(int) f[i][j]], p);
+        			}
+        		}
 
-                double[] levels = getContourLevels();
-                Contour contour = new Contour(x, y, f, levels);
-                contour.showLevelValue(false);
-                canvas.add(contour);
+        		double[] levels = getContourLevels();
+        		Contour contour = new Contour(x, y, f, levels);
+        		contour.showLevelValue(false);
+        		canvas.add(contour);
                 
-                BorderLayout layout = (BorderLayout) getLayout();
-                remove(layout.getLayoutComponent(BorderLayout.CENTER));
-                add(canvas, BorderLayout.CENTER);
-                validate();
-            }
+        		BorderLayout layout = (BorderLayout) getLayout();
+        		remove(layout.getLayoutComponent(BorderLayout.CENTER));
+        		add(canvas, BorderLayout.CENTER);
+        		validate();
+        	}
         } catch (Exception ex) {
-            System.err.println(ex);
+        	System.err.println(ex);
         }
         
         startButton.setEnabled(true);
@@ -231,16 +226,19 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
             datasetIndex = datasetBox.getSelectedIndex();
 
             if (dataset[datasetIndex] == null) {
+                DelimitedTextParser parser = new DelimitedTextParser();
+                parser.setDelimiter("[\t ]+");
+                parser.setResponseIndex(new NominalAttribute("class"), 0);
                 try {
-                    dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format, schema);
+                    dataset[datasetIndex] = parser.parse(datasetName[datasetIndex], smile.data.parser.IOUtils.getTestDataFile(datasource[datasetIndex]));
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                     System.err.println(ex);
                 }
             }
 
-            double[][] data = formula.x(dataset[datasetIndex]).toArray();
-            int[] label = formula.y(dataset[datasetIndex]).toIntArray();
+            double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+            int[] label = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
         
             if (data.length < 500) {
                 pointLegend = 'o';
@@ -264,8 +262,8 @@ public abstract class ClassificationDemo extends JPanel implements Runnable, Act
         if (datasetBox.getSelectedIndex() != datasetIndex) {
             datasetBox.setSelectedIndex(datasetIndex);
 
-            double[][] data = formula.x(dataset[datasetIndex]).toArray();
-            int[] label = formula.y(dataset[datasetIndex]).toIntArray();
+            double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+            int[] label = dataset[datasetIndex].toArray(new int[dataset[datasetIndex].size()]);
         
             PlotCanvas canvas = ScatterPlot.plot(data, 'o');
             for (int i = 0; i < data.length; i++) {
