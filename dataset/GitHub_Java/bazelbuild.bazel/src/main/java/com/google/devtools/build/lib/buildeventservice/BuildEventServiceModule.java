@@ -11,14 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package com.google.devtools.build.lib.buildeventservice;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.lang.String.format;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
@@ -55,18 +59,14 @@ import javax.annotation.Nullable;
  * Module responsible for the Build Event Transport (BEP) and Build Event Service (BES)
  * functionality.
  */
-public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServiceOptions>
+public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions>
     extends BlazeModule {
 
   private static final Logger logger = Logger.getLogger(BuildEventServiceModule.class.getName());
 
   private OutErr outErr;
   private BuildEventStreamer streamer;
-  private BESOptionsT besOptions;
-  private BuildEventProtocolOptions bepOptions;
-  private AuthAndTLSOptions authTlsOptions;
-  private BuildEventStreamOptions besStreamOptions;
-  private ImmutableSet<BuildEventTransport> bepTransports;
+  private boolean keepClient;
 
   /** Whether an error in the Build Event Service upload causes the build to fail. */
   protected boolean errorsShouldFailTheBuild() {
@@ -77,16 +77,9 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   protected void reportError(
       EventHandler commandLineReporter,
       ModuleEnvironment moduleEnvironment,
-      String msg,
-      Exception exception,
-      ExitCode exitCode) {
-    // Don't hide unchecked exceptions as part of the error reporting.
-    Throwables.throwIfUnchecked(exception);
-
-    logger.log(Level.SEVERE, msg, exception);
-    AbruptExitException abruptException = new AbruptExitException(msg, exitCode, exception);
+      AbruptExitException exception) {
     commandLineReporter.handle(Event.error(exception.getMessage()));
-    moduleEnvironment.exit(abruptException);
+    moduleEnvironment.exit(exception);
   }
 
   @Override
@@ -100,13 +93,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   @Override
   public void beforeCommand(CommandEnvironment commandEnvironment) {
-    OptionsParsingResult parsingResult = commandEnvironment.getOptions();
-    besOptions = Preconditions.checkNotNull(parsingResult.getOptions(optionsClass()));
-    bepOptions =
-        Preconditions.checkNotNull(parsingResult.getOptions(BuildEventProtocolOptions.class));
-    authTlsOptions = Preconditions.checkNotNull(parsingResult.getOptions(AuthAndTLSOptions.class));
-    besStreamOptions =
-        Preconditions.checkNotNull(parsingResult.getOptions(BuildEventStreamOptions.class));
+    T besOptions = commandEnvironment.getOptions().getOptions(optionsClass());
 
     // Reset to null in case afterCommand was not called.
     this.outErr = null;
@@ -138,6 +125,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           });
       err.registerStreamer(streamer);
       out.registerStreamer(streamer);
+      logger.fine("BuildEventStreamer created and registered successfully.");
     }
   }
 
@@ -168,23 +156,30 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       this.streamer = null;
     }
 
-    if (!besStreamOptions.keepBackendConnections) {
+    if (!keepClient) {
       clearBesClient();
     }
     this.outErr = null;
-    this.bepTransports = null;
   }
 
   /** Returns {@code null} if no stream could be created. */
   @Nullable
   @VisibleForTesting
   BuildEventStreamer tryCreateStreamer(CommandEnvironment env) {
+    BuildEventStreamOptions buildEventStreamOptions =
+        env.getOptions().getOptions(BuildEventStreamOptions.class);
+    this.keepClient = buildEventStreamOptions.keepBackendConnections;
+
+    BuildEventProtocolOptions protocolOptions =
+        checkNotNull(
+            env.getOptions().getOptions(BuildEventProtocolOptions.class),
+            "Could not get BuildEventProtocolOptions.");
     Supplier<BuildEventArtifactUploader> uploaderSupplier =
         Suppliers.memoize(
             () ->
                 env.getRuntime()
                     .getBuildEventArtifactUploaderFactoryMap()
-                    .select(bepOptions.buildEventUploadStrategy)
+                    .select(protocolOptions.buildEventUploadStrategy)
                     .create(env));
 
     CountingArtifactGroupNamer namer = new CountingArtifactGroupNamer();
@@ -193,41 +188,40 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       try {
         besTransport = tryCreateBesTransport(env, uploaderSupplier, namer);
       } catch (IOException | OptionsParsingException e) {
+        String message = "Failed to create BuildEventTransport: " + e;
+        logger.log(Level.WARNING, message, e);
+        ExitCode exitCode =
+            (e instanceof OptionsParsingException)
+                ? ExitCode.COMMAND_LINE_ERROR
+                : ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR;
         reportError(
             env.getReporter(),
             env.getBlazeModuleEnvironment(),
-            "Failed to create BuildEventTransport: " + e,
-            e,
-            (e instanceof OptionsParsingException)
-                ? ExitCode.COMMAND_LINE_ERROR
-                : ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR);
+            new AbruptExitException(message, exitCode, e));
         clearBesClient();
         return null;
       }
 
-      ImmutableSet<BuildEventTransport> bepFileTransports =
+      ImmutableSet<BuildEventTransport> bepTransports =
           BuildEventTransportFactory.createFromOptions(
-              env, env.getBlazeModuleEnvironment()::exit, bepOptions, uploaderSupplier, namer);
+              env, env.getBlazeModuleEnvironment()::exit, protocolOptions, uploaderSupplier, namer);
 
       ImmutableSet.Builder<BuildEventTransport> transportsBuilder =
-          ImmutableSet.<BuildEventTransport>builder().addAll(bepFileTransports);
+          ImmutableSet.<BuildEventTransport>builder().addAll(bepTransports);
       if (besTransport != null) {
         transportsBuilder.add(besTransport);
       }
 
-      bepTransports = transportsBuilder.build();
-      if (!bepTransports.isEmpty()) {
-        return new BuildEventStreamer(bepTransports, env.getReporter(), besStreamOptions, namer);
+      ImmutableSet<BuildEventTransport> transports = transportsBuilder.build();
+      if (!transports.isEmpty()) {
+        return new BuildEventStreamer(
+            transports, env.getReporter(), buildEventStreamOptions, namer);
       }
     } catch (Exception e) {
-      // TODO(lpino): This generic catch with Exception shouldn't exist, remove it once the code
-      // above is re-structured.
       reportError(
           env.getReporter(),
           env.getBlazeModuleEnvironment(),
-          e.getMessage(),
-          e,
-          ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
+          new AbruptExitException(ExitCode.LOCAL_ENVIRONMENTAL_ERROR, e));
     }
     return null;
   }
@@ -239,11 +233,27 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       ArtifactGroupNamer namer)
       throws IOException, OptionsParsingException {
     OptionsParsingResult optionsProvider = env.getOptions();
+    T besOptions =
+        checkNotNull(
+            optionsProvider.getOptions(optionsClass()), "Could not get BuildEventServiceOptions.");
+    AuthAndTLSOptions authTlsOptions =
+        checkNotNull(
+            optionsProvider.getOptions(AuthAndTLSOptions.class),
+            "Could not get AuthAndTLSOptions.");
+    BuildEventProtocolOptions protocolOptions =
+        checkNotNull(
+            optionsProvider.getOptions(BuildEventProtocolOptions.class),
+            "Could not get BuildEventProtocolOptions.");
 
-    if (Strings.isNullOrEmpty(besOptions.besBackend)) {
+    if (isNullOrEmpty(besOptions.besBackend)) {
+      logger.fine("BuildEventServiceTransport is disabled.");
       clearBesClient();
       return null;
     } else {
+      logger.fine(
+          format(
+              "Will create BuildEventServiceTransport streaming to '%s'", besOptions.besBackend));
+
       String invocationId = env.getCommandId().toString();
       final String besResultsUrl;
       if (!Strings.isNullOrEmpty(besOptions.besResultsUrl)) {
@@ -257,7 +267,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         env.getReporter()
             .handle(
                 Event.info(
-                    String.format(
+                    format(
                         "Streaming Build Event Protocol to %s build_request_id: %s "
                             + "invocation_id: %s",
                         besOptions.besBackend, env.getBuildRequestId(), invocationId)));
@@ -282,28 +292,29 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
               .build(
                   client,
                   artifactUploader,
-                  bepOptions,
+                  protocolOptions,
                   besProtoUtil,
                   env.getRuntime().getClock(),
                   bazelExitFunction(
                       env.getReporter(), env.getBlazeModuleEnvironment(), besResultsUrl),
                   namer);
+      logger.fine("BuildEventServiceTransport was created successfully");
       return besTransport;
     }
   }
 
-  protected abstract Class<BESOptionsT> optionsClass();
+  protected abstract Class<T> optionsClass();
 
   protected abstract BuildEventServiceClient getBesClient(
-      BESOptionsT besOptions, AuthAndTLSOptions authAndTLSOptions)
+      T besOptions, AuthAndTLSOptions authAndTLSOptions)
       throws IOException, OptionsParsingException;
 
   protected abstract void clearBesClient();
 
-  protected abstract Set<String> whitelistedCommands(BESOptionsT besOptions);
+  protected abstract Set<String> whitelistedCommands(T besOptions);
 
   protected Set<String> keywords(
-      BESOptionsT besOptions, @Nullable OptionsParsingResult startupOptionsProvider) {
+      T besOptions, @Nullable OptionsParsingResult startupOptionsProvider) {
     return besOptions.besKeywords.stream()
         .map(keyword -> "user_keyword=" + keyword)
         .collect(ImmutableSet.toImmutableSet());
@@ -336,12 +347,5 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         }
       }
     };
-  }
-
-  // TODO(lpino): This method shouldn exist. It only does because some tests are relying on the
-  // transport creation logic of this module directly.
-  @VisibleForTesting
-  ImmutableSet<BuildEventTransport> getBepTransports() {
-    return bepTransports;
   }
 }
