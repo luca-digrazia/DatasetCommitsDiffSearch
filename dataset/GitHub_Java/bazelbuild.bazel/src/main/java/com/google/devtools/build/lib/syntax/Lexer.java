@@ -252,8 +252,7 @@ public final class Lexer {
       } else if (c == '\r') {
         pos++;
       } else if (c == '\t') {
-        error("Tabulations are not allowed for identation. Use spaces instead.");
-        indentLen++;
+        indentLen += 8 - indentLen % 8;
         pos++;
       } else if (c == '\n') { // entirely blank line: discard
         indentLen = 0;
