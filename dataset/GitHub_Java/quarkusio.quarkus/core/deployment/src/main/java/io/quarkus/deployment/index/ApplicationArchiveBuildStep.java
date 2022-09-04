@@ -34,14 +34,12 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.ApplicationArchiveImpl;
-import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveBuildItem;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
-import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -69,18 +67,9 @@ public class ApplicationArchiveBuildStep {
     }
 
     @BuildStep
-    void addConfiguredIndexedDependencies(BuildProducer<IndexDependencyBuildItem> indexDependencyBuildItemBuildProducer) {
-        for (IndexDependencyConfig indexDependencyConfig : config.indexDependency.values()) {
-            indexDependencyBuildItemBuildProducer.produce(new IndexDependencyBuildItem(indexDependencyConfig.groupId,
-                    indexDependencyConfig.artifactId, indexDependencyConfig.classifier));
-        }
-    }
-
-    @BuildStep
     ApplicationArchivesBuildItem build(ArchiveRootBuildItem root, ApplicationIndexBuildItem appindex,
             List<AdditionalApplicationArchiveMarkerBuildItem> appMarkers,
             List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchiveBuildItem,
-            List<IndexDependencyBuildItem> indexDependencyBuildItems,
             LiveReloadBuildItem liveReloadContext) throws IOException {
 
         Set<String> markerFiles = new HashSet<>();
@@ -95,7 +84,7 @@ public class ApplicationArchiveBuildStep {
         }
 
         List<ApplicationArchive> applicationArchives = scanForOtherIndexes(Thread.currentThread().getContextClassLoader(),
-                markerFiles, root, additionalApplicationArchiveBuildItem, indexDependencyBuildItems, indexCache);
+                markerFiles, root, additionalApplicationArchiveBuildItem, indexCache);
         return new ApplicationArchivesBuildItem(
                 new ApplicationArchiveImpl(appindex.getIndex(), root.getArchiveRoot(), null, false, root.getArchiveLocation()),
                 applicationArchives);
@@ -103,11 +92,11 @@ public class ApplicationArchiveBuildStep {
 
     private List<ApplicationArchive> scanForOtherIndexes(ClassLoader classLoader, Set<String> applicationArchiveFiles,
             ArchiveRootBuildItem root, List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchives,
-            List<IndexDependencyBuildItem> indexDependencyBuildItem, IndexCache indexCache)
+            IndexCache indexCache)
             throws IOException {
         Set<Path> dependenciesToIndex = new HashSet<>();
         //get paths that are included via index-dependencies
-        dependenciesToIndex.addAll(getIndexDependencyPaths(indexDependencyBuildItem, classLoader, root));
+        dependenciesToIndex.addAll(getIndexDependencyPaths(classLoader, root));
         //get paths that are included via marker files
         Set<String> markers = new HashSet<>(applicationArchiveFiles);
         markers.add(JANDEX_INDEX);
@@ -123,21 +112,18 @@ public class ApplicationArchiveBuildStep {
         return indexPaths(dependenciesToIndex, classLoader, indexCache);
     }
 
-    public List<Path> getIndexDependencyPaths(List<IndexDependencyBuildItem> indexDependencyBuildItems,
-            ClassLoader classLoader, ArchiveRootBuildItem root) {
+    public List<Path> getIndexDependencyPaths(ClassLoader classLoader, ArchiveRootBuildItem root) {
         ArtifactIndex artifactIndex = new ArtifactIndex(new ClassPathArtifactResolver(classLoader));
         try {
             List<Path> ret = new ArrayList<>();
 
-            for (IndexDependencyBuildItem indexDependencyBuildItem : indexDependencyBuildItems) {
+            for (Map.Entry<String, IndexDependencyConfig> entry : this.config.indexDependency.entrySet()) {
                 Path path;
-                String classifier = indexDependencyBuildItem.getClassifier();
-                if (classifier == null || classifier.isEmpty()) {
-                    path = artifactIndex.getPath(indexDependencyBuildItem.getGroupId(),
-                            indexDependencyBuildItem.getArtifactId(), null);
+                if (entry.getValue().classifier.isEmpty()) {
+                    path = artifactIndex.getPath(entry.getValue().groupId, entry.getValue().artifactId, null);
                 } else {
-                    path = artifactIndex.getPath(indexDependencyBuildItem.getGroupId(),
-                            indexDependencyBuildItem.getArtifactId(), classifier);
+                    path = artifactIndex.getPath(entry.getValue().groupId, entry.getValue().artifactId,
+                            entry.getValue().classifier);
                 }
                 if (!root.isExcludedFromIndexing(path)) {
                     ret.add(path);

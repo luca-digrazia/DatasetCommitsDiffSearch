@@ -48,6 +48,7 @@ import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
+import io.quarkus.deployment.ApplicationInfoUtil;
 import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.maven.components.MavenVersionEnforcer;
@@ -225,7 +226,6 @@ public class DevMojo extends AbstractMojo {
                 devModeContext.getSystemProperties().put(e.getKey().toString(), (String) e.getValue());
             }
             devModeContext.getBuildSystemProperties().putAll((Map) project.getProperties());
-            devModeContext.setSourceEncoding(getSourceEncoding());
 
             final AppModel appModel;
             try {
@@ -313,10 +313,6 @@ public class DevMojo extends AbstractMojo {
             }
             getLog().debug("Executable jar: " + tempFile.getAbsolutePath());
 
-            devModeContext.getClassesRoots().add(outputDirectory.getAbsoluteFile());
-            devModeContext.setFrameworkClassesDir(wiringClassesDirectory.getAbsoluteFile());
-            devModeContext.setCacheDir(new File(buildDir, "transformer-cache").getAbsoluteFile());
-
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
                 out.putNextEntry(new ZipEntry("META-INF/"));
                 Manifest manifest = new Manifest();
@@ -335,9 +331,13 @@ public class DevMojo extends AbstractMojo {
             }
 
             outputDirectory.mkdirs();
+            ApplicationInfoUtil.writeApplicationInfoProperties(appModel.getAppArtifact(), outputDirectory.toPath());
 
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
+            args.add(outputDirectory.getAbsolutePath());
+            args.add(wiringClassesDirectory.getAbsolutePath());
+            args.add(new File(buildDir, "transformer-cache").getAbsolutePath());
             // Display the launch command line in debug mode
             getLog().debug("Launching JVM with command line: " + args.toString());
             ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
@@ -367,14 +367,6 @@ public class DevMojo extends AbstractMojo {
         } catch (Exception e) {
             throw new MojoFailureException("Failed to run", e);
         }
-    }
-
-    private String getSourceEncoding() {
-        Object sourceEncodingProperty = project.getProperties().get("project.build.sourceEncoding");
-        if (sourceEncodingProperty != null) {
-            return (String) sourceEncodingProperty;
-        }
-        return null;
     }
 
     private void addProject(DevModeContext devModeContext, LocalProject localProject) {
