@@ -60,7 +60,7 @@ public class RepositoryCacheTest {
 
   @After
   public void tearDown() throws IOException {
-    repositoryCachePath.deleteTree();
+    FileSystemUtils.deleteTree(repositoryCachePath);
   }
 
   @Test
