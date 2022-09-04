@@ -241,6 +241,7 @@ public final class CcToolchainProvider extends ToolchainInfo
     }
 
     result.put("C_COMPILER", compiler);
+    result.put("TARGET_CPU", targetCpu);
 
     // Deprecated variables
 

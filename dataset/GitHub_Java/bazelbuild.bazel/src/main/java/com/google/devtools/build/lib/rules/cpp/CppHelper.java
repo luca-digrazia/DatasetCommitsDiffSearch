@@ -860,9 +860,6 @@ public class CppHelper {
     if (cppConfiguration.isFdo()) {
       return (cppConfiguration.getLipoMode() == LipoMode.BINARY) ? "LIPO" : "FDO";
     }
-    if (fdoSupport.isXBinaryFdoEnabled()) {
-      return "XFDO";
-    }
     return null;
   }
 

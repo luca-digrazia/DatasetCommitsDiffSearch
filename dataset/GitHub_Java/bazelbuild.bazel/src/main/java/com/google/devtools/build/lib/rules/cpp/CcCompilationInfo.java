@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
@@ -30,10 +29,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationInfoApi;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import javax.annotation.Nullable;
 
 /** Wrapper for every C++ compilation provider. */
 @Immutable
@@ -44,22 +40,12 @@ public final class CcCompilationInfo extends NativeInfo implements CcCompilation
           FunctionSignature.of(
               /* numMandatoryPositionals= */ 0,
               /* numOptionalPositionals= */ 0,
-              /* numMandatoryNamedOnly= */ 0,
+              /* numMandatoryNamedOnly= */ 1,
               /* starArg= */ false,
               /* kwArg= */ false,
-              "headers"),
-          /* defaultValues= */ ImmutableList.of(Runtime.NONE),
-          /* types= */ ImmutableList.of(SkylarkType.of(SkylarkNestedSet.class)));
-
-  @Nullable
-  private static Object nullIfNone(Object object) {
-    return nullIfNone(object, Object.class);
-  }
-
-  @Nullable
-  private static <T> T nullIfNone(Object object, Class<T> type) {
-    return object != Runtime.NONE ? type.cast(object) : null;
-  }
+              "cc_compilation_info"),
+          /* defaultValues= */ ImmutableList.of(),
+          /* types= */ ImmutableList.of(SkylarkType.of(CcCompilationContext.class)));
 
   public static final NativeProvider<CcCompilationInfo> PROVIDER =
       new NativeProvider<CcCompilationInfo>(
@@ -70,13 +56,8 @@ public final class CcCompilationInfo extends NativeInfo implements CcCompilation
             Object[] args, Environment env, Location loc) throws EvalException {
           CcCommon.checkLocationWhitelisted(loc);
           CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
-          SkylarkNestedSet headers = (SkylarkNestedSet) nullIfNone(args[0]);
-          CcCompilationContext.Builder ccCompilationContext =
-              new CcCompilationContext.Builder(/* ruleContext= */ null);
-          if (headers != null) {
-            ccCompilationContext.addDeclaredIncludeSrcs(headers.getSet(Artifact.class));
-          }
-          ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext.build());
+          ccCompilationInfoBuilder.setCcCompilationContext(
+              ((CcCompilationInfo) args[0]).getCcCompilationContext());
           return ccCompilationInfoBuilder.build();
         }
       };
