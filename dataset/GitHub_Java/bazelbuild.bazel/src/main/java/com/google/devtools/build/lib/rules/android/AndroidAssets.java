@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Objects;
@@ -84,7 +83,8 @@ public class AndroidAssets {
 
     for (TransitiveInfoCollection target : assetTargets) {
       for (Artifact file : target.getProvider(FileProvider.class).getFilesToBuild()) {
-        PathFragment packageFragment = file.getOwnerLabel().getPackageIdentifier().getSourceRoot();
+        PathFragment packageFragment =
+            file.getArtifactOwner().getLabel().getPackageIdentifier().getSourceRoot();
         PathFragment packageRelativePath = file.getRootRelativePath().relativeTo(packageFragment);
         if (packageRelativePath.startsWith(assetsDir)) {
           PathFragment relativePath = packageRelativePath.relativeTo(assetsDir);
@@ -174,16 +174,14 @@ public class AndroidAssets {
     return assetDir;
   }
 
-  public ParsedAndroidAssets parse(AndroidDataContext dataContext, AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
-    return ParsedAndroidAssets.parseFrom(dataContext, aaptVersion, this);
+  public ParsedAndroidAssets parse(AndroidDataContext dataContext) throws InterruptedException {
+    return ParsedAndroidAssets.parseFrom(dataContext, this);
   }
 
   /** Convenience method to do all of asset processing - parsing and merging. */
-  public MergedAndroidAssets process(
-      AndroidDataContext dataContext, AssetDependencies assetDeps, AndroidAaptVersion aaptVersion)
+  public MergedAndroidAssets process(AndroidDataContext dataContext, AssetDependencies assetDeps)
       throws InterruptedException {
-    return parse(dataContext, aaptVersion).merge(dataContext, assetDeps);
+    return parse(dataContext).merge(dataContext, assetDeps);
   }
 
   @Override

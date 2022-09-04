@@ -19,11 +19,17 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidResourcesInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /** A provider that supplies ResourceContainers from its transitive closure. */
+@SkylarkModule(
+    name = "AndroidResourcesInfo",
+    doc = "Android resources provided by a rule",
+    category = SkylarkModuleCategory.PROVIDER)
 @Immutable
-public class AndroidResourcesInfo extends NativeInfo implements AndroidResourcesInfoApi {
+public class AndroidResourcesInfo extends NativeInfo {
 
   private static final String SKYLARK_NAME = "AndroidResourcesInfo";
   public static final NativeProvider<AndroidResourcesInfo> PROVIDER =
@@ -91,6 +97,7 @@ public class AndroidResourcesInfo extends NativeInfo implements AndroidResources
   }
 
   /** Returns the label that is associated with this piece of information. */
+  @SkylarkCallable(name = "label", doc = "Returns the label for this target.", structField = true)
   public Label getLabel() {
     return label;
   }
@@ -99,17 +106,29 @@ public class AndroidResourcesInfo extends NativeInfo implements AndroidResources
     return manifest;
   }
 
-  @Override
+  /** Returns the r.txt file for the target. */
+  @SkylarkCallable(
+      name = "r_txt",
+      doc = "Returns the R.txt file for the target.",
+      structField = true)
   public Artifact getRTxt() {
     return rTxt;
   }
 
   /** Returns the transitive ResourceContainers for the label. */
+  @SkylarkCallable(
+      name = "transitive_android_resources",
+      doc = "Returns the transitive android resources for the label.",
+      structField = true)
   public NestedSet<ValidatedAndroidData> getTransitiveAndroidResources() {
     return transitiveAndroidResources;
   }
 
   /** Returns the immediate ResourceContainers for the label. */
+  @SkylarkCallable(
+      name = "direct_android_resources",
+      doc = "Returns the immediate android resources for the label.",
+      structField = true)
   public NestedSet<ValidatedAndroidData> getDirectAndroidResources() {
     return directAndroidResources;
   }
