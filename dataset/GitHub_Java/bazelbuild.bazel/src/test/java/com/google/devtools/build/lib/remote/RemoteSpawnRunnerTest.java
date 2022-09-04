@@ -50,7 +50,6 @@ import com.google.devtools.remoteexecution.v1test.ActionResult;
 import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
 import com.google.devtools.remoteexecution.v1test.ExecuteResponse;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.SortedMap;
 import org.junit.Before;
@@ -252,8 +251,8 @@ public class RemoteSpawnRunnerTest {
     }
 
     @Override
-    public Duration getTimeout() {
-      return Duration.ZERO;
+    public long getTimeoutMillis() {
+      return 0;
     }
 
     @Override
