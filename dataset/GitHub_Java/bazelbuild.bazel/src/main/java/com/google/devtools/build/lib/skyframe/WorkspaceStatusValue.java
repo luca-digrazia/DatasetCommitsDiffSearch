@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -35,11 +36,12 @@ public class WorkspaceStatusValue extends ActionLookupValue {
   public static final BuildInfoKey BUILD_INFO_KEY = BuildInfoKey.INSTANCE;
 
   WorkspaceStatusValue(
+      ActionKeyContext actionKeyContext,
       Artifact stableArtifact,
       Artifact volatileArtifact,
       WorkspaceStatusAction action,
       boolean removeActionAfterEvaluation) {
-    super(action, removeActionAfterEvaluation);
+    super(actionKeyContext, action, removeActionAfterEvaluation);
     this.stableArtifact = stableArtifact;
     this.volatileArtifact = volatileArtifact;
   }
