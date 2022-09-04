@@ -25,7 +25,6 @@ import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import com.mongodb.BasicDBObjectBuilder;
-import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.WriteConcern;
@@ -52,7 +51,6 @@ import org.mockito.junit.MockitoRule;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -105,7 +103,6 @@ public class ClusterEventPeriodicalTest {
     @After
     public void tearDown() {
         DateTimeUtils.setCurrentMillisSystem();
-        mongoConnection.getMongoDatabase().drop();
     }
 
     @Test
@@ -123,7 +120,6 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", SimpleEvent.class.getCanonicalName())
                 .add("payload", ImmutableMap.of("HAHA", "test"))
                 .get();
-        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         collection.save(event);
 
@@ -154,15 +150,14 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", SimpleEvent.class.getCanonicalName())
                 .add("payload", ImmutableMap.of("payload", "test"))
                 .get();
-        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         assertThat(collection.save(event).getN()).isEqualTo(1);
         assertThat(collection.count()).isEqualTo(1L);
-        assertThat(handler.invocations).hasValue(0);
+        assertThat(handler.invocations).isEqualTo(0);
 
         clusterEventPeriodical.run();
 
-        assertThat(handler.invocations).hasValue(1);
+        assertThat(handler.invocations).isEqualTo(1);
         assertThat(collection.count()).isEqualTo(1L);
 
         @SuppressWarnings("unchecked")
@@ -184,7 +179,6 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", DebugEvent.class.getCanonicalName())
                 .add("payload", objectMapper.convertValue(event, Map.class))
                 .get();
-        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         collection.save(dbObject);
 
@@ -212,7 +206,6 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", SimpleEvent.class.getCanonicalName())
                 .add("payload", ImmutableMap.of("payload", "test"))
                 .get();
-        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         collection.save(event);
 
@@ -233,7 +226,6 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testPublishClusterEvent() throws Exception {
-        @SuppressWarnings("deprecation")
         DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         SimpleEvent event = new SimpleEvent("test");
 
@@ -257,7 +249,6 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void publishClusterEventHandlesAutoValueCorrectly() throws Exception {
-        @SuppressWarnings("deprecation")
         DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         DebugEvent event = DebugEvent.create("Node ID", "Test");
 
@@ -277,7 +268,6 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void publishClusterEventSkipsDeadEvent() throws Exception {
-        @SuppressWarnings("deprecation")
         DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         DeadEvent event = new DeadEvent(clusterEventBus, new SimpleEvent("test"));
 
@@ -291,7 +281,6 @@ public class ClusterEventPeriodicalTest {
 
     @Test
     public void prepareCollectionCreatesIndexesOnExistingCollection() throws Exception {
-        @SuppressWarnings("deprecation")
         DBCollection original = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         original.dropIndexes();
         assertThat(original.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
@@ -306,9 +295,7 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void prepareCollectionCreatesCollectionIfItDoesNotExist() throws Exception {
-        @SuppressWarnings("deprecation")
-        final DB database = mongoConnection.getDatabase();
-        assertThat(database.collectionExists(ClusterEventPeriodical.COLLECTION_NAME)).isFalse();
+        assertThat(mongoConnection.getDatabase().collectionExists(ClusterEventPeriodical.COLLECTION_NAME)).isFalse();
         DBCollection collection = ClusterEventPeriodical.prepareCollection(mongoConnection);
 
         assertThat(collection.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
@@ -317,12 +304,11 @@ public class ClusterEventPeriodicalTest {
     }
 
     public static class SimpleEventHandler {
-        final AtomicInteger invocations = new AtomicInteger();
+        public volatile int invocations = 0;
 
         @Subscribe
-        @SuppressWarnings("unused")
         public void handleSimpleEvent(SimpleEvent event) {
-            invocations.incrementAndGet();
+            invocations++;
         }
     }
 }

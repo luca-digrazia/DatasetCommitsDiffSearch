@@ -1,38 +1,45 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.system.jobs;
 
-import org.graylog2.system.activities.ActivityWriter;
-import org.testng.annotations.Test;
+import com.codahale.metrics.MetricRegistry;
+import com.google.common.util.concurrent.Uninterruptibles;
+import org.graylog2.system.activities.SystemMessageActivityWriter;
+import org.junit.Rule;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
-import static org.mockito.Mockito.mock;
-import static org.testng.AssertJUnit.assertEquals;
-import static org.testng.AssertJUnit.assertTrue;
+import java.util.concurrent.TimeUnit;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 public class SystemJobManagerTest {
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
+    @Mock
+    private SystemMessageActivityWriter systemMessageActivityWriter;
 
     @Test
     public void testGetRunningJobs() throws Exception {
-        SystemJobManager manager = new SystemJobManager(mock(ActivityWriter.class));
+        SystemJobManager manager = new SystemJobManager(systemMessageActivityWriter, new MetricRegistry());
 
         LongRunningJob job1 = new LongRunningJob(1);
         LongRunningJob job2 = new LongRunningJob(1);
@@ -50,7 +57,7 @@ public class SystemJobManagerTest {
 
     @Test
     public void testConcurrentJobs() throws Exception {
-        SystemJobManager manager = new SystemJobManager(mock(ActivityWriter.class));
+        SystemJobManager manager = new SystemJobManager(systemMessageActivityWriter, new MetricRegistry());
 
         SystemJob job1 = new LongRunningJob(3);
         SystemJob job2 = new LongRunningJob(3);
@@ -66,7 +73,7 @@ public class SystemJobManagerTest {
 
     @Test
     public void testSubmitThrowsExceptionIfMaxConcurrencyLevelReached() throws Exception {
-        SystemJobManager manager = new SystemJobManager(mock(ActivityWriter.class));
+        SystemJobManager manager = new SystemJobManager(systemMessageActivityWriter, new MetricRegistry());
 
         LongRunningJob job1 = new LongRunningJob(3);
         LongRunningJob job2 = new LongRunningJob(3);
@@ -81,7 +88,7 @@ public class SystemJobManagerTest {
         boolean exceptionThrown = false;
         try {
             manager.submit(job2);
-        } catch(SystemJobConcurrencyException e) {
+        } catch (SystemJobConcurrencyException e) {
             exceptionThrown = true;
         }
 
@@ -104,12 +111,7 @@ public class SystemJobManagerTest {
 
         @Override
         public void execute() {
-            try {
-                Thread.sleep(seconds*1000);
-            } catch (InterruptedException e) {
-                // That's fine.
-                return;
-            }
+            Uninterruptibles.sleepUninterruptibly(seconds, TimeUnit.SECONDS);
         }
 
         void setMaxConcurrency(int maxConcurrency) {
@@ -161,12 +163,7 @@ public class SystemJobManagerTest {
 
         @Override
         public void execute() {
-            try {
-                Thread.sleep(seconds*1000);
-            } catch (InterruptedException e) {
-                // That's fine.
-                return;
-            }
+            Uninterruptibles.sleepUninterruptibly(seconds, TimeUnit.SECONDS);
         }
 
         @Override

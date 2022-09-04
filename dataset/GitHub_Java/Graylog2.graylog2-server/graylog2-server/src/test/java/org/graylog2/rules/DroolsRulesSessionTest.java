@@ -1,53 +1,55 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.rules;
 
 import org.graylog2.plugin.Message;
-import org.joda.time.DateTime;
+import org.graylog2.plugin.Tools;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.rule.FactHandle;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
-import static junit.framework.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
 
 public class DroolsRulesSessionTest {
-    @Mock private KieSession kieSession;
-    @Mock private FactHandle factHandle;
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
+    @Mock
+    private KieSession kieSession;
+    @Mock
+    private FactHandle factHandle;
 
     private Message message;
     private DroolsRulesSession session;
     private int rulesFired = 3;
 
-    @BeforeMethod
+    @Before
     public void setUp() throws Exception {
-        MockitoAnnotations.initMocks(this);
-
-        message = new Message("hello", "localhost", new DateTime());
+        message = new Message("hello", "localhost", Tools.nowUTC());
 
         when(kieSession.insert(message)).thenReturn(factHandle);
         when(kieSession.fireAllRules()).thenReturn(rulesFired);
@@ -84,14 +86,14 @@ public class DroolsRulesSessionTest {
         assertEquals(i, rulesFired);
     }
 
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test(expected = IllegalStateException.class)
     public void testEvaluateWithNullSession() throws Exception {
         DroolsRulesSession session = new DroolsRulesSession(null);
 
         session.evaluate(message, false);
     }
 
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test(expected = IllegalStateException.class)
     public void testEvaluateWithClosedSession() throws Exception {
         session.close();
         session.evaluate(message, false);

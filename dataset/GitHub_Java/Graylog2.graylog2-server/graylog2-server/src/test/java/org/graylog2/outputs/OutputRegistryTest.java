@@ -56,6 +56,8 @@ public class OutputRegistryTest {
     private Output output;
     @Mock
     private OutputService outputService;
+    @Mock
+    private org.graylog2.Configuration configuration;
 
     @Test
     public void testMessageOutputsIncludesDefault() {
@@ -80,13 +82,13 @@ public class OutputRegistryTest {
         when(outputService.load(eq(outputId))).thenReturn(output);
 
         final OutputRegistry outputRegistry = new OutputRegistry(null, outputService, messageOutputFactory, null, null, FAULT_COUNT_THRESHOLD, FAULT_PENALTY_SECONDS);
-        assertEquals(0, outputRegistry.getRunningMessageOutputs().size());
+        assertEquals(outputRegistry.getRunningMessageOutputs().size(), 0);
 
         MessageOutput result = outputRegistry.getOutputForIdAndStream(outputId, stream);
 
         assertSame(result, messageOutput);
         assertNotNull(outputRegistry.getRunningMessageOutputs());
-        assertEquals(1, outputRegistry.getRunningMessageOutputs().size());
+        assertEquals(outputRegistry.getRunningMessageOutputs().size(), 1);
     }
 
     @Test
@@ -100,7 +102,7 @@ public class OutputRegistryTest {
         MessageOutput messageOutput = outputRegistry.getOutputForIdAndStream(outputId, stream);
 
         assertNull(messageOutput);
-        assertEquals(0, outputRegistry.getRunningMessageOutputs().size());
+        assertEquals(outputRegistry.getRunningMessageOutputs().size(), 0);
     }
 
     @Test
@@ -111,11 +113,11 @@ public class OutputRegistryTest {
         when(outputService.load(eq(outputId))).thenReturn(output);
 
         final OutputRegistry outputRegistry = new OutputRegistry(null, outputService, messageOutputFactory, null, null, FAULT_COUNT_THRESHOLD, FAULT_PENALTY_SECONDS);
-        assertEquals(0, outputRegistry.getRunningMessageOutputs().size());
+        assertEquals(outputRegistry.getRunningMessageOutputs().size(), 0);
 
         MessageOutput result = outputRegistry.getOutputForIdAndStream(outputId, stream);
 
         assertNull(result);
-        assertEquals(0, outputRegistry.getRunningMessageOutputs().size());
+        assertEquals(outputRegistry.getRunningMessageOutputs().size(), 0);
     }
 }

@@ -19,7 +19,6 @@ package org.graylog2.users;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import com.google.common.eventbus.EventBus;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
@@ -31,7 +30,6 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.security.PasswordAlgorithm;
-import org.graylog2.security.AccessTokenService;
 import org.graylog2.security.InMemoryRolePermissionResolver;
 import org.graylog2.security.PasswordAlgorithmFactory;
 import org.graylog2.security.hashing.SHA1HashPasswordAlgorithm;
@@ -73,11 +71,7 @@ public class UserServiceImplTest {
     @Mock
     private RoleService roleService;
     @Mock
-    private AccessTokenService accessTokenService;
-    @Mock
     private InMemoryRolePermissionResolver permissionsResolver;
-    @Mock
-    private EventBus serverEventBus;
 
     @Before
     public void setUp() throws Exception {
@@ -85,8 +79,8 @@ public class UserServiceImplTest {
         this.configuration = new Configuration();
         this.userFactory = new UserImplFactory(configuration);
         this.permissions = new Permissions(ImmutableSet.of(new RestPermissions()));
-        this.userService = new UserServiceImpl(mongoConnection, configuration, roleService, accessTokenService,
-                                               userFactory, permissionsResolver, serverEventBus);
+        this.userService = new UserServiceImpl(mongoConnection, configuration, roleService, userFactory,
+                                               permissionsResolver);
 
         when(roleService.getAdminRoleObjectId()).thenReturn("deadbeef");
     }
@@ -212,9 +206,8 @@ public class UserServiceImplTest {
     @Test
     public void testGetPermissionsForUser() throws Exception {
         final InMemoryRolePermissionResolver permissionResolver = mock(InMemoryRolePermissionResolver.class);
-        final UserService userService = new UserServiceImpl(mongoConnection, configuration, roleService,
-                                                            accessTokenService,userFactory, permissionResolver,
-                                                            serverEventBus);
+        final UserService userService = new UserServiceImpl(mongoConnection, configuration, roleService, userFactory,
+                                                            permissionResolver);
 
         final UserImplFactory factory = new UserImplFactory(new Configuration());
         final UserImpl user = factory.create(new HashMap<>());
@@ -226,7 +219,6 @@ public class UserServiceImplTest {
 
         when(permissionResolver.resolveStringPermission(role.getId())).thenReturn(Collections.singleton("foo:bar"));
 
-        assertThat(userService.getPermissionsForUser(user)).containsOnly("users:passwordchange:user", "users:edit:user",
-                "foo:bar", "hello:world", "users:tokenlist:user", "users:tokencreate:user", "users:tokenremove:user");
+        assertThat(userService.getPermissionsForUser(user)).containsOnly("users:passwordchange:user", "users:edit:user", "foo:bar", "hello:world");
     }
 }

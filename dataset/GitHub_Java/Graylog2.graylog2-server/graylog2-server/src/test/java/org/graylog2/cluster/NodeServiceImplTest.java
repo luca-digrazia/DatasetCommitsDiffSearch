@@ -94,7 +94,6 @@ public class NodeServiceImplTest {
 
         nodeService.registerServer(nodeId.toString(), true, TRANSPORT_URI, LOCAL_CANONICAL_HOSTNAME);
 
-        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoRule.getMongoConnection().getDatabase().getCollection("nodes");
 
         assertThat(collection.count())

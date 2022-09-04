@@ -30,22 +30,24 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.util.List;
 
 import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
-@RunWith(MockitoJUnitRunner.class)
 public class DashboardServiceImplTest {
     @ClassRule
     public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
 
     @Rule
     public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
     private DashboardService dashboardService;
 
@@ -60,7 +62,7 @@ public class DashboardServiceImplTest {
 
     @Before
     public void setUpService() throws Exception {
-        this.dashboardService = new DashboardServiceImpl(mongoRule.getMongoConnection(), metricRegistry, searches, dashboardWidgetCreator);
+        this.dashboardService = new DashboardServiceImpl(mongoRule.getMongoConnection(), dashboardWidgetCreator);
     }
 
     @Test
@@ -69,7 +71,7 @@ public class DashboardServiceImplTest {
         final String title = "Dashboard Title";
         final String description = "This is the dashboard description";
         final String creatorUserId = "foobar";
-        final DateTime createdAt = Tools.iso8601();
+        final DateTime createdAt = Tools.nowUTC();
 
         final Dashboard dashboard = dashboardService.create(title, description, creatorUserId, createdAt);
 

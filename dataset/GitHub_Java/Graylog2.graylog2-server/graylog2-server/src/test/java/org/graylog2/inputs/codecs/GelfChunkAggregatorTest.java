@@ -29,9 +29,10 @@ import org.joda.time.DateTimeZone;
 import org.joda.time.Period;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -45,14 +46,17 @@ import static org.graylog2.inputs.codecs.GelfChunkAggregator.EXPIRED_CHUNKS;
 import static org.graylog2.inputs.codecs.GelfChunkAggregator.EXPIRED_MESSAGES;
 import static org.graylog2.inputs.codecs.GelfChunkAggregator.WAITING_MESSAGES;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
-@RunWith(MockitoJUnitRunner.class)
 public class GelfChunkAggregatorTest {
     private static final byte[] CHUNK_MAGIC_BYTES = new byte[]{0x1e, 0x0f};
+
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
     private ScheduledThreadPoolExecutor poolExecutor;
     private GelfChunkAggregator aggregator;
@@ -116,6 +120,24 @@ public class GelfChunkAggregatorTest {
                 assertEquals(0, counterValueNamed(metricRegistry, EXPIRED_MESSAGES));
                 assertEquals(0, counterValueNamed(metricRegistry, DUPLICATE_CHUNKS));
             }
+        }
+    }
+
+    @Test
+    public void tooManyChunks() {
+        final ChannelBuffer[] chunks = createChunkedMessage(129 * 1024, 1024);
+        int i = 1;
+        for (final ChannelBuffer chunk : chunks) {
+            final CodecAggregator.Result result = aggregator.addChunk(chunk);
+            if (i == 129) {
+                assertFalse("Message invalidated (chunk #" + i + ")", result.isValid());
+                assertNull("Message discarded (chunk #" + i + ")", result.getMessage());
+
+            } else {
+                assertTrue("Incomplete message valid (chunk #" + i + ")", result.isValid());
+                assertNull("Message not complete (chunk #" + i + ")", result.getMessage());
+            }
+            i++;
         }
     }
 

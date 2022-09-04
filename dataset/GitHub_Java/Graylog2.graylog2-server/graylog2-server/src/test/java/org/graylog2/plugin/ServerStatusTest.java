@@ -69,12 +69,12 @@ public class ServerStatusTest {
 
     @Test
     public void testGetNodeId() throws Exception {
-        assertEquals(new String(Files.readAllBytes(tempFile.toPath()), StandardCharsets.UTF_8), status.getNodeId().toString());
+        assertEquals(status.getNodeId().toString(), new String(Files.readAllBytes(tempFile.toPath()), StandardCharsets.UTF_8));
     }
 
     @Test
     public void testGetLifecycle() throws Exception {
-        assertEquals(Lifecycle.UNINITIALIZED, status.getLifecycle());
+        assertEquals(status.getLifecycle(), Lifecycle.UNINITIALIZED);
     }
 
     @Test
@@ -166,18 +166,18 @@ public class ServerStatusTest {
     @Test
     @SuppressForbidden("Deliberate invocation")
     public void testGetTimezone() throws Exception {
-        assertEquals(DateTimeZone.getDefault(), status.getTimezone());
+        assertEquals(status.getTimezone(), DateTimeZone.getDefault());
     }
 
     @Test
     public void testAddCapability() throws Exception {
-        assertEquals(status, status.addCapability(ServerStatus.Capability.SERVER));
+        assertEquals(status.addCapability(ServerStatus.Capability.SERVER), status);
         assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.SERVER));
     }
 
     @Test
     public void testAddCapabilities() throws Exception {
-        assertEquals(status, status.addCapabilities(ServerStatus.Capability.LOCALMODE));
+        assertEquals(status.addCapabilities(ServerStatus.Capability.LOCALMODE), status);
         assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.LOCALMODE));
     }
 
@@ -185,7 +185,7 @@ public class ServerStatusTest {
     public void testPauseMessageProcessing() throws Exception {
         status.pauseMessageProcessing();
 
-        assertEquals(Lifecycle.PAUSED, status.getLifecycle());
+        assertEquals(status.getLifecycle(), Lifecycle.PAUSED);
         assertTrue(status.processingPauseLocked());
     }
 
@@ -193,7 +193,7 @@ public class ServerStatusTest {
     public void testPauseMessageProcessingWithLock() throws Exception {
         status.pauseMessageProcessing(true);
 
-        assertEquals(Lifecycle.PAUSED, status.getLifecycle());
+        assertEquals(status.getLifecycle(), Lifecycle.PAUSED);
         assertTrue(status.processingPauseLocked());
     }
 
@@ -201,7 +201,7 @@ public class ServerStatusTest {
     public void testPauseMessageProcessingWithoutLock() throws Exception {
         status.pauseMessageProcessing(false);
 
-        assertEquals(Lifecycle.PAUSED, status.getLifecycle());
+        assertEquals(status.getLifecycle(), Lifecycle.PAUSED);
         assertFalse(status.processingPauseLocked());
     }
 
@@ -218,7 +218,7 @@ public class ServerStatusTest {
         status.pauseMessageProcessing(false);
         status.resumeMessageProcessing();
 
-        assertEquals(Lifecycle.RUNNING, status.getLifecycle());
+        assertEquals(status.getLifecycle(), Lifecycle.RUNNING);
     }
 
     @Test(expected = ProcessingPauseLockedException.class)

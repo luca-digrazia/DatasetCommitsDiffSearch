@@ -136,14 +136,14 @@ public class PeriodicalsTest {
 
         verify(periodical, never()).run();
 
-        assertEquals("Future for the periodical was not added to the futures Map", future, periodicals.getFutures().get(periodical));
+        assertEquals("Future for the periodical was not added to the futures Map", periodicals.getFutures().get(periodical), future);
     }
 
     @Test
     public void testGetAll() throws Exception {
         periodicals.registerAndStart(periodical);
 
-        assertEquals("getAll() did not return all periodicals", Lists.newArrayList(periodical), periodicals.getAll());
+        assertEquals("getAll() did not return all periodicals", periodicals.getAll(), Lists.newArrayList(periodical));
     }
 
     @Test
@@ -152,7 +152,7 @@ public class PeriodicalsTest {
 
         periodicals.getAll().add(periodical);
 
-        assertEquals("getAll() did not return a copy of the periodicals List", 1, periodicals.getAll().size());
+        assertEquals("getAll() did not return a copy of the periodicals List", periodicals.getAll().size(), 1);
     }
 
     @Test
@@ -167,7 +167,7 @@ public class PeriodicalsTest {
 
         assertFalse("periodical without graceful shutdown is in the list", allStoppedOnGracefulShutdown.contains(periodical));
         assertTrue("graceful shutdown periodical is not in the list", allStoppedOnGracefulShutdown.contains(periodical2));
-        assertEquals("more graceful shutdown periodicals in the list", 1, allStoppedOnGracefulShutdown.size());
+        assertEquals("more graceful shutdown periodicals in the list", allStoppedOnGracefulShutdown.size(), 1);
     }
 
     @Test
@@ -175,7 +175,7 @@ public class PeriodicalsTest {
         periodicals.registerAndStart(periodical);
 
         assertTrue("missing periodical in future Map", periodicals.getFutures().containsKey(periodical));
-        assertEquals(1, periodicals.getFutures().size());
+        assertEquals(periodicals.getFutures().size(), 1);
     }
 
     @Test
@@ -187,7 +187,7 @@ public class PeriodicalsTest {
         periodicals.getFutures().put(periodical2, null);
 
         assertFalse("getFutures() did not return a copy of the Map", periodicals.getFutures().containsKey(periodical2));
-        assertEquals(1, periodicals.getFutures().size());
+        assertEquals(periodicals.getFutures().size(), 1);
     }
 
     @Test

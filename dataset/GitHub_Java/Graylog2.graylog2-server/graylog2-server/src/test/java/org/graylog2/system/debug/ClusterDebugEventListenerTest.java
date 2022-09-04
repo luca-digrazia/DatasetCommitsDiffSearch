@@ -16,20 +16,22 @@
  */
 package org.graylog2.system.debug;
 
-import com.google.common.eventbus.EventBus;
-import org.graylog2.events.ClusterEvent;
+import org.graylog2.events.ClusterEventBus;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Spy;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ClusterDebugEventListenerTest {
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
     @Spy
-    private EventBus clusterEventBus;
+    private ClusterEventBus clusterEventBus;
 
     @Before
     public void setUp() {
