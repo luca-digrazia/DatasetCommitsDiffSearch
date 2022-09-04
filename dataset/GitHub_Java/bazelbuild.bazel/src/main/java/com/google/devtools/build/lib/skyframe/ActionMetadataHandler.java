@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
@@ -56,6 +55,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -80,7 +80,7 @@ import javax.annotation.Nullable;
 @VisibleForTesting
 public final class ActionMetadataHandler implements MetadataHandler {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(ActionMetadataHandler.class.getName());
 
   /**
    * Data for input artifacts. Immutable.
@@ -177,8 +177,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
       } catch (IOException e) {
         // If we cannot get the FileArtifactValue, then we will make a FileSystem call to get the
         // digest, so it is okay to skip and continue here.
-        logger.atWarning().log(
-            "Could not properly get digest for %s", entry.getKey().getExecPath());
+        logger.warning("Could not properly get digest for " + entry.getKey().getExecPath());
         continue;
       }
     }
@@ -437,8 +436,6 @@ public final class ActionMetadataHandler implements MetadataHandler {
           throw new IOException(errorMessage, e);
         }
 
-        // TODO(janakr): we don't actually want the metadata for this TreeFileArtifact stored in the
-        //  main metadata cache as of cl/297927844. Refactor and remove.
         // A minor hack: maybeStoreAdditionalData will force the data to be stored via
         // store.putAdditionalOutputData, if the underlying OutputStore supports it.
         fileMetadata = maybeStoreAdditionalData(treeFileArtifact, fileMetadata, null);
@@ -542,8 +539,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
   }
 
   @Override
-  public void injectRemoteFile(
-      Artifact output, byte[] digest, long size, int locationIndex, String actionId) {
+  public void injectRemoteFile(Artifact output, byte[] digest, long size, int locationIndex) {
     Preconditions.checkArgument(
         isKnownOutput(output), output + " is not a declared output of this action");
     Preconditions.checkArgument(
@@ -552,7 +548,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
         output);
     Preconditions.checkState(
         executionMode.get(), "Tried to inject %s outside of execution", output);
-    store.injectRemoteFile(output, digest, size, locationIndex, actionId);
+    store.injectRemoteFile(output, digest, size, locationIndex);
   }
 
   @Override
