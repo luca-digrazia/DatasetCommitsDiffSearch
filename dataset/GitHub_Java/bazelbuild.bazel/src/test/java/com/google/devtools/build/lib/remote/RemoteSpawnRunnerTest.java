@@ -63,10 +63,10 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
 import com.google.devtools.build.lib.exec.util.FakeOwner;
-import com.google.devtools.build.lib.remote.common.SimpleBlobStore.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.util.FakeSpawnExecutionContext;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.FileOutErr;
@@ -212,7 +212,7 @@ public class RemoteSpawnRunnerTest {
     runner.exec(spawn, policy);
 
     verify(localRunner).exec(spawn, policy);
-    verify(cache).ensureInputsPresent(any(), any(), eq(execRoot));
+    verify(cache, never()).upload(any(), any(), any(), any(), any(), any());
     verifyNoMoreInteractions(cache);
   }
 
@@ -839,7 +839,7 @@ public class RemoteSpawnRunnerTest {
             retrier,
             digestUtil,
             logDir,
-            /* filesToDownload= */ ImmutableSet.of());
+            /* topLevelOutputs= */ ImmutableSet.of());
 
     ExecuteResponse succeeded =
         ExecuteResponse.newBuilder()
