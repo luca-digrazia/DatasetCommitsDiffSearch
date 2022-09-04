@@ -20,7 +20,6 @@
 package org.graylog2.streams;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -39,9 +38,6 @@ import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.rest.resources.streams.requests.CreateRequest;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,17 +83,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         return new StreamImpl(fields);
     }
 
-    @Override
-    public Stream create(CreateRequest cr) {
-        Map<String, Object> streamData = Maps.newHashMap();
-        streamData.put("title", cr.title);
-        streamData.put("description", cr.description);
-        streamData.put("creator_user_id", cr.creatorUserId);
-        streamData.put("created_at", new DateTime(DateTimeZone.UTC));
-
-        return create(streamData);
-    }
-
     public Stream load(String id) throws NotFoundException {
         try {
             return load(new ObjectId(id));
@@ -112,7 +97,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
 
     @SuppressWarnings("unchecked")
     public List<Stream> loadAllEnabled(Map<String, Object> additionalQueryOpts) {
-        additionalQueryOpts.put("disabled", false);
+        additionalQueryOpts.put("disabled", new BasicDBObject("$ne", true));
 
         return loadAll(additionalQueryOpts);
     }
@@ -202,15 +187,23 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
     }
 
     @Override
-    public void pause(Stream stream) throws ValidationException {
-        stream.setDisabled(true);
-        save(stream);
+    public void pause(Stream stream) {
+        try {
+            stream.setDisabled(true);
+            save(stream);
+        } catch (ValidationException e) {
+            LOG.error("Caught exception while saving object: ", e);
+        }
     }
 
     @Override
-    public void resume(Stream stream) throws ValidationException {
-        stream.setDisabled(false);
-        save(stream);
+    public void resume(Stream stream) {
+        try {
+            stream.setDisabled(false);
+            save(stream);
+        } catch (ValidationException e) {
+            LOG.error("Caught exception while saving object: ", e);
+        }
     }
 
     @Override
