@@ -20,8 +20,6 @@
 
 package org.graylog2.outputs;
 
-import com.google.common.collect.Lists;
-import java.util.List;
 import org.graylog2.plugin.logmessage.LogMessage;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamImpl;
@@ -31,26 +29,7 @@ import org.graylog2.streams.StreamImpl;
  */
 public class OutputRouter {
     
-    public static String ES_CLASS_NAME = ElasticSearchOutput.class.getCanonicalName();
-    
-    public static List<LogMessage> getMessagesForOutput(List<LogMessage> msgs, String outputTypeClass) {
-        List<LogMessage> filteredMessages = Lists.newArrayList();
-        
-        for (LogMessage msg : msgs) {
-            if (checkRouting(outputTypeClass, msg)) {
-                filteredMessages.add(msg);
-            }
-        }
-        
-        return filteredMessages;
-    }
-    
-    private static boolean checkRouting(String outputTypeClass, LogMessage msg) {
-        // ElasticSearch gets all messages.
-        if (outputTypeClass.equals(ES_CLASS_NAME)) {
-            return true;
-        }
-        
+    public static boolean checkRouting(String outputTypeClass, LogMessage msg) {
         for (Stream stream : msg.getStreams()) {
             if (((StreamImpl) stream).hasConfiguredOutputs(outputTypeClass)) {
                 return true;
