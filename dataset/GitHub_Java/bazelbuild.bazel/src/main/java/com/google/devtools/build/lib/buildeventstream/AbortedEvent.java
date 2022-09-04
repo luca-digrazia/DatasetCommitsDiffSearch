@@ -67,7 +67,7 @@ public class AbortedEvent extends GenericBuildEvent {
   }
 
   @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     return GenericBuildEvent.protoChaining(this)
         .setAborted(
             BuildEventStreamProtos.Aborted.newBuilder()
