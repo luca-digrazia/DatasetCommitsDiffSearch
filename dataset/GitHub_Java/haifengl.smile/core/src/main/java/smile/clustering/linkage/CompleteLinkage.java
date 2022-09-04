@@ -1,20 +1,23 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.clustering.linkage;
+
+import smile.math.distance.Distance;
 
 /**
  * Complete linkage. This is the opposite of single linkage. Distance between
@@ -30,7 +33,30 @@ public class CompleteLinkage extends Linkage {
      * dissimilarity. To save space, we only need the lower half of matrix.
      */
     public CompleteLinkage(double[][] proximity) {
-        this.proximity = proximity;
+        super(proximity);
+    }
+
+    /**
+     * Constructor. Initialize the linkage with the lower triangular proximity matrix.
+     * @param size the data size.
+     * @param proximity column-wise linearized proximity matrix that stores
+     *                  only the lower half. The length of proximity should be
+     *                  size * (size+1) / 2.
+     *                  To save space, Linkage will use this argument directly
+     *                  without copy. The elements may be modified.
+     */
+    public CompleteLinkage(int size, float[] proximity) {
+        super(size, proximity);
+    }
+
+    /** Given a set of data, computes the proximity and then the linkage. */
+    public static CompleteLinkage of(double[][] data) {
+        return new CompleteLinkage(data.length, proximity(data));
+    }
+
+    /** Given a set of data, computes the proximity and then the linkage. */
+    public static <T> CompleteLinkage of(T[] data, Distance<T> distance) {
+        return new CompleteLinkage(data.length, proximity(data, distance));
     }
 
     @Override
@@ -41,11 +67,11 @@ public class CompleteLinkage extends Linkage {
     @Override
     public void merge(int i, int j) {
         for (int k = 0; k < i; k++) {
-            proximity[i][k] = Math.max(proximity[i][k], d(j, k));
+            proximity[index(i, k)] = Math.max(d(i, k), d(j, k));
         }
 
-        for (int k = i+1; k < proximity.length; k++) {
-            proximity[k][i] = Math.max(proximity[k][i], d(j, k));
+        for (int k = i+1; k < size; k++) {
+            proximity[index(k, i)] = Math.max(d(k, i), d(j, k));
         }
     }
 }

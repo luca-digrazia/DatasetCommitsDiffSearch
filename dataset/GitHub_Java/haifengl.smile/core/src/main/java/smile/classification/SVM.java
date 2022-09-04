@@ -106,7 +106,6 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @param y training labels.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @return the model.
      */
     public static Classifier<double[]> fit(double[][] x, int[] y, double C, double tol) {
         LASVM<double[]> lasvm = new LASVM<>(new LinearKernel(), C, tol);
@@ -129,7 +128,6 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @param p the dimension of input vector.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @return the model.
      */
     public static Classifier<int[]> fit(int[][] x, int[] y, int p, double C, double tol) {
         LASVM<int[]> lasvm = new LASVM<>(new BinarySparseLinearKernel(), C, tol);
@@ -152,7 +150,6 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @param p the dimension of input vector.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @return the model.
      */
     public static Classifier<SparseArray> fit(SparseArray[] x, int[] y, int p, double C, double tol) {
         LASVM<SparseArray> lasvm = new LASVM<>(new SparseLinearKernel(), C, tol);
@@ -175,8 +172,6 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @param kernel the kernel function.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
-     * @param <T> the data type.
-     * @return the model.
      */
     public static <T> SVM<T> fit(T[] x, int[] y, MercerKernel<T> kernel, double C, double tol) {
         LASVM<T> lasvm = new LASVM<>(kernel, C, tol);

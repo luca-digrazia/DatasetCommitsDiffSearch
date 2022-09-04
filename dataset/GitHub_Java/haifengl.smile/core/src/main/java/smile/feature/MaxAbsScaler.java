@@ -71,7 +71,6 @@ public class MaxAbsScaler implements FeatureTransform {
     /**
      * Learns transformation parameters from a dataset.
      * @param data The training data.
-     * @return the model.
      */
     public static MaxAbsScaler fit(DataFrame data) {
         if (data.isEmpty()) {
@@ -93,7 +92,6 @@ public class MaxAbsScaler implements FeatureTransform {
     /**
      * Learns transformation parameters from a dataset.
      * @param data The training data.
-     * @return the model.
      */
     public static MaxAbsScaler fit(double[][] data) {
         return fit(DataFrame.of(data));

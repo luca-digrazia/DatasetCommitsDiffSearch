@@ -97,13 +97,9 @@ public class TSNE implements Serializable {
      */
     private final double minGain         = .01;
 
-    /** The gain matrix. */
     private final double[][] gains; // adjust learning rate for each point
-    /** The probability matrix of the distances in the input space. */
     private final double[][] P;
-    /** The probability matrix of the distances in the feature space. */
     private final double[][] Q;
-    /** The sum of Q matrix. */
     private double Qsum;
 
     /** Constructor. Train t-SNE for 1000 iterations, perplexity = 20 and learning rate = 200.
@@ -172,10 +168,7 @@ public class TSNE implements Serializable {
         update(iterations);
     }
 
-    /**
-     * Performs additional iterations.
-     * @param iterations the number of iterations.
-     */
+    /** Performs additional iterations. */
     public void update(int iterations) {
         double[][] Y = coordinates;
         int n = Y.length;

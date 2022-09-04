@@ -17,11 +17,9 @@
 
 package smile.feature;
 
-import java.util.Optional;
 import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.type.StructType;
 import smile.math.MathEx;
 
 /**
@@ -72,21 +70,6 @@ public class Normalizer implements FeatureTransform {
     }
 
     @Override
-    public Optional<StructType> schema() {
-        return Optional.empty();
-    }
-
-    @Override
-    public double transform(double x, int i) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public double invert(double x, int i) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public double[] transform(double[] x) {
         double scale;
 
@@ -118,7 +101,7 @@ public class Normalizer implements FeatureTransform {
 
     @Override
     public Tuple transform(Tuple x) {
-        double[] y = transform(x.toArray(false, CategoricalEncoder.LEVEL));
+        double[] y = transform(x.toArray(false, CategoricalEncoder.ONE_HOT));
         return Tuple.of(y, x.schema());
     }
 

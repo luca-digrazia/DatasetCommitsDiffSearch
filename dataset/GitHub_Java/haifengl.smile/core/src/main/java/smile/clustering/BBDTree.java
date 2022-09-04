@@ -229,14 +229,14 @@ public class BBDTree {
     /**
      * Returns the total contribution of all data in the given kd-tree node,
      * assuming they are all assigned to a mean at the given location.
-     * <p>
-     *   sum_{x \in node} ||x - mean||<sup>2</sup>
-     * <p>
+     *
+     *   sum_{x \in node} ||x - mean||^2.
+     *
      * If c denotes the mean of mass of the data in this node and n denotes
      * the number of data in it, then this quantity is given by
-     * <p>
-     *   n * ||c - mean||<sup>2</sup> + sum_{x \in node} ||x - c||<sup>2</sup>
-     * <p>
+     *
+     *   n * ||c - mean||^2 + sum_{x \in node} ||x - c||^2
+     *
      * The sum is precomputed for each node as cost. This formula follows
      * from expanding both sides as dot products.
      */

@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.imputation;
 
 import smile.clustering.KMeans;
+import smile.clustering.PartitionClustering;
 
 /**
  * Missing value imputation by K-Means clustering. First cluster data by K-Means
@@ -31,11 +32,11 @@ public class KMeansImputation implements MissingValueImputation {
     /**
      * The number of clusters in KMeans clustering.
      */
-    private int k;
+    private final int k;
     /**
      * The number of runs of K-Means algorithm.
      */
-    private int runs;
+    private final int runs;
 
     /**
      * Constructor.
@@ -86,13 +87,13 @@ public class KMeansImputation implements MissingValueImputation {
             }
         }
 
-        KMeans kmeans = KMeans.lloyd(data, k, Integer.MAX_VALUE, runs);
+        KMeans kmeans = PartitionClustering.run(runs, () -> KMeans.lloyd(data, k));
 
         for (int i = 0; i < k; i++) {
-            if (kmeans.getClusterSize()[i] > 0) {
-                double[][] d = new double[kmeans.getClusterSize()[i]][];
+            if (kmeans.size[i] > 0) {
+                double[][] d = new double[kmeans.size[i]][];
                 for (int j = 0, m = 0; j < data.length; j++) {
-                    if (kmeans.getClusterLabel()[j] == i) {
+                    if (kmeans.y[j] == i) {
                         d[m++] = data[j];
                     }
                 }

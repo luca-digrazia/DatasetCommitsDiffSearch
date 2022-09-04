@@ -65,17 +65,15 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
     /**
      * Constructor.
      * @param classifiers the binary classifier for each one-vs-rest case.
-     * @param platt Platt scaling models.
      */
-    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platt) {
-        this(classifiers, platt, IntSet.of(classifiers.length));
+    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platts) {
+        this(classifiers, platts, IntSet.of(classifiers.length));
     }
 
     /**
      * Constructor.
      * @param classifiers the binary classifier for each one-vs-rest case.
-     * @param platt Platt scaling models.
-     * @param labels the class label encoder.
+     * @param labels the class labels.
      */
     public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platt, IntSet labels) {
         this.classifiers = classifiers;
@@ -90,8 +88,6 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
      * @param x the training samples.
      * @param y the training labels.
      * @param trainer the lambda to train binary classifiers.
-     * @param <T> the data type.
-     * @return the model.
      */
     public static <T> OneVersusRest<T> fit(T[] x, int[] y, BiFunction<T[], int[], Classifier<T>> trainer) {
         return fit(x, y, +1, -1, trainer);
@@ -104,8 +100,6 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
      * @param pos the class label for one case.
      * @param neg the class label for rest cases.
      * @param trainer the lambda to train binary classifiers.
-     * @param <T> the data type.
-     * @return the model.
      */
     @SuppressWarnings("unchecked")
     public static <T> OneVersusRest<T> fit(T[] x, int[] y, int pos, int neg, BiFunction<T[], int[], Classifier<T>> trainer) {
@@ -154,7 +148,6 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      * @param trainer the lambda to train binary classifiers.
-     * @return the model.
      */
     @SuppressWarnings("unchecked")
     public static DataFrameClassifier fit(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
