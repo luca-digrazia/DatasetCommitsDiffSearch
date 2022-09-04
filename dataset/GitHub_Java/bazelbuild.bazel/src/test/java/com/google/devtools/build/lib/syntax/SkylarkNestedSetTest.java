@@ -266,11 +266,12 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testTooManyPositionals() throws Exception {
-    new BothModesTest()
-        .testIfErrorContains(
-            "expected no more than 2 positional arguments, but got 3, for call to function "
-                + "depset(items = [], order = \"default\", direct = None, transitive = None)",
-            "depset([], 'default', [])");
+    new BothModesTest().testIfExactError(
+        "too many (3) positional arguments in call to "
+            + "depset(items = [], order: string = \"default\", *, "
+            + "direct: sequence or NoneType = None, "
+            + "transitive: sequence of depsets or NoneType = None)",
+        "depset([], 'default', [])");
   }
 
 
@@ -366,7 +367,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testUnionIncompatibleOrder() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     checkEvalError(
         "Order mismatch: topological != postorder",
         "depset(['a', 'b'], order='postorder') + depset(['c', 'd'], order='topological')");
@@ -374,23 +374,24 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testUnionWithNonsequence() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
-    checkEvalError("cannot union value of type 'int' to a depset", "depset([]).union(5)");
-    checkEvalError("cannot union value of type 'string' to a depset", "depset(['a']).union('b')");
+    new BothModesTest()
+        .testIfExactError(
+            "cannot union value of type 'int' to a depset",
+            "depset([]).union(5)")
+        .testIfExactError(
+            "cannot union value of type 'string' to a depset",
+            "depset(['a']).union('b')");
   }
 
   @Test
   public void testUnionWrongNumArgs() throws Exception {
-    new BothModesTest()
-        .testIfErrorContains(
-            "parameter 'new_elements' has no default value, "
-                + "for call to method union(new_elements) of 'depset'",
-            "depset(['a']).union()");
+    new BothModesTest().testIfErrorContains(
+        "parameter 'new_elements' has no default value, in method call union() of 'depset'",
+        "depset(['a']).union()");
   }
 
   @Test
   public void testUnionNoSideEffects() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func():",
         "  s1 = depset(['a'])",
@@ -402,7 +403,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testFunctionReturnsDepset() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func():",
         "  t = depset()",
@@ -415,7 +415,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testPlusEqualsWithList() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func():",
         "  t = depset()",
@@ -427,7 +426,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testPlusEqualsNoSideEffects() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func():",
         "  s1 = depset()",
@@ -441,7 +439,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testFuncParamNoSideEffects() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func1(t):",
         "  t += ['b']",
@@ -456,7 +453,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testTransitiveOrdering() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func():",
         "  sa = depset(['a'], order='postorder')",
@@ -470,7 +466,6 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
 
   @Test
   public void testLeftRightDirectOrdering() throws Exception {
-    env = newEnvironmentWithSkylarkOptions("--incompatible_depset_union=false");
     eval(
         "def func():",
         "  t = depset()",
