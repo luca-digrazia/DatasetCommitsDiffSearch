@@ -40,7 +40,7 @@ import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.rpc.PreconditionFailure;
@@ -71,7 +71,7 @@ public final class RemoteModule extends BlazeModule {
       buildEventArtifactUploaderFactoryDelegate = new BuildEventArtifactUploaderFactoryDelegate();
 
   @Override
-  public void serverInit(OptionsParsingResult startupOptions, ServerBuilder builder) {
+  public void serverInit(OptionsProvider startupOptions, ServerBuilder builder) {
     builder.addBuildEventArtifactUploaderFactory(buildEventArtifactUploaderFactoryDelegate, "remote");
   }
 
@@ -280,8 +280,14 @@ public final class RemoteModule extends BlazeModule {
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
     return "build".equals(command.name())
-        ? ImmutableList.of(RemoteOptions.class, AuthAndTLSOptions.class)
-        : ImmutableList.of();
+        ? ImmutableList.<Class<? extends OptionsBase>>of(
+            RemoteOptions.class, AuthAndTLSOptions.class)
+        : ImmutableList.<Class<? extends OptionsBase>>of();
+  }
+
+  public static boolean remoteEnabled(RemoteOptions options) {
+    return SimpleBlobStoreFactory.isRemoteCacheOptions(options)
+        || GrpcRemoteCache.isRemoteCacheOptions(options);
   }
 
   static RemoteRetrier createExecuteRetrier(
@@ -310,7 +316,7 @@ public final class RemoteModule extends BlazeModule {
     }
 
     @Override
-    public BuildEventArtifactUploader create(OptionsParsingResult options) {
+    public BuildEventArtifactUploader create(OptionsProvider options) {
       BuildEventArtifactUploaderFactory uploaderFactory0 = this.uploaderFactory;
       if (uploaderFactory0 == null) {
         return BuildEventArtifactUploader.LOCAL_FILES_UPLOADER;

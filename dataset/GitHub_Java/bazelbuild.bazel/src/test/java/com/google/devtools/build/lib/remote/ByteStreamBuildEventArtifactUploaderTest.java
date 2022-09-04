@@ -15,9 +15,7 @@ package com.google.devtools.build.lib.remote;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
-import build.bazel.remote.execution.v2.Digest;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
 import com.google.bytestream.ByteStreamProto.WriteResponse;
 import com.google.common.io.BaseEncoding;
@@ -36,6 +34,7 @@ import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+import com.google.devtools.remoteexecution.v1test.Digest;
 import io.grpc.Context;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
@@ -145,7 +144,7 @@ public class ByteStreamBuildEventArtifactUploaderTest {
         new ByteStreamUploader("instance", refCntChannel, null, 3, retrier);
     ByteStreamBuildEventArtifactUploader artifactUploader =
         new ByteStreamBuildEventArtifactUploader(
-            uploader, "localhost", withEmptyMetadata, "instance", /* maxUploadThreads= */ 100);
+            uploader, "localhost", withEmptyMetadata, "instance");
 
     PathConverter pathConverter = artifactUploader.upload(filesToUpload).get();
     for (Path file : filesToUpload.keySet()) {
@@ -160,21 +159,6 @@ public class ByteStreamBuildEventArtifactUploaderTest {
 
     assertThat(uploader.refCnt()).isEqualTo(0);
     assertThat(refCntChannel.isShutdown()).isTrue();
-  }
-
-  @Test
-  public void testUploadDirectoryDoesNotCrash() throws Exception {
-    Path dir = fs.getPath("/dir");
-    dir.createDirectoryAndParents();
-    Map<Path, LocalFile> filesToUpload = new HashMap<>();
-    filesToUpload.put(dir, new LocalFile(dir, LocalFileType.OUTPUT));
-    ByteStreamUploader uploader = mock(ByteStreamUploader.class);
-    ByteStreamBuildEventArtifactUploader artifactUploader =
-        new ByteStreamBuildEventArtifactUploader(
-            uploader, "localhost", withEmptyMetadata, "instance", /* maxUploadThreads= */ 100);
-    PathConverter pathConverter = artifactUploader.upload(filesToUpload).get();
-    assertThat(pathConverter.apply(dir)).isNull();
-    artifactUploader.shutdown();
   }
 
   @Test
@@ -234,7 +218,7 @@ public class ByteStreamBuildEventArtifactUploaderTest {
         new ByteStreamUploader("instance", refCntChannel, null, 3, retrier);
     ByteStreamBuildEventArtifactUploader artifactUploader =
         new ByteStreamBuildEventArtifactUploader(
-            uploader, "localhost", withEmptyMetadata, "instance", /* maxUploadThreads= */ 100);
+            uploader, "localhost", withEmptyMetadata, "instance");
 
     try {
       artifactUploader.upload(filesToUpload).get();

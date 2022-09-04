@@ -20,7 +20,6 @@ import static java.lang.String.format;
 import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
-import build.bazel.remote.execution.v2.Digest;
 import com.google.bytestream.ByteStreamGrpc;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
 import com.google.bytestream.ByteStreamProto.WriteResponse;
@@ -34,6 +33,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
+import com.google.devtools.remoteexecution.v1test.Digest;
 import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -62,7 +62,7 @@ import javax.annotation.concurrent.GuardedBy;
  * A client implementing the {@code Write} method of the {@code ByteStream} gRPC service.
  *
  * <p>The uploader supports reference counting to easily be shared between components with
- * different lifecyles. After instantiation the reference count is {@code 1}.
+ * different lifecyles. After instantiation the reference coune is {@code 1}.
  *
  * See {@link ReferenceCounted} for more information on reference counting.
  */
@@ -168,8 +168,14 @@ class ByteStreamUploader extends AbstractReferenceCounted {
       }
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
-      Throwables.propagateIfInstanceOf(cause, IOException.class);
-      throw new RuntimeException(cause);
+      if (cause instanceof RetryException) {
+        throw (RetryException) cause;
+      } else {
+        throw Throwables.propagate(cause);
+      }
+    } catch (InterruptedException e) {
+      Thread.interrupted();
+      throw e;
     }
   }
 

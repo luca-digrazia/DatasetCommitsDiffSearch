@@ -13,13 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.util;
 
-import build.bazel.remote.execution.v2.RequestMetadata;
-import build.bazel.remote.execution.v2.ToolDetails;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
-import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
-import com.google.devtools.build.lib.remote.options.RemoteOptions;
+import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
+import com.google.devtools.remoteexecution.v1test.RequestMetadata;
+import com.google.devtools.remoteexecution.v1test.ToolDetails;
 import io.grpc.ClientInterceptor;
 import io.grpc.Context;
 import io.grpc.Contexts;
@@ -30,8 +29,6 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.protobuf.ProtoUtils;
 import io.grpc.stub.MetadataUtils;
-import java.util.List;
-import java.util.Map.Entry;
 import javax.annotation.Nullable;
 
 /** Utility functions to handle Metadata for remote Grpc calls. */
@@ -55,7 +52,19 @@ public class TracingMetadataUtils {
    */
   public static Context contextWithMetadata(
       String buildRequestId, String commandId, ActionKey actionKey) {
-    return contextWithMetadata(buildRequestId, commandId, actionKey.getDigest().getHash());
+    Preconditions.checkNotNull(buildRequestId);
+    Preconditions.checkNotNull(commandId);
+    Preconditions.checkNotNull(actionKey);
+    RequestMetadata.Builder metadata =
+        RequestMetadata.newBuilder()
+            .setCorrelatedInvocationsId(buildRequestId)
+            .setToolInvocationId(commandId);
+    metadata.setActionId(actionKey.getDigest().getHash());
+    metadata.setToolDetails(ToolDetails.newBuilder()
+            .setToolName("bazel")
+            .setToolVersion(BlazeVersionInfo.instance().getVersion()))
+            .build();
+    return Context.current().withValue(CONTEXT_KEY, metadata.build());
   }
 
   /**
@@ -69,17 +78,14 @@ public class TracingMetadataUtils {
       String buildRequestId, String commandId, String actionId) {
     Preconditions.checkNotNull(buildRequestId);
     Preconditions.checkNotNull(commandId);
-    Preconditions.checkNotNull(actionId);
     RequestMetadata.Builder metadata =
         RequestMetadata.newBuilder()
             .setCorrelatedInvocationsId(buildRequestId)
             .setToolInvocationId(commandId);
     metadata.setActionId(actionId);
-    metadata
-        .setToolDetails(
-            ToolDetails.newBuilder()
-                .setToolName("bazel")
-                .setToolVersion(BlazeVersionInfo.instance().getVersion()))
+    metadata.setToolDetails(ToolDetails.newBuilder()
+        .setToolName("bazel")
+        .setToolVersion(BlazeVersionInfo.instance().getVersion()))
         .build();
     return Context.current().withValue(CONTEXT_KEY, metadata.build());
   }
@@ -121,28 +127,6 @@ public class TracingMetadataUtils {
     return MetadataUtils.newAttachHeadersInterceptor(headersFromCurrentContext());
   }
 
-  private static Metadata newMetadataForHeaders(List<Entry<String, String>> headers) {
-    Metadata metadata = new Metadata();
-    headers.forEach(
-        header ->
-            metadata.put(
-                Metadata.Key.of(header.getKey(), Metadata.ASCII_STRING_MARSHALLER),
-                header.getValue()));
-    return metadata;
-  }
-
-  public static ClientInterceptor newCacheHeadersInterceptor(RemoteOptions options) {
-    Metadata metadata = newMetadataForHeaders(options.remoteHeaders);
-    metadata.merge(newMetadataForHeaders(options.remoteCacheHeaders));
-    return MetadataUtils.newAttachHeadersInterceptor(metadata);
-  }
-
-  public static ClientInterceptor newExecHeadersInterceptor(RemoteOptions options) {
-    Metadata metadata = newMetadataForHeaders(options.remoteHeaders);
-    metadata.merge(newMetadataForHeaders(options.remoteExecHeaders));
-    return MetadataUtils.newAttachHeadersInterceptor(metadata);
-  }
-
   /** GRPC interceptor to add logging metadata to the GRPC context. */
   public static class ServerHeadersInterceptor implements ServerInterceptor {
     @Override
@@ -150,11 +134,7 @@ public class TracingMetadataUtils {
         ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
       RequestMetadata meta = requestMetadataFromHeaders(headers);
       if (meta == null) {
-        throw io.grpc.Status.INVALID_ARGUMENT
-            .withDescription(
-                "RequestMetadata not received from the client for "
-                    + call.getMethodDescriptor().getFullMethodName())
-            .asRuntimeException();
+        throw new IllegalStateException("RequestMetadata not received from the client.");
       }
       Context ctx = Context.current().withValue(CONTEXT_KEY, meta);
       return Contexts.interceptCall(ctx, call, headers, next);
