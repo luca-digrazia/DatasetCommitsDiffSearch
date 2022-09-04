@@ -19,7 +19,6 @@ package io.quarkus.hibernate.orm.runtime.boot.registry;
 import static org.hibernate.internal.HEMLogging.messageLogger;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +51,6 @@ import org.hibernate.resource.transaction.internal.TransactionCoordinatorBuilder
 import org.hibernate.service.Service;
 import org.hibernate.service.internal.ProvidedService;
 import org.hibernate.service.internal.SessionFactoryServiceRegistryFactoryInitiator;
-import org.hibernate.service.spi.ServiceContributor;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
@@ -81,12 +79,11 @@ public class PreconfiguredServiceRegistryBuilder {
     private final Map configurationValues = new HashMap();
     private final List<StandardServiceInitiator> initiators;
     private final List<ProvidedService> providedServices = new ArrayList<ProvidedService>();
-    private final Collection<Integrator> integrators;
+    private final MirroringIntegratorService integrators = new MirroringIntegratorService();
     private final StandardServiceRegistryImpl destroyedRegistry;
 
     public PreconfiguredServiceRegistryBuilder(RecordedState rs) {
         this.initiators = buildQuarkusServiceInitiatorList(rs);
-        this.integrators = rs.getIntegrators();
         this.destroyedRegistry = (StandardServiceRegistryImpl) rs.getMetadata().getMetadataBuildingOptions()
                 .getServiceRegistry();
     }
@@ -96,13 +93,18 @@ public class PreconfiguredServiceRegistryBuilder {
         return this;
     }
 
+    public PreconfiguredServiceRegistryBuilder applyIntegrator(Integrator integrator) {
+        integrators.addIntegrator(integrator);
+        return this;
+    }
+
     public PreconfiguredServiceRegistryBuilder addInitiator(StandardServiceInitiator initiator) {
         initiators.add(initiator);
         return this;
     }
 
-    public PreconfiguredServiceRegistryBuilder addService(ProvidedService providedService) {
-        providedServices.add(providedService);
+    public PreconfiguredServiceRegistryBuilder addService(final Class serviceRole, final Service service) {
+        providedServices.add(new ProvidedService(serviceRole, service));
         return this;
     }
 
@@ -144,7 +146,7 @@ public class PreconfiguredServiceRegistryBuilder {
         return new BootstrapServiceRegistryImpl(true,
                 FlatClassLoaderService.INSTANCE,
                 strategySelector, // new MirroringStrategySelector(),
-                new MirroringIntegratorService(integrators));
+                integrators);
     }
 
     /**

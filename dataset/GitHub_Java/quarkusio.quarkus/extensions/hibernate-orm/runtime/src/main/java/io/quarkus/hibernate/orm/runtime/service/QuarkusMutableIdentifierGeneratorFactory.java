@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.hibernate.dialect.Dialect;
 import org.hibernate.id.IdentifierGenerator;
+import org.hibernate.id.factory.internal.DefaultIdentifierGeneratorFactory;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
 import org.hibernate.service.spi.ServiceRegistryAwareService;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
@@ -26,7 +27,7 @@ import org.hibernate.type.Type;
 public final class QuarkusMutableIdentifierGeneratorFactory
         implements MutableIdentifierGeneratorFactory, Serializable, ServiceRegistryAwareService {
 
-    private final QuarkusSimplifiedIdentifierGeneratorFactory original = new QuarkusSimplifiedIdentifierGeneratorFactory();
+    private final DefaultIdentifierGeneratorFactory original = new DefaultIdentifierGeneratorFactory();
     private final ConcurrentHashMap<String, Class<? extends IdentifierGenerator>> typeCache = new ConcurrentHashMap<>();
 
     @Override
