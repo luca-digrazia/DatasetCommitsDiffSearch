@@ -23,7 +23,6 @@ import static java.util.stream.Stream.concat;
 
 import com.google.common.base.Ascii;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -142,15 +141,8 @@ final class JavaInfoBuildHelper {
 
     javaInfoBuilder.setRuntimeJars(ImmutableList.of(javaOutput.getClassJar()));
 
-    ImmutableList<JavaCcInfoProvider> transitiveNativeLibraries =
-        Streams.concat(
-                streamProviders(runtimeDeps, JavaCcInfoProvider.class),
-                streamProviders(exports, JavaCcInfoProvider.class),
-                streamProviders(compileTimeDeps, JavaCcInfoProvider.class),
-                Stream.of(new JavaCcInfoProvider(CcInfo.merge(nativeLibraries))))
-            .collect(toImmutableList());
     javaInfoBuilder.addProvider(
-        JavaCcInfoProvider.class, JavaCcInfoProvider.merge(transitiveNativeLibraries));
+        JavaCcInfoProvider.class, new JavaCcInfoProvider(CcInfo.merge(nativeLibraries)));
 
     return javaInfoBuilder.build();
   }
@@ -249,7 +241,6 @@ final class JavaInfoBuildHelper {
       List<Label> exportLabels,
       List<JavaInfo> plugins,
       List<JavaInfo> exportedPlugins,
-      List<CcInfo> nativeLibraries,
       List<Artifact> annotationProcessorAdditionalInputs,
       List<Artifact> annotationProcessorAdditionalOutputs,
       String strictDepsMode,
@@ -328,14 +319,6 @@ final class JavaInfoBuildHelper {
       javaInfoBuilder.setRuntimeJars(ImmutableList.of(outputJar));
     }
 
-    ImmutableList<JavaCcInfoProvider> transitiveNativeLibraries =
-        Streams.concat(
-                streamProviders(runtimeDeps, JavaCcInfoProvider.class),
-                streamProviders(exports, JavaCcInfoProvider.class),
-                streamProviders(deps, JavaCcInfoProvider.class),
-                Stream.of(new JavaCcInfoProvider(CcInfo.merge(nativeLibraries))))
-            .collect(toImmutableList());
-
     return javaInfoBuilder
         .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
         .addProvider(
@@ -346,7 +329,6 @@ final class JavaInfoBuildHelper {
             JavaPluginInfoProvider.class,
             createJavaPluginsProvider(concat(exportedPlugins, exports)))
         .addProvider(JavaExportsProvider.class, createJavaExportsProvider(exports, exportLabels))
-        .addProvider(JavaCcInfoProvider.class, JavaCcInfoProvider.merge(transitiveNativeLibraries))
         .addTransitiveOnlyRuntimeJarsToJavaInfo(deps)
         .addTransitiveOnlyRuntimeJarsToJavaInfo(exports)
         .addTransitiveOnlyRuntimeJarsToJavaInfo(runtimeDeps)
