@@ -27,7 +27,6 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
-import org.androidannotations.annotations.EFragment;
 import org.androidannotations.helper.ActionBarSherlockHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.process.ProcessHolder;
@@ -248,12 +247,8 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 		JVar savedInstanceState = onCreateView.param(classes().BUNDLE, "savedInstanceState");
 
-		boolean forceInjection = getAnnotatedElement().getAnnotation(EFragment.class).forceLayoutInjection();
-
 		JBlock body = onCreateView.body();
-
-		if (!forceInjection)
-			body.assign(contentView, _super().invoke(onCreateView).arg(inflater).arg(container).arg(savedInstanceState));
+		body.assign(contentView, _super().invoke(onCreateView).arg(inflater).arg(container).arg(savedInstanceState));
 
 		setContentViewBlock = body.block();
 

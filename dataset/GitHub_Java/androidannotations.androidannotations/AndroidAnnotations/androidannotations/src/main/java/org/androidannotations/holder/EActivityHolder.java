@@ -27,7 +27,6 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
-
 import org.androidannotations.api.SdkVersionHelper;
 import org.androidannotations.helper.ActionBarSherlockHelper;
 import org.androidannotations.helper.ActivityIntentBuilder;
@@ -35,19 +34,16 @@ import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.IntentBuilder;
-import org.androidannotations.helper.OrmLiteHelper;
 import org.androidannotations.process.ProcessHolder;
-
-import java.util.ArrayList;
-import java.util.List;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
+import java.util.ArrayList;
+import java.util.List;
 
 import static com.sun.codemodel.JExpr.FALSE;
 import static com.sun.codemodel.JExpr.TRUE;
@@ -62,8 +58,6 @@ import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
 public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration {
-
-	private static final String ON_CONTENT_CHANGED_JAVADOC = "We cannot simply copy the " + "code from RoboActivity, because that can cause classpath issues. " + "For further details see issue #1116.";
 
 	private ActivityIntentBuilder intentBuilder;
 	private JMethod onCreate;
@@ -236,7 +230,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	protected void setOnContentChanged() {
 		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onContentChanged");
 		method.annotate(Override.class);
-		method.javadoc().append(ON_CONTENT_CHANGED_JAVADOC);
 		JBlock body = method.body();
 		body.invoke(_super(), method);
 		getRoboGuiceHolder().onContentChangedAfterSuperBlock = body.block();
@@ -453,11 +446,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	protected void setContentViewListenerField() {
 		getRoboGuiceHolder().contentViewListenerField = generatedClass.field(JMod.NONE, classes().CONTENT_VIEW_LISTENER, "ignored" + GENERATION_SUFFIX);
 		getRoboGuiceHolder().contentViewListenerField.annotate(classes().INJECT);
-	}
-
-	protected void setScopeField() {
-		getRoboGuiceHolder().scope = getGeneratedClass().field(JMod.PRIVATE, classes().CONTEXT_SCOPE, "scope_");
-
 	}
 
 	@Override
@@ -761,11 +749,4 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		return receiverRegistrationHolder.getIntentFilterField(actions, dataSchemes);
 	}
 
-	@Override
-	protected JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
-		JFieldVar databaseHelperRef = super.setDatabaseHelperRef(databaseHelperTypeMirror);
-		OrmLiteHelper.injectReleaseInDestroy(databaseHelperRef, this, classes());
-
-		return databaseHelperRef;
-	}
 }
