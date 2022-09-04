@@ -415,9 +415,8 @@ public class BuildRequest implements OptionsClassProvider {
 
   private long startTimeMillis = 0; // milliseconds since UNIX epoch.
 
-  private boolean needsInstrumentationFilter;
-  private boolean runningInEmacs;
-  private boolean runTests;
+  private boolean runningInEmacs = false;
+  private boolean runTests = false;
 
   private static final ImmutableList<Class<? extends OptionsBase>> MANDATORY_OPTIONS =
       ImmutableList.of(
@@ -575,14 +574,6 @@ public class BuildRequest implements OptionsClassProvider {
    */
   public long getStartTime() {
     return startTimeMillis;
-  }
-
-  public void setNeedsInstrumentationFilter(boolean needInstrumentationFilter) {
-    this.needsInstrumentationFilter = needInstrumentationFilter;
-  }
-
-  public boolean needsInstrumentationFilter() {
-    return needsInstrumentationFilter;
   }
 
   /**
