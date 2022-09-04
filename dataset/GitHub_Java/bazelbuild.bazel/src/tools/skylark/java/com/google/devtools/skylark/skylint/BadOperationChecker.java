@@ -26,8 +26,6 @@ import java.util.List;
 
 /** Checks for operations that are deprecated */
 public class BadOperationChecker extends SyntaxTreeVisitor {
-  private static final String DEPRECATED_PLUS_DICT_CATEGORY = "deprecated-plus-dict";
-
   private final List<Issue> issues = new ArrayList<>();
 
   private BadOperationChecker() {}
@@ -47,8 +45,7 @@ public class BadOperationChecker extends SyntaxTreeVisitor {
           || node.getRhs() instanceof DictionaryLiteral
           || node.getRhs() instanceof DictComprehension) {
         issues.add(
-            Issue.create(
-                DEPRECATED_PLUS_DICT_CATEGORY,
+            new Issue(
                 "'+' operator is deprecated and should not be used on dictionaries",
                 node.getLocation()));
       }
@@ -61,8 +58,7 @@ public class BadOperationChecker extends SyntaxTreeVisitor {
     if (node.getExpression() instanceof DictionaryLiteral
         || node.getExpression() instanceof DictComprehension) {
       issues.add(
-          Issue.create(
-              DEPRECATED_PLUS_DICT_CATEGORY,
+          new Issue(
               "'+' operator is deprecated and should not be used on dictionaries",
               node.getLocation()));
     }
