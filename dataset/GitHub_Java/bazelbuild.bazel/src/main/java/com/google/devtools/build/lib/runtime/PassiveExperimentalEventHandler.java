@@ -18,15 +18,16 @@ import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 
 /**
- * A passive version of {@link UiEventHandler}.
+ * A passive version of {@link ExperimentalEventHandler}.
  *
- * <p>Given an {@link UiEventHandler}, generate a wrapper class, that only subscribes to events that
- * only modify its internal state, but do not produce any output.
+ * Given an {@link ExperimentalEventHandler}, generate a wrapper class, that
+ * only subscribes to events that only modify its internal state, but do not
+ * produce any output.
  */
 public class PassiveExperimentalEventHandler {
-  private final UiEventHandler eventHandler;
+  private final ExperimentalEventHandler eventHandler;
 
-  public PassiveExperimentalEventHandler(UiEventHandler eventHandler) {
+  public PassiveExperimentalEventHandler(ExperimentalEventHandler eventHandler) {
     this.eventHandler = eventHandler;
   }
 
