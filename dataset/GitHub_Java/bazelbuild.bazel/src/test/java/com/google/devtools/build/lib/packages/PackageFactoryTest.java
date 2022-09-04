@@ -715,8 +715,9 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     events.setFailFast(false);
     assertGlobFails(
         "glob(1, exclude=2)",
-        "argument 'include' has type 'int', but should be 'sequence'\n"
-            + "in call to builtin function glob(include, *, exclude, exclude_directories)");
+        "method glob(include: sequence of strings, *, exclude: sequence of strings, "
+            + "exclude_directories: int) is not applicable for arguments (int, int, int): "
+            + "'include' is 'int', but should be 'sequence'");
   }
 
   @Test
@@ -735,7 +736,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
           /*result=*/ ImmutableList.of("Wombat1.java", "This_file_doesn_t_exist.java"),
           /*includes=*/ ImmutableList.of("W*", "subdir"),
           /*excludes=*/ ImmutableList.<String>of(),
-          /* excludeDirs= */ true);
+          /*excludesDirs=*/ true);
       fail();
     } catch (IllegalArgumentException e) {
       assertThat(e).hasMessage("ERROR /globs/BUILD:2:73: name 'this_will_fail' is not defined");
@@ -748,7 +749,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         /*result=*/ ImmutableList.of("Wombat1.java", "Wombat2.java"),
         /*includes=*/ ImmutableList.of("W*", "subdir"),
         /*excludes=*/ ImmutableList.<String>of(),
-        /* excludeDirs= */ true);
+        /*excludesDirs=*/ true);
   }
 
   @Test
@@ -757,7 +758,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         /*result=*/ ImmutableList.of("Wombat1.java", "Wombat2.java", "subdir"),
         /*includes=*/ ImmutableList.of("W*", "subdir"),
         /*excludes=*/ ImmutableList.<String>of(),
-        /* excludeDirs= */ false);
+        /*excludesDirs=*/ false);
   }
 
   @Test
@@ -766,7 +767,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         /*result=*/ ImmutableList.of("Wombat1.java", "Wombat2.java"),
         /*includes=*/ ImmutableList.of("W*"),
         /*excludes=*/ Collections.<String>emptyList(),
-        /* excludeDirs= */ false);
+        /*excludesDirs=*/ false);
   }
 
   @Test
@@ -785,7 +786,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         /*result=*/ ImmutableList.of("Wombat1.java"),
         /*includes=*/ ImmutableList.of("W*"),
         /*excludes=*/ ImmutableList.of("*2*"),
-        /* excludeDirs= */ false);
+        /*excludesDirs=*/ false);
   }
 
   @Test
@@ -794,7 +795,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         /*result=*/ ImmutableList.of("Wombat1.java", "subdir/Wombat3.java"),
         /*includes=*/ ImmutableList.of("W*", "subdir/W*"),
         /*excludes=*/ ImmutableList.of("*2*"),
-        /* excludeDirs= */ false);
+        /*excludesDirs=*/ false);
   }
 
   @Test
@@ -803,7 +804,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
         /*result=*/ ImmutableList.of("subdir/Wombat3.java"),
         /*includes=*/ ImmutableList.of("W*", "subdir/W*"),
         /*excludes=*/ ImmutableList.of("Wombat*.java"),
-        /* excludeDirs= */ false);
+        /*excludesDirs=*/ false);
   }
 
   @Test
@@ -812,10 +813,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
    assertGlobFails("glob(['?'])", "glob pattern '?' contains forbidden '?' wildcard");
   }
 
-  /**
-   * Tests that a glob evaluation that encounters an I/O error throws instead of constructing a
-   * package.
-   */
+  /** Tests that a glob evaluation that encounters an I/O error produces a glob error. */
   @Test
   public void testGlobWithIOErrors() throws Exception {
     events.setFailFast(false);
@@ -827,11 +825,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     unreadableSubdir.setReadable(false);
 
     Path file = scratch.file("/pkg/BUILD", "cc_library(name = 'c', srcs = glob(['globs/**']))");
-    try {
-      packages.eval("pkg", file);
-    } catch (NoSuchPackageException expected) {
-    }
-    events.assertContainsError("Directory is not readable");
+    packages.eval("pkg", file);
+    events.assertContainsError("error globbing [globs/**]: Directory is not readable");
   }
 
   @Test
@@ -1001,13 +996,11 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     Path parentDir = buildFile.getParentDirectory();
     scratch.file("/e/data.txt");
     throwOnReaddir = parentDir;
-    try {
-      packages.createPackage("e", buildFile);
-    } catch (NoSuchPackageException expected) {
-    }
+    Package pkg = packages.createPackage("e", buildFile);
+    assertThat(pkg.containsErrors()).isTrue();
     events.setFailFast(true);
     throwOnReaddir = null;
-    Package pkg = packages.createPackage("e", buildFile);
+    pkg = packages.createPackage("e", buildFile);
     assertThat(pkg.containsErrors()).isFalse();
     assertThat(pkg.getRule("e")).isNotNull();
     GlobList globList = (GlobList) pkg.getRule("e").getAttributeContainer().getAttr("data");
