@@ -40,17 +40,13 @@ public interface StarlarkAspect extends StarlarkAspectApi {
    *     parent aspects
    * @param inheritedAttributeAspects is the list of attribute aspects inherited from the aspect
    *     parent aspects
-   * @param allowAspectsParameters if false an error will be reported if any aspect in the chain of
-   *     required aspects has parameters. This is needed for top-level aspects that do not allow
-   *     parameters at the moment.
-   * @throws EvalException if this aspect cannot be successfully added to the aspects list.
+   * @throws EvalException if this aspect cannot be successfully applied to the given attribute
    */
   void attachToAspectsList(
       String baseAspectName,
       AspectsListBuilder aspectsListBuilder,
       ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders,
-      ImmutableList<String> inheritedAttributeAspects,
-      boolean allowAspectsParameters)
+      ImmutableList<String> inheritedAttributeAspects)
       throws EvalException;
 
   /** Returns the aspect class for this aspect. */

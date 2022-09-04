@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.Starlark;
 
 /** A natively-defined aspect that is may be referenced by Starlark attribute definitions. */
 public abstract class StarlarkNativeAspect extends NativeAspectClass implements StarlarkAspect {
@@ -37,14 +36,8 @@ public abstract class StarlarkNativeAspect extends NativeAspectClass implements 
       String baseAspectName,
       AspectsListBuilder aspectsList,
       ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders,
-      ImmutableList<String> inheritedAttributeAspects,
-      boolean allowAspectsParameters)
+      ImmutableList<String> inheritedAttributeAspects)
       throws EvalException {
-
-    if (!allowAspectsParameters && !this.getParamAttributes().isEmpty()) {
-      throw Starlark.errorf("Cannot use parameterized aspect %s at the top level.", this.getName());
-    }
-
     aspectsList.addAspect(
         this, baseAspectName, inheritedRequiredProviders, inheritedAttributeAspects);
   }
