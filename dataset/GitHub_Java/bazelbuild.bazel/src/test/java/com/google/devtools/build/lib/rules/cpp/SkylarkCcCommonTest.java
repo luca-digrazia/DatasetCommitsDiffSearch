@@ -63,7 +63,6 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.MakeV
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
 import com.google.protobuf.TextFormat;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
@@ -1213,7 +1212,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
       List<String> dynamicLibraryList)
       throws Exception {
     useConfiguration("--features=-supports_interface_shared_libraries");
-    setSkylarkSemanticsOptions("--incompatible_depset_for_libraries_to_link_getter");
     setUpCcLinkingContextTest();
     ConfiguredTarget a = getConfiguredTarget("//a:a");
 
@@ -1231,9 +1229,8 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
                 .collect(ImmutableList.toImmutableList()))
         .containsExactly("b.lds", "d.lds");
     @SuppressWarnings("unchecked")
-    Collection<LibraryToLink> librariesToLink =
-        info.getValue("libraries_to_link", SkylarkNestedSet.class)
-            .toCollection(LibraryToLink.class);
+    SkylarkList<LibraryToLink> librariesToLink =
+        (SkylarkList<LibraryToLink>) info.getValue("libraries_to_link", SkylarkList.class);
     assertThat(
             librariesToLink.stream()
                 .filter(x -> x.getStaticLibrary() != null)
