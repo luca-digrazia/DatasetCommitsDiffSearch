@@ -16,7 +16,7 @@
 package smile.plot;
 
 import java.awt.Color;
-import smile.math.Math;
+import smile.math.MathEx;
 
 /**
  * A barplot draws bars with heights proportional to the value.
@@ -183,7 +183,7 @@ public class BarPlot extends Plot {
             if (rightTop[i][1] > rightBottom[i][1]) {
                 if (coord[0] < rightBottom[i][0] && coord[0] > leftBottom[i][0] && coord[1] < rightTop[i][1] && coord[1] > rightBottom[i][1]) {
                     if (description == null) {
-                        return String.format("data[%d] = %g", i, data[i][1]);
+                        return String.format("data[%d] = %G", i, data[i][1]);
                     } else {
                         return String.format("%s = %g", description[i], data[i][1]);
                     }
@@ -191,9 +191,9 @@ public class BarPlot extends Plot {
             } else {
                 if (coord[0] < rightBottom[i][0] && coord[0] > leftBottom[i][0] && coord[1] > rightTop[i][1] && coord[1] < rightBottom[i][1]) {
                     if (description == null) {
-                        return String.format("data[%d] = %g", i, data[i][1]);
+                        return String.format("data[%d] = %G", i, data[i][1]);
                     } else {
-                        return String.format("%s = %g", description[i], data[i][1]);
+                        return String.format("%s = %G", description[i], data[i][1]);
                     }
                 }
             }
@@ -234,8 +234,8 @@ public class BarPlot extends Plot {
      * @param data a vector of which values will determine the heights of bars.
      */
     public static PlotCanvas plot(String id, double[] data) {
-        double[] lowerBound = {0, Math.min(data)};
-        double[] upperBound = {data.length, Math.max(data)};
+        double[] lowerBound = {0, MathEx.min(data)};
+        double[] upperBound = {data.length, MathEx.max(data)};
         PlotCanvas canvas = new PlotCanvas(lowerBound, upperBound);
 
         BarPlot plot = new BarPlot(data);
@@ -268,8 +268,8 @@ public class BarPlot extends Plot {
             throw new IllegalArgumentException("Data size and label size don't match.");
         }
 
-        double[] lowerBound = {0, Math.min(data)};
-        double[] upperBound = {data.length, Math.max(data)};
+        double[] lowerBound = {0, MathEx.min(data)};
+        double[] upperBound = {data.length, MathEx.max(data)};
         PlotCanvas canvas = new PlotCanvas(lowerBound, upperBound);
 
         BarPlot plot = new BarPlot(labels, data);
@@ -309,8 +309,8 @@ public class BarPlot extends Plot {
             throw new IllegalArgumentException("Dataset is not 2-dimensional.");
         }
 
-        double[] lowerBound = Math.colMin(data);
-        double[] upperBound = Math.colMax(data);
+        double[] lowerBound = MathEx.colMin(data);
+        double[] upperBound = MathEx.colMax(data);
         PlotCanvas canvas = new PlotCanvas(lowerBound, upperBound);
         canvas.getAxis(0).setGridVisible(false);
         BarPlot plot = new BarPlot(data);

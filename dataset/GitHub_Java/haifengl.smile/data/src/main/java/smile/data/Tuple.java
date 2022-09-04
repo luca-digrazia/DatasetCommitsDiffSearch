@@ -22,8 +22,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
-import smile.data.measure.DiscreteMeasure;
-import smile.data.measure.Measure;
+import smile.data.type.DataType;
+import smile.data.type.DiscreteMeasure;
+import smile.data.type.Measure;
 import smile.data.type.StructType;
 
 /**
@@ -38,13 +39,11 @@ import smile.data.type.StructType;
  * @author Haifeng Li
  */
 public interface Tuple extends Serializable {
+    /** Number of elements in the Tuple. */
+    int size();
+
     /** Returns the schema of tuple. */
     StructType schema();
-
-    /** Number of elements in the Tuple. */
-    default int length() {
-        return schema().length();
-    }
 
     /**
      * Returns the value at position i. The value may be null.
@@ -272,8 +271,12 @@ public interface Tuple extends Serializable {
         if (o instanceof String) {
             return (String) o;
         } else {
-            Measure scale = schema().measure().get(schema().field(i).name);
-            return scale != null ? scale.toString(o) : schema().field(i).type.toString(o);
+            Measure m = schema().measure().get(schema().fields()[i].name);
+            if (m != null && m instanceof DiscreteMeasure) {
+                return getScale(i);
+            } else {
+                return schema().fields()[i].type.toString(o);
+            }
         }
     }
 
@@ -357,16 +360,16 @@ public interface Tuple extends Serializable {
     }
 
     /**
-     * Returns the value at position i of NominalScale or OrdinalScale.
+     * Returns the value at position i of NominalScale or OridnalScale.
      *
      * @throws ClassCastException when the data is not nominal or ordinal.
      */
     default String getScale(int i) {
-        return ((DiscreteMeasure) schema().measure().get(schema().field(i).name)).toString(getInt(i));
+        return ((DiscreteMeasure) schema().measure().get(schema().fields()[i].name)).toString(getInt(i));
     }
 
     /**
-     * Returns the field value of NominalScale or OrdinalScale.
+     * Returns the field value of NominalScale or OridnalScale.
      *
      * @throws ClassCastException when the data is not nominal or ordinal.
      */
@@ -446,7 +449,7 @@ public interface Tuple extends Serializable {
 
     /** Returns true if there are any NULL values in this tuple. */
     default boolean anyNull() {
-        for (int i = 0; i < length(); i++) {
+        for (int i = 0; i < size(); i++) {
             if (isNullAt(i)) return true;
         }
         return false;
@@ -455,6 +458,11 @@ public interface Tuple extends Serializable {
     /** Returns an object array based tuple. */
     static Tuple of(Object[] row, StructType schema) {
         return new Tuple() {
+            @Override
+            public int size() {
+                return row.length;
+            }
+
             @Override
             public Object get(int i) {
                 return row[i];

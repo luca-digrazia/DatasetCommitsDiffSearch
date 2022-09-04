@@ -15,6 +15,7 @@
  *******************************************************************************/
 package smile.io;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StreamTokenizer;
@@ -23,11 +24,10 @@ import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.measure.NominalScale;
 import smile.data.type.*;
 
 /**
@@ -57,7 +57,7 @@ import smile.data.type.*;
  *
  * @author Haifeng Li
  */
-public class Arff implements AutoCloseable {
+public class Arff implements Closeable {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Arff.class);
 
     /** The keyword used to denote the start of an arff header */
@@ -94,8 +94,8 @@ public class Arff implements AutoCloseable {
     private Map<String, NominalScale> measure;
     /** The lambda to parse fields. */
     private Parser[] parser;
-    /** Attribute name path in case of sub-relations. */
-    private String path = "";
+    /** If a field has missing values, the corresponding entry will be true. */
+    private boolean[] missing;
 
     /** Parser lambda interface that allows throw a checked exception. */
     interface Parser {
@@ -127,18 +127,6 @@ public class Arff implements AutoCloseable {
     @Override
     public void close() throws IOException {
         reader.close();
-    }
-
-    /** Returns the name of relation. */
-    public String name() {
-        return name;
-    }
-
-    /**
-     * Returns the attribute set of given stream.
-     */
-    public StructType schema() {
-        return schema;
     }
 
     /**
@@ -239,6 +227,7 @@ public class Arff implements AutoCloseable {
         
         schema = DataTypes.struct(fields);
         schema.measure().putAll(measure);
+        missing = new boolean[fields.size()];
         parser = new Parser[fields.size()];
         for (int i = 0; i < parser.length; i++) {
             final StructField field = fields.get(i);
@@ -262,26 +251,26 @@ public class Arff implements AutoCloseable {
 
         // Get attribute name.
         getNextToken();
-        String name = attributeName(tokenizer.sval);
+        String attributeName = tokenizer.sval;
         getNextToken();
 
         // Check if attribute is nominal.
         if (tokenizer.ttype == StreamTokenizer.TT_WORD) {
             // Attribute is real, integer, or string.
             if (tokenizer.sval.equalsIgnoreCase(ARFF_ATTRIBUTE_NUMERIC)) {
-                attribute = new StructField(name, DataTypes.DoubleType);
+                attribute = new StructField(attributeName, DataTypes.DoubleType);
                 readTillEOL();
 
             } else if (tokenizer.sval.equalsIgnoreCase(ARFF_ATTRIBUTE_REAL)) {
-                attribute = new StructField(name, DataTypes.FloatType);
+                attribute = new StructField(attributeName, DataTypes.FloatType);
                 readTillEOL();
 
             } else if (tokenizer.sval.equalsIgnoreCase(ARFF_ATTRIBUTE_INTEGER)) {
-                attribute = new StructField(name, DataTypes.IntegerType);
+                attribute = new StructField(attributeName, DataTypes.IntegerType);
                 readTillEOL();
 
             } else if (tokenizer.sval.equalsIgnoreCase(ARFF_ATTRIBUTE_STRING)) {
-                attribute = new StructField(name, DataTypes.StringType);
+                attribute = new StructField(attributeName, DataTypes.StringType);
                 readTillEOL();
 
             } else if (tokenizer.sval.equalsIgnoreCase(ARFF_ATTRIBUTE_DATE)) {
@@ -289,21 +278,19 @@ public class Arff implements AutoCloseable {
                     if ((tokenizer.ttype != StreamTokenizer.TT_WORD) && (tokenizer.ttype != '\'') && (tokenizer.ttype != '\"')) {
                         throw new ParseException("not a valid date format", tokenizer.lineno());
                     }
-                    attribute = new StructField(name, DataTypes.datetime(tokenizer.sval));
+                    attribute = new StructField(attributeName, DataTypes.datetime(tokenizer.sval));
                     readTillEOL();
                 } else {
-                    attribute = new StructField(name, DataTypes.DateTimeType);
+                    attribute = new StructField(attributeName, DataTypes.DateTimeType);
                     tokenizer.pushBack();
                 }
                 readTillEOL();
 
             } else if (tokenizer.sval.equalsIgnoreCase(ARFF_ATTRIBUTE_RELATIONAL)) {
-                logger.info("Encounter relational attribute {}. Flat out its attributes to top level.", name);
-                path = path + "." + name;
+                logger.info("Encounter relational attribute {}. Flat out its attributes to top level.", attributeName);
                 readTillEOL();
 
             } else if (tokenizer.sval.equalsIgnoreCase(ARFF_END_SUBRELATION)) {
-                path = path.substring(0, path.lastIndexOf('.'));
                 getNextToken();
 
             } else {
@@ -330,13 +317,13 @@ public class Arff implements AutoCloseable {
 
             String[] levels = attributeValues.toArray(new String[attributeValues.size()]);
             if (levels.length <= Byte.MAX_VALUE + 1) {
-                attribute = new StructField(name, DataTypes.ByteType);
+                attribute = new StructField(attributeName, DataTypes.ByteType);
             } else if (levels.length <= Short.MAX_VALUE + 1) {
-                attribute = new StructField(name, DataTypes.ShortType);
+                attribute = new StructField(attributeName, DataTypes.ShortType);
             } else {
-                attribute = new StructField(name, DataTypes.IntegerType);
+                attribute = new StructField(attributeName, DataTypes.IntegerType);
             }
-            measure.put(name, new NominalScale(levels));
+            measure.put(attributeName, new NominalScale(levels));
         }
 
         getLastToken(false);
@@ -346,11 +333,6 @@ public class Arff implements AutoCloseable {
         }
 
         return attribute;
-    }
-
-    /** Returns the attribute name. */
-    private String attributeName(String name) {
-        return path.length() == 0 ? name : path + "." + name;
     }
 
     /**
@@ -365,6 +347,18 @@ public class Arff implements AutoCloseable {
 
         // push back the EOL token
         tokenizer.pushBack();
+    }
+
+    /** Returns the name of relation. */
+    public String name() {
+        return name;
+    }
+
+    /**
+     * Returns the attribute set of given stream.
+     */
+    public StructType schema() {
+        return schema;
     }
 
     /**
@@ -383,7 +377,7 @@ public class Arff implements AutoCloseable {
             throw new IllegalArgumentException("Invalid limit: " + limit);
         }
 
-        List<Tuple> rows = new ArrayList<>();
+        List<Tuple> data = new ArrayList<>();
         for (int i = 0; i < limit; i++) {
             // Check if end of file reached.
             getFirstToken();
@@ -393,11 +387,10 @@ public class Arff implements AutoCloseable {
 
             // Parse instance
             Object[] row = tokenizer.ttype == '{' ? readSparseInstance() : readInstance();
-            rows.add(Tuple.of(row, schema));
+            data.add(Tuple.of(row, schema));
         }
 
-        schema.boxed(rows);
-        return DataFrame.of(rows);
+        return DataFrame.of(data);
     }
 
     /**
@@ -418,6 +411,8 @@ public class Arff implements AutoCloseable {
 
             if (tokenizer.ttype != '?') {
                 x[i] = parser[i].apply(tokenizer.sval);
+            } else {
+                missing[i] = true;
             }
         }
 
@@ -451,12 +446,14 @@ public class Arff implements AutoCloseable {
             String val = tokenizer.sval.trim();
             if (!val.equals("?")) {
                 x[i] = parser[i].apply(val);
+            } else {
+                missing[i] = true;
             }
         } while (tokenizer.ttype == StreamTokenizer.TT_WORD);
 
         for (int i = 0; i < x.length; i++) {
             if (x[i] == null) {
-                StructField field = schema.field(i);
+                StructField field = schema.fields()[i];
                 if (field.type.isByte()) {
                     x[i] = (byte) 0;
                 } else if (field.type.isShort()) {

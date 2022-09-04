@@ -1,28 +1,25 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.io;
 
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.Arrays;
@@ -32,8 +29,8 @@ import java.util.stream.Collectors;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.*;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
-import org.apache.arrow.vector.ipc.ArrowStreamReader;
-import org.apache.arrow.vector.ipc.ArrowStreamWriter;
+import org.apache.arrow.vector.ipc.ArrowFileReader;
+import org.apache.arrow.vector.ipc.ArrowFileWriter;
 import org.apache.arrow.vector.ipc.message.ArrowBlock;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
@@ -44,6 +41,7 @@ import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import static org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE;
 import static org.apache.arrow.vector.types.FloatingPointPrecision.SINGLE;
+
 import smile.data.DataFrame;
 import smile.data.type.*;
 
@@ -59,20 +57,11 @@ public class Arrow {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Arrow.class);
 
     /**
-     * The root allocator. Typically only one created for a JVM.
-     * Arrow provides a tree-based model for memory allocation.
-     * The RootAllocator is created first, then all allocators are
-     * created as children of that allocator. The RootAllocator is
-     * responsible for being the master bookeeper for memory
-     * allocations. All other allocators are created as children
-     * of this tree. Each allocator can first determine whether
-     * it has enough local memory to satisfy a particular request.
-     * If not, the allocator can ask its parent for an additional
-     * memory allocation.
+     * The memory limit for allocator.
      */
-    private static RootAllocator allocator;
+    private long limit;
     /**
-     * The number of records in a record batch.
+     * The number of rows in a record batch.
      * An Apache Arrow record batch is conceptually similar
      * to the Parquet row group. Parquet recommends a
      * disk/block/row group/file size of 512 to 1024 MB on HDFS.
@@ -83,34 +72,33 @@ public class Arrow {
 
     /** Constructor. */
     public Arrow() {
-        this(1000000);
+        this(Long.MAX_VALUE);
     }
 
     /**
      * Constructor.
-     * @param batch the number of records in a record batch.
+     * @param limit the maximum amount of memory in bytes that can be allocated.
      */
-    public Arrow(int batch) {
+    public Arrow(long limit) {
+        this(limit, 1000000);
+    }
+
+    /**
+     * Constructor.
+     * @param limit the maximum amount of memory in bytes that can be allocated.
+     * @param batch the number of rows in each record batch.
+     */
+    public Arrow(long limit, int batch) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("Invalid limit: " + limit);
+        }
+
         if (batch <= 0) {
             throw new IllegalArgumentException("Invalid batch size: " + batch);
         }
 
+        this.limit = limit;
         this.batch = batch;
-    }
-
-    /**
-     * Creates the root allocator.
-     * The RootAllocator is responsible for being the master
-     * bookeeper for memory allocations.
-     *
-     * @param limit memory allocation limit in bytes.
-     */
-    public static void allocate(long limit) {
-        if (limit <= 0) {
-            throw new IllegalArgumentException("Invalid RootAllocator limit: " + limit);
-        }
-
-        allocator = new RootAllocator(limit);
     }
 
     /**
@@ -118,29 +106,22 @@ public class Arrow {
      * @param path an Apache Arrow file path.
      */
     public DataFrame read(Path path) throws IOException {
-        return read(path, Integer.MAX_VALUE);
-    }
-
-    /**
-     * Reads a limited number of records from an arrow file.
-     * @param path an Apache Arrow file path.
-     * @param limit reads a limited number of records.
-     */
-    public DataFrame read(Path path, int limit) throws IOException {
-        if (allocator == null) {
-            allocate(Long.MAX_VALUE);
-        }
-
-        try (InputStream input = Files.newInputStream(path);
-             ArrowStreamReader reader = new ArrowStreamReader(input, allocator)) {
+        try (RootAllocator allocator = new RootAllocator(limit);
+             FileInputStream input = new FileInputStream(path.toFile());
+             ArrowFileReader reader = new ArrowFileReader(input.getChannel(), allocator)) {
 
             // The holder for a set of vectors to be loaded/unloaded.
             VectorSchemaRoot root = reader.getVectorSchemaRoot();
-            List<DataFrame> frames = new ArrayList<>();
-            int size = 0;
-            while (reader.loadNextBatch() && size < limit) {
+            List<ArrowBlock> blocks = reader.getRecordBlocks();
+            DataFrame[] frames = new DataFrame[blocks.size()];
+            for (int i = 0; i < frames.length; i++) {
+                ArrowBlock block = blocks.get(i);
+                if (!reader.loadRecordBatch(block)) {
+                    throw new IOException("Failed to load record batch: " + block);
+                }
+
                 List<FieldVector> fieldVectors = root.getFieldVectors();
-                logger.info("read {} rows and {} columns", root.getRowCount(), fieldVectors.size());
+                logger.info("read {} rows and {} columns from block {}", root.getRowCount(), fieldVectors.size(), block);
 
                 smile.data.vector.BaseVector[] vectors = new smile.data.vector.BaseVector[fieldVectors.size()];
                 for (int j = 0; j < fieldVectors.size(); j++) {
@@ -209,28 +190,15 @@ public class Arrow {
                     }
                 }
 
-                DataFrame frame = DataFrame.of(vectors);
-                frames.add(frame);
-                size += frames.size();
+                frames[i] = DataFrame.of(vectors);
             }
 
-            if (frames.isEmpty()) {
-                throw new IllegalStateException("No record batch");
-            } else if (frames.size() == 1) {
-                return frames.get(0);
-            } else {
-                DataFrame df = frames.get(0);
-                return df.union(frames.subList(1, frames.size()).toArray(new DataFrame[frames.size() - 1]));
-            }
+            return frames[0];
         }
     }
 
     /** Writes the DataFrame to a file. */
     public void write(DataFrame df, Path path) throws IOException {
-        if (allocator == null) {
-            allocate(Long.MAX_VALUE);
-        }
-
         Schema schema = toArrowSchema(df.schema());
         /**
          * When a field is dictionary encoded, the values are represented
@@ -244,9 +212,10 @@ public class Arrow {
          * it must send at least one DictionaryBatch for this id.
          */
         DictionaryProvider provider = new DictionaryProvider.MapDictionaryProvider();
-        try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
-             OutputStream output = Files.newOutputStream(path);
-             ArrowStreamWriter writer = new ArrowStreamWriter(root, provider, output)) {
+        try (RootAllocator allocator = new RootAllocator(limit);
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
+             FileOutputStream output = new FileOutputStream(path.toFile());
+             ArrowFileWriter writer = new ArrowFileWriter(root, provider, output.getChannel())) {
 
             writer.start();
             final int size = df.size();
@@ -348,6 +317,11 @@ public class Arrow {
                 writer.writeBatch();
                 logger.info("write {} rows", count);
             }
+
+            writer.end();
+            writer.close();
+            output.flush();
+            output.close();
         }
     }
 
@@ -372,7 +346,7 @@ public class Arrow {
                     a[i] = vector.get(i) != 0;
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Boolean.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -397,7 +371,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Byte.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -422,7 +396,7 @@ public class Arrow {
                     a[i] = (char) vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Character.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -447,7 +421,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Short.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -472,7 +446,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Integer.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -497,7 +471,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Long.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -522,7 +496,7 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Float.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
@@ -547,11 +521,11 @@ public class Arrow {
                     a[i] = vector.get(i);
             }
 
-            return smile.data.vector.Vector.of(fieldVector.getField().getName(), Double.class, a);
+            return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
         }
     }
 
-    /** Reads a decimal column. */
+    /** Reads a decmal column. */
     private smile.data.vector.BaseVector readDecimalField(FieldVector fieldVector) {
         int count = fieldVector.getValueCount();
         BigDecimal[] a = new BigDecimal[count];
@@ -560,7 +534,7 @@ public class Arrow {
             a[i] = vector.isNull(i) ? null : vector.getObject(i);
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.DecimalType, a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
     }
 
     /** Reads a date column. */
@@ -580,7 +554,7 @@ public class Arrow {
             }
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.DateType, a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
     }
 
     /** Reads a time column. */
@@ -608,7 +582,7 @@ public class Arrow {
                 a[i] = vector.isNull(i) ? null : LocalTime.ofSecondOfDay(vector.get(i));
             }
         }
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.TimeType, a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
     }
 
     /** Reads a DateTime column. */
@@ -636,7 +610,7 @@ public class Arrow {
             }
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.DateTimeType, a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
     }
 
     /** Reads a byte[] column. */
@@ -663,7 +637,7 @@ public class Arrow {
             throw new UnsupportedOperationException("Unsupported binary vector: " + fieldVector);
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.ByteArrayType, a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
     }
 
     /** Reads a String column. */
@@ -678,7 +652,7 @@ public class Arrow {
                 a[i] = new String(vector.get(i));
         }
 
-        return smile.data.vector.Vector.of(fieldVector.getField().getName(), DataTypes.StringType, a);
+        return smile.data.vector.Vector.of(fieldVector.getField().getName(), a);
     }
 
     /** Writes an int column. */
@@ -959,7 +933,7 @@ public class Arrow {
         fieldVector.allocateNew();
 
         VarCharVector vector = (VarCharVector) fieldVector;
-        smile.data.vector.StringVector column = df.stringVector(fieldVector.getField().getName());
+        smile.data.vector.Vector<String> column = df.vector(fieldVector.getField().getName());
         for (int i = 0, j = from; i < count; i++, j++) {
             String x = column.get(j);
             if (x == null) {
@@ -1074,7 +1048,7 @@ public class Arrow {
     }
 
     /** Converts a smile schema to arrow schema. */
-    private Schema toArrowSchema(StructType schema) {
+    public static Schema toArrowSchema(StructType schema) {
         List<Field> fields = new ArrayList<>();
         for (StructField field : schema.fields()) {
             fields.add(toArrowField(field));
@@ -1084,7 +1058,7 @@ public class Arrow {
     }
 
     /** Converts an arrow schema to smile schema. */
-    private StructType toSmileSchema(Schema schema) {
+    public static StructType toSmileSchema(Schema schema) {
         List<StructField> fields = new ArrayList<>();
         for (Field field : schema.getFields()) {
             fields.add(toSmileField(field));
@@ -1094,7 +1068,7 @@ public class Arrow {
     }
 
     /** Converts a smile struct field to arrow field. */
-    private Field toArrowField(StructField field) {
+    public static Field toArrowField(smile.data.type.StructField field) {
         switch (field.type.id()) {
             case Integer:
                 return new Field(field.name, new FieldType(false, new ArrowType.Int(32, true), null), null);
@@ -1140,8 +1114,9 @@ public class Arrow {
                     return new Field(field.name, FieldType.nullable(new ArrowType.Int(16, true)), null);
                 } else if (clazz == Character.class) {
                     return new Field(field.name, FieldType.nullable(new ArrowType.Int(16, false)), null);
+                } else {
+                    throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
                 }
-                break;
             }
             case Array: {
                 DataType etype = ((ArrayType) field.type).getComponentType();
@@ -1186,24 +1161,25 @@ public class Arrow {
                         );
                     case Char:
                         return new Field(field.name, FieldType.nullable(new ArrowType.Utf8()), null);
+                    default:
+                        throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
                 }
-                break;
             }
             case Struct: {
-                StructType children = (StructType) field.type;
+                smile.data.type.StructType children = (smile.data.type.StructType) field.type;
                 return new Field(field.name,
                         new FieldType(false, new ArrowType.Struct(), null),
                         // children type
-                        Arrays.stream(children.fields()).map(this::toArrowField).collect(Collectors.toList())
+                        Arrays.stream(children.fields()).map(Arrow::toArrowField).collect(Collectors.toList())
                 );
             }
+            default:
+                throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
         }
-
-        throw new UnsupportedOperationException("Unsupported smile to arrow type conversion: " + field.type);
     }
 
     /** Converts an arrow field to smile struct field. */
-    private StructField toSmileField(Field field) {
+    public static StructField toSmileField(Field field) {
         String name = field.getName();
         ArrowType type = field.getType();
         boolean nullable = field.isNullable();
@@ -1251,7 +1227,7 @@ public class Arrow {
 
             case Binary:
             case FixedSizeBinary:
-                return new StructField(name, DataTypes.ByteArrayType);
+                return new StructField(name, DataTypes.array(DataTypes.ByteType));
 
             case List:
             case FixedSizeList:
@@ -1263,7 +1239,7 @@ public class Arrow {
                 return new StructField(name, DataTypes.array(toSmileField(child.get(0)).type));
 
             case Struct:
-                List<StructField> children = field.getChildren().stream().map(this::toSmileField).collect(Collectors.toList());
+                List<StructField> children = field.getChildren().stream().map(Arrow::toSmileField).collect(Collectors.toList());
                 return new StructField(name, DataTypes.struct(children));
 
             default:

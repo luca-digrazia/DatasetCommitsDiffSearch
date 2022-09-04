@@ -1,28 +1,27 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.data.vector;
 
-import java.util.function.DoubleFunction;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
+
+import smile.data.type.ContinuousMeasure;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.StructField;
 
 /**
  * An immutable double vector.
@@ -35,8 +34,11 @@ public interface DoubleVector extends BaseVector<Double, Double, DoubleStream> {
         return DataTypes.DoubleType;
     }
 
-    @Override
-    double[] array();
+    /** Returns the scale of measure. Returns null if unknown. */
+    ContinuousMeasure getScale();
+
+    /** Sets the (optional) scale of measure. */
+    void setScale(ContinuousMeasure scale);
 
     @Override
     default byte getByte(int i) {
@@ -68,9 +70,8 @@ public interface DoubleVector extends BaseVector<Double, Double, DoubleStream> {
      * @param n Number of elements to show
      */
     default String toString(int n) {
-        DoubleFunction<String> toString = field()::toString;
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
-        return stream().limit(n).mapToObj(toString).collect(Collectors.joining(", ", "[", suffix));
+        return stream().limit(n).mapToObj(String::valueOf).collect(Collectors.joining(", ", "[", suffix));
     }
 
     /** Creates a named double vector.
@@ -80,32 +81,5 @@ public interface DoubleVector extends BaseVector<Double, Double, DoubleStream> {
      */
     static DoubleVector of(String name, double[] vector) {
         return new DoubleVectorImpl(name, vector);
-    }
-
-    /** Creates a named double vector.
-     *
-     * @param name the name of vector.
-     * @param stream the data stream of vector.
-     */
-    static DoubleVector of(String name, DoubleStream stream) {
-        return new DoubleVectorImpl(name, stream.toArray());
-    }
-
-    /** Creates a named double vector.
-     *
-     * @param field the struct field of vector.
-     * @param vector the data of vector.
-     */
-    static DoubleVector of(StructField field, double[] vector) {
-        return new DoubleVectorImpl(field, vector);
-    }
-
-    /** Creates a named double vector.
-     *
-     * @param field the struct field of vector.
-     * @param stream the data stream of vector.
-     */
-    static DoubleVector of(StructField field, DoubleStream stream) {
-        return new DoubleVectorImpl(field, stream.toArray());
     }
 }

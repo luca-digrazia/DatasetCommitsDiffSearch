@@ -30,8 +30,7 @@ import java.util.Spliterator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import smile.data.measure.Measure;
-import smile.data.measure.NominalScale;
+
 import smile.data.type.*;
 import smile.data.vector.*;
 import smile.math.matrix.DenseMatrix;
@@ -51,6 +50,8 @@ class DataFrameImpl implements DataFrame {
     private List<BaseVector> columns;
     /** The number of rows. */
     private final int size;
+    /** The lambda to retrieve a field value. */
+    private final Getter[] getter;
 
     /** The lambda to retrieve a field value. */
     interface Getter {
@@ -74,6 +75,9 @@ class DataFrameImpl implements DataFrame {
                 .collect(Collectors.toList())
                 .toArray(new StructField[columns.size()]);
         this.schema = DataTypes.struct(fields);
+        this.getter = IntStream.of(fields.length)
+                .<Getter>mapToObj(j -> (i -> get(i, j)))
+                .toArray(Getter[]::new);
 
         Set<String> set = new HashSet<>();
         for (BaseVector v : columns) {
@@ -180,7 +184,7 @@ class DataFrameImpl implements DataFrame {
                     } else {
                         Object[] values = new Object[size];
                         for (int i = 0; i < size; i++) values[i] = read.invoke(data.get(i));
-                        Vector<?> vector = Vector.of(name, type, values);
+                        Vector<?> vector = Vector.of(name, values);
                         columns.add(vector);
                     }
                 }
@@ -192,6 +196,8 @@ class DataFrameImpl implements DataFrame {
             logger.error("Failed to call property read method: ", ex);
             throw new RuntimeException(ex);
         }
+
+        this.getter = IntStream.of(schema.fields().length).<Getter>mapToObj(j -> (i -> get(i, j))).toArray(Getter[]::new);
     }
 
     /** Returns the struct field of a property. */
@@ -212,6 +218,7 @@ class DataFrameImpl implements DataFrame {
         this.schema = data.get(0).schema();
         StructField[] fields = schema.fields();
         this.columns = new ArrayList<>(fields.length);
+        this.getter = IntStream.of(fields.length).<Getter>mapToObj(j -> (i -> columns.get(j).get(i))).toArray(Getter[]::new);
 
         for (int j = 0; j < fields.length; j++) {
             StructField field = fields[j];
@@ -283,7 +290,7 @@ class DataFrameImpl implements DataFrame {
                 default: {
                     Object[] values = new Object[size];
                     for (int i = 0; i < size; i++) values[i] = data.get(i).get(j);
-                    Vector vector = Vector.of(field.name, field.type, values);
+                    Vector vector = Vector.of(field.name, values);
                     columns.add(vector);
                 }
             }
@@ -300,6 +307,7 @@ class DataFrameImpl implements DataFrame {
         this.schema = formula.bind(df.schema());
         StructField[] fields = schema.fields();
         this.columns = new ArrayList<>(fields.length);
+        this.getter = IntStream.of(fields.length).<Getter>mapToObj(j -> (i -> get(i, j))).toArray(Getter[]::new);
 
         smile.data.formula.Factor[] factors = formula.factors();
         for (int j = 0; j < fields.length; j++) {
@@ -387,7 +395,7 @@ class DataFrameImpl implements DataFrame {
                 default: {
                     Object[] values = new Object[size];
                     for (int i = 0; i < size; i++) values[i] = data.get(i).get(j);
-                    Vector vector = Vector.of(field.name, field.type, values);
+                    Vector vector = Vector.of(field.name, values);
                     columns.add(vector);
                 }
             }
@@ -547,102 +555,6 @@ class DataFrameImpl implements DataFrame {
     }
 
     @Override
-    public DataFrame union(DataFrame... dataframes) {
-        for (DataFrame df : dataframes) {
-            if (!schema.equals(df.schema())) {
-                throw new IllegalArgumentException("Union data frames with different schema: " + schema + " vs " + df.schema());
-            }
-        }
-
-        int nrows = nrows();
-        for (DataFrame df : dataframes) {
-            nrows += df.nrows();
-        }
-
-        // Single line solution
-        // Stream.of(a, b).flatMap(Stream::of).toArray(Object[]::new)
-        // It doesn't work for boolean, byte, char, short though.
-        Object[] vectors = new Object[ncols()];
-        for (int i = 0; i < vectors.length; i++) {
-            BaseVector column = columns.get(i);
-            switch (column.type().id()) {
-                case Boolean:
-                    vectors[i] = new boolean[nrows];
-                    break;
-                case Char:
-                    vectors[i] = new char[nrows];
-                    break;
-                case Byte:
-                    vectors[i] = new byte[nrows];
-                    break;
-                case Short:
-                    vectors[i] = new short[nrows];
-                    break;
-                case Integer:
-                    vectors[i] = new int[nrows];
-                    break;
-                case Long:
-                    vectors[i] = new long[nrows];
-                    break;
-                case Float:
-                    vectors[i] = new float[nrows];
-                    break;
-                case Double:
-                    vectors[i] = new double[nrows];
-                    break;
-                default:
-                    vectors[i] = new Object[nrows];
-            }
-            System.arraycopy(column.array(), 0, vectors[i], 0, nrows());
-        }
-
-        int destPos = nrows();
-        for (DataFrame df : dataframes) {
-            for (int i = 0; i < vectors.length; i++) {
-                System.arraycopy(df.column(i).array(), 0, vectors[i], destPos, df.nrows());
-            }
-            destPos += df.nrows();
-        }
-
-        List<BaseVector> data = new ArrayList<>();
-        for (int i = 0; i < vectors.length; i++) {
-            BaseVector column = columns.get(i);
-            switch (column.type().id()) {
-                case Boolean:
-                    data.add(BooleanVector.of(column.name(), (boolean[]) vectors[i]));
-                    break;
-                case Char:
-                    data.add(CharVector.of(column.name(), (char[]) vectors[i]));
-                    break;
-                case Byte:
-                    data.add(ByteVector.of(column.name(), (byte[]) vectors[i]));
-                    break;
-                case Short:
-                    data.add(ShortVector.of(column.name(), (short[]) vectors[i]));
-                    break;
-                case Integer:
-                    data.add(IntVector.of(column.name(), (int[]) vectors[i]));
-                    break;
-                case Long:
-                    data.add(LongVector.of(column.name(), (long[]) vectors[i]));
-                    break;
-                case Float:
-                    data.add(FloatVector.of(column.name(), (float[]) vectors[i]));
-                    break;
-                case Double:
-                    data.add(DoubleVector.of(column.name(), (double[]) vectors[i]));
-                    break;
-                default:
-                    data.add(Vector.of(column.name(), column.type(), (Object[]) vectors[i]));
-            }
-        }
-
-        DataFrameImpl df = new DataFrameImpl(data);
-        df.schema.measure().putAll(schema.measure());
-        return df;
-    }
-
-    @Override
     public Tuple get(int i) {
         return new DataFrameRow(i);
     }
@@ -753,6 +665,11 @@ class DataFrameImpl implements DataFrame {
         @Override
         public StructType schema() {
             return schema;
+        }
+
+        @Override
+        public int size() {
+            return columns.size();
         }
 
         @Override

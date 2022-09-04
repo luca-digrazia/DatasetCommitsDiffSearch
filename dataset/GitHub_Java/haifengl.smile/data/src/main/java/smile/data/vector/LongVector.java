@@ -1,28 +1,25 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.data.vector;
 
-import java.util.function.LongFunction;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
-import smile.data.type.StructField;
 
 /**
  * An immutable long vector.
@@ -34,9 +31,6 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
     default DataType type() {
         return DataTypes.LongType;
     }
-
-    @Override
-    long[] array();
 
     @Override
     default byte getByte(int i) {
@@ -68,9 +62,8 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
      * @param n Number of elements to show
      */
     default String toString(int n) {
-        LongFunction<String> toString = field()::toString;
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
-        return stream().limit(n).mapToObj(toString).collect(Collectors.joining(", ", "[", suffix));
+        return stream().limit(n).mapToObj(String::valueOf).collect(Collectors.joining(", ", "[", suffix));
     }
 
     /** Creates a named long vector.
@@ -80,32 +73,5 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
      */
     static LongVector of(String name, long[] vector) {
         return new LongVectorImpl(name, vector);
-    }
-
-    /** Creates a named long integer vector.
-     *
-     * @param name the name of vector.
-     * @param stream the data stream of vector.
-     */
-    static LongVector of(String name, LongStream stream) {
-        return new LongVectorImpl(name, stream.toArray());
-    }
-
-    /** Creates a named long integer vector.
-     *
-     * @param field the struct field of vector.
-     * @param vector the data of vector.
-     */
-    static LongVector of(StructField field, long[] vector) {
-        return new LongVectorImpl(field, vector);
-    }
-
-    /** Creates a named long integer vector.
-     *
-     * @param field the struct field of vector.
-     * @param stream the data stream of vector.
-     */
-    static LongVector of(StructField field, LongStream stream) {
-        return new LongVectorImpl(field, stream.toArray());
     }
 }
