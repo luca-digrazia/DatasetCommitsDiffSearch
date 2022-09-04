@@ -33,11 +33,7 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.rest.documentation.annotations.Api;
-import org.graylog2.rest.documentation.annotations.ApiOperation;
-import org.graylog2.rest.documentation.annotations.ApiParam;
-import org.graylog2.rest.documentation.annotations.ApiResponse;
-import org.graylog2.rest.documentation.annotations.ApiResponses;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.CreateExtractorRequest;
 import org.graylog2.rest.resources.system.inputs.requests.OrderExtractorsRequest;
@@ -49,13 +45,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
-import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.POST;
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
@@ -64,12 +59,14 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "Extractors", description = "Extractors of an input")
 @Path("/system/inputs/{inputId}/extractors")
 public class ExtractorsResource extends RestResource {
+
     private static final Logger LOG = LoggerFactory.getLogger(ExtractorsResource.class);
 
     private final InputService inputService;
@@ -79,11 +76,11 @@ public class ExtractorsResource extends RestResource {
     private final ExtractorFactory extractorFactory;
 
     @Inject
-    public ExtractorsResource(final InputService inputService,
-                              final ActivityWriter activityWriter,
-                              final InputRegistry inputs,
-                              final MetricRegistry metricRegistry,
-                              final ExtractorFactory extractorFactory) {
+    public ExtractorsResource(InputService inputService,
+                              ActivityWriter activityWriter,
+                              InputRegistry inputs,
+                              MetricRegistry metricRegistry,
+                              ExtractorFactory extractorFactory) {
         this.inputService = inputService;
         this.activityWriter = activityWriter;
         this.inputs = inputs;
@@ -211,52 +208,53 @@ public class ExtractorsResource extends RestResource {
         return json(result);
     }
 
-    @DELETE
-    @Timed
+    @DELETE @Timed
     @ApiOperation(value = "Delete an extractor")
     @Path("/{extractorId}")
     @ApiResponses(value = {
-            @ApiResponse(code = 400, message = "Invalid request."),
-            @ApiResponse(code = 404, message = "Input not found."),
+            @ApiResponse(code = 404, message = "No such input on this node."),
             @ApiResponse(code = 404, message = "Extractor not found.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public void removeExtractor(
+    public Response terminate(
             @ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId,
             @ApiParam(title = "extractorId", required = true) @PathParam("extractorId") String extractorId) throws NotFoundException {
-        if (isNullOrEmpty(extractorId)) {
-            LOG.error("extractorId is missing.");
-            throw new BadRequestException("extractorId is missing.");
+        if (extractorId == null || extractorId.isEmpty()) {
+            LOG.error("Missing extractorId. Returning HTTP 400.");
+            throw new WebApplicationException(400);
         }
 
-        if (isNullOrEmpty(inputId)) {
-            LOG.error("inputId is missing.");
-            throw new BadRequestException("inputId is missing.");
+        if (inputId == null || inputId.isEmpty()) {
+            LOG.error("Missing inputId. Returning HTTP 400.");
+            throw new WebApplicationException(400);
         }
         checkPermission(RestPermissions.INPUTS_EDIT, inputId);
 
-        final MessageInput input = inputs.getPersisted(inputId);
+        MessageInput input = inputs.getRunningInput(inputId);
+
         if (input == null) {
             LOG.error("Input <{}> not found.", inputId);
-            throw new javax.ws.rs.NotFoundException("Couldn't find input " + inputId);
+            throw new WebApplicationException(404);
         }
 
         if (input.getExtractors().get(extractorId) == null) {
             LOG.error("Extractor <{}> not found.", extractorId);
-            throw new javax.ws.rs.NotFoundException("Couldn't find extractor " + extractorId);
+            throw new WebApplicationException(404);
         }
 
         // Remove from Mongo.
-        final Input mongoInput = inputService.find(input.getPersistId());
+        Input mongoInput = inputService.find(input.getPersistId());
         inputService.removeExtractor(mongoInput, extractorId);
 
-        final Extractor extractor = input.getExtractors().get(extractorId);
+        Extractor extractor = input.getExtractors().get(extractorId);
         input.getExtractors().remove(extractorId);
 
-        final String msg = "Deleted extractor <" + extractorId + "> of type [" + extractor.getType() + "] " +
-                "from input <" + inputId + ">.";
+        String msg = "Deleted extractor <" + extractorId + "> of type [" + extractor.getType() + "] " +
+                "from input <" + inputId + ">. Reason: REST request.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, InputsResource.class));
+
+        return Response.status(Response.Status.NO_CONTENT).build();
     }
 
     @POST @Timed
