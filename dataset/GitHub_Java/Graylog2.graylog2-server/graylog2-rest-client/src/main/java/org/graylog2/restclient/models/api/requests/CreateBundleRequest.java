@@ -24,7 +24,6 @@ import org.graylog2.restclient.models.bundles.Input;
 import org.graylog2.restclient.models.bundles.Output;
 import org.graylog2.restclient.models.bundles.Stream;
 
-import java.util.Collections;
 import java.util.List;
 
 @JsonAutoDetect
@@ -36,13 +35,13 @@ public class CreateBundleRequest extends ApiRequest {
     @JsonProperty("category")
     public String category;
     @JsonProperty("inputs")
-    public List<Input> inputs = Collections.emptyList();
+    public List<Input> inputs;
     @JsonProperty("streams")
-    public List<Stream> streams = Collections.emptyList();
+    public List<Stream> streams;
     @JsonProperty("outputs")
-    public List<Output> outputs = Collections.emptyList();
+    public List<Output> outputs;
     @JsonProperty("dashboards")
-    public List<Dashboard> dashboards = Collections.emptyList();
+    public List<Dashboard> dashboards;
     @JsonProperty("grok_patterns")
-    public List<GrokPattern> grokPatterns = Collections.emptyList();
+    public List<GrokPattern> grokPatterns;
 }
