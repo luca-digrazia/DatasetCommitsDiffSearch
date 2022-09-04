@@ -745,16 +745,12 @@ public class CppHelper {
    * or null if such a provider doesn't exist.
    */
   public static LipoContextProvider getLipoContextProvider(RuleContext ruleContext) {
-    if (ruleContext
-            .getRule()
-            .getAttributeDefinition(TransitiveLipoInfoProvider.LIPO_CONTEXT_COLLECTOR)
-        == null) {
+    if (ruleContext.getRule().getAttributeDefinition(":lipo_context_collector") == null) {
       return null;
     }
 
     TransitiveInfoCollection dep =
-        ruleContext.getPrerequisite(
-            TransitiveLipoInfoProvider.LIPO_CONTEXT_COLLECTOR, Mode.DONT_CHECK);
+        ruleContext.getPrerequisite(":lipo_context_collector", Mode.DONT_CHECK);
     return (dep != null) ? dep.getProvider(LipoContextProvider.class) : null;
   }
 
@@ -1104,17 +1100,5 @@ public class CppHelper {
    */
   public static boolean useFission(CppConfiguration config, CcToolchainProvider toolchain) {
     return config.fissionIsActiveForCurrentCompilationMode() && toolchain.supportsFission();
-  }
-
-  /**
-   * Returns true if Fission and PER_OBJECT_DEBUG_INFO are specified and supported by the CROSSTOOL
-   * for the build implied by the given configuration, toolchain and feature configuration.
-   */
-  public static boolean shouldCreatePerObjectDebugInfo(
-      CppConfiguration config,
-      CcToolchainProvider toolchain,
-      FeatureConfiguration featureConfiguration) {
-    return useFission(config, toolchain)
-        && featureConfiguration.isEnabled(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
   }
 }
