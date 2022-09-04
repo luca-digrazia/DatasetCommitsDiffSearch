@@ -349,14 +349,10 @@ public final class JpaJandexScavenger {
         }
         // we need to check for enums
         for (FieldInfo fieldInfo : classInfo.fields()) {
-            Type fieldType = fieldInfo.type();
-            if (Type.Kind.PRIMITIVE == fieldType.kind()) {
-                continue;
-            }
-            DotName fieldClassName = fieldInfo.type().name();
-            ClassInfo fieldTypeClassInfo = index.getClassByName(fieldClassName);
+            DotName fieldType = fieldInfo.type().name();
+            ClassInfo fieldTypeClassInfo = index.getClassByName(fieldType);
             if (fieldTypeClassInfo != null && ClassNames.ENUM.equals(fieldTypeClassInfo.superName())) {
-                collector.enumTypes.add(fieldClassName.toString());
+                collector.enumTypes.add(fieldType.toString());
             }
         }
 
