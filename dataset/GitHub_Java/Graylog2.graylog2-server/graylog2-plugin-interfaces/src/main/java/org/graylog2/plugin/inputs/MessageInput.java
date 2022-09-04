@@ -163,14 +163,9 @@ public abstract class MessageInput implements Stoppable {
 
     public void stop() {
         transport.stop();
-        cleanupMetrics();
     }
 
     public void terminate() {
-        cleanupMetrics();
-    }
-
-    private void cleanupMetrics() {
         if (localRegistry != null && localRegistry.getMetrics() != null)
             for (String metricName : localRegistry.getMetrics().keySet())
                 metricRegistry.remove(getUniqueReadableId() + "." + metricName);
@@ -187,6 +182,8 @@ public abstract class MessageInput implements Stoppable {
     public Descriptor getDescriptor() {
         return descriptor;
     }
+
+    ;
 
     public String getName() {
         return descriptor.getName();
