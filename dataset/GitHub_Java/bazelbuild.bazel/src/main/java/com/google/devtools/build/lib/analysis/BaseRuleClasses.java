@@ -166,16 +166,6 @@ public class BaseRuleClasses {
           .add(attr("args", STRING_LIST))
           // Input files for every test action
           .add(
-              attr("$test_wrapper", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/test:test_wrapper")))
-          .add(
-              attr("$xml_writer", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/test:xml_writer")))
-          .add(
               attr("$test_runtime", LABEL_LIST)
                   .cfg(HostTransition.INSTANCE)
                   .value(ImmutableList.of(env.getToolsLabel("//tools/test:runtime"))))
@@ -184,11 +174,6 @@ public class BaseRuleClasses {
                   .cfg(HostTransition.INSTANCE)
                   .singleArtifact()
                   .value(env.getToolsLabel("//tools/test:test_setup")))
-          .add(
-              attr("$xml_generator_script", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/test:test_xml_generator")))
           .add(
               attr("$collect_coverage_script", LABEL)
                   .cfg(HostTransition.INSTANCE)
@@ -205,7 +190,8 @@ public class BaseRuleClasses {
                   .cfg(HostTransition.INSTANCE)
                   .value(
                       coverageReportGeneratorAttribute(
-                          env.getToolsLabel(DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE))))
+                          env.getToolsLabel(DEFAULT_COVERAGE_REPORT_GENERATOR_VALUE)))
+                  .singleArtifact())
           // The target itself and run_under both run on the same machine.
           .add(attr(":run_under", LABEL).value(RUN_UNDER).skipPrereqValidatorCheck())
           .executionPlatformConstraintsAllowed(ExecutionPlatformConstraintsAllowed.PER_TARGET)
@@ -273,10 +259,9 @@ public class BaseRuleClasses {
                 .value(testonlyDefault)
                 .nonconfigurable("policy decision: rules testability should be consistent"))
         .add(attr("features", STRING_LIST).orderIndependent())
-        .add(
-            attr(":action_listener", LABEL_LIST)
-                .cfg(HostTransition.INSTANCE)
-                .value(ACTION_LISTENER))
+        .add(attr(":action_listener", LABEL_LIST)
+            .cfg(HostTransition.INSTANCE)
+            .value(ACTION_LISTENER))
         .add(
             attr(RuleClass.COMPATIBLE_ENVIRONMENT_ATTR, LABEL_LIST)
                 .allowedRuleClasses(EnvironmentRule.RULE_NAME)
@@ -292,10 +277,7 @@ public class BaseRuleClasses {
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .dontCheckConstraints()
                 .nonconfigurable(
-                    "special logic for constraints and select: see ConstraintSemantics"))
-        .add(
-            attr(RuleClass.CONFIG_SETTING_DEPS_ATTRIBUTE, LABEL_LIST)
-                .nonconfigurable("stores configurability keys"));
+                    "special logic for constraints and select: see ConstraintSemantics"));
   }
 
   public static RuleClass.Builder nameAttribute(RuleClass.Builder builder) {
@@ -330,12 +312,24 @@ public class BaseRuleClasses {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return commonCoreAndSkylarkAttributes(builder)
-          .add(
-              attr("licenses", LICENSE)
-                  .nonconfigurable("Used in core loading phase logic with no access to configs"))
-          .add(
-              attr("distribs", DISTRIBUTIONS)
-                  .nonconfigurable("Used in core loading phase logic with no access to configs"))
+          // Aggregates the labels of all {@link ConfigRuleClasses} rules this rule uses (e.g.
+          // keys for configurable attributes). This is specially populated in
+          // {@RuleClass#populateRuleAttributeValues}.
+          //
+          // This attribute is not needed for actual builds. Its main purpose is so query's
+          // proto/XML output includes the labels of config dependencies, so, e.g., depserver
+          // reverse dependency lookups remain accurate. These can't just be added to the
+          // attribute definitions proto/XML queries already output because not all attributes
+          // contain labels.
+          //
+          // Builds and Blaze-interactive queries don't need this because they find dependencies
+          // through direct Rule label visitation, which already factors these in.
+          .add(attr("$config_dependencies", LABEL_LIST)
+              .nonconfigurable("not intended for actual builds"))
+          .add(attr("licenses", LICENSE)
+              .nonconfigurable("Used in core loading phase logic with no access to configs"))
+          .add(attr("distribs", DISTRIBUTIONS)
+              .nonconfigurable("Used in core loading phase logic with no access to configs"))
           .build();
     }
 
