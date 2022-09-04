@@ -14,10 +14,12 @@
 
 package com.google.devtools.build.lib.runtime;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
+import static java.util.Comparator.comparingLong;
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Ordering;
 import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.Action;
@@ -34,7 +36,6 @@ import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.clock.Clock;
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -177,27 +178,38 @@ public class CriticalPathComputer {
 
   /** Returns the list of components using the most memory. */
   public ImmutableList<CriticalPathComponent> getLargestMemoryComponents() {
-    return ImmutableList.copyOf(
-        Ordering.from(
-                Comparator.comparingLong(
-                    (CriticalPathComponent c) -> c.getSpawnMetrics().memoryEstimate()))
-            .greatestOf(outputArtifactToComponent.values(), LARGEST_MEMORY_COMPONENTS_SIZE));
+    return outputArtifactToComponent
+        .values()
+        .stream()
+        .sorted(
+            comparingLong((CriticalPathComponent a) -> a.getSpawnMetrics().memoryEstimate())
+                .reversed())
+        .limit(LARGEST_MEMORY_COMPONENTS_SIZE)
+        .collect(toImmutableList());
   }
 
   /** Returns the list of components with the largest input sizes. */
   public ImmutableList<CriticalPathComponent> getLargestInputSizeComponents() {
-    return ImmutableList.copyOf(
-        Ordering.from(
-            Comparator.comparingLong(
-                (CriticalPathComponent c) -> c.getSpawnMetrics().inputBytes()))
-            .greatestOf(outputArtifactToComponent.values(), LARGEST_INPUT_SIZE_COMPONENTS_SIZE));
+    return outputArtifactToComponent
+        .values()
+        .stream()
+        .sorted(
+            comparingLong((CriticalPathComponent a) -> a.getSpawnMetrics().inputBytes())
+                .reversed())
+        .limit(LARGEST_INPUT_SIZE_COMPONENTS_SIZE)
+        .collect(toImmutableList());
   }
 
   /** Returns the list of slowest components. */
   public ImmutableList<CriticalPathComponent> getSlowestComponents() {
-    return ImmutableList.copyOf(
-        Ordering.from(Comparator.comparingLong(CriticalPathComponent::getElapsedTimeNanos))
-            .greatestOf(outputArtifactToComponent.values(), SLOWEST_COMPONENTS_SIZE));
+    return outputArtifactToComponent
+        .values()
+        .stream()
+        .sorted(
+            comparingLong((CriticalPathComponent a) -> a.getElapsedTimeNanos())
+                .reversed())
+        .limit(SLOWEST_COMPONENTS_SIZE)
+        .collect(toImmutableList());
   }
 
   /**
