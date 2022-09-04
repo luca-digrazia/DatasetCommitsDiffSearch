@@ -11,7 +11,7 @@ import java.util.Set;
 
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
-        include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        include = JsonTypeInfo.As.PROPERTY,
         property = Filter.TYPE_FIELD,
         visible = true,
         defaultImpl = Filter.Fallback.class)
