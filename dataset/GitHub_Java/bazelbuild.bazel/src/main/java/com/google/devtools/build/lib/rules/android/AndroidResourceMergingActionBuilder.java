@@ -17,11 +17,11 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -240,7 +240,7 @@ public class AndroidResourceMergingActionBuilder {
             .build(context));
   }
 
-  public ResourceContainer build(RuleContext context) {
+  public ResourceContainer build(ActionConstructionContext context) {
     CustomCommandLine.Builder parsedMergeBuilder =
         new CustomCommandLine.Builder().add("--tool").add("MERGE").add("--");
     CustomCommandLine.Builder compiledMergeBuilder =
@@ -267,7 +267,6 @@ public class AndroidResourceMergingActionBuilder {
 
     if (classJarOut != null) {
       jarAndManifestBuilder.addExecPath("--classJarOutput", classJarOut);
-      jarAndManifestBuilder.addLabel("--targetLabel", ruleContext.getLabel());
       jarAndManifestOutputs.add(classJarOut);
     }
 

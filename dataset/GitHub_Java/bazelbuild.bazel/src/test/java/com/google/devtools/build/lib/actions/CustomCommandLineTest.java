@@ -899,8 +899,8 @@ public class CustomCommandLineTest {
 
   @Test
   public void testTreeFileArtifactExecPathArgs() {
-    SpecialArtifact treeArtifactOne = createTreeArtifact("myArtifact/treeArtifact1");
-    SpecialArtifact treeArtifactTwo = createTreeArtifact("myArtifact/treeArtifact2");
+    Artifact treeArtifactOne = createTreeArtifact("myArtifact/treeArtifact1");
+    Artifact treeArtifactTwo = createTreeArtifact("myArtifact/treeArtifact2");
 
     CustomCommandLine commandLineTemplate =
         builder()
@@ -981,7 +981,7 @@ public class CustomCommandLineTest {
     }
   }
 
-  private SpecialArtifact createTreeArtifact(String rootRelativePath) {
+  private Artifact createTreeArtifact(String rootRelativePath) {
     PathFragment relpath = PathFragment.create(rootRelativePath);
     return new SpecialArtifact(
         rootDir.getRoot().getRelative(relpath),
@@ -992,7 +992,7 @@ public class CustomCommandLineTest {
   }
 
   private TreeFileArtifact createTreeFileArtifact(
-      SpecialArtifact inputTreeArtifact, String parentRelativePath) {
+      Artifact inputTreeArtifact, String parentRelativePath) {
     return ActionInputHelper.treeFileArtifact(
         inputTreeArtifact,
         PathFragment.create(parentRelativePath));
