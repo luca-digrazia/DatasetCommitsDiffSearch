@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.is;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.test.junit.DisabledOnNativeImage;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
@@ -31,8 +32,9 @@ public class ClasspathTestCase {
     }
 
     @Test
-    @Disabled("For some reason, class files are not accessible as resources through the static init classloader;"
-            + " that's beside the point of this PR though, so we'll ignore that.")
+    // Static init may happen in a container when testing a native image,
+    // in which case we don't have any classpath record to check.
+    @DisabledOnNativeImage
     public void testStaticInitMainClassNoDuplicate() {
         given().param("resourceName", CLASS_FILE)
                 .param("phase", "static_init")
@@ -41,6 +43,9 @@ public class ClasspathTestCase {
     }
 
     @Test
+    // Static init may happen in a container when testing a native image,
+    // in which case we don't have any classpath record to check.
+    @DisabledOnNativeImage
     public void testStaticInitMainResourceNoDuplicate() {
         given().param("resourceName", RESOURCE_FILE)
                 .param("phase", "static_init")
@@ -49,7 +54,7 @@ public class ClasspathTestCase {
     }
 
     @Test
-    @Disabled("For some reason, class files are not accessible as resources through the static init classloader;"
+    @Disabled("For some reason, class files are not accessible as resources through the runtime init classloader;"
             + " that's beside the point of this PR though, so we'll ignore that.")
     public void testRuntimeInitMainClassNoDuplicate() {
         given().param("resourceName", CLASS_FILE)
