@@ -3,6 +3,7 @@ package io.dropwizard.testing.junit;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import io.dropwizard.jackson.Jackson;
@@ -30,8 +31,6 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.core.Context;
 import java.util.Map;
 import java.util.Set;
-
-import static java.util.Objects.requireNonNull;
 
 /**
  * A JUnit {@link TestRule} for testing Jersey resources.
@@ -147,10 +146,10 @@ public class ResourceTestRule implements TestRule {
         public ResourceTestResourceConfig(@Context ServletConfig servletConfig) {
             super(true, new MetricRegistry());
             String ruleId = servletConfig.getInitParameter(RULE_ID);
-            requireNonNull(ruleId);
+            Preconditions.checkNotNull(ruleId);
 
             ResourceTestRule resourceTestRule = RULE_ID_TO_RULE.get(ruleId);
-            requireNonNull(resourceTestRule);
+            Preconditions.checkNotNull(resourceTestRule);
             configure(resourceTestRule);
         }
 
