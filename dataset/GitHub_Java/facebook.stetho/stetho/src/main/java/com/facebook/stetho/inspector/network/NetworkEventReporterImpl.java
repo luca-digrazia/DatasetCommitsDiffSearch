@@ -1,26 +1,30 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.inspector.network;
 
+import android.os.SystemClock;
+import com.facebook.stetho.common.Utf8Charset;
+import com.facebook.stetho.inspector.console.CLog;
+import com.facebook.stetho.inspector.protocol.module.Console;
+import com.facebook.stetho.inspector.protocol.module.Network;
+import com.facebook.stetho.inspector.protocol.module.Page;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-
-import android.os.SystemClock;
-
-import com.facebook.stetho.common.LogRedirector;
-import com.facebook.stetho.common.Utf8Charset;
-import com.facebook.stetho.inspector.protocol.module.Console;
-import com.facebook.stetho.inspector.protocol.module.Network;
-import com.facebook.stetho.inspector.protocol.module.Page;
-
-import org.apache.http.protocol.HTTP;
-import org.json.JSONException;
-import org.json.JSONObject;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Implementation of {@link NetworkEventReporter} which allows callers to inform the Stetho
@@ -29,8 +33,7 @@ import org.json.JSONObject;
  * implementation will be automatically wired up to them.
  */
 public class NetworkEventReporterImpl implements NetworkEventReporter {
-  private static final String TAG = "RealNetworkEventReporter";
-
+  private final AtomicInteger mNextRequestId = new AtomicInteger(0);
   @Nullable
   private ResourceTypeHelper mResourceTypeHelper;
 
@@ -96,6 +99,12 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       params.timestamp = stethoNow() / 1000.0;
       params.initiator = initiatorJSON;
       params.redirectResponse = null;
+
+      // Type is now required as of at least WebKit Inspector rev @188492.  If you don't send
+      // it, Chrome will refuse to draw the row in the Network tab until the response is
+      // received (providing the type).  This delay is very noticable on slow networks.
+      params.type = Page.ResourceType.OTHER;
+
       peerManager.sendNotificationToPeers("Network.requestWillBeSent", params);
     }
   }
@@ -109,10 +118,11 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       if (body != null) {
         return new String(body, Utf8Charset.INSTANCE);
       }
-    } catch (IOException e) {
-      writeToConsole(
+    } catch (IOException | OutOfMemoryError e) {
+      CLog.writeToConsole(
           peerManager,
           Console.MessageLevel.WARNING,
+          Console.MessageSource.NETWORK,
           "Could not reproduce POST body: " + e);
     }
     return null;
@@ -128,9 +138,9 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       responseJSON.statusText = response.reasonPhrase();
       responseJSON.headers = formatHeadersAsJSON(response);
       String contentType = getContentType(response);
-      if (contentType != null) {
-        responseJSON.mimeType = getResourceTypeHelper().stripContentExtras(contentType);
-      }
+      responseJSON.mimeType = contentType != null ?
+          getResourceTypeHelper().stripContentExtras(contentType) :
+          "application/octet-stream";
       responseJSON.connectionReused = response.connectionReused();
       responseJSON.connectionId = response.connectionId();
       responseJSON.fromDiskCache = response.fromDiskCache();
@@ -139,23 +149,71 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       receivedParams.frameId = "1";
       receivedParams.loaderId = "1";
       receivedParams.timestamp = stethoNow() / 1000.0;
-      if (contentType != null) {
-        receivedParams.type = getResourceTypeHelper().determineResourceType(contentType);
-      }
       receivedParams.response = responseJSON;
+      AsyncPrettyPrinter asyncPrettyPrinter =
+          initAsyncPrettyPrinterForResponse(response, peerManager);
+      receivedParams.type =
+          determineResourceType(asyncPrettyPrinter, contentType, getResourceTypeHelper());
       peerManager.sendNotificationToPeers("Network.responseReceived", receivedParams);
+    }
+  }
+
+  @Nullable
+  private static AsyncPrettyPrinter initAsyncPrettyPrinterForResponse(
+      InspectorResponse response,
+      NetworkPeerManager peerManager) {
+    AsyncPrettyPrinterRegistry registry = peerManager.getAsyncPrettyPrinterRegistry();
+    AsyncPrettyPrinter asyncPrettyPrinter = createPrettyPrinterForResponse(response, registry);
+    if (asyncPrettyPrinter != null) {
+      peerManager.getResponseBodyFileManager().associateAsyncPrettyPrinterWithId(
+          response.requestId(),
+          asyncPrettyPrinter);
+    }
+     return asyncPrettyPrinter;
+  }
+
+  private static Page.ResourceType determineResourceType(
+      AsyncPrettyPrinter asyncPrettyPrinter,
+      String contentType,
+      ResourceTypeHelper resourceTypeHelper) {
+    if (asyncPrettyPrinter != null) {
+      return asyncPrettyPrinter.getPrettifiedType().getResourceType();
+    } else {
+      return contentType != null ?
+          resourceTypeHelper.determineResourceType(contentType) :
+          Page.ResourceType.OTHER;
+    }
+  }
+
+  //@VisibleForTesting
+  @Nullable
+  static AsyncPrettyPrinter createPrettyPrinterForResponse(
+      InspectorResponse response,
+      @Nullable AsyncPrettyPrinterRegistry registry) {
+    if (registry != null) {
+      for (int i = 0, count = response.headerCount(); i < count; i++) {
+        AsyncPrettyPrinterFactory factory = registry.lookup(response.headerName(i));
+        if (factory != null) {
+          AsyncPrettyPrinter asyncPrettyPrinter = factory.getInstance(
+              response.headerName(i),
+              response.headerValue(i));
+          return asyncPrettyPrinter;
+        }
       }
+    }
+    return null;
   }
 
   @Override
   public InputStream interpretResponseStream(
       String requestId,
       @Nullable String contentType,
-      @Nullable InputStream inputStream,
+      @Nullable String contentEncoding,
+      @Nullable InputStream availableInputStream,
       ResponseHandler responseHandler) {
     NetworkPeerManager peerManager = getPeerManagerIfEnabled();
     if (peerManager != null) {
-      if (inputStream == null) {
+      if (availableInputStream == null) {
         responseHandler.onEOF();
         return null;
       }
@@ -172,24 +230,26 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       }
 
       try {
-        OutputStream responseOutputStream =
+        OutputStream fileOutputStream =
             peerManager.getResponseBodyFileManager().openResponseBodyFile(
                 requestId,
                 base64Encode);
-        return new ResponseHandlingInputStream(
-            inputStream,
-            requestId,
-            responseOutputStream,
+        return DecompressionHelper.teeInputWithDecompression(
             peerManager,
+            requestId,
+            availableInputStream,
+            fileOutputStream,
+            contentEncoding,
             responseHandler);
       } catch (IOException e) {
-        writeToConsole(
+        CLog.writeToConsole(
             peerManager,
             Console.MessageLevel.ERROR,
+            Console.MessageSource.NETWORK,
             "Error writing response body data for request #" + requestId);
       }
     }
-    return inputStream;
+    return availableInputStream;
   }
 
   @Override
@@ -224,6 +284,7 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
       failedParams.requestId = requestId;
       failedParams.timestamp = stethoNow() / 1000.0;
       failedParams.errorText = errorText;
+      failedParams.type = Page.ResourceType.OTHER;
       peerManager.sendNotificationToPeers("Network.loadingFailed", failedParams);
     }
   }
@@ -255,39 +316,139 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
     }
   }
 
+  @Override
+  public String nextRequestId() {
+    return String.valueOf(mNextRequestId.getAndIncrement());
+  }
+
   @Nullable
   private String getContentType(InspectorHeaders headers) {
     // This may need to change in the future depending on how cumbersome header simulation
     // is for the various hooks we expose.
-    return headers.firstHeaderValue(HTTP.CONTENT_TYPE);
+    return headers.firstHeaderValue("Content-Type");
+  }
+
+  @Override
+  public void webSocketCreated(String requestId, String url) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketCreatedParams params = new Network.WebSocketCreatedParams();
+      params.requestId = requestId;
+      params.url = url;
+      peerManager.sendNotificationToPeers("Network.webSocketCreated", params);
+    }
+  }
+
+  @Override
+  public void webSocketClosed(String requestId) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketClosedParams params = new Network.WebSocketClosedParams();
+      params.requestId = requestId;
+      params.timestamp = stethoNow() / 1000.0;
+      peerManager.sendNotificationToPeers("Network.webSocketClosed", params);
+    }
+  }
+
+  @Override
+  public void webSocketWillSendHandshakeRequest(InspectorWebSocketRequest request) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketWillSendHandshakeRequestParams params =
+          new Network.WebSocketWillSendHandshakeRequestParams();
+      params.requestId = request.id();
+      params.timestamp = stethoNow() / 1000.0;
+      params.wallTime = System.currentTimeMillis() / 1000.0;
+      Network.WebSocketRequest requestJSON = new Network.WebSocketRequest();
+      requestJSON.headers = formatHeadersAsJSON(request);
+      params.request = requestJSON;
+      peerManager.sendNotificationToPeers("Network.webSocketWillSendHandshakeRequest", params);
+    }
+  }
+
+  @Override
+  public void webSocketHandshakeResponseReceived(InspectorWebSocketResponse response) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketHandshakeResponseReceivedParams params =
+          new Network.WebSocketHandshakeResponseReceivedParams();
+      params.requestId = response.requestId();
+      params.timestamp = stethoNow() / 1000.0;
+      Network.WebSocketResponse responseJSON = new Network.WebSocketResponse();
+      responseJSON.headers = formatHeadersAsJSON(response);
+      responseJSON.headersText = null;
+      if (response.requestHeaders() != null) {
+        responseJSON.requestHeaders = formatHeadersAsJSON(response.requestHeaders());
+        responseJSON.requestHeadersText = null;
+      }
+      responseJSON.status = response.statusCode();
+      responseJSON.statusText = response.reasonPhrase();
+      params.response = responseJSON;
+      peerManager.sendNotificationToPeers("Network.webSocketHandshakeResponseReceived", params);
+    }
+  }
+
+  @Override
+  public void webSocketFrameSent(InspectorWebSocketFrame frame) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketFrameSentParams params = new Network.WebSocketFrameSentParams();
+      params.requestId = frame.requestId();
+      params.timestamp = stethoNow() / 1000.0;
+      params.response = convertFrame(frame);
+      peerManager.sendNotificationToPeers("Network.webSocketFrameSent", params);
+    }
+  }
+
+  @Override
+  public void webSocketFrameReceived(InspectorWebSocketFrame frame) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketFrameReceivedParams params = new Network.WebSocketFrameReceivedParams();
+      params.requestId = frame.requestId();
+      params.timestamp = stethoNow() / 1000.0;
+      params.response = convertFrame(frame);
+      peerManager.sendNotificationToPeers("Network.webSocketFrameReceived", params);
+    }
+  }
+
+  private static Network.WebSocketFrame convertFrame(InspectorWebSocketFrame in) {
+    Network.WebSocketFrame out = new Network.WebSocketFrame();
+    out.opcode = in.opcode();
+    out.mask = in.mask();
+    out.payloadData = in.payloadData();
+    return out;
+  }
+
+  @Override
+  public void webSocketFrameError(String requestId, String errorMessage) {
+    NetworkPeerManager peerManager = getPeerManagerIfEnabled();
+    if (peerManager != null) {
+      Network.WebSocketFrameErrorParams params = new Network.WebSocketFrameErrorParams();
+      params.requestId = requestId;
+      params.timestamp = stethoNow() / 1000.0;
+      params.errorMessage = errorMessage;
+      peerManager.sendNotificationToPeers("Network.webSocketFrameError", params);
+    }
   }
 
   private static JSONObject formatHeadersAsJSON(InspectorHeaders headers) {
     JSONObject json = new JSONObject();
     for (int i = 0; i < headers.headerCount(); i++) {
+      String name = headers.headerName(i);
+      String value = headers.headerValue(i);
       try {
-        json.put(headers.headerName(i), headers.headerValue(i));
+        if (json.has(name)) {
+          // Multiple headers are separated with a new line.
+          json.put(name, json.getString(name) + "\n" + value);
+        } else {
+          json.put(name, value);
+        }
       } catch (JSONException e) {
         throw new RuntimeException(e);
       }
     }
     return json;
-  }
-
-  private static void writeToConsole(
-      NetworkPeerManager networkPeerManager,
-      Console.MessageLevel logLevel,
-      String messageText) {
-    // Send to logcat to increase the chances that a developer will notice :)
-    LogRedirector.d(TAG, messageText);
-
-    Console.ConsoleMessage message = new Console.ConsoleMessage();
-    message.source = Console.MessageSource.NETWORK;
-    message.level = logLevel;
-    message.text = messageText;
-    Console.MessageAddedRequest messageAddedRequest = new Console.MessageAddedRequest();
-    messageAddedRequest.message = message;
-    networkPeerManager.sendNotificationToPeers("Console.messageAdded", messageAddedRequest);
   }
 
   @Nonnull
