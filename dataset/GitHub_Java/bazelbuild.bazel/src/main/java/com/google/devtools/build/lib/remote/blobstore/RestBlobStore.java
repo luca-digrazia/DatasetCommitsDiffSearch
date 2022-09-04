@@ -13,20 +13,18 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.blobstore;
 
+import com.google.common.io.ByteStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 
@@ -119,19 +117,22 @@ public final class RestBlobStore implements SimpleBlobStore {
   }
 
   @Override
-  public void put(String key, long length, InputStream in) throws IOException {
-    put(CAS_PREFIX, key, new InputStreamEntity(in, length, ContentType.APPLICATION_OCTET_STREAM));
+  public void put(String key, InputStream in) throws IOException {
+    put(CAS_PREFIX, key, in);
   }
 
   @Override
-  public void putActionResult(String key, byte[] in) throws IOException, InterruptedException {
-    put(ACTION_CACHE_PREFIX, key, new ByteArrayEntity(in, ContentType.APPLICATION_OCTET_STREAM));
+  public void putActionResult(String key, InputStream in) throws IOException, InterruptedException {
+    put(ACTION_CACHE_PREFIX, key, in);
   }
 
-  private void put(String urlPrefix, String key, HttpEntity entity) throws IOException {
+  private void put(String urlPrefix, String key, InputStream in) throws IOException {
     HttpClient client = clientFactory.build();
     HttpPut put = new HttpPut(baseUrl + "/" + urlPrefix + "/" + key);
-    put.setEntity(entity);
+    // For now, upload a byte array instead of a stream, due to Hazelcast crashing on the stream.
+    // See https://github.com/hazelcast/hazelcast/issues/10878.
+    put.setEntity(new ByteArrayEntity(ByteStreams.toByteArray(in)));
+    put.setHeader("Content-Type", "application/octet-stream");
     client.execute(
         put,
         (response) -> {
