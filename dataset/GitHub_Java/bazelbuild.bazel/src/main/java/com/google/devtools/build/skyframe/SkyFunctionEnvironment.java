@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.GraphInconsistencyReceiver.Inconsistency;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
@@ -191,8 +190,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
           batchPrefetch(skyKey, directDeps, oldDeps, /*assertDone=*/ false, skyKey);
     } catch (UndonePreviouslyRequestedDep undonePreviouslyRequestedDep) {
       throw new IllegalStateException(
-          "batchPrefetch can't throw UndonePreviouslyRequestedDep unless assertDone is true",
-          undonePreviouslyRequestedDep);
+          "batchPrefetch can't throw UndonePreviouslyRequestedDep unless assertDone is true");
     }
     Preconditions.checkState(
         !this.previouslyRequestedDepsValues.containsKey(ErrorTransienceValue.KEY),
@@ -265,19 +263,39 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     Preconditions.checkState(building, skyKey);
   }
 
-  Pair<NestedSet<TaggedEvents>, NestedSet<Postable>> buildAndReportEventsAndPostables(
-      NodeEntry entry, boolean expectDoneDeps) throws InterruptedException {
+  NestedSet<TaggedEvents> buildAndReportEvents(NodeEntry entry, boolean expectDoneDeps)
+      throws InterruptedException {
     EventFilter eventFilter = evaluatorContext.getStoredEventFilter();
     if (!eventFilter.storeEventsAndPosts()) {
-      return Pair.of(
-          NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-          NestedSetBuilder.emptySet(Order.STABLE_ORDER));
+      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
-
     NestedSetBuilder<TaggedEvents> eventBuilder = NestedSetBuilder.stableOrder();
     ImmutableList<Event> events = eventHandler.getEvents();
     if (!events.isEmpty()) {
       eventBuilder.add(new TaggedEvents(getTagFromKey(), events));
+    }
+
+    GroupedList<SkyKey> depKeys = entry.getTemporaryDirectDeps();
+    Collection<SkyValue> deps =
+        getDepValuesForDoneNodeFromErrorOrDepsOrGraph(
+            Iterables.filter(
+                depKeys.getAllElementsAsIterable(),
+                eventFilter.depEdgeFilterForEventsAndPosts(skyKey)),
+            expectDoneDeps,
+            depKeys.numElements());
+    for (SkyValue value : deps) {
+      eventBuilder.addTransitive(ValueWithMetadata.getEvents(value));
+    }
+    NestedSet<TaggedEvents> result = eventBuilder.build();
+    evaluatorContext.getReplayingNestedSetEventVisitor().visit(result);
+    return result;
+  }
+
+  NestedSet<Postable> buildAndReportPostables(NodeEntry entry, boolean expectDoneDeps)
+      throws InterruptedException {
+    EventFilter eventFilter = evaluatorContext.getStoredEventFilter();
+    if (!eventFilter.storeEventsAndPosts()) {
+      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
     NestedSetBuilder<Postable> postBuilder = NestedSetBuilder.stableOrder();
     postBuilder.addAll(eventHandler.getPosts());
@@ -291,14 +309,11 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
             expectDoneDeps,
             depKeys.numElements());
     for (SkyValue value : deps) {
-      eventBuilder.addTransitive(ValueWithMetadata.getEvents(value));
       postBuilder.addTransitive(ValueWithMetadata.getPosts(value));
     }
-    NestedSet<TaggedEvents> taggedEvents = eventBuilder.build();
-    NestedSet<Postable> postables = postBuilder.build();
-    evaluatorContext.getReplayingNestedSetEventVisitor().visit(taggedEvents);
-    evaluatorContext.getReplayingNestedSetPostableVisitor().visit(postables);
-    return Pair.of(taggedEvents, postables);
+    NestedSet<Postable> result = postBuilder.build();
+    evaluatorContext.getReplayingNestedSetPostableVisitor().visit(result);
+    return result;
   }
 
   void setValue(SkyValue newValue) {
@@ -701,21 +716,18 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     // (2) value == null && enqueueParents happens for values that are found to have errors
     // during a --keep_going build.
 
-    Pair<NestedSet<TaggedEvents>, NestedSet<Postable>> eventsAndPostables =
-        buildAndReportEventsAndPostables(primaryEntry, /*expectDoneDeps=*/ true);
+    NestedSet<Postable> posts = buildAndReportPostables(primaryEntry, /*expectDoneDeps=*/ true);
+    NestedSet<TaggedEvents> events = buildAndReportEvents(primaryEntry, /*expectDoneDeps=*/ true);
 
     SkyValue valueWithMetadata;
     if (value == null) {
       Preconditions.checkNotNull(errorInfo, "%s %s", skyKey, primaryEntry);
-      valueWithMetadata =
-          ValueWithMetadata.error(errorInfo, eventsAndPostables.first, eventsAndPostables.second);
+      valueWithMetadata = ValueWithMetadata.error(errorInfo, events, posts);
     } else {
       // We must be enqueueing parents if we have a value.
       Preconditions.checkState(
           enqueueParents == EnqueueParentBehavior.ENQUEUE, "%s %s", skyKey, primaryEntry);
-      valueWithMetadata =
-          ValueWithMetadata.normal(
-              value, errorInfo, eventsAndPostables.first, eventsAndPostables.second);
+      valueWithMetadata = ValueWithMetadata.normal(value, errorInfo, events, posts);
     }
     GroupedList<SkyKey> temporaryDirectDeps = primaryEntry.getTemporaryDirectDeps();
     if (!oldDeps.isEmpty()) {
