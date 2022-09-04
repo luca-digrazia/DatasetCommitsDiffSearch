@@ -458,11 +458,8 @@ class ArcContainerImpl implements ArcContainer {
     }
 
     private static Integer getAlternativePriority(InjectableBean<?> bean) {
-        Integer beanPriority = bean.getAlternativePriority();
-        if (beanPriority == null && bean.getDeclaringBean() != null) {
-            beanPriority = bean.getDeclaringBean().getAlternativePriority();
-        }
-        return beanPriority;
+        return bean.getDeclaringBean() != null ? bean.getDeclaringBean().getAlternativePriority()
+                : bean.getAlternativePriority();
     }
 
     List<InjectableBean<?>> getMatchingBeans(Resolvable resolvable) {
@@ -487,14 +484,10 @@ class ArcContainerImpl implements ArcContainer {
 
     private static int compareAlternativeBeans(InjectableBean<?> bean1, InjectableBean<?> bean2) {
         // The highest priority wins
-        Integer priority2 = bean2.getAlternativePriority();
-        if (priority2 == null && bean2.getDeclaringBean() != null) {
-            priority2 = bean2.getDeclaringBean().getAlternativePriority();
-        }
-        Integer priority1 = bean1.getAlternativePriority();
-        if (priority1 == null && bean1.getDeclaringBean() != null) {
-            priority1 = bean1.getDeclaringBean().getAlternativePriority();
-        }
+        Integer priority2 = bean2.getDeclaringBean() != null ? bean2.getDeclaringBean().getAlternativePriority()
+                : bean2.getAlternativePriority();
+        Integer priority1 = bean1.getDeclaringBean() != null ? bean1.getDeclaringBean().getAlternativePriority()
+                : bean1.getAlternativePriority();
         return priority2.compareTo(priority1);
     }
 
