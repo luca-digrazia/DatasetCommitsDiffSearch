@@ -206,16 +206,14 @@ public class RuntimeResourceDeployment {
         // given that we may inject form params in the endpoint we need to make sure we read the body before
         // we create/inject our endpoint
         EndpointInvoker invoker = method.getInvoker().get();
-        ServerRestHandler instanceHandler = null;
         if (!locatableResource) {
             if (clazz.isPerRequestResource()) {
-                instanceHandler = new PerRequestInstanceHandler(clazz.getFactory(), info.getClientProxyUnwrapper());
+                handlers.add(new PerRequestInstanceHandler(clazz.getFactory(), info.getClientProxyUnwrapper()));
                 score.add(ScoreSystem.Category.Resource, ScoreSystem.Diagnostic.ResourcePerRequest);
             } else {
-                instanceHandler = new InstanceHandler(clazz.getFactory());
+                handlers.add(new InstanceHandler(clazz.getFactory()));
                 score.add(ScoreSystem.Category.Resource, ScoreSystem.Diagnostic.ResourceSingleton);
             }
-            handlers.add(instanceHandler);
         }
 
         for (int i = 0; i < parameters.length; i++) {
@@ -349,11 +347,6 @@ public class RuntimeResourceDeployment {
             responseFilterHandlers.addAll(interceptorDeployment.setupResponseFilterHandler());
             handlers.addAll(responseFilterHandlers);
             handlers.add(new ResponseWriterHandler(dynamicEntityWriter));
-        }
-        if (!clazz.resourceExceptionMapper().isEmpty() && (instanceHandler != null)) {
-            // when class level exception mapper are used, we need to make sure that an instance of resource class exists
-            // so we can invoke it
-            abortHandlingChain.add(instanceHandler);
         }
         abortHandlingChain.add(new ExceptionHandler());
         abortHandlingChain.add(new ResponseHandler());
