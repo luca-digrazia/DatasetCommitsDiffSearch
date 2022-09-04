@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationIn
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingOutputs;
 import com.google.devtools.build.lib.rules.cpp.CcNativeLibraryProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
@@ -57,7 +58,7 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper;
-import com.google.devtools.build.lib.rules.cpp.LibraryToLinkWrapper.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.Exports;
@@ -209,18 +210,18 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
         ccLinkingHelper.emitInterfaceSharedLibraries(true);
       }
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-      ImmutableList<LibraryToLinkWrapper> libraryToLinkWrapper = ImmutableList.of();
+      ImmutableList.Builder<LibraryToLinkWrapper> libraryToLinkWrapperBuilder =
+          ImmutableList.builder();
       if (!ccCompilationOutputs.isEmpty()) {
         ccLinkingOutputs = ccLinkingHelper.link(ccCompilationOutputs);
-        if (!ccLinkingOutputs.isEmpty()) {
-          libraryToLinkWrapper = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
-        }
+        libraryToLinkWrapperBuilder.add(
+            LibraryToLinkWrapper.convertLinkOutputsToLibraryToLinkWrapper(ccLinkingOutputs));
       }
       CcNativeLibraryProvider ccNativeLibraryProvider =
-          CppHelper.collectNativeCcLibraries(deps, libraryToLinkWrapper);
-      CcLinkingContext ccLinkingContext =
-          ccLinkingHelper.buildCcLinkingContextFromLibraryToLinkWrappers(
-              libraryToLinkWrapper, compilationInfo.getCcCompilationContext());
+          CppHelper.collectNativeCcLibraries(deps, ccLinkingOutputs);
+      CcLinkingInfo ccLinkingInfo =
+          ccLinkingHelper.buildCcLinkingInfoFromLibraryToLinkWrappers(
+              libraryToLinkWrapperBuilder.build(), compilationInfo.getCcCompilationContext());
 
       ccLibraryProviders =
           new TransitiveInfoProviderMapBuilder()
@@ -228,33 +229,22 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               .put(
                   CcInfo.builder()
                       .setCcCompilationContext(compilationInfo.getCcCompilationContext())
-                      .setCcLinkingContext(ccLinkingContext)
+                      .setCcLinkingInfo(ccLinkingInfo)
                       .build())
               .add(ccNativeLibraryProvider)
               .build();
       outputGroups = ImmutableMap.copyOf(compilationInfo.getOutputGroups());
       // On Windows, dynamic library is not built by default, so don't add them to filesToBuild.
 
-      if (!libraryToLinkWrapper.isEmpty()) {
-        LibraryToLinkWrapper artifactsToBuild = libraryToLinkWrapper.get(0);
-        if (artifactsToBuild.getStaticLibrary() != null) {
-          filesBuilder.add(artifactsToBuild.getStaticLibrary());
-        }
-        if (artifactsToBuild.getPicStaticLibrary() != null) {
-          filesBuilder.add(artifactsToBuild.getPicStaticLibrary());
-        }
-        if (!featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-          if (artifactsToBuild.getResolvedSymlinkDynamicLibrary() != null) {
-            filesBuilder.add(artifactsToBuild.getResolvedSymlinkDynamicLibrary());
-          } else if (artifactsToBuild.getDynamicLibrary() != null) {
-            filesBuilder.add(artifactsToBuild.getDynamicLibrary());
-          }
-          if (artifactsToBuild.getResolvedSymlinkInterfaceLibrary() != null) {
-            filesBuilder.add(artifactsToBuild.getResolvedSymlinkInterfaceLibrary());
-          } else if (artifactsToBuild.getInterfaceLibrary() != null) {
-            filesBuilder.add(artifactsToBuild.getInterfaceLibrary());
-          }
-        }
+      filesBuilder
+          .addAll(LinkerInputs.toLibraryArtifacts(ccLinkingOutputs.getStaticLibraries()))
+          .addAll(LinkerInputs.toLibraryArtifacts(ccLinkingOutputs.getPicStaticLibraries()));
+      if (!featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
+        filesBuilder
+            .addAll(
+                LinkerInputs.toNonSolibArtifacts(ccLinkingOutputs.getDynamicLibrariesForLinking()))
+            .addAll(
+                LinkerInputs.toNonSolibArtifacts(ccLinkingOutputs.getDynamicLibrariesForRuntime()));
       }
     }
 
@@ -294,7 +284,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               cppSemantics,
               featureConfiguration,
               toolchain,
-              toolchain.getFdoContext());
+              toolchain.getFdoProvider());
       TransitiveInfoCollection runtime = getProtoToolchainProvider().runtime();
       if (runtime != null) {
         helper.addDeps(ImmutableList.of(runtime));
@@ -316,7 +306,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               cppSemantics,
               featureConfiguration,
               toolchain,
-              toolchain.getFdoContext(),
+              toolchain.getFdoProvider(),
               ruleContext.getConfiguration());
       helper.addDeps(deps);
       // TODO(dougk): Configure output artifact with action_config

@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.InfoInterface;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
@@ -67,7 +66,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
         skylarkRuleContext =
             new SkylarkRuleContext(
                 ruleContext, aspectDescriptor, analysisEnv.getSkylarkSemantics());
-      } catch (EvalException | RuleErrorException e) {
+      } catch (EvalException e) {
         ruleContext.ruleError(e.getMessage());
         return null;
       }
@@ -77,9 +76,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
               .setEventHandler(analysisEnv.getEventHandler())
               .setStarlarkContext(
                   new BazelStarlarkContext(
-                      toolsRepository,
-                      ruleContext.getRule().getPackage().getRepositoryMapping(),
-                      ruleContext.getSymbolGenerator()))
+                      toolsRepository, ruleContext.getRule().getPackage().getRepositoryMapping()))
               // NB: loading phase functions are not available: this is analysis already, so we do
               // *not* setLoadingPhase().
               .build();

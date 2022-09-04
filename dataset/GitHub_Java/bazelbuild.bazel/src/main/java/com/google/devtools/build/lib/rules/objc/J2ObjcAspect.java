@@ -59,7 +59,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
-import com.google.devtools.build.lib.rules.cpp.FdoContext;
+import com.google.devtools.build.lib.rules.cpp.FdoProvider;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -154,7 +154,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         .addRequiredToolchains(ccToolchainType)
         .add(
             attr("$j2objc", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(
                     Label.parseAbsoluteUnchecked(
@@ -162,7 +162,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         .add(
             attr("$j2objc_wrapper", LABEL)
                 .allowedFileTypes(FileType.of(".py"))
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .singleArtifact()
                 .value(
@@ -171,7 +171,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         .add(
             attr("$j2objc_header_map", LABEL)
                 .allowedFileTypes(FileType.of(".py"))
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .singleArtifact()
                 .value(
@@ -179,14 +179,11 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                         toolsRepository + "//tools/j2objc:j2objc_header_map")))
         .add(
             attr("$jre_emul_jar", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(
                     Label.parseAbsoluteUnchecked(
                         toolsRepository + "//third_party/java/j2objc:jre_emul.jar")))
-        .add(
-            attr(":dead_code_report", LABEL)
-                .cfg(HostTransition.createFactory())
-                .value(DEAD_CODE_REPORT))
+        .add(attr(":dead_code_report", LABEL).cfg(HostTransition.INSTANCE).value(DEAD_CODE_REPORT))
         .add(
             attr("$jre_lib", LABEL)
                 .value(
@@ -194,12 +191,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                         toolsRepository + "//third_party/java/j2objc:jre_core_lib")))
         .add(
             attr("$xcrunwrapper", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:xcrunwrapper")))
         .add(
             attr(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:libtool")))
         .add(
@@ -210,7 +207,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 .value(AppleToolchain.getXcodeConfigLabel(toolsRepository)))
         .add(
             attr("$zipper", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/zip:zipper")))
         .add(
@@ -263,7 +260,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       try {
         CcToolchainProvider ccToolchain =
             CppHelper.getToolchain(ruleContext, ":j2objc_cc_toolchain");
-        FdoContext fdoContext = ccToolchain.getFdoContext();
+        FdoProvider fdoProvider = ccToolchain.getFdoProvider();
         CompilationSupport compilationSupport =
             new CompilationSupport.Builder()
                 .setRuleContext(ruleContext)
@@ -279,12 +276,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 EXTRA_COMPILE_ARGS,
                 ImmutableList.<PathFragment>of(),
                 ccToolchain,
-                fdoContext)
+                fdoProvider)
             .registerFullyLinkAction(
                 common.getObjcProvider(),
                 ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB),
                 ccToolchain,
-                fdoContext);
+                fdoProvider);
       } catch (RuleErrorException e) {
         ruleContext.ruleError(e.getMessage());
       }
