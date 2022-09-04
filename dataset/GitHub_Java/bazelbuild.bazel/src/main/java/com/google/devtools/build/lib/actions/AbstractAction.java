@@ -22,7 +22,6 @@ import com.google.common.collect.Maps;
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.Artifact.ArchivedTreeArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
-import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -516,12 +515,8 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   protected void checkOutputsForDirectories(ActionExecutionContext actionExecutionContext) {
     FileArtifactValue metadata;
     for (Artifact output : getOutputs()) {
-      MetadataHandler metadataHandler = actionExecutionContext.getMetadataHandler();
-      if (metadataHandler.artifactOmitted(output)) {
-        continue;
-      }
       try {
-        metadata = metadataHandler.getMetadata(output);
+        metadata = actionExecutionContext.getMetadataHandler().getMetadata(output);
       } catch (IOException e) {
         logger.atWarning().withCause(e).log("Error getting metadata for %s", output);
         metadata = null;
