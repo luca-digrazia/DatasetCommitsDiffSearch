@@ -469,7 +469,6 @@ public class EndpointIndexer {
             boolean formParamRequired = false;
             for (int i = 0; i < methodParameters.length; ++i) {
                 Map<DotName, AnnotationInstance> anns = parameterAnnotations[i];
-                boolean encoded = anns.containsKey(QuarkusRestDotNames.ENCODED);
                 Type paramType = info.parameters().get(i);
                 String errorLocation = "method " + info + " on class " + info.declaringClass();
 
@@ -489,7 +488,7 @@ public class EndpointIndexer {
                 }
                 methodParameters[i] = new MethodParameter(name,
                         elementType, toClassName(paramType, currentClassInfo, actualEndpointInfo, index), type, single,
-                        converter, defaultValue, parameterExtractor.isObtainedAsCollection(), encoded);
+                        converter, defaultValue, parameterExtractor.isObtainedAsCollection());
 
                 if (type == ParameterType.BEAN) {
                     // transform the bean param
