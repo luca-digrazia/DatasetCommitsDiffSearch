@@ -33,10 +33,7 @@ import java.util.function.Function;
 @AutoValue
 public abstract class SkylarkSemantics {
 
-  /**
-   * Enum where each element represents a skylark semantics flag. The name of each value should
-   * be the exact name of the flag transformed to upper case (for error representation).
-   */
+  /** Enum where each element represents a skylark semantics flag. */
   public enum FlagIdentifier {
     EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS(
         SkylarkSemantics::experimentalAnalysisTestingImprovements),
@@ -54,14 +51,6 @@ public abstract class SkylarkSemantics {
 
     FlagIdentifier(Function<SkylarkSemantics, Boolean> semanticsFunction) {
       this.semanticsFunction = semanticsFunction;
-    }
-
-    /**
-     * Returns the name of the flag that this identifier controls. For example, EXPERIMENTAL_FOO
-     * would return 'experimental_foo'.
-     */
-    public String getFlagName() {
-      return this.name().toLowerCase();
     }
   }
 
@@ -115,8 +104,6 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean experimentalPlatformsApi();
 
-  public abstract boolean experimentalStarlarkConfigTransitions();
-
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
   public abstract boolean incompatibleDepsetIsNotIterable();
@@ -136,8 +123,6 @@ public abstract class SkylarkSemantics {
   public abstract boolean incompatibleDisallowFileType();
 
   public abstract boolean incompatibleDisallowLegacyJavaInfo();
-
-  public abstract boolean incompatibleDisallowLoadLabelsToCrossPackageBoundaries();
 
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
 
@@ -194,7 +179,6 @@ public abstract class SkylarkSemantics {
           .experimentalEnableRepoMapping(false)
           .experimentalRemapMainRepo(false)
           .experimentalPlatformsApi(false)
-          .experimentalStarlarkConfigTransitions(false)
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
@@ -205,7 +189,6 @@ public abstract class SkylarkSemantics {
           .incompatibleDisallowDictPlus(false)
           .incompatibleDisallowFileType(false)
           .incompatibleDisallowLegacyJavaInfo(false)
-          .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(false)
           .incompatibleDisallowOldStyleArgsAdd(false)
           .incompatibleDisallowSlashOperator(false)
           .incompatibleExpandDirectories(false)
@@ -242,8 +225,6 @@ public abstract class SkylarkSemantics {
 
     public abstract Builder experimentalPlatformsApi(boolean value);
 
-    public abstract Builder experimentalStarlarkConfigTransitions(boolean value);
-
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
     public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
@@ -263,8 +244,6 @@ public abstract class SkylarkSemantics {
     public abstract Builder incompatibleDisallowFileType(boolean value);
 
     public abstract Builder incompatibleDisallowLegacyJavaInfo(boolean value);
-
-    public abstract Builder incompatibleDisallowLoadLabelsToCrossPackageBoundaries(boolean value);
 
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
 

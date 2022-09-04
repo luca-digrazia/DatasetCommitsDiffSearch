@@ -19,7 +19,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 
 /** Info object representing data about a specific platform. */
 @SkylarkModule(
@@ -35,7 +35,7 @@ public interface PlatformInfoApi<
 
   static final String EXPERIMENTAL_WARNING =
       "<i>Note: This API is experimental and may change at any time. It is disabled by default, "
-          + "but may be enabled with <code>--experimental_platforms_api</code></i>";
+          + "but may be enabled with <code>--experimental_platform_api</code></i>";
 
   @SkylarkCallable(
       name = "label",

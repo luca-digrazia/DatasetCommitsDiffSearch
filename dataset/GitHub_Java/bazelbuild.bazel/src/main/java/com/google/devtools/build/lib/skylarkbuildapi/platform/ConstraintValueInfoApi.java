@@ -15,23 +15,21 @@
 package com.google.devtools.build.lib.skylarkbuildapi.platform;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 
 /**
  * Info object representing a value for a constraint setting that can be used to define a platform.
  */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "ConstraintValueInfo",
     doc =
-        "A value for a constraint setting that can be used to define a platform. See "
-            + "<a href='../../platforms.html#defining-constraints-and-platforms'>Defining "
-            + "Constraints and Platforms</a> for more information."
+        "A value for a constraint setting that can be used to define a platform. "
             + PlatformInfoApi.EXPERIMENTAL_WARNING,
-    category = StarlarkDocumentationCategory.PROVIDER)
+    category = SkylarkModuleCategory.PROVIDER)
 public interface ConstraintValueInfoApi extends StructApi {
 
   @SkylarkCallable(

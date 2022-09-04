@@ -125,9 +125,8 @@ public class SkylarkSemanticsConsistencyTest {
             + rand.nextDouble(),
         "--experimental_enable_android_migration_apis=" + rand.nextBoolean(),
         "--experimental_enable_repo_mapping=" + rand.nextBoolean(),
-        "--experimental_platforms_api=" + rand.nextBoolean(),
         "--experimental_remap_main_repo=" + rand.nextBoolean(),
-        "--experimental_starlark_config_transitions=" + rand.nextBoolean(),
+        "--experimental_platforms_api=" + rand.nextBoolean(),
         "--incompatible_bzl_disallow_load_after_statement=" + rand.nextBoolean(),
         "--incompatible_depset_is_not_iterable=" + rand.nextBoolean(),
         "--incompatible_depset_union=" + rand.nextBoolean(),
@@ -138,13 +137,11 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_disallow_dict_plus=" + rand.nextBoolean(),
         "--incompatible_disallow_filetype=" + rand.nextBoolean(),
         "--incompatible_disallow_legacy_javainfo=" + rand.nextBoolean(),
-        "--incompatible_disallow_load_labels_to_cross_package_boundaries=" + rand.nextBoolean(),
         "--incompatible_disallow_old_style_args_add=" + rand.nextBoolean(),
         "--incompatible_disallow_slash_operator=" + rand.nextBoolean(),
         "--incompatible_expand_directories=" + rand.nextBoolean(),
         "--incompatible_generate_javacommon_source_jar=" + rand.nextBoolean(),
         "--incompatible_new_actions_api=" + rand.nextBoolean(),
-        "--incompatible_no_attr_license=" + rand.nextBoolean(),
         "--incompatible_no_output_attr_default=" + rand.nextBoolean(),
         "--incompatible_no_support_tools_in_action_inputs=" + rand.nextBoolean(),
         "--incompatible_no_target_output_group=" + rand.nextBoolean(),
@@ -155,7 +152,8 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_remove_native_http_archive=" + rand.nextBoolean(),
         "--incompatible_static_name_resolution=" + rand.nextBoolean(),
         "--incompatible_string_is_not_iterable=" + rand.nextBoolean(),
-        "--internal_skylark_flag_test_canary=" + rand.nextBoolean());
+        "--internal_skylark_flag_test_canary=" + rand.nextBoolean(),
+        "--incompatible_never_use_embedded_jdk_for_javabase=" + rand.nextBoolean());
   }
 
   /**
@@ -170,9 +168,8 @@ public class SkylarkSemanticsConsistencyTest {
             ImmutableList.of(String.valueOf(rand.nextDouble()), String.valueOf(rand.nextDouble())))
         .experimentalEnableAndroidMigrationApis(rand.nextBoolean())
         .experimentalEnableRepoMapping(rand.nextBoolean())
-        .experimentalPlatformsApi(rand.nextBoolean())
         .experimentalRemapMainRepo(rand.nextBoolean())
-        .experimentalStarlarkConfigTransitions(rand.nextBoolean())
+        .experimentalPlatformsApi(rand.nextBoolean())
         .incompatibleBzlDisallowLoadAfterStatement(rand.nextBoolean())
         .incompatibleDepsetIsNotIterable(rand.nextBoolean())
         .incompatibleDepsetUnion(rand.nextBoolean())
@@ -183,13 +180,11 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleDisallowDictPlus(rand.nextBoolean())
         .incompatibleDisallowFileType(rand.nextBoolean())
         .incompatibleDisallowLegacyJavaInfo(rand.nextBoolean())
-        .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(rand.nextBoolean())
         .incompatibleDisallowOldStyleArgsAdd(rand.nextBoolean())
         .incompatibleDisallowSlashOperator(rand.nextBoolean())
         .incompatibleExpandDirectories(rand.nextBoolean())
         .incompatibleGenerateJavaCommonSourceJar(rand.nextBoolean())
         .incompatibleNewActionsApi(rand.nextBoolean())
-        .incompatibleNoAttrLicense(rand.nextBoolean())
         .incompatibleNoOutputAttrDefault(rand.nextBoolean())
         .incompatibleNoSupportToolsInActionInputs(rand.nextBoolean())
         .incompatibleNoTargetOutputGroup(rand.nextBoolean())
@@ -201,6 +196,7 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleStaticNameResolution(rand.nextBoolean())
         .incompatibleStringIsNotIterable(rand.nextBoolean())
         .internalSkylarkFlagTestCanary(rand.nextBoolean())
+        .incompatibleNeverUseEmbeddedJDKForJavabase(rand.nextBoolean())
         .build();
   }
 

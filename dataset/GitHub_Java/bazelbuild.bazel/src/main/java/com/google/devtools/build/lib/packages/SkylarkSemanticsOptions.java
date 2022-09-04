@@ -66,9 +66,15 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       name = "experimental_analysis_testing_improvements",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "If true, enables pieces of experimental Starlark API for analysis-phase testing.")
+      effectTags = {
+          OptionEffectTag.BUILD_FILE_SEMANTICS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
+      },
+      metadataTags = {
+          OptionMetadataTag.EXPERIMENTAL
+      },
+      help = "If true, enables pieces of experimental Skylark API for analysis-phase testing."
+  )
   public boolean experimentalAnalysisTestingImprovements;
 
   @Option(
@@ -79,7 +85,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
-          "Passes list of packages that can use the C++ Starlark API. Don't enable this flag yet, "
+          "Passes list of packages that can use the C++ Skylark API. Don't enable this flag yet, "
               + "we will be making breaking changes.")
   public List<String> experimentalCcSkylarkApiEnabledPackages;
 
@@ -116,19 +122,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       help = "If set to true, enables a number of platform-related Starlark APIs useful for "
           + "debugging.")
   public boolean experimentalPlatformsApi;
-
-  // TODO(cparsons): Resolve and finalize the transition() API. The transition implementation
-  // function should accept two mandatory parameters, 'settings' and 'attr'.
-  @Option(
-      name = "experimental_starlark_config_transitions",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "If set to true, enables creation of configuration transition objects (the "
-              + "`transition()` function) in Starlark.")
-  public boolean experimentalStarlarkConfigTransitions;
 
   @Option(
     name = "incompatible_bzl_disallow_load_after_statement",
@@ -182,12 +175,13 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+          OptionMetadataTag.INCOMPATIBLE_CHANGE,
+          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
       help =
           "If set to true, disable the deprecated parameters 'single_file' and 'non_empty' on "
-              + "attribute definition methods, such as attr.label().")
+              + "skylark attribute definition methods, such as attr.label()."
+  )
   public boolean incompatibleDisableDeprecatedAttrParams;
 
   @Option(
@@ -271,19 +265,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleDisallowLegacyJavaInfo;
 
   @Option(
-      name = "incompatible_disallow_load_labels_to_cross_package_boundaries",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, the label argument to 'load' cannot cross a package boundary."
-  )
-  public boolean incompatibleDisallowLoadLabelsToCrossPackageBoundaries;
-
-  @Option(
       name = "incompatible_generate_javacommon_source_jar",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -353,18 +334,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
               + "not on `ctx`."
   )
   public boolean incompatibleNewActionsApi;
-
-  @Option(
-      name = "incompatible_no_attr_license",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, disables the function `attr.license`.")
-  public boolean incompatibleNoAttrLicense;
 
   @Option(
       name = "incompatible_no_output_attr_default",
@@ -450,7 +419,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
 
   @Option(
       name = "incompatible_remove_native_git_repository",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -458,13 +427,14 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
       help =
-          "If set to true, the native git_repository rules are disabled; only the Starlark version "
-              + "will be available")
+          "If set to true, the native git_repository rules are disabled; only the skylark version "
+              + "will be available"
+  )
   public boolean incompatibleRemoveNativeGitRepository;
 
   @Option(
       name = "incompatible_remove_native_http_archive",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -472,8 +442,9 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
       help =
-          "If set to true, the native http_archive rules are disabled; only the Starlark version "
-              + "will be available")
+          "If set to true, the native http_archive rules are disabled; only the skylark version "
+              + "will be available"
+  )
   public boolean incompatibleRemoveNativeHttpArchive;
 
   @Option(
@@ -515,6 +486,20 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   )
   public boolean internalSkylarkFlagTestCanary;
 
+  @Option(
+      name = "incompatible_never_use_embedded_jdk_for_javabase",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "Don't use the embedded JDK as a fall-back --javabase if we can't find a locally"
+              + " installed JDK (using JAVA_HOME or `which javac`).")
+  public boolean incompatibleNeverUseEmbeddedJDKForJavabase;
+
   /** Constructs a {@link SkylarkSemantics} object corresponding to this set of option values. */
   public SkylarkSemantics toSkylarkSemantics() {
     return SkylarkSemantics.builder()
@@ -525,7 +510,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .experimentalEnableRepoMapping(experimentalEnableRepoMapping)
         .experimentalRemapMainRepo(experimentalRemapMainRepo)
         .experimentalPlatformsApi(experimentalPlatformsApi)
-        .experimentalStarlarkConfigTransitions(experimentalStarlarkConfigTransitions)
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -536,14 +520,11 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
         .incompatibleDisallowFileType(incompatibleDisallowFileType)
         .incompatibleDisallowLegacyJavaInfo(incompatibleDisallowLegacyJavaInfo)
-        .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(
-            incompatibleDisallowLoadLabelsToCrossPackageBoundaries)
         .incompatibleDisallowOldStyleArgsAdd(incompatibleDisallowOldStyleArgsAdd)
         .incompatibleDisallowSlashOperator(incompatibleDisallowSlashOperator)
         .incompatibleExpandDirectories(incompatibleExpandDirectories)
         .incompatibleGenerateJavaCommonSourceJar(incompatibleGenerateJavaCommonSourceJar)
         .incompatibleNewActionsApi(incompatibleNewActionsApi)
-        .incompatibleNoAttrLicense(incompatibleNoAttrLicense)
         .incompatibleNoOutputAttrDefault(incompatibleNoOutputAttrDefault)
         .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
@@ -555,6 +536,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleStaticNameResolution(incompatibleStaticNameResolution)
         .incompatibleStringIsNotIterable(incompatibleStringIsNotIterable)
         .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
+        .incompatibleNeverUseEmbeddedJDKForJavabase(incompatibleNeverUseEmbeddedJDKForJavabase)
         .build();
   }
 }

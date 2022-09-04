@@ -19,7 +19,6 @@ import static com.google.common.collect.ImmutableListMultimap.toImmutableListMul
 import static java.util.stream.Collectors.joining;
 
 import com.google.common.base.Functions;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
@@ -34,27 +33,17 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.StringUtilities;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
 /** Provider for a platform, which is a group of constraints and values. */
 @Immutable
 @AutoCodec
 public class PlatformInfo extends NativeInfo
     implements PlatformInfoApi<ConstraintSettingInfo, ConstraintValueInfo> {
-
-  /**
-   * The literal key that will be used to copy the {@link #remoteExecutionProperties} from the
-   * parent {@link PlatformInfo} into a new {@link PlatformInfo}'s {@link
-   * #remoteExecutionProperties}.
-   */
-  public static final String PARENT_REMOTE_EXECUTION_KEY = "{PARENT_REMOTE_EXECUTION_PROPERTIES}";
-
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "PlatformInfo";
 
@@ -77,7 +66,7 @@ public class PlatformInfo extends NativeInfo
 
     this.label = label;
     this.constraints = constraints;
-    this.remoteExecutionProperties = Strings.nullToEmpty(remoteExecutionProperties);
+    this.remoteExecutionProperties = remoteExecutionProperties;
   }
 
   @Override
@@ -114,25 +103,10 @@ public class PlatformInfo extends NativeInfo
 
   /** Builder class to facilitate creating valid {@link PlatformInfo} instances. */
   public static class Builder {
-
-    private PlatformInfo parent = null;
     private Label label;
     private final List<ConstraintValueInfo> constraints = new ArrayList<>();
-    private String remoteExecutionProperties = null;
+    private String remoteExecutionProperties = "";
     private Location location = Location.BUILTIN;
-
-    /**
-     * Sets the parent {@link PlatformInfo} that this platform inherits from. Constraint values set
-     * directly on this instance will be kept, but any other constraint settings will be found from
-     * the parent, if set.
-     *
-     * @param parent the platform that is the parent of this platform
-     * @return the {@link Builder} instance for method chaining
-     */
-    public Builder setParent(PlatformInfo parent) {
-      this.parent = parent;
-      return this;
-    }
 
     /**
      * Sets the {@link Label} for this {@link PlatformInfo}.
@@ -176,24 +150,7 @@ public class PlatformInfo extends NativeInfo
     }
 
     /**
-     * Sets the data being sent to a potential remote executor. If there is a parent {@link
-     * PlatformInfo} set, the literal string "{PARENT_REMOTE_EXECUTION_PROPERTIES}" will be replaced
-     * by the {@link #remoteExecutionProperties} from that parent. Also if the parent is set, and
-     * this instance's {@link #remoteExecutionProperties} is blank or unset, the parent's will be
-     * used directly.
-     *
-     * <p>Specific examples:
-     *
-     * <ul>
-     *   <li>parent.remoteExecutionProperties is unset: use the child's value
-     *   <li>parent.remoteExecutionProperties is set, child.remoteExecutionProperties is unset: use
-     *       the parent's value
-     *   <li>parent.remoteExecutionProperties is set, child.remoteExecutionProperties is set, and
-     *       does not contain {PARENT_REMOTE_EXECUTION_PROPERTIES}: use the child's value
-     *   <li>parent.remoteExecutionProperties is set, child.remoteExecutionProperties is set, and
-     *       does contain {PARENT_REMOTE_EXECUTION_PROPERTIES}: use the child's value, but
-     *       substitute the parent's value for {PARENT_REMOTE_EXECUTION_PROPERTIES}
-     * </ul>
+     * Sets the data being sent to a potential remote executor.
      *
      * @param properties the properties to be added
      * @return the {@link Builder} instance for method chaining
@@ -221,41 +178,9 @@ public class PlatformInfo extends NativeInfo
      *     constraint setting
      */
     public PlatformInfo build() throws DuplicateConstraintException {
-      // Validate that there are no collisions in the directly set constraint values.
       ImmutableList<ConstraintValueInfo> validatedConstraints = validateConstraints(constraints);
-
-      // Merge parent constraints and the validated constraints to a single set and create a
-      // collection.
-      ConstraintCollection platformConstraints =
-          new ConstraintCollection(parentConstraints(), validatedConstraints);
-
-      // Merge the remote execution properties.
-      String remoteExecutionProperties =
-          mergeRemoteExecutionProperties(parent, this.remoteExecutionProperties);
+      ConstraintCollection platformConstraints = new ConstraintCollection(validatedConstraints);
       return new PlatformInfo(label, platformConstraints, remoteExecutionProperties, location);
-    }
-
-    @Nullable
-    private ConstraintCollection parentConstraints() {
-      if (parent == null) {
-        return null;
-      }
-      return parent.constraints();
-    }
-
-    private static String mergeRemoteExecutionProperties(
-        PlatformInfo parent, String remoteExecutionProperties) {
-      String parentRemoteExecutionProperties = "";
-      if (parent != null) {
-        parentRemoteExecutionProperties = parent.remoteExecutionProperties();
-      }
-
-      if (remoteExecutionProperties == null) {
-        return parentRemoteExecutionProperties;
-      }
-
-      return StringUtilities.replaceAllLiteral(
-          remoteExecutionProperties, PARENT_REMOTE_EXECUTION_KEY, parentRemoteExecutionProperties);
     }
 
     public static ImmutableList<ConstraintValueInfo> validateConstraints(
