@@ -286,12 +286,21 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
 
               @Override
               public void onCompleted() {
-                try {
-                  verifyContents(digest, hashOut);
-                  out.flush();
-                  outerF.set(null);
-                } catch (IOException e) {
-                  outerF.setException(e);
+                String expectedHash = digest.getHash();
+                String actualHash = DigestUtil.hashCodeToString(hashOut.hash());
+                if (!expectedHash.equals(actualHash)) {
+                  String msg =
+                      String.format(
+                          "Expected hash '%s' does not match received hash '%s'.",
+                          expectedHash, actualHash);
+                  outerF.setException(new IOException(msg));
+                } else {
+                  try {
+                    out.flush();
+                    outerF.set(null);
+                  } catch (IOException e) {
+                    outerF.setException(e);
+                  }
                 }
               }
             });

@@ -15,10 +15,13 @@
 package com.google.devtools.build.lib.remote;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.AsyncCallable;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
@@ -252,9 +255,14 @@ public class Retrier {
     }
   }
 
-  /** Executes an {@link AsyncCallable}, retrying execution in case of failure. */
+  /**
+   * Executes an {@link AsyncCallable}, retrying execution in case of failure and returning a {@link
+   * ListenableFuture} pointing to the result/error.
+   */
   public <T> ListenableFuture<T> executeAsync(AsyncCallable<T> call) {
-    return executeAsync(call, newBackoff());
+    SettableFuture<T> f = SettableFuture.create();
+    executeAsync(call, f);
+    return f;
   }
 
   /**
@@ -262,38 +270,66 @@ public class Retrier {
    * {@code promise} to point to the result/error.
    */
   public <T> void executeAsync(AsyncCallable<T> call, SettableFuture<T> promise) {
-    promise.setFuture(executeAsync(call));
+    Preconditions.checkNotNull(call);
+    Preconditions.checkNotNull(promise);
+    Backoff backoff = newBackoff();
+    executeAsync(call, promise, backoff);
   }
 
-  /**
-   * Executes an {@link AsyncCallable}, retrying execution in case of failure with the given
-   * backoff.
-   */
-  private <T> ListenableFuture<T> executeAsync(AsyncCallable<T> call, Backoff backoff) {
+  private <T> void executeAsync(AsyncCallable<T> call, SettableFuture<T> outerF, Backoff backoff) {
+    Preconditions.checkState(!outerF.isDone(), "outerF completed already.");
     try {
-      return Futures.catchingAsync(
+      Futures.addCallback(
           call.call(),
-          Exception.class,
-          t -> onExecuteAsyncFailure(t, call, backoff),
+          new FutureCallback<T>() {
+            @Override
+            public void onSuccess(T t) {
+              outerF.set(t);
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+              onExecuteAsyncFailure(t, call, outerF, backoff);
+            }
+          },
           MoreExecutors.directExecutor());
     } catch (Exception e) {
-      return onExecuteAsyncFailure(e, call, backoff);
+      onExecuteAsyncFailure(e, call, outerF, backoff);
     }
   }
 
-  private <T> ListenableFuture<T> onExecuteAsyncFailure(
-      Exception t, AsyncCallable<T> call, Backoff backoff) {
+  private <T> void onExecuteAsyncFailure(
+      Throwable t, AsyncCallable<T> call, SettableFuture<T> outerF, Backoff backoff) {
     long waitMillis = backoff.nextDelayMillis();
-    if (waitMillis >= 0 && isRetriable(t)) {
+    if (waitMillis >= 0 && t instanceof Exception && isRetriable((Exception) t)) {
       try {
-        return Futures.scheduleAsync(
-            () -> executeAsync(call, backoff), waitMillis, TimeUnit.MILLISECONDS, retryService);
+        ListenableScheduledFuture<?> sf =
+            retryService.schedule(
+                () -> {
+                  executeAsync(call, outerF, backoff);
+                },
+                waitMillis,
+                TimeUnit.MILLISECONDS);
+        Futures.addCallback(
+            sf,
+            new FutureCallback<Object>() {
+              @Override
+              public void onSuccess(Object o) {
+                // Submitted successfully. Intentionally left empty.
+              }
+
+              @Override
+              public void onFailure(Throwable t) {
+                outerF.setException(t);
+              }
+            },
+            MoreExecutors.directExecutor());
       } catch (RejectedExecutionException e) {
-        // May be thrown by .scheduleAsync(...) if i.e. the executor is shutdown.
-        return Futures.immediateFailedFuture(new IOException(e));
+        // May be thrown by .schedule(...) if i.e. the executor is shutdown.
+        outerF.setException(new IOException(e));
       }
     } else {
-      return Futures.immediateFailedFuture(t);
+      outerF.setException(t);
     }
   }
 

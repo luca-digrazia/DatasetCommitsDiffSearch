@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
@@ -221,7 +220,8 @@ public class RemoteSpawnRunnerTest {
             any(Command.class),
             any(Path.class),
             any(Collection.class),
-            any(FileOutErr.class));
+            any(FileOutErr.class),
+            any(Boolean.class));
     verifyZeroInteractions(localRunner);
   }
 
@@ -276,8 +276,9 @@ public class RemoteSpawnRunnerTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  public void failedLocalActionShouldNotBeUploaded() throws Exception {
-    // Test that the outputs of a locally executed action that failed are not uploaded.
+  public void failedActionShouldOnlyUploadOutputs() throws Exception {
+    // Test that the outputs of a failed locally executed action are uploaded to a remote cache,
+    // but the action result itself is not.
 
     options.remoteUploadLocalResults = true;
 
@@ -318,15 +319,16 @@ public class RemoteSpawnRunnerTest {
             any(ActionKey.class),
             any(Action.class),
             any(Command.class),
-            /* uploadLocalResults= */ eq(true));
-    verify(cache, never())
+            eq(true));
+    verify(cache)
         .upload(
             any(ActionKey.class),
             any(Action.class),
             any(Command.class),
             any(Path.class),
             any(Collection.class),
-            any(FileOutErr.class));
+            any(FileOutErr.class),
+            eq(false));
   }
 
   @Test
@@ -403,7 +405,8 @@ public class RemoteSpawnRunnerTest {
             any(Command.class),
             any(Path.class),
             any(Collection.class),
-            any(FileOutErr.class));
+            any(FileOutErr.class),
+            eq(true));
 
     SpawnResult res =
         new SpawnResult.Builder()
@@ -1112,11 +1115,6 @@ public class RemoteSpawnRunnerTest {
     @Override
     public void report(ProgressStatus state, String name) {
       assertThat(state).isEqualTo(ProgressStatus.EXECUTING);
-    }
-
-    @Override
-    public MetadataInjector getMetadataInjector() {
-      throw new UnsupportedOperationException();
     }
   }
 }

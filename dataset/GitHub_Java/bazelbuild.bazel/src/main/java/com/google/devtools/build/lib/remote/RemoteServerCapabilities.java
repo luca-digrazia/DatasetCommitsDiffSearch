@@ -25,7 +25,6 @@ import build.bazel.remote.execution.v2.PriorityCapabilities.PriorityRange;
 import build.bazel.remote.execution.v2.ServerCapabilities;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import io.grpc.CallCredentials;
 import io.grpc.Context;
@@ -151,9 +150,7 @@ class RemoteServerCapabilities {
 
   /** Compare the remote server capabilities with those requested by current execution. */
   public static ClientServerCompatibilityStatus checkClientServerCompatibility(
-      ServerCapabilities capabilities,
-      RemoteOptions remoteOptions,
-      DigestFunction.Value digestFunction) {
+      ServerCapabilities capabilities, RemoteOptions remoteOptions, DigestFunction digestFunction) {
     ClientServerCompatibilityStatus.Builder result = new ClientServerCompatibilityStatus.Builder();
     boolean remoteExecution = !Strings.isNullOrEmpty(remoteOptions.remoteExecutor);
     if (!remoteExecution && Strings.isNullOrEmpty(remoteOptions.remoteCache)) {
@@ -191,7 +188,7 @@ class RemoteServerCapabilities {
       }
 
       // Check execution digest function.
-      if (execCap.getDigestFunction() == DigestFunction.Value.UNKNOWN) {
+      if (execCap.getDigestFunction() == DigestFunction.UNKNOWN) {
         // Server side error -- this is not supposed to happen.
         result.addError("Remote server error: UNKNOWN execution digest function.");
       }

@@ -90,7 +90,7 @@ final class RemoteSpawnCache implements SpawnCache {
   @Override
   public CacheHandle lookup(Spawn spawn, SpawnExecutionContext context)
       throws InterruptedException, IOException, ExecException {
-    if (!Spawns.mayBeCached(spawn) || !Spawns.mayBeExecutedRemotely(spawn)) {
+    if (!Spawns.mayBeCached(spawn)) {
       return SpawnCache.NO_RESULT_NO_STORE;
     }
     boolean checkCache = options.remoteAcceptCached;
@@ -189,12 +189,8 @@ final class RemoteSpawnCache implements SpawnCache {
         }
 
         @Override
-        public void store(SpawnResult result) throws ExecException, InterruptedException {
-          boolean uploadResults = Status.SUCCESS.equals(result.status()) && result.exitCode() == 0;
-          if (!uploadResults) {
-            return;
-          }
-
+        public void store(SpawnResult result)
+            throws ExecException, InterruptedException, IOException {
           if (options.experimentalGuardAgainstConcurrentChanges) {
             try (SilentCloseable c =
                 Profiler.instance().profile("RemoteCache.checkForConcurrentModifications")) {
@@ -204,13 +200,13 @@ final class RemoteSpawnCache implements SpawnCache {
               return;
             }
           }
-
+          boolean uploadAction = Status.SUCCESS.equals(result.status()) && result.exitCode() == 0;
           Context previous = withMetadata.attach();
           Collection<Path> files =
               RemoteSpawnRunner.resolveActionInputs(execRoot, spawn.getOutputFiles());
           try (SilentCloseable c = Profiler.instance().profile("RemoteCache.upload")) {
             remoteCache.upload(
-                actionKey, action, command, execRoot, files, context.getFileOutErr());
+                actionKey, action, command, execRoot, files, context.getFileOutErr(), uploadAction);
           } catch (IOException e) {
             String errorMsg = e.getMessage();
             if (isNullOrEmpty(errorMsg)) {

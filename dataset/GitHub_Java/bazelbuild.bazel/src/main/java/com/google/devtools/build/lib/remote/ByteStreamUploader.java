@@ -28,6 +28,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
 import com.google.common.hash.HashCode;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -230,18 +231,7 @@ class ByteStreamUploader extends AbstractReferenceCounted {
         return inProgress;
       }
 
-      Context ctx = Context.current();
-      ListenableFuture<Void> uploadResult =
-          Futures.transform(
-              retrier.executeAsync(() -> ctx.call(() -> startAsyncUpload(chunker))),
-              (v) -> {
-                synchronized (lock) {
-                  uploadedBlobs.add(hash);
-                }
-                return null;
-              },
-              MoreExecutors.directExecutor());
-      uploadsInProgress.put(digest, uploadResult);
+      final SettableFuture<Void> uploadResult = SettableFuture.create();
       uploadResult.addListener(
           () -> {
             synchronized (lock) {
@@ -249,6 +239,26 @@ class ByteStreamUploader extends AbstractReferenceCounted {
             }
           },
           MoreExecutors.directExecutor());
+      Futures.addCallback(
+          uploadResult,
+          new FutureCallback<Void>() {
+            @Override
+            public void onSuccess(Void result) {
+              synchronized (lock) {
+                uploadedBlobs.add(hash);
+              }
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+              // ignore
+            }
+          },
+          MoreExecutors.directExecutor());
+      uploadsInProgress.put(digest, uploadResult);
+      Context ctx = Context.current();
+      retrier.executeAsync(
+          () -> ctx.call(() -> startAsyncUpload(chunker, uploadResult)), uploadResult);
       return uploadResult;
     }
   }
@@ -260,8 +270,12 @@ class ByteStreamUploader extends AbstractReferenceCounted {
     }
   }
 
-  /** Starts a file upload an returns a future representing the upload. */
-  private ListenableFuture<Void> startAsyncUpload(Chunker chunker) {
+  /**
+   * Starts a file upload an returns a future representing the upload. The {@code
+   * overallUploadResult} future propagates cancellations from the caller to the upload.
+   */
+  private ListenableFuture<Void> startAsyncUpload(
+      Chunker chunker, ListenableFuture<Void> overallUploadResult) {
     try {
       chunker.reset();
     } catch (IOException e) {
@@ -272,9 +286,9 @@ class ByteStreamUploader extends AbstractReferenceCounted {
     AsyncUpload newUpload =
         new AsyncUpload(
             channel, callCredentials, callTimeoutSecs, instanceName, chunker, currUpload);
-    currUpload.addListener(
+    overallUploadResult.addListener(
         () -> {
-          if (currUpload.isCancelled()) {
+          if (overallUploadResult.isCancelled()) {
             newUpload.cancel();
           }
         },
