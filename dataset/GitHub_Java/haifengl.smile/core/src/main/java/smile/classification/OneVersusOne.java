@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -141,7 +141,7 @@ public class OneVersusOne<T> implements SoftClassifier<T> {
 
                 if (j == 0 && i == 1) {
                     try {
-                        classifiers[i][j].score(xij[0]);
+                        classifiers[i][j].f(xij[0]);
                         platts = new PlattScaling[k][];
                     } catch (UnsupportedOperationException ex) {
                         logger.info("The classifier doesn't support score function. Don't fit Platt scaling.");
@@ -224,7 +224,7 @@ public class OneVersusOne<T> implements SoftClassifier<T> {
 
         for (int i = 1; i < k; i++) {
             for (int j = 0; j < i; j++) {
-                r[i][j] = platts[i][j].scale(classifiers[i][j].score(x));
+                r[i][j] = platts[i][j].scale(classifiers[i][j].f(x));
                 r[j][i] = 1.0 - r[i][j];
             }
         }
