@@ -684,11 +684,6 @@ public class ObjcRuleClasses {
           provided module map to the compiler.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("module_map", LABEL).allowedFileTypes(FileType.of(".modulemap")))
-          /* <!-- #BLAZE_RULE($objc_compiling_rule).ATTRIBUTE(module_name) -->
-          Sets the module name for this target. By default the module name is the target path with
-          all special symbols replaced by _, e.g. //foo/baz:bar can be imported as foo_baz_bar.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(attr("module_name", STRING))
           /* Provides the label for header_scanner tool that is used to scan inclusions for ObjC
           sources and provide a list of required headers via a .header_list file.
 
@@ -1050,7 +1045,7 @@ public class ObjcRuleClasses {
           /* <!-- #BLAZE_RULE($objc_bundling_rule).ATTRIBUTE(infoplist)[DEPRECATED] -->
            The infoplist file. This corresponds to <i>appname</i>-Info.plist in Xcode projects.
 
-           <p>Bazel will perform variable substitution on the plist file for the following values
+           <p>Blaze will perform variable substitution on the plist file for the following values
            (if they are strings in the top-level <code>dict</code> of the plist):</p>
 
            <ul>
@@ -1063,7 +1058,7 @@ public class ObjcRuleClasses {
           </ul>
 
           <p>The key in <code>${}</code> may be suffixed with <code>:rfc1034identifier</code> (for
-          example <code>${PRODUCT_NAME::rfc1034identifier}</code>) in which case Bazel will
+          example <code>${PRODUCT_NAME::rfc1034identifier}</code>) in which case Blaze will
           replicate Xcode's behavior and replace non-RFC1034-compliant characters with
           <code>-</code>.</p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
@@ -1074,7 +1069,7 @@ public class ObjcRuleClasses {
            and only if the values conflict.  If both <code>infoplist</code> and
            <code>infoplists</code> are specified, the files defined in both attributes will be used.
 
-           <p>Bazel will perform variable substitution on the plist file for the following values
+           <p>Blaze will perform variable substitution on the plist file for the following values
            (if they are strings in the top-level <code>dict</code> of the plist):</p>
 
            <ul>
@@ -1087,7 +1082,7 @@ public class ObjcRuleClasses {
           </ul>
 
           <p>The key in <code>${}</code> may be suffixed with <code>:rfc1034identifier</code> (for
-          example <code>${PRODUCT_NAME::rfc1034identifier}</code>) in which case Bazel will
+          example <code>${PRODUCT_NAME::rfc1034identifier}</code>) in which case Blaze will
           replicate Xcode's behavior and replace non-RFC1034-compliant characters with
           <code>-</code>.</p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/

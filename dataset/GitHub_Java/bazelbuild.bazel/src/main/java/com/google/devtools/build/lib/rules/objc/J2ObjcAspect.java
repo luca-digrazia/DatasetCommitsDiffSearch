@@ -306,8 +306,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
       throws InterruptedException, ActionConflictException {
     JavaCompilationArgsProvider compilationArgsProvider =
         JavaInfo.getProvider(JavaCompilationArgsProvider.class, base);
-    JavaSourceInfoProvider sourceInfoProvider =
-            JavaInfo.getProvider(JavaSourceInfoProvider.class, base);
+    JavaSourceInfoProvider sourceInfoProvider = base.getProvider(JavaSourceInfoProvider.class);
     JavaGenJarsProvider genJarProvider = base.getProvider(JavaGenJarsProvider.class);
     ImmutableSet.Builder<Artifact> javaSourceFilesBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<Artifact> javaSourceJarsBuilder = ImmutableSet.builder();
@@ -641,7 +640,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
         supportData.getTransitiveImports(),
         supportData.getProtosInDirectDeps(),
         supportData.getTransitiveProtoPathFlags(),
-        supportData.getDirectProtoSourceRoots(),
         ruleContext.getLabel(),
         outputs,
         "j2objc",
