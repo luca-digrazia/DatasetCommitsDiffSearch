@@ -18,12 +18,12 @@
  *
  */
 package org.graylog2.periodical;
-import com.beust.jcommander.internal.Lists;
-import org.elasticsearch.search.SearchHit;
+
+import org.graylog2.Core;
 import org.graylog2.alerts.Alert;
 import org.graylog2.alerts.AlertCondition;
 import org.graylog2.alerts.AlertSender;
-import org.graylog2.plugin.Message;
+import org.graylog2.notifications.Notification;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamImpl;
@@ -35,15 +35,24 @@ import java.util.List;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class AlertScannerThread extends Periodical {
+public class AlertScannerThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(AlertScannerThread.class);
+    
+    public static final int INITIAL_DELAY = 10;
+    public static final int PERIOD = 60;
+    
+    private final Core server;
+    
+    public AlertScannerThread(Core server) {
+        this.server = server;
+    }
     
     @Override
     public void run() {
         LOG.debug("Running alert checks.");
 
-        List<Stream> alertedStreams = StreamImpl.loadAllWithConfiguredAlertConditions(core);
+        List<Stream> alertedStreams = StreamImpl.loadAllWithConfiguredAlertConditions(server);
 
         LOG.debug("There are {} streams with configured alert conditions.", alertedStreams.size());
 
@@ -62,26 +71,30 @@ public class AlertScannerThread extends Periodical {
                         LOG.info("Alert condition [{}] is triggered. Sending alerts.", alertCondition);
 
                         // Persist alert.
-                        Alert alert = Alert.factory(result, core);
+                        Alert alert = Alert.factory(result, server);
                         alert.save();
 
                         // Send alerts.
                         if (stream.getAlertReceivers().size() > 0) {
                             try {
-                                AlertSender sender = new AlertSender(core);
-                                if (alertCondition.getBacklog() > 0 && alertCondition.getSearchHits() != null) {
-                                    List<Message> backlog = Lists.newArrayList();
-                                    for (SearchHit searchHit : alertCondition.getSearchHits().getHits()) {
-                                        backlog.add(new Message(searchHit.getSource()));
-                                    }
-                                    sender.sendEmails(stream, result, backlog.subList(0, alertCondition.getBacklog()));
-                                } else {
-                                    sender.sendEmails(stream, result);
-                                }
+                                AlertSender sender = new AlertSender(server);
+                                sender.sendEmails(stream, result);
                             } catch (TransportConfigurationException e) {
+                                Notification notification = Notification.buildNow(server)
+                                        .addThisNode()
+                                        .addType(Notification.Type.EMAIL_TRANSPORT_CONFIGURATION_INVALID)
+                                        .addDetail("stream_id", stream.getId())
+                                        .addDetail("exception", e);
+                                notification.publishIfFirst();
                                 LOG.warn("Stream [{}] has alert receivers and is triggered, but email transport is not configured.", stream);
                             } catch (Exception e) {
-                                LOG.error("Stream [{}] has alert receivers and is triggered, but sending emails failed: ", stream, e);
+                                Notification notification = Notification.buildNow(server)
+                                        .addThisNode()
+                                        .addType(Notification.Type.EMAIL_TRANSPORT_FAILED)
+                                        .addDetail("stream_id", stream.getId())
+                                        .addDetail("exception", e);
+                                notification.publishIfFirst();
+                                LOG.error("Stream [{}] has alert receivers and is triggered, but sending emails failed", stream, e);
                             }
                         }
                     } else {
@@ -97,38 +110,4 @@ public class AlertScannerThread extends Periodical {
         }
     }
 
-    @Override
-    public boolean runsForever() {
-        return false;
-    }
-
-    @Override
-    public boolean isDaemon() {
-        return true;
-    }
-
-    @Override
-    public boolean stopOnGracefulShutdown() {
-        return true;
-    }
-
-    @Override
-    public boolean masterOnly() {
-        return true;
-    }
-
-    @Override
-    public boolean startOnThisNode() {
-        return true;
-    }
-
-    @Override
-    public int getInitialDelaySeconds() {
-        return 10;
-    }
-
-    @Override
-    public int getPeriodSeconds() {
-        return 60;
-    }
 }
