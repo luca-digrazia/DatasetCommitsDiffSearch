@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,31 +15,6 @@
  */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr.FALSE;
-import static com.sun.codemodel.JExpr.TRUE;
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr._super;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JExpr.ref;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeMirror;
-
-import org.androidannotations.annotations.EFragment;
-import org.androidannotations.annotations.Receiver.RegisterAt;
-import org.androidannotations.helper.ActionBarSherlockHelper;
-import org.androidannotations.helper.AnnotationHelper;
-import org.androidannotations.helper.OrmLiteHelper;
-import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
-import org.androidannotations.process.ProcessHolder;
-
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -52,6 +27,29 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JTypeVar;
 import com.sun.codemodel.JVar;
+
+import org.androidannotations.annotations.EFragment;
+import org.androidannotations.helper.ActionBarSherlockHelper;
+import org.androidannotations.helper.AnnotationHelper;
+import org.androidannotations.helper.OrmLiteHelper;
+import org.androidannotations.process.ProcessHolder;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
+
+import static com.sun.codemodel.JExpr.FALSE;
+import static com.sun.codemodel.JExpr.TRUE;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._super;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JExpr.ref;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 
 public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration {
 
@@ -67,7 +65,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private JVar injectBundleArgs;
 	private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
-	private ReceiverRegistrationHolder<EFragmentHolder> receiverRegistrationHolder;
+	private ReceiverRegistrationHolder receiverRegistrationHolder;
 	private JBlock onCreateOptionsMenuMethodBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
 	private JVar onCreateOptionsMenuMenuParam;
@@ -87,7 +85,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		super(processHolder, annotatedElement);
 		instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
-		receiverRegistrationHolder = new ReceiverRegistrationHolder<EFragmentHolder>(this);
+		receiverRegistrationHolder = new ReceiverRegistrationHolder(this);
 		setOnCreate();
 		setOnViewCreated();
 		setFragmentBuilder();
@@ -258,9 +256,8 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 		JBlock body = onCreateView.body();
 
-		if (!forceInjection) {
+		if (!forceInjection)
 			body.assign(contentView, _super().invoke(onCreateView).arg(inflater).arg(container).arg(savedInstanceState));
-		}
 
 		setContentViewBlock = body.block();
 
@@ -480,8 +477,8 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
-		return receiverRegistrationHolder.getIntentFilterField(intentFilterData);
+	public JFieldVar getIntentFilterField(String[] actions, String[] dataSchemes) {
+		return receiverRegistrationHolder.getIntentFilterField(actions, dataSchemes);
 	}
 
 	@Override
@@ -546,14 +543,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 			setOnDetach();
 		}
 		return onDetachBeforeSuperBlock;
-	}
-
-	@Override
-	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
-		if (RegisterAt.OnAttachOnDetach.equals(intentFilterData.getRegisterAt())) {
-			return getOnAttachAfterSuperBlock();
-		}
-		return getInitBody();
 	}
 
 	@Override

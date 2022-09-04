@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,40 +15,6 @@
  */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr.FALSE;
-import static com.sun.codemodel.JExpr.TRUE;
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr._super;
-import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.ElementFilter;
-
-import org.androidannotations.api.SdkVersionHelper;
-import org.androidannotations.helper.ActionBarSherlockHelper;
-import org.androidannotations.helper.ActivityIntentBuilder;
-import org.androidannotations.helper.AndroidManifest;
-import org.androidannotations.helper.AnnotationHelper;
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.helper.IntentBuilder;
-import org.androidannotations.helper.OrmLiteHelper;
-import org.androidannotations.holder.ReceiverRegistrationHolder.IntentFilterData;
-import org.androidannotations.process.ProcessHolder;
-
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
@@ -61,6 +27,39 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
+
+import org.androidannotations.api.SdkVersionHelper;
+import org.androidannotations.helper.ActionBarSherlockHelper;
+import org.androidannotations.helper.ActivityIntentBuilder;
+import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.helper.AnnotationHelper;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.helper.IntentBuilder;
+import org.androidannotations.helper.OrmLiteHelper;
+import org.androidannotations.process.ProcessHolder;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
+
+import static com.sun.codemodel.JExpr.FALSE;
+import static com.sun.codemodel.JExpr.TRUE;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._super;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
 public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration {
 
@@ -75,7 +74,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	private JDefinedClass intentBuilderClass;
 	private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
-	private ReceiverRegistrationHolder<EActivityHolder> receiverRegistrationHolder;
+	private ReceiverRegistrationHolder receiverRegistrationHolder;
 	private RoboGuiceHolder roboGuiceHolder;
 	private JMethod injectExtrasMethod;
 	private JBlock injectExtrasBlock;
@@ -103,7 +102,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		super(processHolder, annotatedElement);
 		instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
-		receiverRegistrationHolder = new ReceiverRegistrationHolder<EActivityHolder>(this);
+		receiverRegistrationHolder = new ReceiverRegistrationHolder(this);
 		setSetContentView();
 		intentBuilder = new ActivityIntentBuilder(this, androidManifest);
 		intentBuilder.build();
@@ -148,8 +147,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		onCreateBody.invoke(_super(), onCreate).arg(onCreateSavedInstanceState);
 		viewNotifierHelper.resetPreviousNotifier(onCreateBody, previousNotifier);
 	}
-
-	// CHECKSTYLE:OFF
 
 	protected void setOnStart() {
 		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onStart");
@@ -342,7 +339,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "setContentView");
 		method.annotate(Override.class);
 
-		List<JVar> params = new ArrayList<JVar>();
+		ArrayList<JVar> params = new ArrayList<JVar>();
 		for (int i = 0; i < paramTypes.length; i++) {
 			JVar param = method.param(paramTypes[i], paramNames[i]);
 			params.add(param);
@@ -378,15 +375,16 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 			onKeyDownBody._if( //
 					sdkInt.lt(JExpr.lit(5)) //
-							.cand(keyCodeParam.eq(keyEventClass.staticRef("KEYCODE_BACK"))) //
-							.cand(eventParam.invoke("getRepeatCount").eq(JExpr.lit(0)))) //
+					.cand(keyCodeParam.eq(keyEventClass.staticRef("KEYCODE_BACK"))) //
+					.cand(eventParam.invoke("getRepeatCount").eq(JExpr.lit(0)))) //
 					._then() //
 					.invoke("onBackPressed");
 
 			onKeyDownBody._return( //
 					JExpr._super().invoke(onKeyDownMethod) //
-							.arg(keyCodeParam) //
-							.arg(eventParam));
+					.arg(keyCodeParam) //
+					.arg(eventParam));
+
 		}
 	}
 
@@ -414,7 +412,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 				&& method.getThrownTypes().size() == 0 //
 				&& method.getModifiers().contains(Modifier.PUBLIC) //
 				&& method.getReturnType().getKind().equals(TypeKind.VOID) //
-				&& method.getParameters().size() == 0;
+				&& method.getParameters().size() == 0 //
+				;
 	}
 
 	@Override
@@ -458,9 +457,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 
 	protected void setScopeField() {
 		getRoboGuiceHolder().scope = getGeneratedClass().field(JMod.PRIVATE, classes().CONTEXT_SCOPE, "scope_");
-	}
 
-	// CHECKSTYLE:ON
+	}
 
 	@Override
 	public JMethod getInjectExtrasMethod() {
@@ -759,13 +757,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
-		return receiverRegistrationHolder.getIntentFilterField(intentFilterData);
-	}
-
-	@Override
-	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
-		return getInitBody();
+	public JFieldVar getIntentFilterField(String[] actions, String[] dataSchemes) {
+		return receiverRegistrationHolder.getIntentFilterField(actions, dataSchemes);
 	}
 
 	@Override

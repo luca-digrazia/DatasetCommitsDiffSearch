@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,7 +17,6 @@ package org.androidannotations.holder;
 
 import static com.sun.codemodel.JExpr.cast;
 import static com.sun.codemodel.JMod.PRIVATE;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +25,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.helper.CaseHelper;
+import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JBlock;
@@ -41,7 +41,7 @@ import com.sun.codemodel.JVar;
 
 public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 
-	private static final String METHOD_MAIN_LOOPER = "getMainLooper";
+    private static final String METHOD_MAIN_LOOPER = "getMainLooper";
 
 	protected JExpression contextRef;
 	protected JMethod init;
@@ -84,7 +84,7 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 	}
 
 	private void setResourcesRef() {
-		resourcesRef = getInitBody().decl(classes().RESOURCES, "resources" + generationSuffix(), getContextRef().invoke("getResources"));
+		resourcesRef = getInitBody().decl(classes().RESOURCES, "resources_", getContextRef().invoke("getResources"));
 	}
 
 	public JFieldVar getPowerManagerRef() {
@@ -99,7 +99,7 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 		JBlock methodBody = getInitBody();
 
 		JFieldRef serviceRef = classes().CONTEXT.staticRef("POWER_SERVICE");
-		powerManagerRef = getGeneratedClass().field(PRIVATE, classes().POWER_MANAGER, "powerManager" + generationSuffix());
+		powerManagerRef = getGeneratedClass().field(PRIVATE, classes().POWER_MANAGER, "powerManager_");
 		methodBody.assign(powerManagerRef, cast(classes().POWER_MANAGER, getContextRef().invoke("getSystemService").arg(serviceRef)));
 	}
 
@@ -113,7 +113,7 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 
 	protected JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
 		JClass databaseHelperClass = refClass(databaseHelperTypeMirror.toString());
-		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + generationSuffix();
+		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + ModelConstants.GENERATION_SUFFIX;
 		JFieldVar databaseHelperRef = generatedClass.field(PRIVATE, databaseHelperClass, fieldName);
 		databaseHelperRefs.put(databaseHelperTypeMirror, databaseHelperRef);
 
@@ -133,8 +133,8 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 
 	private void setHandler() {
 		JClass handlerClass = classes().HANDLER;
-		JClass looperClass = classes().LOOPER;
-		JInvocation arg = JExpr._new(handlerClass).arg(looperClass.staticInvoke(METHOD_MAIN_LOOPER));
-		handler = generatedClass.field(JMod.PRIVATE, handlerClass, "handler" + generationSuffix(), arg);
+        JClass looperClass = classes().LOOPER;
+        JInvocation arg = JExpr._new(handlerClass).arg(looperClass.staticInvoke(METHOD_MAIN_LOOPER));
+        handler = generatedClass.field(JMod.PRIVATE, handlerClass, "handler_", arg);
 	}
 }
