@@ -100,7 +100,9 @@ import javax.annotation.Nullable;
          help = "resource:run.txt",
          allowResidue = true,
          hasSensitiveResidue = true,
-         completion = "label-bin")
+         binaryStdOut = true,
+         completion = "label-bin",
+         binaryStdErr = true)
 public class RunCommand implements BlazeCommand  {
   /** Options for the "run" command. */
   public static class RunOptions extends OptionsBase {
@@ -184,19 +186,13 @@ public class RunCommand implements BlazeCommand  {
     String productName = env.getRuntime().getProductName();
     Artifact executable = targetToRun.getProvider(FilesToRunProvider.class).getExecutable();
 
-    BuildRequestOptions requestOptions = env.getOptions().getOptions(BuildRequestOptions.class);
-
     PathFragment executablePath = executable.getPath().asFragment();
-    PathFragment prettyExecutablePath =
-        OutputDirectoryLinksUtils.getPrettyPath(
-            executable.getPath(),
-            env.getWorkspaceName(),
-            env.getWorkspace(),
-            requestOptions.printWorkspaceInOutputPathsIfNeeded
-                ? env.getWorkingDirectory()
-                : env.getWorkspace(),
-            requestOptions.getSymlinkPrefix(productName),
-            productName);
+    PathFragment prettyExecutablePath = OutputDirectoryLinksUtils.getPrettyPath(
+          executable.getPath(),
+          env.getWorkspaceName(),
+          env.getWorkspace(),
+          env.getOptions().getOptions(BuildRequestOptions.class).getSymlinkPrefix(productName),
+          productName);
 
     RunUnder runUnder = env.getOptions().getOptions(BuildConfiguration.Options.class).runUnder;
     // Insert the command prefix specified by the "--run_under=<command-prefix>" option
