@@ -27,7 +27,6 @@ import org.graylog2.Configuration;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.EmptyIndexException;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.indexer.searches.SearchesTest;
 import org.graylog2.shared.system.activities.NullActivityWriter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -40,7 +39,6 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import javax.inject.Inject;
-import java.util.Collections;
 import java.util.Map;
 
 import static com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
@@ -49,11 +47,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(MockitoJUnitRunner.class)
 public class RebuildIndexRangesJobTest {
-    private static final String INDEX_NAME = "graylog";
     @ClassRule
     public static final EmbeddedElasticsearch EMBEDDED_ELASTICSEARCH = newEmbeddedElasticsearchRule().build();
     @Rule
-    public ElasticsearchRule elasticsearchRule;
+    public ElasticsearchRule elasticsearchRule = newElasticsearchRule().defaultEmbeddedElasticsearch();
 
     @Mock
     private Deflector deflector;
@@ -63,10 +60,6 @@ public class RebuildIndexRangesJobTest {
     private IndexRangeService indexRangeService;
     private RebuildIndexRangesJob rebuildIndexRangesJob;
 
-    public RebuildIndexRangesJobTest() {
-        this.elasticsearchRule = newElasticsearchRule().defaultEmbeddedElasticsearch();
-        this.elasticsearchRule.setLoadStrategyFactory(new SearchesTest.IndexCreatingLoadStrategyFactory(Collections.singleton(INDEX_NAME)));
-    }
 
     @Before
     public void setUp() throws Exception {
@@ -78,10 +71,10 @@ public class RebuildIndexRangesJobTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testCalculateRange() throws Exception {
-        final Map<String, Object> range = rebuildIndexRangesJob.calculateRange(INDEX_NAME);
+        final Map<String, Object> range = rebuildIndexRangesJob.calculateRange("graylog");
 
         assertThat(range).isNotNull();
-        assertThat(range.get("index")).isEqualTo(INDEX_NAME);
+        assertThat(range.get("index")).isEqualTo("graylog");
         assertThat(range.get("start")).isEqualTo(Ints.saturatedCast(new DateTime(2015, 1, 1, 12, 0, DateTimeZone.UTC).getMillis() / 1000L));
     }
 
