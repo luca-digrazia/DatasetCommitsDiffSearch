@@ -76,7 +76,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.Future;
@@ -332,7 +331,6 @@ public final class PackageFactory {
   private static final Logger logger = Logger.getLogger(PackageFactory.class.getName());
 
   private final RuleFactory ruleFactory;
-  private final ImmutableMap<String, RuleFunction> ruleFunctions;
   private final RuleClassProvider ruleClassProvider;
 
   private AtomicReference<? extends UnixGlob.FilesystemCalls> syscalls;
@@ -408,7 +406,6 @@ public final class PackageFactory {
       Package.Builder.Helper packageBuilderHelper) {
     this.platformSetRegexps = platformSetRegexps;
     this.ruleFactory = new RuleFactory(ruleClassProvider, attributeContainerFactory);
-    this.ruleFunctions = buildRuleFunctions(ruleFactory);
     this.ruleClassProvider = ruleClassProvider;
     threadPool = new ThreadPoolExecutor(100, 100, 15L, TimeUnit.SECONDS,
         new LinkedBlockingQueue<Runnable>(),
@@ -592,7 +589,7 @@ public final class PackageFactory {
     }
 
     GlobList<String> globList = GlobList.captureResults(includes, excludes, matches);
-    return new MutableList<>(globList, env);
+    return new MutableList<Object>(globList, env);
   }
 
   /**
@@ -1190,6 +1187,26 @@ public final class PackageFactory {
     };
   }
 
+  // Helper function for createRuleFunction.
+  private static void addRule(RuleFactory ruleFactory,
+                              String ruleClassName,
+                              PackageContext context,
+                              Map<String, Object> kwargs,
+                              FuncallExpression ast,
+                              Environment env)
+      throws RuleFactory.InvalidRuleException, Package.NameConflictException, InterruptedException {
+    RuleClass ruleClass = getBuiltInRuleClass(ruleClassName, ruleFactory);
+    BuildLangTypedAttributeValuesMap attributeValues = new BuildLangTypedAttributeValuesMap(kwargs);
+    AttributeContainer attributeContainer = ruleFactory.getAttributeContainer(ruleClass);
+    RuleFactory.createAndAddRule(context, ruleClass, attributeValues, ast, env, attributeContainer);
+  }
+
+  private static RuleClass getBuiltInRuleClass(String ruleClassName, RuleFactory ruleFactory) {
+    if (ruleFactory.getRuleClassNames().contains(ruleClassName)) {
+      return ruleFactory.getRuleClass(ruleClassName);
+    }
+    throw new IllegalArgumentException("no such rule class: "  + ruleClassName);
+  }
 
   /**
    * Get the PackageContext by looking up in the environment.
@@ -1207,56 +1224,28 @@ public final class PackageFactory {
     return value;
   }
 
-  private static ImmutableMap<String, RuleFunction> buildRuleFunctions(RuleFactory ruleFactory) {
-    ImmutableMap.Builder<String, RuleFunction> result = ImmutableMap.builder();
-    for (String ruleClass : ruleFactory.getRuleClassNames()) {
-      result.put(ruleClass, new RuleFunction(ruleClass, ruleFactory));
-    }
-    return result.build();
-  }
+  /**
+   * Returns a function-value implementing the build rule "ruleClass" (e.g. cc_library) in the
+   * specified package context.
+   */
+  private static BuiltinFunction newRuleFunction(
+      final RuleFactory ruleFactory, final String ruleClass) {
+    return new BuiltinFunction(
+        ruleClass, FunctionSignature.KWARGS, BuiltinFunction.USE_AST_ENV, /*isRule=*/ true) {
 
-  /** {@link BuiltinFunction} adapter for creating {@link Rule}s for native {@link RuleClass}es. */
-  private static class RuleFunction extends BuiltinFunction {
-    private final String ruleClassName;
-    private final RuleFactory ruleFactory;
-    private final RuleClass ruleClass;
-
-    RuleFunction(String ruleClassName, RuleFactory ruleFactory) {
-      super(ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_AST_ENV, /*isRule=*/ true);
-      this.ruleClassName = ruleClassName;
-      this.ruleFactory = Preconditions.checkNotNull(ruleFactory, "ruleFactory was null");
-      this.ruleClass = Preconditions.checkNotNull(
-          ruleFactory.getRuleClass(ruleClassName),
-          "No such rule class: %s",
-          ruleClassName);
-    }
-
-    @SuppressWarnings({"unchecked", "unused"})
-    public Runtime.NoneType invoke(
-        Map<String, Object> kwargs, FuncallExpression ast, Environment env)
-        throws EvalException, InterruptedException {
-      env.checkLoadingOrWorkspacePhase(ruleClassName, ast.getLocation());
-      try {
-        addRule(getContext(env, ast), kwargs, ast, env);
-      } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
-        throw new EvalException(ast.getLocation(), e.getMessage());
+      @SuppressWarnings({"unchecked", "unused"})
+      public Runtime.NoneType invoke(
+          Map<String, Object> kwargs, FuncallExpression ast, Environment env)
+          throws EvalException, InterruptedException {
+        env.checkLoadingOrWorkspacePhase(ruleClass, ast.getLocation());
+        try {
+          addRule(ruleFactory, ruleClass, getContext(env, ast), kwargs, ast, env);
+        } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
+          throw new EvalException(ast.getLocation(), e.getMessage());
+        }
+        return Runtime.NONE;
       }
-      return Runtime.NONE;
-    }
-
-    private void addRule(
-        PackageContext context,
-        Map<String, Object> kwargs,
-        FuncallExpression ast,
-        Environment env)
-            throws RuleFactory.InvalidRuleException, Package.NameConflictException,
-                InterruptedException {
-      BuildLangTypedAttributeValuesMap attributeValues =
-          new BuildLangTypedAttributeValuesMap(kwargs);
-      AttributeContainer attributeContainer = ruleFactory.getAttributeContainer(ruleClass);
-      RuleFactory.createAndAddRule(
-          context, ruleClass, attributeValues, ast, env, attributeContainer);
-    }
+    };
   }
 
   /**
@@ -1553,7 +1542,9 @@ public final class PackageFactory {
     for (String nativeFunction : Runtime.getFunctionNames(SkylarkNativeModule.class)) {
       builder.put(nativeFunction, Runtime.getFunction(SkylarkNativeModule.class, nativeFunction));
     }
-    builder.putAll(ruleFunctions);
+    for (String ruleClass : ruleFactory.getRuleClassNames()) {
+      builder.put(ruleClass, newRuleFunction(ruleFactory, ruleClass));
+    }
     builder.put("package", newPackageFunction(packageArguments));
     for (EnvironmentExtension extension : environmentExtensions) {
       for (BaseFunction function : extension.nativeModuleFunctions()) {
@@ -1567,6 +1558,7 @@ public final class PackageFactory {
   private void buildPkgEnv(
       Environment pkgEnv,
       PackageContext context,
+      RuleFactory ruleFactory,
       PackageIdentifier packageId) {
     // TODO(bazel-team): remove the naked functions that are redundant with the nativeModule,
     // or if not possible, at least make them straight copies from the native module variant.
@@ -1585,8 +1577,9 @@ public final class PackageFactory {
         .setup("repository_name", SkylarkNativeModule.repositoryName)
         .setup("environment_group", newEnvironmentGroupFunction.apply(context));
 
-    for (Entry<String, RuleFunction> entry : ruleFunctions.entrySet()) {
-      pkgEnv.setup(entry.getKey(), entry.getValue());
+    for (String ruleClass : ruleFactory.getRuleClassNames()) {
+      BaseFunction ruleFunction = newRuleFunction(ruleFactory, ruleClass);
+      pkgEnv.setup(ruleClass, ruleFunction);
     }
 
     for (EnvironmentExtension extension : environmentExtensions) {
@@ -1670,7 +1663,7 @@ public final class PackageFactory {
       PackageContext context =
           new PackageContext(
               pkgBuilder, globber, eventHandler, ruleFactory.getAttributeContainerFactory());
-      buildPkgEnv(pkgEnv, context, packageId);
+      buildPkgEnv(pkgEnv, context, ruleFactory, packageId);
 
       if (containsError) {
         pkgBuilder.setContainsErrors();
