@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.hamcrest.core.Is;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -170,6 +171,21 @@ public class CatResourceTest {
     }
 
     @Test
+    void testCountByColorContains() {
+        when().get("/cat/count/by/color/Dummy/contains").then()
+                .statusCode(200)
+                .body(is("0"));
+
+        when().get("/cat/count/by/color/hit/contains").then()
+                .statusCode(200)
+                .body(is("1"));
+
+        when().get("/cat/count/by/color/Gre/contains").then()
+                .statusCode(200)
+                .body(is("2"));
+    }
+
+    @Test
     void testExistsByColorStartsWith() {
         when().get("/cat/exists/by/colorStartsWith/Dum").then()
                 .statusCode(200)
@@ -210,5 +226,22 @@ public class CatResourceTest {
                 .statusCode(200)
                 .body(containsString("British Shorthair"))
                 .body(not(containsString("Persian")));
+    }
+
+    @Test
+    void testCustomFindPublicationYearObject() {
+        when().get("/cat/customFindDistinctive/2").then()
+                .statusCode(200)
+                .body(Is.is("true"));
+    }
+
+    @Test
+    void testCustomQueryCatColors() {
+        List<String> catColors = when().get("/cat/customQueryCatColors").then()
+                .statusCode(200)
+                .extract().body().jsonPath().getList(".", String.class);
+        assertThat(catColors)
+                .containsOnlyOnce("Grey", "White", "Black")
+                .hasSize(3);
     }
 }
