@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import javax.inject.Inject;
+
 import org.assertj.core.api.Assertions;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -19,9 +21,9 @@ import com.google.protobuf.EmptyProtos;
 
 import io.grpc.StatusRuntimeException;
 import io.grpc.testing.integration.Messages;
-import io.quarkus.grpc.GrpcClient;
 import io.quarkus.grpc.blocking.BlockingTestServiceGrpc;
 import io.quarkus.grpc.blocking.MutinyBlockingTestServiceGrpc;
+import io.quarkus.grpc.runtime.annotations.GrpcService;
 import io.quarkus.grpc.server.services.AssertHelper;
 import io.quarkus.grpc.server.services.BlockingTestService;
 import io.quarkus.test.QuarkusUnitTest;
@@ -31,22 +33,22 @@ import io.smallrye.mutiny.Uni;
 public class BlockingMethodsTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setFlatClassPath(true)
-            .setArchiveProducer(
-                    () -> ShrinkWrap.create(JavaArchive.class)
-                            .addPackage(EmptyProtos.class.getPackage())
-                            .addPackage(Messages.class.getPackage())
-                            .addPackage(BlockingTestServiceGrpc.class.getPackage())
-                            .addClasses(BlockingTestService.class, AssertHelper.class))
+    static final QuarkusUnitTest config = new QuarkusUnitTest().setArchiveProducer(
+            () -> ShrinkWrap.create(JavaArchive.class)
+                    .addPackage(EmptyProtos.class.getPackage())
+                    .addPackage(Messages.class.getPackage())
+                    .addPackage(BlockingTestServiceGrpc.class.getPackage())
+                    .addClasses(BlockingTestService.class, AssertHelper.class))
             .withConfigurationResource("blocking-test-config.properties");
 
     protected static final Duration TIMEOUT = Duration.ofSeconds(5);
 
-    @GrpcClient("blocking-test")
+    @Inject
+    @GrpcService("blocking-test")
     BlockingTestServiceGrpc.BlockingTestServiceBlockingStub service;
 
-    @GrpcClient("blocking-test")
+    @Inject
+    @GrpcService("blocking-test")
     MutinyBlockingTestServiceGrpc.MutinyBlockingTestServiceStub mutiny;
 
     @Test
@@ -111,7 +113,7 @@ public class BlockingMethodsTest {
         });
         assertThat(list).hasSize(10)
                 .allSatisfy(s -> {
-                    assertThat(s).contains("executor");
+                    assertThat(s).contains("worker");
                 });
     }
 
@@ -145,7 +147,7 @@ public class BlockingMethodsTest {
                 .map(p -> Messages.StreamingOutputCallRequest.newBuilder().setPayload(p).build());
         List<String> response = mutiny.fullDuplexCall(input)
                 .map(o -> o.getPayload().getBody().toStringUtf8())
-                .collect().asList()
+                .collectItems().asList()
                 .await().atMost(TIMEOUT);
         assertThat(response).isNotNull().hasSize(4)
                 .allSatisfy(s -> {
@@ -161,11 +163,11 @@ public class BlockingMethodsTest {
                 .map(p -> Messages.StreamingOutputCallRequest.newBuilder().setPayload(p).build());
         List<String> response = mutiny.fullDuplexCallBlocking(input)
                 .map(o -> o.getPayload().getBody().toStringUtf8())
-                .collect().asList()
+                .collectItems().asList()
                 .await().atMost(TIMEOUT);
         assertThat(response).isNotNull().hasSize(4)
                 .allSatisfy(s -> {
-                    assertThat(s).contains("executor");
+                    assertThat(s).contains("worker");
                 });
     }
 
@@ -176,7 +178,7 @@ public class BlockingMethodsTest {
                 .map(p -> Messages.StreamingOutputCallRequest.newBuilder().setPayload(p).build());
         List<String> response = mutiny.halfDuplexCall(input)
                 .map(o -> o.getPayload().getBody().toStringUtf8())
-                .collect().asList()
+                .collectItems().asList()
                 .await().atMost(TIMEOUT);
         assertThat(response).isNotNull().hasSize(4)
                 .allSatisfy(s -> {
@@ -191,11 +193,11 @@ public class BlockingMethodsTest {
                 .map(p -> Messages.StreamingOutputCallRequest.newBuilder().setPayload(p).build());
         List<String> response = mutiny.halfDuplexCallBlocking(input)
                 .map(o -> o.getPayload().getBody().toStringUtf8())
-                .collect().asList()
+                .collectItems().asList()
                 .await().atMost(TIMEOUT);
         assertThat(response).isNotNull().hasSize(4)
                 .allSatisfy(s -> {
-                    assertThat(s).contains("executor");
+                    assertThat(s).contains("worker");
                 });
     }
 
