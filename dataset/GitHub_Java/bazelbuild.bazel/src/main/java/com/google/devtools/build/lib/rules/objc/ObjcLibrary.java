@@ -24,9 +24,9 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
+import com.google.devtools.build.lib.rules.cpp.CcCompilationContextInfo;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.syntax.Type;
@@ -52,6 +52,9 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
         .addRuntimeDeps(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET))
         .addDepObjcProviders(
             ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR))
+        .addNonPropagatedDepObjcProviders(
+            ruleContext.getPrerequisites(
+                "non_propagated_deps", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR))
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .setAlwayslink(ruleContext.attributes().get("alwayslink", Type.BOOLEAN))
         .setHasModuleMap()
@@ -91,8 +94,8 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
     J2ObjcEntryClassProvider j2ObjcEntryClassProvider = new J2ObjcEntryClassProvider.Builder()
       .addTransitive(ruleContext.getPrerequisites("deps", Mode.TARGET,
           J2ObjcEntryClassProvider.class)).build();
-    CcCompilationContext ccCompilationContext =
-        new CcCompilationContext.Builder(ruleContext)
+    CcCompilationContextInfo ccCompilationContextInfo =
+        new CcCompilationContextInfo.Builder(ruleContext)
             .addDeclaredIncludeSrcs(
                 CompilationAttributes.Builder.fromRuleContext(ruleContext)
                     .build()
@@ -103,11 +106,11 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
             .build();
 
     CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
-    ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext);
+    ccCompilationInfoBuilder.setCcCompilationContextInfo(ccCompilationContextInfo);
 
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    ccLinkingInfoBuilder.setCcLinkParamsStore(
-        new CcLinkParamsStore(new ObjcLibraryCcLinkParamsStore(common)));
+    ccLinkingInfoBuilder.setCcLinkParamsInfo(
+        new CcLinkParamsInfo(new ObjcLibraryCcLinkParamsStore(common)));
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addNativeDeclaredProvider(common.getObjcProvider())

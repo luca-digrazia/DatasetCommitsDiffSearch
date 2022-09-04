@@ -1766,7 +1766,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         ActionsTestUtil.getFirstArtifactEndingWith(cppLibLinkAction.getInputs(), ".o");
 
     CppCompileAction action = (CppCompileAction) getGeneratingAction(cppLibArtifact);
-    assertAppleSdkVersionEnv(action.getIncompleteEnvironmentForTesting());
+    assertAppleSdkVersionEnv(action.getEnvironment());
   }
 
   @Test
