@@ -24,8 +24,6 @@ import com.google.auto.value.AutoValue;
 import org.graylog2.rest.models.system.responses.DeflectorConfigResponse;
 import org.graylog2.rest.models.system.responses.SizeBasedRotationStrategyResponse;
 
-import javax.validation.constraints.Min;
-
 @JsonAutoDetect
 @AutoValue
 public abstract class SizeBasedRotationStrategyConfig implements RotationStrategyConfig {
@@ -34,12 +32,12 @@ public abstract class SizeBasedRotationStrategyConfig implements RotationStrateg
 
     @JsonCreator
     public static SizeBasedRotationStrategyConfig create(@JsonProperty(TYPE_FIELD) String type,
-                                                         @JsonProperty("max_size") @Min(1) long maxSize) {
+                                                         @JsonProperty("max_size") long maxSize) {
         return new AutoValue_SizeBasedRotationStrategyConfig(type, maxSize);
     }
 
     @JsonCreator
-    public static SizeBasedRotationStrategyConfig create(@JsonProperty("max_size") @Min(1) long maxSize) {
+    public static SizeBasedRotationStrategyConfig create(@JsonProperty("max_size") long maxSize) {
         return create(SizeBasedRotationStrategyConfig.class.getCanonicalName(), maxSize);
     }
 

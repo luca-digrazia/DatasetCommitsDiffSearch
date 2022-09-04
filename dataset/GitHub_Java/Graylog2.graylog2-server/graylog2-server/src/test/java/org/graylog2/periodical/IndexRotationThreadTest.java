@@ -17,18 +17,14 @@
 package org.graylog2.periodical;
 
 import com.google.common.collect.ImmutableMap;
-import org.graylog2.indexer.IndexSetRegistry;
-import org.graylog2.indexer.LegacyDeflectorRegistry;
+import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.NoTargetIndexException;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.management.IndexManagementConfig;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
-import org.graylog2.plugin.indexer.rotation.RotationStrategyConfig;
-import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.system.activities.NullActivityWriter;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -46,7 +42,7 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.class)
 public class IndexRotationThreadTest {
     @Mock
-    private IndexSet indexSet;
+    private Deflector deflector;
     @Mock
     private NotificationService notificationService;
     @Mock
@@ -63,39 +59,32 @@ public class IndexRotationThreadTest {
             public RotationStrategy get() {
                 return new RotationStrategy() {
                     @Override
-                    public void rotate(IndexSet indexSet) {
+                    public void rotate() {
                     }
 
                     @Override
-                    public RotationStrategyConfig defaultConfiguration() {
-                        return null;
-                    }
-
-                    @Override
-                    public Class<? extends RotationStrategyConfig> configurationClass() {
+                    public Class<?> configurationClass() {
                         return null;
                     }
                 };
             }
         };
 
-        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy", "retention"));
+        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy"));
 
-        final IndexSetRegistry indexSetRegistry = new LegacyDeflectorRegistry(indexSet);
         final IndexRotationThread rotationThread = new IndexRotationThread(
                 notificationService,
                 indices,
-                indexSetRegistry,
+                deflector,
                 cluster,
                 new NullActivityWriter(),
-                mock(NodeId.class),
                 clusterConfigService,
                 ImmutableMap.<String, Provider<RotationStrategy>>builder().put("strategy", provider).build()
         );
 
-        indexSetRegistry.forEach(rotationThread::checkForRotation);
+        rotationThread.checkForRotation();
 
-        verify(indexSet, never()).cycle();
+        verify(deflector, never()).cycle();
     }
 
     @Test
@@ -105,40 +94,35 @@ public class IndexRotationThreadTest {
             public RotationStrategy get() {
                 return new RotationStrategy() {
                     @Override
-                    public void rotate(IndexSet indexSet) {
-                        indexSet.cycle();
+                    public void rotate() {
+                        deflector.cycle();
                     }
 
                     @Override
-                    public RotationStrategyConfig defaultConfiguration() {
-                        return null;
-                    }
-
-                    @Override
-                    public Class<? extends RotationStrategyConfig> configurationClass() {
+                    public Class<?> configurationClass() {
                         return null;
                     }
                 };
             }
         };
 
-        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy", "retention"));
+        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy"));
 
-        final IndexSetRegistry indexSetRegistry = new LegacyDeflectorRegistry(indexSet);
         final IndexRotationThread rotationThread = new IndexRotationThread(
                 notificationService,
                 indices,
-                indexSetRegistry,
+                deflector,
                 cluster,
                 new NullActivityWriter(),
-                mock(NodeId.class),
                 clusterConfigService,
                 ImmutableMap.<String, Provider<RotationStrategy>>builder().put("strategy", provider).build()
         );
 
-        indexSetRegistry.forEach(rotationThread::checkForRotation);
+        when(deflector.getNewestTargetName()).thenReturn("some_index");
 
-        verify(indexSet, times(1)).cycle();
+        rotationThread.checkForRotation();
+
+        verify(deflector, times(1)).cycle();
     }
 
     @Test
@@ -148,61 +132,56 @@ public class IndexRotationThreadTest {
             public RotationStrategy get() {
                 return new RotationStrategy() {
                     @Override
-                    public void rotate(IndexSet indexSet) {
+                    public void rotate() {
                     }
 
                     @Override
-                    public RotationStrategyConfig defaultConfiguration() {
-                        return null;
-                    }
-
-                    @Override
-                    public Class<? extends RotationStrategyConfig> configurationClass() {
+                    public Class<?> configurationClass() {
                         return null;
                     }
                 };
             }
         };
 
-        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy", "retention"));
+        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy"));
 
-        final IndexSetRegistry indexSetRegistry = new LegacyDeflectorRegistry(indexSet);
         final IndexRotationThread rotationThread = new IndexRotationThread(
                 notificationService,
                 indices,
-                indexSetRegistry,
+                deflector,
                 cluster,
                 new NullActivityWriter(),
-                mock(NodeId.class),
                 clusterConfigService,
                 ImmutableMap.<String, Provider<RotationStrategy>>builder().put("strategy", provider).build()
         );
 
-        indexSetRegistry.forEach(rotationThread::checkForRotation);
+        when(deflector.getNewestTargetName()).thenReturn("some_index");
 
-        verify(indexSet, never()).cycle();
+        rotationThread.checkForRotation();
+
+        verify(deflector, never()).cycle();
     }
 
     @Test
     public void testDontPerformRotationIfClusterIsDown() throws NoTargetIndexException {
         final Provider<RotationStrategy> provider = mock(Provider.class);
         when(cluster.isConnected()).thenReturn(false);
+        when(cluster.isHealthy()).thenReturn(false);
+        when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("strategy"));
 
-        final IndexSetRegistry indexSetRegistry = new LegacyDeflectorRegistry(indexSet);
         final IndexRotationThread rotationThread = new IndexRotationThread(
                 notificationService,
                 indices,
-                indexSetRegistry,
+                deflector,
                 cluster,
                 new NullActivityWriter(),
-                mock(NodeId.class),
                 clusterConfigService,
                 ImmutableMap.<String, Provider<RotationStrategy>>builder().put("strategy", provider).build()
         );
 
         rotationThread.doRun();
 
-        verify(indexSet, never()).cycle();
+        verify(deflector, never()).cycle();
         verify(provider, never()).get();
     }
 }
