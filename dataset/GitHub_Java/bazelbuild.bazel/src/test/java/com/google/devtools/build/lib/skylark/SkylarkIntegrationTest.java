@@ -133,7 +133,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testExternalRepoLabelWorkspaceRoot_subdirRepoLayout() throws Exception {
+  public void testExternalRepoLabelWorkspaceRoot() throws Exception {
     scratch.overwriteFile(
         "WORKSPACE",
         new ImmutableList.Builder<String>()
@@ -157,35 +157,6 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     ConfiguredTarget myTarget = getConfiguredTarget("@r//:t");
     String result = (String) getMyInfoFromTarget(myTarget).getValue("result");
     assertThat(result).isEqualTo("external/r");
-  }
-
-  @Test
-  public void testExternalRepoLabelWorkspaceRoot_siblingRepoLayout() throws Exception {
-    scratch.overwriteFile(
-        "WORKSPACE",
-        new ImmutableList.Builder<String>()
-            .addAll(analysisMock.getWorkspaceContents(mockToolsConfig))
-            .add("local_repository(name='r', path='/r')")
-            .build());
-
-    scratch.file("/r/WORKSPACE");
-    scratch.file(
-        "/r/test/skylark/extension.bzl",
-        "load('@//myinfo:myinfo.bzl', 'MyInfo')",
-        "def _impl(ctx):",
-        "  return [MyInfo(result = ctx.label.workspace_root)]",
-        "my_rule = rule(implementation = _impl, attrs = { })");
-    scratch.file(
-        "/r/BUILD", "load('//:test/skylark/extension.bzl', 'my_rule')", "my_rule(name='t')");
-
-    // Required since we have a new WORKSPACE file.
-    invalidatePackages(true);
-
-    setSkylarkSemanticsOptions("--experimental_sibling_repository_layout");
-
-    ConfiguredTarget myTarget = getConfiguredTarget("@r//:t");
-    String result = (String) getMyInfoFromTarget(myTarget).getValue("result");
-    assertThat(result).isEqualTo("../r");
   }
 
   @Test
@@ -2882,7 +2853,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     getConfiguredTarget("//test:test");
 
-    assertContainsEvent("[none]");
+    assertContainsEvent("<license object>");
   }
 
   @Test
