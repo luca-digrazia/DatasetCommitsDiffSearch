@@ -14,32 +14,33 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertSameContents;
+import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-
 import java.util.List;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for {@link RawAttributeMapper}.
  */
+@RunWith(JUnit4.class)
 public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
 
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
+  @Before
+  public final void createMapper() throws Exception {
     // Run AbstractAttributeMapper tests through a RawAttributeMapper.
     mapper = RawAttributeMapper.of(rule);
   }
 
   private Rule setupGenRule() throws Exception {
-    return createRule("x", "myrule",
+    return scratchRule("x", "myrule",
         "sh_binary(",
         "    name = 'myrule',",
         "    srcs = select({",
@@ -50,68 +51,76 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
         "    data = [ ':data_a', ':data_b' ])");
   }
 
+  @Test
   public void testGetAttribute() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
     List<Label> value = rawMapper.get("data", BuildType.LABEL_LIST);
-    assertNotNull(value);
-    assertThat(value).containsExactly(Label.create("x", "data_a"), Label.create("x", "data_b"));
+    assertThat(value).isNotNull();
+    assertThat(value).containsExactly(
+        Label.create("@//x", "data_a"), Label.create("@//x", "data_b"));
 
     // Configurable attribute: trying to directly access from a RawAttributeMapper throws a
     // type mismatch exception.
-    try {
-      rawMapper.get("srcs", BuildType.LABEL_LIST);
-      fail("Expected srcs lookup to fail since the returned type is a SelectorList and not a list");
-    } catch (IllegalArgumentException e) {
-      assertThat(e.getCause().getMessage())
-          .contains("SelectorList cannot be cast to java.util.List");
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            "Expected srcs lookup to fail since the returned type is a SelectorList and not a list",
+            IllegalArgumentException.class,
+            () -> rawMapper.get("srcs", BuildType.LABEL_LIST));
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "Unexpected configurable attribute \"srcs\" in sh_binary rule //x:myrule: "
+                + "expected list(label), is select");
   }
 
   @Override
+  @Test
   public void testGetAttributeType() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
-    assertEquals(BuildType.LABEL_LIST, rawMapper.getAttributeType("data")); // not configurable
-    assertEquals(BuildType.LABEL_LIST, rawMapper.getAttributeType("srcs")); // configurable
+    assertThat(rawMapper.getAttributeType("data"))
+        .isEqualTo(BuildType.LABEL_LIST); // not configurable
+    assertThat(rawMapper.getAttributeType("srcs")).isEqualTo(BuildType.LABEL_LIST); // configurable
   }
 
+  @Test
   public void testConfigurabilityCheck() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
-    assertFalse(rawMapper.isConfigurable("data", BuildType.LABEL_LIST));
-    assertTrue(rawMapper.isConfigurable("srcs", BuildType.LABEL_LIST));
+    assertThat(rawMapper.isConfigurable("data")).isFalse();
+    assertThat(rawMapper.isConfigurable("srcs")).isTrue();
   }
 
   /**
    * Tests that RawAttributeMapper can't handle label visitation with configurable attributes.
    */
+  @Test
   public void testVisitLabels() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
-    try {
-      rawMapper.visitLabels(new AttributeMap.AcceptsLabelAttribute() {
-        @Override
-        public void acceptLabelAttribute(Label label, Attribute attribute) {
-          // Nothing to do.
-        }
-      });
-      fail("Expected label visitation to fail since one attribute is configurable");
-    } catch (IllegalArgumentException e) {
-      assertThat(e.getCause().getMessage())
-          .contains("SelectorList cannot be cast to java.util.List");
-    }
+    IllegalArgumentException e =
+        assertThrows(
+            "Expected label visitation to fail since one attribute is configurable",
+            IllegalArgumentException.class,
+            () -> rawMapper.visitAllLabels((attribute, label) -> {}));
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "Unexpected configurable attribute \"srcs\" in sh_binary rule //x:myrule: "
+                + "expected list(label), is select");
   }
 
+  @Test
   public void testGetConfigurabilityKeys() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
-    assertSameContents(
-        ImmutableSet.of(
-            Label.parseAbsolute("//conditions:a"),
-            Label.parseAbsolute("//conditions:b"),
-            Label.parseAbsolute("//conditions:default")),
-        rawMapper.getConfigurabilityKeys("srcs", BuildType.LABEL_LIST));
+    assertThat(rawMapper.getConfigurabilityKeys("srcs", BuildType.LABEL_LIST))
+        .containsExactly(
+            Label.parseAbsolute("//conditions:a", ImmutableMap.of()),
+            Label.parseAbsolute("//conditions:b", ImmutableMap.of()),
+            Label.parseAbsolute("//conditions:default", ImmutableMap.of()));
     assertThat(rawMapper.getConfigurabilityKeys("data", BuildType.LABEL_LIST)).isEmpty();
   }
 
+  @Test
   public void testGetMergedValues() throws Exception {
-    Rule rule = createRule("x", "myrule",
+    Rule rule = scratchRule("x", "myrule",
         "sh_binary(",
         "    name = 'myrule',",
         "    srcs = select({",
@@ -119,15 +128,17 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
         "        '//conditions:b': ['b.sh', 'c.sh'],",
         "    }))");
     RawAttributeMapper rawMapper = RawAttributeMapper.of(rule);
-    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST)).containsExactly(
-        Label.parseAbsolute("//x:a.sh"),
-        Label.parseAbsolute("//x:b.sh"),
-        Label.parseAbsolute("//x:c.sh"))
+    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST))
+        .containsExactly(
+            Label.parseAbsolute("//x:a.sh", ImmutableMap.of()),
+            Label.parseAbsolute("//x:b.sh", ImmutableMap.of()),
+            Label.parseAbsolute("//x:c.sh", ImmutableMap.of()))
         .inOrder();
   }
 
+  @Test
   public void testMergedValuesWithConcatenatedSelects() throws Exception {
-    Rule rule = createRule("x", "myrule",
+    Rule rule = scratchRule("x", "myrule",
         "sh_binary(",
         "    name = 'myrule',",
         "    srcs = select({",
@@ -138,12 +149,13 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
         "            '//conditions:b2': ['b2.sh']})",
         "    )");
     RawAttributeMapper rawMapper = RawAttributeMapper.of(rule);
-    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST)).containsExactly(
-        Label.parseAbsolute("//x:a1.sh"),
-        Label.parseAbsolute("//x:b1.sh"),
-        Label.parseAbsolute("//x:another_b1.sh"),
-        Label.parseAbsolute("//x:a2.sh"),
-        Label.parseAbsolute("//x:b2.sh"))
+    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST))
+        .containsExactly(
+            Label.parseAbsolute("//x:a1.sh", ImmutableMap.of()),
+            Label.parseAbsolute("//x:b1.sh", ImmutableMap.of()),
+            Label.parseAbsolute("//x:another_b1.sh", ImmutableMap.of()),
+            Label.parseAbsolute("//x:a2.sh", ImmutableMap.of()),
+            Label.parseAbsolute("//x:b2.sh", ImmutableMap.of()))
         .inOrder();
   }
 }

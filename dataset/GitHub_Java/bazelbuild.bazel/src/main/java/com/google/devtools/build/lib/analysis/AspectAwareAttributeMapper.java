@@ -19,21 +19,23 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.DependencyFilter;
+import com.google.devtools.build.lib.packages.Type;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
- * An {@link AttributeMap} that supports attribute type queries on both a rule
- * and its aspects and attribute value queries on the rule.
+ * An {@link AttributeMap} that supports attribute type queries on both a rule and its aspects and
+ * attribute value queries on the rule.
  *
- * <p>An attribute type query is anything accessible from {@link Attribute} (i.e.
- * anything about how the attribute is integrated into the {@link RuleClass}). An
- * attribute value query is anything related to the actual value an attribute takes.
+ * <p>An attribute type query is anything accessible from {@link Attribute} (i.e. anything about how
+ * the attribute is integrated into the {@link com.google.devtools.build.lib.packages.RuleClass}).
+ * An attribute value query is anything related to the actual value an attribute takes.
  *
- * <p>For example, given {@code deps = [":adep"]}, checking that {@code deps} exists
- * or that it's type is {@link BuildType.LABEL_LIST} are type queries. Checking that
- * its value is explicitly set in the BUILD File or that its value
- * {@code [":adep"]} are value queries..
+ * <p>For example, given {@code deps = [":adep"]}, checking that {@code deps} exists or that it's
+ * type is {@link com.google.devtools.build.lib.packages.BuildType#LABEL_LIST} are type queries.
+ * Checking that its value is explicitly set in the BUILD File or that its value {@code [":adep"]}
+ * are value queries..
  *
  * <p>Value queries on aspect attributes trigger {@link UnsupportedOperationException}.
  */
@@ -47,16 +49,14 @@ class AspectAwareAttributeMapper implements AttributeMap {
     this.aspectAttributes = aspectAttributes;
   }
 
-  /**
-   * Don't use this except where absolutely necessary. This exposes internal implementation details.
-   */
-  ImmutableMap<String, Attribute> getAspectAttributes() {
-    return aspectAttributes;
-  }
-
   @Override
   public String getName() {
     return ruleAttributes.getName();
+  }
+
+  @Override
+  public String getRuleClassName() {
+    return ruleAttributes.getRuleClassName();
   }
 
   @Override
@@ -79,19 +79,18 @@ class AspectAwareAttributeMapper implements AttributeMap {
             "attribute %s has type %s, not expected type %s",
             attributeName, attribute.getType(), type));
       } else {
-        throw new UnsupportedOperationException("Attribute '%s' comes from an aspect. "
-            + "Value retrieval for aspect attributes is not supported.");
+        throw new UnsupportedOperationException(
+            String.format(
+                "Attribute '%s' comes from an aspect. "
+                    + "Value retrieval for aspect attributes is not supported.",
+                attributeName));
       }
     }
   }
 
   @Override
-  public <T> boolean isConfigurable(String attributeName, Type<T> type) {
-    if (ruleAttributes.has(attributeName, type)) {
-      return ruleAttributes.isConfigurable(attributeName, type);
-    }
-    // Any scenario aside from a "select(...)" in a BUILD file is not configurable.
-    return false;
+  public boolean isConfigurable(String attributeName) {
+    return ruleAttributes.isConfigurable(attributeName);
   }
 
   @Override
@@ -129,7 +128,17 @@ class AspectAwareAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public void visitLabels(AcceptsLabelAttribute observer) throws InterruptedException {
+  public void visitAllLabels(BiConsumer<Attribute, Label> consumer) {
+    throw new UnsupportedOperationException("rule + aspects label visition is not supported");
+  }
+
+  @Override
+  public void visitLabels(Attribute attribute, Consumer<Label> consumer) {
+    throw new UnsupportedOperationException("rule + aspects label visition is not supported");
+  }
+
+  @Override
+  public void visitLabels(DependencyFilter filter, BiConsumer<Attribute, Label> consumer) {
     throw new UnsupportedOperationException("rule + aspects label visition is not supported");
   }
 
@@ -154,7 +163,16 @@ class AspectAwareAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public boolean has(String attrName, Type<?> type) {
+  public boolean has(String attrName) {
+    if (ruleAttributes.has(attrName)) {
+      return true;
+    } else {
+      return aspectAttributes.containsKey(attrName);
+    }
+  }
+
+  @Override
+  public <T> boolean has(String attrName, Type<T> type) {
     if (ruleAttributes.has(attrName, type)) {
       return true;
     } else {
