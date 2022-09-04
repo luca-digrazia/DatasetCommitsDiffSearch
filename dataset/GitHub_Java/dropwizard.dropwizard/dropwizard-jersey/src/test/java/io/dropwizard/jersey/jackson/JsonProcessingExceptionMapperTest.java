@@ -11,6 +11,7 @@ import org.glassfish.jersey.test.JerseyTest;
 import org.glassfish.jersey.test.TestProperties;
 import org.junit.Test;
 
+import javax.validation.Validator;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
@@ -42,7 +43,6 @@ public class JsonProcessingExceptionMapperTest extends JerseyTest {
         Response response = target("/json/broken").request(MediaType.APPLICATION_JSON)
                 .post(Entity.entity(new BrokenRepresentation(ImmutableList.of("whee")), MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
-        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
     }
 
     @Test
@@ -54,14 +54,12 @@ public class JsonProcessingExceptionMapperTest extends JerseyTest {
         Response response = target("/json/brokenList").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity(ent, MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
-        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
     }
 
     @Test
     public void returnsA500ForNonSerializableRepresentationClassesOutbound() throws Exception {
         Response response = target("/json/brokenOutbound").request(MediaType.APPLICATION_JSON).get();
         assertThat(response.getStatus()).isEqualTo(500);
-        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
     }
 
     @Test
@@ -69,7 +67,6 @@ public class JsonProcessingExceptionMapperTest extends JerseyTest {
         Response response = target("/json/interface").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity("\"hello\"", MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
-        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
     }
 
     @Test
@@ -77,7 +74,6 @@ public class JsonProcessingExceptionMapperTest extends JerseyTest {
         Response response = target("/json/interfaceList").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity("[\"hello\"]", MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
-        assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
     }
 
     @Test
