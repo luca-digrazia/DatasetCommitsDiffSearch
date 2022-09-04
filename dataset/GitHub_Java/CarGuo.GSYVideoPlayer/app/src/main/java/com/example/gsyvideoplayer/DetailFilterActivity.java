@@ -10,7 +10,6 @@ import android.widget.RelativeLayout;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
-import com.example.gsyvideoplayer.effect.PixelationEffect;
 import com.example.gsyvideoplayer.utils.JumpUtils;
 import com.example.gsyvideoplayer.video.SampleControlVideo;
 import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
@@ -26,15 +25,12 @@ import com.shuyu.gsyvideoplayer.effect.DocumentaryEffect;
 import com.shuyu.gsyvideoplayer.effect.DuotoneEffect;
 import com.shuyu.gsyvideoplayer.effect.FillLightEffect;
 import com.shuyu.gsyvideoplayer.effect.GammaEffect;
-import com.shuyu.gsyvideoplayer.effect.GaussianBlurEffect;
 import com.shuyu.gsyvideoplayer.effect.GrainEffect;
 import com.shuyu.gsyvideoplayer.effect.HueEffect;
 import com.shuyu.gsyvideoplayer.effect.InvertColorsEffect;
 import com.shuyu.gsyvideoplayer.effect.LamoishEffect;
 import com.shuyu.gsyvideoplayer.effect.NoEffect;
-import com.shuyu.gsyvideoplayer.effect.OverlayEffect;
 import com.shuyu.gsyvideoplayer.effect.PosterizeEffect;
-import com.shuyu.gsyvideoplayer.effect.SampleBlurEffect;
 import com.shuyu.gsyvideoplayer.effect.SaturationEffect;
 import com.shuyu.gsyvideoplayer.effect.SepiaEffect;
 import com.shuyu.gsyvideoplayer.effect.SharpnessEffect;
@@ -187,10 +183,10 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
                 effect = new AutoFixEffect(deep);
                 break;
             case 1:
-                effect = new PixelationEffect();
+                effect = new BlackAndWhiteEffect();
                 break;
             case 2:
-                effect = new BlackAndWhiteEffect();
+                effect = new BrightnessEffect(deep);
                 break;
             case 3:
                 effect = new ContrastEffect(deep);
@@ -252,22 +248,10 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
             case 22:
                 effect = new NoEffect();
                 break;
-            case 23:
-                effect = new OverlayEffect();
-                break;
-            case 24:
-                effect = new SampleBlurEffect(4.0f);
-                break;
-            case 25:
-                effect = new GaussianBlurEffect(6.0f, GaussianBlurEffect.TYPEXY);
-                break;
-            case 26:
-                effect = new BrightnessEffect(deep);
-                break;
         }
         detailPlayer.setEffectFilter(effect);
         type++;
-        if (type > 25) {
+        if (type > 22) {
             type = 0;
         }
     }
