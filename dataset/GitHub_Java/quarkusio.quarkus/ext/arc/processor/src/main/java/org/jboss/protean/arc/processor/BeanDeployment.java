@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 
 import javax.enterprise.inject.Model;
 import javax.enterprise.inject.spi.DefinitionException;
-import javax.enterprise.inject.spi.DeploymentException;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -43,10 +42,8 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.logging.Logger.Level;
-import org.jboss.protean.arc.processor.BeanDeploymentValidator.ValidationContext;
 import org.jboss.protean.arc.processor.BeanProcessor.BuildContextImpl;
 import org.jboss.protean.arc.processor.BeanRegistrar.RegistrationContext;
-import org.jboss.protean.arc.processor.BuildExtension.BuildContext;
 import org.jboss.protean.arc.processor.BuildExtension.Key;
 
 /**
@@ -103,7 +100,7 @@ public class BeanDeployment {
         this.beanResolver = new BeanResolver(this);
         List<ObserverInfo> observers = new ArrayList<>();
         List<InjectionPointInfo> injectionPoints = new ArrayList<>();
-        this.beans = findBeans(initBeanDefiningAnnotations(additionalBeanDefiningAnnotations, stereotypes.keySet()), observers, injectionPoints);
+        this.beans = findBeans(initBeanDefiningAnnotations(additionalBeanDefiningAnnotations, stereotypes), observers, injectionPoints);
 
         if (buildContext != null) {
             buildContext.putInternal(Key.INJECTION_POINTS.asString(), Collections.unmodifiableList(injectionPoints));
@@ -137,24 +134,8 @@ public class BeanDeployment {
         }
 
         // Validate the bean deployment
-        ValidationContextImpl validationContext = new ValidationContextImpl(buildContext);
         for (BeanDeploymentValidator validator : validators) {
-            validator.validate(validationContext);
-        }
-        List<Throwable> errors = validationContext.getErrors();
-        if (!errors.isEmpty()) {
-            if (errors.size() == 1) {
-                throw new DeploymentException(errors.get(0));
-            } else {
-                DeploymentException deploymentException = new DeploymentException("Multiple deployment problems occured: " + errors.stream()
-                        .map(e -> e.getMessage())
-                        .collect(Collectors.toList())
-                        .toString());
-                for (Throwable error : errors) {
-                    deploymentException.addSuppressed(error);
-                }
-                throw deploymentException;
-            }
+            validator.validate();
         }
 
         this.observers = observers;
@@ -162,7 +143,7 @@ public class BeanDeployment {
 
         LOGGER.infof("Build deployment created in %s ms", System.currentTimeMillis() - start);
     }
-    
+
     public Collection<BeanInfo> getBeans() {
         return beans;
     }
@@ -271,7 +252,7 @@ public class BeanDeployment {
         return stereotypes;
     }
 
-    private List<BeanInfo> findBeans(Collection<DotName> beanDefiningAnnotations, List<ObserverInfo> observers, List<InjectionPointInfo> injectionPoints) {
+    private List<BeanInfo> findBeans(List<DotName> beanDefiningAnnotations, List<ObserverInfo> observers, List<InjectionPointInfo> injectionPoints) {
 
         Set<ClassInfo> beanClasses = new HashSet<>();
         Set<MethodInfo> producerMethods = new HashSet<>();
@@ -477,49 +458,17 @@ public class BeanDeployment {
         return interceptors;
     }
 
-    public static Set<DotName> initBeanDefiningAnnotations(Collection<DotName> additionalBeanDefiningAnnotationss, Set<DotName> stereotypes) {
-        Set<DotName> beanDefiningAnnotations = new HashSet<>();
+    private List<DotName> initBeanDefiningAnnotations(Collection<DotName> additionalBeanDefiningAnnotationss, Map<DotName, StereotypeInfo> stereotypes) {
+        List<DotName> beanDefiningAnnotations = new ArrayList<>();
         for (ScopeInfo scope : ScopeInfo.values()) {
             beanDefiningAnnotations.add(scope.getDotName());
         }
         if (additionalBeanDefiningAnnotationss != null) {
             beanDefiningAnnotations.addAll(additionalBeanDefiningAnnotationss);
         }
-        beanDefiningAnnotations.addAll(stereotypes);
+        beanDefiningAnnotations.addAll(stereotypes.keySet());
         beanDefiningAnnotations.add(DotNames.create(Model.class));
         return beanDefiningAnnotations;
-    }
-    
-    static class ValidationContextImpl implements ValidationContext {
-
-        private final BuildContext buildContext;
-        
-        private final List<Throwable> errors;
-        
-        public ValidationContextImpl(BuildContext buildContext) {
-            this.buildContext = buildContext;
-            this.errors = new ArrayList<Throwable>();
-        }
-
-        @Override
-        public <V> V get(Key<V> key) {
-            return buildContext.get(key);
-        }
-
-        @Override
-        public <V> V put(Key<V> key, V value) {
-            return buildContext.put(key, value);
-        }
-
-        @Override
-        public void addDeploymentProblem(Throwable problem) {
-            errors.add(problem);
-        }
-
-        List<Throwable> getErrors() {
-            return errors;
-        }
-        
     }
 
 }
