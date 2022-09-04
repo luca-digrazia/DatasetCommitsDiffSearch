@@ -515,7 +515,7 @@ public class JavaOptions extends FragmentOptions {
   public boolean disableAbsoluteJavabase;
 
   @Override
-  public FragmentOptions getHost() {
+  public FragmentOptions getHost(boolean fallback) {
     JavaOptions host = (JavaOptions) getDefault();
 
     host.disableAbsoluteJavabase = disableAbsoluteJavabase;
