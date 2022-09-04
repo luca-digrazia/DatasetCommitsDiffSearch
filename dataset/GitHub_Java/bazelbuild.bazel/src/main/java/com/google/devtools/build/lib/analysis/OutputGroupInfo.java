@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.syntax.EvalUtils.SKYLARK_COMPARATOR;
 
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -32,7 +33,6 @@ import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.OutputGroupInfoApi;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
@@ -118,8 +118,8 @@ public final class OutputGroupInfo extends NativeInfo
   /**
    * The default set of OutputGroups we typically want to build.
    */
-  public static final ImmutableSortedSet<String> DEFAULT_GROUPS =
-      ImmutableSortedSet.of(DEFAULT, TEMP_FILES, HIDDEN_TOP_LEVEL);
+  public static final ImmutableSet<String> DEFAULT_GROUPS =
+      ImmutableSet.of(DEFAULT, TEMP_FILES, HIDDEN_TOP_LEVEL);
 
   private final ImmutableMap<String, NestedSet<Artifact>> outputGroups;
 
@@ -218,7 +218,7 @@ public final class OutputGroupInfo extends NativeInfo
   }
 
   @Override
-  public Object getIndex(Object key, Location loc, StarlarkContext context) throws EvalException {
+  public Object getIndex(Object key, Location loc) throws EvalException {
     if (!(key instanceof String)) {
       throw new EvalException(loc, String.format(
           "Output grout names must be strings, got %s instead",

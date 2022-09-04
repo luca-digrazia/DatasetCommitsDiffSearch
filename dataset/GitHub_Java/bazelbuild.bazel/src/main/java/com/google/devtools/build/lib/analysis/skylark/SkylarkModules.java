@@ -15,13 +15,11 @@
 package com.google.devtools.build.lib.analysis.skylark;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.packages.BazelLibrary;
 import com.google.devtools.build.lib.packages.SkylarkNativeModule;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.TopLevelBootstrap;
-import com.google.devtools.build.lib.syntax.MethodLibrary;
-import com.google.devtools.build.lib.syntax.Runtime;
 
 /**
  * The basis for a Skylark Environment with all build-related modules registered.
@@ -39,17 +37,14 @@ public final class SkylarkModules {
           SkylarkNativeModule.class,
           SkylarkRuleClassFunctions.class,
           StructProvider.STRUCT,
-          OutputGroupInfo.SKYLARK_CONSTRUCTOR,
-          ActionsProvider.INSTANCE);
+          OutputGroupInfo.SKYLARK_CONSTRUCTOR);
 
   /**
    * Adds bindings for skylark built-ins and non-rules-specific globals of the build API to
    * the given environment map builder.
    */
   public static void addSkylarkGlobalsToBuilder(ImmutableMap.Builder<String, Object> envBuilder) {
-    Runtime.addConstantsToBuilder(envBuilder);
-    MethodLibrary.addBindingsToBuilder(envBuilder);
-
+    BazelLibrary.addSkylarkGlobalsToBuilder(envBuilder);
     topLevelBootstrap.addBindingsToBuilder(envBuilder);
   }
 }
