@@ -105,8 +105,7 @@ public class LdapResource extends RestResource {
                 ldapSettings.getDefaultGroup(),
                 ldapSettings.getGroupMapping(),
                 ldapSettings.getGroupSearchBase(),
-                ldapSettings.getGroupIdAttribute(),
-                ldapSettings.getAdditionalDefaultGroups());
+                ldapSettings.getGroupIdAttribute());
     }
 
     @POST
@@ -218,7 +217,6 @@ public class LdapResource extends RestResource {
         ldapSettings.setGroupMapping(request.groupMapping());
         ldapSettings.setGroupSearchBase(request.groupSearchBase());
         ldapSettings.setGroupIdAttribute(request.groupIdAttribute());
-        ldapSettings.setAdditionalDefaultGroups(request.additionalDefaultGroups());
 
         ldapSettingsService.save(ldapSettings);
     }
