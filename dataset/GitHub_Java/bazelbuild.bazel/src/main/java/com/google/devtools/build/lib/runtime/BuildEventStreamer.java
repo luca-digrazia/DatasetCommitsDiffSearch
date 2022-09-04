@@ -33,18 +33,14 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.rules.extra.ExtraAction;
-import java.util.ArrayList;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Future;
 import java.util.logging.Logger;
 
 /** Listen for {@link BuildEvent} and stream them to the provided {@link BuildEventTransport}. */
 public class BuildEventStreamer implements EventHandler {
-
   private final Collection<BuildEventTransport> transports;
   private Set<BuildEventId> announcedEvents;
   private final Set<BuildEventId> postedEvents = new HashSet<>();
@@ -92,10 +88,15 @@ public class BuildEventStreamer implements EventHandler {
     }
 
     for (BuildEventTransport transport : transports) {
-      if (linkEvent != null) {
-        transport.sendBuildEvent(linkEvent);
+      try {
+        if (linkEvent != null) {
+          transport.sendBuildEvent(linkEvent);
+        }
+        transport.sendBuildEvent(event);
+      } catch (IOException e) {
+        // TODO(aehlig): signal that the build ought to be aborted
+        log.severe("Failed to write to build event transport: " + e);
       }
-      transport.sendBuildEvent(event);
     }
   }
 
@@ -126,18 +127,12 @@ public class BuildEventStreamer implements EventHandler {
   }
 
   private void close() {
-    List<Future<Void>> shutdownFutures = new ArrayList<>(transports.size());
-
     for (BuildEventTransport transport : transports) {
-      shutdownFutures.add(transport.close());
-    }
-
-    // Wait for all transports to close.
-    for (Future<Void> f : shutdownFutures) {
       try {
-        f.get();
-      } catch (Exception e) {
-        log.severe("Failed to close a build event transport: " + e);
+        transport.close();
+      } catch (IOException e) {
+        // TODO(aehlig): signal that the build ought to be aborted
+        log.warning("Failure while closing build event transport: " + e);
       }
     }
   }
@@ -186,14 +181,9 @@ public class BuildEventStreamer implements EventHandler {
     close();
   }
 
-  /**
-   * Return true, if the action is not worth being reported. This is the case, if the action
-   * executed successfully and is not an ExtraAction.
-   */
   private static boolean isActionWithoutError(BuildEvent event) {
     return event instanceof ActionExecutedEvent
-        && ((ActionExecutedEvent) event).getException() == null
-        && (!(((ActionExecutedEvent) event).getAction() instanceof ExtraAction));
+        && ((ActionExecutedEvent) event).getException() == null;
   }
 
   private boolean bufferUntilPrerequisitesReceived(BuildEvent event) {
