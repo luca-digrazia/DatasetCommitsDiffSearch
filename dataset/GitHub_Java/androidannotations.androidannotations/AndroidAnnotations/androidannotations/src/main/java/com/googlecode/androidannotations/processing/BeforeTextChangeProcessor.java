@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -29,7 +29,6 @@ import com.googlecode.androidannotations.annotations.BeforeTextChange;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.TextWatcherHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpression;
@@ -41,7 +40,7 @@ import com.sun.codemodel.JVar;
 /**
  * @author Mathieu Boniface
  */
-public class BeforeTextChangeProcessor implements DecoratingElementProcessor {
+public class BeforeTextChangeProcessor implements ElementProcessor {
 
 	private final TextWatcherHelper helper;
 
@@ -58,7 +57,8 @@ public class BeforeTextChangeProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
 		String methodName = element.getSimpleName().toString();
 
@@ -97,7 +97,8 @@ public class BeforeTextChangeProcessor implements DecoratingElementProcessor {
 
 		}
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
+		BeforeTextChange annotation = element.getAnnotation(BeforeTextChange.class);
+		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "BeforeTextChanged", holder);
 
 		for (JFieldRef idRef : idsRefs) {
 			TextWatcherHolder textWatcherHolder = helper.getOrCreateListener(codeModel, holder, idRef, viewParameterType);
@@ -109,7 +110,7 @@ public class BeforeTextChangeProcessor implements DecoratingElementProcessor {
 			JBlock methodBody = methodToCall.body();
 
 			methodBody.add(previousBody);
-			JExpression activityRef = holder.generatedClass.staticRef("this");
+			JExpression activityRef = holder.eBean.staticRef("this");
 			textChangeCall = methodBody.invoke(activityRef, methodName);
 
 			for (int i = 0; i < parameters.size(); i++) {
