@@ -15,15 +15,17 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import java.util.Objects;
+import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** Wraps merged Android resources. */
 public class MergedAndroidResources extends ParsedAndroidResources {
   private final Artifact mergedResources;
   private final Artifact classJar;
+  @Nullable private final Artifact aapt2RTxt;
   @Nullable private final Artifact dataBindingInfoZip;
   private final ResourceDependencies resourceDependencies;
   /**
@@ -35,49 +37,55 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   private final ProcessedAndroidManifest manifest;
 
   public static MergedAndroidResources mergeFrom(
-      RuleContext ruleContext, ParsedAndroidResources parsed, boolean neverlink)
+      AndroidDataContext dataContext,
+      ParsedAndroidResources parsed,
+      ResourceDependencies resourceDeps)
       throws InterruptedException {
 
-    AndroidConfiguration androidConfiguration = AndroidCommon.getAndroidConfig(ruleContext);
-
-    boolean useCompiledMerge =
-        androidConfiguration.getAndroidAaptVersion().equals(AndroidAaptVersion.AAPT2)
-            && androidConfiguration.skipParsingAction();
-
-    Preconditions.checkState(
-        !useCompiledMerge || parsed.getCompiledSymbols() != null,
+    Preconditions.checkNotNull(
+        parsed.getCompiledSymbols(),
         "Should not use compiled merge if no compiled symbols are available!");
 
     AndroidResourceMergingActionBuilder builder =
-        new AndroidResourceMergingActionBuilder(ruleContext)
+        new AndroidResourceMergingActionBuilder()
             .setJavaPackage(parsed.getJavaPackage())
-            .withDependencies(ResourceDependencies.fromRuleDeps(ruleContext, neverlink))
-            .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
-            .setUseCompiledMerge(useCompiledMerge);
+            .withDependencies(resourceDeps)
+            .setThrowOnResourceConflict(dataContext.throwOnResourceConflict())
+            .setAnnotateRFieldsFromTransitiveDeps(dataContext.annotateRFieldsFromTransitiveDeps())
+            .setOmitTransitiveDependenciesFromAndroidRClasses(
+                dataContext.omitTransitiveResourcesFromAndroidRClasses());
 
-    if (DataBinding.isEnabled(ruleContext)) {
-      builder.setDataBindingInfoZip(DataBinding.getLayoutInfoFile(ruleContext));
+    parsed.asDataBindingContext().supplyLayoutInfo(builder::setDataBindingInfoZip);
+
+    if (dataContext.getAndroidConfig().useRTxtFromMergedResources()) {
+      builder.setAapt2RTxtOut(
+          dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_R_TXT));
     }
 
     return builder
         .setManifestOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
-        .setMergedResourcesOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
+            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
         .setClassJarOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
-        .build(ruleContext, parsed);
+            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
+        .build(dataContext, parsed);
   }
 
   public static MergedAndroidResources of(
       ParsedAndroidResources parsed,
       Artifact mergedResources,
       Artifact classJar,
+      Artifact aapt2RTxt,
       @Nullable Artifact dataBindingInfoZip,
       ResourceDependencies resourceDependencies,
       ProcessedAndroidManifest manifest) {
     return new MergedAndroidResources(
-        parsed, mergedResources, classJar, dataBindingInfoZip, resourceDependencies, manifest);
+        parsed,
+        mergedResources,
+        classJar,
+        aapt2RTxt,
+        dataBindingInfoZip,
+        resourceDependencies,
+        manifest);
   }
 
   MergedAndroidResources(MergedAndroidResources other) {
@@ -85,26 +93,39 @@ public class MergedAndroidResources extends ParsedAndroidResources {
         other,
         other.mergedResources,
         other.classJar,
+        other.aapt2RTxt,
         other.dataBindingInfoZip,
         other.resourceDependencies,
         other.manifest);
   }
 
-  private MergedAndroidResources(
+  protected MergedAndroidResources(
       ParsedAndroidResources other,
       Artifact mergedResources,
       Artifact classJar,
+      Artifact aapt2RTxt,
       @Nullable Artifact dataBindingInfoZip,
       ResourceDependencies resourceDependencies,
       ProcessedAndroidManifest manifest) {
     super(other, manifest);
     this.mergedResources = mergedResources;
     this.classJar = classJar;
+    this.aapt2RTxt = aapt2RTxt;
     this.dataBindingInfoZip = dataBindingInfoZip;
     this.resourceDependencies = resourceDependencies;
     this.manifest = manifest;
   }
 
+  /**
+   * Gets an Artifact containing a zip of merged resources.
+   *
+   * <p>If assets were processed together with resources, the zip will also contain merged assets.
+   *
+   * @deprecated This artifact is produced by an often-expensive action and should not be used if
+   *     another option is available. Furthermore, it will be replaced by flat files once we
+   *     completely move to aapt2.
+   */
+  @Deprecated
   public Artifact getMergedResources() {
     return mergedResources;
   }
@@ -118,8 +139,21 @@ public class MergedAndroidResources extends ParsedAndroidResources {
     return dataBindingInfoZip;
   }
 
+  public Artifact getJavaClassJar() {
+    return classJar;
+  }
+
+  @Nullable
+  Artifact getAapt2RTxt() {
+    return aapt2RTxt;
+  }
+
   @Override
   public ProcessedAndroidManifest getStampedManifest() {
+    return manifest;
+  }
+
+  public ProcessedAndroidManifest getProcessedManifest() {
     return manifest;
   }
 
@@ -130,22 +164,41 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   /**
    * Validates and packages this rule's resources.
    *
-   * <p>See {@link ValidatedAndroidResources#validateFrom(RuleContext, MergedAndroidResources)}.
-   * This method is a convenience method for calling that one.
+   * <p>See {@link ValidatedAndroidResources#validateFrom(AndroidDataContext,
+   * MergedAndroidResources)}. This method is a convenience method for calling that one.
    */
-  public ValidatedAndroidResources validate(RuleContext ruleContext) throws InterruptedException {
-    return ValidatedAndroidResources.validateFrom(ruleContext, this);
+  public ValidatedAndroidResources validate(AndroidDataContext dataContext)
+      throws InterruptedException {
+    return ValidatedAndroidResources.validateFrom(dataContext, this);
+  }
+
+  @Override
+  public Optional<? extends MergedAndroidResources> maybeFilter(
+      RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter, boolean isDependency)
+      throws RuleErrorException {
+    return super.maybeFilter(errorConsumer, resourceFilter, isDependency)
+        .map(
+            parsed ->
+                MergedAndroidResources.of(
+                    parsed,
+                    mergedResources,
+                    classJar,
+                    aapt2RTxt,
+                    dataBindingInfoZip,
+                    resourceDependencies,
+                    manifest));
   }
 
   @Override
   public boolean equals(Object object) {
-    if (!super.equals(object)) {
+    if (!super.equals(object) || !(object instanceof MergedAndroidResources)) {
       return false;
     }
 
     MergedAndroidResources other = (MergedAndroidResources) object;
-    return mergedResources.equals(other.mergedResources)
+    return Objects.equals(mergedResources, other.mergedResources)
         && classJar.equals(other.classJar)
+        && Objects.equals(aapt2RTxt, other.aapt2RTxt)
         && Objects.equals(dataBindingInfoZip, other.dataBindingInfoZip)
         && resourceDependencies.equals(other.resourceDependencies);
   }
@@ -153,6 +206,11 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   @Override
   public int hashCode() {
     return Objects.hash(
-        super.hashCode(), mergedResources, classJar, dataBindingInfoZip, resourceDependencies);
+        super.hashCode(),
+        mergedResources,
+        classJar,
+        aapt2RTxt,
+        dataBindingInfoZip,
+        resourceDependencies);
   }
 }
