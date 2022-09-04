@@ -47,7 +47,7 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
 
     /** Returns a struct field corresponding to this vector. */
     default StructField field() {
-        return new StructField(name(), type(), measure().orElse(null));
+        return new StructField(name(), type(), measure());
     }
 
     /** Number of elements in the vector. */
