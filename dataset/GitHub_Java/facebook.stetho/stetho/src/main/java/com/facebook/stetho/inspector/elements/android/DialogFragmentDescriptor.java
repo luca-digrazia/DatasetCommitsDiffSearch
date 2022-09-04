@@ -20,7 +20,6 @@ import com.facebook.stetho.common.android.FragmentCompat;
 import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
 import com.facebook.stetho.inspector.elements.AttributeAccumulator;
 import com.facebook.stetho.inspector.elements.ChainedDescriptor;
-import com.facebook.stetho.inspector.elements.ComputedStyleAccumulator;
 import com.facebook.stetho.inspector.elements.Descriptor;
 import com.facebook.stetho.inspector.elements.DescriptorMap;
 import com.facebook.stetho.inspector.elements.NodeType;
@@ -44,7 +43,7 @@ final class DialogFragmentDescriptor
     if (compat != null) {
       Class<?> dialogFragmentClass = compat.getDialogFragmentClass();
       LogUtil.d("Adding support for %s", dialogFragmentClass);
-      map.register(dialogFragmentClass, new DialogFragmentDescriptor(compat));
+      map.registerDescriptor(dialogFragmentClass, new DialogFragmentDescriptor(compat));
     }
   }
 
@@ -134,6 +133,6 @@ final class DialogFragmentDescriptor
   }
 
   @Override
-  public void getComputedStyles(Object element, ComputedStyleAccumulator styles) {
+  public void getAccessibilityStyles(Object element, StyleAccumulator accumulator) {
   }
 }
