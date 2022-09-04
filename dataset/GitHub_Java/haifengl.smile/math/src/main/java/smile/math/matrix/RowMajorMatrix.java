@@ -24,7 +24,7 @@ import smile.stat.distribution.GaussianDistribution;
  * A dense matrix whose data is stored in a single 1D array of
  * doubles in row major order.
  */
-public class RowMajorMatrix implements DenseMatrix {
+public class RowMajorMatrix extends DenseMatrix {
 
     /**
      * The matrix storage.
@@ -44,6 +44,35 @@ public class RowMajorMatrix implements DenseMatrix {
      * @param A the array of matrix.
      */
     public RowMajorMatrix(double[][] A) {
+        this(A, false);
+    }
+
+    /**
+     * Constructor.
+     * If the matrix is updated, no check on if the matrix is symmetric.
+     * @param A the array of matrix.
+     * @param symmetric true if the matrix is symmetric.
+     */
+    public RowMajorMatrix(double[][] A, boolean symmetric) {
+        this(A, symmetric, false);
+    }
+
+    /**
+     * Constructor.
+     * If the matrix is updated, no check on if the matrix is symmetric
+     * and/or positive definite. The symmetric and positive definite
+     * properties are intended for read-only matrices.
+     * @param A the array of matrix.
+     * @param symmetric true if the matrix is symmetric.
+     * @param positive true if the matrix is positive definite.
+     */
+    public RowMajorMatrix(double[][] A, boolean symmetric, boolean positive) {
+        super(symmetric, positive);
+
+        if (symmetric && A.length != A[0].length) {
+            throw new IllegalArgumentException("A is not square");
+        }
+
         this.nrows = A.length;
         this.ncols = A[0].length;
         this.A = new double[nrows*ncols];
@@ -69,8 +98,7 @@ public class RowMajorMatrix implements DenseMatrix {
      */
     public RowMajorMatrix(int rows, int cols, double value) {
         this(rows, cols);
-        if (value != 0.0)
-            Arrays.fill(A, value);
+        Arrays.fill(A, value);
     }
 
     /**
@@ -125,23 +153,13 @@ public class RowMajorMatrix implements DenseMatrix {
         return matrix;
     }
 
-    @Override
-    public String toString() {
-        return toString(false);
-    }
-
-    @Override
-    public RowMajorMatrix copy() {
-        return new RowMajorMatrix(nrows, ncols, A.clone());
-    }
-
     /**
      * Returns the transpose that shares the same underlying array
      * with this matrix. The result matrix should only be used for
      * read only operations, which is the typical cases in linear algebra.
      */
     @Override
-    public DenseMatrix transpose() {
+    public ColumnMajorMatrix transpose() {
         return new ColumnMajorMatrix(ncols, nrows, A);
     }
 
@@ -152,11 +170,6 @@ public class RowMajorMatrix implements DenseMatrix {
 
     @Override
     public int ncols() {
-        return ncols;
-    }
-
-    @Override
-    public int ld() {
         return ncols;
     }
 
