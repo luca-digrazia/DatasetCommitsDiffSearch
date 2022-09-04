@@ -177,11 +177,7 @@ public class OutputConsumer implements ClassFileConsumer {
             return;
           }
           if (DescriptorUtils.isCompanionClassBinaryName(owner)) {
-            // Don't expect companion classes from the desugared library to be present. They are
-            // considered library classes not program classes.
-            if (!owner.startsWith("j$")) {
-              dependencyCollector.assumeCompanionClass(className, owner);
-            }
+            dependencyCollector.assumeCompanionClass(className, owner);
           }
         }
       }
