@@ -19,10 +19,8 @@ public class BootstrapMavenOptionsParser {
         final Map<String, Object> map = new HashMap<>();
         put(cmdLine, map, CLIManager.ALTERNATE_USER_SETTINGS);
         put(cmdLine, map, CLIManager.ALTERNATE_GLOBAL_SETTINGS);
-        put(cmdLine, map, CLIManager.ALTERNATE_POM_FILE);
         put(map, String.valueOf(CLIManager.ACTIVATE_PROFILES), cmdLine.getOptionValues(CLIManager.ACTIVATE_PROFILES));
 
-        putBoolean(cmdLine, map, CLIManager.OFFLINE);
         putBoolean(cmdLine, map, CLIManager.SUPRESS_SNAPSHOT_UPDATES);
         putBoolean(cmdLine, map, CLIManager.UPDATE_SNAPSHOTS);
         putBoolean(cmdLine, map, CLIManager.CHECKSUM_FAILURE_POLICY);

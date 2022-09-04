@@ -10,7 +10,6 @@ import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
-import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.loader.json.ArtifactResolver;
@@ -20,6 +19,8 @@ import io.quarkus.platform.descriptor.loader.json.QuarkusJsonPlatformDescriptorL
 import io.quarkus.platform.descriptor.loader.json.QuarkusJsonPlatformDescriptorLoaderContext;
 import io.quarkus.platform.descriptor.loader.json.ResourceLoader;
 import io.quarkus.platform.descriptor.loader.json.ZipResourceLoader;
+import io.quarkus.platform.tools.DefaultMessageWriter;
+import io.quarkus.platform.tools.MessageWriter;
 import io.quarkus.platform.tools.ToolsConstants;
 import io.quarkus.platform.tools.ToolsUtils;
 import java.io.BufferedReader;
@@ -145,7 +146,7 @@ public class QuarkusJsonPlatformDescriptorResolver {
         if (artifactResolver == null) {
             try {
                 artifactResolver = new BootstrapAppModelResolver(MavenArtifactResolver.builder().build());
-            } catch (Exception e) {
+            } catch (AppModelResolverException e) {
                 throw new IllegalStateException("Failed to initialize the Maven artifact resolver", e);
             }
         }
@@ -176,7 +177,7 @@ public class QuarkusJsonPlatformDescriptorResolver {
 
     private void ensureLoggerInitialized() {
         if (log == null) {
-            log = MessageWriter.info();
+            log = new DefaultMessageWriter();
         }
     }
 
@@ -710,7 +711,12 @@ public class QuarkusJsonPlatformDescriptorResolver {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load quarkus.properties from the classpath", e);
         }
-        return ToolsUtils.requireQuarkusCoreVersion(props);
+        final String quarkusVersion = props.getProperty("plugin-version");
+        if (quarkusVersion == null) {
+            throw new IllegalStateException(
+                    "quarkus.properties loaded from the classpath is missing plugin-version property");
+        }
+        return quarkusVersion;
     }
 
     private static InputStream getCpResourceAsStream(String name) {

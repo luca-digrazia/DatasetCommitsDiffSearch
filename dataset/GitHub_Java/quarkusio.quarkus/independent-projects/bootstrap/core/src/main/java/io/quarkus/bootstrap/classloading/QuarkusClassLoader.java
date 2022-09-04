@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -125,7 +124,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         //for resources banned means that we don't delegate to the parent, as there can be multiple resources
         //for single resources we still respect this
         boolean banned = state.bannedResources.contains(name);
-        Set<URL> resources = new LinkedHashSet<>();
+        List<URL> resources = new ArrayList<>();
         //ClassPathElement[] providers = loadableResources.get(name);
         //if (providers != null) {
         //    for (ClassPathElement element : providers) {

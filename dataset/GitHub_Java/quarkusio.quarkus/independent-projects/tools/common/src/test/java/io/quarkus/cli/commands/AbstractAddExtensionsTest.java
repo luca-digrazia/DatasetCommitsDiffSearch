@@ -19,7 +19,7 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void addSomeValidExtensions() throws Exception {
+    void addSomeValidExtensions() throws IOException {
         createProject();
         addExtensions(asList("jdbc-postgre", "agroal", "quarkus-arc", " hibernate-validator",
                 "commons-io:commons-io:2.6"));
@@ -32,7 +32,7 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void testPartialMatches() throws Exception {
+    void testPartialMatches() throws IOException {
         createProject();
         addExtensions(asList("orm-pana", "jdbc-postgre", "arc"));
 
@@ -43,13 +43,12 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void testRegexpMatches() throws Exception {
+    void testRegexpMatches() throws IOException {
         createProject();
 
-        final QuarkusCommandOutcome result = addExtensions(asList("Sm??lRye**"));
+        final AddExtensionResult result = addExtensions(asList("Sm??lRye**"));
 
-        Assertions.assertTrue(result.isSuccess());
-        Assertions.assertTrue(result.valueIs(AddExtensions.OUTCOME_UPDATED, true));
+        Assertions.assertTrue(result.isUpdated());
 
         final T project = readProject();
         hasDependency(project, "quarkus-smallrye-reactive-messaging");
@@ -67,48 +66,48 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void addMissingExtension() throws Exception {
+    void addMissingExtension() throws IOException {
         createProject();
 
-        final QuarkusCommandOutcome result = addExtensions(Collections.singletonList("missing"));
+        final AddExtensionResult result = addExtensions(Collections.singletonList("missing"));
 
         final T project = readProject();
         doesNotHaveDependency(project, "quarkus-missing");
-        Assertions.assertFalse(result.isSuccess());
-        Assertions.assertFalse(result.valueIs(AddExtensions.OUTCOME_UPDATED, true));
+        Assertions.assertFalse(result.succeeded());
+        Assertions.assertFalse(result.isUpdated());
     }
 
     @Test
-    void addExtensionTwiceInOneBatch() throws Exception {
+    void addExtensionTwiceInOneBatch() throws IOException {
         createProject();
-        final QuarkusCommandOutcome result = addExtensions(asList("agroal", "agroal"));
+        final AddExtensionResult result = addExtensions(asList("agroal", "agroal"));
         final T project = readProject();
         hasDependency(project, "quarkus-agroal");
         Assertions.assertEquals(1,
                 countDependencyOccurrences(project, getPluginGroupId(), "quarkus-agroal", null));
-        Assertions.assertTrue(result.valueIs(AddExtensions.OUTCOME_UPDATED, true));
-        Assertions.assertTrue(result.isSuccess());
+        Assertions.assertTrue(result.isUpdated());
+        Assertions.assertTrue(result.succeeded());
     }
 
     @Test
-    void addExtensionTwiceInTwoBatches() throws Exception {
+    void addExtensionTwiceInTwoBatches() throws IOException {
         createProject();
 
-        final QuarkusCommandOutcome result1 = addExtensions(Collections.singletonList("agroal"));
+        final AddExtensionResult result1 = addExtensions(Collections.singletonList("agroal"));
         final T project1 = readProject();
         hasDependency(project1, "quarkus-agroal");
         Assertions.assertEquals(1,
                 countDependencyOccurrences(project1, getPluginGroupId(), "quarkus-agroal", null));
-        Assertions.assertTrue(result1.valueIs(AddExtensions.OUTCOME_UPDATED, true));
-        Assertions.assertTrue(result1.isSuccess());
+        Assertions.assertTrue(result1.isUpdated());
+        Assertions.assertTrue(result1.succeeded());
 
-        final QuarkusCommandOutcome result2 = addExtensions(Collections.singletonList("agroal"));
+        final AddExtensionResult result2 = addExtensions(Collections.singletonList("agroal"));
         final T project2 = readProject();
         hasDependency(project2, "quarkus-agroal");
         Assertions.assertEquals(1,
                 countDependencyOccurrences(project2, getPluginGroupId(), "quarkus-agroal", null));
-        Assertions.assertFalse(result2.valueIs(AddExtensions.OUTCOME_UPDATED, true));
-        Assertions.assertTrue(result2.isSuccess());
+        Assertions.assertFalse(result2.isUpdated());
+        Assertions.assertTrue(result2.succeeded());
     }
 
     /**
@@ -116,38 +115,38 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
      * The `arc` query was matching ArC but also hibernate-search-elasticsearch.
      */
     @Test
-    void testPartialMatchConflict() throws Exception {
+    void testPartialMatchConflict() throws IOException {
         createProject();
 
-        final QuarkusCommandOutcome result = addExtensions(Collections.singletonList("arc"));
+        final AddExtensionResult result = addExtensions(Collections.singletonList("arc"));
 
-        Assertions.assertTrue(result.valueIs(AddExtensions.OUTCOME_UPDATED, true));
-        Assertions.assertTrue(result.isSuccess());
+        Assertions.assertTrue(result.isUpdated());
+        Assertions.assertTrue(result.succeeded());
         final T project = readProject();
         hasDependency(project, "quarkus-arc");
 
-        final QuarkusCommandOutcome result2 = addExtensions(Collections.singletonList("elasticsearch"));
+        final AddExtensionResult result2 = addExtensions(Collections.singletonList("elasticsearch"));
 
-        Assertions.assertTrue(result2.valueIs(AddExtensions.OUTCOME_UPDATED, true));
-        Assertions.assertTrue(result2.isSuccess());
+        Assertions.assertTrue(result2.isUpdated());
+        Assertions.assertTrue(result2.succeeded());
         final T project2 = readProject();
         hasDependency(project2, "quarkus-hibernate-search-elasticsearch");
     }
 
     @Test
-    void addExistingAndMissingExtensions() throws Exception {
+    void addExistingAndMissingExtensions() throws IOException {
         createProject();
-        final QuarkusCommandOutcome result = addExtensions(asList("missing", "agroal"));
+        final AddExtensionResult result = addExtensions(asList("missing", "agroal"));
 
         final T project = readProject();
         doesNotHaveDependency(project, "quarkus-missing");
         hasDependency(project, "quarkus-agroal");
-        Assertions.assertFalse(result.isSuccess());
-        Assertions.assertTrue(result.valueIs(AddExtensions.OUTCOME_UPDATED, true));
+        Assertions.assertFalse(result.succeeded());
+        Assertions.assertTrue(result.isUpdated());
     }
 
     @Test
-    void addDuplicatedExtension() throws Exception {
+    void addDuplicatedExtension() throws IOException {
         createProject();
 
         addExtensions(asList("agroal", "jdbc", "non-exist-ent"));
@@ -159,7 +158,7 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void addDuplicatedExtensionUsingGAV() throws Exception {
+    void addDuplicatedExtensionUsingGAV() throws IOException {
         createProject();
 
         addExtensions(asList("org.acme:acme:1", "org.acme:acme:1"));
@@ -171,7 +170,7 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void testVertx() throws Exception {
+    void testVertx() throws IOException {
         createProject();
 
         addExtensions(Collections.singletonList("vertx"));
@@ -181,7 +180,7 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
     }
 
     @Test
-    void testVertxWithDot() throws Exception {
+    void testVertxWithDot() throws IOException {
         createProject();
 
         addExtensions(Collections.singletonList("vert.x"));
@@ -202,11 +201,11 @@ abstract class AbstractAddExtensionsTest<T> extends PlatformAwareTestBase {
         Assertions.assertTrue(countDependencyOccurrences(project, getPluginGroupId(), artifactId, null) == 0);
     }
 
-    protected abstract T createProject() throws IOException, QuarkusCommandException;
+    protected abstract T createProject() throws IOException;
 
     protected abstract T readProject() throws IOException;
 
-    protected abstract QuarkusCommandOutcome addExtensions(List<String> extensions) throws IOException, QuarkusCommandException;
+    protected abstract AddExtensionResult addExtensions(List<String> extensions) throws IOException;
 
     protected abstract long countDependencyOccurrences(T project, String groupId, String artifactId, String version);
 }

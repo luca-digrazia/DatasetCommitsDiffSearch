@@ -46,7 +46,7 @@ public class BootstrapAppModelFactory {
 
     private static final String QUARKUS = "quarkus";
     private static final String BOOTSTRAP = "bootstrap";
-    private static final String APP_MODEL_DAT = "app-model.dat";
+    private static final String DEPLOYMENT_CP = "deployment.cp";
 
     public static final String CREATOR_APP_GROUP_ID = "creator.app.groupId";
     public static final String CREATOR_APP_ARTIFACT_ID = "creator.app.artifactId";
@@ -79,8 +79,6 @@ public class BootstrapAppModelFactory {
     private MavenArtifactResolver mavenArtifactResolver;
 
     private LocalProject appClassesWorkspace;
-
-    private List<AppDependency> forcedDependencies = Collections.emptyList();
 
     private BootstrapAppModelFactory() {
     }
@@ -142,11 +140,6 @@ public class BootstrapAppModelFactory {
 
     public BootstrapAppModelFactory setAppArtifact(AppArtifact appArtifact) {
         this.appArtifact = appArtifact;
-        return this;
-    }
-
-    public BootstrapAppModelFactory setForcedDependencies(List<AppDependency> forcedDependencies) {
-        this.forcedDependencies = forcedDependencies;
         return this;
     }
 
@@ -280,7 +273,7 @@ public class BootstrapAppModelFactory {
             }
             AppModelResolver appModelResolver = getAppModelResolver();
             CurationResult curationResult = new CurationResult(appModelResolver
-                    .resolveManagedModel(appArtifact, forcedDependencies, managingProject));
+                    .resolveManagedModel(appArtifact, Collections.emptyList(), managingProject));
             if (cachedCpPath != null) {
                 Files.createDirectories(cachedCpPath.getParent());
                 try (DataOutputStream out = new DataOutputStream(Files.newOutputStream(cachedCpPath))) {
@@ -441,10 +434,8 @@ public class BootstrapAppModelFactory {
         }
     }
 
-    private Path resolveCachedCpPath(LocalProject project) {
-        final String filePrefix = test ? "test-" : (devMode ? "dev-" : null);
-        return project.getOutputDir().resolve(QUARKUS).resolve(BOOTSTRAP)
-                .resolve(filePrefix == null ? APP_MODEL_DAT : filePrefix + APP_MODEL_DAT);
+    private static Path resolveCachedCpPath(LocalProject project) {
+        return project.getOutputDir().resolve(QUARKUS).resolve(BOOTSTRAP).resolve(DEPLOYMENT_CP);
     }
 
     private static void debug(String msg, Object... args) {

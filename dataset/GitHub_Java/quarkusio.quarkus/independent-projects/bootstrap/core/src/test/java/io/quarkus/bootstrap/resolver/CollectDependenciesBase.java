@@ -60,21 +60,17 @@ public abstract class CollectDependenciesBase extends ResolverSetupCleanup {
     }
 
     protected TsArtifact install(TsArtifact dep, String collectedInScope) {
-        return install(dep, null, collectedInScope, false);
-    }
-
-    protected TsArtifact install(TsArtifact dep, String collectedInScope, boolean optional) {
-        return install(dep, null, collectedInScope, optional);
+        return install(dep, null, collectedInScope);
     }
 
     protected TsArtifact install(TsArtifact dep, Path p, boolean collected) {
-        return install(dep, p, collected ? "compile" : null, false);
+        return install(dep, p, collected ? "compile" : null);
     }
 
-    protected TsArtifact install(TsArtifact dep, Path p, String collectedInScope, boolean optional) {
+    protected TsArtifact install(TsArtifact dep, Path p, String collectedInScope) {
         install(dep, p);
         if (collectedInScope != null) {
-            addCollectedDep(dep, collectedInScope, optional);
+            addCollectedDep(dep, collectedInScope, false);
         }
         return dep;
     }

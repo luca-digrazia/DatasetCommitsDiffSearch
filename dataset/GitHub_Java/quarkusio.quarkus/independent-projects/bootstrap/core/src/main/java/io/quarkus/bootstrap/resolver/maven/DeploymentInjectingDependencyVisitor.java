@@ -126,6 +126,7 @@ public class DeploymentInjectingDependencyVisitor {
         node.setData(QUARKUS_DEPLOYMENT_ARTIFACT, deploymentArtifact);
         runtimeNodes.add(node);
         Dependency dependency = new Dependency(node.getArtifact(), JavaScopes.COMPILE);
+        managedDeps.add(dependency);
         runtimeExtensionDeps.add(dependency);
         managedDeps.add(new Dependency(deploymentArtifact, JavaScopes.COMPILE));
     }

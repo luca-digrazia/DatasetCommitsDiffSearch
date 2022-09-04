@@ -13,6 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import org.apache.maven.model.Dependency;
@@ -23,11 +24,24 @@ import org.junit.jupiter.api.Test;
 public class ListExtensionsTest extends PlatformAwareTestBase {
 
     @Test
-    public void listWithBom() throws Exception {
-        final FileProjectWriter writer = createNewProject(new File("target/list-extensions-test", "pom.xml"));
-        addExtensions(writer, "commons-io:commons-io:2.5", "Agroal");
+    public void listWithBom() throws IOException {
+        final File pom = new File("target/list-extensions-test", "pom.xml");
 
-        final ListExtensions listExtensions = new ListExtensions(new MavenBuildFile(writer), getPlatformDescriptor());
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        FileProjectWriter writer = new FileProjectWriter(pom.getParentFile());
+        new CreateProject(writer)
+                .groupId("org.acme")
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+
+        File pomFile = new File(pom.getAbsolutePath());
+        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+
+        final ListExtensions listExtensions = new ListExtensions(new MavenBuildFile(writer));
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
@@ -41,11 +55,24 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
      * so we added code for that and we need to test it.
      */
     @Test
-    public void listWithBomExtensionWithSpaces() throws Exception {
-        final FileProjectWriter writer = createNewProject(new File("target/list-extensions-test", "pom.xml"));
-        addExtensions(writer, "resteasy", " hibernate-validator ");
+    public void listWithBomExtensionWithSpaces() throws IOException {
+        final File pom = new File("target/list-extensions-test", "pom.xml");
 
-        final ListExtensions listExtensions = new ListExtensions(new MavenBuildFile(writer), getPlatformDescriptor());
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId("org.acme")
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("resteasy", " hibernate-validator ")));
+
+        final ListExtensions listExtensions = new ListExtensions(new MavenBuildFile(writer));
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
@@ -54,9 +81,20 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
     }
 
     @Test
-    public void listWithoutBom() throws Exception {
+    public void listWithoutBom() throws IOException {
         final File pom = new File("target/list-extensions-test", "pom.xml");
-        final FileProjectWriter writer = createNewProject(pom);
+
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId("org.acme")
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
 
         Model model = readPom(pom);
 
@@ -67,7 +105,8 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
 
         MojoUtils.write(model, pom);
 
-        addExtensions(writer, "commons-io:commons-io:2.5", "Agroal");
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         model = readPom(pom);
 
@@ -75,10 +114,8 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(new MavenBuildFile(writer), getPlatformDescriptor())
-                    .all(true)
-                    .format("full")
-                    .execute();
+            new ListExtensions(new MavenBuildFile(writer))
+                    .listExtensions(true, "full", null);
         } finally {
             System.setOut(out);
         }
@@ -115,19 +152,30 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
     }
 
     @Test
-    public void searchUnexpected() throws Exception {
-        final FileProjectWriter writer = createNewProject(new File("target/list-extensions-test", "pom.xml"));
-        addExtensions(writer, "commons-io:commons-io:2.5", "Agroal");
+    public void searchUnexpected() throws IOException {
+        final File pom = new File("target/list-extensions-test", "pom.xml");
+
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId("org.acme")
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         final PrintStream out = System.out;
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(new MavenBuildFile(writer), getPlatformDescriptor())
-                    .all(true)
-                    .format("full")
-                    .search("unexpectedSearch")
-                    .execute();
+            new ListExtensions(new MavenBuildFile(writer))
+                    .listExtensions(true, "full", "unexpectedSearch");
         } finally {
             System.setOut(out);
         }
@@ -137,19 +185,30 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
     }
 
     @Test
-    public void searchRest() throws Exception {
-        final FileProjectWriter writer = createNewProject(new File("target/list-extensions-test", "pom.xml"));
-        addExtensions(writer, "commons-io:commons-io:2.5", "Agroal");
+    public void searchRest() throws IOException {
+        final File pom = new File("target/list-extensions-test", "pom.xml");
+
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId("org.acme")
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         final PrintStream out = System.out;
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(new MavenBuildFile(writer), getPlatformDescriptor())
-                    .all(true)
-                    .format("full")
-                    .search("Rest")
-                    .execute();
+            new ListExtensions(new MavenBuildFile(writer))
+                    .listExtensions(true, "full", "Rest");
         } finally {
             System.setOut(out);
         }
@@ -159,24 +218,7 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
 
     @Test
     void testListExtensionsWithoutAPomFile() throws IOException {
-        ListExtensions listExtensions = new ListExtensions(null, getPlatformDescriptor());
+        ListExtensions listExtensions = new ListExtensions(null);
         assertThat(listExtensions.findInstalled()).isEmpty();
-    }
-
-    private void addExtensions(FileProjectWriter writer, String... extensions) throws Exception {
-        new AddExtensions(writer, getPlatformDescriptor())
-                .extensions(new HashSet<>(asList(extensions)))
-                .execute();
-    }
-
-    private FileProjectWriter createNewProject(final File pom) throws IOException, QuarkusCommandException {
-        CreateProjectTest.delete(pom.getParentFile());
-        final FileProjectWriter writer = new FileProjectWriter(pom.getParentFile());
-        new CreateProject(writer, getPlatformDescriptor())
-                .groupId("org.acme")
-                .artifactId("add-extension-test")
-                .version("0.0.1-SNAPSHOT")
-                .execute();
-        return writer;
     }
 }

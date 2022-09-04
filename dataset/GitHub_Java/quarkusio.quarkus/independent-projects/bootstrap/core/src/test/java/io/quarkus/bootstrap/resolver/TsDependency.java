@@ -51,13 +51,6 @@ public class TsDependency {
         return this;
     }
 
-    public TsDependency exclude(TsArtifact... artifacts) {
-        for (TsArtifact artifact : artifacts) {
-            exclude(artifact);
-        }
-        return this;
-    }
-
     public Dependency toPomDependency() {
         final Dependency dep = new Dependency();
         dep.setGroupId(artifact.groupId);

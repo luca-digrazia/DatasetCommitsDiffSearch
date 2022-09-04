@@ -12,8 +12,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.function.Function;
-
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
@@ -23,15 +21,6 @@ import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
-import org.eclipse.aether.artifact.Artifact;
-import org.eclipse.aether.artifact.DefaultArtifact;
-
-import io.quarkus.bootstrap.resolver.AppModelResolverException;
-import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
-import io.quarkus.dependencies.Extension;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
-import io.quarkus.platform.descriptor.loader.json.ArtifactResolver;
-import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
 
 /**
  * @author kameshs
@@ -50,100 +39,27 @@ public class MojoUtils {
     public static final String TEMPLATE_PROPERTY_QUARKUS_VERSION_VALUE = toPropExpr(TEMPLATE_PROPERTY_QUARKUS_VERSION_NAME);
 
     public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_GROUP_ID_NAME = "quarkus.platform.group-id";
-    public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_GROUP_ID_VALUE = toPropExpr(TEMPLATE_PROPERTY_QUARKUS_PLATFORM_GROUP_ID_NAME);
+    public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_GROUP_ID_VALUE = toPropExpr(
+            TEMPLATE_PROPERTY_QUARKUS_PLATFORM_GROUP_ID_NAME);
 
     public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_NAME = "quarkus.platform.artifact-id";
-    public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_VALUE = toPropExpr(TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_NAME);
+    public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_VALUE = toPropExpr(
+            TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_NAME);
 
     public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_VERSION_NAME = "quarkus.platform.version";
-    public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_VERSION_VALUE = toPropExpr(TEMPLATE_PROPERTY_QUARKUS_PLATFORM_VERSION_NAME);
+    public static final String TEMPLATE_PROPERTY_QUARKUS_PLATFORM_VERSION_VALUE = toPropExpr(
+            TEMPLATE_PROPERTY_QUARKUS_PLATFORM_VERSION_NAME);
 
     public static final String TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_NAME = "quarkus-plugin.version";
-    public static final String TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_VALUE = toPropExpr(TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_NAME);
+    public static final String TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_VALUE = toPropExpr(
+            TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_NAME);
 
     private static String toPropExpr(String name) {
         return "${" + name + "}";
     }
 
-    private static Properties properties;
-
-    private static QuarkusPlatformDescriptor platformDescr;
-
-    private static QuarkusPlatformDescriptor getPlatformDescriptor() {
-        return platformDescr == null ? platformDescr = QuarkusPlatformConfig.getGlobalDefault().getPlatformDescriptor() : platformDescr;
-    }
-
-    private static Properties getProperties() {
-        if(properties == null) {
-            try {
-                properties = getPlatformDescriptor().loadResource("quarkus.properties", is -> {
-                    final Properties props = new Properties();
-                    props.load(is);
-                    return props;
-                });
-            } catch (IOException e) {
-                throw new IllegalStateException("The quarkus.properties file cannot be read", e);
-            }
-        }
-        return properties;
-    }
-
     private MojoUtils() {
         // Avoid direct instantiation
-    }
-
-    public static Map<String, String> getAllProperties() {
-        Map<String, String> all = new HashMap<>();
-        getProperties().stringPropertyNames().forEach(s -> all.put(s, getProperties().getProperty(s)));
-        return all;
-    }
-
-    public static String getPluginArtifactId() {
-        return get("plugin-artifactId");
-    }
-
-    public static String getPluginGroupId() {
-        return get("plugin-groupId");
-    }
-
-    public static String getPluginKey() {
-        return MojoUtils.getPluginGroupId() + ":" + MojoUtils.getPluginArtifactId();
-    }
-
-    public static String getPluginVersion() {
-        return getPlatformDescriptor().getQuarkusVersion();
-    }
-
-    public static String getBomArtifactId() {
-        return getPlatformDescriptor().getBomArtifactId();
-    }
-
-    public static String getBomGroupId() {
-        return getPlatformDescriptor().getBomGroupId();
-    }
-
-    public static String getBomVersion() {
-        return getPlatformDescriptor().getBomVersion();
-    }
-
-    public static String getQuarkusVersion() {
-        return getPlatformDescriptor().getQuarkusVersion();
-    }
-
-    public static String getProposedMavenVersion() {
-        return get("proposed-maven-version");
-    }
-
-    public static String getMavenWrapperVersion() {
-        return get("maven-wrapper-version");
-    }
-
-    public static String getGradleWrapperVersion() {
-        return get("gradle-wrapper-version");
-    }
-
-    public static String get(String key) {
-        return getProperties().getProperty(key);
     }
 
     /**
@@ -164,13 +80,13 @@ public class MojoUtils {
         Dependency res = new Dependency();
         String[] segments = dependency.split(":");
         if (segments.length >= 2) {
-            res.setGroupId(segments[0]);
-            res.setArtifactId(segments[1]);
+            res.setGroupId(segments[0].toLowerCase());
+            res.setArtifactId(segments[1].toLowerCase());
             if (segments.length >= 3 && !segments[2].isEmpty()) {
                 res.setVersion(segments[2]);
             }
             if (segments.length >= 4) {
-                res.setClassifier(segments[3]);
+                res.setClassifier(segments[3].toLowerCase());
             }
             return res;
         } else {
@@ -268,27 +184,23 @@ public class MojoUtils {
         }
     }
 
-    public static List<Extension> loadExtensions() {
-        return QuarkusPlatformConfig.getGlobalDefault().getPlatformDescriptor().getExtensions();
-    }
-
     public static String credentials(final Dependency d) {
         return String.format("%s:%s", d.getGroupId(), d.getArtifactId());
     }
 
-    public static boolean checkProjectForMavenBuildPlugin(MavenProject project) {
+    public static Plugin checkProjectForMavenBuildPlugin(MavenProject project) {
         for (Plugin plugin : project.getBuildPlugins()) {
             if (plugin.getGroupId().equals("io.quarkus")
                     && plugin.getArtifactId().equals("quarkus-maven-plugin")) {
                 for (PluginExecution pluginExecution : plugin.getExecutions()) {
                     if (pluginExecution.getGoals().contains("build")) {
-                        return true;
+                        return plugin;
                     }
                 }
             }
         }
 
-        return false;
+        return null;
     }
 
     /**
@@ -384,16 +296,19 @@ public class MojoUtils {
      * classpath of the context classloader
      */
     public static Path getClassOrigin(Class<?> cls) throws IOException {
-        final String pluginClassPath = cls.getName().replace('.', '/') + ".class";
-        URL url = cls.getClassLoader().getResource(pluginClassPath);
+        return getResourceOrigin(cls.getClassLoader(), cls.getName().replace('.', '/') + ".class");
+    }
+
+    public static Path getResourceOrigin(ClassLoader cl, final String name) throws IOException {
+        URL url = cl.getResource(name);
         if (url == null) {
-            throw new IOException("Failed to locate the origin of " + cls);
+            throw new IOException("Failed to locate the origin of " + name);
         }
         String classLocation = url.toExternalForm();
         if (url.getProtocol().equals("jar")) {
-            classLocation = classLocation.substring(4, classLocation.length() - pluginClassPath.length() - 2);
+            classLocation = classLocation.substring(4, classLocation.length() - name.length() - 2);
         } else {
-            classLocation = classLocation.substring(0, classLocation.length() - pluginClassPath.length());
+            classLocation = classLocation.substring(0, classLocation.length() - name.length());
         }
         return urlSpecToPath(classLocation);
     }
@@ -405,46 +320,5 @@ public class MojoUtils {
             throw new IOException(
                     "Failed to create an instance of " + Path.class.getName() + " from " + urlSpec, e);
         }
-    }
-
-    public static ArtifactResolver toJsonArtifactResolver(MavenArtifactResolver mvn) {
-        return new ArtifactResolver() {
-
-            @Override
-            public <T> T process(String groupId, String artifactId, String classifier, String type, String version,
-                    Function<Path, T> processor) {
-                final DefaultArtifact artifact = new DefaultArtifact(groupId, artifactId, classifier, type, version);
-                try {
-                    return processor.apply(mvn.resolve(artifact).getArtifact().getFile().toPath());
-                } catch (AppModelResolverException e) {
-                    throw new IllegalStateException("Failed to resolve " + artifact, e);
-                }
-            }
-
-            @Override
-            public List<Dependency> getManagedDependencies(String groupId, String artifactId, String classifier, String type, String version) {
-                final List<org.eclipse.aether.graph.Dependency> deps;
-                Artifact a = new DefaultArtifact(groupId, artifactId, classifier, type, version);
-                try {
-                    deps = mvn.resolveDescriptor(a).getManagedDependencies();
-                } catch (AppModelResolverException e) {
-                    throw new IllegalStateException("Failed to resolve descriptor for " + a, e);
-                }
-                final List<Dependency> result = new ArrayList<>(deps.size());
-                for(org.eclipse.aether.graph.Dependency dep : deps) {
-                    a = dep.getArtifact();
-                    final Dependency d = new Dependency();
-                    d.setGroupId(a.getGroupId());
-                    d.setArtifactId(a.getArtifactId());
-                    d.setClassifier(a.getClassifier());
-                    d.setType(a.getExtension());
-                    d.setVersion(a.getVersion());
-                    d.setOptional(dep.isOptional());
-                    d.setScope(dep.getScope());
-                    result.add(d);
-                }
-                return result;
-            }
-        };
     }
 }

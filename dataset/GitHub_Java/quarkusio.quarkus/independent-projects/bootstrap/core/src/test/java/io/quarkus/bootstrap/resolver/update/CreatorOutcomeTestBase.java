@@ -37,13 +37,12 @@ public abstract class CreatorOutcomeTestBase extends ResolverSetupCleanup {
         IoUtils.recursiveDelete(ws);
         final Path outputDir = IoUtils.mkdirs(ws.resolve("target"));
 
-        final QuarkusBootstrap.Builder bootstrap = QuarkusBootstrap.builder()
-                .setApplicationRoot(resolver.resolve(appJar.toAppArtifact()))
+        final QuarkusBootstrap.Builder bootstrap = QuarkusBootstrap.builder(resolver.resolve(appJar.toAppArtifact()))
                 .setTargetDirectory(outputDir)
                 .setAppModelResolver(resolver);
 
         if (createWorkspace) {
-            System.setProperty("basedir", ws.toAbsolutePath().toString());
+            IoUtils.recursiveDelete(ws);
             final Path classesDir = outputDir.resolve("classes");
             ZipUtils.unzip(resolver.resolve(appJar.toAppArtifact()), classesDir);
             ModelUtils.persistModel(ws.resolve("pom.xml"), appJar.getPomModel());

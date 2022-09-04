@@ -1,25 +1,33 @@
 package io.quarkus.bootstrap.resolver.maven.test;
 
-import io.quarkus.bootstrap.resolver.AppModelResolverException;
-import io.quarkus.bootstrap.resolver.maven.MavenRepoInitializer;
-import org.apache.maven.settings.*;
-import org.eclipse.aether.repository.RemoteRepository;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import java.util.List;
-
 import static org.eclipse.aether.repository.RepositoryPolicy.CHECKSUM_POLICY_WARN;
 import static org.eclipse.aether.repository.RepositoryPolicy.UPDATE_POLICY_DAILY;
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class MavenRepoInitializerTest {
+import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.bootstrap.resolver.maven.MavenRepoInitializer;
+import java.util.Arrays;
+import java.util.List;
+import org.apache.maven.settings.Mirror;
+import org.apache.maven.settings.Profile;
+import org.apache.maven.settings.Proxy;
+import org.apache.maven.settings.Repository;
+import org.apache.maven.settings.RepositoryPolicy;
+import org.apache.maven.settings.Settings;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+class MavenRepoInitializerTest {
     private static Mirror mirrorA;
     private static Proxy localProxy;
     private static Settings baseSettings;
 
-    @BeforeClass
-    public static void init() {
+    @BeforeAll
+    static void init() {
         baseSettings = new Settings();
 
         baseSettings.setInteractiveMode(true);
@@ -83,7 +91,7 @@ public class MavenRepoInitializerTest {
     }
 
     @Test
-    public void getRemoteRepoFromSettingsWithNeitherProxyNorMirror() throws AppModelResolverException {
+    void getRemoteRepoFromSettingsWithNeitherProxyNorMirror() throws AppModelResolverException {
         final Settings settings = baseSettings.clone();
 
         List<RemoteRepository> repos = MavenRepoInitializer.getRemoteRepos(settings);
@@ -100,7 +108,7 @@ public class MavenRepoInitializerTest {
     }
 
     @Test
-    public void getRemoteRepoFromSettingsWithProxyButWithoutMirror() throws AppModelResolverException {
+    void getRemoteRepoFromSettingsWithProxyButWithoutMirror() throws AppModelResolverException {
         final Settings settings = baseSettings.clone();
         settings.addProxy(localProxy);
 
@@ -112,28 +120,31 @@ public class MavenRepoInitializerTest {
         assertNotNull(repos.get(0).getMirroredRepositories());
 
         final RemoteRepository centralRepo = repos.get(repos.size() - 1);
-        assertEquals("central repo must be added as default repository", "central", centralRepo.getId());
+        assertEquals("central", centralRepo.getId(), "central repo must be added as default repository");
         assertNotNull(centralRepo.getProxy());
         assertTrue(centralRepo.getMirroredRepositories().isEmpty());
     }
 
     @Test
-    public void getRemoteRepoFromSettingsWithProxyAndMirror() throws AppModelResolverException {
+    void getRemoteRepoFromSettingsWithProxyAndMirror() throws AppModelResolverException {
         final Settings settings = baseSettings.clone();
         settings.addProxy(localProxy);
         settings.addMirror(mirrorA);
 
         List<RemoteRepository> repos = MavenRepoInitializer.getRemoteRepos(settings);
-        assertEquals(4, repos.size());
+        assertEquals(2, repos.size());
 
         assertEquals("custom-repo", repos.get(0).getId());
         assertNotNull(repos.get(0).getProxy());
         assertNotNull(repos.get(0).getMirroredRepositories());
 
         final RemoteRepository centralRepo = repos.get(repos.size() - 1);
-        assertEquals("Central repo must be substitute by mirror", "mirror-A", centralRepo.getId());
+        assertEquals("mirror-A", centralRepo.getId(), "Central repo must be substitute by mirror");
         assertNotNull(centralRepo.getProxy());
-        assertEquals(1, centralRepo.getMirroredRepositories().size());
-        assertEquals("central", centralRepo.getMirroredRepositories().get(0).getId());
+        assertEquals(3, centralRepo.getMirroredRepositories().size());
+        final List<String> mirrored = Arrays.asList("central", "jboss-public-repository", "spring-public-repository");
+        for (RemoteRepository repo : centralRepo.getMirroredRepositories()) {
+            assertTrue(mirrored.contains(repo.getId()));
+        }
     }
 }

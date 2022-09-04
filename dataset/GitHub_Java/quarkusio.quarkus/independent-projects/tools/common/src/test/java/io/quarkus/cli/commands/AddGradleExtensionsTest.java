@@ -5,6 +5,7 @@ import io.quarkus.cli.commands.writer.FileProjectWriter;
 import io.quarkus.generators.BuildTool;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import org.junit.jupiter.api.Disabled;
@@ -17,15 +18,15 @@ class AddGradleExtensionsTest extends AbstractAddExtensionsTest<List<String>> {
     }
 
     @Override
-    protected List<String> createProject() throws IOException, QuarkusCommandException {
+    protected List<String> createProject() throws IOException {
         CreateProjectTest.delete(getProjectPath().toFile());
         final FileProjectWriter writer = new FileProjectWriter(getProjectPath().toFile());
-        new CreateProject(writer, getPlatformDescriptor())
-                .buildFile(new GradleBuildFile(writer))
+        new CreateProject(writer)
                 .groupId("org.acme")
                 .artifactId("add-gradle-extension-test")
                 .version("0.0.1-SNAPSHOT")
-                .execute();
+                .buildFile(new GradleBuildFile(writer))
+                .doCreateProject(new HashMap<>());
         return readProject();
     }
 
@@ -35,10 +36,9 @@ class AddGradleExtensionsTest extends AbstractAddExtensionsTest<List<String>> {
     }
 
     @Override
-    protected QuarkusCommandOutcome addExtensions(final List<String> extensions) throws IOException, QuarkusCommandException {
-        return new AddExtensions(new FileProjectWriter(getProjectPath().toFile()), BuildTool.GRADLE, getPlatformDescriptor())
-                .extensions(new HashSet<>(extensions))
-                .execute();
+    protected AddExtensionResult addExtensions(final List<String> extensions) throws IOException {
+        return new AddExtensions(new FileProjectWriter(getProjectPath().toFile()), BuildTool.GRADLE)
+                .addExtensions(new HashSet<>(extensions));
     }
 
     @Override

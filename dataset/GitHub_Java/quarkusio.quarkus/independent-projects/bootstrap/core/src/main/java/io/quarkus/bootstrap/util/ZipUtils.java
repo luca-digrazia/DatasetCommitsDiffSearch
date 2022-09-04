@@ -1,6 +1,7 @@
 package io.quarkus.bootstrap.util;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.DirectoryStream;
@@ -17,6 +18,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.zip.ZipError;
 
 /**
  *
@@ -39,6 +41,12 @@ public class ZipUtils {
             for (Path zipRoot : zipfs.getRootDirectories()) {
                 copyFromZip(zipRoot, targetDir);
             }
+        } catch (IOException | ZipError ioe) {
+            // TODO: (at a later date) Get rid of the ZipError catching (and instead only catch IOException)
+            //  since it's a JDK bug which threw the undeclared ZipError instead of an IOException.
+            //  Java 9 fixes it https://bugs.openjdk.java.net/browse/JDK-8062754
+
+            throw new IOException("Could not unzip " + zipFile + " to target dir " + targetDir, ioe);
         }
     }
 
@@ -57,20 +65,22 @@ public class ZipUtils {
                 new SimpleFileVisitor<Path>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                        throws IOException {
+                            throws IOException {
                         final Path targetDir = target.resolve(source.relativize(dir).toString());
                         try {
                             Files.copy(dir, targetDir);
                         } catch (FileAlreadyExistsException e) {
-                             if (!Files.isDirectory(targetDir))
-                                 throw e;
+                            if (!Files.isDirectory(targetDir))
+                                throw e;
                         }
                         return FileVisitResult.CONTINUE;
                     }
+
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                        throws IOException {
-                        Files.copy(file, target.resolve(source.relativize(file).toString()), StandardCopyOption.REPLACE_EXISTING);
+                            throws IOException {
+                        Files.copy(file, target.resolve(source.relativize(file).toString()),
+                                StandardCopyOption.REPLACE_EXISTING);
                         return FileVisitResult.CONTINUE;
                     }
                 });
@@ -78,9 +88,9 @@ public class ZipUtils {
 
     public static void zip(Path src, Path zipFile) throws IOException {
         try (FileSystem zipfs = newZip(zipFile)) {
-            if(Files.isDirectory(src)) {
+            if (Files.isDirectory(src)) {
                 try (DirectoryStream<Path> stream = Files.newDirectoryStream(src)) {
-                    for(Path srcPath : stream) {
+                    for (Path srcPath : stream) {
                         copyToZip(src, srcPath, zipfs);
                     }
                 }
@@ -91,7 +101,19 @@ public class ZipUtils {
     }
 
     public static FileSystem newZip(Path zipFile) throws IOException {
-        return newFileSystem(toZipUri(zipFile), Files.exists(zipFile) ? Collections.emptyMap() : CREATE_ENV);
+        final Map<String, ?> env;
+        if (Files.exists(zipFile)) {
+            env = Collections.emptyMap();
+        } else {
+            env = CREATE_ENV;
+            // explicitly create any parent dirs, since the ZipFileSystem only creates a new file
+            // with "create" = "true", but doesn't create any parent dirs.
+
+            // It's OK to not check the existence of the parent dir(s) first, since the API,
+            // as per its contract doesn't throw any exception if the parent dir(s) already exist
+            Files.createDirectories(zipFile.getParent());
+        }
+        return newFileSystem(toZipUri(zipFile), env);
     }
 
     private static void copyToZip(Path srcRoot, Path srcPath, FileSystem zipfs) throws IOException {
@@ -99,21 +121,23 @@ public class ZipUtils {
                 new SimpleFileVisitor<Path>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                        throws IOException {
+                            throws IOException {
                         final Path targetDir = zipfs.getPath(srcRoot.relativize(dir).toString());
                         try {
                             Files.copy(dir, targetDir);
                         } catch (FileAlreadyExistsException e) {
-                             if (!Files.isDirectory(targetDir)) {
-                                 throw e;
-                             }
+                            if (!Files.isDirectory(targetDir)) {
+                                throw e;
+                            }
                         }
                         return FileVisitResult.CONTINUE;
                     }
+
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                        throws IOException {
-                        Files.copy(file, zipfs.getPath(srcRoot.relativize(file).toString()), StandardCopyOption.REPLACE_EXISTING);
+                            throws IOException {
+                        Files.copy(file, zipfs.getPath(srcRoot.relativize(file).toString()),
+                                StandardCopyOption.REPLACE_EXISTING);
                         return FileVisitResult.CONTINUE;
                     }
                 });
@@ -122,25 +146,87 @@ public class ZipUtils {
     /**
      * This call is not thread safe, a single of FileSystem can be created for the
      * profided uri until it is closed.
+     * 
      * @param uri The uri to the zip file.
      * @param env Env map.
      * @return A new FileSystem.
-     * @throws IOException  in case of a failure
+     * @throws IOException in case of a failure
      */
     public static FileSystem newFileSystem(URI uri, Map<String, ?> env) throws IOException {
         // If Multi threading required, logic should be added to wrap this fs
         // onto a fs that handles a reference counter and close the fs only when all thread are done
         // with it.
-        return FileSystems.newFileSystem(uri, env);
+        try {
+            return FileSystems.newFileSystem(uri, env);
+        } catch (IOException | ZipError ioe) {
+            // TODO: (at a later date) Get rid of the ZipError catching (and instead only catch IOException)
+            //  since it's a JDK bug which threw the undeclared ZipError instead of an IOException.
+            //  Java 9 fixes it https://bugs.openjdk.java.net/browse/JDK-8062754
+
+            // include the URI for which the filesystem creation failed
+            throw new IOException("Failed to create a new filesystem for " + uri, ioe);
+        }
     }
 
     /**
      * This call is thread safe, a new FS is created for each invocation.
+     * 
      * @param path The zip file.
      * @return A new FileSystem instance
-     * @throws IOException  in case of a failure
+     * @throws IOException in case of a failure
      */
-     public static FileSystem newFileSystem(Path path) throws IOException {
-         return FileSystems.newFileSystem(path, null);
-     }
+    public static FileSystem newFileSystem(final Path path) throws IOException {
+        try {
+            return FileSystems.newFileSystem(path, (ClassLoader) null);
+        } catch (IOException | ZipError ioe) {
+            // TODO: (at a later date) Get rid of the ZipError catching (and instead only catch IOException)
+            //  since it's a JDK bug which threw the undeclared ZipError instead of an IOException.
+            //  Java 9 fixes it https://bugs.openjdk.java.net/browse/JDK-8062754
+
+            // include the path for which the filesystem creation failed
+            throw new IOException("Failed to create a new filesystem for " + path, ioe);
+        }
+    }
+
+    /**
+     * This is a hack to get past the <a href="https://bugs.openjdk.java.net/browse/JDK-8232879">JDK-8232879</a>
+     * issue which causes CRC errors when writing out data to (jar) files using ZipFileSystem.
+     * TODO: Get rid of this method as soon as JDK-8232879 gets fixed and released in a public version
+     *
+     * @param original The original outputstream which will be wrapped into a new outputstream
+     *        that delegates to this one.
+     * @return
+     */
+    public static OutputStream wrapForJDK8232879(final OutputStream original) {
+        return new OutputStream() {
+            @Override
+            public void write(final byte[] b) throws IOException {
+                original.write(b);
+            }
+
+            @Override
+            public void write(final byte[] b, final int off, final int len) throws IOException {
+                original.write(b, off, len);
+            }
+
+            @Override
+            public void flush() throws IOException {
+                original.flush();
+            }
+
+            @Override
+            public void close() throws IOException {
+                original.close();
+            }
+
+            @Override
+            public void write(final int b) throws IOException {
+                // we call the 3 arg write(...) method here, instead
+                // of the single arg one to bypass the JDK-8232879 issue
+                final byte[] buf = new byte[1];
+                buf[0] = (byte) (b & 0xff);
+                this.write(buf, 0, 1);
+            }
+        };
+    }
 }

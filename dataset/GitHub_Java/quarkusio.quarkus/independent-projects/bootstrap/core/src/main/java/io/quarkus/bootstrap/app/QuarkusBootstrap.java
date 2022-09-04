@@ -3,7 +3,6 @@ package io.quarkus.bootstrap.app;
 import io.quarkus.bootstrap.BootstrapAppModelFactory;
 import io.quarkus.bootstrap.BootstrapException;
 import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.update.DependenciesOrigin;
@@ -73,15 +72,10 @@ public class QuarkusBootstrap implements Serializable {
     private final boolean isolateDeployment;
     private final MavenArtifactResolver mavenArtifactResolver;
     private final AppArtifact managingProject;
-    private final List<AppDependency> forcedDependencies;
 
     private QuarkusBootstrap(Builder builder) {
         this.applicationRoot = builder.applicationRoot;
         this.additionalApplicationArchives = new ArrayList<>(builder.additionalApplicationArchives);
-        if (applicationRoot != null) {
-            // this path has to be added last to give a chance the test directories override the app properties, etc
-            additionalApplicationArchives.add(AdditionalDependency.test(applicationRoot));
-        }
         this.excludeFromClassPath = new ArrayList<>(builder.excludeFromClassPath);
         this.projectRoot = builder.projectRoot != null ? builder.projectRoot.normalize() : null;
         this.buildSystemProperties = builder.buildSystemProperties;
@@ -101,7 +95,6 @@ public class QuarkusBootstrap implements Serializable {
         this.additionalDeploymentArchives = builder.additionalDeploymentArchives;
         this.mavenArtifactResolver = builder.mavenArtifactResolver;
         this.managingProject = builder.managingProject;
-        this.forcedDependencies = new ArrayList<>(builder.forcedDependencies);
     }
 
     public CuratedApplication bootstrap() throws BootstrapException {
@@ -126,8 +119,7 @@ public class QuarkusBootstrap implements Serializable {
                 .setLocalProjectsDiscovery(localProjectDiscovery)
                 .setAppArtifact(appArtifact)
                 .setManagingProject(managingProject)
-                .setForcedDependencies(forcedDependencies)
-                .setProjectRoot(getProjectRoot() != null ? getProjectRoot()
+                .setAppClasses(getProjectRoot() != null ? getProjectRoot()
                         : getApplicationRoot());
         if (mode == Mode.TEST || test) {
             appModelFactory.setTest(true);
@@ -137,7 +129,10 @@ public class QuarkusBootstrap implements Serializable {
             appModelFactory.setDevMode(true);
             appModelFactory.setEnableClasspathCache(true);
         }
-        return new CuratedApplication(this, appModelFactory.resolveAppModel());
+        CurationResult model = appModelFactory
+                .resolveAppModel();
+        return new CuratedApplication(this, model);
+
     }
 
     public AppModelResolver getAppModelResolver() {
@@ -176,11 +171,6 @@ public class QuarkusBootstrap implements Serializable {
         return offline;
     }
 
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    @Deprecated
     public static Builder builder(Path applicationRoot) {
         return new Builder(applicationRoot);
     }
@@ -202,7 +192,7 @@ public class QuarkusBootstrap implements Serializable {
     }
 
     public static class Builder {
-        Path applicationRoot;
+        final Path applicationRoot;
         String baseName;
         Path projectRoot;
         ClassLoader baseClassLoader = ClassLoader.getSystemClassLoader();
@@ -223,19 +213,9 @@ public class QuarkusBootstrap implements Serializable {
         boolean isolateDeployment;
         MavenArtifactResolver mavenArtifactResolver;
         AppArtifact managingProject;
-        List<AppDependency> forcedDependencies = new ArrayList<>();
 
-        public Builder() {
-        }
-
-        @Deprecated
         public Builder(Path applicationRoot) {
-            setApplicationRoot(applicationRoot);
-        }
-
-        public Builder setApplicationRoot(Path applicationRoot) {
             this.applicationRoot = applicationRoot;
-            return this;
         }
 
         public Builder addAdditionalApplicationArchive(AdditionalDependency path) {
@@ -346,15 +326,6 @@ public class QuarkusBootstrap implements Serializable {
 
         public Builder setMavenArtifactResolver(MavenArtifactResolver mavenArtifactResolver) {
             this.mavenArtifactResolver = mavenArtifactResolver;
-            return this;
-        }
-
-        /**
-         * If set, each of these dependencies will either be added to the application dependencies if the GA doesn't match any
-         * application dependencies, or override the existing version if the GA does match
-         */
-        public Builder setForcedDependencies(List<AppDependency> forcedDependencies) {
-            this.forcedDependencies = forcedDependencies;
             return this;
         }
 

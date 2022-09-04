@@ -27,18 +27,7 @@ import java.util.stream.Stream;
  */
 public class BootstrapMavenOptions {
 
-    public static final String QUARKUS_INTERNAL_MAVEN_CMD_LINE_ARGS = "quarkus-internal.maven-cmd-line-args";
-    private static final String MAVEN_CMD_LINE_ARGS = "MAVEN_CMD_LINE_ARGS";
-
     private static final String ACTIVATE_PROFILES = "P";
-    public static final String ALTERNATE_USER_SETTINGS = "s";
-    public static final String ALTERNATE_GLOBAL_SETTINGS = "gs";
-    public static final String ALTERNATE_POM_FILE = "f";
-    public static final String OFFLINE = "o";
-    public static final String SUPRESS_SNAPSHOT_UPDATES = "nsu";
-    public static final String UPDATE_SNAPSHOTS = "U";
-    public static final String CHECKSUM_FAILURE_POLICY = "C";
-    public static final String CHECKSUM_WARNING_POLICY = "c";
 
     public static Map<String, Object> parse(String cmdLine) {
         if (cmdLine == null) {
@@ -85,17 +74,8 @@ public class BootstrapMavenOptions {
         }
     }
 
-    public static BootstrapMavenOptions newInstance() {
-        return newInstance(getMavenCmdLine());
-    }
-
     public static BootstrapMavenOptions newInstance(String cmdLine) {
         return new BootstrapMavenOptions(parse(cmdLine));
-    }
-
-    public static String getMavenCmdLine() {
-        final String mvnCmd = PropertyUtils.getProperty(QUARKUS_INTERNAL_MAVEN_CMD_LINE_ARGS);
-        return mvnCmd == null ? System.getenv(MAVEN_CMD_LINE_ARGS) : mvnCmd;
     }
 
     private final Map<String, Object> options;
