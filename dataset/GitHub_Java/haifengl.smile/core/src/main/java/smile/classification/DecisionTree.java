@@ -973,6 +973,9 @@ public class DecisionTree implements SoftClassifier<double[]> {
             }
         }
 
+        // Priority queue for best-first tree growing.
+        PriorityQueue<TrainNode> nextSplits = new PriorityQueue<>();
+
         int n = y.length;
         int[] count = new int[k];
         if (samples == null) {
@@ -1000,28 +1003,21 @@ public class DecisionTree implements SoftClassifier<double[]> {
         root = new Node(Math.whichMax(count), posteriori);
         
         TrainNode trainRoot = new TrainNode(root, x, y, samples, 0, originalOrder.length);
-        if(maxNodes == Integer.MAX_VALUE) {// depth-first split
-            if (trainRoot.findBestSplit()) {
-                trainRoot.split(null);
-            }
-        } else {// best-first split
-            // Priority queue for best-first tree growing.
-            PriorityQueue<TrainNode> nextSplits = new PriorityQueue<>();
+        // Now add splits to the tree until max tree size is reached
+        if (trainRoot.findBestSplit()) {
+            nextSplits.add(trainRoot);
+        }
 
-            // Now add splits to the tree until max tree size is reached
-            if (trainRoot.findBestSplit()) {
-                nextSplits.add(trainRoot);
+        // Pop best leaf from priority queue, split it, and push
+        // children nodes into the queue if possible.
+        for (int leaves = 1; leaves < this.maxNodes; leaves++) {
+            // parent is the leaf to split
+            TrainNode node = nextSplits.poll();
+            if (node == null) {
+                break;
             }
-            // Pop best leaf from priority queue, split it, and push
-            // children nodes into the queue if possible.
-            for (int leaves = 1; leaves < this.maxNodes; leaves++) {
-                // parent is the leaf to split
-                TrainNode node = nextSplits.poll();
-                if (node == null) {
-                    break;
-                }
-                node.split(nextSplits); // Split the parent node into two children nodes
-            }
+
+            node.split(nextSplits); // Split the parent node into two children nodes
         }
 
         this.order = null;
