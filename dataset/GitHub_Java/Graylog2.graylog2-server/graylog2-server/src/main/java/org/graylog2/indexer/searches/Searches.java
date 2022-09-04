@@ -25,7 +25,10 @@ import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.index.query.*;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilterBuilders;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.facet.FacetBuilders;
 import org.elasticsearch.search.facet.datehistogram.DateHistogramFacet;
@@ -179,13 +182,10 @@ public class Searches {
 				.field("timestamp")
 				.facetFilter(IndexHelper.getTimestampRangeFilter(range))
 				.interval(interval.toString().toLowerCase());
-
-        QueryStringQueryBuilder qs = queryString(query);
-        qs.allowLeadingWildcard(false);
-
-        SearchRequestBuilder srb = c.prepareSearch();
+		
+		SearchRequestBuilder srb = c.prepareSearch();
 		srb.setIndices(IndexHelper.determineAffectedIndices(server, range).toArray(new String[]{}));
-		srb.setQuery(qs);
+		srb.setQuery(queryString(query));
 		srb.addFacet(fb);
 
         final SearchRequest request = srb.request();

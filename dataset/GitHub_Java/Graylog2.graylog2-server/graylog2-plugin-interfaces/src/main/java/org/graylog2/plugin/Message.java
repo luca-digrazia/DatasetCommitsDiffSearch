@@ -123,17 +123,15 @@ public class Message {
 
         // Add fields.
         obj.putAll(getFields());
-
-        if (getField("timestamp") instanceof DateTime) {
-            // Timestamp
-            obj.put("timestamp", Tools.buildElasticSearchTimeFormat((DateTime) getField("timestamp")));
-        }
+        
+        // Timestamp
+        obj.put("timestamp", Tools.buildElasticSearchTimeFormat((DateTime) getField("timestamp")));
 
         // Manually converting stream ID to string - caused strange problems without it.
         if (getStreams().size() > 0) {
             List<String> streamIds = Lists.newArrayList();
             for (Stream stream : this.getStreams()) {
-                streamIds.add(stream.getId());
+                streamIds.add(stream.getId().toString());
             }
             obj.put("streams", streamIds);
         } else {

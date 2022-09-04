@@ -100,13 +100,12 @@ public class SearchResource extends RestResource {
         }
     }
 
-    protected HistogramResult fieldHistogram(String field, String query, String interval, String filter, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
+    protected HistogramResult fieldHistogram(String field, String query, String interval, TimeRange timeRange) throws IndexHelper.InvalidRangeFormatException {
         try {
             return core.getIndexer().searches().fieldHistogram(
                     query,
                     field,
                     Indexer.DateHistogramInterval.valueOf(interval),
-                    filter,
                     timeRange
             );
         } catch(Searches.FieldTypeException e) {

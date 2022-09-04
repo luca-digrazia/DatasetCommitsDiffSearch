@@ -34,13 +34,13 @@ public class ExactMatcher implements StreamRuleMatcher {
             return false;
         }
 
-		Object value = msg.getField(rule.getField());
+		Object field = msg.getField(rule.getField());
 		
-		if (value == null) {
+		if (field == null) {
 			return false;
 		}
 		
-		return rule.getInverted() ^ value.toString().equals(rule.getValue());
+		return rule.getInverted() ^ field.equals(rule.getValue());
 	}
 
 }
