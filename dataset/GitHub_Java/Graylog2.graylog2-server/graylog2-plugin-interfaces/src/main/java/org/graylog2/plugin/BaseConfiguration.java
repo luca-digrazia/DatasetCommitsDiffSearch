@@ -41,9 +41,6 @@ public abstract class BaseConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(BaseConfiguration.class);
     protected static final int GRAYLOG2_DEFAULT_PORT = 12900;
 
-    @Parameter(value = "shutdown_timeout", validator = PositiveIntegerValidator.class)
-    protected int shutdownTimeout = 30000;
-
     @Parameter(value = "rest_transport_uri")
     private URI restTransportUri;
 
@@ -107,8 +104,6 @@ public abstract class BaseConfiguration {
 
     @Parameter(value = "input_cache_max_size")
     private long inputCacheMaxSize = 0;
-    @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
-    private int udpRecvBufferSizes = 1048576;
 
     @Parameter("message_journal_enabled")
     private boolean messageJournalEnabled = false;
@@ -116,14 +111,8 @@ public abstract class BaseConfiguration {
     @Parameter("message_journal_dir")
     private String messageJournalDir = "journal";
 
-    @Parameter("message_journal_segment_size")
-    private int messageJournalSegmentSize = 1024 * 1024 * 100; // 100 MB
-
     @Parameter("inputbuffer_processors")
     private int inputbufferProcessors = 2;
-
-    @Parameter("message_recordings_enable")
-    private boolean messageRecordingsEnable = false;
 
     public String getRestUriScheme() {
         return isRestEnableTls() ? "https" : "http";
@@ -275,21 +264,4 @@ public abstract class BaseConfiguration {
     public int getInputbufferProcessors() {
         return inputbufferProcessors;
     }
-
-    public int getMessageJournalSegmentSize() {
-        return messageJournalSegmentSize;
-    }
-
-    public int getShutdownTimeout() {
-        return shutdownTimeout;
-    }
-
-    public int getUdpRecvBufferSizes() {
-        return udpRecvBufferSizes;
-    }
-
-    public boolean isMessageRecordingsEnabled() {
-        return messageRecordingsEnable;
-    }
-
 }
