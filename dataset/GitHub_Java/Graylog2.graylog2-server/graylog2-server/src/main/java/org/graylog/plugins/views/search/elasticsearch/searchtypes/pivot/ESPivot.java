@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.search.elasticsearch.searchtypes.pivot;
 
 import com.google.common.base.Preconditions;
@@ -21,11 +37,12 @@ import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotResult;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotSpec;
 import org.graylog.plugins.views.search.searchtypes.pivot.SeriesSpec;
-import org.graylog.plugins.views.search.Query;
-import org.graylog.plugins.views.search.SearchJob;
-import org.graylog.plugins.views.search.SearchType;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.jooq.lambda.tuple.Tuple;
 import org.jooq.lambda.tuple.Tuple2;
 import org.slf4j.Logger;
@@ -44,6 +61,16 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
     private static final Logger LOG = LoggerFactory.getLogger(ESPivot.class);
     private final Map<String, ESPivotBucketSpecHandler<? extends BucketSpec, ? extends Aggregation>> bucketHandlers;
     private final Map<String, ESPivotSeriesSpecHandler<? extends SeriesSpec, ? extends Aggregation>> seriesHandlers;
+    private static final TimeRange ALL_MESSAGES_TIMERANGE = allMessagesTimeRange();
+
+    private static TimeRange allMessagesTimeRange() {
+        try {
+            return RelativeRange.create(0);
+        } catch (InvalidRangeParametersException e){
+            LOG.error("Unable to instantiate all messages timerange: ", e);
+        }
+        return null;
+    }
 
     @Inject
     public ESPivot(Map<String, ESPivotBucketSpecHandler<? extends BucketSpec, ? extends Aggregation>> bucketHandlers,
@@ -154,14 +181,27 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
                 .map(Optional::get);
     }
 
-    @Override
-    public SearchType.Result doExtractResult(SearchJob job, Query query, Pivot pivot, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
+    private boolean isAllMessagesTimeRange(TimeRange timeRange) {
+        return ALL_MESSAGES_TIMERANGE.equals(timeRange);
+    }
+
+    private AbsoluteRange extractEffectiveTimeRange(SearchResult queryResult, Query query, Pivot pivot) {
         final Double from = queryResult.getAggregations().getMinAggregation("timestamp-min").getMin();
         final Double to = queryResult.getAggregations().getMaxAggregation("timestamp-max").getMax();
-        final AbsoluteRange effectiveTimerange = AbsoluteRange.create(
-                from == null ? query.timerange().getFrom() : new DateTime(from.longValue()),
-                to == null ? query.timerange().getTo() : new DateTime(to.longValue())
+        final TimeRange pivotRange = query.effectiveTimeRange(pivot);
+        return AbsoluteRange.create(
+                isAllMessagesTimeRange(pivotRange) && from != null
+                        ? new DateTime(from.longValue(), DateTimeZone.UTC)
+                        : query.effectiveTimeRange(pivot).getFrom(),
+                isAllMessagesTimeRange(pivotRange) && to != null
+                        ? new DateTime(to.longValue(), DateTimeZone.UTC)
+                        : query.effectiveTimeRange(pivot).getTo()
         );
+    }
+
+    @Override
+    public SearchType.Result doExtractResult(SearchJob job, Query query, Pivot pivot, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
+        final AbsoluteRange effectiveTimerange = extractEffectiveTimeRange(queryResult, query, pivot);
 
         final PivotResult.Builder resultBuilder = PivotResult.builder()
                 .id(pivot.id())
@@ -179,7 +219,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
 
         processRows(resultBuilder, queryResult, queryContext, pivot, pivot.rowGroups(), new ArrayDeque<>(), aggregations);
 
-        return resultBuilder.build();
+        return pivot.name().map(resultBuilder::name).orElse(resultBuilder).build();
     }
 
     private long extractDocumentCount(SearchResult queryResult, Pivot pivot, ESGeneratedQueryContext queryContext) {
