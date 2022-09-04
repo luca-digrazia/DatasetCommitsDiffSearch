@@ -185,6 +185,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   @Deprecated
   public enum AndroidAaptVersion {
     AAPT2;
+
+    public static AndroidAaptVersion chooseTargetAaptVersion(RuleContext ruleContext) {
+      return AAPT2;
+    }
   }
 
   /** Android configuration options. */
