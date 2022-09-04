@@ -32,7 +32,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -51,11 +50,7 @@ import org.apache.maven.toolchain.ToolchainManager;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
-import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.repository.RemoteRepository;
-import org.eclipse.aether.resolution.ArtifactRequest;
-import org.eclipse.aether.resolution.ArtifactResolutionException;
-import org.eclipse.aether.resolution.ArtifactResult;
 
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
@@ -434,7 +429,6 @@ public class DevMojo extends AbstractMojo {
 
     class DevModeRunner {
 
-        private static final String KOTLIN_MAVEN_PLUGIN_GA = "org.jetbrains.kotlin:kotlin-maven-plugin";
         private final List<String> args;
         private Process process;
         private Set<Path> pomFiles = new HashSet<>();
@@ -517,8 +511,6 @@ public class DevMojo extends AbstractMojo {
                     break;
                 }
             }
-
-            setKotlinSpecificFlags(devModeContext);
 
             final AppModel appModel;
             try {
@@ -644,50 +636,6 @@ public class DevMojo extends AbstractMojo {
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
 
-        }
-
-        private void setKotlinSpecificFlags(DevModeContext devModeContext) {
-            Plugin kotlinMavenPlugin = null;
-            for (Plugin plugin : project.getBuildPlugins()) {
-                if (plugin.getKey().equals(KOTLIN_MAVEN_PLUGIN_GA)) {
-                    kotlinMavenPlugin = plugin;
-                    break;
-                }
-            }
-
-            if (kotlinMavenPlugin == null) {
-                return;
-            }
-
-            getLog().debug("Kotlin Maven plugin detected");
-
-            List<String> compilerPluginArtifacts = new ArrayList<>();
-            List<Dependency> dependencies = kotlinMavenPlugin.getDependencies();
-            for (Dependency dependency : dependencies) {
-                try {
-                    ArtifactResult resolvedArtifact = repoSystem.resolveArtifact(repoSession,
-                            new ArtifactRequest()
-                                    .setArtifact(new DefaultArtifact(dependency.getGroupId(), dependency.getArtifactId(),
-                                            dependency.getClassifier(), dependency.getType(), dependency.getVersion()))
-                                    .setRepositories(repos));
-
-                    compilerPluginArtifacts.add(resolvedArtifact.getArtifact().getFile().toPath().toAbsolutePath().toString());
-                } catch (ArtifactResolutionException e) {
-                    getLog().warn("Unable to properly setup dev-mode for Kotlin", e);
-                    return;
-                }
-            }
-            devModeContext.setCompilerPluginArtifacts(compilerPluginArtifacts);
-
-            List<String> options = new ArrayList<>();
-            Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) kotlinMavenPlugin.getConfiguration();
-            if (compilerPluginConfiguration != null) {
-                Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.getChild("pluginOptions");
-                for (Xpp3Dom argConfiguration : compilerPluginArgsConfiguration.getChildren()) {
-                    options.add(argConfiguration.getValue());
-                }
-            }
-            devModeContext.setCompilerPluginsOptions(options);
         }
 
         public Set<Path> getPomFiles() {
