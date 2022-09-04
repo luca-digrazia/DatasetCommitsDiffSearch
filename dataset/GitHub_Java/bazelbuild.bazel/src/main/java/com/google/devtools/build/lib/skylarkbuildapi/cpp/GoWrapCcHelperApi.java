@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
@@ -27,10 +28,9 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.Tuple;
+import com.google.devtools.build.lib.syntax.Runtime.NoneType;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 
 /**
  * Helper class for the C++ functionality needed from Skylark specifically to implement go_wrap_cc.
@@ -153,14 +153,14 @@ public interface GoWrapCcHelperApi<
             positional = false,
             named = true,
             type = CcToolchainProviderApi.class),
-        @Param(name = "srcs", positional = false, named = true, type = Sequence.class),
-        @Param(name = "deps", positional = false, named = true, type = Sequence.class),
+        @Param(name = "srcs", positional = false, named = true, type = SkylarkList.class),
+        @Param(name = "deps", positional = false, named = true, type = SkylarkList.class),
       })
   public Tuple<FileT> createGoCompileActions(
       SkylarkRuleContextT skylarkRuleContext,
       CcToolchainProviderT ccToolchainProvider,
-      Sequence<?> srcs, // <FileT> expected
-      Sequence<?> deps /* <TransitiveInfoCollectionT> expected */)
+      SkylarkList<?> srcs, // <FileT> expected
+      SkylarkList<?> deps /* <TransitiveInfoCollectionT> expected */)
       throws EvalException;
 
   @SkylarkCallable(
@@ -174,14 +174,14 @@ public interface GoWrapCcHelperApi<
             positional = false,
             named = true,
             type = CcToolchainProviderApi.class),
-        @Param(name = "srcs", positional = false, named = true, type = Sequence.class),
-        @Param(name = "deps", positional = false, named = true, type = Sequence.class),
+        @Param(name = "srcs", positional = false, named = true, type = SkylarkList.class),
+        @Param(name = "deps", positional = false, named = true, type = SkylarkList.class),
       })
   public Tuple<FileT> createGoCompileActionsGopkg(
       SkylarkRuleContextT skylarkRuleContext,
       CcToolchainProviderT ccToolchainProvider,
-      Sequence<?> srcs, // <FileT> expected
-      Sequence<?> deps /* <TransitiveInfoCollectionT> expected */)
+      SkylarkList<?> srcs, // <FileT> expected
+      SkylarkList<?> deps /* <TransitiveInfoCollectionT> expected */)
       throws EvalException;
 
   @SkylarkCallable(
@@ -213,6 +213,6 @@ public interface GoWrapCcHelperApi<
             named = true,
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = FileApi.class)}),
       })
-  public SkylarkNestedSet /*<FileT>*/ getGopackageFilesForStarlark(
+  public NestedSet<FileT> getGopackageFiles(
       SkylarkRuleContextT skylarkRuleContext, FileT skylarkGopkg);
 }

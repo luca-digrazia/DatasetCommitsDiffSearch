@@ -323,13 +323,6 @@ public interface BazelCcModuleApi<
             named = true,
             defaultValue = "[]",
             type = SkylarkList.class),
-        @Param(
-            name = "grep_includes",
-            positional = false,
-            named = true,
-            noneable = true,
-            defaultValue = "None",
-            allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
       })
   LinkingOutputsT link(
       SkylarkActionFactoryT skylarkActionFactoryApi,
@@ -343,7 +336,6 @@ public interface BazelCcModuleApi<
       String outputType,
       boolean linkDepsStatically,
       SkylarkList<?> additionalInputs, // <FileT> expected
-      Object grepIncludes,
       Location location,
       StarlarkThread thread)
       throws InterruptedException, EvalException;

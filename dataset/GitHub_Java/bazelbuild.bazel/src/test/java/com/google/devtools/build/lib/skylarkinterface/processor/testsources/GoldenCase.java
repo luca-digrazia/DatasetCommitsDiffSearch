@@ -18,15 +18,16 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
-/** Test source file verifying various proper uses of SkylarkCallable. */
-public class GoldenCase implements StarlarkValue {
+/**
+ * Test source file verifying various proper uses of SkylarkCallable.
+ */
+public class GoldenCase {
 
   @SkylarkCallable(
     name = "struct_field_method",
@@ -174,7 +175,7 @@ public class GoldenCase implements StarlarkValue {
   public String twoArgMethodWithParamsAndInfoAndKwargs(
       String one,
       Integer two,
-      Dict<?, ?> kwargs,
+      SkylarkDict<?, ?> kwargs,
       Location location,
       FuncallExpression ast,
       StarlarkThread thread,
@@ -193,7 +194,11 @@ public class GoldenCase implements StarlarkValue {
       extraKeywords = @Param(name = "kwargs"),
       useStarlarkThread = true)
   public String twoArgMethodWithParamsAndInfoAndKwargs(
-      String one, Integer two, Sequence<?> args, Dict<?, ?> kwargs, StarlarkThread thread) {
+      String one,
+      Integer two,
+      SkylarkList<?> args,
+      SkylarkDict<?, ?> kwargs,
+      StarlarkThread thread) {
     return "yar";
   }
 
@@ -215,8 +220,10 @@ public class GoldenCase implements StarlarkValue {
       documented = false,
       structField = true,
       useLocation = true,
+      useStarlarkThread = true,
       useStarlarkSemantics = true)
-  public String structFieldMethodWithInfo(Location location, StarlarkSemantics starlarkSemantics) {
+  public String structFieldMethodWithInfo(
+      Location location, StarlarkThread thread, StarlarkSemantics starlarkSemantics) {
     return "dragon";
   }
 
@@ -224,10 +231,10 @@ public class GoldenCase implements StarlarkValue {
       name = "method_with_list_and_dict",
       documented = false,
       parameters = {
-        @Param(name = "one", type = Sequence.class, named = true),
-        @Param(name = "two", type = Dict.class, named = true),
+        @Param(name = "one", type = SkylarkList.class, named = true),
+        @Param(name = "two", type = SkylarkDict.class, named = true),
       })
-  public String methodWithListandDict(Sequence<?> one, Dict<?, ?> two) {
+  public String methodWithListandDict(SkylarkList<?> one, SkylarkDict<?, ?> two) {
     return "bar";
   }
 }
