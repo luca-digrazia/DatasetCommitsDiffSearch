@@ -14,15 +14,18 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.repository;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryModuleApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.FunctionSignature;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeDescriptor;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeSkylarkRuleFunctionsApi.AttributeNameComparator;
 import com.google.devtools.build.skydoc.rendering.RuleInfoWrapper;
@@ -31,14 +34,14 @@ import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.Attr
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.RuleInfo;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 
 /**
  * Fake implementation of {@link RepositoryModuleApi}.
  */
 public class FakeRepositoryModule implements RepositoryModuleApi {
   private static final FakeDescriptor IMPLICIT_NAME_ATTRIBUTE_DESCRIPTOR =
-      new FakeDescriptor(AttributeType.NAME, "A unique name for this repository.", true);
+      new FakeDescriptor(
+          AttributeType.NAME, "A unique name for this repository.", true, ImmutableList.of(), "");
 
   private final List<RuleInfoWrapper> ruleInfoList;
 
@@ -48,18 +51,19 @@ public class FakeRepositoryModule implements RepositoryModuleApi {
 
   @Override
   public BaseFunction repositoryRule(
-      BaseFunction implementation,
+      StarlarkCallable implementation,
       Object attrs,
       Boolean local,
-      SkylarkList<String> environ,
+      Sequence<?> environ, // <String> expected
+      Boolean configure,
+      Boolean remotable,
       String doc,
-      FuncallExpression ast,
-      Environment env)
+      StarlarkThread thread)
       throws EvalException {
     List<AttributeInfo> attrInfos;
     ImmutableMap.Builder<String, FakeDescriptor> attrsMapBuilder = ImmutableMap.builder();
-    if (attrs != null && attrs != Runtime.NONE) {
-      SkylarkDict<?, ?> attrsDict = (SkylarkDict<?, ?>) attrs;
+    if (attrs != null && attrs != Starlark.NONE) {
+      Dict<?, ?> attrsDict = (Dict<?, ?>) attrs;
       attrsMapBuilder.putAll(attrsDict.getContents(String.class, FakeDescriptor.class, "attrs"));
     }
 
@@ -77,7 +81,8 @@ public class FakeRepositoryModule implements RepositoryModuleApi {
     // Only the Builder is passed to RuleInfoWrapper as the rule name is not yet available.
     RuleInfo.Builder ruleInfo = RuleInfo.newBuilder().setDocString(doc).addAllAttribute(attrInfos);
 
-    ruleInfoList.add(new RuleInfoWrapper(functionIdentifier, ast.getLocation(), ruleInfo));
+    Location loc = thread.getCallerLocation();
+    ruleInfoList.add(new RuleInfoWrapper(functionIdentifier, loc, ruleInfo));
     return functionIdentifier;
   }
 
@@ -91,15 +96,22 @@ public class FakeRepositoryModule implements RepositoryModuleApi {
   private static class RepositoryRuleDefinitionIdentifier extends BaseFunction {
 
     private static int idCounter = 0;
+    private final String name = "RepositoryRuleDefinitionIdentifier" + idCounter++;
 
-    public RepositoryRuleDefinitionIdentifier() {
-      super("RepositoryRuleDefinitionIdentifier" + idCounter++);
+    @Override
+    public String getName() {
+      return name;
     }
 
     @Override
-    public boolean equals(@Nullable Object other) {
-      // Use exact object matching.
-      return this == other;
+    public FunctionSignature getSignature() {
+      return FunctionSignature.KWARGS;
     }
+  }
+
+  @Override
+  public void failWithIncompatibleUseCcConfigureFromRulesCc(StarlarkThread thread)
+      throws EvalException {
+    // Noop until --incompatible_use_cc_configure_from_rules_cc is implemented.
   }
 }

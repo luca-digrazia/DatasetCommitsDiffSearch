@@ -14,25 +14,24 @@
 
 package com.google.devtools.build.lib.rules.config;
 
-import static com.google.devtools.build.lib.analysis.starlark.FunctionTransitionUtil.COMMAND_LINE_OPTION_PREFIX;
+import static com.google.devtools.build.lib.analysis.skylark.FunctionTransitionUtil.COMMAND_LINE_OPTION_PREFIX;
 
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.Settings;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.Settings;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
-import com.google.devtools.build.lib.starlarkbuildapi.config.ConfigGlobalLibraryApi;
-import com.google.devtools.build.lib.starlarkbuildapi.config.ConfigurationTransitionApi;
+import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigGlobalLibraryApi;
+import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigurationTransitionApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkCallable;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
 
 /**
  * Implementation of {@link ConfigGlobalLibraryApi}.
@@ -49,16 +48,12 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
       StarlarkThread thread)
       throws EvalException {
     StarlarkSemantics semantics = thread.getSemantics();
-    List<String> inputsList = Sequence.cast(inputs, String.class, "inputs");
-    List<String> outputsList = Sequence.cast(outputs, String.class, "outputs");
+    List<String> inputsList = inputs.getContents(String.class, "inputs");
+    List<String> outputsList = outputs.getContents(String.class, "outputs");
     validateBuildSettingKeys(
-        inputsList,
-        Settings.INPUTS,
-        semantics.getBool(BuildLanguageOptions.EXPERIMENTAL_STARLARK_CONFIG_TRANSITIONS));
+        inputsList, Settings.INPUTS, semantics.experimentalStarlarkConfigTransitions());
     validateBuildSettingKeys(
-        outputsList,
-        Settings.OUTPUTS,
-        semantics.getBool(BuildLanguageOptions.EXPERIMENTAL_STARLARK_CONFIG_TRANSITIONS));
+        outputsList, Settings.OUTPUTS, semantics.experimentalStarlarkConfigTransitions());
     return StarlarkDefinedConfigTransition.newRegularTransition(
         implementation, inputsList, outputsList, semantics, thread);
   }
@@ -69,7 +64,7 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
       StarlarkThread thread)
       throws EvalException {
     Map<String, Object> changedSettingsMap =
-        Dict.cast(changedSettings, String.class, Object.class, "changed_settings dict");
+        changedSettings.getContents(String.class, Object.class, "changed_settings dict");
     validateBuildSettingKeys(changedSettingsMap.keySet(), Settings.OUTPUTS, true);
     return StarlarkDefinedConfigTransition.newAnalysisTestTransition(
         changedSettingsMap, thread.getCallerLocation());
@@ -103,11 +98,7 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
         }
       } else {
         String optionName = optionKey.substring(COMMAND_LINE_OPTION_PREFIX.length());
-        // If any other flags need to be excepted, then this fix should be amended to instead be
-        // a commandline-specified set of allowed exceptions.
-        if (optionName.startsWith("experimental_")
-            || (optionName.startsWith("incompatible_")
-                && !optionName.equals("incompatible_enable_cc_toolchain_resolution"))) {
+        if (optionName.startsWith("experimental_") || optionName.startsWith("incompatible_")) {
           throw Starlark.errorf(
               "Invalid transition %s '%s'. Cannot transition on --experimental_* or "
                   + "--incompatible_* options",

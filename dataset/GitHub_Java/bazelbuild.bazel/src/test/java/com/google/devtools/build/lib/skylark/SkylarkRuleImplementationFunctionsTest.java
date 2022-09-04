@@ -51,7 +51,8 @@ import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.StarlarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -81,7 +82,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests for Starlark functions relating to rule implementation. */
+/** Tests for skylark functions relating to rule implemenetation. */
 @RunWith(JUnit4.class)
 @SkylarkGlobalLibrary // needed for CallUtils.getBuiltinCallable, sadly
 public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
@@ -174,7 +175,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
     return (StructImpl) configuredTarget.get(key);
   }
@@ -278,8 +279,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         action.getArguments(), "-c", "dummy_command", "", "--a", "--b");
     assertThat(action.getMnemonic()).isEqualTo("DummyMnemonic");
     assertThat(action.getProgressMessage()).isEqualTo("dummy_message");
-    assertThat(action.getIncompleteEnvironmentForTesting())
-        .isEqualTo(targetConfig.getLocalShellEnvironment());
+    assertThat(action.getIncompleteEnvironmentForTesting()).isEqualTo(targetConfig.getLocalShellEnvironment());
   }
 
   @Test
@@ -401,7 +401,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testCreateSpawnActionBadGenericArg() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
     checkEvalErrorContains(
-        "at index 0 of outputs, got element of type string, want File",
+        "expected type 'File' for 'outputs' element but got type 'string' instead",
         "l = ['a', 'b']",
         "ruleContext.actions.run_shell(",
         "  outputs = l,",
@@ -448,7 +448,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolInInputsLegacy() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=false");
+    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=false");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -463,7 +463,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolAttribute() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
+    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -479,7 +479,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolAttributeIgnoresToolsInInputs() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
+    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -495,7 +495,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolInInputsFailAtAnalysisTime() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
+    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -841,7 +841,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testRunfilesBadListGenericType() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
     checkEvalErrorContains(
-        "at index 0 of files, got element of type string, want File",
+        "expected type 'File' for 'files' element but got type 'string' instead",
         "ruleContext.runfiles(files = ['some string'])");
   }
 
@@ -849,7 +849,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testRunfilesBadSetGenericType() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
     checkEvalErrorContains(
-        "got a depset of 'int', expected a depset of 'File'",
+        "got value of type 'depset', want 'depset of Files or NoneType'",
         "ruleContext.runfiles(transitive_files=depset([1, 2, 3]))");
   }
 
@@ -857,16 +857,16 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testRunfilesBadMapGenericType() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
     checkEvalErrorContains(
-        "got dict<int, File> for 'symlinks', want dict<string, File>",
+        "expected type 'string' for 'symlinks' key but got type 'int' instead",
         "ruleContext.runfiles(symlinks = {123: ruleContext.files.srcs[0]})");
     checkEvalErrorContains(
-        "got dict<string, int> for 'symlinks', want dict<string, File>",
+        "expected type 'File' for 'symlinks' value but got type 'int' instead",
         "ruleContext.runfiles(symlinks = {'some string': 123})");
     checkEvalErrorContains(
-        "got dict<int, File> for 'root_symlinks', want dict<string, File>",
+        "expected type 'string' for 'root_symlinks' key but got type 'int' instead",
         "ruleContext.runfiles(root_symlinks = {123: ruleContext.files.srcs[0]})");
     checkEvalErrorContains(
-        "got dict<string, int> for 'root_symlinks', want dict<string, File>",
+        "expected type 'File' for 'root_symlinks' value but got type 'int' instead",
         "ruleContext.runfiles(root_symlinks = {'some string': 123})");
   }
 
@@ -897,7 +897,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testRunfilesArtifactsFromDefaultAndFiles() throws Exception {
     setRuleContext(createRuleContext("//foo:bar"));
     // It would be nice to write [DEFAULT] + ruleContext.files.srcs, but artifacts
-    // is an ImmutableList and Starlark interprets it as a tuple.
+    // is an ImmutableList and Skylark interprets it as a tuple.
     Object result =
         eval("ruleContext.runfiles(collect_default = True, files = ruleContext.files.srcs)");
     // From DEFAULT only libjl.jar comes, see testRunfilesAddFromDependencies().
@@ -1150,7 +1150,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testDefaultProviderInvalidConfiguration() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/foo.bzl",
         "foo_provider = provider()",
@@ -1349,7 +1349,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(provider).isInstanceOf(StructImpl.class);
     assertThat(((StructImpl) provider).getProvider().getKey())
         .isEqualTo(
-            new StarlarkProvider.Key(
+            new SkylarkKey(
                 Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
   }
 
@@ -1392,8 +1392,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(provider).isInstanceOf(StructImpl.class);
     assertThat(((StructImpl) provider).getProvider().getKey())
         .isEqualTo(
-            new StarlarkProvider.Key(
-                Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "FooInfo"));
+            new SkylarkKey(Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "FooInfo"));
   }
 
   @Test
@@ -1512,7 +1511,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(provider).isInstanceOf(StructImpl.class);
     assertThat(((StructImpl) provider).getProvider().getKey())
         .isEqualTo(
-            new StarlarkProvider.Key(
+            new SkylarkKey(
                 Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
     assertThat(((StructImpl) provider).getValue("a")).isEqualTo(123);
   }
@@ -1561,7 +1560,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(provider).isInstanceOf(StructImpl.class);
     assertThat(((StructImpl) provider).getProvider().getKey())
         .isEqualTo(
-            new StarlarkProvider.Key(
+            new SkylarkKey(
                 Label.parseAbsolute("//test:foo.bzl", ImmutableMap.of()), "foo_provider"));
   }
 
@@ -2547,7 +2546,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
     scratch.file("test/BUILD", "load('//test:rule.bzl', 'foo')", "foo(name='foo')");
 
-    setStarlarkSemanticsOptions("--experimental_starlark_config_transitions=true");
+    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions=true");
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:foo");
@@ -2588,7 +2587,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "    '_attr': attr.label(",
         "        cfg = android_common.multi_cpu_configuration,",
         "        default = configuration_field(fragment='cpp', name = 'cc_toolchain'))})");
-    setStarlarkSemanticsOptions("--experimental_google_legacy_api");
+    setSkylarkSemanticsOptions("--experimental_google_legacy_api");
 
     scratch.file("test/BUILD", "load('//test:rule.bzl', 'foo')", "foo(name='foo')");
 

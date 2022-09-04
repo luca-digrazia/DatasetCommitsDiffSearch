@@ -25,8 +25,8 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
- * The Starlark module containing the definition of {@code repository_rule} function to define a
- * Starlark remote repository.
+ * The Skylark module containing the definition of {@code repository_rule} function to define a
+ * skylark remote repository.
  */
 @SkylarkGlobalLibrary
 public interface RepositoryModuleApi {
@@ -124,7 +124,6 @@ public interface RepositoryModuleApi {
           "When --incompatible_use_cc_configure_from_rules_cc is set to true, Bazel will "
               + "fail the build. Please see https://github.com/bazelbuild/bazel/issues/10134 for "
               + "details and migration instructions.",
-      documented = false,
       useStarlarkThread = true)
   void failWithIncompatibleUseCcConfigureFromRulesCc(StarlarkThread thread) throws EvalException;
 }

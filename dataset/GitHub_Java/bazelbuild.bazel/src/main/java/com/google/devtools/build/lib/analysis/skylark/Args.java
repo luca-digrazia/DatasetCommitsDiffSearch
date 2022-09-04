@@ -23,11 +23,11 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineAndParamFil
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.SingleStringArgFormatter;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkCustomCommandLine.ScalarArg;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkCustomCommandLine.ScalarArg;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Mutability;
@@ -231,7 +231,7 @@ public abstract class Args implements CommandLineArgsApi {
   /** Args module. */
   private static class MutableArgs extends Args implements StarlarkValue, Mutability.Freezable {
     private final Mutability mutability;
-    private final StarlarkCustomCommandLine.Builder commandLine;
+    private final SkylarkCustomCommandLine.Builder commandLine;
     private final List<NestedSet<?>> potentialDirectoryArtifacts = new ArrayList<>();
     private final Set<Artifact> directoryArtifacts = new HashSet<>();
     private ParameterFileType parameterFileType = ParameterFileType.SHELL_QUOTED;
@@ -327,6 +327,7 @@ public abstract class Args implements CommandLineArgsApi {
       addVectorArg(
           values,
           argName,
+          /* mapAll= */ null,
           mapEach != Starlark.NONE ? (StarlarkCallable) mapEach : null,
           formatEach != Starlark.NONE ? (String) formatEach : null,
           beforeEach != Starlark.NONE ? (String) beforeEach : null,
@@ -366,6 +367,7 @@ public abstract class Args implements CommandLineArgsApi {
       addVectorArg(
           values,
           argName,
+          /* mapAll= */ null,
           mapEach != Starlark.NONE ? (StarlarkCallable) mapEach : null,
           formatEach != Starlark.NONE ? (String) formatEach : null,
           /* beforeEach= */ null,
@@ -382,6 +384,7 @@ public abstract class Args implements CommandLineArgsApi {
     private void addVectorArg(
         Object value,
         String argName,
+        StarlarkCallable mapAll,
         StarlarkCallable mapEach,
         String formatEach,
         String beforeEach,
@@ -393,20 +396,20 @@ public abstract class Args implements CommandLineArgsApi {
         String terminateWith,
         Location loc)
         throws EvalException {
-      StarlarkCustomCommandLine.VectorArg.Builder vectorArg;
+      SkylarkCustomCommandLine.VectorArg.Builder vectorArg;
       if (value instanceof Depset) {
         Depset skylarkNestedSet = (Depset) value;
         NestedSet<?> nestedSet = skylarkNestedSet.getSet();
         if (expandDirectories) {
           potentialDirectoryArtifacts.add(nestedSet);
         }
-        vectorArg = new StarlarkCustomCommandLine.VectorArg.Builder(nestedSet);
+        vectorArg = new SkylarkCustomCommandLine.VectorArg.Builder(nestedSet);
       } else {
         Sequence<?> skylarkList = (Sequence) value;
         if (expandDirectories) {
           scanForDirectories(skylarkList);
         }
-        vectorArg = new StarlarkCustomCommandLine.VectorArg.Builder(skylarkList);
+        vectorArg = new SkylarkCustomCommandLine.VectorArg.Builder(skylarkList);
       }
       validateFormatString("format_each", formatEach);
       validateFormatString("format_joined", formatJoined);
@@ -414,6 +417,7 @@ public abstract class Args implements CommandLineArgsApi {
           .setLocation(loc)
           .setArgName(argName)
           .setExpandDirectories(expandDirectories)
+          .setMapAll(mapAll)
           .setFormatEach(formatEach)
           .setBeforeEach(beforeEach)
           .setJoinWith(joinWith)
@@ -516,7 +520,7 @@ public abstract class Args implements CommandLineArgsApi {
 
     private MutableArgs(@Nullable Mutability mutability, StarlarkSemantics starlarkSemantics) {
       this.mutability = mutability != null ? mutability : Mutability.IMMUTABLE;
-      this.commandLine = new StarlarkCustomCommandLine.Builder(starlarkSemantics);
+      this.commandLine = new SkylarkCustomCommandLine.Builder(starlarkSemantics);
     }
 
     @Override
