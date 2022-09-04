@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.profiler.output;
 
 import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.CriticalPathEntry;
 import com.google.devtools.build.lib.profiler.statistics.CriticalPathStatistics;
+import com.google.devtools.build.lib.profiler.statistics.CriticalPathStatistics.MiddleManStatistics;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.TimeUtilities;
 import java.io.PrintStream;
@@ -50,6 +51,11 @@ public final class CriticalPathText extends TextPrinter {
   private void printCriticalPathTimingBreakdown(
       CriticalPathEntry totalPath, CriticalPathEntry optimalPath) {
     lnPrint(totalPath.task.type);
+
+    lnPrintf(
+        TWO_COLUMN_FORMAT,
+        "Main thread scheduling delays",
+        TimeUtilities.prettyTime(criticalPathStats.getMainThreadWaitTime()));
 
     printLn();
     lnPrint("Critical path time:");
@@ -107,7 +113,7 @@ public final class CriticalPathText extends TextPrinter {
 
     long totalPathTime = path.cumulativeDuration;
 
-    for (CriticalPathEntry pathEntry : criticalPathStats.getFilteredPath(path)) {
+    for (CriticalPathEntry pathEntry : criticalPathStats.getMiddlemanFilteredPath(path)) {
       String desc = pathEntry.task.getDescription().replace(':', ' ');
       if (isComponent) {
         lnPrintf(
@@ -124,6 +130,23 @@ public final class CriticalPathText extends TextPrinter {
             prettyPercentage((double) pathEntry.duration / totalPathTime),
             prettyPercentage((double) pathEntry.getCriticalTime() / totalPathTime),
             desc);
+      }
+    }
+    MiddleManStatistics middleMan = MiddleManStatistics.create(path);
+    if (middleMan.count > 0) {
+      if (isComponent) {
+        lnPrintf(
+            "       %11s %8s   [%d middleman actions]",
+            TimeUtilities.prettyTime(middleMan.duration),
+            prettyPercentage((double) middleMan.duration / totalPathTime),
+            middleMan.count);
+      } else {
+        lnPrintf(
+            "       %11s %8s %8s   [%d middleman actions]",
+            TimeUtilities.prettyTime(middleMan.duration),
+            prettyPercentage((double) middleMan.duration / totalPathTime),
+            prettyPercentage((double) middleMan.criticalTime / totalPathTime),
+            middleMan.count);
       }
     }
   }
