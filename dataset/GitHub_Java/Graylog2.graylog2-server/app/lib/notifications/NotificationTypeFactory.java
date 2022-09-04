@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ * <p/>
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * <p/>
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * <p/>
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package lib.notifications;
 
 import org.graylog2.restclient.lib.APIException;
@@ -8,9 +24,6 @@ import org.graylog2.restclient.models.StreamService;
 import javax.inject.Inject;
 import java.io.IOException;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public class NotificationTypeFactory {
     private final StreamService streamService;
 
@@ -29,6 +42,12 @@ public class NotificationTypeFactory {
                 return new NoMasterNotification(notification);
             case ES_OPEN_FILES:
                 return new EsOpenFilesNotification(notification);
+            case ES_CLUSTER_RED:
+                return new EsClusterStatusRedNotification(notification);
+            case ES_UNAVAILABLE:
+                return new EsClusterUnavailableNotification(notification);
+            case INDEX_RANGES_RECALCULATION:
+                return new IndexRangesRecalculationNotification(notification);
             case NO_INPUT_RUNNING:
                 return new NoInputRunningNotification(notification);
             case INPUT_FAILED_TO_START:
@@ -49,8 +68,18 @@ public class NotificationTypeFactory {
                 } catch (APIException | IOException e) {
                     streamTitle = "(Stream title unavailable)";
                 }
-                long faultCount = Math.round((double)notification.getDetail("fault_count"));
+                int faultCount = (int) notification.getDetail("fault_count");
                 return new StreamProcessingDisabledNotification(notification, streamTitle, faultCount);
+            case GC_TOO_LONG:
+                return new GcTooLongNotification(notification);
+            case JOURNAL_UTILIZATION_TOO_HIGH:
+                return new JournalUtilizationTooHighNotification(notification);
+            case JOURNAL_UNCOMMITTED_MESSAGES_DELETED:
+                return new JournalUncommitedMessagesDeletedNotification(notification);
+            case OUTPUT_DISABLED:
+                return new OutputDisabledNotification(notification);
+            case GENERIC:
+                return new GenericNotification(notification);
         }
 
         throw new RuntimeException("No notification registered for " + notification.getType());
