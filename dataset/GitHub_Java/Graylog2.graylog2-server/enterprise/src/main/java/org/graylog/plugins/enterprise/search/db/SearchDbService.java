@@ -5,7 +5,6 @@ import com.google.common.collect.Streams;
 import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog.plugins.enterprise.search.Search;
-import org.graylog.plugins.enterprise.search.views.ViewService;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PaginatedList;
@@ -20,7 +19,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -34,13 +32,10 @@ import java.util.stream.Stream;
  */
 public class SearchDbService {
     protected final JacksonDBCollection<Search, ObjectId> db;
-    private final ViewService viewService;
 
     @Inject
     protected SearchDbService(MongoConnection mongoConnection,
-                              MongoJackObjectMapperProvider mapper,
-                              ViewService viewService) {
-        this.viewService = viewService;
+                             MongoJackObjectMapperProvider mapper) {
         db = JacksonDBCollection.wrap(mongoConnection.getDatabase().getCollection("searches"),
                 Search.class,
                 ObjectId.class,
@@ -52,44 +47,8 @@ public class SearchDbService {
         return Optional.ofNullable(db.findOneById(new ObjectId(id)));
     }
 
-    public Optional<Search> getForUser(String id, String username, Predicate<String> permissionChecker) {
-        final Search search = db.findOneById(new ObjectId(id));
-
-        if (search == null) {
-            return Optional.empty();
-        }
-
-        if (search.owner().map(owner -> owner.equals(username)).orElse(false)) {
-            return Optional.of(search);
-        }
-
-        if (viewService.forSearch(id).stream()
-                .anyMatch(view -> permissionChecker.test(view.id()))) {
-            return Optional.of(search);
-        }
-
-        return Optional.empty();
-    }
-
     public Search save(Search search) {
-        if (search.id() != null) {
-            final Search previous = db.findOneById(new ObjectId(search.id()));
-            if (previous != null && previous.owner().map(owner -> !owner.equals(search.owner().orElse(null))).orElse(false)) {
-                throw new IllegalArgumentException("Unable to update search with id <" + search.id() + ">, already exists and user is not permitted to overwrite it.");
-            }
-
-            final WriteResult<Search, ObjectId> save = db.update(
-                    DBQuery.is("_id", search.id()),
-                    search,
-                    true,
-                    false
-            );
-
-            return search;
-        }
-
-        final WriteResult<Search, ObjectId> save = db.insert(search);
-
+        WriteResult<Search, ObjectId> save = db.save(search);
         return save.getSavedObject();
     }
 
