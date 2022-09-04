@@ -41,6 +41,12 @@ public class TestConfigFragments {
     }
 
     @Override
+    public boolean defaultsToSelf() {
+      throw new UnsupportedOperationException(
+          "dynamic configurations don't use global transition tables");
+    }
+
+    @Override
     public BuildOptions apply(BuildOptions options) {
       BuildOptions toOptions = options.clone();
       BuildConfiguration.Options coreOptions =

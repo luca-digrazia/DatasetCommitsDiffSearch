@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,20 +14,20 @@
 
 package com.google.devtools.build.lib.rules.test;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.packages.TargetUtils;
-
-import java.util.List;
+import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.Path;
 
 /**
  * Container for common test execution settings shared by all
@@ -35,35 +35,39 @@ import java.util.List;
  */
 public final class TestTargetExecutionSettings {
 
-  private final List<String> testArguments;
+  private final CommandLine testArguments;
   private final String testFilter;
   private final int totalShards;
   private final RunUnder runUnder;
   private final Artifact runUnderExecutable;
   private final Artifact executable;
-  private final Artifact runfilesManifest;
+  private final boolean runfilesSymlinksCreated;
+  private final Path runfilesDir;
+  private final Runfiles runfiles;
   private final Artifact runfilesInputManifest;
   private final Artifact instrumentedFileManifest;
 
-  TestTargetExecutionSettings(RuleContext ruleContext, RunfilesSupport runfiles,
+  TestTargetExecutionSettings(RuleContext ruleContext, RunfilesSupport runfilesSupport,
       Artifact executable, Artifact instrumentedFileManifest, int shards) {
     Preconditions.checkArgument(TargetUtils.isTestRule(ruleContext.getRule()));
     Preconditions.checkArgument(shards >= 0);
     BuildConfiguration config = ruleContext.getConfiguration();
+    TestConfiguration testConfig = config.getFragment(TestConfiguration.class);
 
-    List<String> targetArgs = runfiles.getArgs();
-    testArguments = targetArgs.isEmpty()
-      ? config.getTestArguments()
-      : ImmutableList.copyOf(Iterables.concat(targetArgs, config.getTestArguments()));
+    CommandLine targetArgs = runfilesSupport.getArgs();
+    testArguments =
+        CommandLine.concat(targetArgs, ImmutableList.copyOf(testConfig.getTestArguments()));
 
     totalShards = shards;
     runUnder = config.getRunUnder();
     runUnderExecutable = getRunUnderExecutable(ruleContext);
 
-    this.testFilter = config.getTestFilter();
+    this.testFilter = testConfig.getTestFilter();
     this.executable = executable;
-    this.runfilesManifest = runfiles.getRunfilesManifest();
-    this.runfilesInputManifest = runfiles.getRunfilesInputManifest();
+    this.runfilesSymlinksCreated = runfilesSupport.getCreateSymlinks();
+    this.runfilesDir = runfilesSupport.getRunfilesDirectory();
+    this.runfiles = runfilesSupport.getRunfiles();
+    this.runfilesInputManifest = runfilesSupport.getRunfilesInputManifest();
     this.instrumentedFileManifest = instrumentedFileManifest;
   }
 
@@ -75,7 +79,7 @@ public final class TestTargetExecutionSettings {
         : runUnderTarget.getProvider(FilesToRunProvider.class).getExecutable();
   }
 
-  public List<String> getArgs() {
+  public CommandLine getArgs() {
     return testArguments;
   }
 
@@ -99,17 +103,19 @@ public final class TestTargetExecutionSettings {
     return executable;
   }
 
-  /**
-   * Returns the runfiles manifest for this test.
-   *
-   * <p>This returns either the input manifest outside of the runfiles tree,
-   * if blaze is run with --nobuild_runfile_links or the manifest inside the
-   * runfiles tree, if blaze is run with --build_runfile_links.
-   *
-   * @see com.google.devtools.build.lib.analysis.RunfilesSupport#getRunfilesManifest()
-   */
-  public Artifact getManifest() {
-    return runfilesManifest;
+  /** @return whether or not the runfiles symlinks were created */
+  public boolean getRunfilesSymlinksCreated() {
+    return runfilesSymlinksCreated;
+  }
+
+  /** @return the directory of the runfiles */
+  public Path getRunfilesDir() {
+    return runfilesDir;
+  }
+
+  /** @return the runfiles for the test */
+  public Runfiles getRunfiles() {
+    return runfiles;
   }
 
   /**
