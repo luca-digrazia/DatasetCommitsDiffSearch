@@ -18,19 +18,17 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.bazel.repository.RepositoryResolvedEvent;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
-import com.google.devtools.build.lib.rules.repository.ResolvedHashesValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -38,7 +36,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -47,14 +44,9 @@ import javax.annotation.Nullable;
 public class SkylarkRepositoryFunction extends RepositoryFunction {
 
   private final HttpDownloader httpDownloader;
-  private double timeoutScaling = 1.0;
 
   public SkylarkRepositoryFunction(HttpDownloader httpDownloader) {
     this.httpDownloader = httpDownloader;
-  }
-
-  public void setTimeoutScaling(double timeoutScaling) {
-    this.timeoutScaling = timeoutScaling;
   }
 
   @Nullable
@@ -70,20 +62,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     if (skylarkSemantics == null) {
       return null;
     }
-
-    Set<String> verificationRules =
-        RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES.get(env);
-    if (verificationRules == null) {
-      return null;
-    }
-    ResolvedHashesValue resolvedHashesValue =
-        (ResolvedHashesValue) env.getValue(ResolvedHashesValue.key());
-    if (resolvedHashesValue == null) {
-      return null;
-    }
-    Map<String, String> resolvedHashes = resolvedHashesValue.getHashes();
-
-    try (Mutability mutability = Mutability.create("Starlark repository")) {
+    try (Mutability mutability = Mutability.create("skylark repository")) {
       com.google.devtools.build.lib.syntax.Environment buildEnv =
           com.google.devtools.build.lib.syntax.Environment.builder(mutability)
               .setSemantics(skylarkSemantics)
@@ -91,13 +70,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               .build();
       SkylarkRepositoryContext skylarkRepositoryContext =
           new SkylarkRepositoryContext(
-              rule,
-              outputDirectory,
-              env,
-              clientEnvironment,
-              httpDownloader,
-              timeoutScaling,
-              markerData);
+              rule, outputDirectory, env, clientEnvironment, httpDownloader, markerData);
 
       // Since restarting a repository function can be really expensive, we first ensure that
       // all label-arguments can be resolved to paths.
@@ -114,10 +87,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
         // means the rule might get restarted for legitimate reasons.
       }
 
-      // This rule is mainly executed for its side effect. Nevertheless, the return value is
-      // of importance, as it provides information on how the call has to be modified to be a
-      // reproducible rule.
-      //
+      // This has side-effect, we don't care about the output.
       // Also we do a lot of stuff in there, maybe blocking operations and we should certainly make
       // it possible to return null and not block but it doesn't seem to be easy with Skylark
       // structure as it is.
@@ -127,28 +97,10 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               /*kwargs=*/ ImmutableMap.of(),
               null,
               buildEnv);
-      RepositoryResolvedEvent resolved =
-          new RepositoryResolvedEvent(
-              rule, skylarkRepositoryContext.getAttr(), outputDirectory, retValue);
-      if (resolved.isNewInformationReturned()) {
-        env.getListener().handle(Event.debug(resolved.getMessage()));
+      if (retValue != Runtime.NONE) {
+        env.getListener()
+            .handle(Event.info("Repository rule '" + rule.getName() + "' returned: " + retValue));
       }
-
-      String ruleClass =
-          rule.getRuleClassObject().getRuleDefinitionEnvironmentLabel() + "%" + rule.getRuleClass();
-      if (verificationRules.contains(ruleClass)) {
-        String expectedHash = resolvedHashes.get(rule.getName());
-        if (expectedHash != null) {
-          String actualHash = resolved.getDirectoryDigest();
-          if (!expectedHash.equals(actualHash)) {
-            throw new RepositoryFunctionException(
-                new IOException(
-                    rule + " failed to create a directory with expected hash " + expectedHash),
-                Transience.PERSISTENT);
-          }
-        }
-      }
-      env.getListener().post(resolved);
     } catch (EvalException e) {
       if (e.getCause() instanceof RepositoryMissingDependencyException) {
         // A dependency is missing, cleanup and returns null
