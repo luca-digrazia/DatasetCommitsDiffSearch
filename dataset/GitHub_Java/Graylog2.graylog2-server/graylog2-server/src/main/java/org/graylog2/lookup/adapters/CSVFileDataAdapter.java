@@ -16,44 +16,43 @@
  */
 package org.graylog2.lookup.adapters;
 
+import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.primitives.Ints;
+import com.google.inject.assistedinject.Assisted;
+
 import au.com.bytecode.opencsv.CSVReader;
-import com.codahale.metrics.MetricRegistry;
+
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.google.auto.value.AutoValue;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multimap;
-import com.google.common.primitives.Ints;
-import com.google.inject.assistedinject.Assisted;
+
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog2.plugin.lookup.LookupCachePurge;
 import org.graylog2.plugin.lookup.LookupDataAdapter;
 import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
 import org.graylog2.plugin.lookup.LookupResult;
 import org.graylog2.plugin.utilities.FileInfo;
+import org.hibernate.validator.constraints.NotEmpty;
 import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.Size;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.Size;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -65,14 +64,14 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
     private final Config config;
     private final AtomicReference<Map<String, String>> lookupRef = new AtomicReference<>(ImmutableMap.of());
 
-    private FileInfo fileInfo = FileInfo.empty();
+    private FileInfo fileInfo;
 
     @Inject
-    public CSVFileDataAdapter(@Assisted("id") String id,
+    public CSVFileDataAdapter(@Named("daemonScheduler") ScheduledExecutorService scheduler,
+                              @Assisted("id") String id,
                               @Assisted("name") String name,
-                              @Assisted LookupDataAdapterConfiguration config,
-                              MetricRegistry metricRegistry) {
-        super(id, name, config, metricRegistry);
+                              @Assisted LookupDataAdapterConfiguration config) {
+        super(id, name, config, scheduler);
         this.config = (Config) config;
     }
 
@@ -82,36 +81,41 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         if (isNullOrEmpty(config.path())) {
             throw new IllegalStateException("File path needs to be set");
         }
+
+        try {
+            // Set file info before parsing the data for the first time
+            fileInfo = FileInfo.forPath(Paths.get(config.path()));
+            lookupRef.set(parseCSVFile());
+
+        } catch (Exception e) {
+            setError(e);
+        }
         if (config.checkInterval() < 1) {
             throw new IllegalStateException("Check interval setting cannot be smaller than 1");
         }
-
-        // Set file info before parsing the data for the first time
-        fileInfo = FileInfo.forPath(Paths.get(config.path()));
-        lookupRef.set(parseCSVFile());
     }
 
     @Override
-    public Duration refreshInterval() {
+    protected Duration refreshInterval() {
         return Duration.standardSeconds(Ints.saturatedCast(config.checkInterval()));
     }
 
     @Override
-    protected void doRefresh(LookupCachePurge cachePurge) throws Exception {
+    protected void doRefresh() throws Exception {
         try {
+            clearError();
             final FileInfo.Change fileChanged = fileInfo.checkForChange();
-            if (!fileChanged.isChanged() && !getError().isPresent()) {
+            if (!fileChanged.isChanged()) {
                 // Nothing to do, file did not change
                 return;
             }
 
             LOG.debug("CSV file {} has changed, updating data", config.path());
             lookupRef.set(parseCSVFile());
-            cachePurge.purgeAll();
+            getLookupTable().cache().purge();
             fileInfo = fileChanged.fileInfo();
-            clearError();
         } catch (IOException e) {
-            LOG.error("Couldn't check data adapter <{}> CSV file {} for updates: {} {}", name(), config.path(), e.getClass().getCanonicalName(), e.getMessage());
+            LOG.error("Couldn't check CSV file {} for updates", config.path(), e);
             setError(e);
         }
     }
@@ -140,8 +144,7 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
                         if (!isNullOrEmpty(column)) {
                             if (config.keyColumn().equals(column)) {
                                 keyColumn = col;
-                            }
-                            if (config.valueColumn().equals(column)) {
+                            } else if (config.valueColumn().equals(column)) {
                                 valueColumn = col;
                             }
                         }
@@ -152,11 +155,7 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
                     if (keyColumn < 0 || valueColumn < 0) {
                         throw new IllegalStateException("Couldn't detect column number for key or value - check CSV file format");
                     }
-                    if (config.isCaseInsensitiveLookup()) {
-                        newLookupBuilder.put(next[keyColumn].toLowerCase(Locale.ENGLISH), next[valueColumn]);
-                    } else {
-                        newLookupBuilder.put(next[keyColumn], next[valueColumn]);
-                    }
+                    newLookupBuilder.put(next[keyColumn], next[valueColumn]);
                 }
             }
         } catch (Exception e) {
@@ -175,8 +174,7 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
     @Override
     public LookupResult doGet(Object key) {
-        final String stringKey = config.isCaseInsensitiveLookup() ? String.valueOf(key).toLowerCase(Locale.ENGLISH) : String.valueOf(key);
-        final String value = lookupRef.get().get(stringKey);
+        final String value = lookupRef.get().get(String.valueOf(key));
 
         if (value == null) {
             return LookupResult.empty();
@@ -215,7 +213,6 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
                     .keyColumn("key")
                     .valueColumn("value")
                     .checkInterval(60)
-                    .caseInsensitiveLookup(false)
                     .build();
         }
     }
@@ -271,29 +268,8 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         @Min(1)
         public abstract long checkInterval();
 
-        @JsonProperty("case_insensitive_lookup")
-        public abstract Optional<Boolean> caseInsensitiveLookup();
-
-        public boolean isCaseInsensitiveLookup() {
-            return caseInsensitiveLookup().isPresent() && caseInsensitiveLookup().get();
-        }
-
         public static Builder builder() {
             return new AutoValue_CSVFileDataAdapter_Config.Builder();
-        }
-
-        @Override
-        public Optional<Multimap<String, String>> validate() {
-            final ArrayListMultimap<String, String> errors = ArrayListMultimap.create();
-
-            final Path path = Paths.get(path());
-            if (!Files.exists(path)) {
-                errors.put("path", "The file does not exist.");
-            } else if (!Files.isReadable(path)) {
-                errors.put("path", "The file cannot be read.");
-            }
-
-            return errors.isEmpty() ? Optional.empty() : Optional.of(errors);
         }
 
         @AutoValue.Builder
@@ -318,9 +294,6 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
             @JsonProperty("check_interval")
             public abstract Builder checkInterval(long checkInterval);
-
-            @JsonProperty("case_insensitive_lookup")
-            public abstract Builder caseInsensitiveLookup(Boolean caseInsensitiveLookup);
 
             public abstract Config build();
         }
