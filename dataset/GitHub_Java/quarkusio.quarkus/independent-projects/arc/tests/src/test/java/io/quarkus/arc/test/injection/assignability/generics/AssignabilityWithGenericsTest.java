@@ -1,11 +1,8 @@
 package io.quarkus.arc.test.injection.assignability.generics;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.test.ArcTestContainer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,51 +21,22 @@ public class AssignabilityWithGenericsTest {
 
     @Rule
     public ArcTestContainer container = new ArcTestContainer(Car.class, Engine.class, PetrolEngine.class, Vehicle.class,
-            StringListConsumer.class, ListConsumer.class, ProducerBean.class, DefinitelyNotBar.class,
-            Bar.class, GenericInterface.class, AlmostCompleteBean.class, ActualBean.class,
-            BetaFace.class, GammaFace.class, GammaImpl.class, AbstractAlpha.class, AlphaImpl.class);
+            StringListConsumer.class, ListConsumer.class, ProducerBean.class, DefinitelyNotBar.class, Bar.class,
+            GenericInterface.class, AlmostCompleteBean.class, ActualBean.class);
 
     @Test
     public void testSelectingInstanceOfCar() {
-        InstanceHandle<Car> instance = Arc.container().instance(Car.class);
-        assertTrue(instance.isAvailable());
-        assertNotNull(instance.get().getEngine());
+        assertTrue(Arc.container().instance(Car.class).isAvailable());
     }
 
     @Test
     public void testParameterizedTypeWithTypeVariable() {
-        InstanceHandle<StringListConsumer> instance = Arc.container().instance(StringListConsumer.class);
-        assertTrue(instance.isAvailable());
-        assertNotNull(instance.get().getList());
+        assertTrue(Arc.container().instance(StringListConsumer.class).isAvailable());
     }
 
     @Test
     public void testHierarchyWithInterfacesAndMap() {
-        InstanceHandle<ActualBean> instance = Arc.container().instance(ActualBean.class);
-        assertTrue(instance.isAvailable());
-        assertNotNull(instance.get().getInjectedMap());
-    }
-
-    @Test
-    public void testProxiedBeanWithGenericMethodParams() {
-        InstanceHandle<AlphaImpl> alphaInstance = Arc.container().instance(AlphaImpl.class);
-        InstanceHandle<GammaImpl> gammaInstance = Arc.container().instance(GammaImpl.class);
-        assertTrue(alphaInstance.isAvailable());
-        assertTrue(gammaInstance.isAvailable());
-        AlphaImpl alpha = alphaInstance.get();
-        assertEquals(GammaImpl.class.getSimpleName(), alpha.ping(alpha.getParam()));
-    }
-
-    interface GenericInterface<T, K> {
-
-    }
-
-    interface BetaFace<K> {
-        K ping();
-    }
-
-    interface GammaFace extends BetaFace<String> {
-
+        assertTrue(Arc.container().instance(ActualBean.class).isAvailable());
     }
 
     @Dependent
@@ -80,17 +48,10 @@ public class AssignabilityWithGenericsTest {
 
         @Inject
         List<T> list;
-
-        public List<T> getList() {
-            return list;
-        }
     }
 
     @Dependent
     static class ProducerBean {
-
-        @Produces
-        String foo = "foo";
 
         @Produces
         List<String> produceList() {
@@ -101,6 +62,13 @@ public class AssignabilityWithGenericsTest {
         Map<String, Bar> produceMap() {
             return new HashMap<>();
         }
+
+        @Produces
+        String foo = "foo";
+
+    }
+
+    static interface GenericInterface<T, K> {
 
     }
 
@@ -124,43 +92,10 @@ public class AssignabilityWithGenericsTest {
         public void observeSomethingElse(@ObservesAsync String event, K injectedInstance) {
             // inject-ability is verified at bootstrap
         }
-
-        public Map<T, K> getInjectedMap() {
-            return injectedMap;
-        }
     }
 
     @ApplicationScoped
     static class ActualBean extends AlmostCompleteBean<String, Bar> {
-
-    }
-
-    @ApplicationScoped
-    static class GammaImpl implements GammaFace {
-
-        @Override
-        public String ping() {
-            return GammaImpl.class.getSimpleName();
-        }
-    }
-
-    static abstract class AbstractAlpha<T extends BetaFace> {
-
-        @Inject
-        T param;
-
-        public T getParam() {
-            return param;
-        }
-
-        public String ping(T param) {
-            return param.ping().toString();
-        }
-
-    }
-
-    @ApplicationScoped
-    static class AlphaImpl extends AbstractAlpha<GammaFace> {
 
     }
 
