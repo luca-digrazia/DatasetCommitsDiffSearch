@@ -72,11 +72,8 @@ class BeanValidationProcessor implements ResourceProcessor {
                 }
             }
         }
-
-        //the map of validators, first key is constraint (annotation), second is the validator class name, value is the type that is validated
-        Map<DotName, Map<DotName, DotName>> validatorsByConstraint = new HashMap<>();
-
         for (ClassInfo classInfo : archiveContext.getCombinedIndex().getAllKnownImplementors(CONSTRAINT_VALIDATOR)) {
+            boolean skip = false;
             for (Type iface : classInfo.interfaceTypes()) {
                 if (iface.kind() == Type.Kind.PARAMETERIZED_TYPE) {
                     ParameterizedType pt = iface.asParameterizedType();
@@ -84,46 +81,25 @@ class BeanValidationProcessor implements ResourceProcessor {
                         if (pt.arguments().size() == 2) {
                             DotName type = pt.arguments().get(1).name();
                             DotName annotation = pt.arguments().get(0).name();
-
-                            if (!type.toString().startsWith("javax.money") &&
-                                    !type.toString().startsWith("org.joda")) {
+                            Set<DotName> seen = seenConstraints.get(annotation);
+                            if (type.toString().startsWith("javax.money") ||
+                                    type.toString().startsWith("org.joda")) {
                                 //TODO: what if joda is present?
-                                Map<DotName, DotName> vals = validatorsByConstraint.get(annotation);
-                                if (vals == null) {
-                                    validatorsByConstraint.put(annotation, vals = new HashMap<>());
-                                }
-                                vals.put(classInfo.name(), type);
+                                skip = true;
+                                break;
+                            } else if (seen == null) {
+                                skip = true;
+                                break;
+                            } else if (!seen.contains(type)) {
+                                skip = true;
+                                break;
                             }
-                            break;
                         }
                     }
                 }
             }
-        }
-        for (Map.Entry<DotName, Map<DotName, DotName>> entry : validatorsByConstraint.entrySet()) {
-
-            Set<DotName> seen = seenConstraints.get(entry.getKey());
-            if (seen != null) {
-                Set<DotName> toRegister = new HashSet<>();
-                for (DotName type : seen) {
-                    boolean found = false;
-                    for (Map.Entry<DotName, DotName> e : entry.getValue().entrySet()) {
-                        if (type.equals(e.getValue())) {
-                            toRegister.add(e.getKey());
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        //we can't be sure which one we need
-                        //just add them all
-                        toRegister.addAll(entry.getValue().keySet());
-                        break;
-                    }
-                }
-                for (DotName i : toRegister) { //such hacks
-                    processorContext.addReflectiveClass(false, false, i.toString());
-                }
+            if (!skip) { //such hacks
+                processorContext.addReflectiveClass(false, false, classInfo.name().toString());
             }
         }
     }
