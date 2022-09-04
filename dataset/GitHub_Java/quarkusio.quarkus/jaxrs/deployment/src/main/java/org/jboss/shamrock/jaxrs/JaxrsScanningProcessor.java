@@ -29,10 +29,10 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import javax.servlet.Servlet;
@@ -41,7 +41,7 @@ import javax.ws.rs.ext.Providers;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Index;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
@@ -88,18 +88,18 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
         //this is pretty yuck, and does not really belong here, but it is needed to get the json-p
         //provider to work
-        processorContext.addReflectiveClass(true, false,"org.glassfish.json.JsonProviderImpl", "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector");
+        processorContext.addReflectiveClass("org.glassfish.json.JsonProviderImpl","com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector");
 
-        IndexView index = archiveContext.getIndex();
-        Collection<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
+        Index index = archiveContext.getIndex();
+        List<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
         if (app.isEmpty()) {
             return;
         }
-        Collection<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
-        if (!xmlRoot.isEmpty()) {
-            processorContext.addReflectiveClass(true, false,"com.sun.xml.bind.v2.ContextFactory", "com.sun.xml.internal.bind.v2.ContextFactory");
+        List<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
+        if(!xmlRoot.isEmpty()) {
+            processorContext.addReflectiveClass("com.sun.xml.bind.v2.ContextFactory","com.sun.xml.internal.bind.v2.ContextFactory");
         }
-        AnnotationInstance appPath = app.iterator().next();
+        AnnotationInstance appPath = app.get(0);
         String path = appPath.value().asString();
         try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.JAXRS_DEPLOYMENT)) {
             UndertowDeploymentTemplate undertow = recorder.getRecordingProxy(UndertowDeploymentTemplate.class);
@@ -107,9 +107,8 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
             InstanceFactory<? extends Servlet> factory = undertow.createInstanceFactory(instanceFactory);
             undertow.registerServlet(null, JAX_RS_SERVLET_NAME, recorder.classProxy(HttpServlet30Dispatcher.class.getName()), true, factory);
             undertow.addServletMapping(null, JAX_RS_SERVLET_NAME, path + "/*");
-            Collection<AnnotationInstance> paths = index.getAnnotations(PATH);
+            List<AnnotationInstance> paths = index.getAnnotations(PATH);
             if (paths != null) {
-                processorContext.addReflectiveClass(false,  false, HttpServlet30Dispatcher.class.getName());
                 StringBuilder sb = new StringBuilder();
                 boolean first = true;
                 for (AnnotationInstance annotation : paths) {
@@ -119,30 +118,30 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
                         } else {
                             sb.append(",");
                         }
+                        processorContext.addReflectiveClass(HttpServlet30Dispatcher.class.getName());
                         String className = annotation.target().asClass().name().toString();
                         sb.append(className);
-                        processorContext.addReflectiveClass(true, true, className);
+                        processorContext.addReflectiveClass(className);
                     }
                 }
 
-                if(sb.length() > 0) {
-                    undertow.addServletContextParameter(null, ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString());
-                }
+                undertow.addServletContextParameter(null, ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString());
                 undertow.addServletContextParameter(null, "resteasy.servlet.mapping.prefix", path);
                 undertow.addServletContextParameter(null, "resteasy.injector.factory", ShamrockInjectorFactory.class.getName());
+                processorContext.addReflectiveClass(HttpServlet30Dispatcher.class.getName());
                 for (String i : loadProviders()) {
-                    processorContext.addReflectiveClass(true, true, i);
+                    processorContext.addReflectiveClass(i);
                 }
             }
         }
         for (DotName annotationType : METHOD_ANNOTATIONS) {
-            Collection<AnnotationInstance> instances = index.getAnnotations(annotationType);
+            List<AnnotationInstance> instances = index.getAnnotations(annotationType);
             for (AnnotationInstance instance : instances) {
                 MethodInfo method = instance.target().asMethod();
                 if (method.returnType().kind() == Type.Kind.CLASS) {
                     String className = method.returnType().asClassType().name().toString();
                     if (!className.equals(String.class.getName())) {
-                        processorContext.addReflectiveClass(true, true, className);
+                        processorContext.addReflectiveClass(className);
                     }
                 }
             }

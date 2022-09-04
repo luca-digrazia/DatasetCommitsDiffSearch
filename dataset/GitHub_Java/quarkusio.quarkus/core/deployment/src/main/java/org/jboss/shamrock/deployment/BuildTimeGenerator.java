@@ -38,19 +38,14 @@ import java.util.List;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
-import org.jboss.jandex.CompositeIndex;
-import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
-import org.jboss.shamrock.deployment.buildconfig.BuildConfig;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorderImpl;
-import org.jboss.shamrock.deployment.index.IndexLoader;
 import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
 import org.objectweb.asm.AnnotationVisitor;
-import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -74,7 +69,10 @@ public class BuildTimeGenerator {
     private final DeploymentProcessorInjection injection;
     private final ClassLoader classLoader;
     private final boolean useStaticInit;
-    private final List<Function<String, Function<ClassVisitor, ClassVisitor>>> bytecodeTransformers = new ArrayList<>();
+
+    public BuildTimeGenerator(ClassOutput classOutput, boolean useStaticInit) {
+        this(classOutput, BuildTimeGenerator.class.getClassLoader(), useStaticInit);
+    }
 
     public BuildTimeGenerator(ClassOutput classOutput, ClassLoader cl, boolean useStaticInit) {
         this.useStaticInit = useStaticInit;
@@ -90,14 +88,10 @@ public class BuildTimeGenerator {
         this.classLoader = cl;
     }
 
-    public List<Function<String, Function<ClassVisitor, ClassVisitor>>> getBytecodeTransformers() {
-        return bytecodeTransformers;
-    }
 
     public void run(Path root) throws IOException {
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(classLoader);
-        BuildConfig config = BuildConfig.readConfig(classLoader, root.toFile());
         try {
             Indexer indexer = new Indexer();
             Files.walkFileTree(root, new FileVisitor<Path>() {
@@ -126,12 +120,8 @@ public class BuildTimeGenerator {
                     return FileVisitResult.CONTINUE;
                 }
             });
-            List<IndexView> composite = new ArrayList<>();
-            composite.add(indexer.complete());
-            composite.addAll(IndexLoader.scanForOtherIndexes(classLoader, config));
-
-
-            ArchiveContext context = new ArchiveContextImpl(CompositeIndex.create(composite), root, config);
+            Index index = indexer.complete();
+            ArchiveContext context = new ArchiveContextImpl(index, root);
             ProcessorContextImpl processorContext = new ProcessorContextImpl();
             for (ResourceProcessor processor : processors) {
                 try {
@@ -151,29 +141,22 @@ public class BuildTimeGenerator {
 
     private static class ArchiveContextImpl implements ArchiveContext {
 
-        private final IndexView index;
+        private final Index index;
         private final Path root;
-        private final BuildConfig buildConfig;
 
-        private ArchiveContextImpl(IndexView index, Path root, BuildConfig buildConfig) {
+        private ArchiveContextImpl(Index index, Path root) {
             this.index = index;
             this.root = root;
-            this.buildConfig = buildConfig;
         }
 
         @Override
-        public IndexView getIndex() {
+        public Index getIndex() {
             return index;
         }
 
         @Override
         public Path getArchiveRoot() {
             return root;
-        }
-
-        @Override
-        public BuildConfig getBuildConfig() {
-            return buildConfig;
         }
     }
 
@@ -207,11 +190,6 @@ public class BuildTimeGenerator {
         @Override
         public void addGeneratedClass(String name, byte[] classData) throws IOException {
             output.writeClass(name, classData);
-        }
-
-        @Override
-        public void addByteCodeTransformer(Function<String, Function<ClassVisitor, ClassVisitor>> visitorFunction) {
-            bytecodeTransformers.add(visitorFunction);
         }
 
         void writeMainClass() throws IOException {
@@ -351,6 +329,7 @@ public class BuildTimeGenerator {
                 mv.visitTypeInsn(ANEWARRAY, "java/lang/Class");
                 mv.visitInsn(DUP);
                 mv.visitLdcInsn(0);
+                String internalName = holder.replace(".", "/");
                 mv.visitLdcInsn(holder);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
                 mv.visitInsn(AASTORE);
@@ -360,14 +339,11 @@ public class BuildTimeGenerator {
                 mv.visitLdcInsn(holder);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
                 mv.visitInsn(DUP);
-                mv.visitInsn(DUP);
                 mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;", false);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
                 //now load everything else
-                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredMethods", "()[Ljava/lang/reflect/Method;", false);
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getMethods", "()[Ljava/lang/reflect/Method;", false);
                 mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
-                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredFields", "()[Ljava/lang/reflect/Field;", false);
-                mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Field;)V", false);
                 mv.visitLabel(lTryBlockEnd);
                 mv.visitLabel(lCatchBlockStart);
                 mv.visitLabel(lCatchBlockEnd);

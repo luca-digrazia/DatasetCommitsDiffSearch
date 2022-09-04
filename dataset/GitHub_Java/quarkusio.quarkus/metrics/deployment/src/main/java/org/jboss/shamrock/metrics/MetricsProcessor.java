@@ -1,6 +1,6 @@
 package org.jboss.shamrock.metrics;
 
-import java.util.Collection;
+import java.util.List;
 
 import javax.inject.Inject;
 
@@ -9,7 +9,7 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Index;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.shamrock.deployment.ArchiveContext;
 import org.jboss.shamrock.deployment.ProcessorContext;
@@ -54,13 +54,13 @@ public class MetricsProcessor implements ResourceProcessor {
         servletDeployment.addServlet(servletData);
 
         weldDeployment.addAdditionalBean(MetricProducer.class,
-                MetricNameFactory.class,
-                MetricRegistries.class);
+                                            MetricNameFactory.class,
+                                            MetricRegistries.class);
 
         weldDeployment.addAdditionalBean(MetricsInterceptor.class,
-                MeteredInterceptor.class,
-                CountedInterceptor.class,
-                TimedInterceptor.class);
+                                            MeteredInterceptor.class,
+                                            CountedInterceptor.class,
+                                            TimedInterceptor.class);
 
         weldDeployment.addAdditionalBean(MetricsRequestHandler.class, MetricsServlet.class);
         //weldDeployment.addInterceptor(MetricsInterceptor.class);
@@ -68,16 +68,16 @@ public class MetricsProcessor implements ResourceProcessor {
         //weldDeployment.addInterceptor(CountedInterceptor.class);
         //weldDeployment.addInterceptor(TimedInterceptor.class);
 
-        processorContext.addReflectiveClass(false, false, Counted.class.getName(), MetricsBinding.class.getName());
+        processorContext.addReflectiveClass(Counted.class.getName(), MetricsBinding.class.getName());
 
 
         try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.WELD_DEPLOYMENT + 30)) {
             MetricsDeploymentTemplate metrics = recorder.getRecordingProxy(MetricsDeploymentTemplate.class);
 
-            metrics.createRegistries(null);
+            metrics.createRegistries();
 
-            IndexView index = archiveContext.getIndex();
-            Collection<AnnotationInstance> annos = index.getAnnotations(DotName.createSimple(Counted.class.getName()));
+            Index index = archiveContext.getIndex();
+            List<AnnotationInstance> annos = index.getAnnotations(DotName.createSimple(Counted.class.getName()));
 
             for (AnnotationInstance anno : annos) {
                 AnnotationTarget target = anno.target();
@@ -88,7 +88,7 @@ public class MetricsProcessor implements ResourceProcessor {
                 metrics.registerCounted(classInfo.name().toString(),
                         methodInfo.name().toString());
 
-                processorContext.addReflectiveClass(true, false, classInfo.name().toString());
+                processorContext.addReflectiveClass(classInfo.name().toString());
             }
 
         }
