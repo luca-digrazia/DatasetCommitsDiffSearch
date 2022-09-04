@@ -87,8 +87,8 @@ public class RebuildIndexRangesJob extends SystemJob {
             }
 
             try {
-Thread.sleep(10000);
                 ranges.add(calculateRange(index));
+Thread.sleep(5000);
             } catch (EmptyIndexException e) {
                 LOG.info("Index [{}] is empty. Not calculating ranges.", index);
                 continue;
