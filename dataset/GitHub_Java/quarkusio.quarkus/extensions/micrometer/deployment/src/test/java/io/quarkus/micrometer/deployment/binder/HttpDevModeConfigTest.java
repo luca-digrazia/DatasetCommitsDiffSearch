@@ -24,7 +24,7 @@ public class HttpDevModeConfigTest {
                             "quarkus.micrometer.binder.vertx.enabled=true\n"), "application.properties"));
 
     @Test
-    public void test() throws Exception {
+    public void testHttpConfigInDevMode() throws Exception {
 
         when().get("/hello/one").then().statusCode(200);
         when().get("/hello/two").then().statusCode(200);
