@@ -13,58 +13,35 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages.util;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.io.ByteStreams;
-
+import com.google.devtools.build.lib.cmdline.Label;
 import java.io.IOException;
-import java.io.InputStream;
 
 /**
  * Bazel implementation of {@link MockCcSupport}
  */
 public final class BazelMockCcSupport extends MockCcSupport {
-
   public static final BazelMockCcSupport INSTANCE = new BazelMockCcSupport();
+
   /** Filter to remove implicit dependencies of C/C++ rules. */
-  private static final Predicate<String> CC_LABEL_NAME_FILTER =
-      new Predicate<String>() {
-        @Override
-        public boolean apply(String label) {
-          return !label.startsWith("@blaze_tools//tools/cpp/stl");
-        }
-      };
+  private static final boolean isNotCcLabel(String label) {
+    return !label.startsWith("//tools/cpp");
+  }
 
   private BazelMockCcSupport() {}
 
   private static final ImmutableList<String> CROSSTOOL_ARCHS =
-      ImmutableList.of("piii", "k8", "armeabi-v7a");
-
-  protected static void createBasePackage(MockToolsConfig config) throws IOException {
-    config.create(
-        "base/BUILD",
-        "package(default_visibility=['//visibility:public'])",
-        "cc_library(name = 'system_malloc', linkstatic = 1)",
-        "cc_library(name = 'base', srcs=['timestamp.h'])");
-    if (config.isRealFileSystem()) {
-      config.linkTool("base/timestamp.h");
-    } else {
-      config.create("base/timestamp.h", "");
-    }
-  }
+      ImmutableList.of("piii", "k8", "armeabi-v7a", "ppc");
 
   @Override
   protected String getRealFilesystemCrosstoolTopPath() {
-    assert false;
-    return null;
+    throw new UnsupportedOperationException("TODO");
   }
 
   @Override
   protected String[] getRealFilesystemTools(String crosstoolTop) {
-    assert false;
-    return null;
+    throw new UnsupportedOperationException("TODO");
   }
 
   @Override
@@ -74,71 +51,25 @@ public final class BazelMockCcSupport extends MockCcSupport {
 
   @Override
   public void setup(MockToolsConfig config) throws IOException {
-    config.create(
-        "/bazel_tools_workspace/tools/cpp/BUILD",
-        "cc_library(name = 'stl')",
-        "cc_library(name = 'malloc')",
-        "filegroup(name = 'toolchain', ",
-        "    srcs = [':cc-compiler-local', ':cc-compiler-darwin', ':cc-compiler-piii',",
-        "            ':cc-compiler-armeabi-v7a', ':empty'],",
-        ")",
-        "cc_toolchain(name = 'cc-compiler-k8', all_files = ':empty', compiler_files = ':empty',",
-        "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
-        "    linker_files = ':empty',",
-        "    module_map = 'crosstool.cppmap',",
-        "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
-        ")",
-        "cc_toolchain(name = 'cc-compiler-piii', all_files = ':empty', compiler_files = ':empty',",
-        "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
-        "    linker_files = ':empty',",
-        "    module_map = 'crosstool.cppmap',",
-        "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
-        ")",
-        "cc_toolchain(name = 'cc-compiler-darwin', all_files = ':empty', ",
-        "    compiler_files = ':empty',",
-        "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
-        "    linker_files = ':empty',",
-        "    module_map = 'crosstool.cppmap',",
-        "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
-        ")",
-        "cc_toolchain(name = 'cc-compiler-armeabi-v7a', all_files = ':empty', ",
-        "    compiler_files = ':empty',",
-        "    cpu = 'local', dwp_files = ':empty', dynamic_runtime_libs = [':empty'], ",
-        "    linker_files = ':empty',",
-        "    module_map = 'crosstool.cppmap',",
-        "    objcopy_files = ':empty', static_runtime_libs = [':empty'], strip_files = ':empty',",
-        ")");
-
-    config.create(
-        "/bazel_tools_workspace/tools/cpp/CROSSTOOL",
-        readFromResources("com/google/devtools/build/lib/MOCK_CROSSTOOL"));
-    config.create(
-        "/bazel_tools_workspace/tools/objc/BUILD",
-        "xcode_config(name = 'host_xcodes')");
+    writeMacroFile(config);
+    setupRulesCc(config);
+    setupCcToolchainConfig(config);
+    createParseHeadersAndLayeringCheckWhitelist(config);
+    createStarlarkLooseHeadersWhitelist(config, "//...");
   }
 
   @Override
-  protected String getMockCrosstoolVersion() {
-    return "gcc-4.4.0-glibc-2.3.6";
-  }
-
-  @Override
-  protected String readCrosstoolFile() throws IOException {
-    return readFromResources("com/google/devtools/build/lib/MOCK_CROSSTOOL");
-  }
-
-  public static String readFromResources(String filename) throws IOException {
-    InputStream in = BazelMockCcSupport.class.getClassLoader().getResourceAsStream(filename);
-    return new String(ByteStreams.toByteArray(in), UTF_8);
+  public Label getMockCrosstoolLabel() {
+    return Label.parseAbsoluteUnchecked("@bazel_tools//tools/cpp:toolchain");
   }
 
   @Override
   public String getMockCrosstoolPath() {
-    return "/bazel_tools_workspace/tools/cpp/";
+    return "embedded_tools/tools/cpp/";
   }
 
   @Override
   public Predicate<String> labelNameFilter() {
-    return CC_LABEL_NAME_FILTER;
+    return BazelMockCcSupport::isNotCcLabel;
   }
 }
