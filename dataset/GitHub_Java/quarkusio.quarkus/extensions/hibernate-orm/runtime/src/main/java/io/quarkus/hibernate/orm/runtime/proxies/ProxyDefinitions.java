@@ -1,7 +1,8 @@
 package io.quarkus.hibernate.orm.runtime.proxies;
 
+import static org.objectweb.asm.Opcodes.ACC_FINAL;
+
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -101,7 +102,7 @@ public final class ProxyDefinitions {
             PreGeneratedProxies preGeneratedProxies) {
         final String entityName = persistentClass.getEntityName();
         final Class mappedClass = persistentClass.getMappedClass();
-        if (Modifier.isFinal(mappedClass.getModifiers())) {
+        if ((mappedClass.getModifiers() & ACC_FINAL) == ACC_FINAL) {
             LOGGER.warn("Could not generate an enhanced proxy for entity '" + entityName + "' (class='"
                     + mappedClass.getCanonicalName()
                     + "') as it's final. Your application might perform better if we're allowed to extend it.");

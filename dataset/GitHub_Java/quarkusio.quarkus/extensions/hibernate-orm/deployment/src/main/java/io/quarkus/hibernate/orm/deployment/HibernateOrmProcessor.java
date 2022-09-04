@@ -275,8 +275,21 @@ public final class HibernateOrmProcessor {
         for (ParsedPersistenceXmlDescriptor unit : allDescriptors) {
             entitiesToGenerateProxiesFor.addAll(unit.getManagedClassNames());
         }
-        PreGeneratedProxies proxyDefinitions = generatedProxies(entitiesToGenerateProxiesFor, compositeIndex,
-                generatedClassBuildItemBuildProducer);
+        PreGeneratedProxies proxyDefinitions;
+        try {
+            proxyDefinitions = generatedProxies(entitiesToGenerateProxiesFor, compositeIndex,
+                    generatedClassBuildItemBuildProducer);
+        } catch (Throwable t) {
+            //TODO: DELETE THIS
+            //this is just like any other bug
+            //it will likely never happened
+            //only added against my better judgement as this is a very late change
+            proxyDefinitions = new PreGeneratedProxies();
+            LOG.error(
+                    "Failed to generate build time Hibernate proxy definitions. This is a bug, please file an issue at https://github.com/quarkusio/quarkus/issues and this stack trace.",
+                    t);
+        }
+
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
                         recorder.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses,
