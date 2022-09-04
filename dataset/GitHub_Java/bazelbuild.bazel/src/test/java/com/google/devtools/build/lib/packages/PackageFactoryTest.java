@@ -121,7 +121,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   public void testExportsFilesLicensesMustBeSequence() throws Exception {
     expectEvalError(
         "in call to exports_files(), parameter 'licenses' got value of type 'depset', want"
-            + " 'sequence or NoneType'",
+            + " 'sequence of strings or NoneType'",
         "exports_files(srcs=[], licenses=depset(['notice']))");
   }
 
@@ -206,6 +206,14 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   }
 
   @Test
+  public void testPackageConstantIsForbidden() throws Exception {
+    events.setFailFast(false);
+    Path buildFile = scratch.file("/pina/BUILD", "cc_library(name=PACKAGE_NAME + '-colada')");
+    packages.createPackage("pina", RootedPath.toRootedPath(root, buildFile));
+    events.assertContainsError("The value 'PACKAGE_NAME' has been removed");
+  }
+
+  @Test
   public void testPackageNameFunction() throws Exception {
     Path buildFile = scratch.file("/pina/BUILD", "cc_library(name=package_name() + '-colada')");
 
@@ -215,6 +223,19 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     assertThat(pkg.getRule("pina-colada")).isNotNull();
     assertThat(pkg.getRule("pina-colada").containsErrors()).isFalse();
     assertThat(Sets.newHashSet(pkg.getTargets(Rule.class)).size()).isSameInstanceAs(1);
+  }
+
+  @Test
+  public void testPackageConstantInExternalRepositoryIsForbidden() throws Exception {
+    events.setFailFast(false);
+    Path buildFile =
+        scratch.file(
+            "/external/a/b/BUILD", "genrule(name='c', srcs=[], outs=['ao'], cmd=REPOSITORY_NAME)");
+    packages.createPackage(
+        PackageIdentifier.create("@a", PathFragment.create("b")),
+        RootedPath.toRootedPath(root, buildFile),
+        events.reporter());
+    events.assertContainsError("The value 'REPOSITORY_NAME' has been removed");
   }
 
   @Test
@@ -635,7 +656,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     events.setFailFast(false);
     assertGlobFails(
         "glob(1, exclude=2)",
-        "in call to glob(), parameter 'include' got value of type 'int', want 'sequence'");
+        "in call to glob(), parameter 'include' got value of type 'int', want 'sequence of"
+            + " strings'");
   }
 
   @Test
@@ -658,7 +680,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
                     /*includes=*/ ImmutableList.of("W*", "subdir"),
                     /*excludes=*/ ImmutableList.<String>of(),
                     /* excludeDirs= */ true));
-    assertThat(e).hasMessageThat().isEqualTo("ERROR /globs/BUILD:2:77: incorrect glob result");
+    assertThat(e).hasMessageThat().isEqualTo("ERROR /globs/BUILD:2:73: incorrect glob result");
   }
 
   @Test

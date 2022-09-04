@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Globber.BadGlobException;
 import com.google.devtools.build.lib.packages.PackageValidator.InvalidPackageException;
@@ -51,7 +52,6 @@ import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.IfStatement;
 import com.google.devtools.build.lib.syntax.IntegerLiteral;
 import com.google.devtools.build.lib.syntax.ListExpression;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.NodeVisitor;
@@ -206,10 +206,10 @@ public final class PackageFactory {
 
   /**
    * Sets the number of directories to eagerly traverse on the first glob for a given package, in
-   * order to warm the filesystem. -1 means do no eager traversal. See {@link
-   * com.google.devtools.build.lib.pkgcache.PackageOptions#maxDirectoriesToEagerlyVisitInGlobbing}.
-   * -2 means do the eager traversal using the regular globbing infrastructure, i.e. sharing the
-   * globbing threads and caching the actual glob results.
+   * order to warm the filesystem. -1 means do no eager traversal. See {@code
+   * PackageCacheOptions#maxDirectoriesToEagerlyVisitInGlobbing}. -2 means do the eager traversal
+   * using the regular globbing infrastructure, i.e. sharing the globbing threads and caching the
+   * actual glob results.
    */
   public void setMaxDirectoriesToEagerlyVisitInGlobbing(
       int maxDirectoriesToEagerlyVisitInGlobbing) {
@@ -606,7 +606,7 @@ public final class PackageFactory {
   private final ClassObject nativeModule;
   private final ClassObject workspaceNativeModule;
 
-  /** @return the Starlark struct to bind to "native" */
+  /** @return the Skylark struct to bind to "native" */
   public ClassObject getNativeModule(boolean workspace) {
     return workspace ? workspaceNativeModule : nativeModule;
   }
@@ -769,7 +769,7 @@ public final class PackageFactory {
               .setSemantics(semantics)
               .setImportedExtensions(imports)
               .build();
-      thread.setPrintHandler(Event.makeDebugPrintHandler(pkgContext.eventHandler));
+      thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(pkgContext.eventHandler));
       Module module = thread.getGlobals();
 
       // Validate.
@@ -937,7 +937,8 @@ public final class PackageFactory {
                   && arg.getName().equals("name")
                   && arg.getValue() instanceof StringLiteral) {
                 generatorNameByLocation.put(
-                    call.getLparenLocation(), ((StringLiteral) arg.getValue()).getValue());
+                    // TODO(adonovan): use lparen location
+                    call.getStartLocation(), ((StringLiteral) arg.getValue()).getValue());
               }
             }
           }
