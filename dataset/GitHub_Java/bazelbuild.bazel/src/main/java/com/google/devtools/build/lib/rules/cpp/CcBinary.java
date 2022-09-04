@@ -332,23 +332,24 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     // if cc_binary includes "linkshared=1", then gcc will be invoked with
     // linkopt "-shared", which causes the result of linking to be a shared
-    // library.
-    final Artifact binary;
-
-    // For linkshared=1 we used to force users to specify the file extension manually, as part of
-    // the target name.
-    // This is no longer necessary, the toolchain can figure out the correct file extension.
-    String targetName = ruleContext.getTarget().getName();
-    boolean hasLegacyLinkSharedName =
-        isLinkShared(ruleContext)
-            && (CppFileTypes.SHARED_LIBRARY.matches(targetName)
-                || CppFileTypes.VERSIONED_SHARED_LIBRARY.matches(targetName));
-    if (hasLegacyLinkSharedName) {
-      binary = ruleContext.getBinArtifact(PathFragment.create(targetName));
-    } else {
+    // library. In this case, the name of the executable target should end
+    // in ".so" or "dylib" or ".dll".
+    Artifact binary;
+    PathFragment binaryPath = PathFragment.create(ruleContext.getTarget().getName());
+    if (!isLinkShared(ruleContext)) {
       binary =
           CppHelper.getLinkedArtifact(
-              ruleContext, ccToolchain, ruleContext.getConfiguration(), linkType);
+              ruleContext, ccToolchain, ruleContext.getConfiguration(), LinkTargetType.EXECUTABLE);
+    } else {
+      binary = ruleContext.getBinArtifact(binaryPath);
+    }
+
+    if (isLinkShared(ruleContext)
+        && !CppFileTypes.SHARED_LIBRARY.matches(binary.getFilename())
+        && !CppFileTypes.VERSIONED_SHARED_LIBRARY.matches(binary.getFilename())) {
+      ruleContext.attributeError("linkshared", "'linkshared' used in non-shared library");
+      fillInRequiredProviders(ruleBuilder, ruleContext);
+      return;
     }
 
     LinkingMode linkingMode = getLinkStaticness(ruleContext, cppConfiguration);
@@ -391,8 +392,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 ccToolchain,
                 fdoContext,
                 TargetUtils.getExecutionInfo(
-                    ruleContext.getRule(), ruleContext.isAllowTagsPropagation()),
-                /* shouldProcessHeaders= */ true)
+                    ruleContext.getRule(), ruleContext.isAllowTagsPropagation()))
             .fromCommon(common, /* additionalCopts= */ ImmutableList.of())
             .addPrivateHeaders(common.getPrivateHeaders())
             .addSources(common.getSources())
