@@ -152,7 +152,7 @@ public final class Runtime {
    */
   public static Class<?> getSkylarkNamespace(Class<?> clazz) {
     return String.class.isAssignableFrom(clazz)
-        ? StringModule.class
+        ? MethodLibrary.StringModule.class
         : EvalUtils.getSkylarkType(clazz);
   }
 
