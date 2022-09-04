@@ -24,7 +24,6 @@ import org.graylog2.database.PersistedImpl;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +46,7 @@ public class NotificationImpl extends PersistedImpl implements Notification {
 
         this.type = Type.valueOf(((String) fields.get("type")).toUpperCase());
         this.severity = Severity.valueOf(((String) fields.get("severity")).toUpperCase());
-        this.timestamp = new DateTime(fields.get("timestamp"), DateTimeZone.UTC);
+        this.timestamp = new DateTime(fields.get("timestamp"));
         this.node_id = (String) fields.get("node_id");
     }
 
@@ -56,7 +55,7 @@ public class NotificationImpl extends PersistedImpl implements Notification {
 
         this.type = Type.valueOf(((String) fields.get("type")).toUpperCase());
         this.severity = Severity.valueOf(((String) fields.get("severity")).toUpperCase());
-        this.timestamp = new DateTime(fields.get("timestamp"), DateTimeZone.UTC);
+        this.timestamp = new DateTime(fields.get("timestamp"));
         this.node_id = (String) fields.get("node_id");
     }
 

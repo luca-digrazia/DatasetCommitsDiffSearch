@@ -17,8 +17,8 @@
 package org.graylog2.restclient.models;
 
 import com.google.common.collect.Maps;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.Configuration;

@@ -62,6 +62,6 @@ public class RelativeRange implements TimeRange {
 
     @Override
     public DateTime getTo() {
-        return Tools.iso8601();
+        return DateTime.now(DateTimeZone.UTC);
     }
 }

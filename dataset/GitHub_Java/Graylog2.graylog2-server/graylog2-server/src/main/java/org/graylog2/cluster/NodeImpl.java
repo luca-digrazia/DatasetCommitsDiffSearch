@@ -16,7 +16,6 @@
  */
 package org.graylog2.cluster;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.bson.types.ObjectId;
 import org.graylog2.database.CollectionName;
 import org.graylog2.database.PersistedImpl;
@@ -73,13 +72,11 @@ public class NodeImpl extends PersistedImpl implements Node {
     }
 
     @Override
-    @JsonIgnore
     public Map<String, Validator> getValidations() {
         return Collections.emptyMap();
     }
 
     @Override
-    @JsonIgnore
     public Map<String, Validator> getEmbeddedValidations(String key) {
         return Collections.emptyMap();
     }

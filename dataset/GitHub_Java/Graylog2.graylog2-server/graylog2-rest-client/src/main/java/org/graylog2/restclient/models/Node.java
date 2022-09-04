@@ -23,7 +23,6 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.lib.DateTools;
 import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.metrics.Metric;
 import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
@@ -487,7 +486,7 @@ public class Node extends ClusterEntity {
 
     @Override
     public void touch() {
-        this.lastContact = DateTools.nowInUTC();
+        this.lastContact = DateTime.now(DateTimeZone.UTC);
         setActive(true);
     }
 

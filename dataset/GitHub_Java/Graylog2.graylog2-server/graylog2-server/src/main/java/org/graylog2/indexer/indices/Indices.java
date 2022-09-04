@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -299,10 +300,10 @@ public class Indices implements IndexManagement {
         final Set<String> closedIndices = Sets.newHashSet();
 
         ClusterStateRequest csr = new ClusterStateRequest()
-                .nodes(false)
-                .routingTable(false)
-                .blocks(false)
-                .metaData(true);
+                .nodes(true)
+                .routingTable(true)
+                .blocks(true)
+                .metaData(false);
 
         ClusterState state = c.admin().cluster().state(csr).actionGet().getState();
 

@@ -33,7 +33,8 @@
  */
 package org.graylog2.inputs.codecs;
 
-import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Charsets;
+import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.ConfigClass;
@@ -63,22 +64,21 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.base.Throwables.propagate;
 
 public class SyslogCodec implements Codec {
-    private static final Logger LOG = LoggerFactory.getLogger(SyslogCodec.class);
+    private static final Logger log = LoggerFactory.getLogger(SyslogCodec.class);
+
+    private final Configuration configuration;
 
     private static final Pattern STRUCTURED_SYSLOG_PATTERN = Pattern.compile("<\\d+>\\d.*", Pattern.DOTALL);
 
     public static final String CK_FORCE_RDNS = "force_rdns";
     public static final String CK_ALLOW_OVERRIDE_DATE = "allow_override_date";
-    public static final String CK_EXPAND_STRUCTURED_DATA = "expand_structured_data";
     public static final String CK_STORE_FULL_MESSAGE = "store_full_message";
-
-    private final Configuration configuration;
 
     @AssistedInject
     public SyslogCodec(@Assisted Configuration configuration) {
@@ -88,7 +88,7 @@ public class SyslogCodec implements Codec {
     @Nullable
     @Override
     public Message decode(@Nonnull RawMessage rawMessage) {
-        final String msg = new String(rawMessage.getPayload(), StandardCharsets.UTF_8);
+        final String msg = new String(rawMessage.getPayload(), Charsets.UTF_8);
         try {
             final InetSocketAddress remoteAddress = rawMessage.getRemoteAddress();
             return parse(msg, remoteAddress.getAddress(), rawMessage.getTimestamp());
@@ -139,32 +139,30 @@ public class SyslogCodec implements Codec {
             m.addField("full_message", new String(e.getRaw(), StandardCharsets.UTF_8));
         }
 
-
-        final boolean expandStructuredData = configuration.getBoolean(CK_EXPAND_STRUCTURED_DATA);
-        m.addFields(parseAdditionalData(e, expandStructuredData));
+        m.addFields(parseAdditionalData(e));
 
         return m;
     }
 
-    private Map<String, Object> parseAdditionalData(SyslogServerEventIF msg, boolean expand) {
+    private Map<String, Object> parseAdditionalData(SyslogServerEventIF msg) {
+        Map<String, Object> structuredData = Maps.newHashMap();
 
         // Structured syslog has more data we can parse.
         if (msg instanceof StructuredSyslogServerEvent) {
             final StructuredSyslogServerEvent sMsg = (StructuredSyslogServerEvent) msg;
-            final Map<String, Object> structuredData = new HashMap<>(extractFields(sMsg, expand));
 
-            if (!isNullOrEmpty(sMsg.getApplicationName())) {
+            structuredData = StructuredSyslog.extractFields(sMsg);
+
+            if (sMsg.getApplicationName() != null && !sMsg.getApplicationName().isEmpty()) {
                 structuredData.put("application_name", sMsg.getApplicationName());
             }
 
-            if (!isNullOrEmpty(sMsg.getProcessId())) {
+            if (sMsg.getProcessId() != null && !sMsg.getProcessId().isEmpty()) {
                 structuredData.put("process_id", sMsg.getProcessId());
             }
-
-            return structuredData;
-        } else {
-            return Collections.emptyMap();
         }
+
+        return structuredData;
     }
 
     private String parseHost(SyslogServerEventIF msg, InetAddress remoteAddress) {
@@ -172,7 +170,7 @@ public class SyslogCodec implements Codec {
             try {
                 return Tools.rdnsLookup(remoteAddress);
             } catch (UnknownHostException e) {
-                LOG.warn("Reverse DNS lookup failed. Falling back to parsed hostname.", e);
+                log.warn("Reverse DNS lookup failed. Falling back to parsed hostname.", e);
             }
         }
 
@@ -183,13 +181,14 @@ public class SyslogCodec implements Codec {
         // Check if date could be parsed.
         if (msg.getDate() == null) {
             if (configuration.getBoolean(CK_ALLOW_OVERRIDE_DATE)) {
-                LOG.debug("Date could not be parsed. Was set to NOW because {} is true.", CK_ALLOW_OVERRIDE_DATE);
+                log.debug("Date could not be parsed. Was set to NOW because {} is true.",
+                          CK_ALLOW_OVERRIDE_DATE);
                 return receivedTimestamp;
             } else {
-                LOG.warn("Syslog message is missing date or date could not be parsed. (Possibly set {} to true) "
-                                + "Not further handling. Message was: {}",
-                        CK_ALLOW_OVERRIDE_DATE, new String(msg.getRaw(), StandardCharsets.UTF_8));
-                throw new IllegalStateException("Syslog message is missing date or date could not be parsed.");
+                log.warn("Syslog message is missing date or date could not be parsed. (Possibly set {} to true) "
+                                 + "Not further handling. Message was: {}",
+                         CK_ALLOW_OVERRIDE_DATE, new String(msg.getRaw(), StandardCharsets.UTF_8));
+                throw new IllegalStateException();
             }
         }
 
@@ -249,15 +248,6 @@ public class SyslogCodec implements Codec {
                     )
             );
 
-            r.addField(
-                    new BooleanField(
-                            CK_EXPAND_STRUCTURED_DATA,
-                            "Expand structured data?",
-                            false,
-                            "Expand structured data elements by prefixing attributes with their SD-ID?"
-                    )
-            );
-
             return r;
         }
 
@@ -269,39 +259,37 @@ public class SyslogCodec implements Codec {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    @VisibleForTesting
-    Map<String, Object> extractFields(final StructuredSyslogServerEvent msg, final boolean expand) {
-        try {
-            final Map<String, Map<String, String>> raw = msg.getStructuredMessage().getStructuredData();
+    /**
+     * Parses structured syslog data.
+     *
+     * @author Lennart Koopmann <lennart@socketfeed.com>
+     */
+    public static class StructuredSyslog {
 
-            if (raw != null && !raw.isEmpty()) {
-                final Map<String, Object> fields = new HashMap<>(raw.size());
-                for (Map.Entry<String, Map<String, String>> entry : raw.entrySet()) {
-                    if (expand) {
-                        fields.putAll(prefixElements(entry.getKey(), entry.getValue()));
-                    } else {
-                        fields.putAll(entry.getValue());
+        private static final Logger LOG = LoggerFactory.getLogger(StructuredSyslog.class);
+
+        public static Map<String, Object> extractFields(StructuredSyslogServerEvent msg) {
+            Map<String, Object> fields = Maps.newHashMap();
+            try {
+                Map raw = msg.getStructuredMessage().getStructuredData();
+                if (raw != null) {
+                    Set ks = raw.keySet();
+                    if (ks.size() > 0) {
+                        Object[] fl = raw.keySet().toArray();
+
+                        if (fl != null && fl.length > 0) {
+                            String sdID = (String) fl[0];
+                            fields = (HashMap) raw.get(sdID);
+                        }
                     }
                 }
-                return fields;
+            } catch (Exception e) {
+                LOG.debug("Could not extract structured syslog", e);
+                return Collections.emptyMap();
             }
-        } catch (Exception e) {
-            LOG.debug("Could not extract structured syslog", e);
-        }
-        return Collections.emptyMap();
-    }
 
-    private Map<String, String> prefixElements(final String prefix, final Map<String, String> elements) {
-        if (elements == null || elements.isEmpty()) {
-            return Collections.emptyMap();
+            return fields;
         }
 
-        final Map<String, String> prefixedMap = new HashMap<>(elements.size());
-        for (Map.Entry<String, String> entry : elements.entrySet()) {
-            prefixedMap.put(prefix.trim() + "_" + entry.getKey(), entry.getValue());
-        }
-
-        return prefixedMap;
     }
 }

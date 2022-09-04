@@ -18,16 +18,12 @@ package org.graylog2.alerts;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -149,24 +145,16 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         private final String resultDescription;
         private final AlertCondition triggeredCondition;
         private final DateTime triggeredAt;
-        private final ArrayList<MessageSummary> summaries = Lists.newArrayList();
 
-        public CheckResult(boolean isTriggered,
-                           AlertCondition triggeredCondition,
-                           String resultDescription,
-                           DateTime triggeredAt,
-                           List<MessageSummary> summaries) {
+        public CheckResult(boolean isTriggered, AlertCondition triggeredCondition, String resultDescription, DateTime triggeredAt) {
             this.isTriggered = isTriggered;
             this.resultDescription = resultDescription;
             this.triggeredCondition = triggeredCondition;
             this.triggeredAt = triggeredAt;
-            if (summaries != null) {
-                this.summaries.addAll(summaries);
-            }
         }
 
         public CheckResult(boolean isTriggered) {
-            this(false, null, null, null, null);
+            this(false, null, null, null);
             if (isTriggered)
                 throw new RuntimeException("Boolean only constructor should only be called if CheckResult is not triggered!");
         }
@@ -185,11 +173,6 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
 
         public DateTime getTriggeredAt() {
             return triggeredAt;
-        }
-
-        @Override
-        public List<MessageSummary> getMatchingMessages() {
-            return summaries;
         }
     }
 

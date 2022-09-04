@@ -27,15 +27,14 @@ import org.graylog2.filters.blacklist.FilterDescription;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.users.User;
-import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -47,7 +46,11 @@ import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.Set;
 
+import static javax.ws.rs.core.Response.Status;
 import static javax.ws.rs.core.Response.accepted;
+import static javax.ws.rs.core.Response.ok;
+import static javax.ws.rs.core.Response.serverError;
+import static javax.ws.rs.core.Response.status;
 
 @RequiresAuthentication
 @Api(value = "Filters", description = "Message blacklist filters")
@@ -67,18 +70,21 @@ public class BlacklistSourceResource extends RestResource {
     @ApiOperation(value = "Create a blacklist filter", notes = "It can take up to a second until the change is applied")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(name = "filterEntry", required = true) FilterDescription filterDescription) throws ValidationException {
+    public Response create(@ApiParam(name = "filterEntry", required = true) FilterDescription filterDescription) {
         checkPermission(RestPermissions.BLACKLISTENTRY_CREATE);
 
         // force the user name to be consistent with the requesting user
         final User currentUser = getCurrentUser();
         if (currentUser == null) {
-            throw new InternalServerErrorException("Could not load user.");
+            return serverError().entity("Could not load user.").build();
         }
-
         filterDescription.creatorUserId = currentUser.getName();
-
-        final FilterDescription savedFilter = filterService.save(filterDescription);
+        final FilterDescription savedFilter;
+        try {
+            savedFilter = filterService.save(filterDescription);
+        } catch (ValidationException e) {
+            throw new BadRequestException(e);
+        }
         return accepted().entity(savedFilter).build();
     }
 
@@ -99,10 +105,12 @@ public class BlacklistSourceResource extends RestResource {
     @Path("/{filterId}")
     @ApiOperation("Get the existing blacklist filter")
     @Produces(MediaType.APPLICATION_JSON)
-    public FilterDescription get(@ApiParam(name = "filterId", required = true)
-                                 @PathParam("filterId")
-                                 @NotEmpty String filterId) throws org.graylog2.database.NotFoundException {
-        return filterService.load(filterId);
+    public FilterDescription get(@ApiParam(name = "filterId", required = true) @PathParam("filterId") String filterId) {
+        try {
+            return filterService.load(filterId);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new NotFoundException();
+        }
     }
 
     @PUT
@@ -110,11 +118,14 @@ public class BlacklistSourceResource extends RestResource {
     @Path("/{filterId}")
     @ApiOperation(value = "Update an existing blacklist filter", notes = "It can take up to a second until the change is applied")
     @Consumes(MediaType.APPLICATION_JSON)
-    public void update(@ApiParam(name = "filterId", required = true)
-                       @PathParam("filterId") String filterId,
-                       @ApiParam(name = "filterEntry", required = true) FilterDescription filterEntry) throws org.graylog2.database.NotFoundException, ValidationException {
-        FilterDescription filter = filterService.load(filterId);
-
+    public Response update(@ApiParam(name = "filterId", required = true) @PathParam("filterId") String filterId,
+                           @ApiParam(name = "filterEntry", required = true) FilterDescription filterEntry) {
+        FilterDescription filter;
+        try {
+            filter = filterService.load(filterId);
+        } catch (org.graylog2.database.NotFoundException e) {
+            return status(Response.Status.NOT_FOUND).build();
+        }
         // did the filter type change?
         if (!filter.getClass().equals(filterEntry.getClass())) {
             // copy the relevant fields from the saved filter and then use the new class
@@ -129,18 +140,23 @@ public class BlacklistSourceResource extends RestResource {
             filter.name = filterEntry.name;
             filter.pattern = filterEntry.pattern;
         }
-
-        filterService.save(filter);
+        try {
+            filterService.save(filter);
+        } catch (ValidationException e) {
+            return status(Status.BAD_REQUEST).entity(e.getMessage()).build();
+        }
+        return ok().build();
     }
 
     @DELETE
     @Timed
     @ApiOperation(value = "Remove the existing blacklist filter", notes = "It can take up to a second until the change is applied")
     @Path("/{filterId}")
-    public void delete(@ApiParam(name = "filterId", required = true)
-                       @PathParam("filterId") String filterId) {
-        if (filterService.delete(filterId) == 0) {
-            throw new NotFoundException();
+    public Response delete(@ApiParam(name = "filterId", required = true) @PathParam("filterId") String filterId) {
+        final int deleted = filterService.delete(filterId);
+        if (deleted == 0) {
+            return status(Status.NOT_FOUND).build();
         }
+        return Response.accepted().build();
     }
 }
