@@ -32,8 +32,7 @@ public class OptionsHelper {
 		RESOURCE_PACKAGE_NAME("resourcePackageName", null), //
 		LOG_FILE("logFile", null), //
 		LOG_LEVEL("logLevel", "DEBUG"), //
-		LOG_APPENDER_CONSOLE("logAppenderConsole", "false"), //
-		LOG_APPENDER_FILE("logAppenderFile", "true");
+		LOG_APPENDER_CONSOLE("logAppenderConsole", "false");
 
 		private String key;
 		private String defaultValue;
@@ -96,10 +95,6 @@ public class OptionsHelper {
 
 	public boolean shouldUseConsoleAppender() {
 		return getBoolean(Option.LOG_APPENDER_CONSOLE);
-	}
-
-	public boolean shouldUseFileAppender() {
-		return getBoolean(Option.LOG_APPENDER_FILE);
 	}
 
 	private String getString(Option option) {
