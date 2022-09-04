@@ -24,7 +24,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.net.MediaType;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.ning.http.client.*;
@@ -140,8 +139,7 @@ class ApiClientImpl implements ApiClient {
     }
 
     private static <T> T deserializeJson(Response response, Class<T> responseClass) throws IOException {
-        final Gson gson = new GsonBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").create();
-        return gson.fromJson(response.getResponseBody("UTF-8"), responseClass);
+        return new Gson().fromJson(response.getResponseBody("UTF-8"), responseClass);
     }
 
 
@@ -150,6 +148,8 @@ class ApiClientImpl implements ApiClient {
         private Node node;
         private Radio radio;
         private Collection<Node> nodes;
+        private String username;
+        private String password;
         private final Method method;
         private ApiRequest body;
         private final Class<T> responseClass;
@@ -160,7 +160,6 @@ class ApiClientImpl implements ApiClient {
         private int timeoutValue = 5;
         private boolean unauthenticated = false;
         private MediaType mediaType = MediaType.JSON_UTF_8;
-        private String sessionId;
 
         public ApiRequestBuilder(Method method, Class<T> responseClass) {
             this.method = method;
@@ -269,8 +268,9 @@ class ApiClientImpl implements ApiClient {
         }
 
         @Override
-        public lib.ApiRequestBuilder<T> session(String sessionId) {
-            this.sessionId = sessionId;
+        public ApiRequestBuilder<T> credentials(String username, String password) {
+            this.username = username;
+            this.password = password;
             return this;
         }
 
@@ -329,14 +329,6 @@ class ApiClientImpl implements ApiClient {
                 target = radio;
             }
 
-            if (!unauthenticated && sessionId == null) {
-                final User user = UserService.current();
-                if (user != null) {
-                    session(user.getSessionId());
-                } else {
-                    log.warn("You did not add unauthenticated() nor session() but also don't have a current user. You probably meant unauthenticated(). This is a bug!");
-                }
-            }
             final URL url = prepareUrl(target);
             final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
             requestBuilder.addHeader(Http.HeaderNames.ACCEPT, mediaType.toString());
@@ -543,12 +535,20 @@ class ApiClientImpl implements ApiClient {
                     uriBuilder.queryParam(queryParam._1, queryParam._2);
                 }
 
-                if (unauthenticated && sessionId != null) {
-                    log.error("Both session() and unauthenticated() are set for this request, this is a bug, using session id.");
+                if (unauthenticated) {
+                    if (username != null) {
+                        log.error("Both credentials() and unauthenticated() are set for this request, this is a bug, using current user.");
+                    }
                 }
-                if (sessionId != null) {
-                    // pass the current session id via basic auth and special "password"
-                    uriBuilder.userInfo(sessionId + ":session");
+                if (!unauthenticated) {
+                    final User current = UserService.current();
+                    if (current != null) {
+                        username = current.getName();
+                        password = current.getPasswordHash();
+                    }
+                }
+                if (username != null && password != null) {
+                    uriBuilder.userInfo(username + ":" + password);
                 }
                 builtUrl = uriBuilder.build();
                 return builtUrl.toURL();
