@@ -366,9 +366,6 @@ public final class TestActionBuilder {
           coverageArtifacts.add(coverageArtifact);
         }
 
-        boolean cancelConcurrentTests =
-            testConfiguration.runsPerTestDetectsFlakes()
-                && testConfiguration.cancelConcurrentTests();
         TestRunnerAction testRunnerAction =
             new TestRunnerAction(
                 ruleContext.getActionOwner(),
@@ -391,8 +388,7 @@ public final class TestActionBuilder {
                 (!isUsingTestWrapperInsteadOfTestSetupScript
                         || executionSettings.needsShell(isExecutedOnWindows))
                     ? ShToolchain.getPathOrError(ruleContext)
-                    : null,
-                cancelConcurrentTests);
+                    : null);
 
         testOutputs.addAll(testRunnerAction.getSpawnOutputs());
         testOutputs.addAll(testRunnerAction.getOutputs());
