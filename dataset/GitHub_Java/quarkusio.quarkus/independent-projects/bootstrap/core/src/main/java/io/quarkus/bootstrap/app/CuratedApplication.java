@@ -8,6 +8,7 @@ import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
+import java.io.Closeable;
 import java.io.Serializable;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -28,7 +29,7 @@ import java.util.function.Function;
  *
  *
  */
-public class CuratedApplication implements Serializable, AutoCloseable {
+public class CuratedApplication implements Serializable, Closeable {
 
     private static final String AUGMENTOR = "io.quarkus.runner.bootstrap.AugmentActionImpl";
 
@@ -52,16 +53,13 @@ public class CuratedApplication implements Serializable, AutoCloseable {
 
     private final QuarkusBootstrap quarkusBootstrap;
     private final CurationResult curationResult;
-    private final ConfiguredClassLoading configuredClassLoading;
 
     final AppModel appModel;
 
-    CuratedApplication(QuarkusBootstrap quarkusBootstrap, CurationResult curationResult,
-            ConfiguredClassLoading configuredClassLoading) {
+    CuratedApplication(QuarkusBootstrap quarkusBootstrap, CurationResult curationResult) {
         this.quarkusBootstrap = quarkusBootstrap;
         this.curationResult = curationResult;
         this.appModel = curationResult.getAppModel();
-        this.configuredClassLoading = configuredClassLoading;
     }
 
     public AppModel getAppModel() {
@@ -82,6 +80,10 @@ public class CuratedApplication implements Serializable, AutoCloseable {
 
     public Object runInAugmentClassLoader(String consumerName, Map<String, Object> params) {
         return runInCl(consumerName, params, getAugmentClassLoader());
+    }
+
+    public Object runInBaseRuntimeClassLoader(String consumerName, Map<String, Object> params) {
+        return runInCl(consumerName, params, getBaseRuntimeClassLoader());
     }
 
     public CurationResult getCurationResult() {
@@ -157,8 +159,7 @@ public class CuratedApplication implements Serializable, AutoCloseable {
 
     private void addCpElement(QuarkusClassLoader.Builder builder, AppArtifact dep, ClassPathElement element) {
         final AppArtifactKey key = dep.getKey();
-        if (appModel.getParentFirstArtifacts().contains(key)
-                || configuredClassLoading.parentFirstArtifacts.contains(dep.getKey())) {
+        if (appModel.getParentFirstArtifacts().contains(key)) {
             //we always load this from the parent if it is available, as this acts as a bridge between the running
             //app and the dev mode code
             builder.addParentFirstElement(element);
@@ -178,9 +179,6 @@ public class CuratedApplication implements Serializable, AutoCloseable {
             //any of the runtime artifacts, or user classes
             //this will load any deployment artifacts from the parent CL if they are present
             for (AppDependency i : appModel.getFullDeploymentDeps()) {
-                if (configuredClassLoading.reloadableArtifacts.contains(i.getArtifact().getKey())) {
-                    continue;
-                }
                 processCpElement(i.getArtifact(), element -> addCpElement(builder, i.getArtifact(), element));
             }
 
@@ -206,8 +204,7 @@ public class CuratedApplication implements Serializable, AutoCloseable {
             QuarkusClassLoader.Builder builder = QuarkusClassLoader.builder("Quarkus Base Runtime ClassLoader",
                     quarkusBootstrap.getBaseClassLoader(), false);
             builder.addClassLoaderEventListeners(quarkusBootstrap.getClassLoaderEventListeners());
-
-            if (quarkusBootstrap.getMode() == QuarkusBootstrap.Mode.TEST && quarkusBootstrap.isFlatClassPath()) {
+            if (quarkusBootstrap.getMode() == QuarkusBootstrap.Mode.TEST) {
                 //in test mode we have everything in the base class loader
                 //there is no need to restart so there is no need for an additional CL
 
@@ -215,7 +212,6 @@ public class CuratedApplication implements Serializable, AutoCloseable {
                     builder.addElement(ClassPathElement.fromPath(root));
                 }
             }
-
             //additional user class path elements first
             Set<Path> hotReloadPaths = new HashSet<>();
             for (AdditionalDependency i : quarkusBootstrap.getAdditionalApplicationArchives()) {
@@ -233,9 +229,6 @@ public class CuratedApplication implements Serializable, AutoCloseable {
 
             for (AppDependency dependency : appModel.getUserDependencies()) {
                 if (isHotReloadable(dependency.getArtifact(), hotReloadPaths)) {
-                    continue;
-                }
-                if (configuredClassLoading.reloadableArtifacts.contains(dependency.getArtifact().getKey())) {
                     continue;
                 }
                 processCpElement(dependency.getArtifact(), element -> addCpElement(builder, dependency.getArtifact(), element));
@@ -274,17 +267,13 @@ public class CuratedApplication implements Serializable, AutoCloseable {
                 builder.addElement(ClassPathElement.fromPath(root));
             }
         }
-        for (AppDependency dependency : appModel.getUserDependencies()) {
-            if (configuredClassLoading.reloadableArtifacts.contains(dependency.getArtifact().getKey())) {
-                processCpElement(dependency.getArtifact(), element -> addCpElement(builder, dependency.getArtifact(), element));
-            }
-        }
         return builder.build();
     }
 
-    public QuarkusClassLoader createRuntimeClassLoader(Map<String, byte[]> resources, Map<String, byte[]> transformedClasses) {
+    public QuarkusClassLoader createRuntimeClassLoader(QuarkusClassLoader loader,
+            Map<String, byte[]> resources, Map<String, byte[]> transformedClasses) {
         QuarkusClassLoader.Builder builder = QuarkusClassLoader.builder("Quarkus Runtime ClassLoader",
-                getBaseRuntimeClassLoader(), false)
+                loader, false)
                 .setAggregateParentResources(true);
         builder.setTransformedClasses(transformedClasses);
 
@@ -298,11 +287,6 @@ public class CuratedApplication implements Serializable, AutoCloseable {
                 for (Path root : i.getArchivePath()) {
                     builder.addElement(ClassPathElement.fromPath(root));
                 }
-            }
-        }
-        for (AppDependency dependency : appModel.getUserDependencies()) {
-            if (configuredClassLoading.reloadableArtifacts.contains(dependency.getArtifact().getKey())) {
-                processCpElement(dependency.getArtifact(), element -> addCpElement(builder, dependency.getArtifact(), element));
             }
         }
         return builder.build();

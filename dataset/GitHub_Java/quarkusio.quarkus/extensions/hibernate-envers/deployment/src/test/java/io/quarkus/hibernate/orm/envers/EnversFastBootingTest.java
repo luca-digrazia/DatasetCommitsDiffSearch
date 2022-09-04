@@ -1,4 +1,4 @@
-package io.quarkus.hibernate.orm;
+package io.quarkus.hibernate.orm.envers;
 
 import javax.inject.Inject;
 
@@ -10,25 +10,23 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.wildfly.common.Assert;
 
 import io.quarkus.bootstrap.classloading.ClassLoaderLimiter;
-import io.quarkus.hibernate.orm.enhancer.Address;
 import io.quarkus.test.QuarkusUnitTest;
 
 /**
  * Let's run some checks to verify that the optimisations we have
  * to actually boot efficiently are going to survive other patches.
  */
-public class JPAFastBootingTest {
+public class EnversFastBootingTest {
 
     private static final ClassLoaderLimiter limitsChecker = ClassLoaderLimiter.builder()
             .neverLoadedResource("org/hibernate/jpa/orm_2_1.xsd")
             .neverLoadedResource("org/hibernate/jpa/orm_2_2.xsd")
-            .neverLoadedClassName("org.hibernate.boot.jaxb.internal.MappingBinder")
             .build();
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClass(Address.class))
+                    .addClass(MyAuditedEntity.class))
             .withConfigurationResource("application.properties")
             .addClassLoaderEventListener(limitsChecker);
 
