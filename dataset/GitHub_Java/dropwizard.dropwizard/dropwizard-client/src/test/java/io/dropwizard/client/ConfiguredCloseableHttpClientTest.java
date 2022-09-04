@@ -2,30 +2,34 @@ package io.dropwizard.client;
 
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@RunWith(MockitoJUnitRunner.class)
 public class ConfiguredCloseableHttpClientTest {
-    private ConfiguredCloseableHttpClient configuredClient;
+    public ConfiguredCloseableHttpClient configuredClient;
+    @Mock
+    private CloseableHttpClient closeableHttpClientMock;
+    @Mock
+    private RequestConfig defaultRequestConfigMock;
 
-    private CloseableHttpClient closeableHttpClientMock = Mockito.mock(CloseableHttpClient.class);
-    private RequestConfig defaultRequestConfigMock = Mockito.mock(RequestConfig.class);
-
-    @BeforeEach
-    void setUp() {
+    @Before
+    public void setUp() {
         configuredClient = new ConfiguredCloseableHttpClient(closeableHttpClientMock, defaultRequestConfigMock);
     }
 
     @Test
-    void getDefaultRequestConfig_returns_config_provided_at_construction() {
+    public void getDefaultRequestConfig_returns_config_provided_at_construction() {
         assertThat(configuredClient.getDefaultRequestConfig()).isEqualTo(defaultRequestConfigMock);
     }
 
     @Test
-    void getClient_returns_config_provided_at_construction() {
+    public void getClient_returns_config_provided_at_construction() {
         assertThat(configuredClient.getClient()).isEqualTo(closeableHttpClientMock);
     }
 }
