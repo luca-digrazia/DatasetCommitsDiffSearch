@@ -324,7 +324,6 @@ public abstract class MessageInput {
 
     public void processRawMessage(RawMessage rawMessage) {
         rawMessage.setCodecConfig(codecConfig);
-        rawMessage.addSourceNode(getId(), serverStatus.getNodeId(), serverStatus.hasCapability(ServerStatus.Capability.SERVER));
 
         inputBuffer.insert(rawMessage);
 

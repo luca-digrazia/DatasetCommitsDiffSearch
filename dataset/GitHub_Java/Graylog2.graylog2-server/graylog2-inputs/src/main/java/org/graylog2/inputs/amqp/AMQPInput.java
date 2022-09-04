@@ -35,13 +35,12 @@ public class AMQPInput extends MessageInput {
 
     // solely for assistedinject subclass
     protected AMQPInput(MetricRegistry metricRegistry,
-                        Configuration configuration,
                         Transport transport,
                         Codec codec,
                         LocalMetricRegistry localRegistry,
                         MessageInput.Config config,
                         MessageInput.Descriptor descriptor, ServerStatus serverStatus) {
-        super(metricRegistry, configuration, transport, localRegistry, codec, config, descriptor, serverStatus);
+        super(metricRegistry, transport, localRegistry, codec, config, descriptor, serverStatus);
     }
 
     @AssistedInject
@@ -49,7 +48,7 @@ public class AMQPInput extends MessageInput {
                      MetricRegistry metricRegistry,
                      AmqpTransport.Factory transport,
                      RadioMessageCodec.Factory codec, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
-        super(metricRegistry, configuration, transport.create(configuration), localRegistry, codec.create(configuration), config,
+        super(metricRegistry, transport.create(configuration), localRegistry, codec.create(configuration), config,
               descriptor, serverStatus);
     }
 

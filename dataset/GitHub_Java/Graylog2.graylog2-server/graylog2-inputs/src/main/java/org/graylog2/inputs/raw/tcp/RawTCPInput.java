@@ -54,10 +54,9 @@ public class RawTCPInput extends MessageInput {
                        final RawCodec.Factory rawCodecFactory,
                        final MetricRegistry metricRegistry, LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
         super(metricRegistry,
-                configuration,
-                tcpTransportFactory.create(configuration),
-                localRegistry, rawCodecFactory.create(configuration),
-                config, descriptor, serverStatus);
+              tcpTransportFactory.create(configuration),
+              localRegistry, rawCodecFactory.create(configuration),
+              config, descriptor, serverStatus);
     }
 
     public interface Factory extends MessageInput.Factory<RawTCPInput> {

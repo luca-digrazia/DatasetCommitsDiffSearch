@@ -39,12 +39,11 @@ public class RadioAMQPInput extends AMQPInput {
                           RadioMessageCodec.Factory codec,
                           LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
         super(metricRegistry,
-                configuration,
-                transport.create(configuration),
-                codec.create(configuration),
-                localRegistry,
-                config,
-                descriptor, serverStatus);
+              transport.create(configuration),
+              codec.create(configuration),
+              localRegistry,
+              config,
+              descriptor, serverStatus);
     }
 
     public interface Factory extends MessageInput.Factory<RadioAMQPInput> {

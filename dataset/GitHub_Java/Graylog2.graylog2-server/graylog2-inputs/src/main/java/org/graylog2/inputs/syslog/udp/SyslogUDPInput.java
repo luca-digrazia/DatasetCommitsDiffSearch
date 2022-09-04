@@ -55,10 +55,9 @@ public class SyslogUDPInput extends MessageInput {
                           final SyslogCodec.Factory syslogCodecFactory,
                           LocalMetricRegistry localRegistry, Config config, Descriptor descriptor, ServerStatus serverStatus) {
         super(metricRegistry,
-                configuration,
-                udpTransportFactory.create(configuration),
-                localRegistry, syslogCodecFactory.create(configuration),
-                config, descriptor, serverStatus);
+              udpTransportFactory.create(configuration),
+              localRegistry, syslogCodecFactory.create(configuration),
+              config, descriptor, serverStatus);
     }
 
     public interface Factory extends MessageInput.Factory<SyslogUDPInput> {
