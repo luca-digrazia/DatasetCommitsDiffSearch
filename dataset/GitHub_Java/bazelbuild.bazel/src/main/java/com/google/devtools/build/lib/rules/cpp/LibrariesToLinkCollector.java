@@ -19,8 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.LibraryToLinkValue;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.SequenceBuilder;
@@ -117,15 +115,15 @@ public class LibrariesToLinkCollector {
    */
   public static class CollectedLibrariesToLink {
     private final SequenceBuilder librariesToLink;
-    private final NestedSet<LinkerInput> expandedLinkerInputs;
-    private final NestedSet<String> librarySearchDirectories;
-    private final NestedSet<String> runtimeLibrarySearchDirectories;
+    private final ImmutableSet<LinkerInput> expandedLinkerInputs;
+    private final ImmutableSet<String> librarySearchDirectories;
+    private final ImmutableSet<String> runtimeLibrarySearchDirectories;
 
     private CollectedLibrariesToLink(
         SequenceBuilder librariesToLink,
-        NestedSet<LinkerInput> expandedLinkerInputs,
-        NestedSet<String> librarySearchDirectories,
-        NestedSet<String> runtimeLibrarySearchDirectories) {
+        ImmutableSet<LinkerInput> expandedLinkerInputs,
+        ImmutableSet<String> librarySearchDirectories,
+        ImmutableSet<String> runtimeLibrarySearchDirectories) {
       this.librariesToLink = librariesToLink;
       this.expandedLinkerInputs = expandedLinkerInputs;
       this.librarySearchDirectories = librarySearchDirectories;
@@ -137,15 +135,15 @@ public class LibrariesToLinkCollector {
     }
 
     // TODO(b/78347840): Figure out how to make these Artifacts.
-    public NestedSet<LinkerInput> getExpandedLinkerInputs() {
+    public ImmutableSet<LinkerInput> getExpandedLinkerInputs() {
       return expandedLinkerInputs;
     }
 
-    public NestedSet<String> getLibrarySearchDirectories() {
+    public ImmutableSet<String> getLibrarySearchDirectories() {
       return librarySearchDirectories;
     }
 
-    public NestedSet<String> getRuntimeLibrarySearchDirectories() {
+    public ImmutableSet<String> getRuntimeLibrarySearchDirectories() {
       return runtimeLibrarySearchDirectories;
     }
   }
@@ -160,10 +158,10 @@ public class LibrariesToLinkCollector {
    * <p>TODO: Factor out of the bazel binary into build variables for crosstool action_configs.
    */
   public CollectedLibrariesToLink collectLibrariesToLink() {
-    NestedSetBuilder<String> librarySearchDirectories = NestedSetBuilder.linkOrder();
-    NestedSetBuilder<String> runtimeLibrarySearchDirectories = NestedSetBuilder.linkOrder();
+    ImmutableSet.Builder<String> librarySearchDirectories = ImmutableSet.builder();
+    ImmutableSet.Builder<String> runtimeLibrarySearchDirectories = ImmutableSet.builder();
     ImmutableSet.Builder<String> rpathRootsForExplicitSoDeps = ImmutableSet.builder();
-    NestedSetBuilder<LinkerInput> expandedLinkerInputsBuilder = NestedSetBuilder.linkOrder();
+    ImmutableSet.Builder<LinkerInput> expandedLinkerInputsBuilder = ImmutableSet.builder();
     // List of command line parameters that need to be placed *outside* of
     // --whole-archive ... --no-whole-archive.
     SequenceBuilder librariesToLink = new SequenceBuilder();
@@ -212,14 +210,14 @@ public class LibrariesToLinkCollector {
     Preconditions.checkState(
         ltoMap == null || ltoMap.isEmpty(), "Still have LTO objects left: %s", ltoMap);
 
-    NestedSetBuilder<String> allRuntimeLibrarySearchDirectories = NestedSetBuilder.linkOrder();
+    ImmutableSet.Builder<String> allRuntimeLibrarySearchDirectories = ImmutableSet.builder();
     // rpath ordering matters for performance; first add the one where most libraries are found.
     if (includeSolibDir) {
       allRuntimeLibrarySearchDirectories.add(rpathRoot);
     }
     allRuntimeLibrarySearchDirectories.addAll(rpathRootsForExplicitSoDeps.build());
     if (includeToolchainLibrariesSolibDir) {
-      allRuntimeLibrarySearchDirectories.addTransitive(runtimeLibrarySearchDirectories.build());
+      allRuntimeLibrarySearchDirectories.addAll(runtimeLibrarySearchDirectories.build());
     }
 
     return new CollectedLibrariesToLink(
@@ -230,10 +228,10 @@ public class LibrariesToLinkCollector {
   }
 
   private Pair<Boolean, Boolean> addLinkerInputs(
-      NestedSetBuilder<String> librarySearchDirectories,
+      ImmutableSet.Builder<String> librarySearchDirectories,
       ImmutableSet.Builder<String> rpathEntries,
       SequenceBuilder librariesToLink,
-      NestedSetBuilder<LinkerInput> expandedLinkerInputsBuilder) {
+      ImmutableSet.Builder<LinkerInput> expandedLinkerInputsBuilder) {
     boolean includeSolibDir = false;
     boolean includeToolchainLibrariesSolibDir = false;
     for (LinkerInput input : linkerInputs) {
@@ -278,8 +276,8 @@ public class LibrariesToLinkCollector {
   private void addDynamicInputLinkOptions(
       LinkerInput input,
       SequenceBuilder librariesToLink,
-      NestedSetBuilder<LinkerInput> expandedLinkerInputsBuilder,
-      NestedSetBuilder<String> librarySearchDirectories,
+      ImmutableSet.Builder<LinkerInput> expandedLinkerInputsBuilder,
+      ImmutableSet.Builder<String> librarySearchDirectories,
       ImmutableSet.Builder<String> rpathRootsForExplicitSoDeps) {
     Preconditions.checkState(
         input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY
@@ -361,7 +359,7 @@ public class LibrariesToLinkCollector {
   private void addStaticInputLinkOptions(
       LinkerInput input,
       SequenceBuilder librariesToLink,
-      NestedSetBuilder<LinkerInput> expandedLinkerInputsBuilder) {
+      ImmutableSet.Builder<LinkerInput> expandedLinkerInputsBuilder) {
     ArtifactCategory artifactCategory = input.getArtifactCategory();
     Preconditions.checkArgument(
         artifactCategory.equals(ArtifactCategory.OBJECT_FILE)

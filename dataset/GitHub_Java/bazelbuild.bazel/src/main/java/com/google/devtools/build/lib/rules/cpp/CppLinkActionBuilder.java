@@ -271,7 +271,7 @@ public class CppLinkActionBuilder {
       boolean includeLinkStaticInLtoIndexing) {
     NestedSetBuilder<LinkerInputs.LibraryToLink> uniqueLibrariesBuilder =
         NestedSetBuilder.linkOrder();
-    for (LinkerInputs.LibraryToLink lib : originalUniqueLibraries.toList()) {
+    for (LinkerInputs.LibraryToLink lib : originalUniqueLibraries) {
       if (!lib.containsObjectFiles()) {
         uniqueLibrariesBuilder.add(lib);
         continue;
@@ -404,37 +404,37 @@ public class CppLinkActionBuilder {
       boolean includeLinkStaticInLtoIndexing)
       throws RuleErrorException {
     Set<Artifact> compiled = new LinkedHashSet<>();
-    for (LinkerInputs.LibraryToLink lib : uniqueLibraries.toList()) {
+    for (LinkerInputs.LibraryToLink lib : uniqueLibraries) {
       compiled.addAll(lib.getLtoCompilationContext().getBitcodeFiles());
     }
 
-    // Make this a NestedSet to return from LtoBackendAction.getAllowedDerivedInputs. For M binaries
-    // and N .o files, this is O(M*N). If we had nested sets of bitcode files, it would be O(M + N).
-    NestedSetBuilder<Artifact> allBitcode = NestedSetBuilder.stableOrder();
+    // This flattens the set of object files, so for M binaries and N .o files,
+    // this is O(M*N). If we had a nested set of .o files, we could have O(M + N) instead.
+    Map<PathFragment, Artifact> allBitcode = new HashMap<>();
     // Since this link includes object files from another library, we know that library must be
     // statically linked, so we need to look at includeLinkStaticInLtoIndexing to decide whether
     // to include its objects in the LTO indexing for this target.
     if (includeLinkStaticInLtoIndexing) {
-      for (LinkerInputs.LibraryToLink lib : uniqueLibraries.toList()) {
+      for (LinkerInputs.LibraryToLink lib : uniqueLibraries) {
         if (!lib.containsObjectFiles()) {
           continue;
         }
         for (Artifact objectFile : lib.getObjectFiles()) {
           if (compiled.contains(objectFile)) {
-            allBitcode.add(objectFile);
+            allBitcode.put(objectFile.getExecPath(), objectFile);
           }
         }
       }
     }
     for (LinkerInput input : objectFiles) {
       if (this.ltoCompilationContext.containsBitcodeFile(input.getArtifact())) {
-        allBitcode.add(input.getArtifact());
+        allBitcode.put(input.getArtifact().getExecPath(), input.getArtifact());
       }
     }
-    BitcodeFiles bitcodeFiles = new BitcodeFiles(allBitcode.build());
+    BitcodeFiles bitcodeFiles = new BitcodeFiles(allBitcode);
 
     ImmutableList.Builder<LtoBackendArtifacts> ltoOutputs = ImmutableList.builder();
-    for (LinkerInputs.LibraryToLink lib : uniqueLibraries.toList()) {
+    for (LinkerInputs.LibraryToLink lib : uniqueLibraries) {
       if (!lib.containsObjectFiles()) {
         continue;
       }
@@ -552,7 +552,7 @@ public class CppLinkActionBuilder {
       NestedSet<LibraryToLink> librariesToLink) {
     ImmutableList.Builder<LinkerInputs.LibraryToLink> librariesToLinkBuilder =
         ImmutableList.builder();
-    for (LibraryToLink libraryToLink : librariesToLink.toList()) {
+    for (LibraryToLink libraryToLink : librariesToLink) {
       LinkerInputs.LibraryToLink staticLibraryToLink =
           libraryToLink.getStaticLibrary() == null ? null : libraryToLink.getStaticLibraryToLink();
       LinkerInputs.LibraryToLink picStaticLibraryToLink =
