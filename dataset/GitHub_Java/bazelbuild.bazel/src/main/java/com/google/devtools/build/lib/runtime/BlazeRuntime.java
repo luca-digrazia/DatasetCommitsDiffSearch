@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
+import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderFactoryMap;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
@@ -462,6 +463,10 @@ public final class BlazeRuntime {
     return projectFileProvider;
   }
 
+  public Path getOutputBase() {
+    return getWorkspace().getDirectories().getOutputBase();
+  }
+
   /**
    * Hook method called by the BlazeCommandDispatcher prior to the dispatch of
    * each command.
@@ -566,7 +571,6 @@ public final class BlazeRuntime {
 
     env.getReporter().clearEventBus();
     actionKeyContext.clear();
-    flushServerLog();
     return finalCommandResult;
   }
 
@@ -581,16 +585,6 @@ public final class BlazeRuntime {
   public static void setupLogging(Level level) {
     templateLogger.setLevel(level);
     templateLogger.info("Log level: " + templateLogger.getLevel());
-  }
-
-  private void flushServerLog() {
-    for (Logger logger = templateLogger; logger != null; logger = logger.getParent()) {
-      for (Handler handler : logger.getHandlers()) {
-        if (handler != null) {
-          handler.flush();
-        }
-      }
-    }
   }
 
   /**
@@ -980,7 +974,6 @@ public final class BlazeRuntime {
                 startupOptions.commandPort,
                 runtime.getServerDirectory(),
                 startupOptions.maxIdleSeconds,
-                startupOptions.shutdownOnLowSysMem,
                 startupOptions.idleServerTasks);
       } catch (ReflectiveOperationException | IllegalArgumentException e) {
         throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
@@ -1116,15 +1109,12 @@ public final class BlazeRuntime {
     }
 
     FileSystem fs = null;
-    Path execRootBasePath = null;
     try {
       for (BlazeModule module : blazeModules) {
-        BlazeModule.ModuleFileSystem moduleFs =
-            module.getFileSystem(options, outputBase.getRelative(ServerDirectories.EXECROOT));
+        FileSystem moduleFs = module.getFileSystem(options);
         if (moduleFs != null) {
-          execRootBasePath = moduleFs.virtualExecRootBase();
           Preconditions.checkState(fs == null, "more than one module returns a file system");
-          fs = moduleFs.fileSystem();
+          fs = moduleFs;
         }
       }
 
@@ -1141,9 +1131,6 @@ public final class BlazeRuntime {
     Path outputUserRootPath = fs.getPath(outputUserRoot);
     Path installBasePath = fs.getPath(installBase);
     Path outputBasePath = fs.getPath(outputBase);
-    if (execRootBasePath == null) {
-      execRootBasePath = outputBasePath.getRelative(ServerDirectories.EXECROOT);
-    }
     Path workspaceDirectoryPath = null;
     if (!workspaceDirectory.equals(PathFragment.EMPTY_FRAGMENT)) {
       workspaceDirectoryPath = fs.getPath(workspaceDirectory);
@@ -1155,11 +1142,7 @@ public final class BlazeRuntime {
 
     ServerDirectories serverDirectories =
         new ServerDirectories(
-            installBasePath,
-            outputBasePath,
-            outputUserRootPath,
-            execRootBasePath,
-            startupOptions.installMD5);
+            installBasePath, outputBasePath, outputUserRootPath, startupOptions.installMD5);
     Clock clock = BlazeClock.instance();
     BlazeRuntime.Builder runtimeBuilder =
         new BlazeRuntime.Builder()
@@ -1192,15 +1175,6 @@ public final class BlazeRuntime {
 
     BlazeRuntime runtime = runtimeBuilder.build();
 
-    CustomExitCodePublisher.setAbruptExitStatusFileDir(
-        serverDirectories.getOutputBase().getPathString());
-
-    // Most static initializers for @SkylarkSignature-containing classes have already run by this
-    // point, but this will pick up the stragglers.
-    initSkylarkBuiltinsRegistry();
-
-    AutoProfiler.setClock(runtime.getClock());
-    BugReport.setRuntime(runtime);
     BlazeDirectories directories =
         new BlazeDirectories(
             serverDirectories, workspaceDirectoryPath, defaultSystemJavabasePath, productName);
@@ -1212,8 +1186,16 @@ public final class BlazeRuntime {
           "Cannot enumerate embedded binaries: " + e.getMessage(),
           ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
     }
-    // Keep this line last in this method, so that all other initialization is available to it.
     runtime.initWorkspace(directories, binTools);
+    CustomExitCodePublisher.setAbruptExitStatusFileDir(
+        serverDirectories.getOutputBase().getPathString());
+
+    // Most static initializers for @SkylarkSignature-containing classes have already run by this
+    // point, but this will pick up the stragglers.
+    initSkylarkBuiltinsRegistry();
+
+    AutoProfiler.setClock(runtime.getClock());
+    BugReport.setRuntime(runtime);
     return runtime;
   }
 

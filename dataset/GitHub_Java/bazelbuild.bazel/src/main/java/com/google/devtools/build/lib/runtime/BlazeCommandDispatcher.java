@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.DelegatingOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OpaqueOptionsData;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -226,23 +225,6 @@ public class BlazeCommandDispatcher {
     }
   }
 
-  /**
-   * For testing ONLY. Same as {@link #exec(InvocationPolicy, List, OutErr, LockingMode, String,
-   * long, Optional<List<Pair<String, String>>>)}, but automatically uses the current time.
-   */
-  @VisibleForTesting
-  public BlazeCommandResult exec(List<String> args, String clientDescription, OutErr originalOutErr)
-      throws InterruptedException {
-    return exec(
-        InvocationPolicy.getDefaultInstance(),
-        args,
-        originalOutErr,
-        LockingMode.ERROR_OUT,
-        clientDescription,
-        runtime.getClock().currentTimeMillis(),
-        Optional.empty() /* startupOptionBundles */);
-  }
-
   private BlazeCommandResult execExclusively(
       OriginalUnstructuredCommandLineEvent unstructuredServerCommandLineEvent,
       InvocationPolicy invocationPolicy,
@@ -329,7 +311,20 @@ public class BlazeCommandDispatcher {
       // Early exit. We need to guarantee that the ErrOut and Reporter setup below never error out,
       // so any invariants they need must be checked before this point.
       if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-        return replayEarlyExitEvents(outErr, optionHandler, storedEventHandler, env, earlyExitCode);
+        // Partial replay of the printed events before we exit.
+        PrintingEventHandler printingEventHandler =
+            new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
+        for (String note : optionHandler.getRcfileNotes()) {
+          printingEventHandler.handle(Event.info(note));
+        }
+        for (Event event : storedEventHandler.getEvents()) {
+          printingEventHandler.handle(event);
+        }
+        for (Postable post : storedEventHandler.getPosts()) {
+          env.getEventBus().post(post);
+        }
+        result = BlazeCommandResult.exitCode(earlyExitCode);
+        return result;
       }
 
       Reporter reporter = env.getReporter();
@@ -484,13 +479,6 @@ public class BlazeCommandDispatcher {
         }
       }
 
-      // Parse starlark options.
-      earlyExitCode = optionHandler.parseStarlarkOptions(env, storedEventHandler);
-      if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-        return replayEarlyExitEvents(outErr, optionHandler, storedEventHandler, env, earlyExitCode);
-      }
-      options = optionHandler.getOptionsResult();
-
       result = command.exec(env, options);
       ExitCode moduleExitCode = env.precompleteCommand(result.getExitCode());
       // If Blaze did not suffer an infrastructure failure, check for errors in modules.
@@ -523,25 +511,23 @@ public class BlazeCommandDispatcher {
     }
   }
 
-  private static BlazeCommandResult replayEarlyExitEvents(
-      OutErr outErr,
-      BlazeOptionHandler optionHandler,
-      StoredEventHandler storedEventHandler,
-      CommandEnvironment env,
-      ExitCode earlyExitCode) {
-    PrintingEventHandler printingEventHandler =
-        new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
-    for (String note : optionHandler.getRcfileNotes()) {
-      printingEventHandler.handle(Event.info(note));
-    }
-    for (Event event : storedEventHandler.getEvents()) {
-      printingEventHandler.handle(event);
-    }
-    for (Postable post : storedEventHandler.getPosts()) {
-      env.getEventBus().post(post);
-    }
-    return BlazeCommandResult.exitCode(earlyExitCode);
+  /**
+   * For testing ONLY. Same as {@link #exec(InvocationPolicy, List, OutErr, LockingMode, String,
+   * long, Optional<List<Pair<String, String>>>)}, but automatically uses the current time.
+   */
+  @VisibleForTesting
+  public BlazeCommandResult exec(List<String> args, String clientDescription, OutErr originalOutErr)
+      throws InterruptedException {
+    return exec(
+        InvocationPolicy.getDefaultInstance(),
+        args,
+        originalOutErr,
+        LockingMode.ERROR_OUT,
+        clientDescription,
+        runtime.getClock().currentTimeMillis(),
+        Optional.empty() /* startupOptionBundles */);
   }
+
 
   private OutErr bufferOut(OutErr outErr, boolean fully) {
     OutputStream wrappedOut;
@@ -572,6 +558,7 @@ public class BlazeCommandDispatcher {
     OutputStream wrappedErr = new AnsiStrippingOutputStream(outErr.getErrorStream());
     return OutErr.create(outErr.getOutputStream(), wrappedErr);
   }
+
 
   private OutErr tee(OutErr outErr, List<OutErr> additionalOutErrs) {
     if (additionalOutErrs.isEmpty()) {
@@ -612,7 +599,7 @@ public class BlazeCommandDispatcher {
       throw new IllegalStateException(e);
     }
     Command annotation = command.getClass().getAnnotation(Command.class);
-    OptionsParser parser = OptionsParser.newOptionsParser(optionsData, "--//");
+    OptionsParser parser = OptionsParser.newOptionsParser(optionsData);
     parser.setAllowResidue(annotation.allowResidue());
     return parser;
   }
@@ -620,18 +607,14 @@ public class BlazeCommandDispatcher {
   /** Returns the event handler to use for this Blaze command. */
   private EventHandler createEventHandler(
       OutErr outErr, BlazeCommandEventHandler.Options eventOptions) {
-    Path workspacePath = runtime.getWorkspace().getDirectories().getWorkspace();
-    PathFragment workspacePathFragment = workspacePath == null ? null : workspacePath.asFragment();
     EventHandler eventHandler;
     if (eventOptions.experimentalUi) {
-      // The experimental event handler is not to be rate limited, so don't wrap it in a
-      // RateLimitingEventHandler.
-      return new ExperimentalEventHandler(
-          outErr, eventOptions, runtime.getClock(), workspacePathFragment);
+      // The experimental event handler is not to be rate limited.
+      return new ExperimentalEventHandler(outErr, eventOptions, runtime.getClock());
     } else if ((eventOptions.useColor() || eventOptions.useCursorControl())) {
-      eventHandler = new FancyTerminalEventHandler(outErr, eventOptions, workspacePathFragment);
+      eventHandler = new FancyTerminalEventHandler(outErr, eventOptions);
     } else {
-      eventHandler = new BlazeCommandEventHandler(outErr, eventOptions, workspacePathFragment);
+      eventHandler = new BlazeCommandEventHandler(outErr, eventOptions);
     }
 
     return RateLimitingEventHandler.create(eventHandler, eventOptions.showProgressRateLimit);

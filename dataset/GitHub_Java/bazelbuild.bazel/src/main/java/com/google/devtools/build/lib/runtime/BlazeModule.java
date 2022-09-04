@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionN
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.OptionsProvider;
@@ -83,31 +81,10 @@ public abstract class BlazeModule {
    * and {@link #blazeStartup}).
    *
    * @param startupOptions the server's startup options
-   * @param realExecRootBase absolute path fragment of the actual, underlying execution root
    */
-  public ModuleFileSystem getFileSystem(
-      OptionsParsingResult startupOptions, PathFragment realExecRootBase)
+  public FileSystem getFileSystem(OptionsParsingResult startupOptions)
       throws AbruptExitException, DefaultHashFunctionNotSetException {
     return null;
-  }
-
-  /** Tuple returned by {@link #getFileSystem}. */
-  @AutoValue
-  public abstract static class ModuleFileSystem {
-    public abstract FileSystem fileSystem();
-
-    /** Non-null if this filesystem virtualizes the execroot folder. */
-    @Nullable
-    public abstract Path virtualExecRootBase();
-
-    public static ModuleFileSystem create(
-        FileSystem fileSystem, @Nullable Path virtualExecRootBase) {
-      return new AutoValue_BlazeModule_ModuleFileSystem(fileSystem, virtualExecRootBase);
-    }
-
-    public static ModuleFileSystem create(FileSystem fileSystem) {
-      return create(fileSystem, null);
-    }
   }
 
   /**
@@ -293,16 +270,6 @@ public abstract class BlazeModule {
    * rarely need to implement this.
    */
   public void blazeShutdownOnCrash() {}
-
-  /**
-   * Returns a {@link QueryRuntimeHelper.Factory} that will be used by the query, cquery, and aquery
-   * commands.
-   *
-   * <p>It is an error if multiple modules return non-null values.
-   */
-  public QueryRuntimeHelper.Factory getQueryRuntimeHelperFactory() {
-    return null;
-  }
 
   /**
    * Returns a helper that the {@link PackageFactory} will use during package loading. If the module
