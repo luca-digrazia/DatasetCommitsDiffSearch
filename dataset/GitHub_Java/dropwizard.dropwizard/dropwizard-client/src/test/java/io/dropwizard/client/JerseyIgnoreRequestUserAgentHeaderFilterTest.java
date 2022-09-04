@@ -44,7 +44,7 @@ public class JerseyIgnoreRequestUserAgentHeaderFilterTest {
         clientConfiguration.setConnectionTimeout(Duration.milliseconds(DEFAULT_CONNECTION_TIMEOUT));
         clientConfiguration.setTimeout(Duration.milliseconds(DEFAULT_TIMEOUT));
         clientBuilder = new JerseyClientBuilder(new MetricRegistry())
-                .using(Executors.newCachedThreadPool(), Jackson.newObjectMapper());
+                .using(Executors.newSingleThreadExecutor(), Jackson.newObjectMapper());
     }
     
     @Test
