@@ -190,6 +190,15 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
     AAPT2,
     AUTO;
 
+    public static List<String> getAttributeValues() {
+      return ImmutableList.of(
+          AAPT.name().toLowerCase(), AAPT2.name().toLowerCase(), getRuleAttributeDefault());
+    }
+
+    public static String getRuleAttributeDefault() {
+      return AUTO.name().toLowerCase();
+    }
+
     public static AndroidAaptVersion fromString(String value) {
       for (AndroidAaptVersion version : AndroidAaptVersion.values()) {
         if (version.name().equalsIgnoreCase(value)) {
@@ -928,7 +937,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
           OptionMetadataTag.INCOMPATIBLE_CHANGE,
           OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
         },
-        defaultValue = "true",
+        defaultValue = "false",
         help =
             "End support for aapt in Android rules. "
                 + "To resolve issues when migrating your app to build with aapt2, see "
