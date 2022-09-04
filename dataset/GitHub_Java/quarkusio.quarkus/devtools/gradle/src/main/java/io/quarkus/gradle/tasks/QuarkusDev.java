@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +45,6 @@ import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
-import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.deployment.dev.DevModeContext;
@@ -219,8 +217,7 @@ public class QuarkusDev extends QuarkusTask {
                 .debug(System.getProperty("debug"))
                 .debugHost(System.getProperty("debugHost", "localhost"))
                 .suspend(System.getProperty("suspend"))
-                .jvmArgs("-Dquarkus.test.basic-console=true")
-                .jvmArgs("-Dio.quarkus.launched-from-ide=true");
+                .jvmArgs("-Dquarkus.test.basic-console=true"); //TODO: figure out how to fix the console
 
         if (getJvmArgs() != null) {
             builder.jvmArgs(getJvmArgs());
@@ -363,19 +360,17 @@ public class QuarkusDev extends QuarkusTask {
         if (mainSourceSet == null) {
             return;
         }
-        Set<Path> sourcePaths = new LinkedHashSet<>();
-        Set<Path> sourceParentPaths = new LinkedHashSet<>();
+        Set<String> sourcePaths = new HashSet<>();
+        Set<String> sourceParentPaths = new HashSet<>();
 
         for (File sourceDir : mainSourceSet.getAllJava().getSrcDirs()) {
             if (sourceDir.exists()) {
-                sourcePaths.add(sourceDir.toPath().toAbsolutePath());
-                sourceParentPaths.add(sourceDir.toPath().getParent().toAbsolutePath());
+                sourcePaths.add(sourceDir.getAbsolutePath());
+                sourceParentPaths.add(sourceDir.toPath().getParent().toAbsolutePath().toString());
             }
         }
-        final Set<Path> resourcesSrcDirs = new LinkedHashSet<>();
-        for (File resourcesSrcDir : mainSourceSet.getResources().getSourceDirectories().getFiles()) {
-            resourcesSrcDirs.add(resourcesSrcDir.toPath().toAbsolutePath());
-        }
+        //TODO: multiple resource directories
+        final File resourcesSrcDir = mainSourceSet.getResources().getSourceDirectories().getSingleFile();
         // resourcesSrcDir may exist but if it's empty the resources output dir won't be created
         final File resourcesOutputDir = mainSourceSet.getOutput().getResourcesDir();
 
@@ -408,30 +403,28 @@ public class QuarkusDev extends QuarkusTask {
         DevModeContext.ModuleInfo.Builder moduleBuilder = new DevModeContext.ModuleInfo.Builder().setAppArtifactKey(key)
                 .setName(project.getName())
                 .setProjectDirectory(project.getProjectDir().getAbsolutePath())
-                .setSourcePaths(PathsCollection.from(sourcePaths))
+                .setSourcePaths(sourcePaths)
                 .setClassesPath(classesDir)
-                .setResourcePaths(PathsCollection.from(resourcesSrcDirs))
+                .setResourcePath(resourcesSrcDir.getAbsolutePath())
                 .setResourcesOutputPath(resourcesOutputPath)
-                .setSourceParents(PathsCollection.from(sourceParentPaths))
+                .setSourceParents(sourceParentPaths)
                 .setPreBuildOutputDir(project.getBuildDir().toPath().resolve("generated-sources").toAbsolutePath().toString())
                 .setTargetDir(project.getBuildDir().toString());
 
         SourceSet testSourceSet = sourceSets.findByName(SourceSet.TEST_SOURCE_SET_NAME);
         if (testSourceSet != null) {
 
-            Set<Path> testSourcePaths = new LinkedHashSet<>();
-            Set<Path> testSourceParentPaths = new LinkedHashSet<>();
+            Set<String> testSourcePaths = new HashSet<>();
+            Set<String> testSourceParentPaths = new HashSet<>();
 
             for (File sourceDir : testSourceSet.getAllJava().getSrcDirs()) {
                 if (sourceDir.exists()) {
-                    testSourcePaths.add(sourceDir.toPath().toAbsolutePath());
-                    testSourceParentPaths.add(sourceDir.toPath().getParent().toAbsolutePath());
+                    testSourcePaths.add(sourceDir.getAbsolutePath());
+                    testSourceParentPaths.add(sourceDir.toPath().getParent().toAbsolutePath().toString());
                 }
             }
-            final Set<Path> testResourcesSrcDirs = new LinkedHashSet<>();
-            for (File testResourcesSrcDir : testSourceSet.getResources().getSourceDirectories().getFiles()) {
-                testResourcesSrcDirs.add(testResourcesSrcDir.toPath().toAbsolutePath());
-            }
+            //TODO: multiple resource directories
+            final File testResourcesSrcDir = testSourceSet.getResources().getSourceDirectories().getSingleFile();
             // resourcesSrcDir may exist but if it's empty the resources output dir won't be created
             final File testResourcesOutputDir = testSourceSet.getOutput().getResourcesDir();
 
@@ -451,9 +444,9 @@ public class QuarkusDev extends QuarkusTask {
                             // currently resources dir should exist
                             testResourcesOutputPath = testClassesDir;
                         }
-                        moduleBuilder.setTestSourcePaths(PathsCollection.from(testSourcePaths))
+                        moduleBuilder.setTestSourcePaths(testSourcePaths)
                                 .setTestClassesPath(testClassesDir)
-                                .setTestResourcePaths(PathsCollection.from(testResourcesSrcDirs))
+                                .setTestResourcePath(testResourcesSrcDir.getAbsolutePath())
                                 .setTestResourcesOutputPath(testResourcesOutputPath);
                     }
                 }
