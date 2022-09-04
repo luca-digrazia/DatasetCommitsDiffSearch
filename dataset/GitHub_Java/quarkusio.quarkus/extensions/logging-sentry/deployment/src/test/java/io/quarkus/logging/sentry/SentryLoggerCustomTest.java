@@ -9,26 +9,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
-import io.sentry.jul.SentryHandler;
 import io.sentry.jvmti.FrameCache;
 
 public class SentryLoggerCustomTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setAllowTestClassOutsideDeployment(true)
             .withConfigurationResource("application-sentry-logger-custom.properties");
 
     @Test
     public void sentryLoggerCustomTest() {
-        final SentryHandler sentryHandler = getSentryHandler();
-        assertThat(sentryHandler).isNotNull();
-        assertThat(sentryHandler.getLevel()).isEqualTo(org.jboss.logmanager.Level.TRACE);
+        assertThat(getSentryHandler().getLevel()).isEqualTo(org.jboss.logmanager.Level.TRACE);
         assertThat(FrameCache.shouldCacheThrowable(new IllegalStateException("Test frame"), 1)).isTrue();
     }
 
     @AfterAll
-    public static void reset() {
+    static void reset() {
         resetFrameCache();
     }
 }

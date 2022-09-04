@@ -23,14 +23,11 @@ public class SentryLoggerTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setAllowTestClassOutsideDeployment(true)
             .withConfigurationResource("application-sentry-logger-default.properties");
 
     @Test
     public void sentryLoggerDefaultTest() {
-        final SentryHandler sentryHandler = getSentryHandler();
-        assertThat(sentryHandler).isNotNull();
-        assertThat(sentryHandler.getLevel()).isEqualTo(org.jboss.logmanager.Level.WARN);
+        assertThat(getSentryHandler().getLevel()).isEqualTo(org.jboss.logmanager.Level.WARN);
         assertThat(FrameCache.shouldCacheThrowable(new IllegalStateException("Test frame"), 1)).isFalse();
     }
 
@@ -45,11 +42,13 @@ public class SentryLoggerTest {
         Handler handler = Arrays.stream(delayedHandler.getHandlers())
                 .filter(h -> (h instanceof SentryHandler))
                 .findFirst().orElse(null);
-        return (SentryHandler) handler;
+        SentryHandler sentryHandler = (SentryHandler) handler;
+        assertThat(sentryHandler).isNotNull();
+        return sentryHandler;
     }
 
     @AfterAll
-    public static void reset() {
+    static void reset() {
         resetFrameCache();
     }
 }
