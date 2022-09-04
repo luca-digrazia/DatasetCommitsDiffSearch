@@ -1,5 +1,9 @@
 package org.jboss.resteasy.reactive.server.core;
 
+import io.netty.channel.EventLoop;
+import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.net.impl.ConnectionBase;
+import io.vertx.ext.web.RoutingContext;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import javax.ws.rs.core.Cookie;
 import javax.ws.rs.core.GenericEntity;
@@ -25,33 +28,32 @@ import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ReaderInterceptor;
 import javax.ws.rs.ext.WriterInterceptor;
 import org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext;
+import org.jboss.resteasy.reactive.common.core.ThreadSetupAction;
 import org.jboss.resteasy.reactive.common.util.EmptyInputStream;
 import org.jboss.resteasy.reactive.common.util.Encode;
 import org.jboss.resteasy.reactive.common.util.PathSegmentImpl;
 import org.jboss.resteasy.reactive.server.core.serialization.EntityWriter;
+import org.jboss.resteasy.reactive.server.handlers.ServerRestHandler;
 import org.jboss.resteasy.reactive.server.injection.QuarkusRestInjectionContext;
-import org.jboss.resteasy.reactive.server.jaxrs.AsyncResponseImpl;
-import org.jboss.resteasy.reactive.server.jaxrs.ContainerRequestContextImpl;
-import org.jboss.resteasy.reactive.server.jaxrs.ContainerResponseContextImpl;
-import org.jboss.resteasy.reactive.server.jaxrs.HttpHeadersImpl;
-import org.jboss.resteasy.reactive.server.jaxrs.ProvidersImpl;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestAsyncResponse;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestContainerRequestContextImpl;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestContainerResponseContextImpl;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestHttpHeaders;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestProviders;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestRequest;
 import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestSseEventSink;
-import org.jboss.resteasy.reactive.server.jaxrs.RequestImpl;
-import org.jboss.resteasy.reactive.server.jaxrs.UriInfoImpl;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestUriInfo;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.mapping.URITemplate;
-import org.jboss.resteasy.reactive.server.spi.ServerHttpRequest;
-import org.jboss.resteasy.reactive.server.spi.ServerHttpResponse;
-import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
-import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
-public abstract class ResteasyReactiveRequestContext
+public class ResteasyReactiveRequestContext
         extends AbstractResteasyReactiveContext<ResteasyReactiveRequestContext, ServerRestHandler>
         implements Closeable, QuarkusRestInjectionContext {
 
     public static final Object[] EMPTY_ARRAY = new Object[0];
-    protected final Deployment deployment;
-    protected final ProvidersImpl providers;
+    protected final QuarkusRestDeployment deployment;
+    protected final QuarkusRestProviders providers;
+    protected final RoutingContext context;
     /**
      * The parameters array, populated by handlers
      */
@@ -88,12 +90,13 @@ public abstract class ResteasyReactiveRequestContext
      */
     private LazyResponse response;
 
-    private HttpHeadersImpl httpHeaders;
+    private QuarkusRestHttpHeaders httpHeaders;
     private Object requestEntity;
     private Request request;
     private EntityWriter entityWriter;
-    private ContainerRequestContextImpl containerRequestContext;
-    private ContainerResponseContextImpl containerResponseContext;
+    private QuarkusRestContainerRequestContextImpl containerRequestContext;
+    private QuarkusRestContainerResponseContextImpl containerResponseContext;
+    private HttpServerResponse httpServerResponse; // store it as obtaining it from Vert.x isn't dirt cheap and it's done in a lot of places
     private String method; // used to hold the explicitly set method performed by a ContainerRequestFilter
     private String originalMethod; // store the original method as obtaining it from Vert.x isn't dirt cheap
     // this is only set if we override the requestUri
@@ -123,7 +126,7 @@ public abstract class ResteasyReactiveRequestContext
      */
     private List<UriMatch> matchedURIs;
 
-    private AsyncResponseImpl asyncResponse;
+    private QuarkusRestAsyncResponse asyncResponse;
     private QuarkusRestSseEventSink sseEventSink;
     private List<PathSegment> pathSegments;
     private ReaderInterceptor[] readerInterceptors;
@@ -133,23 +136,21 @@ public abstract class ResteasyReactiveRequestContext
     private OutputStream outputStream;
     private OutputStream underlyingOutputStream;
 
-    public ResteasyReactiveRequestContext(Deployment deployment, ProvidersImpl providers,
+    public ResteasyReactiveRequestContext(QuarkusRestDeployment deployment, QuarkusRestProviders providers,
+            RoutingContext context,
             ThreadSetupAction requestContext, ServerRestHandler[] handlerChain, ServerRestHandler[] abortHandlerChain) {
         super(handlerChain, abortHandlerChain, requestContext);
         this.deployment = deployment;
         this.providers = providers;
+        this.context = context;
         this.parameters = EMPTY_ARRAY;
     }
 
-    public abstract ServerHttpRequest serverRequest();
-
-    public abstract ServerHttpResponse serverResponse();
-
-    public Deployment getDeployment() {
+    public QuarkusRestDeployment getDeployment() {
         return deployment;
     }
 
-    public ProvidersImpl getProviders() {
+    public QuarkusRestProviders getProviders() {
         return providers;
     }
 
@@ -175,16 +176,27 @@ public abstract class ResteasyReactiveRequestContext
 
     public UriInfo getUriInfo() {
         if (uriInfo == null) {
-            uriInfo = new UriInfoImpl(this);
+            uriInfo = new QuarkusRestUriInfo(this);
         }
         return uriInfo;
     }
 
-    public HttpHeadersImpl getHttpHeaders() {
+    public QuarkusRestHttpHeaders getHttpHeaders() {
         if (httpHeaders == null) {
-            httpHeaders = new HttpHeadersImpl(serverRequest().getAllRequestHeaders());
+            httpHeaders = new QuarkusRestHttpHeaders(context.request().headers());
         }
         return httpHeaders;
+    }
+
+    public RoutingContext getContext() {
+        return context;
+    }
+
+    public HttpServerResponse getHttpServerResponse() {
+        if (httpServerResponse == null) {
+            httpServerResponse = context.response();
+        }
+        return httpServerResponse;
     }
 
     public Object[] getParameters() {
@@ -301,7 +313,7 @@ public abstract class ResteasyReactiveRequestContext
 
     private void sendInternalError(Throwable throwable) {
         log.error("Request failed", throwable);
-        serverResponse().setStatusCode(500).end();
+        context.response().setStatusCode(500).end();
         close();
     }
 
@@ -335,21 +347,21 @@ public abstract class ResteasyReactiveRequestContext
 
     public Request getRequest() {
         if (request == null) {
-            request = new RequestImpl(this);
+            request = new QuarkusRestRequest(this);
         }
         return request;
     }
 
-    public ContainerRequestContextImpl getContainerRequestContext() {
+    public QuarkusRestContainerRequestContextImpl getContainerRequestContext() {
         if (containerRequestContext == null) {
-            containerRequestContext = new ContainerRequestContextImpl(this);
+            containerRequestContext = new QuarkusRestContainerRequestContextImpl(this);
         }
         return containerRequestContext;
     }
 
-    public ContainerResponseContextImpl getContainerResponseContext() {
+    public QuarkusRestContainerResponseContextImpl getContainerResponseContext() {
         if (containerResponseContext == null) {
-            containerResponseContext = new ContainerResponseContextImpl(this);
+            containerResponseContext = new QuarkusRestContainerResponseContextImpl(this);
         }
         return containerResponseContext;
     }
@@ -359,7 +371,7 @@ public abstract class ResteasyReactiveRequestContext
             if (originalMethod != null) {
                 return originalMethod;
             }
-            return originalMethod = serverRequest().getRequestMethod();
+            return originalMethod = context.request().rawMethod();
         }
         return method;
     }
@@ -398,7 +410,7 @@ public abstract class ResteasyReactiveRequestContext
      */
     public String getPath() {
         if (path == null) {
-            return serverRequest().getRequestNormalisedPath();
+            return context.normalisedPath();
         }
         return path;
     }
@@ -406,7 +418,7 @@ public abstract class ResteasyReactiveRequestContext
     public String getAbsoluteURI() {
         // if we never changed the path we can use the vert.x URI
         if (path == null)
-            return serverRequest().getRequestAbsoluteUri();
+            return getContext().request().absoluteURI();
         // Note: we could store our cache as normalised, but I'm not sure if the vertx one is normalised
         if (absoluteUri == null) {
             try {
@@ -420,13 +432,13 @@ public abstract class ResteasyReactiveRequestContext
 
     public String getScheme() {
         if (scheme == null)
-            return serverRequest().getRequestScheme();
+            return getContext().request().scheme();
         return scheme;
     }
 
     public String getAuthority() {
         if (authority == null)
-            return serverRequest().getRequestHost();
+            return getContext().request().host();
         return authority;
     }
 
@@ -546,11 +558,11 @@ public abstract class ResteasyReactiveRequestContext
         return this;
     }
 
-    public AsyncResponseImpl getAsyncResponse() {
+    public QuarkusRestAsyncResponse getAsyncResponse() {
         return asyncResponse;
     }
 
-    public ResteasyReactiveRequestContext setAsyncResponse(AsyncResponseImpl asyncResponse) {
+    public ResteasyReactiveRequestContext setAsyncResponse(QuarkusRestAsyncResponse asyncResponse) {
         if (this.asyncResponse != null) {
             throw new RuntimeException("Async can only be started once");
         }
@@ -578,20 +590,21 @@ public abstract class ResteasyReactiveRequestContext
 
     protected void handleUnrecoverableError(Throwable throwable) {
         ResteasyReactiveRequestContext.log.error("Request failed", throwable);
-        if (serverResponse().headWritten()) {
-            serverRequest().closeConnection();
+        if (context.response().headWritten()) {
+            context.request().connection().close();
         } else {
-            serverResponse().setStatusCode(500).end();
+            context.response().setStatusCode(500).end();
         }
         close();
     }
 
     protected void handleRequestScopeActivation() {
-        CurrentRequestManager.set(this);
+        CurrentRequest.set(this);
     }
 
     @Override
     protected void requestScopeDeactivated() {
+        CurrentRequest.set(null);
     }
 
     @Override
@@ -638,7 +651,7 @@ public abstract class ResteasyReactiveRequestContext
             matchedURIs.add(new UriMatch(path.substring(1, pos), null, null));
         }
         // FIXME: this may be better as context.normalisedPath() or getPath()
-        String path = serverRequest().getRequestPath();
+        String path = context.request().path();
         matchedURIs.add(0, new UriMatch(path.substring(1, path.length() - (remaining == null ? 0 : remaining.length())),
                 target, endpointInstance));
     }
@@ -719,22 +732,22 @@ public abstract class ResteasyReactiveRequestContext
     @Override
     public Object getHeader(String name, boolean single) {
         if (single)
-            return serverRequest().getRequestHeader(name);
+            return context.request().getHeader(name);
         // empty collections must not be turned to null
-        return serverRequest().getAllRequestHeaders(name);
+        return getContext().request().headers().getAll(name);
     }
 
     @Override
     public Object getQueryParameter(String name, boolean single, boolean encoded) {
         if (single) {
-            String val = serverRequest().getQueryParam(name);
+            String val = context.queryParams().get(name);
             if (encoded && val != null) {
                 val = Encode.encodeQueryParam(val);
             }
             return val;
         }
         // empty collections must not be turned to null
-        List<String> strings = serverRequest().getAllQueryParams(name);
+        List<String> strings = context.queryParam(name);
         if (encoded) {
             List<String> newStrings = new ArrayList<>();
             for (String i : strings) {
@@ -786,13 +799,13 @@ public abstract class ResteasyReactiveRequestContext
     @Override
     public Object getFormParameter(String name, boolean single, boolean encoded) {
         if (single) {
-            String val = serverRequest().getFormAttribute(name);
+            String val = getContext().request().formAttributes().get(name);
             if (encoded && val != null) {
                 val = Encode.encodeQueryParam(val);
             }
             return val;
         }
-        List<String> strings = serverRequest().getAllFormAttributes(name);
+        List<String> strings = getContext().request().formAttributes().getAll(name);
         if (encoded) {
             List<String> newStrings = new ArrayList<>();
             for (String i : strings) {
@@ -816,10 +829,6 @@ public abstract class ResteasyReactiveRequestContext
             return Encode.encodeQueryParam(value);
         }
         return value;
-    }
-
-    public <T> T unwrap(Class<T> type) {
-        return serverRequest().unwrap(type);
     }
 
     public SecurityContext getSecurityContext() {
@@ -848,13 +857,13 @@ public abstract class ResteasyReactiveRequestContext
 
     public OutputStream getOrCreateOutputStream() {
         if (outputStream == null) {
-            return outputStream = underlyingOutputStream = serverResponse().createResponseOutputStream();
+            return outputStream = underlyingOutputStream = new ResteasyReactiveOutputStream(this);
         }
         return outputStream;
     }
 
     @Override
-    protected abstract Executor getEventLoop();
-
-    public abstract Runnable registerTimer(long millis, Runnable task);
+    protected EventLoop getEventLoop() {
+        return ((ConnectionBase) context.request().connection()).channel().eventLoop();
+    }
 }
