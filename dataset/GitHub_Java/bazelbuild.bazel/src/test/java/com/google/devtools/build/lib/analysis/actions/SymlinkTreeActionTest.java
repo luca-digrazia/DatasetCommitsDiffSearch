@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinationFactory;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -34,7 +33,7 @@ import org.junit.runners.JUnit4;
 public class SymlinkTreeActionTest extends BuildViewTestCase {
   private enum KeyAttributes {
     FILESET,
-    RUNFILES_FLAG,
+    RUNFILES,
     FIXED_ENVIRONMENT,
     VARIABLE_ENVIRONMENT
   }
@@ -43,7 +42,6 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
   public void testComputeKey() throws Exception {
     final Artifact inputManifest = getBinArtifactWithNoOwner("dir/manifest.in");
     final Artifact outputManifest = getBinArtifactWithNoOwner("dir/MANIFEST");
-    final Artifact runfile = getBinArtifactWithNoOwner("dir/runfile");
 
     ActionTester.runTest(
         KeyAttributes.class,
@@ -51,29 +49,17 @@ public class SymlinkTreeActionTest extends BuildViewTestCase {
           @Override
           public Action generate(ImmutableSet<KeyAttributes> attributesToFlip) {
             boolean filesetTree = attributesToFlip.contains(KeyAttributes.FILESET);
-            boolean enableRunfiles = attributesToFlip.contains(KeyAttributes.RUNFILES_FLAG);
+            boolean enableRunfiles = attributesToFlip.contains(KeyAttributes.RUNFILES);
 
-            ActionEnvironment env =
-                ActionEnvironment.create(
-                    attributesToFlip.contains(KeyAttributes.FIXED_ENVIRONMENT)
-                        ? ImmutableMap.of("a", "b")
-                        : ImmutableMap.of(),
-                    attributesToFlip.contains(KeyAttributes.VARIABLE_ENVIRONMENT)
-                        ? ImmutableSet.of("c")
-                        : ImmutableSet.of());
-
-            // SymlinkTreeAction currently requires that (runfiles == null) == filsetTree, which the
-            // ActionTester doesn't support. We therefore can't check that two actions have
-            // different fingerprints when they have different runfiles objects.
-            Runfiles runfiles =
-                attributesToFlip.contains(KeyAttributes.FILESET)
-                    ? null
-                    : new Runfiles.Builder("TESTING", false).addArtifact(runfile).build();
+            ActionEnvironment env = ActionEnvironment.create(
+                attributesToFlip.contains(KeyAttributes.FIXED_ENVIRONMENT)
+                    ? ImmutableMap.of("a", "b") : ImmutableMap.of(),
+                attributesToFlip.contains(KeyAttributes.VARIABLE_ENVIRONMENT)
+                    ? ImmutableSet.of("c") : ImmutableSet.of());
 
             return new SymlinkTreeAction(
                 ActionsTestUtil.NULL_ACTION_OWNER,
                 inputManifest,
-                runfiles,
                 outputManifest,
                 filesetTree,
                 env,
