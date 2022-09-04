@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 import com.google.common.collect.Lists;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
@@ -33,26 +32,23 @@ import lib.security.RethrowingFirstSuccessfulStrategy;
 import lib.security.ServerRestInterfaceRealm;
 import models.LocalAdminUser;
 import models.ModelFactoryModule;
+import models.Node;
 import models.UserService;
+import models.api.responses.NodeSummaryResponse;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationListener;
 import org.apache.shiro.authc.Authenticator;
 import org.apache.shiro.authc.pam.ModularRealmAuthenticator;
 import org.apache.shiro.mgt.DefaultSecurityManager;
-import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
-import org.apache.shiro.mgt.DefaultSubjectDAO;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.realm.SimpleAccountRealm;
-import org.graylog2.logback.appender.AccessLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.Application;
 import play.Configuration;
 import play.GlobalSettings;
-import play.api.mvc.EssentialFilter;
 
 import java.io.File;
-import java.net.URI;
 import java.util.List;
 
 /**
@@ -85,17 +81,19 @@ public class Global extends GlobalSettings {
             log.error("graylog2-server.uris is empty!");
             throw new IllegalStateException("graylog2-server.uris is empty");
         }
-        final URI[] initialNodes = new URI[uris.length];
+        final Node[] initialNodes = new Node[uris.length];
         int i = 0;
         for (String uri : uris) {
-            initialNodes[i++] = URI.create(uri);
+            final NodeSummaryResponse r = new NodeSummaryResponse();
+            r.transportAddress =  uri;
+            initialNodes[i++] = new Node(r);  // TODO DI this is wrong, can we use the factory already here?
         }
 
         List<Module> modules = Lists.newArrayList();
         modules.add(new AbstractModule() {
             @Override
             protected void configure() {
-                bind(URI[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes);
+                bind(Node[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes);
             }
         });
         modules.add(new ModelFactoryModule());
@@ -118,13 +116,6 @@ public class Global extends GlobalSettings {
                 new DefaultSecurityManager(
                         Lists.newArrayList(serverRestInterfaceRealm)
                 );
-        // disable storing sessions (TODO we might want to write a session store bridge to play's session cookie)
-        final DefaultSessionStorageEvaluator sessionStorageEvaluator = new DefaultSessionStorageEvaluator();
-        sessionStorageEvaluator.setSessionStorageEnabled(false);
-        final DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();
-        subjectDAO.setSessionStorageEvaluator(sessionStorageEvaluator);
-        securityManager.setSubjectDAO(subjectDAO);
-
         final Authenticator authenticator = securityManager.getAuthenticator();
         if (authenticator instanceof ModularRealmAuthenticator) {
             ModularRealmAuthenticator a = (ModularRealmAuthenticator) authenticator;
@@ -135,18 +126,6 @@ public class Global extends GlobalSettings {
         }
         SecurityUtils.setSecurityManager(securityManager);
 
-    }
-
-    @Override
-    public void onStop(Application app) {
-        injector.getInstance(ApiClient.class).stop();
-        injector.getInstance(ServerNodesRefreshService.class).stop();
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T extends EssentialFilter> Class<T>[] filters() {
-        return new Class[] {AccessLog.class};
     }
 
     @Override
