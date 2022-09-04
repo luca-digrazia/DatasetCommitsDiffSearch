@@ -65,6 +65,8 @@ final class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker
     } else {
       worker = new Worker(key, workerId, key.getExecRoot(), logFile);
     }
+    worker.prepareExecution(key);
+    worker.createProcess();
     if (workerOptions.workerVerbose) {
       reporter.handle(
           Event.info(
@@ -124,8 +126,8 @@ final class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker
       files.addAll(key.getWorkerFilesWithHashes().keySet());
       files.addAll(worker.getWorkerFilesWithHashes().keySet());
       for (PathFragment file : files) {
-        HashCode oldHash = worker.getWorkerFilesWithHashes().get(file);
-        HashCode newHash = key.getWorkerFilesWithHashes().get(file);
+        HashCode oldHash = key.getWorkerFilesWithHashes().get(file);
+        HashCode newHash = worker.getWorkerFilesWithHashes().get(file);
         if (!oldHash.equals(newHash)) {
           msg.append("\n")
               .append(file.getPathString())

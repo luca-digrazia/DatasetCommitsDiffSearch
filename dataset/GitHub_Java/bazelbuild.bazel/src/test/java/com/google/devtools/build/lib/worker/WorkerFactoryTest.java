@@ -17,9 +17,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -31,7 +31,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class WorkerFactoryTest {
 
-  final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.MD5);
+  final FileSystem fs = new InMemoryFileSystem();
 
   /**
    * Regression test for b/64689608: The execroot of the sandboxed worker process must end with the
@@ -49,6 +49,8 @@ public class WorkerFactoryTest {
             "dummy",
             HashCode.fromInt(0),
             ImmutableSortedMap.of(),
+            ImmutableMap.of(),
+            ImmutableSet.of(),
             true);
     Path sandboxedWorkerPath = workerFactory.getSandboxedWorkerPath(workerKey, 1);
 

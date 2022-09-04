@@ -31,10 +31,10 @@ import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.exec.SpawnResult;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -47,7 +47,6 @@ import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -154,7 +153,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
     long startTime = System.currentTimeMillis();
     WorkResponse response = execInWorker(key, workRequest, policy);
-    Duration wallTime = Duration.ofMillis(System.currentTimeMillis() - startTime);
+    long wallTimeMillis = System.currentTimeMillis() - startTime;
 
     FileOutErr outErr = policy.getFileOutErr();
     response.getOutputBytes().writeTo(outErr.getErrorStream());
@@ -162,7 +161,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
     return new SpawnResult.Builder()
         .setExitCode(response.getExitCode())
         .setStatus(SpawnResult.Status.SUCCESS)
-        .setWallTime(wallTime)
+        .setWallTimeMillis(wallTimeMillis)
         .build();
   }
 
