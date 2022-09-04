@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,18 @@
 
 package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
-
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Class for creating paths that are specific to the structure of the Android NDK, but which are
- * common to all crosstool toolchains. 
+ * common to all crosstool toolchains.
  */
 public class NdkPaths {
 
@@ -37,16 +37,20 @@ public class NdkPaths {
     return path.split("/", 3)[2];
   }
 
-  private final String repositoryName, hostPlatform;
+  private final String repositoryName;
+  private final String hostPlatform;
   private final ApiLevel apiLevel;
+  private final Integer majorRevision;
 
-  NdkPaths(EventHandler eventHandler, String repositoryName, String hostPlatform, String apiLevel) {
+  public NdkPaths(
+      String repositoryName, String hostPlatform, ApiLevel apiLevel, Integer majorRevision) {
     this.repositoryName = repositoryName;
     this.hostPlatform = hostPlatform;
-    this.apiLevel = new ApiLevel(eventHandler, repositoryName, apiLevel);
+    this.apiLevel = apiLevel;
+    this.majorRevision = majorRevision;
   }
 
-  ImmutableList<ToolPath> createToolpaths(String toolchainName, String targetPlatform,
+  public ImmutableList<ToolPath> createToolpaths(String toolchainName, String targetPlatform,
       CppConfiguration.Tool... excludedTools) {
 
     ImmutableList.Builder<ToolPath> toolPaths = ImmutableList.builder();
@@ -54,7 +58,7 @@ public class NdkPaths {
     for (Tool tool : CppConfiguration.Tool.values()) {
 
       // Some toolchains don't have particular tools.
-      if (!Arrays.asList(excludedTools).contains(tool)) {      
+      if (!Arrays.asList(excludedTools).contains(tool)) {
 
         String toolPath = createToolPath(toolchainName, targetPlatform + "-" + tool.getNamePart());
 
@@ -68,7 +72,7 @@ public class NdkPaths {
     return toolPaths.build();
   }
 
-  ImmutableList<ToolPath> createClangToolpaths(String toolchainName, String targetPlatform,
+  public ImmutableList<ToolPath> createClangToolpaths(String toolchainName, String targetPlatform,
       String llvmVersion, CppConfiguration.Tool... excludedTools) {
 
     // Add GCC to the list of excluded tools. It will be replaced by clang below.
@@ -84,15 +88,14 @@ public class NdkPaths {
 
         .add(ToolPath.newBuilder()
             .setName("gcc")
-            .setPath(createToolPath("llvm-" + llvmVersion, "clang"))
+            .setPath(createToolPath(llvmVersion == null ? "llvm" : "llvm-" + llvmVersion, "clang"))
             .build())
         .build();
   }
 
   private String createToolPath(String toolchainName, String toolName) {
 
-    String toolpathTemplate =
-        "external/%repositoryName%/ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%"
+    String toolpathTemplate = "ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%"
         + "/bin/%toolName%";
 
     return toolpathTemplate
@@ -103,10 +106,10 @@ public class NdkPaths {
   }
 
   public static String getToolchainDirectoryFromToolPath(String toolPath) {
-    return toolPath.split("/")[4];
+    return toolPath.split("/")[2];
   }
 
-  String createGccToolchainPath(String toolchainName) {
+  public String createGccToolchainPath(String toolchainName) {
 
     String gccToolchainPathTemplate =
         "external/%repositoryName%/ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%";
@@ -117,36 +120,57 @@ public class NdkPaths {
         .replace("%hostPlatform%", hostPlatform);
   }
 
-  ImmutableList<String> createToolchainIncludePaths(
-      String toolchainName, String targetPlatform, String gccVersion) {
-
-    ImmutableList.Builder<String> includePaths = ImmutableList.builder();
-
-    includePaths.add(createToolchainIncludePath(
-        toolchainName, targetPlatform, gccVersion, "include"));
-    includePaths.add(createToolchainIncludePath(
-        toolchainName, targetPlatform, gccVersion, "include-fixed"));
-    
-    return includePaths.build();
-  }
-
-  private String createToolchainIncludePath(
-      String toolchainName, String targetPlatform, String gccVersion, String includeFolderName) {
-
-    String toolchainIncludePathTemplate =
-        "external/%repositoryName%/ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%"
-        + "/lib/gcc/%targetPlatform%/%gccVersion%/%includeFolderName%";
-
-    return toolchainIncludePathTemplate
+  /**
+   * Gets the clang NDK builtin includes directories that exist in the NDK. These directories are
+   * always searched for header files by clang and should be added to the CROSSTOOL in the
+   * cxx_builtin_include_directories list.
+   *
+   * <p>You can see the list of directories and the order that they are searched in by running
+   * {@code clang -E -x c++ - -v < /dev/null}.
+   */
+  public String createClangToolchainBuiltinIncludeDirectory(String clangVersion) {
+    String clangBuiltinIncludeDirectoryPathTemplate =
+        "external/%repositoryName%/ndk/toolchains/llvm/prebuilt/%hostPlatform%/lib64/clang/"
+            + "%clangVersion%/include";
+    return clangBuiltinIncludeDirectoryPathTemplate
         .replace("%repositoryName%", repositoryName)
-        .replace("%toolchainName%", toolchainName)
         .replace("%hostPlatform%", hostPlatform)
-        .replace("%targetPlatform%", targetPlatform)
-        .replace("%gccVersion%", gccVersion)
-        .replace("%includeFolderName%", includeFolderName);
+        .replace("%clangVersion%", clangVersion);
   }
 
-  String createBuiltinSysroot(String targetCpu) {
+  /**
+   * Gets the gcc NDK builtin includes directories that exist in the NDK. These directories are
+   * always searched for header files by clang and should be added to the CROSSTOOL in the
+   * cxx_builtin_include_directories list.
+   *
+   * <p>You can see the list of directories and the order that they are searched in by running
+   * {@code gcc -E -x c++ - -v < /dev/null}.
+   */
+  public List<String> createGccToolchainBuiltinIncludeDirectories(
+      final String toolchainName, final String targetPlatform, final String gccVersion) {
+    final String toolchainIncludePathTemplate =
+        "external/%repositoryName%/ndk/toolchains/%toolchainName%/prebuilt/%hostPlatform%"
+            + "/lib/gcc/%targetPlatform%/%gccVersion%/%includeFolderName%";
+    return Lists.transform(
+        ImmutableList.of("include", "include-fixed"),
+        includeFolderName ->
+            toolchainIncludePathTemplate
+                .replace("%repositoryName%", repositoryName)
+                .replace("%toolchainName%", toolchainName)
+                .replace("%hostPlatform%", hostPlatform)
+                .replace("%targetPlatform%", targetPlatform)
+                .replace("%gccVersion%", gccVersion)
+                .replace("%includeFolderName%", includeFolderName));
+  }
+
+  /**
+   * NDK 14 and below. Each API level has its own headers. See
+   * https://android.googlesource.com/platform/ndk/+/ndk-r15-release/docs/UnifiedHeaders.md#supporting-unified-headers-in-your-build-system
+   *
+   * @param targetCpu the target CPU architecture
+   * @return the path to the compile time sysroot
+   */
+  public String createBuiltinSysroot(String targetCpu) {
 
     String correctedApiLevel = apiLevel.getCpuCorrectedApiLevel(targetCpu);
 
@@ -159,11 +183,25 @@ public class NdkPaths {
         .replace("%arch%", targetCpu);
   }
 
+  /**
+   * NDK 15 and above. The headers have been unified into ndk/sysroot.
+   *
+   * @return the sysroot location for NDK 15 and above.
+   */
+  public String createBuiltinSysroot() {
+    // This location does not exist prior to NDK 15
+    Preconditions.checkState(majorRevision >= 15);
+
+    return "external/%repositoryName%/ndk/sysroot".replace("%repositoryName%", repositoryName);
+  }
+
+  public String getCorrectedApiLevel(String targetCpu) {
+    return apiLevel.getCpuCorrectedApiLevel(targetCpu);
+  }
+
   ImmutableList<String> createGnuLibstdcIncludePaths(String gccVersion, String targetCpu) {
 
-    if (targetCpu.equals("arm64")) {
-      targetCpu = "arm64-v8a";
-    }
+    String cpuNoThumb = targetCpu.replaceAll("-thumb$", "");
 
     String prefix = "external/%repositoryName%/ndk/sources/cxx-stl/gnu-libstdc++/%gccVersion%/";
     List<String> includePathTemplates = Arrays.asList(
@@ -177,31 +215,74 @@ public class NdkPaths {
           template
             .replace("%repositoryName%", repositoryName)
             .replace("%gccVersion%", gccVersion)
-            .replace("%targetCpu%", targetCpu));
+            .replace("%targetCpu%", cpuNoThumb));
     }
     return includePaths.build();
   }
 
   ImmutableList<String> createStlportIncludePaths() {
 
-    String prefix = "external/%repositoryName%/ndk/sources/cxx-stl/"
-        .replace("%repositoryName%", repositoryName);
+    String prefix =
+        "external/%repositoryName%/ndk/sources/cxx-stl/"
+            .replace("%repositoryName%", repositoryName);
 
-    return ImmutableList.<String>builder()
-        .add(prefix + "stlport/stlport")
-        .add(prefix + "gabi++/include")
-        .build();
+    return ImmutableList.of(prefix + "stlport/stlport", prefix + "gabi++/include");
   }
 
   ImmutableList<String> createLibcxxIncludePaths() {
 
-    String prefix = "external/%repositoryName%/ndk/sources/"
-        .replace("%repositoryName%", repositoryName);
+    String prefix =
+        "external/%repositoryName%/ndk/sources/".replace("%repositoryName%", repositoryName);
 
-    return ImmutableList.<String>builder()
-        .add(prefix + "cxx-stl/llvm-libc++/libcxx/include")
-        .add(prefix + "cxx-stl/llvm-libc++abi/libcxxabi/include")
-        .add(prefix + "android/support/include")
-        .build();
+    ImmutableList.Builder<String> includePaths = ImmutableList.builder();
+    
+    if (majorRevision <= 12) {
+      includePaths.add(prefix + "cxx-stl/llvm-libc++/libcxx/include");
+      includePaths.add(prefix + "cxx-stl/llvm-libc++abi/libcxxabi/include");
+    } else {
+      // libcxx/include was moved one level up from r13 onwards.
+      // See https://github.com/bazelbuild/bazel/issues/3641
+      includePaths.add(prefix + "cxx-stl/llvm-libc++/include");
+      includePaths.add(prefix + "cxx-stl/llvm-libc++abi/include");
+    }
+
+    includePaths.add(prefix + "android/support/include");
+
+    return includePaths.build();
+  }
+
+  /**
+   * @param stl The STL name as it appears in the NDK path
+   * @param gccVersion The GCC version "4.8" or "4.9", applicable only to gnu-libstdc++, or null
+   * @param targetCpu Target CPU
+   * @param fileExtension "a" or "so"
+   * @return A glob pattern for the STL runtime libs in the NDK.
+   */
+  static String createStlRuntimeLibsGlob(
+      String stl, String gccVersion, String targetCpu, String fileExtension) {
+
+    if (gccVersion != null) {
+      stl += "/" + gccVersion;
+    }
+
+    targetCpu = targetCpu.replaceAll("-thumb$", "/thumb");
+
+    String template =
+        "ndk/sources/cxx-stl/%stl%/libs/%targetCpu%/*.%fileExtension%";
+    return template
+        .replace("%stl%", stl)
+        .replace("%targetCpu%", targetCpu)
+        .replace("%fileExtension%", fileExtension);
+  }
+
+  /**
+   * @param targetCpu Target CPU
+   * @return the directory of the target CPU's runtime .a files for linking
+   */
+  public String createLibcppLinkerPath(String targetCpu) {
+    return "external/%repositoryName%/ndk/sources/cxx-stl/llvm-libc++/libs/%targetCpu%"
+        .replace("%repositoryName%", repositoryName)
+        .replace("%targetCpu%", targetCpu);
   }
 }
+
