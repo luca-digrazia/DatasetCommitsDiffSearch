@@ -43,9 +43,8 @@ class SmallRyeContextPropagationProcessor {
     private static final Logger log = Logger.getLogger(SmallRyeContextPropagationProcessor.class.getName());
 
     @BuildStep
-    void registerBean(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
-        additionalBeans
-                .produce(AdditionalBeanBuildItem.unremovableOf(SmallRyeContextPropagationProvider.class));
+    AdditionalBeanBuildItem registerBean() {
+        return AdditionalBeanBuildItem.builder().addBeanClass(SmallRyeContextPropagationProvider.class).build();
     }
 
     @BuildStep
@@ -66,6 +65,7 @@ class SmallRyeContextPropagationProcessor {
         for (Class<?> extension : ServiceUtil.classesNamedIn(SmallRyeContextPropagationTemplate.class.getClassLoader(),
                 "META-INF/services/" + ContextManagerExtension.class.getName())) {
             try {
+                System.err.println("Found ext: " + extension);
                 discoveredExtensions.add((ContextManagerExtension) extension.newInstance());
             } catch (InstantiationException | IllegalAccessException e) {
                 throw new RuntimeException("Failed to instantiate declared ThreadContextProvider class: " + extension.getName(),
