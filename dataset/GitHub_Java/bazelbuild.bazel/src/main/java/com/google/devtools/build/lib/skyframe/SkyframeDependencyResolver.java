@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LoadingFailedCause;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -28,10 +28,10 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -54,62 +54,43 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
             "label '%s' does not refer to a package group", label)));
   }
 
-  private void missingEdgeHook(
-      Target from, DependencyKind dependencyKind, Label to, NoSuchThingException e) {
-    boolean raiseError = false;
+  private void missingEdgeHook(Target from, Label to, NoSuchThingException e) {
     if (e instanceof NoSuchTargetException) {
       NoSuchTargetException nste = (NoSuchTargetException) e;
-      raiseError = to.equals(nste.getLabel());
+      if (to.equals(nste.getLabel())) {
+        env.getListener().handle(
+            Event.error(
+                TargetUtils.getLocationMaybe(from),
+                TargetUtils.formatMissingEdge(from, to, e)));
+      }
     } else if (e instanceof NoSuchPackageException) {
       NoSuchPackageException nspe = (NoSuchPackageException) e;
-      raiseError = nspe.getPackageId().equals(to.getPackageIdentifier());
+      if (nspe.getPackageId().equals(to.getPackageIdentifier())) {
+        env.getListener().handle(
+            Event.error(
+                TargetUtils.getLocationMaybe(from),
+                TargetUtils.formatMissingEdge(from, to, e)));
+      }
     }
-
-    if (!raiseError) {
-      return;
-    }
-
-    String message;
-    if (dependencyKind == TOOLCHAIN_DEPENDENCY) {
-      message =
-          String.format(
-              "Target '%s' depends on toolchain '%s', which cannot be found: %s'",
-              from.getLabel(), to, e.getMessage());
-    } else {
-      message = TargetUtils.formatMissingEdge(from, to, e, dependencyKind.getAttribute());
-    }
-
-    env.getListener().handle(Event.error(TargetUtils.getLocationMaybe(from), message));
   }
 
   @Nullable
   @Override
   protected Map<Label, Target> getTargets(
-      OrderedSetMultimap<DependencyKind, Label> labelMap,
-      Target fromTarget,
-      NestedSetBuilder<Cause> rootCauses)
+      Collection<Label> labels, Target fromTarget, NestedSetBuilder<Cause> rootCauses)
       throws InterruptedException {
-
-    Map<PackageIdentifier, SkyKey> packageKeys = new HashMap<>(labelMap.size());
-    for (Label label : labelMap.values()) {
-      packageKeys.computeIfAbsent(label.getPackageIdentifier(), id -> PackageValue.key(id));
-    }
-
     Map<SkyKey, ValueOrException<NoSuchPackageException>> packages =
-        env.getValuesOrThrow(packageKeys.values(), NoSuchPackageException.class);
+        env.getValuesOrThrow(
+            Iterables.transform(labels, label -> PackageValue.key(label.getPackageIdentifier())),
+            NoSuchPackageException.class);
 
     // As per the comment in SkyFunctionEnvironment.getValueOrUntypedExceptions(), we are supposed
     // to prefer reporting errors to reporting null, we first check for errors in our dependencies.
     // This, of course, results in some wasted work in case this will need to be restarted later.
 
     // Duplicates can occur, so we can't use ImmutableMap.
-    HashMap<Label, Target> result = Maps.newHashMapWithExpectedSize(labelMap.size());
-    for (Map.Entry<DependencyKind, Label> entry : labelMap.entries()) {
-      Label label = entry.getValue();
-      if (result.containsKey(label)) {
-        continue;
-      }
-
+    HashMap<Label, Target> result = Maps.newHashMapWithExpectedSize(labels.size());
+    for (Label label : labels) {
       PackageValue packageValue;
       try {
         packageValue =
@@ -120,22 +101,21 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
         }
       } catch (NoSuchPackageException e) {
         rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
-        missingEdgeHook(fromTarget, entry.getKey(), label, e);
+        missingEdgeHook(fromTarget, label, e);
         continue;
       }
-
       Package pkg = packageValue.getPackage();
       try {
         Target target = pkg.getTarget(label.getName());
         if (pkg.containsErrors()) {
           NoSuchTargetException e = new NoSuchTargetException(target);
-          missingEdgeHook(fromTarget, entry.getKey(), label, e);
+          missingEdgeHook(fromTarget, label, e);
           rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
         }
         result.put(label, target);
       } catch (NoSuchTargetException e) {
         rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
-        missingEdgeHook(fromTarget, entry.getKey(), label, e);
+        missingEdgeHook(fromTarget, label, e);
       }
     }
 

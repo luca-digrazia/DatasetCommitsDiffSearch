@@ -59,18 +59,12 @@ public final class TransitionResolver {
       Target toTarget,
       @Nullable RuleTransitionFactory trimmingTransitionFactory) {
 
-    // I. The null configuration always remains the null configuration. We could fold this into
-    // (III), but NoTransition doesn't work if the source is the null configuration.
-    if (fromConfig == null) {
-      return NullTransition.INSTANCE;
-    }
-
-    // II. Input files and package groups have no configurations. We don't want to duplicate them.
+    // I. Input files and package groups have no configurations. We don't want to duplicate them.
     if (usesNullConfiguration(toTarget)) {
       return NullTransition.INSTANCE;
     }
 
-    // III. Host configurations never switch to another. All prerequisites of host targets have the
+    // II. Host configurations never switch to another. All prerequisites of host targets have the
     // same host configuration.
     if (fromConfig.isHostConfiguration()) {
       return NoTransition.INSTANCE;
@@ -96,14 +90,14 @@ public final class TransitionResolver {
     // The current transition to apply. When multiple transitions are requested, this is a
     // ComposingTransition, which encapsulates them into a single object so calling code
     // doesn't need special logic for combinations.
-    // IV. Apply whatever transition the attribute requires.
+    // III. Apply whatever transition the attribute requires.
     ConfigurationTransition currentTransition = attributeTransition;
 
-    // V. Applies any rule transitions associated with the dep target and composes their
+    // IV. Applies any rule transitions associated with the dep target and composes their
     // transitions with a passed-in existing transition.
     currentTransition = applyRuleTransition(currentTransition, toTarget);
 
-    // VI. Applies a transition to trim the result and returns it. (note: this is a temporary
+    // V. Applies a transition to trim the result and returns it. (note: this is a temporary
     // feature; see the corresponding methods in ConfiguredRuleClassProvider)
     return applyTransitionFromFactory(currentTransition, toTarget, trimmingTransitionFactory);
   }
