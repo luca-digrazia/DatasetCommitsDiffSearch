@@ -303,11 +303,8 @@ public class BytecodeRecorderImpl implements RecorderContext {
         ResultHandle out;
         if (param == null) {
             out = method.loadNull();
-        } else if (substitutions.containsKey(param.getClass()) || substitutions.containsKey(expectedType)) {
+        } else if (substitutions.containsKey(param.getClass())) {
             SubstitutionHolder holder = substitutions.get(param.getClass());
-            if (holder == null) {
-                holder = substitutions.get(expectedType);
-            }
             try {
                 ObjectSubstitution substitution = holder.sub.newInstance();
                 Object res = substitution.serialize(param);
@@ -629,4 +626,3 @@ public class BytecodeRecorderImpl implements RecorderContext {
     }
 
 }
-
