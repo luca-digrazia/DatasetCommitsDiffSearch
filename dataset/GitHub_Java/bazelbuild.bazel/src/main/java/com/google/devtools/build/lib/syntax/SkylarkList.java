@@ -50,11 +50,6 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
   /** Returns true if this list is a Skylark tuple. */
   public abstract boolean isTuple();
 
-  @Override
-  public final boolean truth() {
-    return !isEmpty();
-  }
-
   /**
    * Returns an ImmutableList object with the current underlying contents of this SkylarkList.
    */

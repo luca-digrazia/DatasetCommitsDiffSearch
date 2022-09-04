@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.syntax.Concatable.Concatter;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.util.SpellChecker;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.IllegalFormatException;
 import java.util.List;
@@ -123,7 +124,11 @@ public final class EvalUtils {
    */
   public static void checkValidDictKey(Object o, StarlarkThread thread) throws EvalException {
     // TODO(bazel-team): check that all recursive elements are both Immutable AND Comparable.
-    if (isHashable(o)) {
+    if (thread != null && thread.getSemantics().incompatibleDisallowHashingFrozenMutables()) {
+      if (isHashable(o)) {
+        return;
+      }
+    } else if (isImmutable(o)) {
       return;
     }
     // Same error message as Python (that makes it a TypeError).
@@ -145,11 +150,11 @@ public final class EvalUtils {
 
   /**
    * Is this object known or assumed to be recursively immutable by Skylark?
-   *
    * @param o an Object
    * @return true if the object is known to be an immutable value.
    */
-  // NB: This is used as the basis for accepting objects in SkylarkNestedSet-s.
+  // NB: This is used as the basis for accepting objects in SkylarkNestedSet-s,
+  // as well as for accepting objects as keys for Skylark dict-s.
   public static boolean isImmutable(Object o) {
     if (o instanceof SkylarkValue) {
       return ((SkylarkValue) o).isImmutable();
@@ -158,15 +163,14 @@ public final class EvalUtils {
   }
 
   /**
-   * Is this class known to be *recursively* immutable by Skylark? For instance, class Tuple is not
-   * it, because it can contain mutable values.
-   *
+   * Is this class known to be *recursively* immutable by Skylark?
+   * For instance, class Tuple is not it, because it can contain mutable values.
    * @param c a Class
    * @return true if the class is known to represent only recursively immutable values.
    */
   // NB: This is used as the basis for accepting objects in SkylarkNestedSet-s,
   // as well as for accepting objects as keys for Skylark dict-s.
-  private static boolean isImmutable(Class<?> c) {
+  static boolean isImmutable(Class<?> c) {
     return c.isAnnotationPresent(Immutable.class) // TODO(bazel-team): beware of containers!
         || c.equals(String.class)
         || c.equals(Integer.class)
@@ -181,10 +185,11 @@ public final class EvalUtils {
         || c.equals(String.class) // basic values
         || c.equals(Integer.class)
         || c.equals(Boolean.class)
-        // TODO(adonovan): delete those below, and order those above by cost.
         // there is a registered Skylark ancestor class (useful e.g. when using AutoValue)
         || SkylarkInterfaceUtils.getSkylarkModule(c) != null
-        || ImmutableMap.class.isAssignableFrom(c); // will be converted to SkylarkDict
+        || ImmutableMap.class.isAssignableFrom(c) // will be converted to SkylarkDict
+        || NestedSet.class.isAssignableFrom(c) // will be converted to SkylarkNestedSet
+        || PathFragment.class.isAssignableFrom(c); // other known class
   }
 
   // TODO(bazel-team): move the following few type-related functions to SkylarkType
@@ -284,6 +289,9 @@ public final class EvalUtils {
       return "function";
     } else if (c.equals(SelectorValue.class)) {
       return "select";
+    } else if (NestedSet.class.isAssignableFrom(c)) {
+      // TODO(bazel-team): no one should be seeing naked NestedSet at all.
+      return "depset";
     } else {
       if (c.getSimpleName().isEmpty()) {
         return c.getName();
@@ -309,8 +317,7 @@ public final class EvalUtils {
    * Returns the truth value of an object, according to Python rules.
    * http://docs.python.org/2/library/stdtypes.html#truth-value-testing
    */
-  // TODO(adonovan): rename 'Skylark.truth', make it a default-true method of SkylarkValue,
-  // and delete most of the cases.
+  // TODO(adonovan): rename 'truth'.
   public static boolean toBoolean(Object o) {
     if (o == null || o == Runtime.NONE) {
       return false;
@@ -324,6 +331,8 @@ public final class EvalUtils {
       return !((Collection<?>) o).isEmpty();
     } else if (o instanceof Map<?, ?>) {
       return !((Map<?, ?>) o).isEmpty();
+    } else if (o instanceof NestedSet<?>) {
+      return !((NestedSet<?>) o).isEmpty();
     } else if (o instanceof SkylarkNestedSet) {
       return !((SkylarkNestedSet) o).isEmpty();
     } else if (o instanceof Iterable<?>) {
@@ -639,20 +648,7 @@ public final class EvalUtils {
         result = SkylarkType.convertToSkylark(result, thread);
         // If we access NestedSets using ClassObject.getValue() we won't know the generic type,
         // so we have to disable it. This should not happen.
-
-        // TODO(bazel-team): Unify this check with the logic in getSkylarkType. Might
-        // break some providers whose contents don't implement SkylarkValue, aren't wrapped in
-        // SkylarkList, etc.
-        // TODO(adonovan): this is still far too permissive. Replace with isSkylarkAcceptable.
-        if (result instanceof NestedSet
-            || (result instanceof List && !(result instanceof SkylarkList))) {
-          throw new EvalException(
-              loc,
-              "internal error: type '"
-                  + result.getClass().getSimpleName()
-                  + "' is not allowed as a "
-                  + "Starlark value");
-        }
+        SkylarkType.checkTypeAllowedInSkylark(result, loc);
         return result;
       }
     }

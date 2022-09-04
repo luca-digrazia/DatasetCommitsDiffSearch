@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet.NestedSetDepthException;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
@@ -31,7 +32,6 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
@@ -155,7 +155,7 @@ public class MethodLibrary {
       Object collection, boolean value, Location loc, StarlarkThread thread) throws EvalException {
     Iterable<?> iterable = EvalUtils.toIterable(collection, loc, thread);
     for (Object obj : iterable) {
-      if (Starlark.truth(obj) == value) {
+      if (EvalUtils.toBoolean(obj) == value) {
         return true;
       }
     }
@@ -273,8 +273,11 @@ public class MethodLibrary {
       useStarlarkThread = true)
   public MutableList<?> reversed(Object sequence, Location loc, StarlarkThread thread)
       throws EvalException {
+    // We only allow lists and strings.
     if (sequence instanceof SkylarkDict) {
       throw new EvalException(loc, "Argument to reversed() must be a sequence, not a dictionary.");
+    } else if (sequence instanceof NestedSet || sequence instanceof SkylarkNestedSet) {
+      throw new EvalException(loc, "Argument to reversed() must be a sequence, not a depset.");
     }
     ArrayDeque<Object> tmpList = new ArrayDeque<>();
     for (Object element : EvalUtils.toIterable(sequence, loc, thread)) {
@@ -427,7 +430,7 @@ public class MethodLibrary {
             noneable = true)
       })
   public Boolean bool(Object x) throws EvalException {
-    return Starlark.truth(x);
+    return EvalUtils.toBoolean(x);
   }
 
   private final ImmutableMap<String, Integer> intPrefixes =
@@ -1233,7 +1236,7 @@ public class MethodLibrary {
               + "100 % -7  # -5 (unlike in some other languages)\n"
               + "int(\"18\")\n"
               + "</pre>")
-  static final class IntModule implements SkylarkValue {} // (documentation only)
+  public static final class IntModule {}
 
   /** Skylark bool type. */
   @SkylarkModule(
@@ -1245,7 +1248,7 @@ public class MethodLibrary {
               + "<a href=\"globals.html#False\">False</a>. "
               + "Any value can be converted to a boolean using the "
               + "<a href=\"globals.html#bool\">bool</a> function.")
-  static final class BoolModule implements SkylarkValue {} // (documentation only)
+  public static final class BoolModule {}
 
   /** Adds bindings for all the builtin functions of this class to the given map builder. */
   public static void addBindingsToBuilder(ImmutableMap.Builder<String, Object> builder) {
