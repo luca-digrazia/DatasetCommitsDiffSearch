@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.exec;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.config.BinTools;
@@ -52,7 +50,6 @@ import com.google.devtools.build.lib.view.test.TestStatus.TestResultData.Builder
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
 
 /** Runs TestRunnerAction actions. */
 @ExecutionStrategy(
@@ -88,8 +85,7 @@ public class StandaloneTestStrategy extends TestStrategy {
   }
 
   @Override
-  public Set<SpawnResult> exec(
-      TestRunnerAction action, ActionExecutionContext actionExecutionContext)
+  public void exec(TestRunnerAction action, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     Path execRoot = actionExecutionContext.getExecRoot();
     Path coverageDir = execRoot.getRelative(action.getCoverageDirectory());
@@ -144,7 +140,7 @@ public class StandaloneTestStrategy extends TestStrategy {
 
     try {
       int maxAttempts = getTestAttempts(action);
-      StandaloneTestResult standaloneTestResult =
+      TestResultData data =
           executeTestAttempt(
               action,
               spawn,
@@ -155,16 +151,11 @@ public class StandaloneTestStrategy extends TestStrategy {
               workingDirectory);
       int attempt;
       for (attempt = 1;
-          standaloneTestResult.testResultData().getStatus() != BlazeTestStatus.PASSED
-              && attempt < maxAttempts;
+          data.getStatus() != BlazeTestStatus.PASSED && attempt < maxAttempts;
           attempt++) {
         processFailedTestAttempt(
-            attempt,
-            actionExecutionContext,
-            action,
-            dataBuilder,
-            standaloneTestResult.testResultData());
-        standaloneTestResult =
+            attempt, actionExecutionContext, action, dataBuilder, data);
+        data =
             executeTestAttempt(
                 action,
                 spawn,
@@ -174,15 +165,11 @@ public class StandaloneTestStrategy extends TestStrategy {
                 tmpDir,
                 workingDirectory);
       }
-      processLastTestAttempt(attempt, dataBuilder, standaloneTestResult.testResultData());
+      processLastTestAttempt(attempt, dataBuilder, data);
       ImmutableList.Builder<Pair<String, Path>> testOutputsBuilder = new ImmutableList.Builder<>();
       if (action.getTestLog().getPath().exists()) {
         testOutputsBuilder.add(
             Pair.of(TestFileNameConstants.TEST_LOG, action.getTestLog().getPath()));
-      }
-      if (action.getCoverageData() != null && action.getCoverageData().getPath().exists()) {
-        testOutputsBuilder.add(
-            Pair.of(TestFileNameConstants.TEST_COVERAGE, action.getCoverageData().getPath()));
       }
       testOutputsBuilder.addAll(TestResult.testOutputsFromPaths(resolvedPaths));
       actionExecutionContext
@@ -191,17 +178,13 @@ public class StandaloneTestStrategy extends TestStrategy {
               new TestAttempt(
                   action,
                   attempt,
-                  standaloneTestResult.testResultData().getStatus(),
-                  standaloneTestResult.testResultData().getStartTimeMillisEpoch(),
-                  standaloneTestResult.testResultData().getRunDurationMillis(),
+                  data.getStatus(),
+                  data.getStartTimeMillisEpoch(),
+                  data.getRunDurationMillis(),
                   testOutputsBuilder.build(),
-                  standaloneTestResult.testResultData().getWarningList(),
+                  data.getWarningList(),
                   true));
       finalizeTest(actionExecutionContext, action, dataBuilder.build());
-
-      // TODO(b/62588075): Should we accumulate SpawnResults across test attempts instead of only
-      // returning the last set?
-      return standaloneTestResult.spawnResults();
     } catch (IOException e) {
       actionExecutionContext.getEventHandler().handle(Event.error("Caught I/O exception: " + e));
       throw new EnvironmentalExecException("unexpected I/O exception", e);
@@ -227,10 +210,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     if (action.getTestLog().getPath().exists()) {
       action.getTestLog().getPath().renameTo(testLog);
       testOutputsBuilder.add(Pair.of(TestFileNameConstants.TEST_LOG, testLog));
-    }
-    if (action.getCoverageData() != null && action.getCoverageData().getPath().exists()) {
-      testOutputsBuilder.add(
-          Pair.of(TestFileNameConstants.TEST_COVERAGE, action.getCoverageData().getPath()));
     }
 
     // Get the normal test output paths, and then update them to use "attempt_N" names, and
@@ -300,7 +279,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
   }
 
-  private StandaloneTestResult executeTestAttempt(
+  private TestResultData executeTestAttempt(
       TestRunnerAction action,
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
@@ -314,10 +293,13 @@ public class StandaloneTestStrategy extends TestStrategy {
     try (FileOutErr fileOutErr =
             new FileOutErr(
                 action.getTestLog().getPath(), action.resolve(execRoot).getTestStderr())) {
-      StandaloneTestResult standaloneTestResult =
-          executeTest(action, spawn, actionExecutionContext.withFileOutErr(fileOutErr));
+      TestResultData data =
+          executeTest(
+              action,
+              spawn,
+              actionExecutionContext.withFileOutErr(fileOutErr));
       appendStderr(fileOutErr.getOutputPath(), fileOutErr.getErrorPath());
-      return standaloneTestResult;
+      return data;
     }
   }
 
@@ -338,9 +320,11 @@ public class StandaloneTestStrategy extends TestStrategy {
         relativeTmpDir);
   }
 
-  protected StandaloneTestResult executeTest(
-      TestRunnerAction action, Spawn spawn, ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException, IOException {
+  protected TestResultData executeTest(
+      TestRunnerAction action,
+      Spawn spawn,
+      ActionExecutionContext actionExecutionContext)
+          throws ExecException, InterruptedException, IOException {
     Closeable streamed = null;
     Path testLogPath = action.getTestLog().getPath();
     TestResultData.Builder builder = TestResultData.newBuilder();
@@ -348,7 +332,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     long startTime = actionExecutionContext.getClock().currentTimeMillis();
     SpawnActionContext spawnActionContext =
         actionExecutionContext.getSpawnActionContext(action.getMnemonic());
-    Set<SpawnResult> spawnResults = ImmutableSet.of();
     try {
       try {
         if (executionOptions.testOutput.equals(TestOutputFormat.STREAMED)) {
@@ -357,7 +340,7 @@ public class StandaloneTestStrategy extends TestStrategy {
                   Reporter.outErrForReporter(actionExecutionContext.getEventHandler()),
                   testLogPath);
         }
-        spawnResults = spawnActionContext.exec(spawn, actionExecutionContext);
+        spawnActionContext.exec(spawn, actionExecutionContext);
 
         builder
             .setTestPassed(true)
@@ -395,7 +378,7 @@ public class StandaloneTestStrategy extends TestStrategy {
         builder.setHasCoverage(true);
       }
 
-      return StandaloneTestResult.create(spawnResults, builder.build());
+      return builder.build();
     } catch (IOException e) {
       throw new TestExecException(e.getMessage());
     }
