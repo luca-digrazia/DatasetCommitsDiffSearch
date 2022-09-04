@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.Info;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -262,8 +261,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             fake,
             binary,
             linkParams,
-            linkCompileOutputSeparately,
-            semantics);
+            linkCompileOutputSeparately);
     linkActionBuilder.setUseTestOnlyFlags(ruleContext.isTestTarget());
     if (linkStaticness == LinkStaticness.DYNAMIC) {
       linkActionBuilder.setRuntimeInputs(
@@ -292,40 +290,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           CppLinkAction.symbolCountsFileName(binaryPath)));
     }
 
-    Artifact defFile = null;
-    Artifact interfaceLibrary = null;
     if (isLinkShared(ruleContext)) {
       linkActionBuilder.setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(binary));
-
-      if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-        ImmutableList.Builder<Artifact> objectFiles = ImmutableList.builder();
-        objectFiles.addAll(ccCompilationOutputs.getObjectFiles(false));
-        for (LibraryToLink library : linkParams.getLibraries()) {
-          if (library.containsObjectFiles()
-              && library.getArtifactCategory() != ArtifactCategory.DYNAMIC_LIBRARY
-              && library.getArtifactCategory() != ArtifactCategory.INTERFACE_LIBRARY) {
-            objectFiles.addAll(library.getObjectFiles());
-          }
-        }
-        defFile =
-            CppHelper.createDefFileActions(
-                ruleContext,
-                ccToolchain.getDefParserTool(),
-                objectFiles.build(),
-                binary.getFilename());
-
-        if (CppHelper.shouldUseDefFile(featureConfiguration)) {
-          linkActionBuilder.setDefFile(defFile);
-        }
-
-        // If we are using a toolchain supporting interface library and targeting Windows, we build
-        // the interface library with the link action and add it to `interface_output` output group.
-        if (cppConfiguration.useInterfaceSharedObjects()) {
-          interfaceLibrary = ruleContext.getRelatedArtifact(binary.getRootRelativePath(), ".ifso");
-          linkActionBuilder.setInterfaceOutput(interfaceLibrary);
-          linkActionBuilder.addActionOutput(interfaceLibrary);
-        }
-      }
     }
 
     // Store immutable context for use in other *_binary rules that are implemented by
@@ -392,7 +358,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ltoBackendArtifacts);
     Artifact dwpFile =
         ruleContext.getImplicitOutputArtifact(CppRuleClasses.CC_BINARY_DEBUG_PACKAGE);
-    createDebugPackagerActions(ruleContext, ccToolchain, dwpFile, dwoArtifacts);
+    createDebugPackagerActions(ruleContext, ccToolchain, cppConfiguration, dwpFile, dwoArtifacts);
 
     // The debug package should include the dwp file only if it was explicitly requested.
     Artifact explicitDwpFile = dwpFile;
@@ -485,14 +451,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       ruleBuilder.addOutputGroup("pdb_file", pdbFile);
     }
 
-    if (defFile != null) {
-      ruleBuilder.addOutputGroup("def_file", defFile);
-    }
-
-    if (interfaceLibrary != null) {
-      ruleBuilder.addOutputGroup("interface_library", interfaceLibrary);
-    }
-
     return ruleBuilder
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
         .addProvider(
@@ -527,12 +485,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       boolean fake,
       Artifact binary,
       CcLinkParams linkParams,
-      boolean linkCompileOutputSeparately,
-      CppSemantics cppSemantics)
+      boolean linkCompileOutputSeparately)
       throws InterruptedException {
     CppLinkActionBuilder builder =
-        new CppLinkActionBuilder(
-                context, binary, toolchain, fdoSupport, featureConfiguration, cppSemantics)
+        new CppLinkActionBuilder(context, binary, toolchain, fdoSupport, featureConfiguration)
             .setCrosstoolInputs(toolchain.getLink())
             .addNonCodeInputs(compilationPrerequisites);
 
@@ -640,12 +596,11 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Creates the actions needed to generate this target's "debug info package" (i.e. its .dwp file).
+   * Creates the actions needed to generate this target's "debug info package"
+   * (i.e. its .dwp file).
    */
-  private static void createDebugPackagerActions(
-      RuleContext context,
-      CcToolchainProvider toolchain,
-      Artifact dwpOutput,
+  private static void createDebugPackagerActions(RuleContext context, CcToolchainProvider toolchain,
+      CppConfiguration cppConfiguration, Artifact dwpOutput,
       DwoArtifactsCollector dwoArtifactsCollector) {
     Iterable<Artifact> allInputs = getDwpInputs(context,
         dwoArtifactsCollector.getPicDwoArtifacts(),
@@ -681,7 +636,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // at the leaves than the root, but that both increases parallelism and reduces the final
     // action's input size.
     Packager packager =
-        createIntermediateDwpPackagers(context, dwpOutput, toolchain, dwpTools, allInputs, 1);
+        createIntermediateDwpPackagers(
+            context, dwpOutput, cppConfiguration, dwpTools, allInputs, 1);
     packager.spawnAction.setMnemonic("CcGenerateDwp").addOutput(dwpOutput);
     packager.commandLine.addExecPath("-o", dwpOutput);
     context.registerAction(packager.build(context));
@@ -705,7 +661,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   private static Packager createIntermediateDwpPackagers(
       RuleContext context,
       Artifact dwpOutput,
-      CcToolchainProvider toolchain,
+      CppConfiguration cppConfiguration,
       NestedSet<Artifact> dwpTools,
       Iterable<Artifact> inputs,
       int intermediateDwpCount) {
@@ -713,13 +669,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     // Step 1: generate our batches. We currently break into arbitrary batches of fixed maximum
     // input counts, but we can always apply more intelligent heuristics if the need arises.
-    Packager currentPackager = newDwpAction(toolchain, dwpTools);
+    Packager currentPackager = newDwpAction(cppConfiguration, dwpTools);
     int inputsForCurrentPackager = 0;
 
     for (Artifact dwoInput : inputs) {
       if (inputsForCurrentPackager == MAX_INPUTS_PER_DWP_ACTION) {
         packagers.add(currentPackager);
-        currentPackager = newDwpAction(toolchain, dwpTools);
+        currentPackager = newDwpAction(cppConfiguration, dwpTools);
         inputsForCurrentPackager = 0;
       }
       currentPackager.spawnAction.addInput(dwoInput);
@@ -742,7 +698,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         intermediateOutputs.add(intermediateOutput);
       }
       return createIntermediateDwpPackagers(
-          context, dwpOutput, toolchain, dwpTools, intermediateOutputs, intermediateDwpCount);
+          context,
+          dwpOutput,
+          cppConfiguration,
+          dwpTools,
+          intermediateOutputs,
+          intermediateDwpCount);
     }
     return Iterables.getOnlyElement(packagers);
   }
@@ -775,12 +736,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    * settings.
    */
   private static Packager newDwpAction(
-      CcToolchainProvider toolchain, NestedSet<Artifact> dwpTools) {
+      CppConfiguration cppConfiguration, NestedSet<Artifact> dwpTools) {
     Packager packager = new Packager();
     packager
         .spawnAction
         .addTransitiveInputs(dwpTools)
-        .setExecutable(toolchain.getToolPathFragment(Tool.DWP));
+        .setExecutable(cppConfiguration.getDwpExecutable());
     return packager;
   }
 
