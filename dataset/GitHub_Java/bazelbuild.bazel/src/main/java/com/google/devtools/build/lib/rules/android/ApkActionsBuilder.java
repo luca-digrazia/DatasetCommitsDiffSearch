@@ -15,15 +15,14 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ApkSigningMethod;
-import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -39,7 +38,6 @@ public class ApkActionsBuilder {
   private Artifact classesDex;
   private ImmutableList.Builder<Artifact> inputZips = new ImmutableList.Builder<>();
   private Artifact javaResourceZip;
-  private FilesToRunProvider resourceExtractor;
   private Artifact javaResourceFile;
   private NativeLibs nativeLibs = NativeLibs.EMPTY;
   private Artifact unsignedApk;
@@ -88,13 +86,14 @@ public class ApkActionsBuilder {
   }
 
   /**
-   * Adds a zip to be added to the APK and an executable that filters the zip to extract the
-   * relevant contents first.
+   * Sets the file where Java resources are taken.
+   *
+   * <p>The contents of this zip will will be put directly into the APK except for files that are
+   * filtered out by the {@link com.android.sdklib.build.ApkBuilder} which seem to not be resources,
+   * e.g. files with the extension {@code .class}.
    */
-  public ApkActionsBuilder setJavaResourceZip(
-      Artifact javaResourceZip, FilesToRunProvider resourceExtractor) {
+  public ApkActionsBuilder setJavaResourceZip(Artifact javaResourceZip) {
     this.javaResourceZip = javaResourceZip;
-    this.resourceExtractor = resourceExtractor;
     return this;
   }
 
@@ -300,14 +299,13 @@ public class ApkActionsBuilder {
       // The javaResourceZip contains many files that are unwanted in the APK such as .class files.
       Artifact extractedJavaResourceZip =
           AndroidBinary.getDxArtifact(ruleContext, "extracted_" + javaResourceZip.getFilename());
-      ruleContext.registerAction(
-          new SpawnAction.Builder()
-              .setExecutable(resourceExtractor)
-              .setMnemonic("ResourceExtractor")
-              .setProgressMessage("Extracting Java resources from deploy jar for %s", apkName)
-              .addInputArgument(javaResourceZip)
-              .addOutputArgument(extractedJavaResourceZip)
-              .build(ruleContext));
+      ruleContext.registerAction(new SpawnAction.Builder()
+          .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getResourceExtractor())
+          .setMnemonic("ResourceExtractor")
+          .setProgressMessage("Extracting Java resources from deploy jar for " + apkName)
+          .addInputArgument(javaResourceZip)
+          .addOutputArgument(extractedJavaResourceZip)
+          .build(ruleContext));
 
       if (ruleContext.getFragment(AndroidConfiguration.class).compressJavaResources()) {
         compressedApkActionBuilder
@@ -365,17 +363,16 @@ public class ApkActionsBuilder {
 
   /** Uses the zipalign tool to align the zip boundaries for uncompressed resources by 4 bytes. */
   private void zipalignApk(RuleContext ruleContext, Artifact inputApk, Artifact zipAlignedApk) {
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .addInput(inputApk)
-            .addOutput(zipAlignedApk)
-            .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getZipalign())
-            .addArgument("4")
-            .addInputArgument(inputApk)
-            .addOutputArgument(zipAlignedApk)
-            .setProgressMessage("Zipaligning %s", apkName)
-            .setMnemonic("AndroidZipAlign")
-            .build(ruleContext));
+    ruleContext.registerAction(new SpawnAction.Builder()
+        .addInput(inputApk)
+        .addOutput(zipAlignedApk)
+        .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getZipalign())
+        .addArgument("4")
+        .addInputArgument(inputApk)
+        .addOutputArgument(zipAlignedApk)
+        .setProgressMessage("Zipaligning " + apkName)
+        .setMnemonic("AndroidZipAlign")
+        .build(ruleContext));
   }
 
   /**
@@ -387,22 +384,21 @@ public class ApkActionsBuilder {
       RuleContext ruleContext, Artifact unsignedApk, Artifact signedAndZipalignedApk) {
     ApkSigningMethod signingMethod =
         ruleContext.getFragment(AndroidConfiguration.class).getApkSigningMethod();
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getApkSigner())
-            .setProgressMessage("Signing %s", apkName)
-            .setMnemonic("ApkSignerTool")
-            .addArgument("sign")
-            .addArgument("--ks")
-            .addInputArgument(signingKey)
-            .addArguments("--ks-pass", "pass:android")
-            .addArguments("--v1-signing-enabled", Boolean.toString(signingMethod.signV1()))
-            .addArguments("--v1-signer-name", "CERT")
-            .addArguments("--v2-signing-enabled", Boolean.toString(signingMethod.signV2()))
-            .addArgument("--out")
-            .addOutputArgument(signedAndZipalignedApk)
-            .addInputArgument(unsignedApk)
-            .build(ruleContext));
+    ruleContext.registerAction(new SpawnAction.Builder()
+        .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getApkSigner())
+        .setProgressMessage("Signing " + apkName)
+        .setMnemonic("ApkSignerTool")
+        .addArgument("sign")
+        .addArgument("--ks")
+        .addInputArgument(signingKey)
+        .addArguments("--ks-pass", "pass:android")
+        .addArguments("--v1-signing-enabled", Boolean.toString(signingMethod.signV1()))
+        .addArguments("--v1-signer-name", "CERT")
+        .addArguments("--v2-signing-enabled", Boolean.toString(signingMethod.signV2()))
+        .addArgument("--out")
+        .addOutputArgument(signedAndZipalignedApk)
+        .addInputArgument(unsignedApk)
+        .build(ruleContext));
   }
 
   // Adds the appropriate SpawnAction options depending on if SingleJar is a jar or not.
@@ -412,7 +408,7 @@ public class ApkActionsBuilder {
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
-              JavaCommon.getHostJavaExecutable(ruleContext),
+              ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
               singleJar,
               JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));

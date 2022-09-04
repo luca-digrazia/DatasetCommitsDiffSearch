@@ -829,10 +829,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             ApkProvider.class,
             ApkProvider.create(
                 zipAlignedApk,
-                unsignedApk,
                 androidCommon.getInstrumentedJar(),
-                applicationManifest.getManifest(),
-                debugKeystore))
+                applicationManifest.getManifest()))
         .addProvider(AndroidPreDexJarProvider.class, AndroidPreDexJarProvider.create(jarToDex))
         .addProvider(
             AndroidFeatureFlagSetProvider.class,
