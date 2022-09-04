@@ -17,24 +17,18 @@ import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.io.ByteStreams;
-import com.google.devtools.build.lib.clock.BlazeClock;
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.profiler.Profiler.ProfiledTaskKinds;
-import com.google.devtools.build.lib.profiler.Profiler.SlowTask;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
+import com.google.devtools.build.lib.util.BlazeClock;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -206,37 +200,6 @@ public class ProfilerTest extends FoundationTestCase {
   }
 
   @Test
-  public void testGetSlowestTasksCapped() throws Exception {
-    profiler.start(
-        ProfiledTaskKinds.SLOWEST,
-        ByteStreams.nullOutputStream(),
-        "test",
-        /*recordAllDurations=*/ true,
-        BlazeClock.instance(),
-        BlazeClock.instance().nanoTime());
-
-    List<Long> expectedSlowestDurations = new ArrayList<>();
-    for (int i = 0; i < ProfilerTask.VFS_STAT.slowestInstancesCount; i++) {
-      long fakeDuration = i + 1000;
-      profiler.logSimpleTask(1, fakeDuration + 1, ProfilerTask.VFS_STAT, "stat");
-      expectedSlowestDurations.add(fakeDuration);
-    }
-
-    // Sprinkle in a whole bunch of fast tasks.
-    for (int i = 0; i < 100; i++) {
-      profiler.logSimpleTask(1, i + 1, ProfilerTask.VFS_STAT, "stat" + i);
-    }
-
-    ImmutableList<SlowTask> slowTasks = ImmutableList.copyOf(profiler.getSlowestTasks());
-    assertThat(slowTasks).hasSize(ProfilerTask.VFS_STAT.slowestInstancesCount);
-
-    ImmutableList<Long> slowestDurations = slowTasks.stream()
-        .map(task -> task.getDurationNanos())
-        .collect(ImmutableList.toImmutableList());
-    assertThat(slowestDurations).containsExactlyElementsIn(expectedSlowestDurations);
-  }
-
-  @Test
   public void testProfilerRecordsNothing() throws Exception {
     Path profileData = cacheDir.getRelative("foo");
 
@@ -344,25 +307,19 @@ public class ProfilerTest extends FoundationTestCase {
     thread1.join();
     clock.advanceMillis(1);
     profiler.markPhase(ProfilePhase.ANALYZE);
-    Thread thread2 =
-        new Thread() {
-          @Override
-          public void run() {
-            profiler.startTask(ProfilerTask.TEST, "complex task");
-            for (int i = 0; i < 100; i++) {
-              Profiler.instance().logEvent(ProfilerTask.TEST, "thread2a");
-            }
-            profiler.completeTask(ProfilerTask.TEST);
-            try {
-              profiler.markPhase(ProfilePhase.EXECUTE);
-            } catch (InterruptedException e) {
-              throw new IllegalStateException(e);
-            }
-            for (int i = 0; i < 100; i++) {
-              Profiler.instance().logEvent(ProfilerTask.TEST, "thread2b");
-            }
-          }
-        };
+    Thread thread2 = new Thread() {
+      @Override public void run() {
+        profiler.startTask(ProfilerTask.TEST, "complex task");
+        for (int i = 0; i < 100; i++) {
+          Profiler.instance().logEvent(ProfilerTask.TEST, "thread2a");
+        }
+        profiler.completeTask(ProfilerTask.TEST);
+        profiler.markPhase(ProfilePhase.EXECUTE);
+        for (int i = 0; i < 100; i++) {
+          Profiler.instance().logEvent(ProfilerTask.TEST, "thread2b");
+        }
+      }
+    };
     thread2.start();
     thread2.join();
     profiler.logEvent(ProfilerTask.TEST, "last task");
