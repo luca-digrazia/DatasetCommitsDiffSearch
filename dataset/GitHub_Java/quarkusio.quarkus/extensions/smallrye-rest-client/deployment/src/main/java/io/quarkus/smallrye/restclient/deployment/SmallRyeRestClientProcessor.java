@@ -62,16 +62,13 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
-import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
-import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
-import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import io.quarkus.deployment.builditem.substrate.*;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.smallrye.restclient.runtime.IncomingHeadersProvider;
 import io.quarkus.smallrye.restclient.runtime.RestClientBase;
+import io.quarkus.smallrye.restclient.runtime.RestClientBuilderImpl;
 import io.quarkus.smallrye.restclient.runtime.SmallRyeRestClientTemplate;
 import io.smallrye.restclient.DefaultResponseExceptionMapper;
 import io.smallrye.restclient.RestClientProxy;
@@ -128,7 +125,6 @@ class SmallRyeRestClientProcessor {
     }
 
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
     void processInterfaces(CombinedIndexBuildItem combinedIndexBuildItem,
             SslNativeConfigBuildItem sslNativeConfig,
             BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
@@ -136,8 +132,7 @@ class SmallRyeRestClientProcessor {
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
             BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
-            BuildProducer<ServiceProviderBuildItem> serviceProvider,
-            SmallRyeRestClientTemplate smallRyeRestClientTemplate) {
+            BuildProducer<ServiceProviderBuildItem> serviceProvider) {
 
         // According to the spec only rest client interfaces annotated with RegisterRestClient are registered as beans
         Map<DotName, ClassInfo> interfaces = new HashMap<>();
@@ -224,18 +219,15 @@ class SmallRyeRestClientProcessor {
 
         // Indicates that this extension would like the SSL support to be enabled
         extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.SMALLRYE_REST_CLIENT));
-
-        smallRyeRestClientTemplate.setSslEnabled(sslNativeConfig.isEnabled());
+        RestClientBuilderImpl.SSL_ENABLED = sslNativeConfig.isEnabled();
     }
 
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
     void registerProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem,
-            CombinedIndexBuildItem combinedIndexBuildItem,
-            SmallRyeRestClientTemplate smallRyeRestClientTemplate) {
-        smallRyeRestClientTemplate.initializeResteasyProviderFactory(jaxrsProvidersToRegisterBuildItem.useBuiltIn(),
-                jaxrsProvidersToRegisterBuildItem.getProviders());
+            CombinedIndexBuildItem combinedIndexBuildItem) {
+        RestClientBuilderImpl.REGISTER_BUILTIN_PROVIDERS = jaxrsProvidersToRegisterBuildItem.useBuiltIn();
+        RestClientBuilderImpl.PROVIDERS_TO_REGISTER = String.join(",", jaxrsProvidersToRegisterBuildItem.getProviders());
 
         // register the providers for reflection
         for (String providerToRegister : jaxrsProvidersToRegisterBuildItem.getProviders()) {
