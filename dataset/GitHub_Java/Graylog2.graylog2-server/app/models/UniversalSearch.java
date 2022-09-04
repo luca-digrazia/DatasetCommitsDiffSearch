@@ -223,32 +223,20 @@ public class UniversalSearch {
         }
     }
 
-    public Call getCsvRoute(Request request, Stream stream) {
+    public Call getCsvRoute(Request request) {
         int relative = Tools.intSearchParamOrEmpty(request, "relative");
         String from = Tools.stringSearchParamOrEmpty(request, "from");
         String to = Tools.stringSearchParamOrEmpty(request, "to");
         String keyword = Tools.stringSearchParamOrEmpty(request, "keyword");
-        if (stream == null) {
-            return routes.SearchController.exportAsCsv(
-                    query,
-                    "",
-                    timeRange.getType().toString().toLowerCase(),
-                    relative,
-                    from,
-                    to,
-                    keyword
-            );
-        } else {
-            return routes.StreamSearchController.exportAsCsv(
-                    query,
-                    stream.getId(),
-                    timeRange.getType().toString().toLowerCase(),
-                    relative,
-                    from,
-                    to,
-                    keyword
-            );
-        }
+
+        return routes.SearchController.exportAsCsv(
+                query,
+                timeRange.getType().toString().toLowerCase(),
+                relative,
+                from,
+                to,
+                keyword
+        );
     }
 
     public SearchSort getOrder() {
