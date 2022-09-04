@@ -75,7 +75,7 @@ public class JavaToolchainProvider extends ToolchainInfo
       boolean javacSupportsWorkers,
       NestedSet<Artifact> bootclasspath,
       NestedSet<Artifact> extclasspath,
-      @Nullable Artifact javac,
+      Artifact javac,
       NestedSet<Artifact> tools,
       FilesToRunProvider javaBuilder,
       @Nullable FilesToRunProvider headerCompiler,
@@ -119,7 +119,7 @@ public class JavaToolchainProvider extends ToolchainInfo
   private final Label label;
   private final NestedSet<Artifact> bootclasspath;
   private final NestedSet<Artifact> extclasspath;
-  @Nullable private final Artifact javac;
+  private final Artifact javac;
   private final NestedSet<Artifact> tools;
   private final FilesToRunProvider javaBuilder;
   @Nullable private final FilesToRunProvider headerCompiler;
@@ -144,7 +144,7 @@ public class JavaToolchainProvider extends ToolchainInfo
       Label label,
       NestedSet<Artifact> bootclasspath,
       NestedSet<Artifact> extclasspath,
-      @Nullable Artifact javac,
+      Artifact javac,
       NestedSet<Artifact> tools,
       FilesToRunProvider javaBuilder,
       @Nullable FilesToRunProvider headerCompiler,
@@ -205,7 +205,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   }
 
   /** Returns the {@link Artifact} of the javac jar */
-  @Nullable
   public Artifact getJavac() {
     return javac;
   }
@@ -355,7 +354,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   }
 
   @Override
-  @Nullable
   public FileApi getJavacJar() {
     return getJavac();
   }
@@ -375,5 +373,3 @@ public class JavaToolchainProvider extends ToolchainInfo
     return SkylarkNestedSet.of(Artifact.class, getTools());
   }
 }
-
-

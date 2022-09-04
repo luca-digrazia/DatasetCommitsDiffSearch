@@ -62,7 +62,7 @@ public class JavaSkylarkCommon
       checkCallPathInWhitelistedPackages(
           environment.getSemantics(),
           location,
-          environment.getGlobals().getLabel().getPackageName());
+          environment.getCallerLabel().getPackageFragment().toString());
     }
     return JavaInfoBuildHelper.getInstance()
         .create(

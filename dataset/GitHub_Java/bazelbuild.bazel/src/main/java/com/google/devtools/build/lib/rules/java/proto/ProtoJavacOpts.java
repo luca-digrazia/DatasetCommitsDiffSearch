@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 
@@ -33,7 +32,6 @@ public class ProtoJavacOpts {
     return ImmutableList.<String>builder()
         .addAll(toolchain.getJavacOptions(ruleContext))
         .addAll(toolchain.getCompatibleJavacOptions(JavaSemantics.PROTO_JAVACOPTS_KEY))
-        .addAll(JavaCommon.computePerPackageJavacOpts(ruleContext, toolchain))
         .build();
   }
 

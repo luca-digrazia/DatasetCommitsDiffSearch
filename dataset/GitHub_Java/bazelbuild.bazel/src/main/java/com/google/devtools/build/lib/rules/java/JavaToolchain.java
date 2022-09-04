@@ -81,16 +81,13 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
         getCompatibleJavacOptions(ruleContext);
 
     NestedSet<Artifact> tools = PrerequisiteArtifacts.nestedSet(ruleContext, "tools", Mode.HOST);
-    if (javac != null) {
-      tools = NestedSetBuilder.fromNestedSet(tools).add(javac).build();
-    }
 
     TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac", Mode.HOST);
-    ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> locations = ImmutableMap.builder();
-    if (javacDep != null) {
-      locations.put(AliasProvider.getDependencyLabel(javacDep), ImmutableList.of(javac));
-    }
-    ImmutableList<String> jvmOpts = getJvmOpts(ruleContext, locations.build());
+    ImmutableList<String> jvmOpts =
+        getJvmOpts(
+            ruleContext,
+            ImmutableMap.<Label, ImmutableCollection<Artifact>>of(
+                AliasProvider.getDependencyLabel(javacDep), ImmutableList.of(javac)));
 
     ImmutableList<JavaPackageConfigurationProvider> packageConfiguration =
         ImmutableList.copyOf(
