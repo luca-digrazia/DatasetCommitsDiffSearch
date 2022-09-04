@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringValueP
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -124,9 +125,9 @@ public abstract class CcModule
   @Override
   public FeatureConfigurationForStarlark configureFeatures(
       Object ruleContextOrNone,
-      CcToolchainProvider toolchain, // <String> expected
-      SkylarkList<?> requestedFeatures, // <String> expected
-      SkylarkList<?> unsupportedFeatures)
+      CcToolchainProvider toolchain,
+      SkylarkList<String> requestedFeatures,
+      SkylarkList<String> unsupportedFeatures)
       throws EvalException {
     SkylarkRuleContext ruleContext = nullIfNone(ruleContextOrNone, SkylarkRuleContext.class);
     if (ruleContext == null
@@ -150,9 +151,8 @@ public abstract class CcModule
         ruleContext == null ? null : ruleContext.getConfiguration().getOptions();
     return FeatureConfigurationForStarlark.from(
         CcCommon.configureFeaturesOrThrowEvalException(
-            ImmutableSet.copyOf(requestedFeatures.getContents(String.class, "requested_features")),
-            ImmutableSet.copyOf(
-                unsupportedFeatures.getContents(String.class, "unsupported_features")),
+            ImmutableSet.copyOf(requestedFeatures),
+            ImmutableSet.copyOf(unsupportedFeatures),
             toolchain,
             cppConfiguration),
         cppConfiguration,
@@ -503,7 +503,7 @@ public abstract class CcModule
   }
 
   @Override
-  public CcInfo mergeCcInfos(SkylarkList<?> ccInfos) throws EvalException {
+  public CcInfo mergeCcInfos(SkylarkList<CcInfoApi> ccInfos) throws EvalException {
     return CcInfo.merge(ccInfos.getContents(CcInfo.class, /* description= */ null));
   }
 
@@ -567,7 +567,7 @@ public abstract class CcModule
   public CcLinkingContext createCcLinkingInfo(
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
-      SkylarkList<?> nonCodeInputs,
+      SkylarkList<Artifact> nonCodeInputs,
       Location location,
       StarlarkThread thread)
       throws EvalException {
@@ -593,8 +593,7 @@ public abstract class CcModule
                         BazelStarlarkContext.from(thread).getSymbolGenerator()))));
       }
       ccLinkingContextBuilder.addNonCodeInputs(
-          NestedSetBuilder.wrap(
-              Order.LINK_ORDER, nonCodeInputs.getContents(Artifact.class, "additional_inputs")));
+          NestedSetBuilder.wrap(Order.LINK_ORDER, nonCodeInputs));
       return ccLinkingContextBuilder.build();
     }
 
@@ -637,10 +636,10 @@ public abstract class CcModule
   @Override
   public CcToolchainConfigInfo ccToolchainConfigInfoFromSkylark(
       SkylarkRuleContext skylarkRuleContext,
-      SkylarkList<?> features, // <SkylarkInfo> expected
-      SkylarkList<?> actionConfigs, // <SkylarkInfo> expected
-      SkylarkList<?> artifactNamePatterns, // <SkylarkInfo> expected
-      SkylarkList<?> cxxBuiltInIncludeDirectoriesUnchecked, // <String> expected
+      SkylarkList<Object> features,
+      SkylarkList<Object> actionConfigs,
+      SkylarkList<Object> artifactNamePatterns,
+      SkylarkList<String> cxxBuiltInIncludeDirectories,
       String toolchainIdentifier,
       String hostSystemName,
       String targetSystemName,
@@ -649,15 +648,12 @@ public abstract class CcModule
       String compiler,
       String abiVersion,
       String abiLibcVersion,
-      SkylarkList<?> toolPaths, // <SkylarkInfo> expected
-      SkylarkList<?> makeVariables, // <SkylarkInfo> expected
+      SkylarkList<Object> toolPaths,
+      SkylarkList<Object> makeVariables,
       Object builtinSysroot,
       Object ccTargetOs)
       throws EvalException {
 
-    List<String> cxxBuiltInIncludeDirectories =
-        cxxBuiltInIncludeDirectoriesUnchecked.getContents(
-            String.class, "cxx_builtin_include_directories");
     CToolchain.Builder cToolchain = CToolchain.newBuilder();
 
     ImmutableList.Builder<Feature> featureBuilder = ImmutableList.builder();
@@ -1380,12 +1376,12 @@ public abstract class CcModule
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
       CcCompilationOutputs compilationOutputs,
-      SkylarkList<?> userLinkFlags, // <String> expected
-      SkylarkList<?> linkingContexts, // <CcLinkingContext> expected
+      SkylarkList<String> userLinkFlags,
+      SkylarkList<CcLinkingContext> linkingContexts,
       String name,
       String language,
-      boolean alwayslink, // <Artifact> expected
-      SkylarkList<?> additionalInputs,
+      boolean alwayslink,
+      SkylarkList<Artifact> additionalInputs,
       boolean disallowStaticLibraries,
       boolean disallowDynamicLibraries,
       Object grepIncludes,
@@ -1428,8 +1424,7 @@ public abstract class CcModule
                     actions.getRuleContext().getRule(),
                     actions.getRuleContext().isAllowTagsPropagation()))
             .setGrepIncludes(convertFromNoneable(grepIncludes, /* defaultValue= */ null))
-            .addNonCodeLinkerInputs(
-                additionalInputs.getContents(Artifact.class, "additional_inputs"))
+            .addNonCodeLinkerInputs(additionalInputs)
             .setShouldCreateStaticLibraries(!disallowStaticLibraries)
             .setShouldCreateDynamicLibrary(
                 !disallowDynamicLibraries
@@ -1438,7 +1433,7 @@ public abstract class CcModule
                         .isEnabled(CppRuleClasses.TARGETS_WINDOWS))
             .setStaticLinkType(staticLinkTargetType)
             .setDynamicLinkType(LinkTargetType.NODEPS_DYNAMIC_LIBRARY)
-            .addLinkopts(userLinkFlags.getContents(String.class, "user_link_flags"));
+            .addLinkopts(userLinkFlags);
     try {
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
       ImmutableList<LibraryToLink> libraryToLink = ImmutableList.of();
@@ -1459,7 +1454,7 @@ public abstract class CcModule
           CcLinkingContext.merge(
               ImmutableList.<CcLinkingContext>builder()
                   .add(linkingContext)
-                  .addAll(linkingContexts.getContents(CcLinkingContext.class, "linking_contexts"))
+                  .addAll(linkingContexts)
                   .build()),
           ccLinkingOutputs);
     } catch (RuleErrorException e) {
@@ -1504,30 +1499,26 @@ public abstract class CcModule
       SkylarkActionFactory skylarkActionFactoryApi,
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
-      SkylarkList<?> sourcesUnchecked, // <Artifact> expected
-      SkylarkList<?> publicHeadersUnchecked, // <Artifact> expected
-      SkylarkList<?> privateHeadersUnchecked, // <Artifact> expected
-      SkylarkList<?> includes, // <String> expected
-      SkylarkList<?> quoteIncludes, // <String> expected
-      SkylarkList<?> systemIncludes, // <String> expected
-      SkylarkList<?> frameworkIncludes, // <String> expected
-      SkylarkList<?> defines, // <String> expected
-      SkylarkList<?> localDefines, // <String> expected
-      SkylarkList<?> userCompileFlags, // <String> expected
-      SkylarkList<?> ccCompilationContexts, // <CcCompilationContext> expected
+      SkylarkList<Artifact> sources,
+      SkylarkList<Artifact> publicHeaders,
+      SkylarkList<Artifact> privateHeaders,
+      SkylarkList<String> includes,
+      SkylarkList<String> quoteIncludes,
+      SkylarkList<String> systemIncludes,
+      SkylarkList<String> frameworkIncludes,
+      SkylarkList<String> defines,
+      SkylarkList<String> localDefines,
+      SkylarkList<String> userCompileFlags,
+      SkylarkList<CcCompilationContext> ccCompilationContexts,
       String name,
       boolean disallowPicOutputs,
       boolean disallowNopicOutputs,
       Artifact grepIncludes,
-      List<Artifact> headersForClifDoNotUseThisParam,
-      SkylarkList<?> additionalInputs,
+      SkylarkList<Artifact> headersForClifDoNotUseThisParam,
+      SkylarkList<Artifact> additionalInputs,
       Location location,
       @Nullable StarlarkThread thread)
       throws EvalException, InterruptedException {
-    List<Artifact> sources = sourcesUnchecked.getContents(Artifact.class, "srcs");
-    List<Artifact> publicHeaders = publicHeadersUnchecked.getContents(Artifact.class, "srcs");
-    List<Artifact> privateHeaders = privateHeadersUnchecked.getContents(Artifact.class, "srcs");
-
     SkylarkActionFactory actions = skylarkActionFactoryApi;
     CcToolchainProvider ccToolchainProvider = convertFromNoneable(skylarkCcToolchainProvider, null);
     FeatureConfigurationForStarlark featureConfiguration =
@@ -1573,28 +1564,26 @@ public abstract class CcModule
             .addPublicHeaders(publicHeaders)
             .addPrivateHeaders(privateHeaders)
             .addSources(sources)
-            .addCcCompilationContexts(
-                ccCompilationContexts.getContents(
-                    CcCompilationContext.class, "compilation_contexts"))
+            .addCcCompilationContexts(ccCompilationContexts)
             .addIncludeDirs(
-                includes.getContents(String.class, "includes").stream()
+                includes.stream()
                     .map(PathFragment::create)
                     .collect(ImmutableList.toImmutableList()))
             .addQuoteIncludeDirs(
-                quoteIncludes.getContents(String.class, "quote_includes").stream()
+                quoteIncludes.stream()
                     .map(PathFragment::create)
                     .collect(ImmutableList.toImmutableList()))
             .addSystemIncludeDirs(
-                systemIncludes.getContents(String.class, "system_includes").stream()
+                systemIncludes.stream()
                     .map(PathFragment::create)
                     .collect(ImmutableList.toImmutableList()))
             .addFrameworkIncludeDirs(
-                frameworkIncludes.getContents(String.class, "framework_includes").stream()
+                frameworkIncludes.stream()
                     .map(PathFragment::create)
                     .collect(ImmutableList.toImmutableList()))
-            .addDefines(defines.getContents(String.class, "defines"))
-            .addNonTransitiveDefines(localDefines.getContents(String.class, "local_defines"))
-            .setCopts(userCompileFlags.getContents(String.class, "user_compile_flags"))
+            .addDefines(defines)
+            .addNonTransitiveDefines(localDefines)
+            .setCopts(userCompileFlags)
             .addAdditionalCompilationInputs(headersForClifDoNotUseThisParam)
             .addAdditionalCompilationInputs(
                 additionalInputs.getContents(Artifact.class, "additional_inputs"))
@@ -1620,13 +1609,13 @@ public abstract class CcModule
       FeatureConfigurationForStarlark skylarkFeatureConfiguration,
       CcToolchainProvider skylarkCcToolchainProvider,
       CcCompilationOutputs compilationOutputs,
-      SkylarkList<?> userLinkFlags,
-      SkylarkList<?> linkingContexts,
+      SkylarkList<String> userLinkFlags,
+      SkylarkList<CcLinkingContext> linkingContexts,
       String name,
       String language,
       String outputType,
       boolean linkDepsStatically,
-      SkylarkList<?> additionalInputs,
+      SkylarkList<Artifact> additionalInputs,
       Object grepIncludes,
       Location location,
       StarlarkThread thread)
@@ -1680,13 +1669,11 @@ public abstract class CcModule
                     actions.getRuleContext().isAllowTagsPropagation()))
             .setGrepIncludes(convertFromNoneable(grepIncludes, /* defaultValue= */ null))
             .setLinkingMode(linkDepsStatically ? LinkingMode.STATIC : LinkingMode.DYNAMIC)
-            .addNonCodeLinkerInputs(
-                additionalInputs.getContents(Artifact.class, "additional_inputs"))
+            .addNonCodeLinkerInputs(additionalInputs)
             .setDynamicLinkType(dynamicLinkTargetType)
-            .addCcLinkingContexts(
-                linkingContexts.getContents(CcLinkingContext.class, "linking_contexts"))
+            .addCcLinkingContexts(linkingContexts)
             .setShouldCreateStaticLibraries(false)
-            .addLinkopts(userLinkFlags.getContents(String.class, "user_link_flags"))
+            .addLinkopts(userLinkFlags)
             .emitInterfaceSharedLibraries(
                 dynamicLinkTargetType == LinkTargetType.DYNAMIC_LIBRARY
                     && actualFeatureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)
