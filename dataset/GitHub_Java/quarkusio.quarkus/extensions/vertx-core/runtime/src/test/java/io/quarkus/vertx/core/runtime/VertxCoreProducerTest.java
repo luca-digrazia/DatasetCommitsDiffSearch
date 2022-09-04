@@ -1,55 +1,43 @@
 package io.quarkus.vertx.core.runtime;
 
-import static org.hamcrest.core.Is.is;
-import static org.hamcrest.core.IsNull.notNullValue;
-import static org.junit.Assert.*;
-
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import io.quarkus.runtime.LaunchMode;
+import io.quarkus.vertx.core.runtime.VertxCoreRecorder.VertxOptionsCustomizer;
+import io.quarkus.vertx.core.runtime.config.AddressResolverConfiguration;
+import io.quarkus.vertx.core.runtime.config.ClusterConfiguration;
+import io.quarkus.vertx.core.runtime.config.EventBusConfiguration;
+import io.quarkus.vertx.core.runtime.config.JksConfiguration;
+import io.quarkus.vertx.core.runtime.config.PemKeyCertConfiguration;
+import io.quarkus.vertx.core.runtime.config.PemTrustCertConfiguration;
+import io.quarkus.vertx.core.runtime.config.PfxConfiguration;
+import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.dns.AddressResolverOptions;
 
 public class VertxCoreProducerTest {
 
     private VertxCoreRecorder recorder;
-    private VertxCoreProducer producer;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
-        producer = new VertxCoreProducer();
         recorder = new VertxCoreRecorder();
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws Exception {
         recorder.destroy();
-    }
-
-    @Test
-    public void shouldNotFailWithoutConfig() {
-        VertxCoreRecorder.initialize(null);
-        producer.initialize(VertxCoreRecorder.vertx);
-        verifyProducer();
-    }
-
-    private void verifyProducer() {
-        assertThat(producer.vertx(), is(notNullValue()));
-        assertFalse(producer.vertx().isClustered());
-        assertThat(producer.eventbus(), is(notNullValue()));
-    }
-
-    @Test
-    public void shouldNotFailWithDefaultConfig() {
-        VertxConfiguration configuration = createDefaultConfiguration();
-        configuration.workerPoolSize = 10;
-        configuration.warningExceptionTime = Duration.ofSeconds(1);
-        configuration.internalBlockingPoolSize = 5;
-        VertxCoreRecorder.initialize(configuration);
-        producer.initialize(VertxCoreRecorder.vertx);
-        verifyProducer();
     }
 
     @Test
@@ -68,11 +56,48 @@ public class VertxCoreProducerTest {
         configuration.cluster = cc;
 
         try {
-            VertxCoreRecorder.initialize(configuration);
-            fail("It should not have a cluster manager on the classpath, and so fail the creation");
+            VertxCoreRecorder.initialize(configuration, null, null, LaunchMode.TEST);
+            Assertions.fail("It should not have a cluster manager on the classpath, and so fail the creation");
         } catch (IllegalStateException e) {
-            assertTrue(e.getMessage().contains("No ClusterManagerFactory"));
+            Assertions.assertTrue(e.getMessage().contains("No ClusterManagerFactory"),
+                    "The message should contain ''. Message: " + e.getMessage());
         }
+    }
+
+    @Test
+    public void shouldConfigureAddressResolver() {
+        VertxConfiguration configuration = createDefaultConfiguration();
+        AddressResolverConfiguration ar = configuration.resolver;
+        ar.cacheMaxTimeToLive = 3;
+        ar.cacheNegativeTimeToLive = 1;
+
+        VertxOptionsCustomizer customizers = new VertxOptionsCustomizer(Arrays.asList(
+                new Consumer<VertxOptions>() {
+                    @Override
+                    public void accept(VertxOptions vertxOptions) {
+                        Assertions.assertEquals(3, vertxOptions.getAddressResolverOptions().getCacheMaxTimeToLive());
+                        Assertions.assertEquals(
+                                AddressResolverOptions.DEFAULT_CACHE_MIN_TIME_TO_LIVE,
+                                vertxOptions.getAddressResolverOptions().getCacheMinTimeToLive());
+                        Assertions.assertEquals(1, vertxOptions.getAddressResolverOptions().getCacheNegativeTimeToLive());
+                    }
+                }));
+
+        VertxCoreRecorder.initialize(configuration, customizers, null, LaunchMode.TEST);
+    }
+
+    @Test
+    public void shouldInvokeCustomizers() {
+        final AtomicBoolean called = new AtomicBoolean(false);
+        VertxOptionsCustomizer customizers = new VertxOptionsCustomizer(Arrays.asList(
+                new Consumer<VertxOptions>() {
+                    @Override
+                    public void accept(VertxOptions vertxOptions) {
+                        called.set(true);
+                    }
+                }));
+        Vertx v = VertxCoreRecorder.initialize(createDefaultConfiguration(), customizers, null, LaunchMode.TEST);
+        Assertions.assertTrue(called.get(), "Customizer should get called during initialization");
     }
 
     private VertxConfiguration createDefaultConfiguration() {
@@ -85,7 +110,10 @@ public class VertxCoreProducerTest {
         vc.workerPoolSize = 20;
         vc.maxWorkerExecuteTime = Duration.ofSeconds(1);
         vc.internalBlockingPoolSize = 20;
+        vc.queueSize = OptionalInt.empty();
+        vc.keepAliveTime = Duration.ofSeconds(30);
         vc.useAsyncDNS = false;
+        vc.preferNativeTransport = false;
         vc.eventbus = new EventBusConfiguration();
         vc.eventbus.keyCertificatePem = new PemKeyCertConfiguration();
         vc.eventbus.keyCertificatePem.keys = Optional.empty();
@@ -128,6 +156,10 @@ public class VertxCoreProducerTest {
         vc.cluster.clustered = false;
         vc.cluster.pingInterval = Duration.ofSeconds(20);
         vc.cluster.pingReplyInterval = Duration.ofSeconds(20);
+        vc.resolver = new AddressResolverConfiguration();
+        vc.resolver.cacheMaxTimeToLive = Integer.MAX_VALUE;
+        vc.resolver.cacheMinTimeToLive = 0;
+        vc.resolver.cacheNegativeTimeToLive = 0;
         return vc;
     }
 }

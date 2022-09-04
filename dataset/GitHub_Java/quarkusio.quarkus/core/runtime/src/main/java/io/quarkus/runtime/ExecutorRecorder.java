@@ -9,7 +9,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.jboss.logging.Logger;
-import org.jboss.threads.ContextHandler;
 import org.jboss.threads.EnhancedQueueExecutor;
 import org.jboss.threads.JBossExecutors;
 import org.jboss.threads.JBossThreadFactory;
@@ -31,8 +30,8 @@ public class ExecutorRecorder {
     private static volatile Executor current;
 
     public ExecutorService setupRunTime(ShutdownContext shutdownContext, ThreadPoolConfig threadPoolConfig,
-            LaunchMode launchMode, ThreadFactory threadFactory, ContextHandler<Object> contextHandler) {
-        final EnhancedQueueExecutor underlying = createExecutor(threadPoolConfig, threadFactory, contextHandler);
+            LaunchMode launchMode, ThreadFactory threadFactory) {
+        final EnhancedQueueExecutor underlying = createExecutor(threadPoolConfig, threadFactory);
         if (launchMode == LaunchMode.DEVELOPMENT) {
             shutdownContext.addLastShutdownTask(new Runnable() {
                 @Override
@@ -138,8 +137,7 @@ public class ExecutorRecorder {
         };
     }
 
-    private static EnhancedQueueExecutor createExecutor(ThreadPoolConfig threadPoolConfig, ThreadFactory threadFactory,
-            ContextHandler<Object> contextHandler) {
+    private static EnhancedQueueExecutor createExecutor(ThreadPoolConfig threadPoolConfig, ThreadFactory threadFactory) {
         if (threadFactory == null) {
             threadFactory = new JBossThreadFactory(new ThreadGroup("executor"), Boolean.TRUE, null,
                     "executor-thread-%t", JBossExecutors.loggingExceptionHandler("org.jboss.executor.uncaught"), null);
@@ -161,11 +159,6 @@ public class ExecutorRecorder {
         }
         builder.setGrowthResistance(threadPoolConfig.growthResistance);
         builder.setKeepAliveTime(threadPoolConfig.keepAliveTime);
-
-        if (contextHandler != null) {
-            builder.setContextHandler(contextHandler);
-        }
-
         return builder.build();
     }
 
