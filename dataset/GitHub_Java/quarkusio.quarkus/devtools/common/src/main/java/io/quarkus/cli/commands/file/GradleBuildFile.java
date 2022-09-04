@@ -3,16 +3,21 @@ package io.quarkus.cli.commands.file;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 import java.util.Scanner;
+import java.util.function.Consumer;
 
 import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Model;
 
 import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.dependencies.Extension;
-import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.generators.BuildTool;
 
 public class GradleBuildFile extends BuildFile {
 
@@ -20,42 +25,31 @@ public class GradleBuildFile extends BuildFile {
     private static final String SETTINGS_GRADLE_PATH = "settings.gradle";
     private static final String GRADLE_PROPERTIES_PATH = "gradle.properties";
 
-    private String settingsContent = "";
-    private String buildContent = "";
-    private String propertiesContent = "";
-    private ArrayList<Dependency> dependencies = null;
+    private Model model;
 
-    public GradleBuildFile(ProjectWriter writer) throws IOException {
-        super(writer);
-        if (writer.exists(SETTINGS_GRADLE_PATH)) {
-            final byte[] settings = writer.getContent(SETTINGS_GRADLE_PATH);
-            settingsContent = new String(settings);
-        }
-        if (writer.exists(BUILD_GRADLE_PATH)) {
-            final byte[] build = writer.getContent(BUILD_GRADLE_PATH);
-            buildContent = new String(build);
-        }
-        if (writer.exists(GRADLE_PROPERTIES_PATH)) {
-            final byte[] properties = writer.getContent(GRADLE_PROPERTIES_PATH);
-            propertiesContent = new String(properties);
-        }
+    public GradleBuildFile(ProjectWriter writer) {
+        super(writer, BuildTool.GRADLE);
     }
 
     @Override
-    public void write() throws IOException {
-        write(SETTINGS_GRADLE_PATH, settingsContent);
-        write(BUILD_GRADLE_PATH, buildContent);
-        write(GRADLE_PROPERTIES_PATH, propertiesContent);
+    public void close() throws IOException {
+        write(SETTINGS_GRADLE_PATH, getModel().getSettingsContent());
+        write(BUILD_GRADLE_PATH, getModel().getBuildContent());
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        getModel().getPropertiesContent().store(out, "Gradle properties");
+        write(GRADLE_PROPERTIES_PATH, out.toString(StandardCharsets.UTF_8.toString()));
     }
 
-    public void completeFile(String groupId, String artifactId, String version) throws IOException {
+    @Override
+    public void completeFile(String groupId, String artifactId, String version)
+            throws IOException {
         completeSettingsContent(artifactId);
         completeBuildContent(groupId, version);
-        completeProperties(artifactId);
-        write();
+        completeProperties();
     }
 
-    private void completeBuildContent(String groupId, String version) {
+    private void completeBuildContent(String groupId, String version) throws IOException {
+        final String buildContent = getModel().getBuildContent();
         StringBuilder res = new StringBuilder(buildContent);
         if (!buildContent.contains("io.quarkus:quarkus-gradle-plugin")) {
             res.append(System.lineSeparator());
@@ -93,11 +87,12 @@ public class GradleBuildFile extends BuildFile {
             res.append(System.lineSeparator()).append(versionLine)
                     .append(System.lineSeparator());
         }
-        buildContent = res.toString();
+        getModel().setBuildContent(res.toString());
     }
 
-    private void completeSettingsContent(String artifactId) {
-        StringBuilder res = new StringBuilder(settingsContent);
+    private void completeSettingsContent(String artifactId) throws IOException {
+        final String settingsContent = getModel().getSettingsContent();
+        final StringBuilder res = new StringBuilder(settingsContent);
         if (!settingsContent.contains("io.quarkus:quarkus-gradle-plugin")) {
             res.append(System.lineSeparator());
             res.append("pluginManagement {").append(System.lineSeparator());
@@ -120,73 +115,151 @@ public class GradleBuildFile extends BuildFile {
             res.append(System.lineSeparator()).append("rootProject.name='").append(artifactId).append("'")
                     .append(System.lineSeparator());
         }
-        settingsContent = res.toString();
+        getModel().setSettingsContent(res.toString());
     }
 
-    private void completeProperties(String artifactId) {
-        StringBuilder res = new StringBuilder(propertiesContent);
-        if (!propertiesContent.contains("quarkusVersion = ")) {
-            res.append(System.lineSeparator()).append("quarkusVersion = ").append(getPluginVersion()).append(artifactId)
-                    .append(System.lineSeparator());
+    private void completeProperties() throws IOException {
+        if (getModel().getPropertiesContent().getProperty("quarkusVersion") == null) {
+            getModel().getPropertiesContent().setProperty("quarkusVersion", getPluginVersion());
         }
-        propertiesContent = res.toString();
     }
 
     @Override
-    protected void addDependencyInBuildFile(Dependency dependency) {
+    protected void addDependencyInBuildFile(Dependency dependency) throws IOException {
         StringBuilder newBuildContent = new StringBuilder();
-        try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes()))) {
+        readLineByLine(getModel().getBuildContent(), new AppendDependency(newBuildContent, dependency));
+        getModel().setBuildContent(newBuildContent.toString());
+    }
+
+    private void readLineByLine(String content, Consumer<String> lineConsumer) {
+        try (Scanner scanner = new Scanner(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
             while (scanner.hasNextLine()) {
                 String currentLine = scanner.nextLine();
-                newBuildContent.append(currentLine).append(System.lineSeparator());
-                if (currentLine.startsWith("dependencies {")) {
-                    newBuildContent.append("    implementation '")
-                            .append(dependency.getGroupId())
-                            .append(":")
-                            .append(dependency.getArtifactId())
-                            .append("'")
-                            .append(System.lineSeparator());
-                }
+                lineConsumer.accept(currentLine);
             }
         }
-        buildContent = newBuildContent.toString();
+    }
+
+    private static class AppendDependency implements Consumer<String> {
+
+        private StringBuilder newContent;
+        private Dependency dependency;
+
+        public AppendDependency(StringBuilder newContent, Dependency dependency) {
+            this.newContent = newContent;
+            this.dependency = dependency;
+        }
+
+        @Override
+        public void accept(String currentLine) {
+            newContent.append(currentLine).append(System.lineSeparator());
+            if (currentLine.startsWith("dependencies {")) {
+                newContent.append("    implementation '")
+                        .append(dependency.getGroupId())
+                        .append(":")
+                        .append(dependency.getArtifactId());
+                if (dependency.getVersion() != null && !dependency.getVersion().isEmpty()) {
+                    newContent.append(":")
+                            .append(dependency.getVersion());
+                }
+                newContent.append("'")
+                        .append(System.lineSeparator());
+            }
+        }
+
     }
 
     @Override
-    protected boolean hasDependency(Extension extension) {
+    protected boolean hasDependency(Extension extension) throws IOException {
         return getDependencies().stream()
                 .anyMatch(d -> extension.getGroupId().equals(d.getGroupId())
                         && extension.getArtifactId().equals(d.getArtifactId()));
     }
 
     @Override
-    protected boolean containsBOM() {
-        return buildContent.contains("enforcedPlatform(\"io.quarkus:quarkus-bom:");
+    protected boolean containsBOM() throws IOException {
+        return getModel().getBuildContent().contains("enforcedPlatform(\"io.quarkus:quarkus-bom:");
     }
 
     @Override
-    protected List<Dependency> getDependencies() {
-        if (dependencies == null) {
-            dependencies = new ArrayList<>();
-            boolean inDependencies = false;
-            try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes()))) {
-                while (scanner.hasNextLine()) {
-                    String currentLine = scanner.nextLine();
-                    if (currentLine.startsWith("dependencies {")) {
-                        inDependencies = true;
-                    } else if (currentLine.startsWith("}")) {
-                        inDependencies = false;
-                    } else if (inDependencies && currentLine.contains("implementation ")
-                            && !currentLine.contains("enforcedPlatform")) {
-                        if (currentLine.indexOf('\'') != -1) {
-                            String dep = currentLine.substring(currentLine.indexOf('\'') + 1, currentLine.lastIndexOf('\''));
-                            dependencies.add(MojoUtils.parse(dep.trim().toLowerCase()));
-                        }
-                    }
-                }
-            }
-        }
-        return dependencies;
+    public List<Dependency> getDependencies() throws IOException {
+        return Collections.emptyList();
     }
 
+    @Override
+    public String getProperty(String propertyName) throws IOException {
+        return getModel().getPropertiesContent().getProperty(propertyName);
+    }
+
+    @Override
+    protected List<Dependency> getManagedDependencies() {
+        // Gradle tooling API only provide resolved dependencies.
+        return Collections.emptyList();
+    }
+
+    private Model getModel() throws IOException {
+        if (model == null) {
+            initModel();
+        }
+        return model;
+    }
+
+    protected void initModel() throws IOException {
+        String settingsContent = "";
+        String buildContent = "";
+        Properties propertiesContent = new Properties();
+        if (getWriter().exists(SETTINGS_GRADLE_PATH)) {
+            final byte[] settings = getWriter().getContent(SETTINGS_GRADLE_PATH);
+            settingsContent = new String(settings, StandardCharsets.UTF_8);
+        }
+        if (getWriter().exists(BUILD_GRADLE_PATH)) {
+            final byte[] build = getWriter().getContent(BUILD_GRADLE_PATH);
+            buildContent = new String(build, StandardCharsets.UTF_8);
+        }
+        if (getWriter().exists(GRADLE_PROPERTIES_PATH)) {
+            final byte[] properties = getWriter().getContent(GRADLE_PROPERTIES_PATH);
+            propertiesContent.load(new ByteArrayInputStream(properties));
+        }
+        this.model = new Model(settingsContent, buildContent, propertiesContent);
+    }
+
+    protected String getBuildContent() throws IOException {
+        return getModel().getBuildContent();
+    }
+
+    private class Model {
+        private String settingsContent;
+        private String buildContent;
+        private Properties propertiesContent;
+
+        public Model(String settingsContent, String buildContent, Properties propertiesContent) {
+            this.settingsContent = settingsContent;
+            this.buildContent = buildContent;
+            this.propertiesContent = propertiesContent;
+        }
+
+        public String getSettingsContent() {
+            return settingsContent;
+        }
+
+        public String getBuildContent() {
+            return buildContent;
+        }
+
+        public Properties getPropertiesContent() {
+            return propertiesContent;
+        }
+
+        public void setSettingsContent(String settingsContent) {
+            this.settingsContent = settingsContent;
+        }
+
+        public void setBuildContent(String buildContent) {
+            this.buildContent = buildContent;
+        }
+
+        public void setPropertiesContent(Properties propertiesContent) {
+            this.propertiesContent = propertiesContent;
+        }
+    }
 }

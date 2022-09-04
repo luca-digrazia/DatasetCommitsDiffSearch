@@ -53,8 +53,7 @@ final class SummaryTableDocFormatter implements DocFormatter {
         final String defaultValue = configDocKey.getDefaultValue();
         // this is not strictly true, because we can have a required value with a default value, but
         // for documentation it will do
-        String required = configDocKey.isOptional() || !defaultValue.isEmpty() ? ""
-                : "required icon:exclamation-circle[title=Configuration property is required]";
+        String required = configDocKey.isOptional() || !defaultValue.isEmpty() ? "" : "REQUIRED";
         writer.append(String.format(TABLE_ROW_FORMAT,
                 configDocKey.getConfigPhase().getIllustration(),
                 configDocKey.getKey(),
