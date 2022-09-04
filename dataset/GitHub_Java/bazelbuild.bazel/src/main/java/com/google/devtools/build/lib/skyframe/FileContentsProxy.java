@@ -20,41 +20,38 @@ import java.util.Objects;
 
 /**
  * In case we can't get a fast digest from the filesystem, we store this metadata as a proxy to
- * the file contents. Currently it is a pair of a relevant timestamp and a "node id". On Linux the
- * former is the ctime and the latter is the inode number. We might want to add the device number
- * in the future.
+ * the file contents. Currently it is a pair of the mtime and "value id" (which is right now just
+ * the inode number). We may wish to augment this object with the following data:
+ * a. the device number
+ * b. the ctime, which cannot be tampered with in userspace
  *
- * <p>For a Linux example of why mtime alone is insufficient, note that 'mv' preserves timestamps.
- * So if files 'a' and 'b' initially have the same timestamp, then we would think 'b' is unchanged
- * after the user executes `mv a b` between two builds.
+ * <p>For an example of why mtime alone is insufficient, note that 'mv' preserves timestamps. So if
+ * files 'a' and 'b' initially have the same timestamp, then we would think 'b' is unchanged after
+ * the user executes `mv a b` between two builds.
  */
 public final class FileContentsProxy implements Serializable {
-  private final long ctime;
-  private final long nodeId;
+  private final long mtime;
+  private final long valueId;
 
   /**
    * Visible for serialization / deserialization. Do not use this method, but call {@link #create}
    * instead.
    */
-  public FileContentsProxy(long ctime, long nodeId) {
-    this.ctime = ctime;
-    this.nodeId = nodeId;
+  public FileContentsProxy(long mtime, long valueId) {
+    this.mtime = mtime;
+    this.valueId = valueId;
   }
 
   public static FileContentsProxy create(FileStatus stat) throws IOException {
-    // Note: there are file systems that return mtime for this call instead of ctime, such as the
-    // WindowsFileSystem.
-    return new FileContentsProxy(stat.getLastChangeTime(), stat.getNodeId());
+    return new FileContentsProxy(stat.getLastModifiedTime(), stat.getNodeId());
   }
 
-  /** Visible for serialization / deserialization. Do not use this method; use {@link #equals}. */
-  public long getCTime() {
-    return ctime;
+  public long getMtime() {
+    return mtime;
   }
 
-  /** Visible for serialization / deserialization. Do not use this method; use {@link #equals}. */
-  public long getNodeId() {
-    return nodeId;
+  public long getValueId() {
+    return valueId;
   }
 
   @Override
@@ -68,12 +65,12 @@ public final class FileContentsProxy implements Serializable {
     }
 
     FileContentsProxy that = (FileContentsProxy) other;
-    return ctime == that.ctime && nodeId == that.nodeId;
+    return mtime == that.mtime && valueId == that.valueId;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(ctime, nodeId);
+    return Objects.hash(mtime, valueId);
   }
 
   @Override
@@ -82,7 +79,7 @@ public final class FileContentsProxy implements Serializable {
   }
 
   public String prettyPrint() {
-    return String.format("ctime of %d and nodeId of %d", ctime, nodeId);
+    return String.format("mtime of %d and valueId of %d", mtime, valueId);
   }
 }
 

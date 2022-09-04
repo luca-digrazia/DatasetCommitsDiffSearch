@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileStatusWithDigest;
@@ -24,12 +24,13 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
-import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Objects;
+
 import javax.annotation.Nullable;
 
 /**
@@ -43,10 +44,9 @@ import javax.annotation.Nullable;
  *        file digest). See {@link RegularFileStateValue}.
  * <ul>
  *
- * <p>This class is an implementation detail of {@link FileValue} and should not be used by
- * {@link com.google.devtools.build.skyframe.SkyFunction}s other than {@link FileFunction}. Instead,
- * {@link FileValue} should be used by {@link com.google.devtools.build.skyframe.SkyFunction}
- * consumers that care about files.
+ * <p>This class is an implementation detail of {@link FileValue} and should not be used outside of
+ * {@link FileFunction}. Instead, {@link FileValue} should be used by consumers that care about
+ * files.
  *
  * <p>All subclasses must implement {@link #equals} and {@link #hashCode} properly.
  */
@@ -103,7 +103,7 @@ public abstract class FileStateValue implements SkyValue {
   @VisibleForTesting
   @ThreadSafe
   public static SkyKey key(RootedPath rootedPath) {
-    return LegacySkyKey.create(SkyFunctions.FILE_STATE, rootedPath);
+    return SkyKey.create(SkyFunctions.FILE_STATE, rootedPath);
   }
 
   public abstract Type getType();
