@@ -227,7 +227,7 @@ public class FontChooser extends JComponent {
 
     private JList<String> getFontFamilyList() {
         if (fontNameList == null) {
-            fontNameList = new JList<>(getFontFamilies());
+            fontNameList = new JList<String>(getFontFamilies());
             fontNameList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             fontNameList.addListSelectionListener(
                     new ListSelectionHandler(getFontFamilyTextField()));
@@ -240,7 +240,7 @@ public class FontChooser extends JComponent {
 
     private JList<String> getFontStyleList() {
         if (fontStyleList == null) {
-            fontStyleList = new JList<>(getFontStyleNames());
+            fontStyleList = new JList<String>(getFontStyleNames());
             fontStyleList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             fontStyleList.addListSelectionListener(
                     new ListSelectionHandler(getFontStyleTextField()));
@@ -253,7 +253,7 @@ public class FontChooser extends JComponent {
 
     private JList<String> getFontSizeList() {
         if (fontSizeList == null) {
-            fontSizeList = new JList<>(this.fontSizeStrings);
+            fontSizeList = new JList<String>(this.fontSizeStrings);
             fontSizeList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             fontSizeList.addListSelectionListener(
                     new ListSelectionHandler(getFontSizeTextField()));
@@ -538,7 +538,7 @@ public class FontChooser extends JComponent {
                 logger.error("update(DocumentEvent) exception", ex);
             }
 
-            if (!newValue.isEmpty()) {
+            if (newValue.length() > 0) {
                 int index = targetList.getNextMatch(newValue, 0, Position.Bias.Forward);
                 if (index < 0) {
                     index = 0;
