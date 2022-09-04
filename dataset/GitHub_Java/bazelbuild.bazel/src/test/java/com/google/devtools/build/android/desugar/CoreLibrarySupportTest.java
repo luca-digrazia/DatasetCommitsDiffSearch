@@ -276,11 +276,19 @@ public class CoreLibrarySupportTest {
             ImmutableList.of());
     assertThat(
             support.getCoreInterfaceRewritingTarget(
-                Opcodes.INVOKEINTERFACE, "java/util/Collection", "size", "()I", true))
+                Opcodes.INVOKEINTERFACE,
+                "java/util/Collection",
+                "size",
+                "()I",
+                true))
         .isNull();
     assertThat(
             support.getCoreInterfaceRewritingTarget(
-                Opcodes.INVOKEVIRTUAL, "java/util/ArrayList", "size", "()I", false))
+                Opcodes.INVOKEVIRTUAL,
+                "java/util/ArrayList",
+                "size",
+                "()I",
+                false))
         .isNull();
   }
 
@@ -345,8 +353,8 @@ public class CoreLibrarySupportTest {
   }
 
   /**
-   * Tests that call sites of renamed core libraries are treated like call sites in regular {@link
-   * InterfaceDesugaring}.
+   * Tests that call sites of renamed core libraries are treated like call sites in regular
+   * {@link InterfaceDesugaring}.
    */
   @Test
   public void testGetCoreInterfaceRewritingTarget_renamed() throws Exception {
@@ -382,7 +390,11 @@ public class CoreLibrarySupportTest {
     // abstract methods: ignored
     assertThat(
             support.getCoreInterfaceRewritingTarget(
-                Opcodes.INVOKEINTERFACE, "java/util/Collection", "size", "()I", true))
+                Opcodes.INVOKEINTERFACE,
+                "java/util/Collection",
+                "size",
+                "()I",
+                true))
         .isNull();
 
     // static interface method

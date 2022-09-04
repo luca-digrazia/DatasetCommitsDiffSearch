@@ -52,7 +52,8 @@ public class CorePackageRenamerTest {
     assertThat(out.mv.desc).isEqualTo("()Lj$/time/Instant;");
 
     // Ignore moved methods but not their descriptors
-    mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/A", "m", "()Ljava/time/Instant;", false);
+    mv.visitMethodInsn(
+        Opcodes.INVOKESTATIC, "java/util/A", "m", "()Ljava/time/Instant;", false);
     assertThat(out.mv.owner).isEqualTo("java/util/A");
     assertThat(out.mv.desc).isEqualTo("()Lj$/time/Instant;");
 
@@ -62,7 +63,8 @@ public class CorePackageRenamerTest {
     assertThat(out.mv.owner).isEqualTo("other/time/Instant");
     assertThat(out.mv.desc).isEqualTo("()Lj$/time/Instant;");
 
-    mv.visitFieldInsn(Opcodes.GETFIELD, "other/time/Instant", "now", "Ljava/time/Instant;");
+    mv.visitFieldInsn(
+        Opcodes.GETFIELD, "other/time/Instant", "now", "Ljava/time/Instant;");
     assertThat(out.mv.owner).isEqualTo("other/time/Instant");
     assertThat(out.mv.desc).isEqualTo("Lj$/time/Instant;");
   }
