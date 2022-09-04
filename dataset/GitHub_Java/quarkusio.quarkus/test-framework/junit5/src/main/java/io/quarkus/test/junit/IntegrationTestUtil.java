@@ -31,8 +31,7 @@ import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.model.PathsCollection;
-import io.quarkus.bootstrap.model.gradle.QuarkusModel;
-import io.quarkus.bootstrap.util.PathsUtils;
+import io.quarkus.bootstrap.resolver.model.QuarkusModel;
 import io.quarkus.bootstrap.utils.BuildToolHelper;
 import io.quarkus.datasource.deployment.spi.DevServicesDatasourceResultBuildItem;
 import io.quarkus.runtime.configuration.ProfileManager;
@@ -182,15 +181,14 @@ final class IntegrationTestUtil {
         }
 
         // If gradle project running directly with IDE
-        if (System.getProperty(BootstrapConstants.SERIALIZED_TEST_APP_MODEL) == null) {
+        if (System.getProperty(BootstrapConstants.SERIALIZED_APP_MODEL) == null) {
             QuarkusModel model = BuildToolHelper.enableGradleAppModelForTest(projectRoot);
             if (model != null) {
-                final PathsCollection classDirectories = PathsUtils
-                        .toPathsCollection(model.getWorkspace().getMainModule().getSourceSet()
-                                .getSourceDirectories());
-                for (Path classes : classDirectories) {
-                    if (Files.exists(classes) && !rootBuilder.contains(classes)) {
-                        rootBuilder.add(classes);
+                final Set<File> classDirectories = model.getWorkspace().getMainModule().getSourceSet()
+                        .getSourceDirectories();
+                for (File classes : classDirectories) {
+                    if (classes.exists() && !rootBuilder.contains(classes.toPath())) {
+                        rootBuilder.add(classes.toPath());
                     }
                 }
             }
@@ -217,7 +215,7 @@ final class IntegrationTestUtil {
         Map<String, String> propertyMap = new HashMap<>();
         curatedApplication
                 .createAugmentor()
-                .performCustomBuild(NativeDevServicesHandler.class.getName(), new BiConsumer<String, String>() {
+                .performCustomBuild(NativeDevServicesDatasourceHandler.class.getName(), new BiConsumer<String, String>() {
                     @Override
                     public void accept(String s, String s2) {
                         propertyMap.put(s, s2);
