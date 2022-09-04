@@ -10,7 +10,6 @@ import javax.inject.Inject;
 
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
-import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
@@ -30,8 +29,6 @@ import io.quarkus.kubernetes.client.runtime.KubernetesClientRecorder;
 public class KubernetesClientProcessor {
 
     private static final DotName WATCHER = DotName.createSimple("io.fabric8.kubernetes.client.Watcher");
-
-    private static final Logger log = Logger.getLogger(KubernetesClientProcessor.class.getName());
 
     @Inject
     BuildProducer<FeatureBuildItem> featureProducer;
@@ -61,15 +58,7 @@ public class KubernetesClientProcessor {
                             watchedClasses.add(watcherGenericTypes.get(0).name().toString());
                         }
                     } catch (IllegalStateException ignored) {
-                        // when the class has no subclasses and we were not able to determine the generic types, it's likely that
-                        // the watcher will fail due to not being able to deserialize the class
-                        if (applicationIndex.getIndex().getAllKnownSubclasses(c.name()).isEmpty()) {
-                            log.warn("Watcher '" + c.name() + "' will most likely not work correctly in native mode. " +
-                                    "Consider specifying the generic type of 'io.fabric8.kubernetes.client.Watcher' that this class handles. "
-                                    +
-                                    "See https://quarkus.io/guides/kubernetes-client#note-on-implementing-the-watcher-interface for more details");
-                        }
-                    }
+                    } // no need to handle cases when the generic types could not be determined
                 });
         if (!watchedClasses.isEmpty()) {
             reflectiveClasses.produce(new ReflectiveClassBuildItem(true, true, watchedClasses.toArray(new String[0])));
