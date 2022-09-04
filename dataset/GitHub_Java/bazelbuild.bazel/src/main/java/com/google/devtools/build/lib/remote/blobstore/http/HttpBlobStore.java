@@ -13,18 +13,31 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.blobstore.http;
 
+
 import com.google.auth.Credentials;
+import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.remote.blobstore.SimpleBlobStore;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollDomainSocketChannel;
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.kqueue.KQueue;
+import io.netty.channel.kqueue.KQueueDomainSocketChannel;
+import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.pool.ChannelPool;
 import io.netty.channel.pool.ChannelPoolHandler;
+import io.netty.channel.pool.FixedChannelPool;
 import io.netty.channel.pool.SimpleChannelPool;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObjectAggregator;
@@ -38,19 +51,27 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.ssl.SslProvider;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import io.netty.handler.timeout.ReadTimeoutException;
+import io.netty.handler.timeout.WriteTimeoutException;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.Promise;
 import io.netty.util.internal.PlatformDependent;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.FilterInputStream;
-import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.URI;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -81,14 +102,20 @@ import javax.net.ssl.SSLEngine;
  * <p>The implementation currently does not support transfer encoding chunked.
  */
 public final class HttpBlobStore implements SimpleBlobStore {
-
   private static final Pattern INVALID_TOKEN_ERROR =
       Pattern.compile("\\s*error\\s*=\\s*\"?invalid_token\"?");
 
-  private final NioEventLoopGroup eventLoop = new NioEventLoopGroup(2 /* number of threads */);
-  private final ChannelPool downloadChannels;
-  private final ChannelPool uploadChannels;
+  private final EventLoopGroup eventLoop;
+  private final ChannelPool channelPool;
   private final URI uri;
+  private final int timeoutSeconds;
+  private final ImmutableList<Entry<String, String>> extraHttpHeaders;
+  private final boolean useTls;
+
+  private final Object closeLock = new Object();
+
+  @GuardedBy("closeLock")
+  private boolean isClosed;
 
   private final Object credentialsLock = new Object();
 
@@ -98,9 +125,69 @@ public final class HttpBlobStore implements SimpleBlobStore {
   @GuardedBy("credentialsLock")
   private long lastRefreshTime;
 
-  public HttpBlobStore(URI uri, int timeoutMillis, @Nullable final Credentials creds)
+  public static HttpBlobStore create(
+      URI uri,
+      int timeoutSeconds,
+      int remoteMaxConnections,
+      ImmutableList<Entry<String, String>> extraHttpHeaders,
+      @Nullable final Credentials creds)
       throws Exception {
-    boolean useTls = uri.getScheme().equals("https");
+    return new HttpBlobStore(
+        NioEventLoopGroup::new,
+        NioSocketChannel.class,
+        uri,
+        timeoutSeconds,
+        remoteMaxConnections,
+        extraHttpHeaders,
+        creds,
+        null);
+  }
+
+  public static HttpBlobStore create(
+      DomainSocketAddress domainSocketAddress,
+      URI uri,
+      int timeoutSeconds,
+      int remoteMaxConnections,
+      ImmutableList<Entry<String, String>> extraHttpHeaders,
+      @Nullable final Credentials creds)
+      throws Exception {
+
+    if (KQueue.isAvailable()) {
+      return new HttpBlobStore(
+          KQueueEventLoopGroup::new,
+          KQueueDomainSocketChannel.class,
+          uri,
+          timeoutSeconds,
+          remoteMaxConnections,
+          extraHttpHeaders,
+          creds,
+          domainSocketAddress);
+    } else if (Epoll.isAvailable()) {
+      return new HttpBlobStore(
+          EpollEventLoopGroup::new,
+          EpollDomainSocketChannel.class,
+          uri,
+          timeoutSeconds,
+          remoteMaxConnections,
+          extraHttpHeaders,
+          creds,
+          domainSocketAddress);
+    } else {
+      throw new Exception("Unix domain sockets are unsupported on this platform");
+    }
+  }
+
+  private HttpBlobStore(
+      Function<Integer, EventLoopGroup> newEventLoopGroup,
+      Class<? extends Channel> channelClass,
+      URI uri,
+      int timeoutSeconds,
+      int remoteMaxConnections,
+      ImmutableList<Entry<String, String>> extraHttpHeaders,
+      @Nullable final Credentials creds,
+      @Nullable SocketAddress socketAddress)
+      throws Exception {
+    useTls = uri.getScheme().equals("https");
     if (uri.getPort() == -1) {
       int port = useTls ? 443 : 80;
       uri =
@@ -114,6 +201,10 @@ public final class HttpBlobStore implements SimpleBlobStore {
               uri.getFragment());
     }
     this.uri = uri;
+    if (socketAddress == null) {
+      socketAddress = new InetSocketAddress(uri.getHost(), uri.getPort());
+    }
+
     final SslContext sslCtx;
     if (useTls) {
       // OpenSsl gives us a > 2x speed improvement on fast networks, but requires netty tcnative
@@ -123,151 +214,319 @@ public final class HttpBlobStore implements SimpleBlobStore {
     } else {
       sslCtx = null;
     }
+    final int port = uri.getPort();
+    final String hostname = uri.getHost();
+    this.eventLoop = newEventLoopGroup.apply(2);
     Bootstrap clientBootstrap =
         new Bootstrap()
-            .channel(NioSocketChannel.class)
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, timeoutMillis)
-            .option(ChannelOption.SO_TIMEOUT, timeoutMillis)
+            .channel(channelClass)
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000 * timeoutSeconds)
             .group(eventLoop)
-            .remoteAddress(uri.getHost(), uri.getPort());
-    downloadChannels =
-        new SimpleChannelPool(
-            clientBootstrap,
-            new ChannelPoolHandler() {
-              @Override
-              public void channelReleased(Channel ch) {}
+            .remoteAddress(socketAddress);
 
-              @Override
-              public void channelAcquired(Channel ch) {}
+    ChannelPoolHandler channelPoolHandler =
+        new ChannelPoolHandler() {
+          @Override
+          public void channelReleased(Channel ch) {}
 
-              @Override
-              public void channelCreated(Channel ch) {
-                ChannelPipeline p = ch.pipeline();
-                if (sslCtx != null) {
-                  SSLEngine engine = sslCtx.newEngine(ch.alloc());
-                  engine.setUseClientMode(true);
-                  p.addFirst(new SslHandler(engine));
-                }
-                p.addLast(new HttpClientCodec());
-                p.addLast(new HttpDownloadHandler(creds));
+          @Override
+          public void channelAcquired(Channel ch) {}
+
+          @Override
+          public void channelCreated(Channel ch) {
+            ChannelPipeline p = ch.pipeline();
+            if (sslCtx != null) {
+              SSLEngine engine = sslCtx.newEngine(ch.alloc(), hostname, port);
+              engine.setUseClientMode(true);
+              p.addFirst("ssl-handler", new SslHandler(engine));
+            }
+          }
+        };
+    if (remoteMaxConnections > 0) {
+      channelPool = new FixedChannelPool(clientBootstrap, channelPoolHandler, remoteMaxConnections);
+    } else {
+      channelPool = new SimpleChannelPool(clientBootstrap, channelPoolHandler);
+    }
+    this.creds = creds;
+    this.timeoutSeconds = timeoutSeconds;
+    this.extraHttpHeaders = extraHttpHeaders;
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private Channel acquireUploadChannel() throws InterruptedException {
+    Promise<Channel> channelReady = eventLoop.next().newPromise();
+    channelPool
+        .acquire()
+        .addListener(
+            (Future<Channel> channelAcquired) -> {
+              if (!channelAcquired.isSuccess()) {
+                channelReady.setFailure(channelAcquired.cause());
+                return;
               }
-            });
-    uploadChannels =
-        new SimpleChannelPool(
-            clientBootstrap,
-            new ChannelPoolHandler() {
-              @Override
-              public void channelReleased(Channel ch) {}
 
-              @Override
-              public void channelAcquired(Channel ch) {}
-
-              @Override
-              public void channelCreated(Channel ch) {
+              try {
+                Channel ch = channelAcquired.getNow();
                 ChannelPipeline p = ch.pipeline();
-                if (sslCtx != null) {
-                  SSLEngine engine = sslCtx.newEngine(ch.alloc());
-                  engine.setUseClientMode(true);
-                  p.addFirst(new SslHandler(engine));
+
+                if (!isChannelPipelineEmpty(p)) {
+                  channelReady.setFailure(
+                      new IllegalStateException("Channel pipeline is not empty."));
+                  return;
                 }
+
+                p.addFirst(
+                    "timeout-handler",
+                    new IdleTimeoutHandler(timeoutSeconds, WriteTimeoutException.INSTANCE));
                 p.addLast(new HttpResponseDecoder());
                 // The 10KiB limit was chosen at random. We only expect HTTP servers to respond with
                 // an error message in the body and that should always be less than 10KiB.
                 p.addLast(new HttpObjectAggregator(10 * 1024));
                 p.addLast(new HttpRequestEncoder());
                 p.addLast(new ChunkedWriteHandler());
-                p.addLast(new HttpUploadHandler(creds));
+                synchronized (credentialsLock) {
+                  p.addLast(new HttpUploadHandler(creds, extraHttpHeaders));
+                }
+
+                if (!ch.eventLoop().inEventLoop()) {
+                  // If addLast is called outside an event loop, then it doesn't complete until the
+                  // event loop is run again. In that case, a message sent to the last handler gets
+                  // delivered to the last non-pending handler, which will most likely end up
+                  // throwing UnsupportedMessageTypeException. Therefore, we only complete the
+                  // promise in the event loop.
+                  ch.eventLoop().execute(() -> channelReady.setSuccess(ch));
+                } else {
+                  channelReady.setSuccess(ch);
+                }
+              } catch (Throwable t) {
+                channelReady.setFailure(t);
               }
             });
-    this.creds = creds;
+
+    try {
+      return channelReady.get();
+    } catch (ExecutionException e) {
+      PlatformDependent.throwException(e.getCause());
+      return null;
+    }
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private void releaseUploadChannel(Channel ch) {
+    if (ch.isOpen()) {
+      try {
+        ch.pipeline().remove(IdleTimeoutHandler.class);
+        ch.pipeline().remove(HttpResponseDecoder.class);
+        ch.pipeline().remove(HttpObjectAggregator.class);
+        ch.pipeline().remove(HttpRequestEncoder.class);
+        ch.pipeline().remove(ChunkedWriteHandler.class);
+        ch.pipeline().remove(HttpUploadHandler.class);
+      } catch (NoSuchElementException e) {
+        // If the channel is in the process of closing but not yet closed, some handlers could have
+        // been removed and would cause NoSuchElement exceptions to be thrown. Because handlers are
+        // removed in reverse-order, if we get a NoSuchElement exception, the following handlers
+        // should have been removed.
+      }
+    }
+    channelPool.release(ch);
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private Future<Channel> acquireDownloadChannel() {
+    Promise<Channel> channelReady = eventLoop.next().newPromise();
+    channelPool
+        .acquire()
+        .addListener(
+            (Future<Channel> channelAcquired) -> {
+              if (!channelAcquired.isSuccess()) {
+                channelReady.setFailure(channelAcquired.cause());
+                return;
+              }
+
+              try {
+                Channel ch = channelAcquired.getNow();
+                ChannelPipeline p = ch.pipeline();
+
+                if (!isChannelPipelineEmpty(p)) {
+                  channelReady.setFailure(
+                      new IllegalStateException("Channel pipeline is not empty."));
+                  return;
+                }
+                p.addFirst(
+                    "timeout-handler",
+                    new IdleTimeoutHandler(timeoutSeconds, ReadTimeoutException.INSTANCE));
+                p.addLast(new HttpClientCodec());
+                synchronized (credentialsLock) {
+                  p.addLast(new HttpDownloadHandler(creds, extraHttpHeaders));
+                }
+
+                if (!ch.eventLoop().inEventLoop()) {
+                  // If addLast is called outside an event loop, then it doesn't complete until the
+                  // event loop is run again. In that case, a message sent to the last handler gets
+                  // delivered to the last non-pending handler, which will most likely end up
+                  // throwing UnsupportedMessageTypeException. Therefore, we only complete the
+                  // promise in the event loop.
+                  ch.eventLoop().execute(() -> channelReady.setSuccess(ch));
+                } else {
+                  channelReady.setSuccess(ch);
+                }
+              } catch (Throwable t) {
+                channelReady.setFailure(t);
+              }
+            });
+
+    return channelReady;
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private void releaseDownloadChannel(Channel ch) {
+    if (ch.isOpen()) {
+      // The channel might have been closed due to an error, in which case its pipeline
+      // has already been cleared. Closed channels can't be reused.
+      try {
+        ch.pipeline().remove(IdleTimeoutHandler.class);
+        ch.pipeline().remove(HttpClientCodec.class);
+        ch.pipeline().remove(HttpDownloadHandler.class);
+      } catch (NoSuchElementException e) {
+        // If the channel is in the process of closing but not yet closed, some handlers could have
+        // been removed and would cause NoSuchElement exceptions to be thrown. Because handlers are
+        // removed in reverse-order, if we get a NoSuchElement exception, the following handlers
+        // should have been removed.
+      }
+    }
+    channelPool.release(ch);
+  }
+
+  private boolean isChannelPipelineEmpty(ChannelPipeline pipeline) {
+    return (pipeline.first() == null)
+        || (useTls
+            && "ssl-handler".equals(pipeline.firstContext().name())
+            && pipeline.first() == pipeline.last());
   }
 
   @Override
-  public boolean containsKey(String key) throws IOException, InterruptedException {
+  public boolean contains(String key) {
     throw new UnsupportedOperationException("HTTP Caching does not use this method.");
   }
 
   @Override
-  public boolean get(String key, OutputStream out) throws IOException, InterruptedException {
+  public boolean containsActionResult(String key) {
+    throw new UnsupportedOperationException("HTTP Caching does not use this method.");
+  }
+
+  @Override
+  public ListenableFuture<Boolean> get(String key, OutputStream out) {
     return get(key, out, true);
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
-  private boolean get(String key, OutputStream out, boolean casDownload)
-      throws IOException, InterruptedException {
+  private ListenableFuture<Boolean> get(String key, final OutputStream out, boolean casDownload) {
     final AtomicBoolean dataWritten = new AtomicBoolean();
     OutputStream wrappedOut =
-        new FilterOutputStream(out) {
+        new OutputStream() {
+          // OutputStream.close() does nothing, which is what we want to ensure that the
+          // OutputStream can't be closed somewhere in the Netty pipeline, so that we can support
+          // retries. The OutputStream is closed in the finally block below.
+
+          @Override
+          public void write(byte[] b, int offset, int length) throws IOException {
+            dataWritten.set(true);
+            out.write(b, offset, length);
+          }
 
           @Override
           public void write(int b) throws IOException {
             dataWritten.set(true);
-            super.write(b);
+            out.write(b);
           }
 
           @Override
-          public void close() {
-            // Ensure that the OutputStream can't be closed somewhere in the Netty
-            // pipeline, so that we can support retries. The OutputStream is closed in
-            // the finally block below.
+          public void flush() throws IOException {
+            out.flush();
           }
         };
     DownloadCommand download = new DownloadCommand(uri, casDownload, key, wrappedOut);
-    ;
-    Channel ch = null;
-    try {
-      ch = acquireDownloadChannel();
-      ChannelFuture downloadFuture = ch.writeAndFlush(download);
-      downloadFuture.sync();
-      return true;
-    } catch (Exception e) {
-      // e can be of type HttpException, because Netty uses Unsafe.throwException to re-throw a
-      // checked exception that hasn't been declared in the method signature.
-      if (e instanceof HttpException) {
-        HttpResponse response = ((HttpException) e).response();
-        if (!dataWritten.get() && authTokenExpired(response)) {
-          // The error is due to an auth token having expired. Let's try again.
-          refreshCredentials();
-          return getAfterCredentialRefresh(download);
-        }
-        if (cacheMiss(response.status())) {
-          return false;
-        }
-      }
-      throw e;
-    } finally {
-      if (ch != null) {
-        downloadChannels.release(ch);
-      }
-    }
+    SettableFuture<Boolean> outerF = SettableFuture.create();
+    acquireDownloadChannel()
+        .addListener(
+            (Future<Channel> chP) -> {
+              if (!chP.isSuccess()) {
+                outerF.setException(chP.cause());
+                return;
+              }
+
+              Channel ch = chP.getNow();
+              ch.writeAndFlush(download)
+                  .addListener(
+                      (f) -> {
+                        try {
+                          if (f.isSuccess()) {
+                            outerF.set(true);
+                          } else {
+                            Throwable cause = f.cause();
+                            // cause can be of type HttpException, because Netty uses
+                            // Unsafe.throwException to
+                            // re-throw a checked exception that hasn't been declared in the method
+                            // signature.
+                            if (cause instanceof HttpException) {
+                              HttpResponse response = ((HttpException) cause).response();
+                              if (!dataWritten.get() && authTokenExpired(response)) {
+                                // The error is due to an auth token having expired. Let's try
+                                // again.
+                                refreshCredentials();
+                                getAfterCredentialRefresh(download, outerF);
+                                return;
+                              } else if (cacheMiss(response.status())) {
+                                outerF.set(false);
+                                return;
+                              }
+                            }
+                            outerF.setException(cause);
+                          }
+                        } finally {
+                          releaseDownloadChannel(ch);
+                        }
+                      });
+            });
+    return outerF;
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
-  private boolean getAfterCredentialRefresh(DownloadCommand cmd) throws InterruptedException {
-    Channel ch = null;
-    try {
-      ch = acquireDownloadChannel();
-      ChannelFuture downloadFuture = ch.writeAndFlush(cmd);
-      downloadFuture.sync();
-      return true;
-    } catch (Exception e) {
-      if (e instanceof HttpException) {
-        HttpResponse response = ((HttpException) e).response();
-        if (cacheMiss(response.status())) {
-          return false;
-        }
-      }
-      throw e;
-    } finally {
-      if (ch != null) {
-        downloadChannels.release(ch);
-      }
-    }
+  private void getAfterCredentialRefresh(DownloadCommand cmd, SettableFuture<Boolean> outerF) {
+    acquireDownloadChannel()
+        .addListener(
+            (Future<Channel> chP) -> {
+              if (!chP.isSuccess()) {
+                outerF.setException(chP.cause());
+                return;
+              }
+
+              Channel ch = chP.getNow();
+              ch.writeAndFlush(cmd)
+                  .addListener(
+                      (f) -> {
+                        try {
+                          if (f.isSuccess()) {
+                            outerF.set(true);
+                          } else {
+                            Throwable cause = f.cause();
+                            if (cause instanceof HttpException) {
+                              HttpResponse response = ((HttpException) cause).response();
+                              if (cacheMiss(response.status())) {
+                                outerF.set(false);
+                                return;
+                              }
+                            }
+                            outerF.setException(cause);
+                          }
+                        } finally {
+                          releaseDownloadChannel(ch);
+                        }
+                      });
+            });
   }
 
   @Override
-  public boolean getActionResult(String actionKey, OutputStream out)
-      throws IOException, InterruptedException {
+  public ListenableFuture<Boolean> getActionResult(String actionKey, OutputStream out) {
     return get(actionKey, out, false);
   }
 
@@ -316,7 +575,7 @@ public final class HttpBlobStore implements SimpleBlobStore {
     } finally {
       in.close();
       if (ch != null) {
-        uploadChannels.release(ch);
+        releaseUploadChannel(ch);
       }
     }
   }
@@ -330,7 +589,7 @@ public final class HttpBlobStore implements SimpleBlobStore {
       uploadFuture.sync();
     } finally {
       if (ch != null) {
-        uploadChannels.release(ch);
+        releaseUploadChannel(ch);
       }
     }
   }
@@ -363,9 +622,15 @@ public final class HttpBlobStore implements SimpleBlobStore {
   @SuppressWarnings("FutureReturnValueIgnored")
   @Override
   public void close() {
-    downloadChannels.close();
-    uploadChannels.close();
-    eventLoop.shutdownGracefully();
+    synchronized (closeLock) {
+      if (isClosed) {
+        return;
+      }
+
+      isClosed = true;
+      channelPool.close();
+      eventLoop.shutdownGracefully();
+    }
   }
 
   private boolean cacheMiss(HttpResponseStatus status) {
@@ -387,24 +652,6 @@ public final class HttpBlobStore implements SimpleBlobStore {
       return INVALID_TOKEN_ERROR.matcher(value).find();
     } else {
       return response.status().equals(HttpResponseStatus.UNAUTHORIZED);
-    }
-  }
-
-  private Channel acquireDownloadChannel() throws InterruptedException {
-    try {
-      return downloadChannels.acquire().get();
-    } catch (ExecutionException e) {
-      PlatformDependent.throwException(e.getCause());
-      return null;
-    }
-  }
-
-  private Channel acquireUploadChannel() throws InterruptedException {
-    try {
-      return uploadChannels.acquire().get();
-    } catch (ExecutionException e) {
-      PlatformDependent.throwException(e.getCause());
-      return null;
     }
   }
 

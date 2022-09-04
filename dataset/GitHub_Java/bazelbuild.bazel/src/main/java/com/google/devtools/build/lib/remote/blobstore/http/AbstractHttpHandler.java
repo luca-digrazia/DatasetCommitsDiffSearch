@@ -15,7 +15,9 @@ package com.google.devtools.build.lib.remote.blobstore.http;
 
 import com.google.auth.Credentials;
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandler;
 import io.netty.channel.ChannelPromise;
@@ -29,15 +31,22 @@ import java.net.URI;
 import java.nio.channels.ClosedChannelException;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /** Common functionality shared by concrete classes. */
 abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelInboundHandler<T>
     implements ChannelOutboundHandler {
 
-  private final Credentials credentials;
+  private static final String USER_AGENT_VALUE =
+      "bazel/" + BlazeVersionInfo.instance().getVersion();
 
-  public AbstractHttpHandler(Credentials credentials) {
+  private final Credentials credentials;
+  private final ImmutableList<Entry<String, String>> extraHttpHeaders;
+
+  public AbstractHttpHandler(
+      Credentials credentials, ImmutableList<Entry<String, String>> extraHttpHeaders) {
     this.credentials = credentials;
+    this.extraHttpHeaders = extraHttpHeaders;
   }
 
   protected ChannelPromise userPromise;
@@ -50,8 +59,8 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
     userPromise = null;
   }
 
-  @SuppressWarnings("FutureReturnValueIgnored") 
-  protected void succeedAndResetUserPromise() {  
+  @SuppressWarnings("FutureReturnValueIgnored")
+  protected void succeedAndResetUserPromise() {
     userPromise.setSuccess();
     userPromise = null;
   }
@@ -78,6 +87,16 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
     }
   }
 
+  protected void addExtraRemoteHeaders(HttpRequest request) {
+    for (Map.Entry<String, String> header : extraHttpHeaders) {
+      request.headers().add(header.getKey(), header.getValue());
+    }
+  }
+
+  protected void addUserAgentHeader(HttpRequest request) {
+    request.headers().set(HttpHeaderNames.USER_AGENT, USER_AGENT_VALUE);
+  }
+
   protected String constructPath(URI uri, String hash, boolean isCas) {
     StringBuilder builder = new StringBuilder();
     builder.append(uri.getPath());
@@ -90,12 +109,17 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
   }
 
   protected String constructHost(URI uri) {
-    return uri.getHost() + ":" + uri.getPort();
+    boolean includePort =
+        (uri.getPort() > 0)
+            && ((uri.getScheme().equals("http") && uri.getPort() != 80)
+                || (uri.getScheme().equals("https") && uri.getPort() != 443));
+    return uri.getHost() + (includePort ? ":" + uri.getPort() : "");
   }
 
   @Override
-  public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) {
-    failAndResetUserPromise(throwable);
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable t) {
+    failAndResetUserPromise(t);
+    ctx.fireExceptionCaught(t);
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
@@ -131,6 +155,7 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
   @SuppressWarnings("FutureReturnValueIgnored")
   @Override
   public void deregister(ChannelHandlerContext ctx, ChannelPromise promise) {
+    failAndResetUserPromise(new ClosedChannelException());
     ctx.deregister(promise);
   }
 
@@ -147,8 +172,19 @@ abstract class AbstractHttpHandler<T extends HttpObject> extends SimpleChannelIn
   }
 
   @Override
-  public void channelInactive(ChannelHandlerContext channelHandlerContext) throws Exception {
+  public void channelInactive(ChannelHandlerContext ctx) {
     failAndResetUserPromise(new ClosedChannelException());
-    super.channelInactive(channelHandlerContext);
+    ctx.fireChannelInactive();
+  }
+
+  @Override
+  public void handlerRemoved(ChannelHandlerContext ctx) {
+    failAndResetUserPromise(new IOException("handler removed"));
+  }
+
+  @Override
+  public void channelUnregistered(ChannelHandlerContext ctx) {
+    failAndResetUserPromise(new ClosedChannelException());
+    ctx.fireChannelUnregistered();
   }
 }

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.remote.blobstore.http;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.auth.Credentials;
+import com.google.common.collect.ImmutableList;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.http.DefaultHttpRequest;
@@ -29,21 +30,29 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.stream.ChunkedStream;
+import io.netty.handler.timeout.WriteTimeoutException;
 import io.netty.util.internal.StringUtil;
 import java.io.IOException;
+import java.util.Map.Entry;
 
 /** ChannelHandler for uploads. */
 final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
 
-  public HttpUploadHandler(Credentials credentials) {
-    super(credentials);
+  /** the path header in the http request */
+  private String path;
+  /** the size of the data being uploaded in bytes */
+  private long contentLength;
+
+  public HttpUploadHandler(
+      Credentials credentials, ImmutableList<Entry<String, String>> extraHttpHeaders) {
+    super(credentials, extraHttpHeaders);
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
   @Override
   protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse response) {
     if (!response.decoderResult().isSuccess()) {
-      failAndResetUserPromise(new IOException("Failed to parse the HTTP response."));
+      failAndClose(new IOException("Failed to parse the HTTP response."), ctx);
       return;
     }
     try {
@@ -53,8 +62,13 @@ final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
           && !response.status().equals(HttpResponseStatus.CREATED)
           && !response.status().equals(HttpResponseStatus.NO_CONTENT)) {
         // Supporting more than OK status to be compatible with nginx webdav.
-        failAndResetUserPromise(
-            new HttpException(response, "Upload failed with status: " + response.status(), null));
+        String errorMsg = response.status().toString();
+        if (response.content().readableBytes() > 0) {
+          byte[] data = new byte[response.content().readableBytes()];
+          response.content().readBytes(data);
+          errorMsg += "\n" + new String(data, HttpUtil.getCharset(response));
+        }
+        failAndResetUserPromise(new HttpException(response, errorMsg, null));
       } else {
         succeedAndResetUserPromise();
       }
@@ -76,16 +90,21 @@ final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
               "Unsupported message type: " + StringUtil.simpleClassName(msg)));
       return;
     }
-    HttpRequest request = buildRequest((UploadCommand) msg);
-    addCredentialHeaders(request, ((UploadCommand) msg).uri());
-    HttpChunkedInput body = buildBody((UploadCommand) msg);
+    UploadCommand cmd = (UploadCommand) msg;
+    path = constructPath(cmd.uri(), cmd.hash(), cmd.casUpload());
+    contentLength = cmd.contentLength();
+    HttpRequest request = buildRequest(path, constructHost(cmd.uri()), contentLength);
+    addCredentialHeaders(request, cmd.uri());
+    addExtraRemoteHeaders(request);
+    addUserAgentHeader(request);
+    HttpChunkedInput body = buildBody(cmd);
     ctx.writeAndFlush(request)
         .addListener(
             (f) -> {
               if (f.isSuccess()) {
                 return;
               }
-              failAndResetUserPromise(f.cause());
+              failAndClose(f.cause(), ctx);
             });
     ctx.writeAndFlush(body)
         .addListener(
@@ -93,24 +112,39 @@ final class HttpUploadHandler extends AbstractHttpHandler<FullHttpResponse> {
               if (f.isSuccess()) {
                 return;
               }
-              failAndResetUserPromise(f.cause());
+              failAndClose(f.cause(), ctx);
             });
   }
 
-  private HttpRequest buildRequest(UploadCommand msg) {
-    HttpRequest request =
-        new DefaultHttpRequest(
-            HttpVersion.HTTP_1_1,
-            HttpMethod.PUT,
-            constructPath(msg.uri(), msg.hash(), msg.casUpload()));
-    request.headers().set(HttpHeaderNames.HOST, constructHost(msg.uri()));
+  @Override
+  @SuppressWarnings("deprecation")
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable t) {
+    if (t instanceof WriteTimeoutException) {
+      super.exceptionCaught(ctx, new UploadTimeoutException(path, contentLength));
+    } else {
+      super.exceptionCaught(ctx, t);
+    }
+  }
+
+  private HttpRequest buildRequest(String path, String host, long contentLength) {
+    HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.PUT, path);
+    request.headers().set(HttpHeaderNames.HOST, host);
     request.headers().set(HttpHeaderNames.ACCEPT, "*/*");
-    request.headers().set(HttpHeaderNames.CONTENT_LENGTH, msg.contentLength());
+    request.headers().set(HttpHeaderNames.CONTENT_LENGTH, contentLength);
     request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
     return request;
   }
 
   private HttpChunkedInput buildBody(UploadCommand msg) {
     return new HttpChunkedInput(new ChunkedStream(msg.data()));
+  }
+
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private void failAndClose(Throwable t, ChannelHandlerContext ctx) {
+    try {
+      failAndResetUserPromise(t);
+    } finally {
+      ctx.close();
+    }
   }
 }

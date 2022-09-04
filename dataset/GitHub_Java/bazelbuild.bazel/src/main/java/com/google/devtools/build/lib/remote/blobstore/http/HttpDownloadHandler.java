@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.remote.blobstore.http;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.auth.Credentials;
+import com.google.common.collect.ImmutableList;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -31,52 +32,94 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.timeout.ReadTimeoutException;
 import io.netty.util.internal.StringUtil;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Map.Entry;
 
 /** ChannelHandler for downloads. */
 final class HttpDownloadHandler extends AbstractHttpHandler<HttpObject> {
 
-  private long contentLength = -1;
-  private long bytesReceived;
   private OutputStream out;
   private boolean keepAlive = HttpVersion.HTTP_1_1.isKeepAliveDefault();
+  private boolean downloadSucceeded;
+  private HttpResponse response;
 
-  public HttpDownloadHandler(Credentials credentials) {
-    super(credentials);
+  private long bytesReceived;
+  private long contentLength = -1;
+  /** the path header in the http request */
+  private String path;
+
+  public HttpDownloadHandler(
+      Credentials credentials, ImmutableList<Entry<String, String>> extraHttpHeaders) {
+    super(credentials, extraHttpHeaders);
   }
 
   @Override
   protected void channelRead0(ChannelHandlerContext ctx, HttpObject msg) throws Exception {
     if (!msg.decoderResult().isSuccess()) {
-      failAndResetUserPromise(new IOException("Failed to parse the HTTP response."));
+      failAndClose(new IOException("Failed to parse the HTTP response."), ctx);
       return;
     }
-    checkState(userPromise != null, "response before request");
-    if (msg instanceof HttpResponse) {
-      HttpResponse response = (HttpResponse) msg;
-      keepAlive = HttpUtil.isKeepAlive((HttpResponse) msg);
-      if (HttpUtil.isContentLengthSet(response)) {
-        contentLength = HttpUtil.getContentLength(response);
-      }
-      if (!response.status().equals(HttpResponseStatus.OK)) {
-        failAndReset(
-            new HttpException(response, "Download failed with status: " + response.status(), null),
-            ctx);
-      }
-    } else if (msg instanceof HttpContent) {
-      ByteBuf content = ((HttpContent) msg).content();
-      bytesReceived += content.readableBytes();
-      content.readBytes(out, content.readableBytes());
-      if (bytesReceived == contentLength || msg instanceof LastHttpContent) {
-        succeedAndReset(ctx);
-      }
-    } else {
-      failAndReset(
+    if (!(msg instanceof HttpResponse) && !(msg instanceof HttpContent)) {
+      failAndClose(
           new IllegalArgumentException(
               "Unsupported message type: " + StringUtil.simpleClassName(msg)),
           ctx);
+      return;
+    }
+    checkState(userPromise != null, "response before request");
+
+    if (msg instanceof HttpResponse) {
+      response = (HttpResponse) msg;
+      if (!response.protocolVersion().equals(HttpVersion.HTTP_1_1)) {
+        HttpException error =
+            new HttpException(
+                response, "HTTP version 1.1 is required, was: " + response.protocolVersion(), null);
+        failAndClose(error, ctx);
+        return;
+      }
+      boolean contentLengthSet = HttpUtil.isContentLengthSet(response);
+      if (!contentLengthSet && !HttpUtil.isTransferEncodingChunked(response)) {
+        HttpException error =
+            new HttpException(
+                response, "Missing 'Content-Length' or 'Transfer-Encoding: chunked' header", null);
+        failAndClose(error, ctx);
+        return;
+      }
+
+      if (contentLengthSet) {
+        contentLength = HttpUtil.getContentLength(response);
+      }
+      downloadSucceeded = response.status().equals(HttpResponseStatus.OK);
+      if (!downloadSucceeded) {
+        out = new ByteArrayOutputStream();
+      }
+      keepAlive = HttpUtil.isKeepAlive((HttpResponse) msg);
+    }
+
+    if (msg instanceof HttpContent) {
+      checkState(response != null, "content before headers");
+
+      ByteBuf content = ((HttpContent) msg).content();
+      int readableBytes = content.readableBytes();
+      content.readBytes(out, readableBytes);
+      bytesReceived += readableBytes;
+      if (msg instanceof LastHttpContent) {
+        if (downloadSucceeded) {
+          succeedAndReset(ctx);
+        } else {
+          String errorMsg = response.status() + "\n";
+          errorMsg +=
+              new String(
+                  ((ByteArrayOutputStream) out).toByteArray(), HttpUtil.getCharset(response));
+          out.close();
+          HttpException error = new HttpException(response, errorMsg, null);
+          failAndReset(error, ctx);
+        }
+      }
     }
   }
 
@@ -91,31 +134,41 @@ final class HttpDownloadHandler extends AbstractHttpHandler<HttpObject> {
               "Unsupported message type: " + StringUtil.simpleClassName(msg)));
       return;
     }
-    out = ((DownloadCommand) msg).out();
-    HttpRequest request = buildRequest((DownloadCommand) msg);
-    addCredentialHeaders(request, ((DownloadCommand) msg).uri());
+    DownloadCommand cmd = (DownloadCommand) msg;
+    out = cmd.out();
+    path = constructPath(cmd.uri(), cmd.hash(), cmd.casDownload());
+    HttpRequest request = buildRequest(path, constructHost(cmd.uri()));
+    addCredentialHeaders(request, cmd.uri());
+    addExtraRemoteHeaders(request);
+    addUserAgentHeader(request);
     ctx.writeAndFlush(request)
         .addListener(
             (f) -> {
               if (!f.isSuccess()) {
-                failAndReset(f.cause(), ctx);
+                failAndClose(f.cause(), ctx);
               }
             });
   }
 
-  private HttpRequest buildRequest(DownloadCommand request) {
+  @Override
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable t) {
+    if (t instanceof ReadTimeoutException) {
+      super.exceptionCaught(ctx, new DownloadTimeoutException(path, bytesReceived, contentLength));
+    } else {
+      super.exceptionCaught(ctx, t);
+    }
+  }
+
+  private HttpRequest buildRequest(String path, String host) {
     HttpRequest httpRequest =
-        new DefaultFullHttpRequest(
-            HttpVersion.HTTP_1_1,
-            HttpMethod.GET,
-            constructPath(request.uri(), request.hash(), request.casDownload()));
-    httpRequest.headers().set(HttpHeaderNames.HOST, constructHost(request.uri()));
+        new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, path);
+    httpRequest.headers().set(HttpHeaderNames.HOST, host);
     httpRequest.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
     httpRequest.headers().set(HttpHeaderNames.ACCEPT, "*/*");
     return httpRequest;
   }
 
-  private void succeedAndReset(ChannelHandlerContext ctx) throws IOException {
+  private void succeedAndReset(ChannelHandlerContext ctx) {
     try {
       succeedAndResetUserPromise();
     } finally {
@@ -123,7 +176,16 @@ final class HttpDownloadHandler extends AbstractHttpHandler<HttpObject> {
     }
   }
 
-  private void failAndReset(Throwable t, ChannelHandlerContext ctx) throws IOException {
+  @SuppressWarnings("FutureReturnValueIgnored")
+  private void failAndClose(Throwable t, ChannelHandlerContext ctx) {
+    try {
+      failAndResetUserPromise(t);
+    } finally {
+      ctx.close();
+    }
+  }
+
+  private void failAndReset(Throwable t, ChannelHandlerContext ctx) {
     try {
       failAndResetUserPromise(t);
     } finally {
@@ -132,16 +194,16 @@ final class HttpDownloadHandler extends AbstractHttpHandler<HttpObject> {
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
-  private void reset(ChannelHandlerContext ctx) throws IOException {
+  private void reset(ChannelHandlerContext ctx) {
     try {
       if (!keepAlive) {
         ctx.close();
       }
     } finally {
-      contentLength = -1;
-      bytesReceived = 0;
       out = null;
       keepAlive = HttpVersion.HTTP_1_1.isKeepAliveDefault();
+      downloadSucceeded = false;
+      response = null;
     }
   }
 }

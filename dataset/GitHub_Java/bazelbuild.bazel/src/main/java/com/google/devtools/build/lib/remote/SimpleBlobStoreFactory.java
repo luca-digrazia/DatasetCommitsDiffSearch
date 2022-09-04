@@ -14,205 +14,131 @@
 
 package com.google.devtools.build.lib.remote;
 
-import com.hazelcast.client.HazelcastClient;
-import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.client.config.ClientNetworkConfig;
-import com.hazelcast.client.config.XmlClientConfigBuilder;
-import com.hazelcast.config.Config;
-import com.hazelcast.core.Hazelcast;
-import com.hazelcast.core.HazelcastInstance;
-import java.io.ByteArrayOutputStream;
+import com.google.auth.Credentials;
+import com.google.common.base.Ascii;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.remote.blobstore.CombinedDiskHttpBlobStore;
+import com.google.devtools.build.lib.remote.blobstore.ConcurrentMapBlobStore;
+import com.google.devtools.build.lib.remote.blobstore.OnDiskBlobStore;
+import com.google.devtools.build.lib.remote.blobstore.SimpleBlobStore;
+import com.google.devtools.build.lib.remote.blobstore.http.HttpBlobStore;
+import com.google.devtools.build.lib.remote.options.RemoteOptions;
+import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
+import io.netty.channel.unix.DomainSocketAddress;
 import java.io.IOException;
-import java.util.concurrent.ConcurrentMap;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpHead;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.util.EntityUtils;
+import java.net.URI;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.Nullable;
 
 /**
  * A factory class for providing a {@link SimpleBlobStore} to be used with {@link
- * SimpleBlobStoreActionCache}. Currently implemented with Hazelcast or REST.
+ * SimpleBlobStoreActionCache}. Currently implemented with HTTP or local.
  */
 public final class SimpleBlobStoreFactory {
 
-  private static final String HAZELCAST_CACHE_NAME = "hazelcast-build-cache";
-
   private SimpleBlobStoreFactory() {}
 
-  /** A {@link SimpleBlobStore} implementation using a {@link ConcurrentMap}. */
-  public static class ConcurrentMapBlobStore implements SimpleBlobStore {
-    private final ConcurrentMap<String, byte[]> map;
-
-    public ConcurrentMapBlobStore(ConcurrentMap<String, byte[]> map) {
-      this.map = map;
-    }
-
-    @Override
-    public boolean containsKey(String key) {
-      return map.containsKey(key);
-    }
-
-    @Override
-    public byte[] get(String key) {
-      return map.get(key);
-    }
-
-    @Override
-    public void put(String key, byte[] value) {
-      map.put(key, value);
-    }
-  }
-
-  /** Construct a {@link SimpleBlobStore} using Hazelcast's version of {@link ConcurrentMap} */
-  public static SimpleBlobStore createHazelcast(RemoteOptions options) {
-    HazelcastInstance instance;
-    if (options.hazelcastClientConfig != null) {
-      try {
-        ClientConfig config = new XmlClientConfigBuilder(options.hazelcastClientConfig).build();
-        instance = HazelcastClient.newHazelcastClient(config);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    } else if (options.hazelcastNode != null) {
-      // If --hazelcast_node is specified then create a client instance.
-      ClientConfig config = new ClientConfig();
-      ClientNetworkConfig net = config.getNetworkConfig();
-      net.addAddress(options.hazelcastNode.split(","));
-      instance = HazelcastClient.newHazelcastClient(config);
-    } else if (options.hazelcastStandaloneListenPort != 0) {
-      Config config = new Config();
-      config
-          .getNetworkConfig()
-          .setPort(options.hazelcastStandaloneListenPort)
-          .getJoin()
-          .getMulticastConfig()
-          .setEnabled(false);
-      instance = Hazelcast.newHazelcastInstance(config);
+  public static SimpleBlobStore create(RemoteOptions remoteOptions, @Nullable Path casPath) {
+    if (isHttpUrlOptions(remoteOptions)) {
+      return createHttp(remoteOptions, /* creds= */ null);
+    } else if (casPath != null) {
+      return new OnDiskBlobStore(casPath);
     } else {
-      // Otherwise create a default instance. This is going to look at
-      // -Dhazelcast.config=some-hazelcast.xml for configuration.
-      instance = Hazelcast.newHazelcastInstance();
-    }
-    return new ConcurrentMapBlobStore(instance.<String, byte[]>getMap(HAZELCAST_CACHE_NAME));
-  }
-
-  /**
-   * Implementation of {@link SimpleBlobStore} with a REST service. The REST service needs to
-   * support the following HTTP methods.
-   *
-   * <p>PUT /cache/1234 HTTP/1.1 PUT method is used to upload a blob with a base16 key. In this
-   * example the key is 1234. Valid status codes are 200, 201, 202 and 204.
-   *
-   * <p>GET /cache/1234 HTTP/1.1 GET method fetches a blob with the specified key. In this example
-   * the key is 1234. A status code of 200 should be followed by the content of blob. Status code of
-   * 404 or 204 means the key cannot be found.
-   *
-   * <p>HEAD /cache/1234 HTTP/1.1 HEAD method checks to see if the specified key exists in the blob
-   * store. A status code of 200 indicates the key is found in the blob store. A status code of 404
-   * indicates the key is not found in the blob store.
-   */
-  private static class RestBlobStore implements SimpleBlobStore {
-
-    private final String baseUrl;
-
-    RestBlobStore(String baseUrl) {
-      this.baseUrl = baseUrl;
-    }
-
-    @Override
-    public boolean containsKey(String key) {
-      try {
-        HttpClient client = new DefaultHttpClient();
-        HttpHead head = new HttpHead(baseUrl + "/" + key);
-        HttpResponse response = client.execute(head);
-        int statusCode = response.getStatusLine().getStatusCode();
-        return HttpStatus.SC_OK == statusCode;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    @Override
-    public byte[] get(String key) {
-      try {
-        HttpClient client = new DefaultHttpClient();
-        HttpGet get = new HttpGet(baseUrl + "/" + key);
-        HttpResponse response = client.execute(get);
-        int statusCode = response.getStatusLine().getStatusCode();
-        if (HttpStatus.SC_NOT_FOUND == statusCode || HttpStatus.SC_NO_CONTENT == statusCode) {
-          return null;
-        }
-        if (HttpStatus.SC_OK != statusCode) {
-          throw new RuntimeException("GET failed with status code " + statusCode);
-        }
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        HttpEntity entity = response.getEntity();
-        entity.writeTo(buffer);
-        buffer.flush();
-        EntityUtils.consume(entity);
-
-        return buffer.toByteArray();
-
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    @Override
-    public void put(String key, byte[] value) {
-      try {
-        HttpClient client = new DefaultHttpClient();
-        HttpPut put = new HttpPut(baseUrl + "/" + key);
-        put.setEntity(new ByteArrayEntity(value));
-        HttpResponse response = client.execute(put);
-        int statusCode = response.getStatusLine().getStatusCode();
-
-        // Accept more than SC_OK to be compatible with Nginx WebDav module.
-        if (HttpStatus.SC_OK != statusCode
-            && HttpStatus.SC_ACCEPTED != statusCode
-            && HttpStatus.SC_CREATED != statusCode
-            && HttpStatus.SC_NO_CONTENT != statusCode) {
-          throw new RuntimeException("PUT failed with status code " + statusCode);
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+      return new ConcurrentMapBlobStore(new ConcurrentHashMap<>());
     }
   }
 
-  public static SimpleBlobStore createRest(RemoteOptions options) {
-    return new RestBlobStore(options.remoteRestCache);
-  }
+  public static SimpleBlobStore create(
+      RemoteOptions options, @Nullable Credentials creds, Path workingDirectory)
+      throws IOException {
 
-  public static SimpleBlobStore create(RemoteOptions options) {
-    if (isHazelcastOptions(options)) {
-      return createHazelcast(options);
+    Preconditions.checkNotNull(workingDirectory, "workingDirectory");
+    if (isHttpUrlOptions(options) && isDiskCache(options)) {
+      return createCombinedCache(workingDirectory, options.diskCache, options, creds);
     }
-    if (isRestUrlOptions(options)) {
-      return createRest(options);
+    if (isHttpUrlOptions(options)) {
+      return createHttp(options, creds);
+    }
+    if (isDiskCache(options)) {
+      return createDiskCache(workingDirectory, options.diskCache);
     }
     throw new IllegalArgumentException(
-        "Unrecognized concurrent map RemoteOptions: must specify "
-            + "either Hazelcast or Rest URL options.");
+        "Unrecognized RemoteOptions configuration: remote Http cache URL and/or local disk cache"
+            + " options expected.");
   }
 
   public static boolean isRemoteCacheOptions(RemoteOptions options) {
-    return isHazelcastOptions(options) || isRestUrlOptions(options);
+    return isHttpUrlOptions(options) || isDiskCache(options);
   }
 
-  private static boolean isHazelcastOptions(RemoteOptions options) {
-    return options.hazelcastNode != null
-        || options.hazelcastClientConfig != null
-        || options.hazelcastStandaloneListenPort != 0;
+  private static SimpleBlobStore createHttp(RemoteOptions options, Credentials creds) {
+    Preconditions.checkNotNull(options.remoteCache, "remoteCache");
+
+    try {
+      URI uri = URI.create(options.remoteCache);
+      Preconditions.checkArgument(
+          Ascii.toLowerCase(uri.getScheme()).startsWith("http"),
+          "remoteCache should start with http");
+
+      if (options.remoteProxy != null) {
+        if (options.remoteProxy.startsWith("unix:")) {
+          return HttpBlobStore.create(
+              new DomainSocketAddress(options.remoteProxy.replaceFirst("^unix:", "")),
+              uri,
+              options.remoteTimeout,
+              options.remoteMaxConnections,
+              ImmutableList.copyOf(options.remoteHeaders),
+              creds);
+        } else {
+          throw new Exception("Remote cache proxy unsupported: " + options.remoteProxy);
+        }
+      } else {
+        return HttpBlobStore.create(
+            uri,
+            options.remoteTimeout,
+            options.remoteMaxConnections,
+            ImmutableList.copyOf(options.remoteHeaders),
+            creds);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
-  private static boolean isRestUrlOptions(RemoteOptions options) {
-    return options.remoteRestCache != null;
+  private static SimpleBlobStore createDiskCache(Path workingDirectory, PathFragment diskCachePath)
+      throws IOException {
+    Path cacheDir =
+        workingDirectory.getRelative(Preconditions.checkNotNull(diskCachePath, "diskCachePath"));
+    if (!cacheDir.exists()) {
+      cacheDir.createDirectoryAndParents();
+    }
+    return new OnDiskBlobStore(cacheDir);
+  }
+
+  private static SimpleBlobStore createCombinedCache(
+      Path workingDirectory, PathFragment diskCachePath, RemoteOptions options, Credentials cred)
+      throws IOException {
+
+    Path cacheDir =
+        workingDirectory.getRelative(Preconditions.checkNotNull(diskCachePath, "diskCachePath"));
+    if (!cacheDir.exists()) {
+      cacheDir.createDirectoryAndParents();
+    }
+
+    OnDiskBlobStore diskCache = new OnDiskBlobStore(cacheDir);
+    SimpleBlobStore httpCache = createHttp(options, cred);
+    return new CombinedDiskHttpBlobStore(diskCache, httpCache);
+  }
+
+  private static boolean isDiskCache(RemoteOptions options) {
+    return options.diskCache != null && !options.diskCache.isEmpty();
+  }
+
+  private static boolean isHttpUrlOptions(RemoteOptions options) {
+    return options.remoteCache != null
+        && (Ascii.toLowerCase(options.remoteCache).startsWith("http://")
+            || Ascii.toLowerCase(options.remoteCache).startsWith("https://"));
   }
 }
