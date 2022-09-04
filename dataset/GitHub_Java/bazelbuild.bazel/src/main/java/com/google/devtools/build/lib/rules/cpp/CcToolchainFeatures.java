@@ -38,7 +38,9 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -116,7 +118,9 @@ public class CcToolchainFeatures implements Serializable {
    * %{var1}/%{var2}"). We split the string into chunks, where each chunk represents either a text
    * snippet, or a variable that is to be replaced.
    */
+  @AutoCodec(strategy = Strategy.POLYMORPHIC)
   interface StringChunk {
+    ObjectCodec<StringChunk> CODEC = new CcToolchainFeatures_StringChunk_AutoCodec();
     /**
      * Expands this chunk.
      *
@@ -130,6 +134,10 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class StringLiteralChunk implements StringChunk, Serializable {
+
+    public static final ObjectCodec<StringLiteralChunk> CODEC =
+        new CcToolchainFeatures_StringLiteralChunk_AutoCodec();
+
     private final String text;
 
     @VisibleForSerialization
@@ -159,15 +167,15 @@ public class CcToolchainFeatures implements Serializable {
       return Objects.hash(text);
     }
   }
-
-  /** A chunk of a string value into which a variable should be expanded. */
+  
+  /**
+   * A chunk of a string value into which a variable should be expanded.
+   */
   @Immutable
-  @AutoCodec
-  static class VariableChunk implements StringChunk, Serializable {
+  private static class VariableChunk implements StringChunk, Serializable {
     private final String variableName;
-
-    @VisibleForSerialization
-    VariableChunk(String variableName) {
+    
+    private VariableChunk(String variableName) {
       this.variableName = variableName;
     }
 
@@ -320,7 +328,11 @@ public class CcToolchainFeatures implements Serializable {
   }
 
   /** A flag or flag group that can be expanded under a set of variables. */
+  @AutoCodec(strategy = Strategy.POLYMORPHIC)
   interface Expandable {
+
+    ObjectCodec<Expandable> CODEC = new CcToolchainFeatures_Expandable_AutoCodec();
+
     /**
      * Expands the current expandable under the given {@code view}, adding new flags to {@code
      * commandLine}.
@@ -338,6 +350,9 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class Flag implements Serializable, Expandable {
+
+    public static final ObjectCodec<Flag> CODEC = new CcToolchainFeatures_Flag_AutoCodec();
+
     private final ImmutableList<StringChunk> chunks;
 
     @VisibleForSerialization
@@ -386,6 +401,9 @@ public class CcToolchainFeatures implements Serializable {
     @AutoCodec
     @VisibleForSerialization
     static class SingleChunkFlag implements Serializable, Expandable {
+      public static final ObjectCodec<SingleChunkFlag> CODEC =
+          new CcToolchainFeatures_Flag_SingleChunkFlag_AutoCodec();
+
       private final StringChunk chunk;
 
       @VisibleForSerialization
@@ -425,6 +443,9 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class EnvEntry implements Serializable {
+
+    public static final ObjectCodec<EnvEntry> CODEC = new CcToolchainFeatures_EnvEntry_AutoCodec();
+
     private final String key;
     private final ImmutableList<StringChunk> valueChunks;
 
@@ -476,6 +497,10 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class VariableWithValue {
+
+    public static final ObjectCodec<VariableWithValue> CODEC =
+        new CcToolchainFeatures_VariableWithValue_AutoCodec();
+
     public final String variable;
     public final String value;
 
@@ -493,6 +518,10 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class FlagGroup implements Serializable, Expandable {
+
+    public static final ObjectCodec<FlagGroup> CODEC =
+        new CcToolchainFeatures_FlagGroup_AutoCodec();
+
     private final ImmutableList<Expandable> expandables;
     private String iterateOverVariable;
     private final ImmutableSet<String> expandIfAllAvailable;
@@ -684,11 +713,14 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class FlagSet implements Serializable {
+
+    public static final ObjectCodec<FlagSet> CODEC = new CcToolchainFeatures_FlagSet_AutoCodec();
+
     private final ImmutableSet<String> actions;
     private final ImmutableSet<String> expandIfAllAvailable;
     private final ImmutableSet<CToolchain.WithFeatureSet> withFeatureSets;
     private final ImmutableList<FlagGroup> flagGroups;
-
+    
     private FlagSet(CToolchain.FlagSet flagSet) throws InvalidConfigurationException {
       this(flagSet, ImmutableSet.copyOf(flagSet.getActionList()));
     }
@@ -767,6 +799,9 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class EnvSet implements Serializable {
+
+    public static final ObjectCodec<EnvSet> CODEC = new CcToolchainFeatures_EnvSet_AutoCodec();
+
     private final ImmutableSet<String> actions;
     private final ImmutableList<EnvEntry> envEntries;
     private final ImmutableSet<CToolchain.WithFeatureSet> withFeatureSets;
@@ -851,6 +886,9 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec
   @VisibleForSerialization
   static class Feature implements Serializable, CrosstoolSelectable {
+
+    public static final ObjectCodec<Feature> CODEC = new CcToolchainFeatures_Feature_AutoCodec();
+
     private final String name;
     private final ImmutableList<FlagSet> flagSets;
     private final ImmutableList<EnvSet> envSets;
@@ -983,6 +1021,10 @@ public class CcToolchainFeatures implements Serializable {
   @Immutable
   @AutoCodec
   static class ActionConfig implements Serializable, CrosstoolSelectable {
+
+    public static final ObjectCodec<ActionConfig> CODEC =
+        new CcToolchainFeatures_ActionConfig_AutoCodec();
+
     public static final String FLAG_SET_WITH_ACTION_ERROR =
         "action_config %s specifies actions.  An action_config's flag sets automatically apply "
             + "to the configured action.  Thus, you must not specify action lists in an "
@@ -1128,6 +1170,9 @@ public class CcToolchainFeatures implements Serializable {
   @Immutable
   @AutoCodec
   public static class Variables {
+    public static final ObjectCodec<Variables> CODEC =
+        new CcToolchainFeatures_Variables_AutoCodec();
+
     /** An empty variables instance. */
     public static final Variables EMPTY = new Variables.Builder().build();
 
@@ -1159,7 +1204,11 @@ public class CcToolchainFeatures implements Serializable {
      * <p>Implementations must be immutable and without any side-effects. They will be expanded and
      * queried multiple times.
      */
+    @AutoCodec(strategy = Strategy.POLYMORPHIC)
     interface VariableValue {
+      ObjectCodec<VariableValue> CODEC =
+          new CcToolchainFeatures_Variables_VariableValue_AutoCodec();
+
       /**
        * Returns string value of the variable, if the variable type can be converted to string (e.g.
        * StringValue), or throw exception if it cannot (e.g. Sequence).
@@ -1335,6 +1384,9 @@ public class CcToolchainFeatures implements Serializable {
     @AutoCodec
     @VisibleForSerialization
     static final class LazyStringSequence extends VariableValueAdapter {
+      public static final ObjectCodec<LazyStringSequence> CODEC =
+          new CcToolchainFeatures_Variables_LazyStringSequence_AutoCodec();
+
       private final Supplier<ImmutableList<String>> supplier;
 
       @VisibleForSerialization
@@ -1370,6 +1422,9 @@ public class CcToolchainFeatures implements Serializable {
     @Immutable
     @AutoCodec
     public static class LibraryToLinkValue extends VariableValueAdapter {
+      public static final ObjectCodec<LibraryToLinkValue> CODEC =
+          new CcToolchainFeatures_Variables_LibraryToLinkValue_AutoCodec();
+
       public static final String OBJECT_FILES_FIELD_NAME = "object_files";
       public static final String NAME_FIELD_NAME = "name";
       public static final String TYPE_FIELD_NAME = "type";
@@ -1394,47 +1449,61 @@ public class CcToolchainFeatures implements Serializable {
       }
 
       private final String name;
-      private final ImmutableList<Artifact> objectFiles;
+      private final Artifact directory;
+      private final ImmutableList<String> objectFiles;
       private final boolean isWholeArchive;
       private final Type type;
 
       public static LibraryToLinkValue forDynamicLibrary(String name) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, false, Type.DYNAMIC_LIBRARY);
+            Preconditions.checkNotNull(name), null, null, false, Type.DYNAMIC_LIBRARY);
       }
 
       public static LibraryToLinkValue forVersionedDynamicLibrary(
           String name) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, false, Type.VERSIONED_DYNAMIC_LIBRARY);
+            Preconditions.checkNotNull(name), null, null, false, Type.VERSIONED_DYNAMIC_LIBRARY);
       }
 
       public static LibraryToLinkValue forInterfaceLibrary(String name) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, false, Type.INTERFACE_LIBRARY);
+            Preconditions.checkNotNull(name), null, null, false, Type.INTERFACE_LIBRARY);
       }
 
       public static LibraryToLinkValue forStaticLibrary(String name, boolean isWholeArchive) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, isWholeArchive, Type.STATIC_LIBRARY);
+            Preconditions.checkNotNull(name), null, null, isWholeArchive, Type.STATIC_LIBRARY);
       }
 
       public static LibraryToLinkValue forObjectFile(String name, boolean isWholeArchive) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, isWholeArchive, Type.OBJECT_FILE);
+            Preconditions.checkNotNull(name), null, null, isWholeArchive, Type.OBJECT_FILE);
       }
 
       public static LibraryToLinkValue forObjectFileGroup(
-          ImmutableList<Artifact> objects, boolean isWholeArchive) {
+          ImmutableList<String> objects, boolean isWholeArchive) {
         Preconditions.checkNotNull(objects);
         Preconditions.checkArgument(!objects.isEmpty());
-        return new LibraryToLinkValue(null, objects, isWholeArchive, Type.OBJECT_FILE_GROUP);
+        return new LibraryToLinkValue(null, null, objects, isWholeArchive, Type.OBJECT_FILE_GROUP);
+      }
+
+      public static LibraryToLinkValue forObjectDirectory(
+          Artifact directory, boolean isWholeArchive) {
+        Preconditions.checkNotNull(directory);
+        Preconditions.checkArgument(directory.isTreeArtifact());
+        return new LibraryToLinkValue(
+            null, directory, null, isWholeArchive, Type.OBJECT_FILE_GROUP);
       }
 
       @VisibleForSerialization
       LibraryToLinkValue(
-          String name, ImmutableList<Artifact> objectFiles, boolean isWholeArchive, Type type) {
+          String name,
+          Artifact directory,
+          ImmutableList<String> objectFiles,
+          boolean isWholeArchive,
+          Type type) {
         this.name = name;
+        this.directory = directory;
         this.objectFiles = objectFiles;
         this.isWholeArchive = isWholeArchive;
         this.type = type;
@@ -1448,14 +1517,17 @@ public class CcToolchainFeatures implements Serializable {
           return new StringValue(name);
         } else if (OBJECT_FILES_FIELD_NAME.equals(field) && type.equals(Type.OBJECT_FILE_GROUP)) {
           ImmutableList.Builder<String> expandedObjectFiles = ImmutableList.builder();
-          for (Artifact objectFile : objectFiles) {
-            if (objectFile.isTreeArtifact() && (expander != null)) {
+          if (objectFiles != null) {
+            expandedObjectFiles.addAll(objectFiles);
+          } else if (directory != null) {
+            if (expander != null) {
               List<Artifact> artifacts = new ArrayList<>();
-              expander.expand(objectFile, artifacts);
+              expander.expand(directory, artifacts);
+
               expandedObjectFiles.addAll(
                   Iterables.transform(artifacts, artifact -> artifact.getExecPathString()));
             } else {
-              expandedObjectFiles.add(objectFile.getExecPathString());
+              expandedObjectFiles.add(directory.getExecPathString());
             }
           }
           return new StringSequence(expandedObjectFiles.build());
@@ -1484,6 +1556,9 @@ public class CcToolchainFeatures implements Serializable {
     @AutoCodec
     @VisibleForSerialization
     static final class Sequence extends VariableValueAdapter {
+      public static final ObjectCodec<Sequence> CODEC =
+          new CcToolchainFeatures_Variables_Sequence_AutoCodec();
+
       private static final String SEQUENCE_VARIABLE_TYPE_NAME = "sequence";
 
       private final ImmutableList<VariableValue> values;
@@ -1517,6 +1592,9 @@ public class CcToolchainFeatures implements Serializable {
     @AutoCodec
     @VisibleForSerialization
     static final class StructureSequence extends VariableValueAdapter {
+      public static final ObjectCodec<StructureSequence> CODEC =
+          new CcToolchainFeatures_Variables_StructureSequence_AutoCodec();
+
       private final ImmutableList<ImmutableMap<String, VariableValue>> values;
 
       @VisibleForSerialization
@@ -1553,6 +1631,9 @@ public class CcToolchainFeatures implements Serializable {
     @Immutable
     @AutoCodec
     static final class StringSequence extends VariableValueAdapter {
+      public static final ObjectCodec<StringSequence> CODEC =
+          new CcToolchainFeatures_Variables_StringSequence_AutoCodec();
+
       private final Iterable<String> values;
 
       public StringSequence(Iterable<String> values) {
@@ -1588,6 +1669,9 @@ public class CcToolchainFeatures implements Serializable {
     @AutoCodec
     @VisibleForSerialization
     static final class StructureValue extends VariableValueAdapter {
+      public static final ObjectCodec<StructureValue> CODEC =
+          new CcToolchainFeatures_Variables_StructureValue_AutoCodec();
+
       private static final String STRUCTURE_VARIABLE_TYPE_NAME = "structure";
 
       private final ImmutableMap<String, VariableValue> value;
@@ -1625,6 +1709,9 @@ public class CcToolchainFeatures implements Serializable {
     @AutoCodec
     @VisibleForSerialization
     static final class StringValue extends VariableValueAdapter {
+      public static final ObjectCodec<StringValue> CODEC =
+          new CcToolchainFeatures_Variables_StringValue_AutoCodec();
+
       private static final String STRING_VARIABLE_TYPE_NAME = "string";
 
       private final String value;
@@ -1658,6 +1745,9 @@ public class CcToolchainFeatures implements Serializable {
     @Immutable
     @AutoCodec
     static final class IntegerValue extends VariableValueAdapter {
+      public static final ObjectCodec<IntegerValue> CODEC =
+          new CcToolchainFeatures_Variables_IntegerValue_AutoCodec();
+
       private static final String INTEGER_VALUE_TYPE_NAME = "integer";
       private final int value;
 
@@ -2005,10 +2095,14 @@ public class CcToolchainFeatures implements Serializable {
   @Immutable
   @AutoCodec
   public static class FeatureConfiguration {
+
+    public static final ObjectCodec<FeatureConfiguration> CODEC =
+        new CcToolchainFeatures_FeatureConfiguration_AutoCodec();
+
     private final ImmutableSet<String> enabledFeatureNames;
     private final ImmutableList<Feature> enabledFeatures;
     private final ImmutableSet<String> enabledActionConfigActionNames;
-
+    
     private final ImmutableMap<String, ActionConfig> actionConfigByActionName;
 
     /**
@@ -2028,7 +2122,7 @@ public class CcToolchainFeatures implements Serializable {
         ImmutableSet<String> enabledActionConfigActionNames,
         ImmutableMap<String, ActionConfig> actionConfigByActionName) {
       this.enabledFeatures = enabledFeatures;
-
+      
       this.actionConfigByActionName = actionConfigByActionName;
       ImmutableSet.Builder<String> featureBuilder = ImmutableSet.builder();
       for (Feature feature : enabledFeatures) {
@@ -2037,7 +2131,7 @@ public class CcToolchainFeatures implements Serializable {
       this.enabledFeatureNames = featureBuilder.build();
       this.enabledActionConfigActionNames = enabledActionConfigActionNames;
     }
-
+    
     /**
      * @return whether the given {@code feature} is enabled.
      */
@@ -2110,7 +2204,7 @@ public class CcToolchainFeatures implements Serializable {
       }
       return envBuilder.build();
     }
-
+  
     /**
      * Returns a given action's tool under this FeatureConfiguration.
      */
@@ -2151,7 +2245,7 @@ public class CcToolchainFeatures implements Serializable {
 
   /** All artifact name patterns defined in this feature configuration. */
   private final ImmutableList<ArtifactNamePattern> artifactNamePatterns;
-
+  
   /**
    * All features and action configs in the order in which they were specified in the configuration.
    *
