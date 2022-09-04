@@ -284,7 +284,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         "proto_library(name = 'bar')");
     NestedSet<Artifact> providedSpecs =
         getConfiguredTarget("//x:lite_pb2")
-            .get(ProguardSpecProvider.PROVIDER)
+            .getProvider(ProguardSpecProvider.class)
             .getTransitiveProguardSpecs();
 
     assertThat(ActionsTestUtil.baseArtifactNames(providedSpecs))
