@@ -18,9 +18,10 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import javax.annotation.Nullable;
 
 /** Info object representing data about a specific platform. */
@@ -33,13 +34,14 @@ import javax.annotation.Nullable;
 public interface ConstraintCollectionApi<
         ConstraintSettingInfoT extends ConstraintSettingInfoApi,
         ConstraintValueInfoT extends ConstraintValueInfoApi>
-    extends SkylarkIndexable, SkylarkValue {
+    extends SkylarkIndexable, StarlarkValue {
 
   @SkylarkCallable(
       name = "constraint_settings",
       doc = "The ConstraintSettingInfo values that this collection directly references.",
-      structField = true)
-  SkylarkList<ConstraintSettingInfoT> constraintSettings();
+      structField = true,
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+  Sequence<ConstraintSettingInfoT> constraintSettings();
 
   @SkylarkCallable(
       name = "get",
@@ -49,11 +51,36 @@ public interface ConstraintCollectionApi<
         @Param(
             name = "constraint",
             type = ConstraintSettingInfoApi.class,
-            defaultValue = "None",
-            noneable = true,
             named = true,
             doc = "The constraint setting to fetch the value for.")
-      })
+      },
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
   @Nullable
   ConstraintValueInfoT get(ConstraintSettingInfoT constraint);
+
+  @SkylarkCallable(
+      name = "has",
+      doc = "Returns whether the specific ConstraintSettingInfo is set.",
+      parameters = {
+        @Param(
+            name = "constraint",
+            type = ConstraintSettingInfoApi.class,
+            named = true,
+            doc = "The constraint setting to check.")
+      },
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+  boolean has(ConstraintSettingInfoT constraint);
+
+  @SkylarkCallable(
+      name = "has_constraint_value",
+      doc = "Returns whether the specific ConstraintValueInfo is set.",
+      parameters = {
+        @Param(
+            name = "constraint_value",
+            type = ConstraintValueInfoApi.class,
+            named = true,
+            doc = "The constraint value to check.")
+      },
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+  boolean hasConstraintValue(ConstraintValueInfoT constraintValue);
 }
