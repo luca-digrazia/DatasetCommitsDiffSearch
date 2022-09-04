@@ -308,10 +308,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     filesBuilder.addAll(LinkerInputs.toLibraryArtifacts(linkedLibraries.getPicStaticLibraries()));
 
     if (!featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
+      filesBuilder.addAll(LinkerInputs.toNonSolibArtifacts(linkedLibraries.getDynamicLibraries()));
       filesBuilder.addAll(
-          LinkerInputs.toNonSolibArtifacts(linkedLibraries.getDynamicLibrariesForLinking()));
-      filesBuilder.addAll(
-          LinkerInputs.toNonSolibArtifacts(linkedLibraries.getDynamicLibrariesForRuntime()));
+          LinkerInputs.toNonSolibArtifacts(linkedLibraries.getExecutionDynamicLibraries()));
     }
 
     CcLinkingOutputs linkingOutputs = linkingInfo.getCcLinkingOutputs();
@@ -376,8 +375,8 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         (CcLinkingInfo) linkingInfo.getProviders().getProvider(CcLinkingInfo.PROVIDER.getKey());
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
     ccLinkingInfoBuilder.setCcLinkParamsStore(ccLinkingInfo.getCcLinkParamsStore());
-    ccLinkingInfoBuilder.setCcExecutionDynamicLibraries(
-        ccLinkingInfo.getCcExecutionDynamicLibraries());
+    ccLinkingInfoBuilder.setCcExecutionDynamicLibrariesInfo(
+        ccLinkingInfo.getCcExecutionDynamicLibrariesInfo());
     ccLinkingInfoBuilder.setCcRunfiles(new CcRunfiles(staticRunfiles, sharedRunfiles));
 
     return ccLinkingInfoBuilder.build();
