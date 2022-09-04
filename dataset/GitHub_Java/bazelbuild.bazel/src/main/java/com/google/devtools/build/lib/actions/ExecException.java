@@ -14,11 +14,6 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.base.Strings;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.util.DetailedExitCode;
-import com.google.errorprone.annotations.ForOverride;
-
 /**
  * An exception indication that the execution of an action has failed OR could not be attempted OR
  * could not be finished OR had something else wrong.
@@ -86,8 +81,11 @@ public abstract class ExecException extends Exception {
    * @param action failed action
    * @return ActionExecutionException object describing the action failure
    */
-  public final ActionExecutionException toActionExecutionException(Action action) {
-    return toActionExecutionException("", action);
+  public ActionExecutionException toActionExecutionException(Action action) {
+    // In all ExecException implementations verboseFailures argument used only to determine should
+    // we pass ExecException as cause of ActionExecutionException. So use this method only
+    // if you need this information inside of ActionExecutionexception.
+    return toActionExecutionException("", true, action);
   }
 
   /**
@@ -96,31 +94,10 @@ public abstract class ExecException extends Exception {
    * incorporating just the termination status if available.
    *
    * @param messagePrefix describes the action type as noun
+   * @param verboseFailures true if user requested verbose output with flag --verbose_failures
    * @param action failed action
    * @return ActionExecutionException object describing the action failure
    */
-  public final ActionExecutionException toActionExecutionException(
-      String messagePrefix, Action action) {
-    String message =
-        String.format(
-            "%s failed: %s",
-            Strings.isNullOrEmpty(messagePrefix) ? action.describe() : messagePrefix,
-            getMessageForActionExecutionException());
-    return toActionExecutionException(
-        message, action, DetailedExitCode.of(getFailureDetail(message)));
-  }
-
-  @ForOverride
-  protected ActionExecutionException toActionExecutionException(
-      String message, Action action, DetailedExitCode code) {
-    return new ActionExecutionException(message, this, action, isCatastrophic(), code);
-  }
-
-  @ForOverride
-  protected String getMessageForActionExecutionException() {
-    return getMessage();
-  }
-
-  @ForOverride
-  protected abstract FailureDetail getFailureDetail(String message);
+  public abstract ActionExecutionException toActionExecutionException(
+      String messagePrefix, boolean verboseFailures, Action action);
 }
