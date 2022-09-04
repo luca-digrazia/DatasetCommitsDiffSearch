@@ -184,8 +184,7 @@ public class DevModeMain implements Closeable {
                 } else {
                     //we need to set this here, while we still have the correct TCCL
                     //this is so the config is still valid, and we can read HTTP config from application.properties
-                    log.error("Failed to start Quarkus", t);
-                    log.info("Attempting to start hot replacement endpoint to recover from previous Quarkus startup failure");
+                    log.error("Failed to start Quarkus, attempting to start hot replacement endpoint to recover");
                     if (runtimeUpdatesProcessor != null) {
                         runtimeUpdatesProcessor.startupFailed();
                     }
