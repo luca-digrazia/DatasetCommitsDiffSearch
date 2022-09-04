@@ -23,7 +23,6 @@ package org.graylog2;
 import com.google.common.collect.Lists;
 import java.util.List;
 import java.util.Map.Entry;
-import org.graylog2.plugin.MessageCounter;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -57,7 +56,7 @@ public class GraphiteFormatter {
 
         // Hosts.
         for(Entry<String, Integer> host : counter.getHostCounts().entrySet()) {
-            String hval = prefix() + "hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9\\.]", "") + " " + host.getValue() + " " + Tools.getUTCTimestamp();
+            String hval = prefix() + "hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", "") + " " + host.getValue() + " " + Tools.getUTCTimestamp();
             r.add(hval);
         }
 
