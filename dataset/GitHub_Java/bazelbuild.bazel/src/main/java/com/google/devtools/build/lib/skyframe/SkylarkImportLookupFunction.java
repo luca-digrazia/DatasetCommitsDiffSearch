@@ -27,6 +27,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Event;
@@ -176,7 +177,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
   public void resetCache() {
     if (skylarkImportLookupValueCache != null) {
       logger.info(
-          "Starlark inlining cache stats from earlier build: "
+          "Skylark inlining cache stats from earlier build: "
               + skylarkImportLookupValueCache.stats());
     }
     skylarkImportLookupValueCache =
@@ -292,7 +293,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
         ImmutableList<Label> cycle =
             CycleUtils.splitIntoPathAndChain(Predicates.equalTo(fileLabel), alreadyVisited.keySet())
                 .second;
-        throw new SkylarkImportFailedException("Starlark import cycle: " + cycle);
+        throw new SkylarkImportFailedException("Skylark import cycle: " + cycle);
       }
       alreadyVisited.put(fileLabel, null);
       skylarkImportMap = Maps.newHashMapWithExpectedSize(imports.size());
@@ -307,7 +308,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
             this.computeWithInlineCallsInternal(importLookupKey, strippedEnv, alreadyVisited);
         if (cachedValue == null) {
           Preconditions.checkState(
-              env.valuesMissing(), "no starlark import value for %s", importLookupKey);
+              env.valuesMissing(), "no skylark import value for %s", importLookupKey);
           // We continue making inline calls even if some requested values are missing, to maximize
           // the number of dependent (non-inlined) SkyFunctions that are requested, thus avoiding a
           // quadratic number of restarts.
@@ -452,6 +453,18 @@ public class SkylarkImportLookupFunction implements SkyFunction {
 
     private SkylarkImportFailedException(String errorMessage, Exception cause) {
       super(errorMessage, cause);
+    }
+
+    private SkylarkImportFailedException(InconsistentFilesystemException e) {
+      this(e.getMessage(), e);
+    }
+
+    private SkylarkImportFailedException(BuildFileNotFoundException e) {
+      this(e.getMessage(), e);
+    }
+
+    private SkylarkImportFailedException(LabelSyntaxException e) {
+      this(e.getMessage(), e);
     }
 
     static SkylarkImportFailedException errors(PathFragment file) {
