@@ -203,7 +203,6 @@ public class SpawnInputExpander {
       MetadataProvider actionInputFileCache,
       boolean expandTreeArtifactsInRunfiles)
       throws IOException {
-
     TreeMap<PathFragment, ActionInput> inputMap = new TreeMap<>();
     addInputs(inputMap, spawn, artifactExpander);
     addRunfilesToInputs(
