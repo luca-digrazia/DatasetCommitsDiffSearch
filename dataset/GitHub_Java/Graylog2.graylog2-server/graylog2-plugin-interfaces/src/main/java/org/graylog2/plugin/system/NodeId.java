@@ -32,7 +32,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.util.List;
 
@@ -58,7 +57,7 @@ public class NodeId {
 
             LOG.info("Node ID: {}", read);
             return read;
-        } catch(FileNotFoundException | NoSuchFileException e) {
+        } catch(FileNotFoundException e) {
             return generate();
         } catch (Exception e2) {
             LOG.error("Could not read or generate node ID: ", e2);

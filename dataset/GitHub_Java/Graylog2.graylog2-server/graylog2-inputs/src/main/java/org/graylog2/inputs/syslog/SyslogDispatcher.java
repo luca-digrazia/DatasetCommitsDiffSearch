@@ -1,6 +1,4 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,32 +13,28 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
-
 package org.graylog2.inputs.syslog;
 
 import com.codahale.metrics.Meter;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.InputHost;
+import com.codahale.metrics.MetricRegistry;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.inputs.syslog.SyslogProcessor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
+import org.jboss.netty.channel.socket.DatagramChannel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
 public class SyslogDispatcher extends SimpleChannelHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogDispatcher.class);
@@ -48,9 +42,12 @@ public class SyslogDispatcher extends SimpleChannelHandler {
     private SyslogProcessor processor;
     private final Meter receivedMessages;
 
-    public SyslogDispatcher(InputHost server, Configuration config, MessageInput sourceInput) {
-        this.processor = new SyslogProcessor(server, config, sourceInput);
-        this.receivedMessages = server.metrics().meter(name(sourceInput.getUniqueReadableId(), "receivedMessages"));
+    public SyslogDispatcher(MetricRegistry metricRegistry,
+                            Buffer processBuffer,
+                            Configuration config,
+                            MessageInput sourceInput) {
+        this.processor = new SyslogProcessor(metricRegistry, processBuffer, config, sourceInput);
+        this.receivedMessages = metricRegistry.meter(name(sourceInput.getUniqueReadableId(), "receivedMessages"));
     }
 
     @Override
@@ -64,12 +61,16 @@ public class SyslogDispatcher extends SimpleChannelHandler {
         byte[] readable = new byte[buffer.readableBytes()];
         buffer.toByteBuffer().get(readable, buffer.readerIndex(), buffer.readableBytes());
 
-        this.processor.messageReceived(new String(readable), remoteAddress.getAddress());
+        this.processor.messageReceived(new String(readable, StandardCharsets.UTF_8), remoteAddress.getAddress());
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
-        LOG.warn("Could not handle syslog message.", e.getCause());
+        LOG.debug("Could not handle syslog message.", e.getCause());
+
+        if (ctx.getChannel() != null && !(ctx.getChannel() instanceof DatagramChannel)) {
+            ctx.getChannel().close();
+        }
     }
 
 }

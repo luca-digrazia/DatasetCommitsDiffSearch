@@ -1,6 +1,4 @@
-/*
- * Copyright 2013 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -20,6 +18,8 @@ package org.graylog2.rest.resources.search.responses;
 
 import au.com.bytecode.opencsv.CSVWriter;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import org.graylog2.indexer.results.ResultMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,8 +35,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-
-import static com.google.common.base.Objects.firstNonNull;
+import java.nio.charset.StandardCharsets;
 
 @Provider
 @Produces("text/csv")
@@ -44,7 +43,7 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
 
     public static final MediaType TEXT_CSV = new MediaType("text", "csv");
 
-    private static final Logger log = LoggerFactory.getLogger(SearchResponseCsvWriter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SearchResponseCsvWriter.class);
 
     @Override
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
@@ -60,8 +59,9 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
     public void writeTo(SearchResponse searchResponse, Class<?> type, Type genericType, Annotation[] annotations,
             MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream)
             throws IOException, WebApplicationException {
-        final CSVWriter csvWriter = new CSVWriter(new OutputStreamWriter(entityStream));
-        final ImmutableSortedSet<String> sortedFields = ImmutableSortedSet.copyOf(searchResponse.fields);
+        final CSVWriter csvWriter = new CSVWriter(new OutputStreamWriter(entityStream, StandardCharsets.UTF_8));
+        final ImmutableSortedSet<String> sortedFields = ImmutableSortedSet.copyOf(
+                Iterables.concat(searchResponse.fields, Lists.newArrayList("source", "timestamp")));
 
         // write field headers
         csvWriter.writeNext(sortedFields.toArray(new String[sortedFields.size()]));
@@ -72,14 +72,15 @@ public class SearchResponseCsvWriter implements MessageBodyWriter<SearchResponse
             int idx = 0;
             // first collect all values from the current message
             for (String fieldName : sortedFields) {
-                final Object val = message.message.get(fieldName);
-                fieldValues[idx++] = firstNonNull(val, "").toString(); // TODO what about placeholder for null? should be in searchresult (transient field?)
+                final Object val = message.getMessage().get(fieldName);
+                fieldValues[idx++] = ((val == null) ? null : val.toString().replaceAll("\n", "\\\\n"));
+                fieldValues[idx++] = ((val == null) ? null : val.toString().replaceAll("\r", "\\\\r"));
             }
             // write the complete line, some fields might not be present in the message, so there might be null values
             csvWriter.writeNext(fieldValues);
         }
         if (csvWriter.checkError()) {
-            log.error("Encountered unspecified error when writing message result as CSV, result is likely malformed.");
+            LOG.error("Encountered unspecified error when writing message result as CSV, result is likely malformed.");
         }
         csvWriter.close();
     }

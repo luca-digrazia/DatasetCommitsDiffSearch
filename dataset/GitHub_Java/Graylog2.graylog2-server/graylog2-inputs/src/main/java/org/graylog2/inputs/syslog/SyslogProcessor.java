@@ -1,6 +1,4 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,42 +13,38 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
-
 package org.graylog2.inputs.syslog;
 
 import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.InputHost;
+import com.google.common.collect.Maps;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.syslog4j.server.SyslogServerEventIF;
+import org.graylog2.syslog4j.server.impl.event.SyslogServerEvent;
+import org.graylog2.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.Message;
-import org.productivity.java.syslog4j.server.impl.event.SyslogServerEvent;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.regex.Pattern;
-import com.google.common.collect.Maps;
-import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-import org.productivity.java.syslog4j.server.SyslogServerEventIF;
-import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-/**
- * @author Lennart Koopmann <lennart@socketfeed.com>
- */
 public class SyslogProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogProcessor.class);
-    private final InputHost server;
+    private final Buffer processBuffer;
     private final Configuration config;
 
     private final MessageInput sourceInput;
@@ -63,18 +57,21 @@ public class SyslogProcessor {
     private final Meter processedMessages;
     private final Timer syslogParsedTime;
 
-    public SyslogProcessor(InputHost server, Configuration config, MessageInput sourceInput) {
-        this.server = server;
+    public SyslogProcessor(MetricRegistry metricRegistry,
+                           Buffer processBuffer,
+                           Configuration config,
+                           MessageInput sourceInput) {
+        this.processBuffer = processBuffer;
         this.config = config;
 
         this.sourceInput = sourceInput;
 
         String metricsId = sourceInput.getUniqueReadableId();
-        this.incomingMessages = server.metrics().meter(name(metricsId, "incomingMessages"));
-        this.parsingFailures = server.metrics().meter(name(metricsId, "parsingFailures"));
-        this.processedMessages = server.metrics().meter(name(metricsId, "processedMessages"));
-        this.incompleteMessages = server.metrics().meter(name(metricsId, "incompleteMessages"));
-        this.syslogParsedTime = server.metrics().timer(name(metricsId, "syslogParsedTime"));
+        this.incomingMessages = metricRegistry.meter(name(metricsId, "incomingMessages"));
+        this.parsingFailures = metricRegistry.meter(name(metricsId, "parsingFailures"));
+        this.processedMessages = metricRegistry.meter(name(metricsId, "processedMessages"));
+        this.incompleteMessages = metricRegistry.meter(name(metricsId, "incompleteMessages"));
+        this.syslogParsedTime = metricRegistry.timer(name(metricsId, "syslogParsedTime"));
     }
 
     public void messageReceived(String msg, InetAddress remoteAddress) throws BufferOutOfCapacityException {
@@ -86,20 +83,20 @@ public class SyslogProcessor {
             lm = parse(msg, remoteAddress);
         } catch (Exception e) {
             parsingFailures.mark();
-            LOG.error("Could not parse syslog message. Not further handling.", e);
+            LOG.warn("Could not parse syslog message. Not further handling.", e);
             return;
         }
 
         if (!lm.isComplete()) {
             incompleteMessages.mark();
-            LOG.debug("Skipping incomplete message.");
+            LOG.debug("Skipping incomplete message. Parsed fields: [{}]", lm.getFields());
             return;
         }
 
         // Add to process buffer.
         LOG.debug("Adding received syslog message <{}> to process buffer: {}", lm.getId(), lm);
         processedMessages.mark();
-        server.getProcessBuffer().insertCached(lm, sourceInput);
+        processBuffer.insertCached(lm, sourceInput);
     }
 
     private Message parse(String msg, InetAddress remoteAddress) throws UnknownHostException {
@@ -146,7 +143,7 @@ public class SyslogProcessor {
 
         // Store full message if configured.
         if (config.getBoolean(SyslogInputBase.CK_STORE_FULL_MESSAGE)) {
-            m.addField("full_message", new String(e.getRaw()));
+            m.addField("full_message", new String(e.getRaw(), StandardCharsets.UTF_8));
         }
 
         m.addFields(parseAdditionalData(e));
@@ -193,11 +190,12 @@ public class SyslogProcessor {
         // Check if date could be parsed.
         if (msg.getDate() == null) {
             if (config.getBoolean(SyslogInputBase.CK_ALLOW_OVERRIDE_DATE)) {
-                LOG.info("Date could not be parsed. Was set to NOW because {} is true.", SyslogInputBase.CK_ALLOW_OVERRIDE_DATE);
-                return new DateTime();
+                LOG.debug("Date could not be parsed. Was set to NOW because {} is true.", SyslogInputBase.CK_ALLOW_OVERRIDE_DATE);
+                return Tools.iso8601();
             } else {
-                LOG.info("Syslog message is missing date or date could not be parsed. (Possibly set {} to true) "
-                        + "Not further handling. Message was: {}", SyslogInputBase.CK_ALLOW_OVERRIDE_DATE, new String(msg.getRaw()));
+                LOG.warn("Syslog message is missing date or date could not be parsed. (Possibly set {} to true) "
+                        + "Not further handling. Message was: {}",
+                        SyslogInputBase.CK_ALLOW_OVERRIDE_DATE, new String(msg.getRaw(), StandardCharsets.UTF_8));
                 throw new IllegalStateException();
             }
         }
@@ -215,5 +213,4 @@ public class SyslogProcessor {
     public static boolean isStructuredSyslog(String message) {
         return STRUCTURED_SYSLOG_PATTERN.matcher(message).matches();
     }
-    
 }
