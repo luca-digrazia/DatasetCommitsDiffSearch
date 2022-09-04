@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.python.PyCommon;
-import com.google.devtools.build.lib.rules.python.PyProvider;
 import com.google.devtools.build.lib.rules.python.PyRuleClasses;
 import com.google.devtools.build.lib.rules.python.PythonVersion;
 import com.google.devtools.build.lib.util.FileType;
@@ -70,7 +69,7 @@ public final class BazelPyRuleClasses {
           .override(
               builder
                   .copy("deps")
-                  .legacyMandatoryProviders(PyProvider.PROVIDER_NAME)
+                  .legacyMandatoryProviders(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME)
                   .allowedFileTypes())
           /* <!-- #BLAZE_RULE($base_py).ATTRIBUTE(imports) -->
           List of import directories to be added to the <code>PYTHONPATH</code>.
@@ -111,7 +110,7 @@ public final class BazelPyRuleClasses {
           .add(
               attr("srcs_version", STRING)
                   .value(PythonVersion.DEFAULT_SRCS_VALUE.toString())
-                  .allowedValues(new AllowedValueSet(PythonVersion.SRCS_STRINGS)))
+                  .allowedValues(new AllowedValueSet(PythonVersion.ALL_STRINGS)))
           // TODO(brandjon): Consider adding to py_interpreter a .mandatoryNativeProviders() of
           // BazelPyRuntimeProvider. (Add a test case to PythonConfigurationTest for violations
           // of this requirement.)
@@ -170,19 +169,20 @@ public final class BazelPyRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(
               attr(PyCommon.DEFAULT_PYTHON_VERSION_ATTRIBUTE, STRING)
-                  .value(PythonVersion._INTERNAL_SENTINEL.toString())
-                  .allowedValues(PyRuleClasses.TARGET_PYTHON_ATTR_VALUE_SET)
+                  .value(PythonVersion.DEFAULT_TARGET_VALUE.toString())
+                  .allowedValues(new AllowedValueSet(PythonVersion.TARGET_STRINGS))
                   .nonconfigurable(
                       "read by PyRuleClasses.PYTHON_VERSION_TRANSITION, which doesn't have access"
                           + " to the configuration"))
           /* <!-- #BLAZE_RULE($base_py_binary).ATTRIBUTE(python_version) -->
-          A replacement for <code>default_python_version</code>. If both this and
+          An experimental replacement for <code>default_python_version</code>. Only available when
+          <code>--experimental_better_python_version_mixing</code> is enabled. If both this and
           <code>default_python_version</code> are supplied, the latter will be ignored.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(
               attr(PyCommon.PYTHON_VERSION_ATTRIBUTE, STRING)
-                  .value(PythonVersion._INTERNAL_SENTINEL.toString())
-                  .allowedValues(PyRuleClasses.TARGET_PYTHON_ATTR_VALUE_SET)
+                  .value(PythonVersion.DEFAULT_TARGET_VALUE.toString())
+                  .allowedValues(new AllowedValueSet(PythonVersion.TARGET_STRINGS))
                   .nonconfigurable(
                       "read by PyRuleClasses.PYTHON_VERSION_TRANSITION, which doesn't have access"
                           + " to the configuration"))

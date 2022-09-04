@@ -28,7 +28,9 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Base implementation of {@code py_library}. */
+/**
+ * An implementation for the {@code py_library} rule.
+ */
 public abstract class PyLibrary implements RuleConfiguredTargetFactory {
 
   /**
@@ -38,10 +40,10 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
   protected abstract PythonSemantics createSemantics();
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
+  public ConfiguredTarget create(final RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     PythonSemantics semantics = createSemantics();
-    PyCommon common = new PyCommon(ruleContext, semantics);
+    PyCommon common = new PyCommon(ruleContext);
     common.validatePackageName();
     semantics.validate(ruleContext, common);
 
@@ -56,7 +58,10 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
         NestedSetBuilder.wrap(Order.STABLE_ORDER, allOutputs);
     common.addPyExtraActionPseudoAction();
 
-    NestedSet<String> imports = common.getImports();
+    NestedSet<String> imports = common.collectImports(ruleContext, semantics);
+    if (ruleContext.hasErrors()) {
+      return null;
+    }
 
     Runfiles.Builder runfilesBuilder = new Runfiles.Builder(
         ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles());
@@ -69,7 +74,7 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
     runfilesBuilder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-    common.addCommonTransitiveInfoProviders(builder, filesToBuild, imports);
+    common.addCommonTransitiveInfoProviders(builder, semantics, filesToBuild, imports);
 
     return builder
         .setFilesToBuild(filesToBuild)

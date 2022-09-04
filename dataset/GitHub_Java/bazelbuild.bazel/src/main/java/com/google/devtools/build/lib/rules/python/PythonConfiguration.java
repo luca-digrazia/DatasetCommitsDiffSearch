@@ -41,27 +41,18 @@ public class PythonConfiguration extends BuildConfiguration.Fragment {
   private final PythonVersion version;
   private final TriState buildPythonZip;
   private final boolean buildTransitiveRunfilesTrees;
-
-  // TODO(brandjon): Remove these once migration to the new version API is complete (#6583).
-  private final boolean oldPyVersionApiAllowed;
-  private final boolean useNewPyVersionSemantics;
-
-  // TODO(brandjon): Remove this once migration to the new provider is complete (#7010).
-  private final boolean disallowLegacyPyProvider;
+  // TODO(brandjon): Remove once migration to the new API is complete (#6583).
+  private final boolean newPyVersionApiEnabled;
 
   PythonConfiguration(
-      PythonVersion version,
+      PythonVersion defaultPythonVersion,
       TriState buildPythonZip,
       boolean buildTransitiveRunfilesTrees,
-      boolean oldPyVersionApiAllowed,
-      boolean useNewPyVersionSemantics,
-      boolean disallowLegacyPyProvider) {
-    this.version = version;
+      boolean newPyVersionApiEnabled) {
+    this.version = defaultPythonVersion;
     this.buildPythonZip = buildPythonZip;
     this.buildTransitiveRunfilesTrees = buildTransitiveRunfilesTrees;
-    this.oldPyVersionApiAllowed = oldPyVersionApiAllowed;
-    this.useNewPyVersionSemantics = useNewPyVersionSemantics;
-    this.disallowLegacyPyProvider = disallowLegacyPyProvider;
+    this.newPyVersionApiEnabled = newPyVersionApiEnabled;
   }
 
   /**
@@ -97,11 +88,13 @@ public class PythonConfiguration extends BuildConfiguration.Fragment {
 
   @Override
   public void reportInvalidOptions(EventHandler reporter, BuildOptions buildOptions) {
-    PythonOptions opts = buildOptions.get(PythonOptions.class);
-    if (opts.forcePython != null && opts.experimentalRemoveOldPythonVersionApi) {
+    PythonOptions pythonOptions = buildOptions.get(PythonOptions.class);
+    if (pythonOptions.pythonVersion != null
+        && !pythonOptions.experimentalBetterPythonVersionMixing) {
       reporter.handle(
           Event.error(
-              "`--force_python` is disabled by `--experimental_remove_old_python_version_api`"));
+              "`--python_version` is only allowed with "
+                  + "`--experimental_better_python_version_mixing`"));
     }
   }
 
@@ -126,25 +119,10 @@ public class PythonConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns whether use of {@code --force_python} flag and {@code default_python_version} attribute
-   * is allowed.
+   * Returns whether use of {@code --python_version} flag and {@code python_version} attribute is
+   * allowed.
    */
-  public boolean oldPyVersionApiAllowed() {
-    return oldPyVersionApiAllowed;
-  }
-
-  /** Returns true if the new semantics should be used for transitions on the Python version. */
-  public boolean useNewPyVersionSemantics() {
-    return useNewPyVersionSemantics;
-  }
-
-  /**
-   * Returns true if Python rules should omit the legacy "py" provider and fail-fast when given this
-   * provider from their {@code deps}.
-   *
-   * <p>Any rules that pass this provider should be updated to pass {@code PyInfo} instead.
-   */
-  public boolean disallowLegacyPyProvider() {
-    return disallowLegacyPyProvider;
+  public boolean newPyVersionApiEnabled() {
+    return newPyVersionApiEnabled;
   }
 }

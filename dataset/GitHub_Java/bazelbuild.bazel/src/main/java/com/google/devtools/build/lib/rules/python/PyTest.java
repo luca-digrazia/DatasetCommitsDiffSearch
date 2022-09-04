@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.python;
 
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 
 /**
  * An implementation for {@code py_test} rules.
@@ -27,26 +27,19 @@ public abstract class PyTest implements RuleConfiguredTargetFactory {
    * Create a {@link PythonSemantics} object that governs
    * the behavior of this rule.
    */
-protected abstract PythonSemantics createSemantics();
+  protected abstract PythonSemantics createSemantics();
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) {
+  public ConfiguredTarget create(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException, ActionConflictException {
     PythonSemantics semantics = createSemantics();
     PyCommon common = new PyCommon(ruleContext);
-    common.initCommon(getDefaultPythonVersion(ruleContext));
 
     RuleConfiguredTargetBuilder builder = PyBinary.init(ruleContext, semantics, common);
     if (builder == null) {
       return null;
     }
     return builder.build();
-  }
-
-  private PythonVersion getDefaultPythonVersion(RuleContext ruleContext) {
-    return ruleContext.getRule().isAttrDefined("default_python_version", Type.STRING)
-        ? PyCommon.getPythonVersionAttr(ruleContext, "default_python_version", PythonVersion.PY2,
-            PythonVersion.PY3, PythonVersion.PY2AND3)
-        : null;
   }
 }
 
