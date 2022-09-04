@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.regression;
 
@@ -148,11 +148,19 @@ public class OLS {
             }
         }
 
-        LinearModel model = new LinearModel(formula, schema, X, y, w, 0.0);
+        LinearModel model = new LinearModel();
+        model.formula = formula;
+        model.schema = schema;
+        model.predictors = X.colNames();
+        model.p = p;
+        model.w = w;
+
+        double[] fittedValues = X.mv(w);
+        model.fitness(fittedValues, y, MathEx.mean(y));
 
         Matrix inv = null;
         if (stderr || recursive) {
-            Matrix.Cholesky cholesky = method.equalsIgnoreCase("svd") ? X.ata().cholesky(true) : qr.CholeskyOfAtA();
+            Matrix.Cholesky cholesky = method.equalsIgnoreCase("svd") ? X.ata().cholesky() : qr.CholeskyOfAtA();
             inv = cholesky.inverse();
             model.V = inv;
         }

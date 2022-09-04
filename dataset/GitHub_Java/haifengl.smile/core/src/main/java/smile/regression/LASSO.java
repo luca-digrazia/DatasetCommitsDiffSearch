@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.regression;
 
@@ -139,18 +139,27 @@ public class LASSO {
 
         Matrix scaledX = X.scale(center, scale);
 
-        double[] w = train(scaledX, y, lambda, tol, maxIter);
+        LinearModel model = train(scaledX, y, lambda, tol, maxIter);
+        model.formula = formula;
+        model.schema = schema;
+        model.predictors = X.colNames();
 
-        int p = w.length;
-        for (int j = 0; j < p; j++) {
-            w[j] /= scale[j];
+        for (int j = 0; j < model.p; j++) {
+            model.w[j] /= scale[j];
         }
 
-        double b = MathEx.mean(y) - MathEx.dot(w, center);
-        return new LinearModel(formula, schema, X, y, w, b);
+        double ym = MathEx.mean(y);
+        model.b = ym - MathEx.dot(model.w, center);
+
+        double[] fittedValues = new double[y.length];
+        Arrays.fill(fittedValues, model.b);
+        X.mv(1.0, model.w, 1.0, fittedValues);
+        model.fitness(fittedValues, y, ym);
+
+        return model;
     }
 
-    static double[] train(Matrix x, double[] y, double lambda, double tol, int maxIter) {
+    static LinearModel train(Matrix x, double[] y, double lambda, double tol, int maxIter) {
         if (lambda < 0.0) {
             throw new IllegalArgumentException("Invalid shrinkage/regularization parameter lambda = " + lambda);
         }
@@ -353,7 +362,11 @@ public class LASSO {
             logger.error("LASSO: Too many iterations.");
         }
 
-        return w;
+        LinearModel model = new LinearModel();
+        model.p = p;
+        model.w = w;
+
+        return model;
     }
 
     /**

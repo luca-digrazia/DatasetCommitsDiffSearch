@@ -309,7 +309,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
         // # of samples in each class
         int[] count = new int[k];
         for (int i = 0; i < n; i++) {
-            count[codec.y[i]]++;
+            count[y.getInt(i)]++;
         }
         // samples in each class
         int[][] yi = new int[k][];
@@ -318,7 +318,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
         }
         int[] idx = new int[k];
         for (int i = 0; i < n; i++) {
-            int j = codec.y[i];
+            int j = y.getInt(i);
             yi[j][idx[j]++] = i;
         }
 
@@ -366,7 +366,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
                 if (samples[i] == 0) {
                     oob++;
                     int p = tree.predict(x.get(i));
-                    if (p == codec.y[i]) correct++;
+                    if (p == y.getInt(i)) correct++;
                     prediction[i][p]++;
                 }
             }
@@ -388,7 +388,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
             int pred = MathEx.whichMax(prediction[i]);
             if (prediction[i][pred] > 0) {
                 m++;
-                if (pred != codec.y[i]) {
+                if (pred != y.getInt(i)) {
                     err++;
                 }
             }

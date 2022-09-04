@@ -119,7 +119,7 @@ public abstract class IMatrix<T> implements Cloneable, Serializable {
 
     /** Returns the name of i-th column. */
     public String colName(int i) {
-        return colNames[i];
+        return colName(i);
     }
 
     /** Sets the column names. */

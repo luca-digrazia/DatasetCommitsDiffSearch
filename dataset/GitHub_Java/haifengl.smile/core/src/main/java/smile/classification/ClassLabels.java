@@ -104,10 +104,12 @@ public class ClassLabels implements Serializable {
      */
     public static ClassLabels fit(BaseVector response) {
         int[] y = response.toIntArray();
+        StructField field = response.field();
 
-        Measure measure = response.measure();
-        if (measure instanceof NominalScale) {
-            NominalScale scale = (NominalScale) measure;
+        @SuppressWarnings("unchecked")
+        Optional<Measure> measure = response.measure();
+        if (measure.isPresent() && measure.get() instanceof NominalScale) {
+            NominalScale scale = (NominalScale) measure.get();
             int k = scale.size();
             int[] labels = IntStream.range(0, k).toArray();
             IntSet encoder = new IntSet(labels);

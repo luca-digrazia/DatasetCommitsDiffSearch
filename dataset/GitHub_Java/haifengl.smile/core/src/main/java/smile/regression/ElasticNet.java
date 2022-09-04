@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.regression;
 
@@ -134,12 +134,25 @@ public class ElasticNet {
             X2.set(j + n, j, padding);
         }
 
-        double[] w = LASSO.train(X2, y2,lambda1 * c, tol, maxIter);
-        for (int i = 0; i < p; i++) {
-            w[i] = c * w[i] / scale[i];
-        }
+        LinearModel model = LASSO.train(X2, y2,lambda1 * c, tol, maxIter);
+        model.formula = formula;
+        model.schema = schema;
+        model.predictors = X.colNames();
 
-        double b = MathEx.mean(y) - MathEx.dot(w, center);
-        return new LinearModel(formula, schema, X, y, w, b);
+        double[] w = new double[p];
+        for (int i = 0; i < p; i++) {
+            w[i] = c * model.w[i] / scale[i];
+        }
+        model.w = w;
+
+        double ym = MathEx.mean(y);
+        model.b = ym - MathEx.dot(model.w, center);
+
+        double[] fittedValues = new double[y.length];
+        Arrays.fill(fittedValues, model.b);
+        X.mv(1.0, model.w, 1.0, fittedValues);
+        model.fitness(fittedValues, y, ym);
+
+        return model;
     }
 }
