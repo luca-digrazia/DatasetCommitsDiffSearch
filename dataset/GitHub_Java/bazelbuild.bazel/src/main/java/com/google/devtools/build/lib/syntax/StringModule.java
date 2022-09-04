@@ -329,9 +329,6 @@ public final class StringModule {
   public MutableList<String> split(
       String self, String sep, Object maxSplitO, Location loc, Environment env)
       throws EvalException {
-    if (sep.isEmpty()) {
-      throw new EvalException(loc, "Empty separator");
-    }
     int maxSplit =
         Type.INTEGER.convertOptional(maxSplitO, "'split' argument of 'split'", /*label*/ null, -2);
     // + 1 because the last result is the remainder. The default is -2 so that after +1,
@@ -432,36 +429,17 @@ public final class StringModule {
         @Param(name = "self", type = String.class),
         @Param(
             name = "sep",
-            type = Object.class,
+            type = String.class,
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
-            defaultValue = "unbound",
-            doc =
-                "The string to split on, has a default value, space (\" \"), "
-                    + "if the flag --incompatible_disable_partition_default_parameter is disabled. "
-                    + "Otherwise, a value must be provided.")
+            defaultValue = "\" \"",
+            doc = "The string to split on, default is space (\" \").")
       },
       useEnvironment = true,
       useLocation = true)
-  public Tuple<String> partition(String self, Object sep, Location loc, Environment env)
+  public Tuple<String> partition(String self, String sep, Location loc, Environment env)
       throws EvalException {
-    if (sep == Runtime.UNBOUND) {
-      if (env.getSemantics().incompatibleDisablePartitionDefaultParameter()) {
-        throw new EvalException(
-            loc,
-            "parameter 'sep' has no default value, "
-                + "for call to method partition(sep) of 'string'");
-      } else {
-        sep = " ";
-      }
-    } else if (!(sep instanceof String)) {
-      throw new EvalException(
-          loc,
-          "expected value of type 'string' for parameter"
-              + " 'sep', for call to method partition(sep = unbound) of 'string'");
-    }
-
-    return partitionWrapper(self, (String) sep, true, loc);
+    return partitionWrapper(self, sep, true, loc);
   }
 
   @SkylarkCallable(
@@ -477,32 +455,14 @@ public final class StringModule {
             type = String.class,
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
-            defaultValue = "unbound",
-            doc =
-                "The string to split on, has a default value, space (\" \"), "
-                    + "if the flag --incompatible_disable_partition_default_parameter is disabled. "
-                    + "Otherwise, a value must be provided.")
+            defaultValue = "\" \"",
+            doc = "The string to split on, default is space (\" \").")
       },
       useEnvironment = true,
       useLocation = true)
-  public Tuple<String> rpartition(String self, Object sep, Location loc, Environment env)
+  public Tuple<String> rpartition(String self, String sep, Location loc, Environment env)
       throws EvalException {
-    if (sep == Runtime.UNBOUND) {
-      if (env.getSemantics().incompatibleDisablePartitionDefaultParameter()) {
-        throw new EvalException(
-            loc,
-            "parameter 'sep' has no default value, "
-                + "for call to method partition(sep) of 'string'");
-      } else {
-        sep = " ";
-      }
-    } else if (!(sep instanceof String)) {
-      throw new EvalException(
-          loc,
-          "expected value of type 'string' for parameter"
-              + " 'sep', for call to method partition(sep = unbound) of 'string'");
-    }
-    return partitionWrapper(self, (String) sep, false, loc);
+    return partitionWrapper(self, sep, false, loc);
   }
 
   /**
