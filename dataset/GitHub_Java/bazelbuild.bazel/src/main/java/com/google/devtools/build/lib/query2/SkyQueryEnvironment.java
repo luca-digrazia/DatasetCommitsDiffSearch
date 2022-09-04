@@ -254,7 +254,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         result = graphFactory.prepareAndGet(roots, loadingPhaseThreads, universeEvalEventHandler);
       }
 
-      checkEvaluationResult(roots, result);
+      if (roots.size() == 1 && Iterables.getOnlyElement(roots).equals(universeKey)) {
+        checkEvaluationResult(result);
+      }
 
       packageSemaphore = makeFreshPackageMultisetSemaphore();
       graph = result.getWalkableGraph();
@@ -299,28 +301,27 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return packageSemaphore;
   }
 
-  protected void checkEvaluationResult(Set<SkyKey> roots, EvaluationResult<SkyValue> result)
-      throws QueryException {
-    // If the only root is the universe key, we expect to see either a single successfully evaluated
-    // value or a cycle in the result.
-    if (roots.size() == 1 && Iterables.getOnlyElement(roots).equals(universeKey)) {
-      Collection<SkyValue> values = result.values();
-      if (!values.isEmpty()) {
-        Preconditions.checkState(
-            values.size() == 1,
-            "Universe query \"%s\" returned multiple values unexpectedly (%s values in result)",
-            universeScope,
-            values.size());
-        Preconditions.checkNotNull(result.get(universeKey), result);
-      } else {
-        // No values in the result, so there must be an error. We expect the error to be a cycle.
-        boolean foundCycle = !Iterables.isEmpty(result.getError().getCycleInfo());
-        Preconditions.checkState(
-            foundCycle,
-            "Universe query \"%s\" failed with non-cycle error: %s",
-            universeScope,
-            result.getError());
-      }
+  /**
+   * The {@link EvaluationResult} is from the evaluation of a single PrepareDepsOfPatterns node. We
+   * expect to see either a single successfully evaluated value or a cycle in the result.
+   */
+  private void checkEvaluationResult(EvaluationResult<SkyValue> result) {
+    Collection<SkyValue> values = result.values();
+    if (!values.isEmpty()) {
+      Preconditions.checkState(
+          values.size() == 1,
+          "Universe query \"%s\" returned multiple values unexpectedly (%s values in result)",
+          universeScope,
+          values.size());
+      Preconditions.checkNotNull(result.get(universeKey), result);
+    } else {
+      // No values in the result, so there must be an error. We expect the error to be a cycle.
+      boolean foundCycle = !Iterables.isEmpty(result.getError().getCycleInfo());
+      Preconditions.checkState(
+          foundCycle,
+          "Universe query \"%s\" failed with non-cycle error: %s",
+          universeScope,
+          result.getError());
     }
   }
 
@@ -781,7 +782,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   private static Target getSubincludeTarget(Label label, Package pkg) {
-    return new FakeLoadTarget(label, pkg);
+    return new FakeSubincludeTarget(label, pkg);
   }
 
   @ThreadSafe
@@ -971,10 +972,10 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private static Iterable<SkyKey> getPkgLookupKeysForFile(PathFragment originalFileFragment,
       PathFragment currentPathFragment) {
     if (originalFileFragment.equals(currentPathFragment)
-        && originalFileFragment.equals(Label.WORKSPACE_FILE_NAME)) {
+        && originalFileFragment.equals(Label.EXTERNAL_PACKAGE_FILE_NAME)) {
       Preconditions.checkState(
-          Label.WORKSPACE_FILE_NAME.getParentDirectory().equals(PathFragment.EMPTY_FRAGMENT),
-          Label.WORKSPACE_FILE_NAME);
+          Label.EXTERNAL_PACKAGE_FILE_NAME.getParentDirectory().equals(PathFragment.EMPTY_FRAGMENT),
+          Label.EXTERNAL_PACKAGE_FILE_NAME);
       return ImmutableList.of(
           PackageLookupValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER),
           PackageLookupValue.key(PackageIdentifier.createInMainRepo(PathFragment.EMPTY_FRAGMENT)));
