@@ -170,13 +170,11 @@ public abstract class MessageInput implements Stoppable {
     }
 
     public void terminate() {
-        if (localRegistry != null && localRegistry.getMetrics() != null)
-            for (String metricName : localRegistry.getMetrics().keySet())
-                metricRegistry.remove(getUniqueReadableId() + "." + metricName);
+        for (String metricName : localRegistry.getMetrics().keySet())
+            metricRegistry.remove(getUniqueReadableId() + "." + metricName);
 
-        if (this.transportMetrics != null && this.transportMetrics.getMetrics() != null)
-            for (String metricName : this.transportMetrics.getMetrics().keySet())
-                metricRegistry.remove(getUniqueReadableId() + "." + metricName);
+        for (String metricName : this.transportMetrics.getMetrics().keySet())
+            metricRegistry.remove(getUniqueReadableId() + "." + metricName);
     }
 
     public ConfigurationRequest getRequestedConfiguration() {
