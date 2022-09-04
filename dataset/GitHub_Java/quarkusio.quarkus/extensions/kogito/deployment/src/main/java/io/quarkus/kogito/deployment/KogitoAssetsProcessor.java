@@ -33,7 +33,6 @@ import org.kie.internal.kogito.codegen.Generated;
 import org.kie.kogito.Model;
 import org.kie.kogito.codegen.ApplicationGenerator;
 import org.kie.kogito.codegen.GeneratedFile;
-import org.kie.kogito.codegen.decision.DecisionCodegen;
 import org.kie.kogito.codegen.di.CDIDependencyInjectionAnnotator;
 import org.kie.kogito.codegen.process.ProcessCodegen;
 import org.kie.kogito.codegen.process.persistence.PersistenceGenerator;
@@ -41,18 +40,16 @@ import org.kie.kogito.codegen.rules.IncrementalRuleCodegen;
 
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.builder.item.BuildItem;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyIgnoreWarningBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyIgnoreWarningBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.index.IndexingUtil;
 import io.quarkus.runtime.LaunchMode;
 
@@ -61,14 +58,8 @@ public class KogitoAssetsProcessor {
     private final transient String generatedClassesDir = System.getProperty("quarkus.debug.generated-classes-dir");
     private final transient String appPackageName = "org.kie.kogito.app";
     private final transient String persistenceFactoryClass = "org.kie.kogito.persistence.KogitoProcessInstancesFactory";
-    private final transient String metricsClass = "org.kie.addons.monitoring.rest.MetricsResource";
 
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capabilities.KOGITO);
-    }
-
-    @BuildStep
+    @BuildStep(providesCapabilities = "io.quarkus.kogito")
     FeatureBuildItem featureBuildItem() {
         return new FeatureBuildItem(FeatureBuildItem.KOGITO);
     }
@@ -77,7 +68,7 @@ public class KogitoAssetsProcessor {
             BuildProducer<GeneratedBeanBuildItem> generatedBeans,
             IndexView index,
             LaunchModeBuildItem launchMode,
-            BuildProducer<NativeImageResourceBuildItem> resource) throws IOException {
+            BuildProducer<SubstrateResourceBuildItem> resource) throws IOException {
 
         Path projectPath = getProjectPath(root.getArchiveLocation());
         ClassInfo persistenceClass = index
@@ -114,7 +105,7 @@ public class KogitoAssetsProcessor {
         }
 
         if (usePersistence) {
-            resource.produce(new NativeImageResourceBuildItem("kogito-types.proto"));
+            resource.produce(new SubstrateResourceBuildItem("kogito-types.proto"));
         }
     }
 
@@ -140,7 +131,7 @@ public class KogitoAssetsProcessor {
             CombinedIndexBuildItem combinedIndexBuildItem,
             LaunchModeBuildItem launchMode,
             LiveReloadBuildItem liveReload,
-            BuildProducer<NativeImageResourceBuildItem> resource,
+            BuildProducer<SubstrateResourceBuildItem> resource,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass) throws IOException {
 
         if (liveReload.isLiveReload()) {
@@ -152,10 +143,9 @@ public class KogitoAssetsProcessor {
 
         boolean generateRuleUnits = true;
         boolean generateProcesses = true;
-        boolean generateDecisions = true;
 
         ApplicationGenerator appGen = createApplicationGenerator(projectPath, launchMode.getLaunchMode(), generateRuleUnits,
-                generateProcesses, generateDecisions, combinedIndexBuildItem);
+                generateProcesses, combinedIndexBuildItem);
         Collection<GeneratedFile> generatedFiles = appGen.generate();
 
         if (!generatedFiles.isEmpty()) {
@@ -181,8 +171,6 @@ public class KogitoAssetsProcessor {
                     launchMode, resource);
 
             reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.AbstractProcessDataEvent"));
-            reflectiveClass.produce(
                     new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.ProcessInstanceDataEvent"));
             reflectiveClass.produce(
                     new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.impl.ProcessInstanceEventBody"));
@@ -190,17 +178,6 @@ public class KogitoAssetsProcessor {
                     new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.impl.NodeInstanceEventBody"));
             reflectiveClass.produce(
                     new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.impl.ProcessErrorEventBody"));
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.UserTaskInstanceDataEvent"));
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, true, "org.kie.kogito.services.event.impl.UserTaskInstanceEventBody"));
-
-            Collection<ClassInfo> dataEvents = index
-                    .getAllKnownSubclasses(createDotName("org.kie.kogito.services.event.AbstractProcessDataEvent"));
-
-            dataEvents.forEach(c -> reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, true, c.name().toString())));
-
         }
 
     }
@@ -261,14 +238,14 @@ public class KogitoAssetsProcessor {
             generatedBeans.produce(bif.apply(className, data));
 
             if (launchMode == LaunchMode.DEVELOPMENT) {
-                Path path = writeFile(Paths.get(projectPath.toString(), fileName).toString(), data);
+                Path path = writeFile(fileName, data);
 
                 String sourceFile = path.toString().replaceFirst("\\.class", ".java");
                 if (sourceFile.contains("$")) {
                     sourceFile = sourceFile.substring(0, sourceFile.indexOf("$")) + ".java";
                 }
-                KogitoCompilationProvider.classToSource.put(path,
-                        Paths.get(sourceFile));
+                KogitoCompilationProvider.classToSource.put(Paths.get(projectPath.toString(), path.toString()),
+                        Paths.get(projectPath.toString(), sourceFile));
             }
         }
     }
@@ -284,10 +261,7 @@ public class KogitoAssetsProcessor {
     }
 
     private ApplicationGenerator createApplicationGenerator(Path projectPath, LaunchMode launchMode,
-            boolean generateRuleUnits,
-            boolean generateProcesses,
-            boolean generateDecisions,
-            CombinedIndexBuildItem combinedIndexBuildItem)
+            boolean generateRuleUnits, boolean generateProcesses, CombinedIndexBuildItem combinedIndexBuildItem)
             throws IOException {
 
         Path srcPath = projectPath.resolve("src");
@@ -296,9 +270,7 @@ public class KogitoAssetsProcessor {
 
         ApplicationGenerator appGen = new ApplicationGenerator(appPackageName, new File(projectPath.toFile(), "target"))
                 .withDependencyInjection(new CDIDependencyInjectionAnnotator())
-                .withPersistence(usePersistence)
-                .withMonitoring(combinedIndexBuildItem.getIndex()
-                        .getClassByName(createDotName(metricsClass)) != null);
+                .withPersistence(usePersistence);
 
         if (generateRuleUnits) {
             Path moduleXmlPath = projectPath.resolve("src/main/resources").resolve(KieModuleModelImpl.KMODULE_JAR_PATH);
@@ -320,12 +292,7 @@ public class KogitoAssetsProcessor {
         if (generateProcesses) {
 
             appGen.withGenerator(ProcessCodegen.ofPath(projectPath))
-                    .withPersistence(usePersistence)
-                    .withClassLoader(Thread.currentThread().getContextClassLoader());
-        }
-
-        if (generateDecisions) {
-            appGen.withGenerator(DecisionCodegen.ofPath(projectPath));
+                    .withPersistence(usePersistence);
         }
 
         return appGen;
