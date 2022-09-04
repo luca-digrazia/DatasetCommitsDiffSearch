@@ -123,7 +123,7 @@ public final class SymlinkTreeAction extends AbstractAction {
     return filesetTree;
   }
 
-  public boolean isRunfilesEnabled() {
+  public boolean enableRunfiles() {
     return enableRunfiles;
   }
 

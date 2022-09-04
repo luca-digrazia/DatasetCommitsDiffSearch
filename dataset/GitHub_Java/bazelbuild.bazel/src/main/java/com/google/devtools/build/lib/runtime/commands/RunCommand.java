@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
-import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.BlazeServerStartupOptions;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -215,8 +214,7 @@ public class RunCommand implements BlazeCommand  {
       ConfiguredTarget runUnderTarget,
       List<String> args)
       throws NoShellFoundException {
-    BlazeRuntime runtime = env.getRuntime();
-    String productName = runtime.getProductName();
+    String productName = env.getRuntime().getProductName();
     Artifact executable = targetToRun.getProvider(FilesToRunProvider.class).getExecutable();
 
     BuildRequestOptions requestOptions = env.getOptions().getOptions(BuildRequestOptions.class);
@@ -224,7 +222,6 @@ public class RunCommand implements BlazeCommand  {
     PathFragment executablePath = executable.getPath().asFragment();
     PathPrettyPrinter prettyPrinter =
         OutputDirectoryLinksUtils.getPathPrettyPrinter(
-            runtime.getRuleClassProvider().getSymlinkDefinitions(),
             requestOptions.getSymlinkPrefix(productName),
             productName,
             env.getWorkspace(),
