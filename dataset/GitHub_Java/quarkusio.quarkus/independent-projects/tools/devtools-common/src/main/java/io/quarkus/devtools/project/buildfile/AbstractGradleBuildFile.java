@@ -46,7 +46,7 @@ public abstract class AbstractGradleBuildFile extends BuildFile {
             try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 getModel().getRootPropertiesContent().store(out, "Gradle properties");
                 Files.write(rootProjectPath.get().resolve(GRADLE_PROPERTIES_PATH),
-                        out.toByteArray());
+                        getModel().getRootSettingsContent().getBytes());
             }
         } else {
             writeToProjectFile(SETTINGS_GRADLE_PATH, getModel().getSettingsContent().getBytes());

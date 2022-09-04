@@ -33,7 +33,15 @@ public abstract class BuildFile implements ExtensionManager {
     }
 
     @Override
+    public final boolean hasQuarkusPlatformBom() throws IOException {
+        return containsBOM(platformDescriptor.getBomGroupId(), platformDescriptor.getBomArtifactId());
+    }
+
+    @Override
     public final InstallResult install(Collection<AppArtifactCoords> coords) throws IOException {
+        if (!hasQuarkusPlatformBom()) {
+            throw new IllegalStateException("The Quarkus BOM is required to add a Quarkus extension");
+        }
         this.refreshData();
         final Set<AppArtifactKey> existingKeys = getDependenciesKeys();
         final List<AppArtifactCoords> installed = coords.stream()
@@ -88,6 +96,8 @@ public abstract class BuildFile implements ExtensionManager {
     protected abstract void writeToDisk() throws IOException;
 
     protected abstract String getProperty(String propertyName) throws IOException;
+
+    protected abstract boolean containsBOM(String groupId, String artifactId) throws IOException;
 
     protected abstract void refreshData();
 
