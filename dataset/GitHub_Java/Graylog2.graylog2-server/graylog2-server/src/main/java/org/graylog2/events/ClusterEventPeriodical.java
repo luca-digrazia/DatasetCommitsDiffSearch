@@ -32,7 +32,6 @@ import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.utilities.AutoValueUtils;
 import org.mongojack.DBCursor;
 import org.mongojack.DBSort;
 import org.mongojack.DBUpdate;
@@ -95,7 +94,7 @@ public class ClusterEventPeriodical extends Periodical {
                 .asc("producer")
                 .asc("consumers"));
 
-        coll.setWriteConcern(WriteConcern.FSYNCED);
+        coll.setWriteConcern(WriteConcern.MAJORITY);
 
         return coll;
     }
@@ -176,11 +175,11 @@ public class ClusterEventPeriodical extends Periodical {
             return;
         }
 
-        final String className = AutoValueUtils.getCanonicalName(event.getClass());
+        final String className = getCanonicalName(event.getClass());
         final ClusterEvent clusterEvent = ClusterEvent.create(nodeId.toString(), className, event);
 
         try {
-            final String id = dbCollection.save(clusterEvent, WriteConcern.FSYNCED).getSavedId();
+            final String id = dbCollection.save(clusterEvent).getSavedId();
             LOG.debug("Published cluster event with ID <{}> and type <{}>", id, className);
         } catch (MongoException e) {
             LOG.error("Couldn't publish cluster event of type <" + className + ">", e);
@@ -217,5 +216,25 @@ public class ClusterEventPeriodical extends Periodical {
             return null;
 
         }
+    }
+
+    /**
+     * Get the canonical class name of the provided {@link Class} with special handling of Google AutoValue classes.
+     *
+     * @param aClass a class
+     * @return the canonical class name of {@code aClass} or its super class in case of an auto-generated class by
+     * Google AutoValue
+     * @see Class#getCanonicalName()
+     * @see com.google.auto.value.AutoValue
+     */
+    private String getCanonicalName(final Class<?> aClass) {
+        final Class<?> cls;
+        if (aClass.getSimpleName().startsWith("AutoValue_")) {
+            cls = aClass.getSuperclass();
+        } else {
+            cls = aClass;
+        }
+
+        return cls.getCanonicalName();
     }
 }

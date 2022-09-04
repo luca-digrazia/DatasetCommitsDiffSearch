@@ -52,7 +52,7 @@ public class DebugEventsResource extends RestResource {
     @Inject
     public DebugEventsResource(NodeId nodeId,
                                EventBus serverEventBus,
-                               ClusterEventBus clusterEventBus) {
+                               @ClusterEventBus EventBus clusterEventBus) {
         this.nodeId = checkNotNull(nodeId);
         this.serverEventBus = checkNotNull(serverEventBus);
         this.clusterEventBus = checkNotNull(clusterEventBus);
