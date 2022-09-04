@@ -545,14 +545,13 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                 }
 
                 if(ret.type != ConfigType.MAP && ret.type != ConfigType.CUSTOM_TYPE) {
-                    String rawJavadoc = processingEnv.getElementUtils().getDocComment(field);
-                    if (rawJavadoc == null) {
-                        rawJavadoc = tryLoadJavadocFromFile(field);
-                        if (rawJavadoc == null) {
+                    ret.javadoc = processingEnv.getElementUtils().getDocComment(field);
+                    if (ret.javadoc == null) {
+                        ret.javadoc = tryLoadJavadocFromFile(field);
+                        if (ret.javadoc == null) {
                             throw new RuntimeException("Field must include a javadoc description "  + field.getEnclosingElement() + "." + field);
                         }
                     }
-                    ret.javadoc = rawJavadoc.trim();
                 }
                 return ret;
             }

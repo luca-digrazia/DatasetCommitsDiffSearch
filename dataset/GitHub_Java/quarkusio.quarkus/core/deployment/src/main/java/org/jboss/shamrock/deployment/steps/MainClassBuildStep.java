@@ -21,10 +21,8 @@ import static org.jboss.protean.gizmo.MethodDescriptor.ofMethod;
 
 import java.lang.reflect.Modifier;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import org.jboss.builder.Version;
 import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.FieldCreator;
@@ -35,8 +33,6 @@ import org.jboss.protean.gizmo.TryBlock;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.deployment.ClassOutput;
 import org.jboss.shamrock.deployment.builditem.ClassOutputBuildItem;
-import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
-import org.jboss.shamrock.deployment.builditem.HttpServerBuiltItem;
 import org.jboss.shamrock.deployment.builditem.MainBytecodeRecorderBuildItem;
 import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.StaticBytecodeRecorderBuildItem;
@@ -48,16 +44,15 @@ import org.jboss.shamrock.runtime.Timing;
 
 class MainClassBuildStep {
 
+    private static final AtomicInteger COUNT = new AtomicInteger();
     private static final String APP_CLASS = "org.jboss.shamrock.runner.ApplicationImpl";
     private static final String MAIN_CLASS = "org.jboss.shamrock.runner.GeneratedMain";
     private static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
-    
+
     @BuildStep
     MainClassBuildItem build(List<StaticBytecodeRecorderBuildItem> staticInitTasks,
                              List<MainBytecodeRecorderBuildItem> mainMethod,
                              List<SystemPropertyBuildItem> properties,
-                             Optional<HttpServerBuiltItem> httpServer,
-                             List<FeatureBuildItem> features,
                              ClassOutputBuildItem classOutput) {
 
         // Application class
@@ -115,15 +110,7 @@ class MainClassBuildStep {
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
         }
-        
-        // Startup log messages
-        ResultHandle featuresHandle = tryBlock.load(features.stream()
-                .map(f -> f.getInfo())
-                .collect(Collectors.joining(", ")));
-        ResultHandle serverHandle = httpServer.isPresent() ? tryBlock.load("Listening on: http://" + httpServer.get()
-                .getHost() + ":" + httpServer.get().getPort()) : tryBlock.load("");
-        tryBlock.invokeStaticMethod(ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class),
-                tryBlock.load(Version.getVersion()), featuresHandle, serverHandle);
+        tryBlock.invokeStaticMethod(ofMethod(Timing.class, "printStartupTime", void.class));
 
         cb = tryBlock.addCatch(Throwable.class);
         cb.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cb.getCaughtException());
