@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.collect.compacthashmap.CompactHashMap;
@@ -402,58 +401,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   }
 
   /**
-   * Similar to {@link #getValuesFromErrorOrDepsOrGraph}, but instead of a Map, return a List of
-   * SkyValue ordered by the given order of SkyKeys.
-   */
-  private List<SkyValue> getOrderedValuesFromErrorOrDepsOrGraph(Iterable<? extends SkyKey> keys)
-      throws InterruptedException {
-    int capacity = keys instanceof Collection ? ((Collection<?>) keys).size() : 16;
-    List<SkyValue> result = new ArrayList<>(capacity);
-
-    // Ignoring duplication check here since it's done in GroupedList.
-    List<SkyKey> missingKeys = new ArrayList<>();
-    newlyRequestedDeps.startGroup();
-    for (SkyKey key : keys) {
-      Preconditions.checkState(
-          !key.equals(ErrorTransienceValue.KEY),
-          "Error transience key cannot be in requested deps of %s",
-          skyKey);
-      SkyValue value = maybeGetValueFromErrorOrDeps(key);
-      if (value == null) {
-        missingKeys.add(key);
-      }
-      // To maintain the ordering.
-      result.add(value);
-      if (!previouslyRequestedDepsValues.containsKey(key)) {
-        newlyRequestedDeps.add(key);
-      }
-    }
-    newlyRequestedDeps.endGroup();
-
-    if (missingKeys.isEmpty()) {
-      return result;
-    }
-
-    Map<SkyKey, ? extends NodeEntry> missingEntries =
-        evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
-    int i = 0;
-    for (SkyKey key : keys) {
-      if (result.get(i) != null) {
-        continue;
-      }
-      NodeEntry depEntry = missingEntries.get(key);
-      SkyValue valueOrNullMarker = getValueOrNullMarker(depEntry);
-      result.set(i, valueOrNullMarker);
-      newlyRequestedDepsValues.put(key, valueOrNullMarker);
-      if (valueOrNullMarker != NULL_MARKER) {
-        maybeUpdateMaxChildVersion(depEntry);
-      }
-      i++;
-    }
-    return result;
-  }
-
-  /**
    * Returns the values of done deps in {@code depKeys}, by looking in order at:
    *
    * <ol>
@@ -624,90 +571,46 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       }
     }
 
-    return Maps.transformValues(values, this::transformToValueOrUntypedException);
-  }
-
-  @Override
-  protected List<ValueOrUntypedException> getOrderedValueOrUntypedExceptions(
-      Iterable<? extends SkyKey> depKeys) throws InterruptedException {
-    checkActive();
-    List<SkyValue> values = getOrderedValuesFromErrorOrDepsOrGraph(depKeys);
-    int i = 0;
-    for (SkyKey depKey : depKeys) {
-      SkyValue depValue = values.get(i++);
-
-      if (depValue == NULL_MARKER) {
-        valuesMissing = true;
-        if (previouslyRequestedDepsValues.containsKey(depKey)) {
-          Preconditions.checkState(
-              bubbleErrorInfo != null,
-              "Undone key %s was already in deps of %s( dep: %s, parent: %s )",
-              depKey,
-              skyKey,
-              evaluatorContext.getGraph().get(skyKey, Reason.OTHER, depKey),
-              evaluatorContext.getGraph().get(null, Reason.OTHER, skyKey));
-        }
-        continue;
-      }
-
-      ErrorInfo errorInfo = ValueWithMetadata.getMaybeErrorInfo(depValue);
-      if (errorInfo != null) {
-        errorMightHaveBeenFound = true;
-        childErrorInfos.add(errorInfo);
-        if (bubbleErrorInfo != null) {
-          // Set interrupted status, to try to prevent the calling SkyFunction from doing anything
-          // fancy after this. SkyFunctions executed during error bubbling are supposed to
-          // (quickly) rethrow errors or return a value/null (but there's currently no way to
-          // enforce this).
-          Thread.currentThread().interrupt();
-        }
-        if ((!evaluatorContext.keepGoing() && bubbleErrorInfo == null)
-            || errorInfo.getException() == null) {
-          valuesMissing = true;
-          // We arbitrarily record the first child error if we are about to abort.
-          if (!evaluatorContext.keepGoing() && depErrorKey == null) {
-            depErrorKey = depKey;
+    return Maps.transformValues(
+        values,
+        maybeWrappedValue -> {
+          if (maybeWrappedValue == NULL_MARKER) {
+            return ValueOrUntypedException.ofNull();
           }
-        }
-      }
-    }
+          SkyValue justValue = ValueWithMetadata.justValue(maybeWrappedValue);
+          ErrorInfo errorInfo = ValueWithMetadata.getMaybeErrorInfo(maybeWrappedValue);
 
-    return Lists.transform(values, this::transformToValueOrUntypedException);
-  }
+          if (justValue != null && (evaluatorContext.keepGoing() || errorInfo == null)) {
+            // If the dep did compute a value, it is given to the caller if we are in
+            // keepGoing mode or if we are in noKeepGoingMode and there were no errors computing
+            // it.
+            return ValueOrUntypedException.ofValueUntyped(justValue);
+          }
 
-  private ValueOrUntypedException transformToValueOrUntypedException(SkyValue maybeWrappedValue) {
-    if (maybeWrappedValue == NULL_MARKER) {
-      return ValueOrUntypedException.ofNull();
-    }
-    SkyValue justValue = ValueWithMetadata.justValue(maybeWrappedValue);
-    ErrorInfo errorInfo = ValueWithMetadata.getMaybeErrorInfo(maybeWrappedValue);
+          // There was an error building the value, which we will either report by throwing an
+          // exception or insulate the caller from by returning null.
+          Preconditions.checkNotNull(errorInfo, "%s %s", skyKey, maybeWrappedValue);
+          Exception exception = errorInfo.getException();
 
-    if (justValue != null && (evaluatorContext.keepGoing() || errorInfo == null)) {
-      // If the dep did compute a value, it is given to the caller if we are in
-      // keepGoing mode or if we are in noKeepGoingMode and there were no errors computing
-      // it.
-      return ValueOrUntypedException.ofValueUntyped(justValue);
-    }
+          if (!evaluatorContext.keepGoing() && exception != null && bubbleErrorInfo == null) {
+            // Child errors should not be propagated in noKeepGoing mode (except during error
+            // bubbling). Instead we should fail fast.
+            return ValueOrUntypedException.ofNull();
+          }
 
-    // There was an error building the value, which we will either report by throwing an
-    // exception or insulate the caller from by returning null.
-    Preconditions.checkNotNull(errorInfo, "%s %s", skyKey, maybeWrappedValue);
-    Exception exception = errorInfo.getException();
-
-    if (!evaluatorContext.keepGoing() && exception != null && bubbleErrorInfo == null) {
-      // Child errors should not be propagated in noKeepGoing mode (except during error
-      // bubbling). Instead we should fail fast.
-      return ValueOrUntypedException.ofNull();
-    }
-
-    if (exception != null) {
-      // Give builder a chance to handle this exception.
-      return ValueOrUntypedException.ofExn(exception);
-    }
-    // In a cycle.
-    Preconditions.checkState(
-        !errorInfo.getCycleInfo().isEmpty(), "%s %s %s", skyKey, errorInfo, maybeWrappedValue);
-    return ValueOrUntypedException.ofNull();
+          if (exception != null) {
+            // Give builder a chance to handle this exception.
+            return ValueOrUntypedException.ofExn(exception);
+          }
+          // In a cycle.
+          Preconditions.checkState(
+              !errorInfo.getCycleInfo().isEmpty(),
+              "%s %s %s",
+              skyKey,
+              errorInfo,
+              maybeWrappedValue);
+          return ValueOrUntypedException.ofNull();
+        });
   }
 
   /**
