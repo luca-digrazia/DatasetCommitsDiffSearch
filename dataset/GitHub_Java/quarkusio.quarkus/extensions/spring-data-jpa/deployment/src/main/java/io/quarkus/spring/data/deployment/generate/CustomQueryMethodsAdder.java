@@ -6,10 +6,8 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,7 +49,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
     private static final Pattern SELECT_CLAUSE = Pattern.compile("select\\s+(.+)\\s+from", Pattern.CASE_INSENSITIVE);
     private static final Pattern FIELD_ALIAS = Pattern.compile(".*\\s+[as|AS]+\\s+([\\w\\.]+)");
     private static final Pattern FIELD_NAME = Pattern.compile("(\\w+).*");
-    private static final Pattern NAMED_PARAMETER = Pattern.compile("\\:(\\w+)\\b");
 
     private final IndexView index;
     private final ClassOutput nonBeansClassOutput;
@@ -153,18 +150,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
             try (MethodCreator methodCreator = classCreator.getMethodCreator(method.name(), methodReturnTypeDotName.toString(),
                     methodParameterTypesStr)) {
 
-                Set<String> usedNamedParameters = extractNamedParameters(queryString);
-                if (!usedNamedParameters.isEmpty()) {
-                    Set<String> missingParameters = new LinkedHashSet<>(usedNamedParameters);
-                    missingParameters.removeAll(namedParameterToIndex.keySet());
-                    if (!missingParameters.isEmpty()) {
-                        throw new IllegalArgumentException(
-                                method.name() + " of Repository " + repositoryClassInfo
-                                        + " is missing the named parameters " + missingParameters
-                                        + ", provided are " + namedParameterToIndex.keySet()
-                                        + ". Ensure that the parameters are correctly annotated with @Param.");
-                    }
-                }
                 if (isModifying) {
                     methodCreator.addAnnotation(Transactional.class);
                     AnnotationInstance modifyingAnnotation = method.annotation(DotNames.SPRING_DATA_MODIFYING);
@@ -279,7 +264,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                     DotName customResultTypeName = resultType.name();
 
                     if (customResultTypeName.equals(entityClassInfo.name())
-                            || isSupportedJavaLangType(customResultTypeName)) {
+                            || isHibernateSupportedReturnType(customResultTypeName)) {
                         // no special handling needed
                         customResultTypeName = null;
                     } else {
@@ -347,15 +332,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
         }
     }
 
-    private Set<String> extractNamedParameters(String queryString) {
-        Set<String> namedParameters = new LinkedHashSet<>();
-        final Matcher matcher = NAMED_PARAMETER.matcher(queryString);
-        while (matcher.find()) {
-            namedParameters.add(matcher.group(1));
-        }
-        return namedParameters;
-    }
-
     // we currently only support the 'value' attribute of @Query
     private void verifyQueryAnnotation(AnnotationInstance queryInstance, String methodName, String repositoryName) {
         List<AnnotationValue> values = queryInstance.values();
@@ -409,7 +385,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
     // Unless it is some kind of collection containing multiple types, 
     // return the type used in the query result.
     private Type verifyQueryResultType(Type t) {
-        if (isSupportedJavaLangType(t.name())) {
+        if (isHibernateSupportedReturnType(t.name())) {
             return t;
         }
         if (t.kind() == Kind.ARRAY) {
@@ -535,10 +511,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                 }
             }
         }
-    }
-
-    private boolean isSupportedJavaLangType(DotName dotName) {
-        return isIntLongOrBoolean(dotName) || dotName.equals(DotNames.OBJECT) || dotName.equals(DotNames.STRING);
     }
 
     private ResultHandle castReturnValue(MethodCreator methodCreator, ResultHandle resultHandle, String type) {

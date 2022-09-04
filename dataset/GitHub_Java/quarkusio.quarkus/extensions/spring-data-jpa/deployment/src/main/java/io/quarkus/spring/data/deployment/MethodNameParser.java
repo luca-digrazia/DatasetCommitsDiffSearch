@@ -57,17 +57,6 @@ public class MethodNameParser {
 
     private static final Set<String> BOOLEAN_OPERATIONS = new HashSet<>(Arrays.asList("True", "False"));
 
-    private static final Set<DotName> SIMPLE_FIELD_TYPES = new HashSet<>(Arrays.asList(
-            DotNames.STRING,
-            DotNames.BOOLEAN, DotNames.PRIMITIVE_BOOLEAN,
-            DotNames.INTEGER, DotNames.PRIMITIVE_INTEGER,
-            DotNames.LONG, DotNames.PRIMITIVE_LONG,
-            DotNames.SHORT, DotNames.PRIMITIVE_SHORT,
-            DotNames.BYTE, DotNames.PRIMITIVE_BYTE,
-            DotNames.CHARACTER, DotNames.PRIMITIVE_CHAR,
-            DotNames.DOUBLE, DotNames.PRIMITIVE_DOUBLE,
-            DotNames.FLOAT, DotNames.PRIMITIVE_FLOAT));
-
     private final ClassInfo entityClass;
     private final IndexView indexView;
     private final List<ClassInfo> mappedSuperClassInfos;
@@ -87,16 +76,14 @@ public class MethodNameParser {
 
     public Result parse(MethodInfo methodInfo) {
         String methodName = methodInfo.name();
-        ClassInfo repositoryClassInfo = methodInfo.declaringClass();
-        String repositoryMethodDescription = methodName + " of Repository " + repositoryClassInfo;
         QueryType queryType = getType(methodName);
         if (queryType == null) {
-            throw new UnableToParseMethodException("Method " + repositoryMethodDescription + " cannot be parsed");
+            throw new UnableToParseMethodException("Repository method " + methodName + " cannot be parsed");
         }
 
         int byIndex = methodName.indexOf("By");
         if ((byIndex == -1) || (byIndex + 2 >= methodName.length())) {
-            throw new UnableToParseMethodException("Method " + repositoryMethodDescription + " cannot be parsed");
+            throw new UnableToParseMethodException("Repository method " + methodName + " cannot be parsed");
         }
 
         // handle 'Top' and 'First'
@@ -114,19 +101,17 @@ public class MethodNameParser {
                 }
             } catch (Exception e) {
                 throw new UnableToParseMethodException(
-                        "Unable to parse query with limiting results clause. Offending method is "
-                                + repositoryMethodDescription + ".");
+                        "Unable to parse query with limiting results clause. Offending method is " + methodName);
             }
         }
         if ((topCount != null) && (queryType != QueryType.SELECT)) {
             throw new UnableToParseMethodException(
-                    "When 'Top' or 'First' is specified, the query must be a find query. Offending method is "
-                            + repositoryMethodDescription + ".");
+                    "When 'Top' or 'First' is specified, the query must be a find query. Offending method is " + methodName);
         }
 
         if (methodName.substring(0, byIndex).contains("Distinct")) {
             throw new UnableToParseMethodException(
-                    "Distinct is not yet supported. Offending method is " + repositoryMethodDescription + ".");
+                    "Distinct is not yet supported. Offending method is " + methodName);
         }
 
         // handle 'AllIgnoreCase'
@@ -143,7 +128,7 @@ public class MethodNameParser {
             int orderByIndex = afterByPart.indexOf(ORDER_BY);
             if (orderByIndex + ORDER_BY.length() == afterByPart.length()) {
                 throw new UnableToParseMethodException(
-                        "A field must by supplied after 'OrderBy' . Offending method is " + repositoryMethodDescription + ".");
+                        "A field must by supplied after 'OrderBy' . Offending method is " + methodName);
             }
             String afterOrderByPart = afterByPart.substring(orderByIndex + ORDER_BY.length());
             afterByPart = afterByPart.substring(0, orderByIndex);
@@ -160,7 +145,7 @@ public class MethodNameParser {
                 throw new UnableToParseMethodException(
                         "Field " + orderField
                                 + " which was configured as the order field does not exist in the entity. Offending method is "
-                                + repositoryMethodDescription + ".");
+                                + methodName);
             }
 
             if (ascending) {
@@ -176,7 +161,7 @@ public class MethodNameParser {
         if (containsAnd && containsOr) {
             throw new UnableToParseMethodException(
                     "'And' and 'Or' clauses cannot be mixed in a method name - Try specifying the Query with the @Query annotation. Offending method is "
-                            + repositoryMethodDescription + ".");
+                            + methodName);
         }
         if (containsAnd) {
             parts = Arrays.asList(afterByPart.split("And"));
@@ -208,14 +193,14 @@ public class MethodNameParser {
             FieldInfo fieldInfo = getFieldInfo(fieldName, entityClass, mappedSuperClassInfoRef);
             if (fieldInfo == null) {
                 StringBuilder fieldPathBuilder = new StringBuilder(fieldName.length() + 5);
-                fieldInfo = resolveNestedField(repositoryMethodDescription, fieldName, fieldPathBuilder);
+                fieldInfo = resolveNestedField(methodName, fieldName, fieldPathBuilder);
                 fieldName = fieldPathBuilder.toString();
             }
-            validateFieldWithOperation(operation, fieldInfo, fieldName, repositoryMethodDescription);
+            validateFieldWithOperation(operation, fieldInfo, fieldName, methodName);
             if ((ignoreCase || allIgnoreCase) && !DotNames.STRING.equals(fieldInfo.type().name())) {
                 throw new UnableToParseMethodException(
-                        "IgnoreCase cannot be specified for field" + fieldInfo.name() + " because it is not a String type. "
-                                + "Offending method is " + repositoryMethodDescription + ".");
+                        "IgnoreCase cannot be specified for field" + fieldInfo.name() + " of method "
+                                + methodName + " because it is not a String type");
             }
 
             if (where.length() > 0) {
@@ -342,12 +327,11 @@ public class MethodNameParser {
      * See:
      * https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-property-expressions
      */
-    private FieldInfo resolveNestedField(String repositoryMethodDescription, String fieldPathExpression,
-            StringBuilder fieldPathBuilder) {
+    private FieldInfo resolveNestedField(String methodName, String fieldPathExpression, StringBuilder fieldPathBuilder) {
 
         String fieldNotResolvableMessage = "Entity " + this.entityClass + " does not contain a field named: "
                 + fieldPathExpression + ". ";
-        String offendingMethodMessage = "Offending method is " + repositoryMethodDescription + ".";
+        String offendingMethodMessage = "Offending method is " + methodName + ".";
 
         ClassInfo parentClassInfo = this.entityClass;
         FieldInfo fieldInfo = null;
@@ -385,7 +369,7 @@ public class MethodNameParser {
                 fieldPathBuilder.append('.');
             }
             fieldPathBuilder.append(fieldInfo.name());
-            if (!isSupportedHibernateType(fieldInfo.type().name())) {
+            if (!isHibernateProvidedBasicType(fieldInfo.type().name())) {
                 parentClassInfo = indexView.getClassByName(fieldInfo.type().name());
                 if (parentClassInfo == null) {
                     throw new IllegalStateException(
@@ -428,20 +412,19 @@ public class MethodNameParser {
         return Character.isUpperCase(str.charAt(index + operatorStr.length()));
     }
 
-    private void validateFieldWithOperation(String operation, FieldInfo fieldInfo, String fieldPath,
-            String repositoryMethodDescription) {
+    private void validateFieldWithOperation(String operation, FieldInfo fieldInfo, String fieldPath, String methodName) {
         DotName fieldTypeDotName = fieldInfo.type().name();
         if (STRING_LIKE_OPERATIONS.contains(operation) && !DotNames.STRING.equals(fieldTypeDotName)) {
             throw new UnableToParseMethodException(
-                    operation + " cannot be specified for field" + fieldPath + " because it is not a String type. "
-                            + "Offending method is " + repositoryMethodDescription + ".");
+                    operation + " cannot be specified for field" + fieldPath + " of method "
+                            + methodName + " because it is not a String type");
         }
 
         if (BOOLEAN_OPERATIONS.contains(operation) && !DotNames.BOOLEAN.equals(fieldTypeDotName)
                 && !DotNames.PRIMITIVE_BOOLEAN.equals(fieldTypeDotName)) {
             throw new UnableToParseMethodException(
-                    operation + " cannot be specified for field" + fieldPath + " because it is not a boolean type. "
-                            + "Offending method is " + repositoryMethodDescription + ".");
+                    operation + " cannot be specified for field" + fieldPath + " of method "
+                            + methodName + " because it is not a boolean type");
         }
     }
 
@@ -548,8 +531,8 @@ public class MethodNameParser {
         return mappedSuperClassInfoElements;
     }
 
-    private boolean isSupportedHibernateType(DotName dotName) {
-        return SIMPLE_FIELD_TYPES.contains(dotName);
+    private boolean isHibernateProvidedBasicType(DotName dotName) {
+        return DotNames.HIBERNATE_PROVIDED_BASIC_TYPES.contains(dotName);
     }
 
     private static class MutableReference<T> {
