@@ -1286,7 +1286,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T>, Serializ
     }
 
     /**
-     * Indicates if Platt scaling is available.
+     * indicates if platt scaling is available     *
      * @return true if Platt Scaling is available
      */
     public boolean hasPlattScaling(){
