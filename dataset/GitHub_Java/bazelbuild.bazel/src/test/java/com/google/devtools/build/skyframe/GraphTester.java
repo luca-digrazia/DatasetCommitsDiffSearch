@@ -15,17 +15,14 @@ package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Interner;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import java.util.HashMap;
@@ -164,7 +161,7 @@ public class GraphTester {
   }
 
   public static SkyKey skyKey(String key) {
-    return Key.create(key);
+    return LegacySkyKey.create(NODE_TYPE, key);
   }
 
   /** A value in the testing graph that is constructed in the tester. */
@@ -245,11 +242,6 @@ public class GraphTester {
       return this;
     }
 
-    public TestFunction setBuilderUnconditionally(SkyFunction builder) {
-      this.builder = builder;
-      return this;
-    }
-
     public TestFunction setHasTransientError(boolean hasError) {
       this.hasTransientError = hasError;
       return this;
@@ -284,8 +276,8 @@ public class GraphTester {
 
   public static ImmutableList<SkyKey> toSkyKeys(String... names) {
     ImmutableList.Builder<SkyKey> result = ImmutableList.builder();
-    for (String element : names) {
-      result.add(Key.create(element));
+    for (int i = 0; i < names.length; i++) {
+      result.add(LegacySkyKey.create(GraphTester.NODE_TYPE, names[i]));
     }
     return result.build();
   }
@@ -407,25 +399,5 @@ public class GraphTester {
         return StringValue.of(String.format(format, StringValue.from(deps.get(key)).getValue()));
       }
     };
-  }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class Key extends AbstractSkyKey<String> {
-    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
-
-    @AutoCodec.VisibleForSerialization
-    Key(String arg) {
-      super(arg);
-    }
-
-    static Key create(String arg) {
-      return interner.intern(new Key(arg));
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctionName.FOR_TESTING;
-    }
   }
 }
