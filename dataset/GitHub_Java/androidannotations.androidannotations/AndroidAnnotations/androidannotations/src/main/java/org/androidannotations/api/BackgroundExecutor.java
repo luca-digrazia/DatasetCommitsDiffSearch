@@ -247,7 +247,7 @@ public class BackgroundExecutor {
 
 		private String id;
 		private int delay;
-		private long targetTimeMillis; /* since epoch */
+		private long targetTime; /* in milliseconds since epoch */
 		private String serial;
 		private boolean executionAsked;
 		private Future<?> future;
@@ -258,7 +258,7 @@ public class BackgroundExecutor {
 			}
 			if (delay > 0) {
 				this.delay = delay;
-				targetTimeMillis = System.currentTimeMillis() + delay;
+				targetTime = System.currentTimeMillis() + delay;
 			}
 			if (!"".equals(serial)) {
 				this.serial = serial;
@@ -291,7 +291,7 @@ public class BackgroundExecutor {
 					if (next != null) {
 						if (next.delay != 0) {
 							/* compute remaining delay */
-							next.delay = Math.max(0, (int) (targetTimeMillis - System.currentTimeMillis()));
+							next.delay = Math.max(0, (int) (targetTime - System.currentTimeMillis()));
 						}
 						/* a task having the same serial was queued, execute it */
 						BackgroundExecutor.execute(next);
