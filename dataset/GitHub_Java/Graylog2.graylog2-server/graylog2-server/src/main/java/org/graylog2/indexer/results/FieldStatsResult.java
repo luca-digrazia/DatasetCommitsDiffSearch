@@ -16,121 +16,83 @@
  */
 package org.graylog2.indexer.results;
 
-import io.searchbox.core.search.aggregation.CardinalityAggregation;
-import io.searchbox.core.search.aggregation.ExtendedStatsAggregation;
-import io.searchbox.core.search.aggregation.ValueCountAggregation;
+import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
+import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
+import org.elasticsearch.search.aggregations.metrics.valuecount.ValueCount;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 public class FieldStatsResult extends IndexQueryResult {
+
+    @Nullable
+    private final ValueCount valueCount;
+    @Nullable
+    private final ExtendedStats extendedStats;
+    @Nullable
+    private final Cardinality cardinality;
     private List<ResultMessage> searchHits;
 
-    private final long count;
-    private final double sum;
-    private final double sumOfSquares;
-    private final double mean;
-    private final double min;
-    private final double max;
-    private final double variance;
-    private final double stdDeviation;
-    private final long cardinality;
 
-    public FieldStatsResult(ValueCountAggregation valueCountAggregation,
-                            ExtendedStatsAggregation extendedStatsAggregation,
-                            CardinalityAggregation cardinalityAggregation,
-                            List<ResultMessage> hits,
+    public FieldStatsResult(@Nullable ValueCount valueCount,
+                            @Nullable ExtendedStats extendedStats,
+                            @Nullable Cardinality cardinality,
+                            SearchHits hits,
                             String query,
-                            String source,
-                            long tookMs) {
-        super(query, source, tookMs);
-        this.count = getValueCount(valueCountAggregation, extendedStatsAggregation);
-        this.cardinality = cardinalityAggregation == null || cardinalityAggregation.getCardinality() == null ? Long.MIN_VALUE : cardinalityAggregation.getCardinality();
-
-        if (extendedStatsAggregation != null) {
-            sum = extendedStatsAggregation.getSum() != null ? extendedStatsAggregation.getSum() : Double.NaN;
-            sumOfSquares = extendedStatsAggregation.getSumOfSquares() != null ? extendedStatsAggregation.getSumOfSquares() : Double.NaN;
-            mean = extendedStatsAggregation.getAvg() != null ? extendedStatsAggregation.getAvg() : Double.NaN;
-            min = extendedStatsAggregation.getMin() != null ? extendedStatsAggregation.getMin() : Double.NaN;
-            max = extendedStatsAggregation.getMax() != null ? extendedStatsAggregation.getMax() : Double.NaN;
-            variance = extendedStatsAggregation.getVariance() != null ? extendedStatsAggregation.getVariance() : Double.NaN;
-            stdDeviation = extendedStatsAggregation.getStdDeviation() != null ? extendedStatsAggregation.getStdDeviation() : Double.NaN;
-        } else {
-            sum = Double.NaN;
-            sumOfSquares = Double.NaN;
-            mean = Double.NaN;
-            min = Double.NaN;
-            max = Double.NaN;
-            variance = Double.NaN;
-            stdDeviation = Double.NaN;
-        }
-
-        this.searchHits = hits;
+                            BytesReference source, TimeValue took) {
+        super(query, source, took);
+        this.valueCount = valueCount;
+        this.extendedStats = extendedStats;
+        this.cardinality = cardinality;
+        this.searchHits = buildResults(hits);
     }
 
-    private FieldStatsResult(String query, String bytesReference) {
-        super(query, bytesReference, 0);
-
-        this.count = Long.MIN_VALUE;
-        this.cardinality = Long.MIN_VALUE;
-        sum = Double.NaN;
-        sumOfSquares = Double.NaN;
-        mean = Double.NaN;
-        min = Double.NaN;
-        max = Double.NaN;
-        variance = Double.NaN;
-        stdDeviation = Double.NaN;
-    }
-
-    private long getValueCount(ValueCountAggregation valueCountAggregation, ExtendedStatsAggregation extendedStatsAggregation) {
-        if (valueCountAggregation != null && valueCountAggregation.getValueCount() != null) {
-            return valueCountAggregation.getValueCount();
-        } else if (extendedStatsAggregation != null && extendedStatsAggregation.getCount() != null) {
-            return extendedStatsAggregation.getCount();
+    public long getCount() {
+        if (valueCount != null) {
+            return valueCount.getValue();
+        } else if (extendedStats != null) {
+            return extendedStats.getCount();
         }
         return Long.MIN_VALUE;
     }
 
-    public long getCount() {
-        return count;
-    }
-
     public double getSum() {
-        return sum;
+        return extendedStats != null ? extendedStats.getSum() : Double.NaN;
     }
 
     public double getSumOfSquares() {
-        return sumOfSquares;
+        return extendedStats != null ? extendedStats.getSumOfSquares() : Double.NaN;
     }
 
     public double getMean() {
-        return mean;
+        return extendedStats != null ? extendedStats.getAvg() : Double.NaN;
     }
 
     public double getMin() {
-        return min;
+        return extendedStats != null ? extendedStats.getMin() : Double.NaN;
     }
 
     public double getMax() {
-        return max;
+        return extendedStats != null ? extendedStats.getMax() : Double.NaN;
     }
 
     public double getVariance() {
-        return variance;
+        return extendedStats != null ? extendedStats.getVariance() : Double.NaN;
     }
 
     public double getStdDeviation() {
-        return stdDeviation;
+        return extendedStats != null ? extendedStats.getStdDeviation() : Double.NaN;
     }
 
+
     public long getCardinality() {
-        return cardinality;
+        return cardinality != null ? cardinality.getValue() : Long.MIN_VALUE;
     }
 
     public List<ResultMessage> getSearchHits() {
         return searchHits;
-    }
-
-    public static FieldStatsResult empty(String query, String bytesReference) {
-        return new FieldStatsResult(query, bytesReference);
     }
 }

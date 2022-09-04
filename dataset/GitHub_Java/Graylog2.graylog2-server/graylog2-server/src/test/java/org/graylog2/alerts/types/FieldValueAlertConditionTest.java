@@ -141,7 +141,7 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
                 searches,
                 stream,
                 CONDITION_ID,
-                Tools.nowUTC(),
+                Tools.iso8601(),
                 STREAM_CREATOR,
                 parameters);
     }

@@ -140,10 +140,6 @@ public class StatisticalCountWidget extends SearchResultCountWidget {
 
     @Override
     protected ComputationResult compute() {
-        if (timeRange == null) {
-            throw new RuntimeException("Invalid time range provided");
-        }
-
         try {
             final String filter;
             if (!isNullOrEmpty(streamId)) {

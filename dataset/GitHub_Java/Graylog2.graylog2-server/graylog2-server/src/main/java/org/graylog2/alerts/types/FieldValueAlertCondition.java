@@ -36,10 +36,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -74,12 +72,12 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
         super(stream, id, Type.FIELD_VALUE, createdAt, creatorUserId, parameters);
         this.searches = searches;
 
-        this.decimalFormat = new DecimalFormat("#.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+        this.decimalFormat = new DecimalFormat("#.###");
 
         this.time = (Integer) parameters.get("time");
-        this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase(Locale.ENGLISH));
+        this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase());
         this.threshold = (Number) parameters.get("threshold");
-        this.type = CheckType.valueOf(((String) parameters.get("type")).toUpperCase(Locale.ENGLISH));
+        this.type = CheckType.valueOf(((String) parameters.get("type")).toUpperCase());
         this.field = (String) parameters.get("field");
 
         checkArgument(!isNullOrEmpty(field), "\"field\" must not be empty.");
@@ -89,8 +87,8 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
     public String getDescription() {
         return "time: " + time
                 + ", field: " + field
-                + ", check type: " + type.toString().toLowerCase(Locale.ENGLISH)
-                + ", threshold_type: " + thresholdType.toString().toLowerCase(Locale.ENGLISH)
+                + ", check type: " + type.toString().toLowerCase()
+                + ", threshold_type: " + thresholdType.toString().toLowerCase()
                 + ", threshold: " + decimalFormat.format(threshold)
                 + ", grace: " + grace;
     }
