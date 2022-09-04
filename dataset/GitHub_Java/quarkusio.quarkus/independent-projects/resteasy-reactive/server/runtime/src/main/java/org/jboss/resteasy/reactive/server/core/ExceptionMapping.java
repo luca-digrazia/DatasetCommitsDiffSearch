@@ -1,14 +1,15 @@
 package org.jboss.resteasy.reactive.server.core;
 
 import io.smallrye.common.annotation.Blocking;
-import io.smallrye.common.annotation.NonBlocking;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -34,7 +35,6 @@ public class ExceptionMapping {
      * We have a special log message for this.
      */
     private final List<Predicate<Throwable>> blockingProblemPredicates = new ArrayList<>();
-    private final List<Predicate<Throwable>> nonBlockingProblemPredicate = new ArrayList<>();
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void mapException(Throwable throwable, ResteasyReactiveRequestContext context) {
@@ -57,7 +57,6 @@ public class ExceptionMapping {
                 ((ResteasyReactiveAsyncExceptionMapper) exceptionMapper).asyncResponse(throwable,
                         new AsyncExceptionMapperContextImpl(context));
                 logBlockingErrorIfRequired(throwable, context);
-                logNonBlockingErrorIfRequired(throwable, context);
                 return;
             } else if (exceptionMapper instanceof ResteasyReactiveExceptionMapper) {
                 response = ((ResteasyReactiveExceptionMapper) exceptionMapper).toResponse(throwable, context);
@@ -66,7 +65,6 @@ public class ExceptionMapping {
             }
             context.setResult(response);
             logBlockingErrorIfRequired(throwable, context);
-            logNonBlockingErrorIfRequired(throwable, context);
             return;
         }
         if (isWebApplicationException) {
@@ -82,12 +80,12 @@ public class ExceptionMapping {
             log.error("Request failed ", throwable);
         }
         logBlockingErrorIfRequired(throwable, context);
-        logNonBlockingErrorIfRequired(throwable, context);
         context.handleUnmappedException(throwable);
     }
 
     private void logBlockingErrorIfRequired(Throwable throwable, ResteasyReactiveRequestContext context) {
-        if (isBlockingProblem(throwable)) {
+        boolean blockingProblem = isBlockingProblem(throwable);
+        if (blockingProblem) {
             log.error("A blocking operation occurred on the IO thread. This likely means you need to annotate "
                     + context.getTarget().getResourceClass().getName() + "#" + context.getTarget().getJavaMethodName() + "("
                     + Arrays.stream(context.getTarget().getParameterTypes()).map(Objects::toString)
@@ -100,34 +98,15 @@ public class ExceptionMapping {
         }
     }
 
-    private void logNonBlockingErrorIfRequired(Throwable throwable, ResteasyReactiveRequestContext context) {
-        if (isNonBlockingProblem(throwable)) {
-            log.error(
-                    "An operation that needed be run on a Vert.x EventLoop thread was run on a worker pool thread. This likely means you need to annotate "
-                            + context.getTarget().getResourceClass().getName() + "#" + context.getTarget().getJavaMethodName()
-                            + "("
-                            + Arrays.stream(context.getTarget().getParameterTypes()).map(Objects::toString)
-                                    .collect(Collectors.joining(", "))
-                            + ") with @"
-                            + NonBlocking.class.getName()
-                            + ". Alternatively you can annotate the class " + context.getTarget().getResourceClass().getName()
-                            + " to make every method on the class run on a Vert.x EventLoop thread, or annotate your sub class of the "
-                            + Application.class.getName() + " class to affect the entire application");
-        }
-    }
-
     private boolean isBlockingProblem(Throwable throwable) {
-        return isKnownProblem(throwable, blockingProblemPredicates);
-    }
-
-    private boolean isNonBlockingProblem(Throwable throwable) {
-        return isKnownProblem(throwable, nonBlockingProblemPredicate);
-    }
-
-    private boolean isKnownProblem(Throwable throwable, List<Predicate<Throwable>> predicates) {
         Throwable e = throwable;
+        Set<Throwable> seen = new HashSet<>();
         while (e != null) {
-            for (Predicate<Throwable> predicate : predicates) {
+            if (seen.contains(e)) {
+                return false;
+            }
+            seen.add(e);
+            for (Predicate<Throwable> predicate : blockingProblemPredicates) {
                 if (predicate.test(e)) {
                     return true;
                 }
@@ -186,14 +165,6 @@ public class ExceptionMapping {
         blockingProblemPredicates.add(predicate);
     }
 
-    public void addNonBlockingProblem(Class<? extends Throwable> throwable) {
-        nonBlockingProblemPredicate.add(new ExceptionTypePredicate(throwable));
-    }
-
-    public void addNonBlockingProblem(Predicate<Throwable> predicate) {
-        nonBlockingProblemPredicate.add(predicate);
-    }
-
     public <T extends Throwable> void addExceptionMapper(Class<T> exceptionClass, ResourceExceptionMapper<T> mapper) {
         ResourceExceptionMapper<? extends Throwable> existing = mappers.get(exceptionClass);
         if (existing != null) {
@@ -211,10 +182,6 @@ public class ExceptionMapping {
 
     public List<Predicate<Throwable>> getBlockingProblemPredicates() {
         return blockingProblemPredicates;
-    }
-
-    public List<Predicate<Throwable>> getNonBlockingProblemPredicate() {
-        return nonBlockingProblemPredicate;
     }
 
     public void initializeDefaultFactories(Function<String, BeanFactory<?>> factoryCreator) {
@@ -248,42 +215,6 @@ public class ExceptionMapping {
         @Override
         public boolean test(Throwable t) {
             return t.getClass().equals(throwable);
-        }
-    }
-
-    public static class ExceptionTypeAndMessageContainsPredicate implements Predicate<Throwable> {
-
-        private Class<? extends Throwable> throwable;
-        private String messagePart;
-
-        // needed for bytecode recording
-        public ExceptionTypeAndMessageContainsPredicate() {
-        }
-
-        public ExceptionTypeAndMessageContainsPredicate(Class<? extends Throwable> throwable, String messagePart) {
-            this.throwable = throwable;
-            this.messagePart = messagePart;
-        }
-
-        public Class<? extends Throwable> getThrowable() {
-            return throwable;
-        }
-
-        public void setThrowable(Class<? extends Throwable> throwable) {
-            this.throwable = throwable;
-        }
-
-        public String getMessagePart() {
-            return messagePart;
-        }
-
-        public void setMessagePart(String messagePart) {
-            this.messagePart = messagePart;
-        }
-
-        @Override
-        public boolean test(Throwable t) {
-            return t.getClass().equals(throwable) && t.getMessage().contains(messagePart);
         }
     }
 }
