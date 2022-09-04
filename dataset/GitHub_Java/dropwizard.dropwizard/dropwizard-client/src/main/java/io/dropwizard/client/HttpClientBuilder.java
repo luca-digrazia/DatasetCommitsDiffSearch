@@ -13,7 +13,6 @@ import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Duration;
 import org.apache.http.ConnectionReuseStrategy;
-import org.apache.http.Header;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
@@ -21,7 +20,6 @@ import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
-import org.apache.http.client.RedirectStrategy;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.config.Registry;
@@ -42,7 +40,6 @@ import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * A convenience class for building {@link HttpClient} instances.
@@ -74,9 +71,7 @@ public class HttpClientBuilder {
     private CredentialsProvider credentialsProvider = null;
     private HttpClientMetricNameStrategy metricNameStrategy = HttpClientMetricNameStrategies.METHOD_ONLY;
     private HttpRoutePlanner routePlanner = null;
-    private RedirectStrategy redirectStrategy;
     private boolean disableContentCompression;
-    private List<? extends Header> defaultHeaders;
 
     public HttpClientBuilder(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
@@ -173,28 +168,6 @@ public class HttpClientBuilder {
      */
     public HttpClientBuilder using(HttpClientMetricNameStrategy metricNameStrategy) {
         this.metricNameStrategy = metricNameStrategy;
-        return this;
-    }
-
-    /**
-     * Use the given {@link org.apache.http.client.RedirectStrategy} instance.
-     *
-     * @param redirectStrategy    a {@link org.apache.http.client.RedirectStrategy} instance
-     * @return {@code this}
-     */
-    public HttpClientBuilder using(RedirectStrategy redirectStrategy) {
-        this.redirectStrategy = redirectStrategy;
-        return this;
-    }
-
-    /**
-     * Use the given default headers for each HTTP request
-     *
-     * @param defaultHeaders HTTP headers
-     * @return {@code} this
-     */
-    public HttpClientBuilder using(List<? extends Header> defaultHeaders) {
-        this.defaultHeaders = defaultHeaders;
         return this;
     }
 
@@ -327,14 +300,6 @@ public class HttpClientBuilder {
 
         if (disableContentCompression) {
             builder.disableContentCompression();
-        }
-
-        if (redirectStrategy != null) {
-            builder.setRedirectStrategy(redirectStrategy);
-        }
-
-        if (defaultHeaders != null) {
-            builder.setDefaultHeaders(defaultHeaders);
         }
 
         return new ConfiguredCloseableHttpClient(builder.build(), requestConfig);
