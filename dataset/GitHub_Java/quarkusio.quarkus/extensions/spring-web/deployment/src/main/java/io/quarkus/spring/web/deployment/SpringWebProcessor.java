@@ -54,7 +54,6 @@ import io.quarkus.resteasy.server.common.deployment.ResteasyDeploymentCustomizer
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodParamAnnotations;
-import io.quarkus.spring.web.runtime.ResponseStatusExceptionMapper;
 import io.quarkus.undertow.deployment.BlacklistedServletContainerInitializerBuildItem;
 import io.quarkus.undertow.deployment.ServletInitParamBuildItem;
 
@@ -326,7 +325,7 @@ public class SpringWebProcessor {
         return false;
     }
 
-    @BuildStep
+    @BuildStep(loadsApplicationClasses = true)
     public void generateExceptionMapperProviders(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BuildProducer<GeneratedClassBuildItem> generatedExceptionMappers,
             BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer,
@@ -341,11 +340,6 @@ public class SpringWebProcessor {
         generateMappersForResponseStatusOnException(providersProducer, index, classOutput, typesUtil);
         generateMappersForExceptionHandlerInControllerAdvice(providersProducer, reflectiveClassProducer, index, classOutput,
                 typesUtil);
-    }
-
-    @BuildStep
-    public void registerStandardExceptionMappers(BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer) {
-        providersProducer.produce(new ResteasyJaxrsProviderBuildItem(ResponseStatusExceptionMapper.class.getName()));
     }
 
     private void generateMappersForResponseStatusOnException(BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer,

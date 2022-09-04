@@ -34,11 +34,6 @@ public final class ResponseContentTypeResolver {
     }
 
     private static Variant getBestVariant(List<String> acceptHeaders, List<Variant> variants) {
-        if (acceptHeaders.isEmpty()) {
-            // done because negotiation.setAcceptHeaders(acceptHeaders) throws a NPE when passed an empty list
-            return null;
-        }
-
         ServerDrivenNegotiation negotiation = new ServerDrivenNegotiation();
         negotiation.setAcceptHeaders(acceptHeaders);
 
