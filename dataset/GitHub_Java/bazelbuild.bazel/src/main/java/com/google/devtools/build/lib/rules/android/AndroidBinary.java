@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.rules.android;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -68,6 +67,7 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.ProguardHelper;
 import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 import com.google.devtools.build.lib.syntax.Type;
@@ -819,8 +819,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .addOutputGroup("mobile_install_split" + INTERNAL_SUFFIX, splitInstallOutputGroup)
         .addOutputGroup("apk_manifest", apkManifest)
         .addOutputGroup("apk_manifest_text", apkManifestText)
-        .addOutputGroup("android_deploy_info", deployInfo)
-        .addOutputGroup("android_incremental_deploy_info", incrementalDeployInfo);
+        .addOutputGroup("android_deploy_info", deployInfo);
   }
 
   private static void createSplitInstallAction(RuleContext ruleContext,
@@ -1587,7 +1586,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
-              JavaCommon.getHostJavaExecutable(ruleContext),
+              ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
               singleJar,
               JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
