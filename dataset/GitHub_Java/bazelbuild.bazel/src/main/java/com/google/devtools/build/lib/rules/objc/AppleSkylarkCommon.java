@@ -63,17 +63,12 @@ public class AppleSkylarkCommon
         ApplePlatform> {
 
   @VisibleForTesting
-  public static final String BAD_KEY_ERROR =
-      "Argument %s not a recognized key,"
-          + " 'strict_include', 'providers', or 'direct_dep_providers'.";
+  public static final String BAD_KEY_ERROR = "Argument %s not a recognized key, 'providers',"
+      + " or 'direct_dep_providers'.";
 
   @VisibleForTesting
   public static final String BAD_SET_TYPE_ERROR =
       "Value for key %s must be a set of %s, instead found %s.";
-
-  @VisibleForTesting
-  public static final String BAD_FRAMEWORK_PATH_ERROR =
-      "Value for key framework_search_paths must end in .framework; instead found %s.";
 
   @VisibleForTesting
   public static final String BAD_PROVIDERS_ITER_ERROR =
@@ -192,8 +187,7 @@ public class AppleSkylarkCommon
   // This method is registered statically for skylark, and never called directly.
   public ObjcProvider newObjcProvider(Boolean usesSwift, Dict<?, ?> kwargs, StarlarkThread thread)
       throws EvalException {
-    ObjcProvider.StarlarkBuilder resultBuilder =
-        new ObjcProvider.StarlarkBuilder(thread.getSemantics());
+    ObjcProvider.Builder resultBuilder = new ObjcProvider.Builder(thread.getSemantics());
     if (usesSwift) {
       resultBuilder.add(ObjcProvider.FLAG, ObjcProvider.Flag.USES_SWIFT);
     }
@@ -201,8 +195,6 @@ public class AppleSkylarkCommon
       Key<?> key = ObjcProvider.getSkylarkKeyForString((String) entry.getKey());
       if (key != null) {
         resultBuilder.addElementsFromSkylark(key, entry.getValue());
-      } else if (entry.getKey().equals("strict_include")) {
-        resultBuilder.addStrictIncludeFromSkylark(entry.getValue());
       } else if (entry.getKey().equals("providers")) {
         resultBuilder.addProvidersFromSkylark(entry.getValue());
       } else if (entry.getKey().equals("direct_dep_providers")) {
