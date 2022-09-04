@@ -32,6 +32,14 @@ public interface ConfiguredTargetValue extends NotComparableSkyValue {
     return ConfiguredTargetKey.of(label, configuration);
   }
 
+  static ImmutableList<SkyKey> keys(Iterable<ConfiguredTargetKey> lacs) {
+    ImmutableList.Builder<SkyKey> keys = ImmutableList.builder();
+    for (ConfiguredTargetKey lac : lacs) {
+      keys.add(lac);
+    }
+    return keys.build();
+  }
+
   /**
    * Returns the configured target for this value.
    */
