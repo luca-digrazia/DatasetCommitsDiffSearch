@@ -24,14 +24,20 @@ public final class FdoProfileProvider extends NativeInfo {
   public static final NativeProvider<FdoProfileProvider> PROVIDER =
       new NativeProvider<FdoProfileProvider>(FdoProfileProvider.class, "FdoProfileInfo") {};
 
-  private final Artifact profileArtifact;
+  private final FdoInputFile fdoInputFile;
+  private final Artifact protoProfileArtifact;
 
-  public FdoProfileProvider(Artifact profileArtifact) {
+  public FdoProfileProvider(FdoInputFile fdoInputFile, Artifact protoProfileArtifact) {
     super(PROVIDER);
-    this.profileArtifact = profileArtifact;
+    this.fdoInputFile = fdoInputFile;
+    this.protoProfileArtifact = protoProfileArtifact;
   }
 
-  public Artifact getProfileArtifact() {
-    return profileArtifact;
+  public FdoInputFile getInputFile() {
+    return fdoInputFile;
+  }
+
+  public Artifact getProtoProfileArtifact() {
+    return protoProfileArtifact;
   }
 }

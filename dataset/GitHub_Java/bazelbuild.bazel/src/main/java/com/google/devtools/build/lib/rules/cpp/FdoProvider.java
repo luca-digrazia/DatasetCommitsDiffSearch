@@ -17,7 +17,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.vfs.Path;
 
 /**
  * A {@link TransitiveInfoProvider} that describes how C++ FDO compilation should be done.
@@ -44,40 +43,24 @@ public class FdoProvider implements TransitiveInfoProvider {
     LLVM_FDO,
   }
 
-  /** <b>DO NOT EVER USE PATHS IN THE ANALYSIS PHASE!
-   *
-   * <p>This is buggy and incorrect because Bazel cannot track file system accesses done through
-   * raw file system objects like {@link Path} (as opposed to going through Skyframe). This is
-   * bad code, it was a mistake to submit it in the first place and will go away at the first
-   * opportunity we get.
-   */
-  @Deprecated
-  private final Path fdoProfilePath;
   private final FdoMode fdoMode;
   private final String fdoInstrument;
   private final Artifact profileArtifact;
   private final Artifact prefetchHintsArtifact;
+  private final Artifact protoProfileArtifact;
 
   @AutoCodec.Instantiator
-  public FdoProvider(Path fdoProfilePath, FdoMode fdoMode, String fdoInstrument,
-      Artifact profileArtifact, Artifact prefetchHintsArtifact) {
-    this.fdoProfilePath = fdoProfilePath;
+  public FdoProvider(
+      FdoMode fdoMode,
+      String fdoInstrument,
+      Artifact profileArtifact,
+      Artifact prefetchHintsArtifact,
+      Artifact protoProfileArtifact) {
     this.fdoMode = fdoMode;
     this.fdoInstrument = fdoInstrument;
     this.profileArtifact = profileArtifact;
     this.prefetchHintsArtifact = prefetchHintsArtifact;
-  }
-
-  /** <b>DO NOT EVER USE PATHS IN THE ANALYSIS PHASE!
-   *
-   * <p>This is buggy and incorrect because Bazel cannot track file system accesses done through
-   * raw file system objects like {@link Path} (as opposed to going through Skyframe). This is
-   * bad code, it was a mistake to submit it in the first place and will go away at the first
-   * opportunity we get.
-   */
-  @Deprecated
-  public Path getFdoProfilePath() {
-    return fdoProfilePath;
+    this.protoProfileArtifact = protoProfileArtifact;
   }
 
   public String getFdoInstrument() {
@@ -94,5 +77,9 @@ public class FdoProvider implements TransitiveInfoProvider {
 
   public Artifact getPrefetchHintsArtifact() {
     return prefetchHintsArtifact;
+  }
+
+  public Artifact getProtoProfileArtifact() {
+    return protoProfileArtifact;
   }
 }
