@@ -16,6 +16,7 @@
  */
 package org.graylog.security.authservice;
 
+import org.graylog2.shared.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,12 +28,15 @@ public class AuthServiceAuthenticator {
 
     private final GlobalAuthServiceConfig authServiceConfig;
     private final ProvisionerService provisionerService;
+    private final UserService userService;
 
     @Inject
     public AuthServiceAuthenticator(GlobalAuthServiceConfig authServiceConfig,
-                                    ProvisionerService provisionerService) {
+                                    ProvisionerService provisionerService,
+                                    UserService userService) {
         this.authServiceConfig = authServiceConfig;
         this.provisionerService = provisionerService;
+        this.userService = userService;
     }
 
     /**
