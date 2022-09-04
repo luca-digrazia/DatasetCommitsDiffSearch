@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,6 +18,7 @@ package org.androidannotations.test15;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 
 import org.androidannotations.annotations.Background;
 import org.androidannotations.annotations.EActivity;
@@ -39,11 +40,6 @@ public class ThreadActivity extends Activity {
 	@Background
 	void emptyBackgroundMethod() {
 
-	}
-	
-	@Background(delay = 1000)
-	void emptyDelayedBackgroundMethod() {
-		
 	}
 
 	@UiThread
