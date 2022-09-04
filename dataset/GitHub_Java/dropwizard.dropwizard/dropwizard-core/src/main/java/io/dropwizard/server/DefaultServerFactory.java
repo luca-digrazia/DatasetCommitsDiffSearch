@@ -4,6 +4,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jetty9.InstrumentedQueuedThreadPool;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.google.common.base.MoreObjects;
 import io.dropwizard.jetty.ConnectorFactory;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.jetty.RoutingHandler;
@@ -14,7 +15,7 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.component.ContainerLifeCycle;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import javax.validation.constraints.NotEmpty;
+import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,7 +79,7 @@ public class DefaultServerFactory extends AbstractServerFactory {
     @NotNull
     private List<ConnectorFactory> adminConnectors = Collections.singletonList(HttpConnectorFactory.admin());
 
-    @Min(4)
+    @Min(2)
     private int adminMaxThreads = 64;
 
     @Min(1)
@@ -237,13 +238,13 @@ public class DefaultServerFactory extends AbstractServerFactory {
 
     @Override
     public String toString() {
-        return "DefaultServerFactory{" +
-                "applicationConnectors=" + applicationConnectors +
-                ", adminConnectors=" + adminConnectors +
-                ", adminMaxThreads=" + adminMaxThreads +
-                ", adminMinThreads=" + adminMinThreads +
-                ", applicationContextPath='" + applicationContextPath + '\'' +
-                ", adminContextPath='" + adminContextPath + '\'' +
-                '}';
+        return MoreObjects.toStringHelper(this)
+                .add("applicationConnectors", applicationConnectors)
+                .add("adminConnectors", adminConnectors)
+                .add("adminMaxThreads", adminMaxThreads)
+                .add("adminMinThreads", adminMinThreads)
+                .add("applicationContextPath", applicationContextPath)
+                .add("adminContextPath", adminContextPath)
+                .toString();
     }
 }
