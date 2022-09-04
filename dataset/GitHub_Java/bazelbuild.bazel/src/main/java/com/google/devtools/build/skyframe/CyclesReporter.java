@@ -15,7 +15,6 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
  * for more information.
  */
 public class CyclesReporter {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   /**
    * Interface for reporting custom information about a single cycle.
@@ -74,37 +72,17 @@ public class CyclesReporter {
   public void reportCycles(
       Iterable<CycleInfo> cycles, SkyKey topLevelKey, ExtendedEventHandler eventHandler) {
     Preconditions.checkNotNull(eventHandler, "topLevelKey: %s, Cycles %s", topLevelKey, cycles);
-    boolean suppressedCycles = false;
-    boolean firstCycle = true;
     for (CycleInfo cycleInfo : cycles) {
-      // TODO(janakr): if this assertion is never hit, remove topLevelKey as an argument to method.
-      if (!cycleInfo.getTopKey().equals(topLevelKey)) {
-        BugReport.sendBugReport(
-            new IllegalStateException("Cycle " + cycleInfo + " did not start with " + topLevelKey));
-      }
-      suppressedCycles |= maybeReportCycle(cycleInfo, topLevelKey, firstCycle, eventHandler);
-      firstCycle = false;
-    }
-    if (suppressedCycles) {
-      logger.atInfo().log(
-          "Some cycles were omitted for %s because they were already reported", topLevelKey);
+      maybeReportCycle(cycleInfo, topLevelKey, eventHandler);
     }
   }
 
-  private boolean maybeReportCycle(
-      CycleInfo cycleInfo,
-      SkyKey topLevelKey,
-      boolean firstCycle,
-      ExtendedEventHandler eventHandler) {
-    boolean alreadyReported = cycleDeduper.alreadySeen(cycleInfo.getCycle());
-    if (!firstCycle && alreadyReported) {
-      // We've already reported this top-level key and this cycle, although maybe not together.
-      // Enumerating all combinations of top-level keys and cycles is too spammy for the user.
-      return false;
-    }
+  private void maybeReportCycle(
+      CycleInfo cycleInfo, SkyKey topLevelKey, ExtendedEventHandler eventHandler) {
+    boolean alreadyReported = !cycleDeduper.seen(cycleInfo.getCycle());
     for (SingleCycleReporter cycleReporter : cycleReporters) {
       if (cycleReporter.maybeReportCycle(topLevelKey, cycleInfo, alreadyReported, eventHandler)) {
-        return true;
+        return;
       }
     }
 
@@ -116,7 +94,6 @@ public class CyclesReporter {
                 + " file an issue. Raw display: "
                 + rawCycle));
     BugReport.sendBugReport(new IllegalStateException(rawCycle + "\n" + cycleReporters));
-    return true;
   }
 
   private static String printArbitraryCycle(
