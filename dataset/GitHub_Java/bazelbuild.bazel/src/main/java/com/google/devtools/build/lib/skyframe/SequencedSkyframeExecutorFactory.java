@@ -40,6 +40,7 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       Predicate<PathFragment> allowedMissingInputs,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
+      ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers) {
     return SequencedSkyframeExecutor.create(
         pkgFactory,
@@ -50,6 +51,7 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
         diffAwarenessFactories,
         allowedMissingInputs,
         extraSkyFunctions,
+        extraPrecomputedValues,
         customDirtinessCheckers,
         PathFragment.EMPTY_FRAGMENT,
         BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
