@@ -15,8 +15,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
@@ -25,15 +23,15 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ActionConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ArtifactNamePattern;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Feature;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainConfigInfoApi;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingModeFlags;
 
 /** Information describing C++ toolchain derived from CROSSTOOL file. */
 @Immutable
-public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConfigInfoApi {
+public class CcToolchainConfigInfo extends NativeInfo {
   public static final NativeProvider<CcToolchainConfigInfo> PROVIDER =
       new NativeProvider<CcToolchainConfigInfo>(
           CcToolchainConfigInfo.class, "CcToolchainConfigInfo") {};
@@ -69,21 +67,27 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
   private final ImmutableList<String> testOnlyLinkerFlags;
   private final ImmutableList<String> objcopyEmbedFlags;
   private final ImmutableList<String> ldEmbedFlags;
-  private final ImmutableMap<CompilationMode, ImmutableList<String>> compilationModeCompilerFlags;
-  private final ImmutableMap<CompilationMode, ImmutableList<String>> compilationModeCxxFlags;
-  private final ImmutableMap<CompilationMode, ImmutableList<String>> compilationModeLinkerFlags;
+  private final ImmutableList<String> optCompilationModeCompilerFlags;
+  private final ImmutableList<String> optCompilationModeCxxFlags;
+  private final ImmutableList<String> optCompilationModeLinkerFlags;
+  private final ImmutableList<String> dbgCompilationModeCompilerFlags;
+  private final ImmutableList<String> dbgCompilationModeCxxFlags;
+  private final ImmutableList<String> dbgCompilationModeLinkerFlags;
+  private final ImmutableList<String> fastbuildCompilationModeCompilerFlags;
+  private final ImmutableList<String> fastbuildCompilationModeCxxFlags;
+  private final ImmutableList<String> fastbuildCompilationModeLinkerFlags;
   private final ImmutableList<String> mostlyStaticLinkingModeFlags;
   private final ImmutableList<String> dynamicLinkingModeFlags;
   private final ImmutableList<String> fullyStaticLinkingModeFlags;
   private final ImmutableList<String> mostlyStaticLibrariesLinkingModeFlags;
   private final ImmutableList<Pair<String, String>> makeVariables;
   private final String builtinSysroot;
-  private final String defaultLibcTop;
+  private final String defaultGrteTop;
   private final String ccTargetOs;
   private final boolean hasDynamicLinkingModeFlags;
 
   @AutoCodec.Instantiator
-  public CcToolchainConfigInfo(
+  protected CcToolchainConfigInfo(
       ImmutableList<ActionConfig> actionConfigs,
       ImmutableList<Feature> features,
       ImmutableList<ArtifactNamePattern> artifactNamePatterns,
@@ -114,16 +118,22 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
       ImmutableList<String> testOnlyLinkerFlags,
       ImmutableList<String> objcopyEmbedFlags,
       ImmutableList<String> ldEmbedFlags,
-      ImmutableMap<CompilationMode, ImmutableList<String>> compilationModeCompilerFlags,
-      ImmutableMap<CompilationMode, ImmutableList<String>> compilationModeCxxFlags,
-      ImmutableMap<CompilationMode, ImmutableList<String>> compilationModeLinkerFlags,
+      ImmutableList<String> optCompilationModeCompilerFlags,
+      ImmutableList<String> optCompilationModeCxxFlags,
+      ImmutableList<String> optCompilationModeLinkerFlags,
+      ImmutableList<String> dbgCompilationModeCompilerFlags,
+      ImmutableList<String> dbgCompilationModeCxxFlags,
+      ImmutableList<String> dbgCompilationModeLinkerFlags,
+      ImmutableList<String> fastbuildCompilationModeCompilerFlags,
+      ImmutableList<String> fastbuildCompilationModeCxxFlags,
+      ImmutableList<String> fastbuildCompilationModeLinkerFlags,
       ImmutableList<String> mostlyStaticLinkingModeFlags,
       ImmutableList<String> dynamicLinkingModeFlags,
       ImmutableList<String> fullyStaticLinkingModeFlags,
       ImmutableList<String> mostlyStaticLibrariesLinkingModeFlags,
       ImmutableList<Pair<String, String>> makeVariables,
       String builtinSysroot,
-      String defaultLibcTop,
+      String defaultGrteTop,
       String ccTargetOs,
       boolean hasDynamicLinkingModeFlags) {
     super(PROVIDER);
@@ -157,21 +167,27 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
     this.testOnlyLinkerFlags = testOnlyLinkerFlags;
     this.objcopyEmbedFlags = objcopyEmbedFlags;
     this.ldEmbedFlags = ldEmbedFlags;
-    this.compilationModeCompilerFlags = compilationModeCompilerFlags;
-    this.compilationModeCxxFlags = compilationModeCxxFlags;
-    this.compilationModeLinkerFlags = compilationModeLinkerFlags;
+    this.optCompilationModeCompilerFlags = optCompilationModeCompilerFlags;
+    this.optCompilationModeCxxFlags = optCompilationModeCxxFlags;
+    this.optCompilationModeLinkerFlags = optCompilationModeLinkerFlags;
+    this.dbgCompilationModeCompilerFlags = dbgCompilationModeCompilerFlags;
+    this.dbgCompilationModeCxxFlags = dbgCompilationModeCxxFlags;
+    this.dbgCompilationModeLinkerFlags = dbgCompilationModeLinkerFlags;
+    this.fastbuildCompilationModeCompilerFlags = fastbuildCompilationModeCompilerFlags;
+    this.fastbuildCompilationModeCxxFlags = fastbuildCompilationModeCxxFlags;
+    this.fastbuildCompilationModeLinkerFlags = fastbuildCompilationModeLinkerFlags;
     this.mostlyStaticLinkingModeFlags = mostlyStaticLinkingModeFlags;
     this.dynamicLinkingModeFlags = dynamicLinkingModeFlags;
     this.fullyStaticLinkingModeFlags = fullyStaticLinkingModeFlags;
     this.mostlyStaticLibrariesLinkingModeFlags = mostlyStaticLibrariesLinkingModeFlags;
     this.makeVariables = makeVariables;
     this.builtinSysroot = builtinSysroot;
-    this.defaultLibcTop = defaultLibcTop;
+    this.defaultGrteTop = defaultGrteTop;
     this.ccTargetOs = ccTargetOs;
     this.hasDynamicLinkingModeFlags = hasDynamicLinkingModeFlags;
   }
 
-  public static CcToolchainConfigInfo fromToolchain(CToolchain toolchain)
+  public static CcToolchainConfigInfo fromToolchain(CrosstoolRelease file, CToolchain toolchain)
       throws InvalidConfigurationException {
 
     ImmutableList.Builder<ActionConfig> actionConfigBuilder = ImmutableList.builder();
@@ -227,27 +243,6 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
       }
     }
 
-    ImmutableMap.Builder<CompilationMode, ImmutableList<String>> compilationModeCompilerFlags =
-        ImmutableMap.builder();
-    compilationModeCompilerFlags.put(CompilationMode.OPT, optCompilationModeCompilerFlags.build());
-    compilationModeCompilerFlags.put(CompilationMode.DBG, dbgCompilationModeCompilerFlags.build());
-    compilationModeCompilerFlags.put(
-        CompilationMode.FASTBUILD, fastbuildCompilationModeCompilerFlags.build());
-
-    ImmutableMap.Builder<CompilationMode, ImmutableList<String>> compilationModeCxxFlags =
-        ImmutableMap.builder();
-    compilationModeCxxFlags.put(CompilationMode.OPT, optCompilationModeCxxFlags.build());
-    compilationModeCxxFlags.put(CompilationMode.DBG, dbgCompilationModeCxxFlags.build());
-    compilationModeCxxFlags.put(
-        CompilationMode.FASTBUILD, fastbuildCompilationModeCxxFlags.build());
-
-    ImmutableMap.Builder<CompilationMode, ImmutableList<String>> compilationModeLinkerFlags =
-        ImmutableMap.builder();
-    compilationModeLinkerFlags.put(CompilationMode.OPT, optCompilationModeLinkerFlags.build());
-    compilationModeLinkerFlags.put(CompilationMode.DBG, dbgCompilationModeLinkerFlags.build());
-    compilationModeLinkerFlags.put(
-        CompilationMode.FASTBUILD, fastbuildCompilationModeLinkerFlags.build());
-
     boolean hasDynamicLinkingModeFlags = false;
     for (LinkingModeFlags flag : toolchain.getLinkingModeFlagsList()) {
       switch (flag.getMode()) {
@@ -289,7 +284,9 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
         toolchain.getSupportsFission(),
         toolchain.getSupportsDsym(),
         toolchain.getNeedsPic(),
-        toolchain.getToolPathList().stream()
+        toolchain
+            .getToolPathList()
+            .stream()
             .map(a -> Pair.of(a.getName(), a.getPath()))
             .collect(ImmutableList.toImmutableList()),
         ImmutableList.copyOf(toolchain.getCompilerFlagList()),
@@ -300,14 +297,22 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
         ImmutableList.copyOf(toolchain.getTestOnlyLinkerFlagList()),
         ImmutableList.copyOf(toolchain.getObjcopyEmbedFlagList()),
         ImmutableList.copyOf(toolchain.getLdEmbedFlagList()),
-        compilationModeCompilerFlags.build(),
-        compilationModeCxxFlags.build(),
-        compilationModeLinkerFlags.build(),
+        optCompilationModeCompilerFlags.build(),
+        optCompilationModeCxxFlags.build(),
+        optCompilationModeLinkerFlags.build(),
+        dbgCompilationModeCompilerFlags.build(),
+        dbgCompilationModeCxxFlags.build(),
+        dbgCompilationModeLinkerFlags.build(),
+        fastbuildCompilationModeCompilerFlags.build(),
+        fastbuildCompilationModeCxxFlags.build(),
+        fastbuildCompilationModeLinkerFlags.build(),
         mostlyStaticLinkerFlags.build(),
         dynamicLinkerFlags.build(),
         fullyStaticLinkerFlags.build(),
         mostlyStaticLibrariesLinkerFlags.build(),
-        toolchain.getMakeVariableList().stream()
+        toolchain
+            .getMakeVariableList()
+            .stream()
             .map(makeVariable -> Pair.of(makeVariable.getName(), makeVariable.getValue()))
             .collect(ImmutableList.toImmutableList()),
         toolchain.getBuiltinSysroot(),
@@ -528,62 +533,62 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
-  public String getDefaultLibcTop() {
-    return defaultLibcTop;
+  public String getDefaultGrteTop() {
+    return defaultGrteTop;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getOptCompilationModeCompilerFlags() {
-    return compilationModeCompilerFlags.get(CompilationMode.OPT);
+    return optCompilationModeCompilerFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getOptCompilationModeCxxFlags() {
-    return compilationModeCxxFlags.get(CompilationMode.OPT);
+    return optCompilationModeCxxFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getOptCompilationModeLinkerFlags() {
-    return compilationModeLinkerFlags.get(CompilationMode.OPT);
+    return optCompilationModeLinkerFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getDbgCompilationModeCompilerFlags() {
-    return compilationModeCompilerFlags.get(CompilationMode.DBG);
+    return dbgCompilationModeCompilerFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getDbgCompilationModeCxxFlags() {
-    return compilationModeCxxFlags.get(CompilationMode.DBG);
+    return dbgCompilationModeCxxFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getDbgCompilationModeLinkerFlags() {
-    return compilationModeLinkerFlags.get(CompilationMode.DBG);
+    return dbgCompilationModeLinkerFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getFastbuildCompilationModeCompilerFlags() {
-    return compilationModeCompilerFlags.get(CompilationMode.FASTBUILD);
+    return fastbuildCompilationModeCompilerFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getFastbuildCompilationModeCxxFlags() {
-    return compilationModeCxxFlags.get(CompilationMode.FASTBUILD);
+    return fastbuildCompilationModeCxxFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getFastbuildCompilationModeLinkerFlags() {
-    return compilationModeLinkerFlags.get(CompilationMode.FASTBUILD);
+    return fastbuildCompilationModeLinkerFlags;
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.

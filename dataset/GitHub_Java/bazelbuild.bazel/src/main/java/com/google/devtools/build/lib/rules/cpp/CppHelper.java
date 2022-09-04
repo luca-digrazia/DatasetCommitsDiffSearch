@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
@@ -632,15 +631,15 @@ public class CppHelper {
   /**
    * Returns the FDO build subtype.
    */
-  public static String getFdoBuildStamp(RuleContext ruleContext, FdoSupportProvider fdoSupport) {
+  public static String getFdoBuildStamp(RuleContext ruleContext, FdoSupport fdoSupport) {
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    if (fdoSupport.getFdoMode() == FdoMode.AUTO_FDO) {
+    if (fdoSupport.isAutoFdoEnabled()) {
       return "AFDO";
     }
     if (cppConfiguration.isFdo()) {
       return "FDO";
     }
-    if (fdoSupport.getFdoMode() == FdoMode.XBINARY_FDO) {
+    if (fdoSupport.isXBinaryFdoEnabled()) {
       return "XFDO";
     }
     return null;
@@ -703,7 +702,18 @@ public class CppHelper {
 
   public static void maybeAddStaticLinkMarkerProvider(RuleConfiguredTargetBuilder builder,
       RuleContext ruleContext) {
+    boolean staticallyLinked = false;
+    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     if (ruleContext.getFeatures().contains("fully_static_link")) {
+      staticallyLinked = true;
+    } else if (cppConfiguration.hasStaticLinkOption()) {
+      staticallyLinked = true;
+    } else if (ruleContext.attributes().has("linkopts", Type.STRING_LIST)
+        && ruleContext.attributes().get("linkopts", Type.STRING_LIST).contains("-static")) {
+      staticallyLinked = true;
+    }
+
+    if (staticallyLinked) {
       builder.add(StaticallyLinkedMarkerProvider.class, new StaticallyLinkedMarkerProvider(true));
     }
   }

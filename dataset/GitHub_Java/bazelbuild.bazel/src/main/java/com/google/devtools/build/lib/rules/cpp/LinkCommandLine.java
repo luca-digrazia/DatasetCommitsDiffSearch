@@ -291,9 +291,6 @@ public final class LinkCommandLine extends CommandLine {
     int argsSize = args.size();
     for (int i = 1; i < argsSize; i++) {
       String arg = args.get(i);
-      if (arg.isEmpty()) {
-        continue;
-      }
       if (arg.equals("-Wl,-no-whole-archive")) {
         paramFileArgs.add("-no-whole-archive");
       } else if (arg.equals("-Wl,-whole-archive")) {
@@ -412,7 +409,7 @@ public final class LinkCommandLine extends CommandLine {
     private ImmutableList<Artifact> buildInfoHeaderArtifacts = ImmutableList.of();
     private Iterable<Artifact> linkerInputArtifacts = ImmutableList.of();
     @Nullable private LinkTargetType linkTargetType;
-    private Link.LinkingMode linkingMode = Link.LinkingMode.STATIC;
+    private Link.LinkingMode linkingMode = Link.LinkingMode.LEGACY_FULLY_STATIC;
     @Nullable private PathFragment toolchainLibrariesSolibDir;
     private boolean nativeDeps;
     private boolean useTestOnlyFlags;
@@ -495,7 +492,8 @@ public final class LinkCommandLine extends CommandLine {
     /**
      * Sets how static the link is supposed to be. For static target types (see {@link
      * LinkTargetType#linkerOrArchiver()}}), the {@link #build} method throws an exception if this
-     * is not {@link LinkingMode#STATIC}. The default setting is {@link LinkingMode#STATIC}.
+     * is not {@link Link.LinkingMode#LEGACY_FULLY_STATIC}. The default setting is {@link
+     * Link.LinkingMode#LEGACY_FULLY_STATIC}.
      */
     public Builder setLinkingMode(Link.LinkingMode linkingMode) {
       this.linkingMode = linkingMode;
