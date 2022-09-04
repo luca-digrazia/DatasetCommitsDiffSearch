@@ -290,7 +290,9 @@ public final class BuildType {
       Map<Label, List<Object>> convertedFrom = new LinkedHashMap<>();
       for (Object original : input.keySet()) {
         Label label = LABEL.convert(original, what, context);
-        convertedFrom.computeIfAbsent(label, k -> new ArrayList<Object>());
+        if (!convertedFrom.containsKey(label)) {
+          convertedFrom.put(label, new ArrayList<Object>());
+        }
         convertedFrom.get(label).add(original);
       }
       StringBuilder errorMessage = new StringBuilder();
