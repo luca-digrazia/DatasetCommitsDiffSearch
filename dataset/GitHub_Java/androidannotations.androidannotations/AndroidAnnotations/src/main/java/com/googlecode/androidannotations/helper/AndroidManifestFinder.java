@@ -128,7 +128,6 @@ public class AndroidManifestFinder {
                         activityQualifiedName = applicationPackage + activityName;
                     } else {
                         activityQualifiedName = applicationPackage + "." + activityName;
-                        activityQualifiedNames.add(activityName);
                     }
                 }
                 activityQualifiedNames.add(activityQualifiedName);
