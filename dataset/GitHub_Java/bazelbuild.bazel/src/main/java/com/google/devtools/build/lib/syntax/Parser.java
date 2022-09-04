@@ -673,13 +673,6 @@ public class Parser {
           UnaryOperatorExpression minus = new UnaryOperatorExpression(TokenKind.MINUS, expr);
           return setLocation(minus, start, expr);
         }
-      case PLUS:
-        {
-          nextToken();
-          Expression expr = parsePrimaryWithSuffix();
-          UnaryOperatorExpression plus = new UnaryOperatorExpression(TokenKind.PLUS, expr);
-          return setLocation(plus, start, expr);
-        }
       default:
         {
           syntaxError("expected expression");
@@ -1271,25 +1264,28 @@ public class Parser {
   private <V extends Argument> ImmutableList<V>
       parseFunctionArguments(Supplier<V> parseArgument) {
     boolean hasArg = false;
+    boolean hasStar = false;
     boolean hasStarStar = false;
     ImmutableList.Builder<V> argumentsBuilder = ImmutableList.builder();
 
     while (token.kind != TokenKind.RPAREN && token.kind != TokenKind.EOF) {
-      if (hasArg) {
-        expect(TokenKind.COMMA);
-      }
-      if (token.kind == TokenKind.RPAREN) {
-        // list can end with a COMMA
-        break;
-      }
       if (hasStarStar) {
         reportError(lexer.createLocation(token.left, token.right),
             "unexpected tokens after kwarg");
         break;
       }
+      if (hasArg) {
+        expect(TokenKind.COMMA);
+      }
+      if (token.kind == TokenKind.RPAREN && !hasStar) {
+        // list can end with a COMMA if there is neither * nor **
+        break;
+      }
       V arg = parseArgument.get();
       hasArg = true;
-      if (arg.isStarStar()) {
+      if (arg.isStar()) {
+        hasStar = true;
+      } else if (arg.isStarStar()) {
         hasStarStar = true;
       }
       argumentsBuilder.add(arg);
