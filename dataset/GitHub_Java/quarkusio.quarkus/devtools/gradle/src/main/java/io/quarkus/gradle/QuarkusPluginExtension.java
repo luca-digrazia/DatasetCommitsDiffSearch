@@ -10,7 +10,6 @@ import org.gradle.api.tasks.SourceSet;
 
 import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
-import io.quarkus.runtime.LaunchMode;
 
 public class QuarkusPluginExtension {
 
@@ -98,12 +97,8 @@ public class QuarkusPluginExtension {
                 project.getVersion().toString());
     }
 
-    public AppModelResolver getAppModelResolver() {
-        return getAppModelResolver(LaunchMode.NORMAL);
-    }
-
-    public AppModelResolver getAppModelResolver(LaunchMode mode) {
-        return new AppModelGradleResolver(project, mode);
+    public AppModelResolver resolveAppModel() {
+        return new AppModelGradleResolver(project);
     }
 
     /**
