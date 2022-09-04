@@ -15,6 +15,11 @@ import io.vertx.ext.web.RoutingContext;
 public interface RouteHandler extends Handler<RoutingContext> {
 
     /**
+     * Initialize the handler instance before it is put into service.
+     */
+    void initialize();
+
+    /**
      * Invokes the route method.
      * 
      * @param context

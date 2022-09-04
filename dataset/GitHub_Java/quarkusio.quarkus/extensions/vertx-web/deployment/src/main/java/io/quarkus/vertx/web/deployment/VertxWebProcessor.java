@@ -40,6 +40,7 @@ import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
+import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
@@ -129,7 +130,6 @@ class VertxWebProcessor {
     private static final MethodDescriptor INJECTABLE_BEAN_DESTROY = MethodDescriptor.ofMethod(InjectableBean.class, "destroy",
             void.class, Object.class,
             CreationalContext.class);
-    static final MethodDescriptor OBJECT_CONSTRUCTOR = MethodDescriptor.ofConstructor(Object.class);
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -329,6 +329,12 @@ class VertxWebProcessor {
     }
 
     @BuildStep
+    @Record(ExecutionTime.RUNTIME_INIT)
+    void initRouteHandlers(VertxWebRecorder recorder, BeanContainerBuildItem container) {
+        recorder.initHandlers();
+    }
+
+    @BuildStep
     AnnotationsTransformerBuildItem annotationTransformer(CustomScopeAnnotationsBuildItem scopes) {
         return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
 
@@ -412,37 +418,34 @@ class VertxWebProcessor {
                     .setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
 
-        implementConstructor(bean, invokerCreator, beanField, contextField, containerField);
+        implementInitialize(bean, invokerCreator, beanField, contextField, containerField);
         implementInvoke(bean, method, invokerCreator, beanField, contextField, containerField);
 
         invokerCreator.close();
         return generatedName.replace('/', '.');
     }
 
-    void implementConstructor(BeanInfo bean, ClassCreator invokerCreator, FieldCreator beanField, FieldCreator contextField,
+    void implementInitialize(BeanInfo bean, ClassCreator invokerCreator, FieldCreator beanField, FieldCreator contextField,
             FieldCreator containerField) {
-        MethodCreator constructor = invokerCreator.getMethodCreator("<init>", void.class);
-        // Invoke super()
-        constructor.invokeSpecialMethod(OBJECT_CONSTRUCTOR, constructor.getThis());
-
-        ResultHandle containerHandle = constructor
+        MethodCreator initialize = invokerCreator.getMethodCreator("initialize", void.class);
+        ResultHandle containerHandle = initialize
                 .invokeStaticMethod(ARC_CONTAINER);
-        ResultHandle beanHandle = constructor.invokeInterfaceMethod(
+        ResultHandle beanHandle = initialize.invokeInterfaceMethod(
                 ARC_CONTAINER_BEAN,
-                containerHandle, constructor.load(bean.getIdentifier()));
-        constructor.writeInstanceField(beanField.getFieldDescriptor(), constructor.getThis(), beanHandle);
+                containerHandle, initialize.load(bean.getIdentifier()));
+        initialize.writeInstanceField(beanField.getFieldDescriptor(), initialize.getThis(), beanHandle);
         if (contextField != null) {
-            constructor.writeInstanceField(contextField.getFieldDescriptor(), constructor.getThis(),
-                    constructor.invokeInterfaceMethod(
+            initialize.writeInstanceField(contextField.getFieldDescriptor(), initialize.getThis(),
+                    initialize.invokeInterfaceMethod(
                             ARC_CONTAINER_GET_ACTIVE_CONTEXT,
-                            containerHandle, constructor
+                            containerHandle, initialize
                                     .invokeInterfaceMethod(
                                             BEAN_GET_SCOPE,
                                             beanHandle)));
         } else {
-            constructor.writeInstanceField(containerField.getFieldDescriptor(), constructor.getThis(), containerHandle);
+            initialize.writeInstanceField(containerField.getFieldDescriptor(), initialize.getThis(), containerHandle);
         }
-        constructor.returnValue(null);
+        initialize.returnValue(null);
     }
 
     void implementInvoke(BeanInfo bean, MethodInfo method, ClassCreator invokerCreator, FieldCreator beanField,
