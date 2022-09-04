@@ -21,9 +21,6 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -56,21 +53,15 @@ public class JarClassPathElement implements ClassPathElement {
     private final File file;
     private final URL jarPath;
     private final Path root;
-    private final Lock readLock;
-    private final Lock writeLock;
 
-    //Closing the jarFile requires the exclusive lock, while reading data from the jarFile requires the shared lock.
-    private final JarFile jarFile;
-    private volatile boolean closed;
+    private JarFile jarFile;
+    private boolean closed;
 
     public JarClassPathElement(Path root) {
         try {
             jarPath = root.toUri().toURL();
             this.root = root;
             jarFile = JarFiles.create(file = root.toFile());
-            ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
-            this.readLock = readWriteLock.readLock();
-            this.writeLock = readWriteLock.writeLock();
         } catch (IOException e) {
             throw new UncheckedIOException("Error while reading file as JAR: " + root, e);
         }
@@ -148,21 +139,16 @@ public class JarClassPathElement implements ClassPathElement {
     }
 
     private <T> T withJarFile(Function<JarFile, T> func) {
-        readLock.lock();
-        try {
-            if (closed) {
-                //we still need this to work if it is closed, so shutdown hooks work
-                //once it is closed it simply does not hold on to any resources
-                try (JarFile jarFile = JarFiles.create(file)) {
-                    return func.apply(jarFile);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            } else {
+        if (closed) {
+            //we still need this to work if it is closed, so shutdown hooks work
+            //once it is closed it simply does not hold on to any resources
+            try (JarFile jarFile = JarFiles.create(file)) {
                 return func.apply(jarFile);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        } finally {
-            readLock.unlock();
+        } else {
+            return func.apply(jarFile);
         }
     }
 
@@ -236,13 +222,8 @@ public class JarClassPathElement implements ClassPathElement {
 
     @Override
     public void close() throws IOException {
-        writeLock.lock();
-        try {
-            jarFile.close();
-            closed = true;
-        } finally {
-            writeLock.unlock();
-        }
+        closed = true;
+        jarFile.close();
     }
 
     public static byte[] readStreamContents(InputStream inputStream) throws IOException {
