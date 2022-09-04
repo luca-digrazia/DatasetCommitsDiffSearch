@@ -635,16 +635,16 @@ public class DevMojo extends AbstractMojo {
             setKotlinSpecificFlags(devModeContext);
             final LocalProject localProject;
             if (noDeps) {
-                localProject = LocalProject.load(project.getModel().getPomFile().toPath());
+                localProject = LocalProject.load(outputDirectory.toPath());
                 addProject(devModeContext, localProject, true);
-                pomFiles.add(localProject.getRawModel().getPomFile().toPath());
+                pomFiles.add(localProject.getDir().resolve("pom.xml"));
                 devModeContext.getLocalArtifacts()
                         .add(new AppArtifactKey(localProject.getGroupId(), localProject.getArtifactId(), null, "jar"));
             } else {
-                localProject = LocalProject.loadWorkspace(project.getModel().getPomFile().toPath());
+                localProject = LocalProject.loadWorkspace(outputDirectory.toPath());
                 for (LocalProject project : filterExtensionDependencies(localProject)) {
                     addProject(devModeContext, project, project == localProject);
-                    pomFiles.add(project.getRawModel().getPomFile().toPath());
+                    pomFiles.add(project.getDir().resolve("pom.xml"));
                     devModeContext.getLocalArtifacts()
                             .add(new AppArtifactKey(project.getGroupId(), project.getArtifactId(), null, "jar"));
                 }
@@ -871,12 +871,16 @@ public class DevMojo extends AbstractMojo {
 
         for (LocalProject project : localProject.getSelfWithLocalDeps()) {
             inProject.add(project.getKey());
-            if (project.getClassesDir() != null &&
-            //if this project also contains Quarkus extensions we do no want to include these in the discovery
-            //a bit of an edge case, but if you try and include a sample project with your extension you will
-            //run into problems without this
-                    (Files.exists(project.getClassesDir().resolve("META-INF/quarkus-extension.properties")) ||
-                            Files.exists(project.getClassesDir().resolve("META-INF/quarkus-build-steps.list")))) {
+            final Artifact projectDep = this.project.getArtifactMap().get(project.getGroupId() + ':' + project.getArtifactId());
+            if (project.getClassesDir() != null
+                    && (
+                    // if it is not found among project.getArtifacts() it shouldn't be included (e.g. a local test dependency)
+                    (localProject != project && projectDep == null)
+                            //if this project also contains Quarkus extensions we do no want to include these in the discovery
+                            //a bit of an edge case, but if you try and include a sample project with your extension you will
+                            //run into problems without this
+                            || (Files.exists(project.getClassesDir().resolve("META-INF/quarkus-extension.properties")) ||
+                                    Files.exists(project.getClassesDir().resolve("META-INF/quarkus-build-steps.list"))))) {
                 toRemove.add(project);
                 extensionsAndDeps.add(project.getKey());
             } else {
