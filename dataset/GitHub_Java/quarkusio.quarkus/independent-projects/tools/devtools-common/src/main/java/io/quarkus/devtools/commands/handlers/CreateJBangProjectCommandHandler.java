@@ -5,7 +5,6 @@ import static io.quarkus.devtools.commands.handlers.QuarkusCommandHandlers.compu
 import io.quarkus.devtools.codestarts.jbang.QuarkusJBangCodestartCatalog;
 import io.quarkus.devtools.codestarts.jbang.QuarkusJBangCodestartProjectInput;
 import io.quarkus.devtools.codestarts.jbang.QuarkusJBangCodestartProjectInputBuilder;
-import io.quarkus.devtools.commands.CreateProject;
 import io.quarkus.devtools.commands.data.QuarkusCommandException;
 import io.quarkus.devtools.commands.data.QuarkusCommandInvocation;
 import io.quarkus.devtools.commands.data.QuarkusCommandOutcome;
@@ -32,12 +31,9 @@ public class CreateJBangProjectCommandHandler implements QuarkusCommandHandler {
 
         final ExtensionCatalog catalog = invocation.getExtensionsCatalog();
 
-        final boolean noWrapper = invocation.getValue("noJBangWrapper", false) ||
-                invocation.getValue(CreateProject.NO_BUILDTOOL_WRAPPER, false);
-
         final QuarkusJBangCodestartProjectInputBuilder builder = QuarkusJBangCodestartProjectInput.builder()
                 .addExtensions(extensionsToAdd)
-                .setNoJBangWrapper(noWrapper)
+                .setNoJBangWrapper(invocation.getBooleanValue("noJBangWrapper"))
                 .putData("quarkus.version", invocation.getExtensionsCatalog().getQuarkusCoreVersion());
 
         if (catalog.getBom() != null) {
@@ -62,7 +58,7 @@ public class CreateJBangProjectCommandHandler implements QuarkusCommandHandler {
             }
             getCatalog(invocation.getQuarkusProject()).createProject(input).generate(projectDir);
             invocation.log()
-                    .info("\n-----------\n" + MessageIcons.OK_ICON + " "
+                    .info("\n-----------\n" + MessageIcons.NOOP_ICON
                             + " jbang project has been successfully generated in:\n--> "
                             + invocation.getQuarkusProject().getProjectDirPath().toString() + "\n-----------");
         } catch (IOException e) {

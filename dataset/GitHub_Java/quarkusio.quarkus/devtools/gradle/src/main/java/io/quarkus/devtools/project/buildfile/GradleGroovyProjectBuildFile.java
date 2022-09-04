@@ -26,11 +26,6 @@ public class GradleGroovyProjectBuildFile extends GradleProjectBuildFile {
     }
 
     @Override
-    protected boolean importBom(ArtifactCoords coords) {
-        return importBomInModel(getModel(), toBomImportCoords(coords));
-    }
-
-    @Override
     protected boolean addDependency(ArtifactCoords coords, boolean managed) {
         return addDependencyInModel(getModel(), coords, managed);
     }
@@ -38,12 +33,6 @@ public class GradleGroovyProjectBuildFile extends GradleProjectBuildFile {
     @Override
     public BuildTool getBuildTool() {
         return BuildTool.GRADLE;
-    }
-
-    static boolean importBomInModel(Model model, ArtifactCoords coords) {
-        return addDependencyInModel(model,
-                String.format("    implementation %s%n",
-                        createDependencyCoordinatesString(coords, false, containsProperty(coords) ? '\"' : '\'')));
     }
 
     static boolean addDependencyInModel(Model model, ArtifactCoords coords, boolean managed) {

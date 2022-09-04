@@ -17,6 +17,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -127,7 +129,10 @@ public abstract class BuildFile implements ExtensionManager {
     }
 
     private boolean isQuarkusExtension(final ArtifactKey key) {
-        return catalog != null ? isDefinedInRegistry(catalog.getExtensions(), key) : false;
+        if (catalog != null) {
+            return findInList(catalog.getExtensions(), key).isPresent();
+        }
+        return isDefinedInRegistry(catalog.getExtensions(), key);
     }
 
     private Set<ArtifactKey> getDependenciesKeys() throws IOException {
@@ -137,4 +142,11 @@ public abstract class BuildFile implements ExtensionManager {
     public static boolean isDefinedInRegistry(Collection<Extension> registry, final ArtifactKey key) {
         return Extensions.findInList(registry, key).isPresent();
     }
+
+    private static Optional<io.quarkus.registry.catalog.Extension> findInList(
+            Collection<io.quarkus.registry.catalog.Extension> list, final ArtifactKey key) {
+        ArtifactKey k = new ArtifactKey(key.getGroupId(), key.getArtifactId(), key.getClassifier(), key.getType());
+        return list.stream().filter(e -> Objects.equals(e.getArtifact().getKey(), k)).findFirst();
+    }
+
 }

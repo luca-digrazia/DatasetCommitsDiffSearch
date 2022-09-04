@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -18,12 +19,12 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 
-import io.quarkus.bootstrap.model.AppArtifactCoords;
-import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.buildfile.BuildFile;
 import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.registry.Constants;
 import io.quarkus.registry.catalog.ExtensionCatalog;
+import io.quarkus.registry.util.PlatformArtifacts;
 
 public class MavenProjectBuildFile extends BuildFile {
 
@@ -33,8 +34,9 @@ public class MavenProjectBuildFile extends BuildFile {
     private Supplier<List<org.eclipse.aether.graph.Dependency>> projectDepsSupplier;
     private Supplier<List<org.eclipse.aether.graph.Dependency>> projectManagedDepsSupplier;
     private Properties projectProps;
-    protected List<AppArtifactCoords> dependencies;
-    protected List<AppArtifactCoords> managedDependencies;
+    protected List<ArtifactCoords> dependencies;
+    protected List<ArtifactCoords> managedDependencies;
+    protected List<ArtifactCoords> importedPlatforms;
     protected Model model;
 
     public MavenProjectBuildFile(Path projectDirPath, ExtensionCatalog extensionsCatalog, Supplier<Model> model,
@@ -54,7 +56,7 @@ public class MavenProjectBuildFile extends BuildFile {
     }
 
     @Override
-    protected boolean addDependency(AppArtifactCoords coords, boolean managed) {
+    protected boolean addDependency(ArtifactCoords coords, boolean managed) {
         final Dependency d = new Dependency();
         d.setGroupId(coords.getGroupId());
         d.setArtifactId(coords.getArtifactId());
@@ -97,11 +99,11 @@ public class MavenProjectBuildFile extends BuildFile {
     }
 
     @Override
-    protected void removeDependency(AppArtifactKey key) throws IOException {
+    protected void removeDependency(ArtifactKey key) throws IOException {
         if (model() != null) {
-            final Iterator<AppArtifactCoords> i = getDependencies().iterator();
+            final Iterator<ArtifactCoords> i = getDependencies().iterator();
             while (i.hasNext()) {
-                final AppArtifactCoords a = i.next();
+                final ArtifactCoords a = i.next();
                 if (a.getKey().equals(key)) {
                     i.remove();
                     break;
@@ -112,32 +114,50 @@ public class MavenProjectBuildFile extends BuildFile {
     }
 
     @Override
-    protected List<AppArtifactCoords> getDependencies() {
+    protected List<ArtifactCoords> getDependencies() {
         if (dependencies == null) {
             final List<org.eclipse.aether.graph.Dependency> projectDeps = projectDepsSupplier.get();
             projectDepsSupplier = null;
             dependencies = new ArrayList<>(projectDeps.size());
             for (org.eclipse.aether.graph.Dependency dep : projectDeps) {
                 org.eclipse.aether.artifact.Artifact a = dep.getArtifact();
-                dependencies.add(new AppArtifactCoords(a.getGroupId(), a.getArtifactId(), a.getClassifier(),
+                dependencies.add(new ArtifactCoords(a.getGroupId(), a.getArtifactId(), a.getClassifier(),
                         a.getExtension(), a.getVersion()));
             }
         }
         return dependencies;
     }
 
-    protected List<AppArtifactCoords> getManagedDependencies() {
+    @Override
+    public final Collection<ArtifactCoords> getInstalledPlatforms() throws IOException {
+        if (importedPlatforms == null) {
+            final List<ArtifactCoords> tmp = new ArrayList<>(4);
+            for (ArtifactCoords c : getManagedDependencies()) {
+                if (!PlatformArtifacts.isCatalogArtifactId(c.getArtifactId())) {
+                    continue;
+                }
+                tmp.add(new ArtifactCoords(c.getGroupId(),
+                        c.getArtifactId().substring(0,
+                                c.getArtifactId().length() - Constants.PLATFORM_DESCRIPTOR_ARTIFACT_ID_SUFFIX.length()),
+                        null, "pom", c.getVersion()));
+            }
+            importedPlatforms = tmp;
+        }
+        return importedPlatforms;
+    }
+
+    protected List<ArtifactCoords> getManagedDependencies() {
         if (managedDependencies == null) {
             final List<org.eclipse.aether.graph.Dependency> managedDeps = projectManagedDepsSupplier.get();
             projectManagedDepsSupplier = null;
             managedDependencies = new ArrayList<>(managedDeps.size());
             for (org.eclipse.aether.graph.Dependency dep : managedDeps) {
                 org.eclipse.aether.artifact.Artifact a = dep.getArtifact();
-                managedDependencies.add(new AppArtifactCoords(a.getGroupId(), a.getArtifactId(), a.getClassifier(),
+                managedDependencies.add(new ArtifactCoords(a.getGroupId(), a.getArtifactId(), a.getClassifier(),
                         a.getExtension(), a.getVersion()));
             }
         }
-        return dependencies;
+        return managedDependencies;
     }
 
     @Override

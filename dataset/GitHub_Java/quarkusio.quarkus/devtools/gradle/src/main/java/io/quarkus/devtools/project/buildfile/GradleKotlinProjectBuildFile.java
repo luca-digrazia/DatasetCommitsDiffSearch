@@ -26,11 +26,6 @@ public class GradleKotlinProjectBuildFile extends GradleProjectBuildFile {
     }
 
     @Override
-    protected boolean importBom(ArtifactCoords coords) {
-        return importBomInModel(getModel(), toBomImportCoords(coords));
-    }
-
-    @Override
     protected boolean addDependency(ArtifactCoords coords, boolean managed) {
         return addDependencyInModel(getModel(), coords, managed);
     }
@@ -38,12 +33,6 @@ public class GradleKotlinProjectBuildFile extends GradleProjectBuildFile {
     @Override
     public BuildTool getBuildTool() {
         return BuildTool.GRADLE_KOTLIN_DSL;
-    }
-
-    static boolean importBomInModel(Model model, ArtifactCoords coords) {
-        return addDependencyInModel(model,
-                String.format("    implementation(%s)%n",
-                        createDependencyCoordinatesString(coords, false, '"')));
     }
 
     static boolean addDependencyInModel(Model model, ArtifactCoords coords, boolean managed) {

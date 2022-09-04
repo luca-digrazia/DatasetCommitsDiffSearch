@@ -76,7 +76,7 @@ public interface ExtensionManager {
     /**
      * This is going to uninstall/remove all the specified extensions from the project build file(s).
      *
-     * This is ignoring the version
+     * This is ignoring the {@link Extension} version
      *
      * @param keys the set of {@link ArtifactKey} for the extensions to uninstall
      * @return the {@link InstallResult}
@@ -85,39 +85,18 @@ public interface ExtensionManager {
     UninstallResult uninstall(Collection<ArtifactKey> keys) throws IOException;
 
     class InstallResult {
-        private final Collection<ArtifactCoords> installedPlatforms;
-        private final Collection<ArtifactCoords> installedManagedExtensions;
-        private final Collection<ArtifactCoords> installedIndependentExtensions;
-        private final Collection<ArtifactKey> alreadyInstalled;
+        private final Collection<ArtifactCoords> installed;
 
-        public InstallResult(Collection<ArtifactCoords> installedPlatforms,
-                Collection<ArtifactCoords> installedManagedExtensions,
-                Collection<ArtifactCoords> installedIndependentExtensions, Collection<ArtifactKey> alreadyInstalled) {
-            this.installedPlatforms = installedPlatforms;
-            this.installedManagedExtensions = installedManagedExtensions;
-            this.installedIndependentExtensions = installedIndependentExtensions;
-            this.alreadyInstalled = alreadyInstalled;
+        public InstallResult(Collection<ArtifactCoords> installed) {
+            this.installed = installed;
         }
 
-        public Collection<ArtifactCoords> getInstalledManagedExtensions() {
-            return installedManagedExtensions;
-        }
-
-        public Collection<ArtifactCoords> getInstalledIndependentExtensions() {
-            return installedIndependentExtensions;
-        }
-
-        public Collection<ArtifactCoords> getInstalledPlatforms() {
-            return installedPlatforms;
-        }
-
-        public Collection<ArtifactKey> getAlreadyInstalled() {
-            return alreadyInstalled;
+        public Collection<ArtifactCoords> getInstalled() {
+            return installed;
         }
 
         public boolean isSourceUpdated() {
-            return !installedPlatforms.isEmpty() || !installedManagedExtensions.isEmpty()
-                    || !installedIndependentExtensions.isEmpty();
+            return installed.size() > 0;
         }
     }
 

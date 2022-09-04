@@ -1,7 +1,6 @@
 package io.quarkus.devtools.commands.handlers;
 
 import static io.quarkus.devtools.commands.AddExtensions.EXTENSION_MANAGER;
-import static io.quarkus.devtools.messagewriter.MessageIcons.ERROR_ICON;
 import static io.quarkus.devtools.messagewriter.MessageIcons.NOK_ICON;
 
 import io.quarkus.devtools.commands.AddExtensions;
@@ -43,38 +42,17 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
                 invocation.getQuarkusProject().getExtensionManager());
         try {
             ExtensionInstallPlan extensionInstallPlan = planInstallation(invocation, extensionsQuery);
-            if (extensionInstallPlan.isInstallable()) {
+            if (extensionInstallPlan.isNotEmpty()) {
                 final InstallResult result = extensionManager.install(extensionInstallPlan);
-                result.getInstalledPlatforms()
-                        .forEach(a -> invocation.log()
-                                .info(MessageIcons.OK_ICON + " Platform " + a.getGroupId() + ":" + a.getArtifactId()
-                                        + " has been installed"));
-                result.getInstalledManagedExtensions()
+                result.getInstalled()
                         .forEach(a -> invocation.log()
                                 .info(MessageIcons.OK_ICON + " Extension " + a.getGroupId() + ":" + a.getArtifactId()
                                         + " has been installed"));
-                result.getInstalledIndependentExtensions()
-                        .forEach(a -> invocation.log()
-                                .info(MessageIcons.OK_ICON + " Extension " + a.getGroupId() + ":" + a.getArtifactId() + ":"
-                                        + a.getVersion()
-                                        + " has been installed"));
-                result.getAlreadyInstalled()
-                        .forEach(a -> invocation.log()
-                                .info(MessageIcons.NOOP_ICON + " Extension " + a.getGroupId() + ":" + a.getArtifactId()
-                                        + " was already installed"));
                 return new QuarkusCommandOutcome(true).setValue(AddExtensions.OUTCOME_UPDATED, result.isSourceUpdated());
-            } else if (!extensionInstallPlan.getUnmatchedKeywords().isEmpty()) {
-                invocation.log()
-                        .info(ERROR_ICON + " Nothing installed because keyword(s) '"
-                                + String.join("', '", extensionInstallPlan.getUnmatchedKeywords())
-                                + "' were not matched in the catalog.");
-            } else {
-                invocation.log()
-                        .info(NOK_ICON + " The provided keyword(s) did not match any extension from the catalog.");
             }
         } catch (MultipleExtensionsFoundException m) {
             StringBuilder sb = new StringBuilder();
-            sb.append(ERROR_ICON + " Multiple extensions matching '").append(m.getKeyword()).append("'");
+            sb.append(NOK_ICON + " Multiple extensions matching '").append(m.getKeyword()).append("'");
             m.getExtensions()
                     .forEach(extension -> sb.append(System.lineSeparator()).append("     * ")
                             .append(extension.managementKey()));
@@ -90,14 +68,12 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
 
     public ExtensionInstallPlan planInstallation(QuarkusCommandInvocation invocation, Collection<String> keywords)
             throws IOException {
-        if (keywords.isEmpty()) {
-            return ExtensionInstallPlan.EMPTY;
-        }
         final ExtensionCatalog catalog = invocation.getExtensionsCatalog();
         final String quarkusCore = catalog.getQuarkusCoreVersion();
         final Collection<ArtifactCoords> importedPlatforms = invocation.getQuarkusProject().getExtensionManager()
                 .getInstalledPlatforms();
         ExtensionInstallPlan.Builder builder = ExtensionInstallPlan.builder();
+        boolean multipleKeywords = keywords.size() > 1;
         for (String keyword : keywords) {
             int countColons = StringUtils.countMatches(keyword, ":");
             // Check if it's just groupId:artifactId
@@ -111,9 +87,9 @@ public class AddExtensionsCommandHandler implements QuarkusCommandHandler {
                 continue;
             }
             List<Extension> listed = listInternalExtensions(quarkusCore, keyword, catalog.getExtensions());
-            if (listed.isEmpty()) {
-                // No extension found for this keyword.
-                builder.addUnmatchedKeyword(keyword);
+            if (listed.size() != 1 && multipleKeywords) {
+                // No extension found for this keyword. Return empty immediately
+                return ExtensionInstallPlan.EMPTY;
             }
             // If it's a pattern allow multiple results
             // See https://github.com/quarkusio/quarkus/issues/11086#issuecomment-666360783
