@@ -16,11 +16,13 @@
  */
 package org.graylog2.indexer.searches;
 
+import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.Sets;
+
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Sets;
+
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -44,7 +46,6 @@ import org.graylog2.Configuration;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.results.CountResult;
@@ -64,13 +65,9 @@ import org.joda.time.Period;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -78,6 +75,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+
+import joptsimple.internal.Strings;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -123,7 +126,6 @@ public class Searches {
         HOUR(Period.hours(1)),
         MINUTE(Period.minutes(1));
 
-        @SuppressWarnings("ImmutableEnumChecker")
         private final Period period;
 
         DateHistogramInterval(Period period) {
@@ -161,15 +163,13 @@ public class Searches {
     private final Timer esRequestTimer;
     private final Histogram esTimeRangeHistogram;
     private final StreamService streamService;
-    private final Indices indices;
 
     @Inject
     public Searches(Configuration configuration,
                     IndexRangeService indexRangeService,
                     Client client,
                     MetricRegistry metricRegistry,
-                    StreamService streamService,
-                    Indices indices) {
+                    StreamService streamService) {
         this.configuration = checkNotNull(configuration);
         this.indexRangeService = checkNotNull(indexRangeService);
         this.c = checkNotNull(client);
@@ -177,7 +177,6 @@ public class Searches {
         this.esRequestTimer = metricRegistry.timer(name(Searches.class, "elasticsearch", "requests"));
         this.esTimeRangeHistogram = metricRegistry.histogram(name(Searches.class, "elasticsearch", "ranges"));
         this.streamService = streamService;
-        this.indices = indices;
     }
 
     public CountResult count(String query, TimeRange range) {
@@ -263,17 +262,9 @@ public class Searches {
         return new SearchResult(r.getHits(), indices, config.query(), request.source(), r.getTook());
     }
 
-    public TermsResult terms(String field, int size, String query, String filter, TimeRange range, Sorting.Direction sorting) {
-        Terms.Order termsOrder;
-
+    public TermsResult terms(String field, int size, String query, String filter, TimeRange range) {
         if (size == 0) {
             size = 50;
-        }
-
-        if (sorting == Sorting.Direction.DESC){
-            termsOrder = Terms.Order.count(false);
-        } else {
-            termsOrder = Terms.Order.count(true);
         }
 
         SearchRequestBuilder srb;
@@ -287,8 +278,7 @@ public class Searches {
                 .subAggregation(
                         AggregationBuilders.terms(AGG_TERMS)
                                 .field(field)
-                                .size(size)
-                                .order(termsOrder))
+                                .size(size))
                 .subAggregation(
                         AggregationBuilders.missing("missing")
                                 .field(field))
@@ -311,12 +301,8 @@ public class Searches {
         );
     }
 
-    public TermsResult terms(String field, int size, String query, String filter, TimeRange range) {
-        return terms(field, size, query, filter, range, Sorting.Direction.DESC);
-    }
-
     public TermsResult terms(String field, int size, String query, TimeRange range) {
-        return terms(field, size, query, null, range, Sorting.Direction.DESC);
+        return terms(field, size, query, null, range);
     }
 
     public TermsStatsResult termsStats(String keyField, String valueField, TermsStatsOrder order, int size, String query, String filter, TimeRange range) {
@@ -421,13 +407,10 @@ public class Searches {
                                        boolean includeCount)
             throws FieldTypeException {
         SearchRequestBuilder srb;
-
-        final Set<String> indices = indicesContainingField(determineAffectedIndices(range, filter), field);
-
         if (filter == null) {
-            srb = standardSearchRequest(query, indices, range);
+            srb = standardSearchRequest(query, determineAffectedIndices(range, filter), range);
         } else {
-            srb = filteredSearchRequest(query, filter, indices, range);
+            srb = filteredSearchRequest(query, filter, determineAffectedIndices(range, filter), range);
         }
 
         FilterAggregationBuilder builder = AggregationBuilders.filter(AGG_FILTER)
@@ -452,8 +435,6 @@ public class Searches {
         } catch (org.elasticsearch.action.search.SearchPhaseExecutionException e) {
             throw new FieldTypeException(e);
         }
-        checkForFailedShards(r);
-
         recordEsMetrics(r, range);
 
         final Filter f = r.getAggregations().get(AGG_FILTER);
@@ -466,15 +447,6 @@ public class Searches {
                 request.source(),
                 r.getTook()
         );
-    }
-
-    private Set<String> indicesContainingField(Set<String> strings, String field) {
-        return indices.getAllMessageFieldsForIndices(strings.toArray(new String[strings.size()]))
-            .entrySet()
-            .stream()
-            .filter(entry -> entry.getValue().contains(field))
-            .map(Map.Entry::getKey)
-            .collect(Collectors.toSet());
     }
 
     public HistogramResult histogram(String query, DateHistogramInterval interval, TimeRange range) {
@@ -546,20 +518,6 @@ public class Searches {
         } catch (org.elasticsearch.action.search.SearchPhaseExecutionException e) {
             throw new FieldTypeException(e);
         }
-        checkForFailedShards(r);
-
-        recordEsMetrics(r, range);
-
-        final Filter f = r.getAggregations().get(AGG_FILTER);
-        return new FieldHistogramResult(
-                f.getAggregations().get(AGG_HISTOGRAM),
-                query,
-                request.source(),
-                interval,
-                r.getTook());
-    }
-
-    private void checkForFailedShards(SearchResponse r) throws FieldTypeException {
         // unwrap shard failure due to non-numeric mapping. this happens when searching across index sets
         // if at least one of the index sets comes back with a result, the overall result will have the aggregation
         // but not considered failed entirely. however, if one shard has the error, we will refuse to respond
@@ -572,6 +530,15 @@ public class Searches {
                 throw new FieldTypeException(failure.get().getCause());
             }
         }
+        recordEsMetrics(r, range);
+
+        final Filter f = r.getAggregations().get(AGG_FILTER);
+        return new FieldHistogramResult(
+                f.getAggregations().get(AGG_HISTOGRAM),
+                query,
+                request.source(),
+                interval,
+                r.getTook());
     }
 
     private SearchRequestBuilder searchRequest(SearchesConfig config, Set<String> indices) {
@@ -633,7 +600,7 @@ public class Searches {
         }
 
         final QueryBuilder queryBuilder;
-        if ("*".equals(query.trim())) {
+        if (query.trim().equals("*")) {
             queryBuilder = matchAllQuery();
         } else {
             queryBuilder = queryStringQuery(query).allowLeadingWildcard(configuration.isAllowLeadingWildcardSearches());
@@ -686,11 +653,11 @@ public class Searches {
         }
 
         // Not creating a filter for a "*" value because an empty filter used to be submitted that way.
-        if (!isNullOrEmpty(filter) && !"*".equals(filter)) {
+        if (!isNullOrEmpty(filter) && !filter.equals("*")) {
             if (bfb == null) {
                 bfb = QueryBuilders.boolQuery();
             }
-            bfb.must(queryStringQuery(filter));
+            bfb.must(QueryBuilders.queryStringQuery(filter));
         }
 
         return bfb;
@@ -728,7 +695,7 @@ public class Searches {
      * @return the optional stream id
      */
     public static Optional<String> extractStreamId(String filter) {
-        if (isNullOrEmpty(filter)) {
+        if (Strings.isNullOrEmpty(filter)) {
             return Optional.empty();
         }
         final Matcher streamIdMatcher = filterStreamIdPattern.matcher(filter);
