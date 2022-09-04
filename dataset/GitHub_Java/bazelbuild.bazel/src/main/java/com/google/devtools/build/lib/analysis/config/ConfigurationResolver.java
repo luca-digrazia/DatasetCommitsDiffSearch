@@ -14,242 +14,602 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Iterables;
+import com.google.common.base.Functions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.analysis.ConfigurationsCollector;
+import com.google.devtools.build.lib.analysis.ConfigurationsResult;
+import com.google.devtools.build.lib.analysis.Dependency;
+import com.google.devtools.build.lib.analysis.DependencyKey;
+import com.google.devtools.build.lib.analysis.DependencyKind;
+import com.google.devtools.build.lib.analysis.PlatformOptions;
+import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
+import com.google.devtools.build.lib.analysis.config.transitions.ComposingTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.analysis.config.transitions.TransitionUtil;
+import com.google.devtools.build.lib.analysis.starlark.FunctionTransitionUtil;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.Attribute.Configurator;
-import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
-import com.google.devtools.build.lib.packages.Attribute.Transition;
-import com.google.devtools.build.lib.packages.InputFile;
-import com.google.devtools.build.lib.packages.PackageGroup;
-import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleTransitionFactory;
+import com.google.devtools.build.lib.packages.AttributeTransitionData;
+import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import com.google.devtools.build.lib.skyframe.ConfiguredValueCreationException;
+import com.google.devtools.build.lib.skyframe.PackageValue;
+import com.google.devtools.build.lib.skyframe.PlatformMappingValue;
+import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.ValueOrException;
+import com.google.devtools.common.options.OptionsParsingException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import javax.annotation.Nullable;
 
 /**
- * Determines which configurations targets should take.
+ * Turns configuration transition requests into actual configurations.
  *
- * <p>This is the "generic engine" for configuration selection. It doesn't know anything about
- * specific rules or their requirements. Rule writers decide those with appropriately placed
- * {@link PatchTransition} declarations. This class then processes those declarations to determine
- * final configurations.
+ * <p>This involves:
+ *
+ * <ol>
+ *   <li>Patching a source configuration's options with the transition.
+ *   <li>Getting the destination configuration from Skyframe.
+ * </ol>
+ *
+ * <p>For the work of determining the transition requests themselves, see {@link
+ * TransitionResolver}.
  */
 public final class ConfigurationResolver {
-  private final DynamicTransitionMapper transitionMapper;
 
   /**
-   * Instantiates this resolver with a helper class that maps non-{@link PatchTransition}s to
-   * {@link PatchTransition}s.
+   * Determines the output ordering of each {@code <attribute, depLabel> -> [dep<config1>,
+   * dep<config2>, ...]} collection produced by a split transition.
    */
-  public ConfigurationResolver(DynamicTransitionMapper transitionMapper) {
-    this.transitionMapper = transitionMapper;
+  @VisibleForTesting
+  public static final Comparator<Dependency> SPLIT_DEP_ORDERING =
+      Comparator.comparing(
+              Functions.compose(BuildConfiguration::getMnemonic, Dependency::getConfiguration))
+          .thenComparing(
+              Functions.compose(BuildConfiguration::checksum, Dependency::getConfiguration));
+
+  private final SkyFunction.Environment env;
+  private final TargetAndConfiguration ctgValue;
+  private final BuildConfiguration hostConfiguration;
+  private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
+
+  /** The key for {@link #starlarkTransitionCache}. */
+  private static class StarlarkTransitionCacheKey {
+    private final ConfigurationTransition transition;
+    private final BuildOptions fromOptions;
+    private final int hashCode;
+
+    StarlarkTransitionCacheKey(ConfigurationTransition transition, BuildOptions fromOptions) {
+      // For rule self-transitions, the transition instance encapsulates both the transition logic
+      // and attributes of the target it's attached to. This is important: the same transition in
+      // the same configuration applied to distinct targets may produce different outputs. See
+      // StarlarkRuleTransitionProvider.FunctionPatchTransition for details.
+      // TODO(bazel-team): the transition code (i.e. StarlarkTransitionFunction) hashes on identity.
+      // Check that unnecessary copies of the transition function don't dilute this cache. Quick
+      // experimentation shows the # of such instances is very small. But it's unclear how strong
+      // of an interning contract there is.
+      this.transition = transition;
+      this.fromOptions = fromOptions;
+      this.hashCode = Objects.hash(transition, fromOptions);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other == this) {
+        return true;
+      }
+      if (!(other instanceof StarlarkTransitionCacheKey)) {
+        return false;
+      }
+      return (this.transition.equals(((StarlarkTransitionCacheKey) other).transition)
+          && this.fromOptions.equals(((StarlarkTransitionCacheKey) other).fromOptions));
+    }
+
+    @Override
+    public int hashCode() {
+      return hashCode;
+    }
+  }
+
+  /** The result of a {@link #starlarkTransitionCache} lookup. */
+  private static class StarlarkTransitionCacheValue {
+    final Map<String, BuildOptions> result;
+    /**
+     * Stores events for successful transitions. Transitions that fail aren't added to the cache.
+     * This is meant for non-error events like Starlark {@code print()} output. See {@link
+     * StarlarkIntegrationTest#testPrintFromTransitionImpl} for a test that covers this.
+     *
+     * <p>This is null if the transition lacks non-error events.
+     */
+    @Nullable final StoredEventHandler nonErrorEvents;
+
+    StarlarkTransitionCacheValue(
+        Map<String, BuildOptions> result, @Nullable StoredEventHandler nonErrorEvents) {
+      this.result = result;
+      this.nonErrorEvents = nonErrorEvents;
+    }
   }
 
   /**
-   * Given a parent rule and configuration depending on a child through an attribute, determines
-   * the configuration the child should take.
+   * Caches the application of transitions that use Starlark.
    *
-   * @param fromConfig the parent rule's configuration
-   * @param fromRule the parent rule
-   * @param attribute the attribute creating the dependency (e.g. "srcs")
-   * @param toTarget the child target (which may or may not be a rule)
+   * <p>This trivially includes {@link StarlarkTransition}s. But it also includes transitions that
+   * delegate to {@link StarlarkTransition}s, like some {@link ComposingTransition}s.
    *
-   * @return the child's configuration, expressed as a diff from the parent's configuration. This
-   *     is usually a {@PatchTransition} but exceptions apply (e.g.
-   *     {@link Attribute.ConfigurationTransition}).
+   * <p>This cache was added to keep builds that heavily rely on Starlark transitions performant.
+   * The inspiring build is a large Apple binary that heavily relies on {@code objc_library.bzl},
+   * which applies a self-transition. The build applies this transition ~600,000 times. Each
+   * application has a cost, mostly from setup in translating Java objects to Starlark objects in
+   * {@link FunctionTransitionUtil#applyAndValidate}. This cache saves most of that work, reducing
+   * analysis phase CPU time by 17%.
    */
-  public Transition evaluateTransition(BuildConfiguration fromConfig, final Rule fromRule,
-      final Attribute attribute, final Target toTarget) {
+  private static final Cache<StarlarkTransitionCacheKey, StarlarkTransitionCacheValue>
+      starlarkTransitionCache = Caffeine.newBuilder().softValues().build();
 
-    // I. Input files and package groups have no configurations. We don't want to duplicate them.
-    if (usesNullConfiguration(toTarget)) {
-      return Attribute.ConfigurationTransition.NULL;
-    }
+  public ConfigurationResolver(
+      SkyFunction.Environment env,
+      TargetAndConfiguration ctgValue,
+      BuildConfiguration hostConfiguration,
+      ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
+    this.env = env;
+    this.ctgValue = ctgValue;
+    this.hostConfiguration = hostConfiguration;
+    this.configConditions = configConditions;
+  }
 
-    // II. Host configurations never switch to another. All prerequisites of host targets have the
-    // same host configuration.
-    if (fromConfig.isHostConfiguration()) {
-      return Attribute.ConfigurationTransition.NONE;
-    }
+  private BuildConfiguration getCurrentConfiguration() {
+    return ctgValue.getConfiguration();
+  }
 
-    // Make sure config_setting dependencies are resolved in the referencing rule's configuration,
-    // unconditionally. For example, given:
-    //
-    // genrule(
-    //     name = 'myrule',
-    //     tools = select({ '//a:condition': [':sometool'] })
-    //
-    // all labels in "tools" get resolved in the host configuration (since the "tools" attribute
-    // declares a host configuration transition). We want to explicitly exclude configuration labels
-    // from these transitions, since their *purpose* is to do computation on the owning
-    // rule's configuration.
-    // TODO(bazel-team): don't require special casing here. This is far too hackish.
-    if (toTarget instanceof Rule && ((Rule) toTarget).getRuleClassObject().isConfigMatcher()) {
-      // TODO(gregce): see if this actually gets called
-      return Attribute.ConfigurationTransition.NONE;
-    }
-
-    // The current transition to apply. When multiple transitions are requested, this is a
-    // ComposingSplitTransition, which encapsulates them into a single object so calling code
-    // doesn't need special logic for combinations.
-    Transition currentTransition = Attribute.ConfigurationTransition.NONE;
-
-    // Apply the parent rule's outgoing transition if it has one.
-    RuleTransitionFactory transitionFactory =
-        fromRule.getRuleClassObject().getOutgoingTransitionFactory();
-    if (transitionFactory != null) {
-      Transition transition = transitionFactory.buildTransitionFor(toTarget.getAssociatedRule());
-      if (transition != null) {
-        currentTransition = composeTransitions(currentTransition, transition);
-      }
-    }
-
-    // TODO(gregce): make the below transitions composable (i.e. take away the "else" clauses).
-    // The "else" is a legacy restriction from static configurations.
-    if (attribute.hasSplitConfigurationTransition()) {
-      Preconditions.checkState(attribute.getConfigurator() == null);
-      currentTransition = split(currentTransition,
-          (SplitTransition<BuildOptions>) attribute.getSplitTransition(fromRule));
-    } else {
-      // III. Attributes determine configurations. The configuration of a prerequisite is determined
-      // by the attribute.
-      @SuppressWarnings("unchecked")
-      Configurator<BuildOptions> configurator =
-          (Configurator<BuildOptions>) attribute.getConfigurator();
-      if (configurator != null) {
-        // TODO(gregce): attribute configurators are a holdover from static configurations. Remove
-        // them and remove this branch.
-        currentTransition = applyAttributeConfigurator(currentTransition, configurator);
+  /**
+   * Translates a set of {@link DependencyKey} objects with configuration transition requests to the
+   * same objects with resolved configurations.
+   *
+   * <p>This method must preserve the original label ordering of each attribute. For example, if
+   * {@code dependencyKeys.get("data")} is {@code [":a", ":b"]}, the resolved variant must also be
+   * {@code [":a", ":b"]} in the same order.
+   *
+   * <p>For split transitions, {@code dependencyKeys.get("data") = [":a", ":b"]} can produce the
+   * output {@code [":a"<config1>, ":a"<config2>, ..., ":b"<config1>, ":b"<config2>, ...]}. All
+   * instances of ":a" still appear before all instances of ":b". But the {@code [":a"<config1>,
+   * ":a"<config2>"]} subset may be in any (deterministic) order. In particular, this may not be the
+   * same order as {@link SplitTransition#split}. If needed, this code can be modified to use that
+   * order, but that involves more runtime in performance-critical code, so we won't make that
+   * change without a clear need.
+   *
+   * <p>These configurations unconditionally include all fragments.
+   *
+   * <p>This method is heavily performance-optimized. Because {@link
+   * com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction} calls it over every edge in
+   * the configured target graph, small inefficiencies can have observable impact on analysis time.
+   * Keep this in mind when making modifications and performance-test any changes you make.
+   *
+   * @param dependencyKeys the transition requests for each dep and each dependency kind
+   * @return a mapping from each dependency kind in the source target to the {@link
+   *     BuildConfiguration}s and {@link Label}s for the deps under that dependency kind . Returns
+   *     null if not all Skyframe dependencies are available.
+   */
+  @Nullable
+  public OrderedSetMultimap<DependencyKind, Dependency> resolveConfigurations(
+      OrderedSetMultimap<DependencyKind, DependencyKey> dependencyKeys)
+      throws ConfiguredValueCreationException, InterruptedException {
+    OrderedSetMultimap<DependencyKind, Dependency> resolvedDeps = OrderedSetMultimap.create();
+    boolean needConfigsFromSkyframe = false;
+    for (Map.Entry<DependencyKind, DependencyKey> entry : dependencyKeys.entries()) {
+      DependencyKind dependencyKind = entry.getKey();
+      DependencyKey dependencyKey = entry.getValue();
+      ImmutableList<Dependency> depConfig = resolveConfiguration(dependencyKind, dependencyKey);
+      if (depConfig == null) {
+        // Instead of returning immediately, give the loop a chance to queue up every missing
+        // dependency, then return all at once. That prevents re-executing this code an unnecessary
+        // number of times. i.e. this is equivalent to calling env.getValues() once over all deps.
+        needConfigsFromSkyframe = true;
       } else {
-        currentTransition = composeTransitions(currentTransition,
-            attribute.getConfigurationTransition());
+        resolvedDeps.putAll(dependencyKind, depConfig);
+      }
+    }
+    return needConfigsFromSkyframe ? null : resolvedDeps;
+  }
+
+  @Nullable
+  private ImmutableList<Dependency> resolveConfiguration(
+      DependencyKind dependencyKind, DependencyKey dependencyKey)
+      throws ConfiguredValueCreationException, InterruptedException {
+
+    Dependency.Builder dependencyBuilder = dependencyKey.getDependencyBuilder();
+
+    ConfigurationTransition transition = dependencyKey.getTransition();
+    if (transition == NullTransition.INSTANCE) {
+      return ImmutableList.of(resolveNullTransition(dependencyBuilder, dependencyKind));
+    } else if (transition.isHostTransition()) {
+      return ImmutableList.of(resolveHostTransition(dependencyBuilder, dependencyKey));
+    }
+
+    return resolveGenericTransition(
+        getCurrentConfiguration().fragmentClasses(), dependencyBuilder, dependencyKey);
+  }
+
+  @Nullable
+  private Dependency resolveNullTransition(
+      Dependency.Builder dependencyBuilder, DependencyKind dependencyKind)
+      throws ConfiguredValueCreationException, InterruptedException {
+    // The null configuration can be trivially computed (it's, well, null), so special-case that
+    // transition here and skip the rest of the logic. A *lot* of targets have null deps, so
+    // this produces real savings. Profiling tests over a simple cc_binary show this saves ~1% of
+    // total analysis phase time.
+    if (dependencyKind.getAttribute() != null) {
+      ImmutableList<String> transitionKeys = collectTransitionKeys(dependencyKind.getAttribute());
+      if (transitionKeys == null) {
+        return null; // Need Skyframe deps.
+      }
+      dependencyBuilder.setTransitionKeys(transitionKeys);
+    }
+
+    return dependencyBuilder.withNullConfiguration().build();
+  }
+
+  private Dependency resolveHostTransition(
+      Dependency.Builder dependencyBuilder, DependencyKey dependencyKey) {
+    return dependencyBuilder
+        .setConfiguration(hostConfiguration)
+        .setAspects(dependencyKey.getAspects())
+        .build();
+  }
+
+  @Nullable
+  private ImmutableList<Dependency> resolveGenericTransition(
+      FragmentClassSet depFragments,
+      Dependency.Builder dependencyBuilder,
+      DependencyKey dependencyKey)
+      throws ConfiguredValueCreationException, InterruptedException {
+    Map<String, BuildOptions> toOptions;
+    try {
+      toOptions =
+          applyTransitionWithSkyframe(
+              getCurrentConfiguration().getOptions(),
+              dependencyKey.getTransition(),
+              env,
+              env.getListener());
+      if (toOptions == null) {
+        return null; // Need more Skyframe deps for a Starlark transition.
+      }
+    } catch (TransitionException e) {
+      throw new ConfiguredValueCreationException(ctgValue, e.getMessage());
+    }
+
+    if (depFragments.equals(getCurrentConfiguration().fragmentClasses())
+        && SplitTransition.equals(getCurrentConfiguration().getOptions(), toOptions.values())) {
+      // The dep uses the same exact configuration. Let's re-use the current configuration and
+      // skip adding a Skyframe dependency edge on it.
+      return ImmutableList.of(
+          dependencyBuilder
+              .setConfiguration(getCurrentConfiguration())
+              .setAspects(dependencyKey.getAspects())
+              // Explicitly do not set the transition key, since there is only one configuration
+              // and it matches the current one. This ignores the transition key set if this
+              // was a split transition.
+              .build());
+    }
+
+    PathFragment platformMappingPath =
+        getCurrentConfiguration().getOptions().get(PlatformOptions.class).platformMappings;
+    PlatformMappingValue platformMappingValue =
+        (PlatformMappingValue) env.getValue(PlatformMappingValue.Key.create(platformMappingPath));
+    if (platformMappingValue == null) {
+      return null; // Need platform mappings from Skyframe.
+    }
+
+    Map<String, BuildConfigurationValue.Key> configurationKeys = new HashMap<>();
+    try {
+      for (Map.Entry<String, BuildOptions> optionsEntry : toOptions.entrySet()) {
+        String transitionKey = optionsEntry.getKey();
+        BuildConfigurationValue.Key buildConfigurationValueKey =
+            BuildConfigurationValue.keyWithPlatformMapping(
+                platformMappingValue, depFragments, optionsEntry.getValue());
+        configurationKeys.put(transitionKey, buildConfigurationValueKey);
+      }
+    } catch (OptionsParsingException e) {
+      throw new ConfiguredValueCreationException(ctgValue, e.getMessage());
+    }
+
+    Map<SkyKey, ValueOrException<InvalidConfigurationException>> depConfigValues =
+        env.getValuesOrThrow(configurationKeys.values(), InvalidConfigurationException.class);
+    List<Dependency> dependencies = new ArrayList<>();
+    try {
+      for (Map.Entry<String, BuildConfigurationValue.Key> entry : configurationKeys.entrySet()) {
+        String transitionKey = entry.getKey();
+        ValueOrException<InvalidConfigurationException> valueOrException =
+            depConfigValues.get(entry.getValue());
+        if (valueOrException.get() == null) {
+          continue;
+        }
+        BuildConfiguration configuration =
+            ((BuildConfigurationValue) valueOrException.get()).getConfiguration();
+        if (configuration != null) {
+          Dependency resolvedDep =
+              dependencyBuilder
+                  // Copy the builder so we don't overwrite the other dependencies.
+                  .copy()
+                  .setConfiguration(configuration)
+                  .setAspects(dependencyKey.getAspects())
+                  .setTransitionKey(transitionKey)
+                  .build();
+          dependencies.add(resolvedDep);
+        }
+      }
+      if (env.valuesMissing()) {
+        return null; // Need dependency configurations.
+      }
+    } catch (InvalidConfigurationException e) {
+      throw new ConfiguredValueCreationException(ctgValue, e.getMessage());
+    }
+
+    return ImmutableList.sortedCopyOf(SPLIT_DEP_ORDERING, dependencies);
+  }
+
+  @Nullable
+  private ImmutableList<String> collectTransitionKeys(Attribute attribute)
+      throws ConfiguredValueCreationException, InterruptedException {
+    TransitionFactory<AttributeTransitionData> transitionFactory = attribute.getTransitionFactory();
+    if (transitionFactory.isSplit()) {
+      AttributeTransitionData transitionData =
+          AttributeTransitionData.builder()
+              .attributes(
+                  ConfiguredAttributeMapper.of(
+                      ctgValue.getTarget().getAssociatedRule(),
+                      configConditions,
+                      ctgValue.getConfiguration().checksum()))
+              .build();
+      ConfigurationTransition baseTransition = transitionFactory.create(transitionData);
+      Map<String, BuildOptions> toOptions;
+      try {
+        toOptions =
+            applyTransitionWithSkyframe(
+                getCurrentConfiguration().getOptions(), baseTransition, env, env.getListener());
+        if (toOptions == null) {
+          return null; // Need more Skyframe deps for a Starlark transition.
+        }
+      } catch (TransitionException e) {
+        throw new ConfiguredValueCreationException(ctgValue, e.getMessage());
+      }
+      if (!SplitTransition.equals(getCurrentConfiguration().getOptions(), toOptions.values())) {
+        return ImmutableList.copyOf(toOptions.keySet());
       }
     }
 
-    return applyConfigurationHook(currentTransition, toTarget);
+    return ImmutableList.of();
   }
 
   /**
-   * Returns true if the given target should have a null configuration. This method is the
-   * "source of truth" for this determination.
+   * Applies a configuration transition over a set of build options.
+   *
+   * <p>This is only for callers that can't use {@link #applyTransitionWithSkyframe}. The difference
+   * is {@link #applyTransitionWithSkyframe} internally computes {@code buildSettingPackages} with
+   * Skyframe, while this version requires it as a precomputed input.
+   *
+   * <p>prework - load all default values for reading build settings in Starlark transitions (by
+   * design, {@link BuildOptions} never holds default values of build settings)
+   *
+   * <p>postwork - replay events/throw errors from transition implementation function and validate
+   * the outputs of the transition. This only applies to Starlark transitions.
+   *
+   * @return the build options for the transitioned configuration.
    */
-  public static boolean usesNullConfiguration(Target target) {
-    return target instanceof InputFile || target instanceof PackageGroup;
+  public static Map<String, BuildOptions> applyTransitionWithoutSkyframe(
+      BuildOptions fromOptions,
+      ConfigurationTransition transition,
+      Map<PackageValue.Key, PackageValue> buildSettingPackages,
+      ExtendedEventHandler eventHandler)
+      throws TransitionException, InterruptedException {
+    if (StarlarkTransition.doesStarlarkTransition(transition)) {
+      return applyStarlarkTransition(fromOptions, transition, buildSettingPackages, eventHandler);
+    }
+    return transition.apply(TransitionUtil.restrict(transition, fromOptions), eventHandler);
   }
 
   /**
-   * Composes two transitions together efficiently.
+   * Applies a configuration transition over a set of build options.
+   *
+   * <p>Callers should use this over {@link #applyTransitionWithoutSkyframe}. Unlike that variation,
+   * this would may return null if it needs more Skyframe deps.
+   *
+   * <p>postwork - replay events/throw errors from transition implementation function and validate
+   * the outputs of the transition. This only applies to Starlark transitions.
+   *
+   * @return the build options for the transitioned configuration, or null if Skyframe dependencies
+   *     for build_setting default values for Starlark transitions. These can be read from their
+   *     respective packages.
    */
-  @VisibleForTesting
-  public Transition composeTransitions(Transition transition1, Transition transition2) {
-    if (isFinal(transition1)) {
-      return transition1;
-    } else if (transition2 == Attribute.ConfigurationTransition.NONE) {
-      return transition1;
-    } else if (transition2 == Attribute.ConfigurationTransition.NULL) {
-      // A NULL transition can just replace earlier transitions: no need to cfpose them.
-      return Attribute.ConfigurationTransition.NULL;
-    } else if (transition2 == Attribute.ConfigurationTransition.HOST) {
-      // A HOST transition can just replace earlier transitions: no need to compose them.
-      // But it also improves performance: host transitions are common, and
-      // ConfiguredTargetFunction has special optimized logic to handle them. If they were buried
-      // in the last segment of a ComposingSplitTransition, those optimizations wouldn't trigger.
-      return HostTransition.INSTANCE;
+  @Nullable
+  public static Map<String, BuildOptions> applyTransitionWithSkyframe(
+      BuildOptions fromOptions,
+      ConfigurationTransition transition,
+      SkyFunction.Environment env,
+      ExtendedEventHandler eventHandler)
+      throws TransitionException, InterruptedException {
+    if (StarlarkTransition.doesStarlarkTransition(transition)) {
+      // TODO(blaze-team): find a way to dedupe this with SkyframeExecutor.getBuildSettingPackages.
+      Map<PackageValue.Key, PackageValue> buildSettingPackages =
+          StarlarkTransition.getBuildSettingPackages(env, transition);
+      return buildSettingPackages == null
+          ? null
+          : applyStarlarkTransition(fromOptions, transition, buildSettingPackages, eventHandler);
+    }
+    return transition.apply(TransitionUtil.restrict(transition, fromOptions), eventHandler);
+  }
+
+  /**
+   * Applies a Starlark transition.
+   *
+   * @param fromOptions source options before the transition
+   * @param transition the transition itself
+   * @param buildSettingPackages packages for build_settings read by the transition. This is used to
+   *     read default values for build_settings that aren't explicitly set on the build.
+   * @param eventHandler handler for errors evaluating the transition.
+   * @return transition output
+   */
+  private static Map<String, BuildOptions> applyStarlarkTransition(
+      BuildOptions fromOptions,
+      ConfigurationTransition transition,
+      Map<PackageValue.Key, PackageValue> buildSettingPackages,
+      ExtendedEventHandler eventHandler)
+      throws TransitionException, InterruptedException {
+    StarlarkTransitionCacheKey cacheKey = new StarlarkTransitionCacheKey(transition, fromOptions);
+    StarlarkTransitionCacheValue cachedResult = starlarkTransitionCache.getIfPresent(cacheKey);
+    if (cachedResult != null) {
+      if (cachedResult.nonErrorEvents != null) {
+        cachedResult.nonErrorEvents.replayOn(eventHandler);
+      }
+      return cachedResult.result;
+    }
+    BuildOptions adjustedOptions =
+        StarlarkTransition.addDefaultStarlarkOptions(fromOptions, transition, buildSettingPackages);
+    // TODO(bazel-team): Add safety-check that this never mutates fromOptions.
+    StoredEventHandler handlerWithErrorStatus = new StoredEventHandler();
+    Map<String, BuildOptions> result =
+        transition.apply(
+            TransitionUtil.restrict(transition, adjustedOptions), handlerWithErrorStatus);
+
+    // We use a temporary StoredEventHandler instead of the caller's event handler because
+    // StarlarkTransition.validate assumes no errors occurred. We need a StoredEventHandler to be
+    // able to check that, and fail out early if there are errors.
+    //
+    // TODO(bazel-team): harden StarlarkTransition.validate so we can eliminate this step.
+    // StarlarkRuleTransitionProviderTest#testAliasedBuildSetting_outputReturnMismatch shows the
+    // effect.
+    handlerWithErrorStatus.replayOn(eventHandler);
+    if (handlerWithErrorStatus.hasErrors()) {
+      throw new TransitionException("Errors encountered while applying Starlark transition");
+    }
+    result = StarlarkTransition.validate(transition, buildSettingPackages, result);
+    // If the transition errored (like bad Starlark code), this method already exited with an
+    // exception so the results won't go into the cache. We still want to collect non-error events
+    // like print() output.
+    StoredEventHandler nonErrorEvents =
+        !handlerWithErrorStatus.isEmpty() ? handlerWithErrorStatus : null;
+    starlarkTransitionCache.put(cacheKey, new StarlarkTransitionCacheValue(result, nonErrorEvents));
+    return result;
+  }
+
+  /**
+   * This method allows resolution of configurations outside of a skyfunction call.
+   *
+   * <p>Unlike {@link #resolveConfigurations}, this doesn't expect the current context to be
+   * evaluating dependencies of a parent target. So this method is also suitable for top-level
+   * targets.
+   *
+   * <p>Resolution consists of applying the per-target transitions specified in {@code
+   * targetsToEvaluate}. This can be used, e.g., to apply {@link
+   * com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory}s over global
+   * top-level configurations.
+   *
+   * <p>Preserves the original input order (but merges duplicate nodes that might occur due to
+   * top-level configuration transitions) . Uses original (untrimmed, pre-transition) configurations
+   * for targets that can't be evaluated (e.g. due to loading phase errors).
+   *
+   * <p>This is suitable for feeding {@link
+   * com.google.devtools.build.lib.analysis.ConfiguredTargetValue} keys: as general principle {@link
+   * com.google.devtools.build.lib.analysis.ConfiguredTarget}s should have exactly as much
+   * information in their configurations as they need to evaluate and no more (e.g. there's no need
+   * for Android settings in a C++ configured target).
+   *
+   * @param defaultContext the original targets and starting configurations before applying rule
+   *     transitions and trimming. When actual configurations can't be evaluated, these values are
+   *     returned as defaults. See TODO below.
+   * @param targetsToEvaluate the inputs repackaged as dependencies, including rule-specific
+   *     transitions
+   * @param eventHandler the error event handler
+   * @param configurationsCollector the collector which finds configurations for dependencies
+   */
+  // TODO(bazel-team): error out early for targets that fail - failed configuration evaluations
+  //   should never make it through analysis (and especially not seed ConfiguredTargetValues)
+  // TODO(gregce): merge this more with resolveConfigurations? One crucial difference is
+  //   resolveConfigurations can null-return on missing deps since it executes inside Skyfunctions.
+  // Keep this in sync with {@link PrepareAnalysisPhaseFunction#resolveConfigurations}.
+  public static TopLevelTargetsAndConfigsResult getConfigurationsFromExecutor(
+      Iterable<TargetAndConfiguration> defaultContext,
+      Multimap<BuildConfiguration, DependencyKey> targetsToEvaluate,
+      ExtendedEventHandler eventHandler,
+      ConfigurationsCollector configurationsCollector)
+      throws InvalidConfigurationException, InterruptedException {
+
+    Map<Label, Target> labelsToTargets = new HashMap<>();
+    for (TargetAndConfiguration targetAndConfig : defaultContext) {
+      labelsToTargets.put(targetAndConfig.getLabel(), targetAndConfig.getTarget());
     }
 
-    // TODO(gregce): remove the below conversion when all transitions are patch transitions.
-    Transition dynamicTransition = transitionMapper.map(transition2);
-    return transition1 == Attribute.ConfigurationTransition.NONE
-        ? dynamicTransition
-        : new ComposingSplitTransition(transition1, dynamicTransition);
-  }
-
-  /**
-   * Returns true if once the given transition is applied to a dep no followup transitions should
-   * be composed after it.
-   */
-  private static boolean isFinal(Transition transition) {
-    return (transition == Attribute.ConfigurationTransition.NULL
-        || transition == HostTransition.INSTANCE);
-  }
-
-  /**
-   * Applies the given split and composes it after an existing transition.
-   */
-  private static Transition split(Transition currentTransition,
-      SplitTransition<BuildOptions> split) {
-    Preconditions.checkState(currentTransition != Attribute.ConfigurationTransition.NULL,
-        "cannot apply splits after null transitions (null transitions are expected to be final)");
-    Preconditions.checkState(currentTransition != HostTransition.INSTANCE,
-        "cannot apply splits after host transitions (host transitions are expected to be final)");
-    return currentTransition == Attribute.ConfigurationTransition.NONE
-        ? split
-        : new ComposingSplitTransition(currentTransition, split);
-  }
-
-  /**
-   * Applies the given attribute configurator and composes it after an existing transition.
-   */
-  @VisibleForTesting
-  public Transition applyAttributeConfigurator(Transition currentTransition,
-      Configurator<BuildOptions> configurator) {
-    if (isFinal(currentTransition)) {
-      return currentTransition;
-    }
-    return composeTransitions(currentTransition, new AttributeConfiguratorTransition(configurator));
-  }
-
-  /**
-   * A {@link PatchTransition} that applies an attribute configurator over some input options
-   * to determine which transition to use, then applies that transition over those options
-   * for the final output.
-   */
-  private static final class AttributeConfiguratorTransition implements PatchTransition {
-    private final Configurator<BuildOptions> configurator;
-
-    AttributeConfiguratorTransition(Configurator<BuildOptions> configurator) {
-      this.configurator = configurator;
-    }
-
-    @Override
-    public BuildOptions apply(BuildOptions options) {
-      return Iterables.getOnlyElement(
-          ComposingSplitTransition.apply(options, configurator.apply(options)));
-    }
-
-    @Override
-    public boolean defaultsToSelf() {
-      return false;
-    }
-  }
-
-  /**
-   * Applies any configuration hooks associated with the dep target, composes their transitions
-   * after an existing transition, and returns the composed result.
-   */
-  private Transition applyConfigurationHook(Transition currentTransition, Target toTarget) {
-    if (isFinal(currentTransition)) {
-      return currentTransition;
-    }
-    Rule associatedRule = toTarget.getAssociatedRule();
-    RuleTransitionFactory transitionFactory =
-        associatedRule.getRuleClassObject().getTransitionFactory();
-    if (transitionFactory != null) {
-      // transitionMapper is only needed because of Attribute.ConfigurationTransition.DATA: this is
-      // C++-specific but non-C++ rules declare it. So they can't directly provide the C++-specific
-      // patch transition that implements it.
-      PatchTransition ruleClassTransition = (PatchTransition)
-          transitionMapper.map(transitionFactory.buildTransitionFor(associatedRule));
-      if (ruleClassTransition != null) {
-        if (currentTransition == ConfigurationTransition.NONE) {
-          return ruleClassTransition;
-        } else {
-          return new ComposingSplitTransition(currentTransition, ruleClassTransition);
+    // Maps <target, originalConfig> pairs to <target, finalConfig> pairs for targets that
+    // could be successfully Skyframe-evaluated.
+    Map<TargetAndConfiguration, TargetAndConfiguration> successfullyEvaluatedTargets =
+        new LinkedHashMap<>();
+    boolean hasError = false;
+    if (!targetsToEvaluate.isEmpty()) {
+      for (BuildConfiguration fromConfig : targetsToEvaluate.keySet()) {
+        ConfigurationsResult configurationsResult =
+            configurationsCollector.getConfigurations(
+                eventHandler, fromConfig.getOptions(), targetsToEvaluate.get(fromConfig));
+        hasError |= configurationsResult.hasError();
+        for (Map.Entry<DependencyKey, BuildConfiguration> evaluatedTarget :
+            configurationsResult.getConfigurationMap().entries()) {
+          Target target = labelsToTargets.get(evaluatedTarget.getKey().getLabel());
+          successfullyEvaluatedTargets.put(
+              new TargetAndConfiguration(target, fromConfig),
+              new TargetAndConfiguration(target, evaluatedTarget.getValue()));
         }
       }
     }
-    return currentTransition;
+
+    LinkedHashSet<TargetAndConfiguration> result = new LinkedHashSet<>();
+    for (TargetAndConfiguration originalInput : defaultContext) {
+      // If the configuration couldn't be determined (e.g. loading phase error), use the original.
+      result.add(successfullyEvaluatedTargets.getOrDefault(originalInput, originalInput));
+    }
+    return new TopLevelTargetsAndConfigsResult(result, hasError);
+  }
+
+  /**
+   * The result of {@link #getConfigurationsFromExecutor} which also registers if an error was
+   * recorded.
+   */
+  public static class TopLevelTargetsAndConfigsResult {
+    private final Collection<TargetAndConfiguration> configurations;
+    private final boolean hasError;
+
+    public TopLevelTargetsAndConfigsResult(
+        Collection<TargetAndConfiguration> configurations, boolean hasError) {
+      this.configurations = configurations;
+      this.hasError = hasError;
+    }
+
+    public boolean hasError() {
+      return hasError;
+    }
+
+    public Collection<TargetAndConfiguration> getTargetsAndConfigs() {
+      return configurations;
+    }
   }
 }
