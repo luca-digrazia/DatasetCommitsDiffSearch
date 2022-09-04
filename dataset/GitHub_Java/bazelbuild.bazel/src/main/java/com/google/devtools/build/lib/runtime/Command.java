@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
+import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -32,9 +33,8 @@ public @interface Command {
   String name();
 
   /**
-   * Options processed by the command, indicated by options interfaces. These interfaces must
-   * contain methods annotated with {@link com/google/devtools/build/lib/runtime/Command.java used
-   * only in javadoc: com.google.devtools.common.options.Option}.
+   * Options processed by the command, indicated by options interfaces.
+   * These interfaces must contain methods annotated with {@link Option}.
    */
   Class<? extends OptionsBase>[] options() default {};
 
