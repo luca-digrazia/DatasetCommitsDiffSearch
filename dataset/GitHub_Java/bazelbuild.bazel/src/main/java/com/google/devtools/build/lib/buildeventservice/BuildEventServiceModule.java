@@ -52,7 +52,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -73,32 +72,18 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   private BuildEventStreamOptions besStreamOptions;
   private ImmutableSet<BuildEventTransport> bepTransports;
   private String invocationId;
-  private String buildRequestId;
   private EventHandler cmdLineReporter;
-  private final AtomicReference<AbruptExitException> pendingAbruptExitException =
-      new AtomicReference<>();
 
   protected BESOptionsT besOptions;
 
   /** Callback used by the transports to report errors and possible exit abruptly. */
   protected BuildEventServiceAbruptExitCallback getAbruptExitCallback(
       ModuleEnvironment moduleEnvironment) {
-    return (e) -> {
-      // Request exiting early for the first abrupt exception we find.
-      if (this.pendingAbruptExitException.compareAndSet(null, e)) {
-        moduleEnvironment.exit(pendingAbruptExitException.get());
-      }
-    };
-  }
-
-  protected void reportCommandLineError(EventHandler commandLineReporter, Exception exception) {
-    // Don't hide unchecked exceptions as part of the error reporting.
-    Throwables.throwIfUnchecked(exception);
-    commandLineReporter.handle(Event.error(exception.getMessage()));
+    return moduleEnvironment::exit;
   }
 
   /** Report errors in the command line and possibly fail the build. */
-  private void reportError(
+  protected void reportError(
       EventHandler commandLineReporter,
       ModuleEnvironment moduleEnvironment,
       String msg,
@@ -109,7 +94,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
     logger.log(Level.SEVERE, msg, exception);
     AbruptExitException abruptException = new AbruptExitException(msg, exitCode, exception);
-    reportCommandLineError(commandLineReporter, exception);
+    commandLineReporter.handle(Event.error(exception.getMessage()));
     moduleEnvironment.exit(abruptException);
   }
 
@@ -125,7 +110,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   @Override
   public void beforeCommand(CommandEnvironment cmdEnv) {
     this.invocationId = cmdEnv.getCommandId().toString();
-    this.buildRequestId = cmdEnv.getBuildRequestId();
     this.cmdLineReporter = cmdEnv.getReporter();
     // Reset to null in case afterCommand was not called.
     // TODO(lpino): Remove this statement once {@link BlazeModule#afterCommmand()} is guaranteed
@@ -213,12 +197,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   @Override
   public void afterCommand() {
-    AbruptExitException e = pendingAbruptExitException.getAndSet(null);
-    if (e != null) {
-      logger.severe(e.getMessage());
-      reportCommandLineError(cmdLineReporter, e);
-    }
-
     if (streamer != null) {
       if (!Strings.isNullOrEmpty(besOptions.besBackend)) {
         constructAndMaybeReportInvocationIdUrl();
@@ -251,18 +229,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     }
   }
 
-  private void constructAndMaybeReportBuildRequestIdUrl() {
-    if (!getBuildRequestIdPrefix().isEmpty()) {
-      cmdLineReporter.handle(
-          Event.info(
-              "See "
-                  + getBuildRequestIdPrefix()
-                  + buildRequestId
-                  + " for more information about your request."));
-    }
-  }
-
-  private void constructAndReportIds() {
+  private void constructAndReportIds(String buildRequestId) {
     cmdLineReporter.handle(
         Event.info(
             String.format(
@@ -281,7 +248,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       return null;
     }
 
-    constructAndReportIds();
+    constructAndReportIds(cmdEnv.getBuildRequestId());
 
     final BuildEventServiceClient besClient;
     try {
@@ -298,8 +265,8 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
     BuildEventServiceProtoUtil besProtoUtil =
         new BuildEventServiceProtoUtil.Builder()
-            .buildRequestId(buildRequestId)
-            .invocationId(invocationId)
+            .buildRequestId(cmdEnv.getBuildRequestId())
+            .invocationId(cmdEnv.getCommandId().toString())
             .projectId(besOptions.projectId)
             .commandName(cmdEnv.getCommandName())
             .keywords(getBesKeywords(besOptions, cmdEnv.getRuntime().getStartupOptionsProvider()))
@@ -420,7 +387,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
         createBesTransport(cmdEnv, uploaderSupplier, artifactGroupNamer);
     if (besTransport != null) {
       constructAndMaybeReportInvocationIdUrl();
-      constructAndMaybeReportBuildRequestIdUrl();
       bepTransportsBuilder.add(besTransport);
     }
 
@@ -446,9 +412,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   /** A prefix used when printing the invocation ID in the command line */
   protected abstract String getInvocationIdPrefix();
-
-  /** A prefix used when printing the build request ID in the command line */
-  protected abstract String getBuildRequestIdPrefix();
 
   // TODO(b/115961387): This method shouldn't exist. It only does because some tests are relying on
   //  the transport creation logic of this module directly.

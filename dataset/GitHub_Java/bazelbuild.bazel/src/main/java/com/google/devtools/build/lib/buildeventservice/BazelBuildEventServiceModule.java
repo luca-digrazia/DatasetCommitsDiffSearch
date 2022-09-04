@@ -15,14 +15,12 @@
 package com.google.devtools.build.lib.buildeventservice;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
 import com.google.devtools.build.lib.buildeventservice.client.ManagedBuildEventServiceGrpcClient;
-import io.grpc.ManagedChannel;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Set;
@@ -59,18 +57,10 @@ public class BazelBuildEventServiceModule
       config = newConfig;
       client =
           new ManagedBuildEventServiceGrpcClient(
-              newGrpcChannel(besOptions, authAndTLSOptions),
+              GoogleAuthUtils.newChannel(besOptions.besBackend, authAndTLSOptions),
               GoogleAuthUtils.newCallCredentials(authAndTLSOptions));
     }
     return client;
-  }
-
-  // newGrpcChannel is only defined so it can be overridden in tests to not use a real network link.
-  @VisibleForTesting
-  protected ManagedChannel newGrpcChannel(
-      BuildEventServiceOptions besOptions, AuthAndTLSOptions authAndTLSOptions) throws IOException {
-    return GoogleAuthUtils.newChannel(
-        besOptions.besBackend, besOptions.besProxy, authAndTLSOptions, /* interceptor= */ null);
   }
 
   @Override
@@ -107,10 +97,5 @@ public class BazelBuildEventServiceModule
     return besOptions.besResultsUrl.endsWith("/")
         ? besOptions.besResultsUrl
         : besOptions.besResultsUrl + "/";
-  }
-
-  @Override
-  protected String getBuildRequestIdPrefix() {
-    return "";
   }
 }

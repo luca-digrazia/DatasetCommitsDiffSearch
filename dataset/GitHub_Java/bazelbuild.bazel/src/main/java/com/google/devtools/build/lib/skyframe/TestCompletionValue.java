@@ -53,10 +53,9 @@ public class TestCompletionValue implements SkyValue {
         targets,
         ct ->
             TestCompletionKey.create(
-                ConfiguredTargetKey.builder()
-                    .setConfiguredTarget(ct)
-                    .setConfigurationKey(ct.getConfigurationKey())
-                    .build(),
+                // Tests are never in host configuration.
+                ConfiguredTargetKey.of(
+                    ct, ct.getConfigurationKey(), /*isHostConfiguration=*/ false),
                 topLevelArtifactContext,
                 exclusiveTesting));
   }
