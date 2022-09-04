@@ -1,14 +1,6 @@
 package org.androidannotations.logger;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-
-import org.androidannotations.logger.appender.Appender;
-import org.androidannotations.logger.appender.FileAppender;
-import org.androidannotations.logger.appender.MessagerAppender;
 
 public class LoggerContext {
 
@@ -18,7 +10,7 @@ public class LoggerContext {
 	private static final Level DEFAULT_LEVEL = Level.DEBUG;
 
 	private Level currentLevel = DEFAULT_LEVEL;
-	private List<Appender> appenders = new ArrayList<Appender>();
+	private Appender appender = new Appender();
 	private Formatter formatter = new Formatter();
 
 	public static LoggerContext getInstance() {
@@ -33,16 +25,11 @@ public class LoggerContext {
 	}
 
 	LoggerContext() {
-		// appenders.add(new ConsoleAppender());
-		appenders.add(new FileAppender());
-		appenders.add(new MessagerAppender());
 	}
 
-	public void writeLog(Level level, String loggerName, String message, Element element, Throwable thr, Object... args) {
+	public void writeLog(Level level, String loggerName, String message, Throwable thr, Object... args) {
 		String log = formatter.buildLog(level, loggerName, message, thr, args);
-		for (Appender appender : appenders) {
-			appender.append(level, element, log);
-		}
+		appender.append(log);
 	}
 
 	public Level getCurrentLevel() {
@@ -54,18 +41,14 @@ public class LoggerContext {
 	}
 
 	public void setProcessingEnv(ProcessingEnvironment processingEnv) {
-		for (Appender appender : appenders) {
-			appender.setProcessingEnv(processingEnv);
-			appender.open();
-		}
+		appender.setProcessingEnv(processingEnv);
+		appender.resolveLogFile();
 
 		resolveLogLevel(processingEnv);
 	}
 
 	public void close() {
-		for (Appender appender : appenders) {
-			appender.close();
-		}
+		appender.closeFile();
 	}
 
 	private void resolveLogLevel(ProcessingEnvironment processingEnv) {
