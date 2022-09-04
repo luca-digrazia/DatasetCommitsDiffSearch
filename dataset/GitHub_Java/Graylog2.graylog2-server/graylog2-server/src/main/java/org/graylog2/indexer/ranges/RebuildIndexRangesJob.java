@@ -53,10 +53,10 @@ public class RebuildIndexRangesJob extends SystemJob {
     private int indicesToCalculate = 0;
     private int indicesCalculated = 0;
 
-    protected final Deflector deflector;
+    private final Deflector deflector;
     private final Searches searches;
     private final ActivityWriter activityWriter;
-    protected final IndexRangeService indexRangeService;
+    private final IndexRangeService indexRangeService;
 
     @AssistedInject
     public RebuildIndexRangesJob(@Assisted Deflector deflector,
