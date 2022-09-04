@@ -26,11 +26,9 @@ import org.bson.types.ObjectId;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.graylog2.streams.StreamImpl;
-import org.graylog2.streams.StreamRuleImpl;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -46,25 +44,22 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Api(value = "Streams", description = "Manage streams")
 @Path("/streams")
 public class StreamResource extends RestResource {
 	private static final Logger LOG = LoggerFactory.getLogger(StreamResource.class);
 
-    @POST @Timed
-    @ApiOperation(value = "Create a stream")
+    @POST
+    @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(title = "JSON body", required = true) String body) {
+    public Response create(String body) {
         CreateRequest cr;
-
         try {
             cr = objectMapper.readValue(body, CreateRequest.class);
         } catch(IOException e) {
             LOG.error("Error while parsing JSON", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
-
 
         // Create stream.
         Map<String, Object> streamData = Maps.newHashMap();
@@ -81,34 +76,14 @@ public class StreamResource extends RestResource {
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        if (cr.rules != null && cr.rules.size() > 0) {
-            for (org.graylog2.rest.resources.streams.rules.requests.CreateRequest request : cr.rules) {
-                Map<String, Object> streamRuleData = Maps.newHashMap();
-
-                streamRuleData.put("type", request.type);
-                streamRuleData.put("field", request.field);
-                streamRuleData.put("value", request.value);
-                streamRuleData.put("inverted", request.inverted);
-                streamRuleData.put("stream_id", id);
-
-                StreamRuleImpl streamRule = new StreamRuleImpl(streamRuleData, core);
-                try {
-                    streamRule.save();
-                } catch (ValidationException e) {
-                    LOG.error("Validation error while trying to save a stream rule: ", e);
-                    throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
-                }
-            }
-        }
-
         Map<String, Object> result = Maps.newHashMap();
         result.put("stream_id", id.toStringMongod());
 
         return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
     
-    @GET @Timed
-    @ApiOperation(value = "Get a list of all streams")
+    @GET
+    @Timed
     @Produces(MediaType.APPLICATION_JSON)
     public String get() {
         List<Map<String, Object>> streams = Lists.newArrayList();
@@ -124,13 +99,8 @@ public class StreamResource extends RestResource {
     }
     
     @GET @Path("/{streamId}") @Timed
-    @ApiOperation(value = "Get a single stream")
     @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "Stream not found."),
-            @ApiResponse(code = 400, message = "Invalid ObjectId.")
-    })
-    public String get(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) {
+    public String get(@PathParam("streamId") String streamId) {
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -147,12 +117,7 @@ public class StreamResource extends RestResource {
     }
 
     @DELETE @Path("/{streamId}") @Timed
-    @ApiOperation(value = "Delete a stream")
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "Stream not found."),
-            @ApiResponse(code = 400, message = "Invalid ObjectId.")
-    })
-    public Response delete(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) {
+    public Response delete(@PathParam("streamId") String streamId) {
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);

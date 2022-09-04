@@ -22,6 +22,7 @@ package org.graylog2.rest.resources.system.inputs;
 import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
+import org.elasticsearch.common.UUID;
 import org.graylog2.ConfigurationException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
@@ -30,7 +31,6 @@ import org.graylog2.inputs.extractors.ExtractorFactory;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.CreateExtractorRequest;
 import org.graylog2.system.activities.Activity;
@@ -47,24 +47,16 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Api(value = "Extractors", description = "Extractors of an input")
 @Path("/system/inputs/{inputId}/extractors")
 public class ExtractorsResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExtractorsResource.class);
 
-    @POST @Timed
+    @POST
+    @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @ApiOperation(value = "Add an extractor to an input")
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such input on this node."),
-            @ApiResponse(code = 400, message = "No such extractor type."),
-            @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
-            @ApiResponse(code = 400, message = "Missing or invalid configuration.")
-    })
-    public Response create(@ApiParam(title = "JSON body", required = true) String body,
-                           @ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
+    public Response create(String body, @PathParam("inputId") String inputId) {
         if (inputId == null || inputId.isEmpty()) {
             LOG.error("Missing inputId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -91,7 +83,7 @@ public class ExtractorsResource extends RestResource {
             throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
-        String id = new com.eaio.uuid.UUID().toString();
+        String id = UUID.randomUUID().toString();
         Extractor extractor;
         try {
             extractor = ExtractorFactory.factory(
@@ -138,13 +130,10 @@ public class ExtractorsResource extends RestResource {
         return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @GET @Timed
-    @ApiOperation(value = "List all extractors of an input")
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such input on this node.")
-    })
+    @GET
+    @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String list(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
+    public String list(@PathParam("inputId") String inputId) {
         if (inputId == null || inputId.isEmpty()) {
             LOG.error("Missing inputId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -170,17 +159,11 @@ public class ExtractorsResource extends RestResource {
         return json(result);
     }
 
-    @DELETE @Timed
-    @ApiOperation(value = "Delete an extractor")
+    @DELETE
+    @Timed
     @Path("/{extractorId}")
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such input on this node."),
-            @ApiResponse(code = 404, message = "Extractor not found.")
-    })
     @Produces(MediaType.APPLICATION_JSON)
-    public Response terminate(
-            @ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId,
-            @ApiParam(title = "extractorId", required = true) @PathParam("extractorId") String extractorId) {
+    public Response terminate(@PathParam("inputId") String inputId, @PathParam("extractorId") String extractorId) {
         if (extractorId == null || extractorId.isEmpty()) {
             LOG.error("Missing extractorId. Returning HTTP 400.");
             throw new WebApplicationException(400);
