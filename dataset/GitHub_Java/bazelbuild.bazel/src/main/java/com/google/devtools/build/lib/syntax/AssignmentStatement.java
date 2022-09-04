@@ -16,37 +16,43 @@ package com.google.devtools.build.lib.syntax;
 
 import java.io.IOException;
 
-/** Syntax node for an assignment statement. */
+/**
+ * Syntax node for an assignment statement.
+ */
 public final class AssignmentStatement extends Statement {
 
-  private final Expression lhs; // = IDENTIFIER | DOT | INDEX | LIST_LITERAL
-  private final Expression rhs;
+  private final LValue lvalue;
+
+  private final Expression expression;
 
   /**
-   * Constructs an assignment: "lhs = rhs". The LHS must be of the form id, x.y, x[i], [e, ...], or
-   * (e, ...).
+   *  Constructs an assignment: "lvalue := value".
    */
-  public AssignmentStatement(Expression lhs, Expression rhs) {
-    this.lhs = lhs;
-    this.rhs = rhs;
+  public AssignmentStatement(LValue lvalue, Expression expression) {
+    this.lvalue = lvalue;
+    this.expression = expression;
   }
 
-  /** Returns the LHS of the assignment. */
-  public Expression getLHS() {
-    return lhs;
+  /**
+   *  Returns the LHS of the assignment.
+   */
+  public LValue getLValue() {
+    return lvalue;
   }
 
-  /** Returns the RHS of the assignment. */
-  public Expression getRHS() {
-    return rhs;
+  /**
+   *  Returns the RHS of the assignment.
+   */
+  public Expression getExpression() {
+    return expression;
   }
 
   @Override
   public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
     printIndent(buffer, indentLevel);
-    lhs.prettyPrint(buffer, indentLevel);
+    lvalue.prettyPrint(buffer, indentLevel);
     buffer.append(" = ");
-    rhs.prettyPrint(buffer, indentLevel);
+    expression.prettyPrint(buffer, indentLevel);
     buffer.append('\n');
   }
 

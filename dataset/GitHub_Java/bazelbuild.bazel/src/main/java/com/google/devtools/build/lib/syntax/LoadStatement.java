@@ -18,7 +18,9 @@ import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
 import java.util.Map;
 
-/** Syntax node for an import statement. */
+/**
+ * Syntax node for an import statement.
+ */
 public final class LoadStatement extends Statement {
 
   private final ImmutableMap<Identifier, String> symbolMap;
@@ -41,7 +43,7 @@ public final class LoadStatement extends Statement {
   }
 
   public ImmutableList<Identifier> getSymbols() {
-    return symbolMap.keySet().asList();
+    return ImmutableList.copyOf(symbolMap.keySet());
   }
 
   public StringLiteral getImport() {

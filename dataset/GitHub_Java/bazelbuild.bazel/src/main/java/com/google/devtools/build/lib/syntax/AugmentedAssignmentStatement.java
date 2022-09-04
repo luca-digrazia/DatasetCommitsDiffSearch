@@ -17,18 +17,19 @@ package com.google.devtools.build.lib.syntax;
 import java.io.IOException;
 
 /** Syntax node for an augmented assignment statement. */
-// TODO(adonovan): merge with AssignmentStatement.
 public final class AugmentedAssignmentStatement extends Statement {
 
-  private final Expression lhs; // same constraint as AssignmentStatement
   private final Operator operator;
-  private final Expression rhs;
 
-  /** Constructs an augmented assignment. */
-  public AugmentedAssignmentStatement(Operator operator, Expression lhs, Expression rhs) {
-    this.lhs = lhs;
+  private final LValue lvalue;
+
+  private final Expression expression;
+
+  /** Constructs an augmented assignment: "lvalue ::= value". */
+  public AugmentedAssignmentStatement(Operator operator, LValue lvalue, Expression expression) {
     this.operator = operator;
-    this.rhs = rhs;
+    this.lvalue = lvalue;
+    this.expression = expression;
   }
 
   /** Returns the operator of the assignment. */
@@ -36,24 +37,24 @@ public final class AugmentedAssignmentStatement extends Statement {
     return operator;
   }
 
-  /** Returns the LHS of the assignment. */
-  public Expression getLHS() {
-    return lhs;
+  /** Returns the LValue of the assignment. */
+  public LValue getLValue() {
+    return lvalue;
   }
 
   /** Returns the RHS of the assignment. */
-  public Expression getRHS() {
-    return rhs;
+  public Expression getExpression() {
+    return expression;
   }
 
   @Override
   public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
     printIndent(buffer, indentLevel);
-    lhs.prettyPrint(buffer);
+    lvalue.prettyPrint(buffer);
     buffer.append(' ');
     buffer.append(operator.toString());
     buffer.append("= ");
-    rhs.prettyPrint(buffer);
+    expression.prettyPrint(buffer);
     buffer.append('\n');
   }
 

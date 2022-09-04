@@ -13,27 +13,31 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.util.List;
 
-/** Syntax node for a for loop statement. */
+/**
+ * Syntax node for a for loop statement.
+ */
 public final class ForStatement extends Statement {
 
-  private final Expression lhs;
+  private final LValue variable;
   private final Expression collection;
   private final ImmutableList<Statement> block;
 
-  /** Constructs a for loop statement. */
-  public ForStatement(Expression lhs, Expression collection, List<Statement> block) {
-    this.lhs = Preconditions.checkNotNull(lhs);
+  /**
+   * Constructs a for loop statement.
+   */
+  public ForStatement(LValue variable, Expression collection, List<Statement> block) {
+    this.variable = Preconditions.checkNotNull(variable);
     this.collection = Preconditions.checkNotNull(collection);
     this.block = ImmutableList.copyOf(block);
   }
 
-  public Expression getLHS() {
-    return lhs;
+  public LValue getVariable() {
+    return variable;
   }
 
   /**
@@ -51,7 +55,7 @@ public final class ForStatement extends Statement {
   public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
     printIndent(buffer, indentLevel);
     buffer.append("for ");
-    lhs.prettyPrint(buffer);
+    variable.prettyPrint(buffer);
     buffer.append(" in ");
     collection.prettyPrint(buffer);
     buffer.append(":\n");
@@ -60,7 +64,7 @@ public final class ForStatement extends Statement {
 
   @Override
   public String toString() {
-    return "for " + lhs + " in " + collection + ": ...\n";
+    return "for " + variable + " in " + collection + ": ...\n";
   }
 
   @Override

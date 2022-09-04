@@ -16,8 +16,9 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 
-/** Syntax node for a function definition. */
-// TODO(adonovan): rename DefStatement.
+/**
+ * Syntax node for a function definition.
+ */
 public final class FunctionDefStatement extends Statement {
 
   private final Identifier identifier;
@@ -25,8 +26,7 @@ public final class FunctionDefStatement extends Statement {
   private final ImmutableList<Statement> statements;
   private final ImmutableList<Parameter<Expression, Expression>> parameters;
 
-  FunctionDefStatement(
-      Identifier identifier,
+  public FunctionDefStatement(Identifier identifier,
       Iterable<Parameter<Expression, Expression>> parameters,
       FunctionSignature.WithValues<Expression, Expression> signature,
       Iterable<Statement> statements) {

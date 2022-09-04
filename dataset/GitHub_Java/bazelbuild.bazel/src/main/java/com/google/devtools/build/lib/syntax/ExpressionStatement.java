@@ -16,12 +16,14 @@ package com.google.devtools.build.lib.syntax;
 
 import java.io.IOException;
 
-/** Syntax node for a function call statement. Used for build rules. */
+/**
+ * Syntax node for a function call statement. Used for build rules.
+ */
 public final class ExpressionStatement extends Statement {
 
   private final Expression expression;
 
-  ExpressionStatement(Expression expression) {
+  public ExpressionStatement(Expression expression) {
     this.expression = expression;
   }
 

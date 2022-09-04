@@ -13,12 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.util.List;
 
-/** Syntax node for an if/else statement. */
+/**
+ * Syntax node for an if/else statement.
+ */
 public final class IfStatement extends Statement {
 
   /**
@@ -75,7 +77,7 @@ public final class IfStatement extends Statement {
    * Constructs a if-elif-else statement. The else part is mandatory, but the list may be empty.
    * ThenBlocks has to have at least one element.
    */
-  IfStatement(List<ConditionalStatements> thenBlocks, List<Statement> elseBlock) {
+  public IfStatement(List<ConditionalStatements> thenBlocks, List<Statement> elseBlock) {
     Preconditions.checkArgument(!thenBlocks.isEmpty());
     this.thenBlocks = ImmutableList.copyOf(thenBlocks);
     this.elseBlock = ImmutableList.copyOf(elseBlock);

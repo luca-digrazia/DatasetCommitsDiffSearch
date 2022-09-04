@@ -73,7 +73,7 @@ public class Eval {
 
         try {
           for (Statement stmt : node.getBlock()) {
-            exec(stmt);
+            stmt.exec(env);
           }
         } catch (FlowException ex) {
           if (ex == breakException) {

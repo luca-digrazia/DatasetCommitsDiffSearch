@@ -17,7 +17,9 @@ import com.google.devtools.build.lib.events.Location;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
-/** A wrapper Statement class for return expressions. */
+/**
+ * A wrapper Statement class for return expressions.
+ */
 public final class ReturnStatement extends Statement {
 
   /**
