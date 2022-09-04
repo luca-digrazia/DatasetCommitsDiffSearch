@@ -10,9 +10,7 @@ import javax.persistence.spi.PersistenceUnitInfo;
 import javax.persistence.spi.ProviderUtil;
 
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
-import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.jpa.HibernatePersistenceProvider;
-import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.jpa.boot.spi.ProviderChecker;
@@ -100,15 +98,8 @@ final class FastbootHibernateProvider extends HibernatePersistenceProvider imple
 				continue;
 			}
 
-			ClassLoaderService overrideClassLoaderService = FlatClassLoaderService.INSTANCE;
-			EntityManagerFactoryBuilderImpl entityManagerFactoryBuilder = (EntityManagerFactoryBuilderImpl) getEntityManagerFactoryBuilder(
-					persistenceUnit,
-					integration,
-					overrideClassLoaderService
-			);
-			MetadataImplementor metadata = PersistenceUnitsHolder.getMetadata( persistenceUnitName );
-			entityManagerFactoryBuilder.setMetadata( metadata );
-			return entityManagerFactoryBuilder;
+			ClassLoaderService overrideClassLoaderService = new FlatClassLoaderService();
+			return getEntityManagerFactoryBuilder( persistenceUnit, integration, overrideClassLoaderService );
 		}
 
 		log.debug( "Found no matching persistence units" );
