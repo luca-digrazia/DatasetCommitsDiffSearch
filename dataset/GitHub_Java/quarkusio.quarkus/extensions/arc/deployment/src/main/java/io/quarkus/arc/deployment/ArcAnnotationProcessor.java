@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
@@ -35,7 +51,7 @@ import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.ReflectionRegistration;
 import io.quarkus.arc.processor.ResourceOutput;
 import io.quarkus.arc.runtime.AdditionalBean;
-import io.quarkus.arc.runtime.ArcRecorder;
+import io.quarkus.arc.runtime.ArcDeploymentTemplate;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.LifecycleEventRunner;
 import io.quarkus.deployment.Capabilities;
@@ -109,7 +125,7 @@ public class ArcAnnotationProcessor {
     @BuildStep(providesCapabilities = Capabilities.CDI_ARC, applicationArchiveMarkers = { "META-INF/beans.xml",
             "META-INF/services/javax.enterprise.inject.spi.Extension" })
     @Record(STATIC_INIT)
-    public BeanContainerBuildItem build(ArcRecorder recorder,
+    public BeanContainerBuildItem build(ArcDeploymentTemplate arcTemplate,
             List<BeanContainerListenerBuildItem> beanContainerListenerBuildItems,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             List<AnnotationsTransformerBuildItem> annotationTransformers,
@@ -270,8 +286,8 @@ public class ArcAnnotationProcessor {
             reflectiveClasses.produce(new ReflectiveClassBuildItem(true, false, qualifier.name().toString()));
         }
 
-        ArcContainer container = recorder.getContainer(shutdown);
-        BeanContainer beanContainer = recorder.initBeanContainer(container,
+        ArcContainer container = arcTemplate.getContainer(shutdown);
+        BeanContainer beanContainer = arcTemplate.initBeanContainer(container,
                 beanContainerListenerBuildItems.stream().map(BeanContainerListenerBuildItem::getBeanContainerListener)
                         .collect(Collectors.toList()),
                 beanDeployment.getRemovedBeans().stream().flatMap(b -> b.getTypes().stream()).map(t -> t.name().toString())
