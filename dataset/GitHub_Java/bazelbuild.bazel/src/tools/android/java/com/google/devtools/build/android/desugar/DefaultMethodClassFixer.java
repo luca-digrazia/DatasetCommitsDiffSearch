@@ -494,7 +494,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
         // If we're visiting a bootclasspath interface then we most likely don't have the code.
         // That means we can't just copy the method bodies as we're trying to do below.
         checkState(!isBootclasspathInterface,
-            "TODO stub core interface %s bridge methods in %s", stubbedInterfaceName, internalName);
+            "TODO stub bridge methods for core interfaces if ever needed");
         // For bridges we just copy their bodies instead of going through the companion class.
         // Meanwhile, we also need to desugar the copied method bodies, so that any calls to
         // interface methods are correctly handled.
@@ -502,7 +502,6 @@ public class DefaultMethodClassFixer extends ClassVisitor {
             DefaultMethodClassFixer.this.visitMethod(access, name, desc, (String) null, exceptions),
             stubbedInterfaceName,
             bootclasspath,
-            targetLoader,
             depsCollector,
             internalName);
       } else {
@@ -649,7 +648,6 @@ public class DefaultMethodClassFixer extends ClassVisitor {
 
   /** Comparator for interfaces that compares by whether interfaces extend one another. */
   enum InterfaceComparator implements Comparator<Class<?>> {
-    /** Orders subtypes before supertypes and breaks ties lexicographically. */
     INSTANCE;
 
     @Override
