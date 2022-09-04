@@ -95,8 +95,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     if (attributes.hasPortableProtoFilters()) {
       portableProtoFilters.addAll(attributes.getPortableProtoFilters());
     } else if (!Iterables.isEmpty(protoProviders)) {
-      Artifact generatedFilter = ProtobufSupport.getGeneratedPortableFilter(ruleContext,
-          ruleContext.getConfiguration());
+      Artifact generatedFilter = ProtobufSupport.getGeneratedPortableFilter(ruleContext);
       ProtobufSupport.registerPortableFilterGenerationAction(
           ruleContext,
           generatedFilter,

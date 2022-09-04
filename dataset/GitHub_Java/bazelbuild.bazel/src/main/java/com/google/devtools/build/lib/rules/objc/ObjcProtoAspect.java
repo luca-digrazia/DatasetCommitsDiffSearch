@@ -83,8 +83,7 @@ public class ObjcProtoAspect extends NativeAspectClass implements ConfiguredAspe
       // If this target does not provide filters but specifies direct proto_library dependencies,
       // generate a filter file only for those proto files.
       if (Iterables.isEmpty(portableProtoFilters) && !Iterables.isEmpty(protoProviders)) {
-        Artifact generatedFilter =
-            ProtobufSupport.getGeneratedPortableFilter(ruleContext, ruleContext.getConfiguration());
+        Artifact generatedFilter = ProtobufSupport.getGeneratedPortableFilter(ruleContext);
         ProtobufSupport.registerPortableFilterGenerationAction(
             ruleContext,
             generatedFilter,
