@@ -28,7 +28,6 @@ import com.google.bytestream.ByteStreamProto.WriteResponse;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.authandtls.GrpcUtils;
 import com.google.devtools.build.lib.remote.Digests.ActionKey;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.util.io.FileOutErr;
@@ -47,7 +46,6 @@ import com.google.devtools.remoteexecution.v1test.FindMissingBlobsResponse;
 import com.google.devtools.remoteexecution.v1test.GetActionResultRequest;
 import com.google.devtools.remoteexecution.v1test.UpdateActionResultRequest;
 import com.google.protobuf.ByteString;
-import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
@@ -109,17 +107,17 @@ public class GrpcRemoteCacheTest {
     fakeServer.shutdownNow();
   }
 
-  private static class CallCredentialsInterceptor implements ClientInterceptor {
-    private final CallCredentials credentials;
+  private static class ChannelOptionsInterceptor implements ClientInterceptor {
+    private final ChannelOptions channelOptions;
 
-    public CallCredentialsInterceptor(CallCredentials credentials) {
-      this.credentials = credentials;
+    public ChannelOptionsInterceptor(ChannelOptions channelOptions) {
+      this.channelOptions = channelOptions;
     }
 
     @Override
     public <RequestT, ResponseT> ClientCall<RequestT, ResponseT> interceptCall(
         MethodDescriptor<RequestT, ResponseT> method, CallOptions callOptions, Channel next) {
-      assertThat(callOptions.getCredentials()).isEqualTo(credentials);
+      assertThat(callOptions.getCredentials()).isEqualTo(channelOptions.getCallCredentials());
       // Remove the call credentials to allow testing with dummy ones.
       return next.newCall(method, callOptions.withCallCredentials(null));
     }
@@ -139,16 +137,16 @@ public class GrpcRemoteCacheTest {
     Scratch scratch = new Scratch();
     scratch.file(authTlsOptions.authCredentials, new JacksonFactory().toString(json));
 
-    CallCredentials creds = GrpcUtils.newCallCredentials(
-        scratch.resolve(authTlsOptions.authCredentials).getInputStream(),
-        authTlsOptions.authScope);
+    ChannelOptions channelOptions =
+        ChannelOptions.create(
+            authTlsOptions, scratch.resolve(authTlsOptions.authCredentials).getInputStream());
     RemoteOptions remoteOptions = Options.getDefaults(RemoteOptions.class);
     Retrier retrier = new Retrier(remoteOptions);
     return new GrpcRemoteCache(
         ClientInterceptors.intercept(
             InProcessChannelBuilder.forName(fakeServerName).directExecutor().build(),
-            ImmutableList.of(new CallCredentialsInterceptor(creds))),
-        creds,
+            ImmutableList.of(new ChannelOptionsInterceptor(channelOptions))),
+        channelOptions,
         remoteOptions,
         retrier);
   }

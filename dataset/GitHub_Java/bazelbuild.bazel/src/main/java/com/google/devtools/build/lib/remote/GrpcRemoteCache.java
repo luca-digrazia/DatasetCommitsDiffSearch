@@ -19,6 +19,7 @@ import com.google.bytestream.ByteStreamGrpc.ByteStreamBlockingStub;
 import com.google.bytestream.ByteStreamProto.ReadRequest;
 import com.google.bytestream.ByteStreamProto.ReadResponse;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
@@ -28,6 +29,7 @@ import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.remote.Digests.ActionKey;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -52,7 +54,6 @@ import io.grpc.Channel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.protobuf.StatusProto;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -144,15 +145,15 @@ public class GrpcRemoteCache implements RemoteActionCache {
     ImmutableSet<Digest> missingDigests = getMissingDigests(repository.getAllDigests(root));
 
     // Only upload data that was missing from the cache.
-    ArrayList<ActionInput> missingActionInputs = new ArrayList<>();
-    ArrayList<Directory> missingTreeNodes = new ArrayList<>();
-    repository.getDataFromDigests(missingDigests, missingActionInputs, missingTreeNodes);
+    ArrayList<ActionInput> actionInputs = new ArrayList<>();
+    ArrayList<Directory> treeNodes = new ArrayList<>();
+    repository.getDataFromDigests(missingDigests, actionInputs, treeNodes);
 
-    if (!missingTreeNodes.isEmpty()) {
+    if (!treeNodes.isEmpty()) {
       // TODO(olaola): split this into multiple requests if total size is > 10MB.
       BatchUpdateBlobsRequest.Builder treeBlobRequest =
           BatchUpdateBlobsRequest.newBuilder().setInstanceName(options.remoteInstanceName);
-      for (Directory d : missingTreeNodes) {
+      for (Directory d : treeNodes) {
         byte[] data = d.toByteArray();
         treeBlobRequest
             .addRequestsBuilder()
@@ -172,12 +173,17 @@ public class GrpcRemoteCache implements RemoteActionCache {
           });
     }
     uploadBlob(command.toByteArray());
-    if (!missingActionInputs.isEmpty()) {
+    if (!actionInputs.isEmpty()) {
       List<Chunker> inputsToUpload = new ArrayList<>();
       ActionInputFileCache inputFileCache = repository.getInputFileCache();
-      for (ActionInput actionInput : missingActionInputs) {
-        inputsToUpload.add(new Chunker(actionInput, inputFileCache, execRoot));
+      for (ActionInput actionInput : actionInputs) {
+        Digest digest = Digests.getDigestFromInputCache(actionInput, inputFileCache);
+        if (missingDigests.contains(digest)) {
+          Chunker chunker = new Chunker(actionInput, inputFileCache, execRoot);
+          inputsToUpload.add(chunker);
+        }
       }
+
       uploader.uploadBlobs(inputsToUpload);
     }
   }
@@ -196,7 +202,7 @@ public class GrpcRemoteCache implements RemoteActionCache {
    */
   @Override
   public void download(ActionResult result, Path execRoot, FileOutErr outErr)
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, CacheNotFoundException {
     for (OutputFile file : result.getOutputFilesList()) {
       Path path = execRoot.getRelative(file.getPath());
       FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
@@ -210,17 +216,25 @@ public class GrpcRemoteCache implements RemoteActionCache {
             file.getContent().writeTo(stream);
           }
         } else {
-          retrier.execute(
-              () -> {
-                try (OutputStream stream = path.getOutputStream()) {
-                  readBlob(digest, stream);
-                }
-                return null;
-              });
-          Digest receivedDigest = Digests.computeDigest(path);
-          if (!receivedDigest.equals(digest)) {
-            throw new IOException(
-                "Digest does not match " + receivedDigest + " != " + digest);
+          try {
+            retrier.execute(
+                () -> {
+                  try (OutputStream stream = path.getOutputStream()) {
+                    Iterator<ReadResponse> replies = readBlob(digest);
+                    while (replies.hasNext()) {
+                      replies.next().getData().writeTo(stream);
+                    }
+                  }
+                  Digest receivedDigest = Digests.computeDigest(path);
+                  if (!receivedDigest.equals(digest)) {
+                    throw new IOException(
+                        "Digest does not match " + receivedDigest + " != " + digest);
+                  }
+                  return null;
+                });
+          } catch (RetryException e) {
+            Throwables.throwIfInstanceOf(e.getCause(), CacheNotFoundException.class);
+            throw e;
           }
         }
       }
@@ -234,7 +248,7 @@ public class GrpcRemoteCache implements RemoteActionCache {
   }
 
   private void downloadOutErr(ActionResult result, FileOutErr outErr)
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, CacheNotFoundException {
     if (!result.getStdoutRaw().isEmpty()) {
       result.getStdoutRaw().writeTo(outErr.getOutputStream());
       outErr.getOutputStream().flush();
@@ -259,24 +273,21 @@ public class GrpcRemoteCache implements RemoteActionCache {
    * {@link StatusRuntimeException}. Note that the retrier implicitly catches it, so if this is used
    * in the context of {@link Retrier#execute}, that's perfectly safe.
    *
-   * <p>This method also converts any NOT_FOUND code returned from the server into a
-   * {@link CacheNotFoundException}. TODO(olaola): this is not enough. NOT_FOUND can also be raised
-   * by execute, in which case the server should return the missing digest in the Status.details
-   * field. This should be part of the API.
+   * <p>On the other hand, this method can also throw {@link CacheNotFoundException}, but the
+   * retrier also implicitly catches that and wraps it in a {@link RetryException}, so any caller
+   * that wants to propagate the {@link CacheNotFoundException} needs to catch
+   * {@link RetryException} and rethrow the cause if it is a {@link CacheNotFoundException}.
    */
-  private void readBlob(Digest digest, OutputStream stream)
-      throws IOException, StatusRuntimeException {
+  private Iterator<ReadResponse> readBlob(Digest digest)
+      throws CacheNotFoundException, StatusRuntimeException {
     String resourceName = "";
     if (!options.remoteInstanceName.isEmpty()) {
       resourceName += options.remoteInstanceName + "/";
     }
     resourceName += "blobs/" + digest.getHash() + "/" + digest.getSizeBytes();
     try {
-      Iterator<ReadResponse> replies = bsBlockingStub()
+      return bsBlockingStub()
           .read(ReadRequest.newBuilder().setResourceName(resourceName).build());
-      while (replies.hasNext()) {
-        replies.next().getData().writeTo(stream);
-      }
     } catch (StatusRuntimeException e) {
       if (e.getStatus().getCode() == Status.Code.NOT_FOUND) {
         throw new CacheNotFoundException(digest);
@@ -399,16 +410,29 @@ public class GrpcRemoteCache implements RemoteActionCache {
   }
 
   byte[] downloadBlob(Digest digest)
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, CacheNotFoundException {
     if (digest.getSizeBytes() == 0) {
       return new byte[0];
     }
-    return retrier.execute(
-        () -> {
-          ByteArrayOutputStream stream = new ByteArrayOutputStream((int) digest.getSizeBytes());
-          readBlob(digest, stream);
-          return stream.toByteArray();
-        });
+    byte[] result = new byte[(int) digest.getSizeBytes()];
+    try {
+      retrier.execute(
+          () -> {
+            Iterator<ReadResponse> replies = readBlob(digest);
+            int offset = 0;
+            while (replies.hasNext()) {
+              ByteString data = replies.next().getData();
+              data.copyTo(result, offset);
+              offset += data.size();
+            }
+            Preconditions.checkState(digest.getSizeBytes() == offset);
+            return null;
+          });
+    } catch (RetryException e) {
+      Throwables.throwIfInstanceOf(e.getCause(), CacheNotFoundException.class);
+      throw e;
+    }
+    return result;
   }
 
   // Execution Cache API
