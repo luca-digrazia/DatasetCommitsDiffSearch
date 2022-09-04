@@ -406,7 +406,7 @@ public final class PackageFactory {
     this.ruleFactory = new RuleFactory(ruleClassProvider, attributeContainerFactory);
     this.ruleFunctions = buildRuleFunctions(ruleFactory);
     this.ruleClassProvider = ruleClassProvider;
-    threadPool = new ThreadPoolExecutor(100, Integer.MAX_VALUE, 15L, TimeUnit.SECONDS,
+    threadPool = new ThreadPoolExecutor(100, 100, 15L, TimeUnit.SECONDS,
         new LinkedBlockingQueue<Runnable>(),
         new ThreadFactoryBuilder().setNameFormat("Legacy globber %d").build());
     // Do not consume threads when not in use.
@@ -430,6 +430,7 @@ public final class PackageFactory {
    */
   public void setGlobbingThreads(int globbingThreads) {
     threadPool.setCorePoolSize(globbingThreads);
+    threadPool.setMaximumPoolSize(globbingThreads);
   }
 
   /**
@@ -605,7 +606,6 @@ public final class PackageFactory {
    * PythonPreprocessor. We annotate the package with additional dependencies. (A 'real' subinclude
    * will never be seen by the parser, because the presence of "subinclude" triggers preprocessing.)
    */
-  // TODO(b/35913039): Remove this and all references to 'mocksubinclude'.
   @SkylarkSignature(
     name = "mocksubinclude",
     returnType = Runtime.NoneType.class,
@@ -1307,13 +1307,13 @@ public final class PackageFactory {
     // show up below.
     BuildFileAST buildFileAST =
         parseBuildFile(packageId, input, preludeStatements, localReporterForParsing);
-    AstParseResult astParseResult =
-        new AstParseResult(buildFileAST, localReporterForParsing);
-    return createPackageFromAst(
+    AstAfterPreprocessing astAfterPreprocessing =
+        new AstAfterPreprocessing(buildFileAST, localReporterForParsing);
+    return createPackageFromPreprocessingAst(
         workspaceName,
         packageId,
         buildFile,
-        astParseResult,
+        astAfterPreprocessing,
         imports,
         skylarkFileDependencies,
         defaultVisibility,
@@ -1333,11 +1333,11 @@ public final class PackageFactory {
     return buildFileAST;
   }
 
-  public Package.Builder createPackageFromAst(
+  public Package.Builder createPackageFromPreprocessingAst(
       String workspaceName,
       PackageIdentifier packageId,
       Path buildFile,
-      AstParseResult astParseResult,
+      AstAfterPreprocessing astAfterPreprocessing,
       Map<String, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies,
       RuleVisibility defaultVisibility,
@@ -1354,11 +1354,11 @@ public final class PackageFactory {
       return evaluateBuildFile(
           workspaceName,
           packageId,
-          astParseResult.ast,
+          astAfterPreprocessing.ast,
           buildFile,
           globber,
-          astParseResult.allEvents,
-          astParseResult.allPosts,
+          astAfterPreprocessing.allEvents,
+          astAfterPreprocessing.allPosts,
           defaultVisibility,
           skylarkSemantics,
           false /* containsError */,
@@ -1611,7 +1611,7 @@ public final class PackageFactory {
   }
 
   /**
-   * Called by a caller of {@link #createPackageFromAst} after this caller has fully
+   * Called by a caller of {@link #createPackageFromPreprocessingAst} after this caller has fully
    * loaded the package.
    */
   public void afterDoneLoadingPackage(Package pkg, SkylarkSemantics skylarkSemantics) {
