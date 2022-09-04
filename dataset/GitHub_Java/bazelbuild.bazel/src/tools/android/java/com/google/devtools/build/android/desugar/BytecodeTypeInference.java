@@ -15,16 +15,14 @@ package com.google.devtools.build.android.desugar;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.DOUBLE;
-import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.FLOAT;
-import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.INT;
-import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.LONG;
-import static com.google.devtools.build.android.desugar.BytecodeTypeInference.InferredType.TOP;
+import static com.google.devtools.build.android.desugar.io.BitFlags.isStatic;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.CheckReturnValue;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Optional;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
@@ -38,7 +36,8 @@ import org.objectweb.asm.Type;
  * <p>Note: This class only guarantees the correctness of reference types, but not the primitive
  * types, though they might be correct too.
  */
-public final class BytecodeTypeInference extends MethodVisitor {
+@CheckReturnValue // a good practice in general, and preparation for copying this into Truth
+final class BytecodeTypeInference extends MethodVisitor {
 
   private boolean used = false;
   private final ArrayList<InferredType> localVariableSlots;
@@ -46,20 +45,15 @@ public final class BytecodeTypeInference extends MethodVisitor {
   private FrameInfo previousFrame;
   /** For debugging purpose. */
   private final String methodSignature;
-  /**
-   * Stores mapping from "uninitialized" value to concrete value. This is for the "new" instruction.
-   */
-  private final HashMap<InferredType, InferredType> uninitializedToConcreteTypeMap =
-      new HashMap<>();
 
-  public BytecodeTypeInference(int access, String owner, String name, String methodDescriptor) {
-    super(Opcodes.ASM5);
+  BytecodeTypeInference(int access, String owner, String name, String methodDescriptor) {
+    super(Opcodes.ASM8);
     localVariableSlots = createInitialLocalVariableTypes(access, owner, name, methodDescriptor);
     previousFrame = FrameInfo.create(ImmutableList.copyOf(localVariableSlots), ImmutableList.of());
     this.methodSignature = owner + "." + name + methodDescriptor;
   }
 
-  public void setDelegateMethodVisitor(MethodVisitor visitor) {
+  void setDelegateMethodVisitor(MethodVisitor visitor) {
     mv = visitor;
   }
 
@@ -71,7 +65,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
   }
 
   /** Returns the type of a value in the operand. 0 means the top of the stack. */
-  public InferredType getTypeOfOperandFromTop(int offsetFromTop) {
+  InferredType getTypeOfOperandFromTop(int offsetFromTop) {
     int index = operandStack.size() - 1 - offsetFromTop;
     checkState(
         index >= 0,
@@ -82,8 +76,12 @@ public final class BytecodeTypeInference extends MethodVisitor {
     return operandStack.get(index);
   }
 
-  public String getOperandStackAsString() {
+  String getOperandStackAsString() {
     return operandStack.toString();
+  }
+
+  String getLocalsAsString() {
+    return localVariableSlots.toString();
   }
 
   @Override
@@ -109,41 +107,41 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.ICONST_3:
       case Opcodes.ICONST_4:
       case Opcodes.ICONST_5:
-        push(INT);
+        push(InferredType.INT);
         break;
       case Opcodes.LCONST_0:
       case Opcodes.LCONST_1:
-        push(LONG);
-        push(TOP);
+        push(InferredType.LONG);
+        push(InferredType.TOP);
         break;
       case Opcodes.FCONST_0:
       case Opcodes.FCONST_1:
       case Opcodes.FCONST_2:
-        push(FLOAT);
+        push(InferredType.FLOAT);
         break;
       case Opcodes.DCONST_0:
       case Opcodes.DCONST_1:
-        push(DOUBLE);
-        push(TOP);
+        push(InferredType.DOUBLE);
+        push(InferredType.TOP);
         break;
       case Opcodes.IALOAD:
       case Opcodes.BALOAD:
       case Opcodes.CALOAD:
       case Opcodes.SALOAD:
         pop(2);
-        push(INT);
+        push(InferredType.INT);
         break;
       case Opcodes.LALOAD:
       case Opcodes.D2L:
         pop(2);
-        push(LONG);
-        push(TOP);
+        push(InferredType.LONG);
+        push(InferredType.TOP);
         break;
       case Opcodes.DALOAD:
       case Opcodes.L2D:
         pop(2);
-        push(DOUBLE);
-        push(TOP);
+        push(InferredType.DOUBLE);
+        push(InferredType.TOP);
         break;
       case Opcodes.AALOAD:
         InferredType arrayType = pop(2);
@@ -259,7 +257,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.FCMPL:
       case Opcodes.FCMPG:
         pop(2);
-        push(INT);
+        push(InferredType.INT);
         break;
 
       case Opcodes.LADD:
@@ -271,45 +269,45 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.LOR:
       case Opcodes.LXOR:
         pop(4);
-        push(LONG);
-        push(TOP);
+        push(InferredType.LONG);
+        push(InferredType.TOP);
         break;
 
       case Opcodes.LSHL:
       case Opcodes.LSHR:
       case Opcodes.LUSHR:
         pop(3);
-        push(LONG);
-        push(TOP);
+        push(InferredType.LONG);
+        push(InferredType.TOP);
         break;
       case Opcodes.I2L:
       case Opcodes.F2L:
         pop();
-        push(LONG);
-        push(TOP);
+        push(InferredType.LONG);
+        push(InferredType.TOP);
         break;
       case Opcodes.I2F:
         pop();
-        push(FLOAT);
+        push(InferredType.FLOAT);
         break;
 
       case Opcodes.LCMP:
       case Opcodes.DCMPG:
       case Opcodes.DCMPL:
         pop(4);
-        push(INT);
+        push(InferredType.INT);
         break;
 
       case Opcodes.I2D:
       case Opcodes.F2D:
         pop();
-        push(DOUBLE);
-        push(TOP);
+        push(InferredType.DOUBLE);
+        push(InferredType.TOP);
         break;
       case Opcodes.F2I:
       case Opcodes.ARRAYLENGTH:
         pop();
-        push(INT);
+        push(InferredType.INT);
         break;
       case Opcodes.FALOAD:
       case Opcodes.FADD:
@@ -320,7 +318,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.L2F:
       case Opcodes.D2F:
         pop(2);
-        push(FLOAT);
+        push(InferredType.FLOAT);
         break;
 
       case Opcodes.DADD:
@@ -329,8 +327,8 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case Opcodes.DDIV:
       case Opcodes.DREM:
         pop(4);
-        push(DOUBLE);
-        push(TOP);
+        push(InferredType.DOUBLE);
+        push(InferredType.TOP);
         break;
       default:
         throw new RuntimeException("Unhandled opcode " + opcode);
@@ -343,7 +341,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
     switch (opcode) {
       case Opcodes.BIPUSH:
       case Opcodes.SIPUSH:
-        push(INT);
+        push(InferredType.INT);
         break;
       case Opcodes.NEWARRAY:
         pop();
@@ -386,18 +384,18 @@ public final class BytecodeTypeInference extends MethodVisitor {
   public void visitVarInsn(int opcode, int var) {
     switch (opcode) {
       case Opcodes.ILOAD:
-        push(INT);
+        push(InferredType.INT);
         break;
       case Opcodes.LLOAD:
-        push(LONG);
-        push(TOP);
+        push(InferredType.LONG);
+        push(InferredType.TOP);
         break;
       case Opcodes.FLOAD:
-        push(FLOAT);
+        push(InferredType.FLOAT);
         break;
       case Opcodes.DLOAD:
-        push(DOUBLE);
-        push(TOP);
+        push(InferredType.DOUBLE);
+        push(InferredType.TOP);
         break;
       case Opcodes.ALOAD:
         push(getLocalVariableType(var));
@@ -415,7 +413,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
         {
           InferredType type = pop(2);
           setLocalVariableTypes(var, type);
-          setLocalVariableTypes(var + 1, TOP);
+          setLocalVariableTypes(var + 1, InferredType.TOP);
           break;
         }
       case Opcodes.RET:
@@ -431,7 +429,8 @@ public final class BytecodeTypeInference extends MethodVisitor {
     String descriptor = convertToDescriptor(type);
     switch (opcode) {
       case Opcodes.NEW:
-        pushDescriptor(descriptor); // This should be UNINITIALIZED(label). Okay for type inference.
+        // This should be UNINITIALIZED(label). Okay for type inference.
+        pushDescriptor(descriptor);
         break;
       case Opcodes.ANEWARRAY:
         pop();
@@ -443,7 +442,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
         break;
       case Opcodes.INSTANCEOF:
         pop();
-        push(INT);
+        push(InferredType.INT);
         break;
       default:
         throw new RuntimeException("Unhandled opcode " + opcode);
@@ -482,7 +481,6 @@ public final class BytecodeTypeInference extends MethodVisitor {
       InferredType receiverType = getTypeOfOperandFromTop(argumentSize - 1);
       if (receiverType.isUninitialized()) {
         InferredType realType = InferredType.create('L' + owner + ';');
-        uninitializedToConcreteTypeMap.put(receiverType, realType);
         replaceUninitializedTypeInStack(receiverType, realType);
       }
     }
@@ -551,15 +549,15 @@ public final class BytecodeTypeInference extends MethodVisitor {
   @Override
   public void visitLdcInsn(Object cst) {
     if (cst instanceof Integer) {
-      push(INT);
+      push(InferredType.INT);
     } else if (cst instanceof Float) {
-      push(FLOAT);
+      push(InferredType.FLOAT);
     } else if (cst instanceof Long) {
-      push(LONG);
-      push(TOP);
+      push(InferredType.LONG);
+      push(InferredType.TOP);
     } else if (cst instanceof Double) {
-      push(DOUBLE);
-      push(TOP);
+      push(InferredType.DOUBLE);
+      push(InferredType.TOP);
     } else if (cst instanceof String) {
       pushDescriptor("Ljava/lang/String;");
     } else if (cst instanceof Type) {
@@ -574,7 +572,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
 
   @Override
   public void visitIincInsn(int var, int increment) {
-    setLocalVariableTypes(var, INT);
+    setLocalVariableTypes(var, InferredType.INT);
     super.visitIincInsn(var, increment);
   }
 
@@ -647,26 +645,11 @@ public final class BytecodeTypeInference extends MethodVisitor {
     operandStack.addAll(previousFrame.stack());
     localVariableSlots.clear();
     localVariableSlots.addAll(previousFrame.locals());
-
     super.visitFrame(type, nLocal, local, nStack, stack);
   }
 
   private static String convertToDescriptor(String type) {
-    char firstChar = type.charAt(0);
-    switch (firstChar) {
-      case 'Z':
-      case 'B':
-      case 'C':
-      case 'S':
-      case 'I':
-      case 'J':
-      case 'D':
-      case 'F':
-      case '[':
-        return type;
-      default:
-        return 'L' + type + ';';
-    }
+    return (type.length() > 1 && type.charAt(0) != '[') ? 'L' + type + ';' : type;
   }
 
   private void push(InferredType type) {
@@ -677,13 +660,13 @@ public final class BytecodeTypeInference extends MethodVisitor {
     checkArgument(oldType.isUninitialized(), "The old type is NOT uninitialized. %s", oldType);
     for (int i = 0, size = operandStack.size(); i < size; ++i) {
       InferredType type = operandStack.get(i);
-      if (type == oldType) {
+      if (type.equals(oldType)) {
         operandStack.set(i, newType);
       }
     }
   }
 
-  private final void pushDescriptor(String desc) {
+  private void pushDescriptor(String desc) {
     int index = desc.charAt(0) == '(' ? desc.indexOf(')') + 1 : 0;
     switch (desc.charAt(index)) {
       case 'V':
@@ -693,18 +676,18 @@ public final class BytecodeTypeInference extends MethodVisitor {
       case 'B':
       case 'S':
       case 'I':
-        push(INT);
+        push(InferredType.INT);
         break;
       case 'F':
-        push(FLOAT);
+        push(InferredType.FLOAT);
         break;
       case 'D':
         push(InferredType.DOUBLE);
-        push(TOP);
+        push(InferredType.TOP);
         break;
       case 'J':
         push(InferredType.LONG);
-        push(TOP);
+        push(InferredType.TOP);
         break;
       case 'L':
       case '[':
@@ -715,11 +698,12 @@ public final class BytecodeTypeInference extends MethodVisitor {
     }
   }
 
-  private final InferredType pop() {
+  @CanIgnoreReturnValue
+  private InferredType pop() {
     return pop(1);
   }
 
-  private final void popDescriptor(String desc) {
+  private void popDescriptor(String desc) {
     char c = desc.charAt(0);
     switch (c) {
       case '(':
@@ -738,7 +722,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
     }
   }
 
-  private final InferredType getLocalVariableType(int index) {
+  private InferredType getLocalVariableType(int index) {
     checkState(
         index < localVariableSlots.size(),
         "Cannot find type for var %s in method %s",
@@ -747,19 +731,20 @@ public final class BytecodeTypeInference extends MethodVisitor {
     return localVariableSlots.get(index);
   }
 
-  private final void setLocalVariableTypes(int index, InferredType type) {
+  private void setLocalVariableTypes(int index, InferredType type) {
     while (localVariableSlots.size() <= index) {
-      localVariableSlots.add(TOP);
+      localVariableSlots.add(InferredType.TOP);
     }
     localVariableSlots.set(index, type);
   }
 
-  private final InferredType top() {
+  private InferredType top() {
     return operandStack.get(operandStack.size() - 1);
   }
 
   /** Pop elements from the end of the operand stack, and return the last popped element. */
-  private final InferredType pop(int count) {
+  @CanIgnoreReturnValue
+  private InferredType pop(int count) {
     checkArgument(
         count >= 1, "The count should be at least one: %s (In %s)", count, methodSignature);
     checkState(
@@ -776,12 +761,6 @@ public final class BytecodeTypeInference extends MethodVisitor {
     return lastPopped;
   }
 
-  private static ImmutableList<InferredType> removeBackFromList(
-      ImmutableList<InferredType> list, int countToRemove) {
-    int newSize = list.size() - countToRemove;
-    return list.subList(0, newSize);
-  }
-
   /**
    * Create the types of local variables at the very beginning of the method with the information of
    * the declaring class and the method descriptor.
@@ -790,7 +769,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
       int access, String ownerClass, String methodName, String methodDescriptor) {
     ArrayList<InferredType> types = new ArrayList<>();
 
-    if (!BitFlags.isSet(access, Opcodes.ACC_STATIC)) {
+    if (!isStatic(access)) {
       // Instance method, and this is the receiver
       types.add(InferredType.create(convertToDescriptor(ownerClass)));
     }
@@ -802,18 +781,18 @@ public final class BytecodeTypeInference extends MethodVisitor {
         case Type.CHAR:
         case Type.SHORT:
         case Type.INT:
-          types.add(INT);
+          types.add(InferredType.INT);
           break;
         case Type.FLOAT:
-          types.add(FLOAT);
+          types.add(InferredType.FLOAT);
           break;
         case Type.LONG:
-          types.add(LONG);
-          types.add(TOP);
+          types.add(InferredType.LONG);
+          types.add(InferredType.TOP);
           break;
         case Type.DOUBLE:
-          types.add(DOUBLE);
-          types.add(TOP);
+          types.add(InferredType.DOUBLE);
+          types.add(InferredType.TOP);
           break;
         case Type.ARRAY:
         case Type.OBJECT:
@@ -833,6 +812,28 @@ public final class BytecodeTypeInference extends MethodVisitor {
     return types;
   }
 
+  private static ImmutableList<InferredType> removeBackFromList(
+      ImmutableList<InferredType> list, int countToRemove) {
+    int origSize = list.size();
+    int index = origSize - 1;
+
+    while (index >= 0 && countToRemove > 0) {
+      InferredType type = list.get(index);
+      if (type.equals(InferredType.TOP) && index > 0 && list.get(index - 1).isCategory2()) {
+        --index; // A category 2 takes two slots.
+      }
+      --index; // Eat this local variable.
+      --countToRemove;
+    }
+    checkState(
+        countToRemove == 0,
+        "countToRemove is %s but not 0. index=%s, list=%s",
+        countToRemove,
+        index,
+        list);
+    return list.subList(0, index + 1);
+  }
+
   private ImmutableList<InferredType> appendArrayToList(
       ImmutableList<InferredType> list, int size, Object[] array) {
     ImmutableList.Builder<InferredType> builder = ImmutableList.builder();
@@ -850,11 +851,11 @@ public final class BytecodeTypeInference extends MethodVisitor {
   /** Convert the type in stack map frame to inference type. */
   private InferredType convertTypeInStackMapFrame(Object typeInStackMapFrame) {
     if (typeInStackMapFrame == Opcodes.TOP) {
-      return TOP;
+      return InferredType.TOP;
     } else if (typeInStackMapFrame == Opcodes.INTEGER) {
-      return INT;
+      return InferredType.INT;
     } else if (typeInStackMapFrame == Opcodes.FLOAT) {
-      return FLOAT;
+      return InferredType.FLOAT;
     } else if (typeInStackMapFrame == Opcodes.DOUBLE) {
       return InferredType.DOUBLE;
     } else if (typeInStackMapFrame == Opcodes.LONG) {
@@ -871,8 +872,7 @@ public final class BytecodeTypeInference extends MethodVisitor {
         return InferredType.create('L' + referenceTypeName + ';');
       }
     } else if (typeInStackMapFrame instanceof Label) {
-      Label label = (Label) typeInStackMapFrame;
-      return InferredType.createUninitialized(label.getOffset());
+      return InferredType.UNINITIALIZED;
     } else {
       throw new RuntimeException(
           "Cannot reach here. Unhandled element: value="
@@ -911,30 +911,35 @@ public final class BytecodeTypeInference extends MethodVisitor {
 
   /** This is the type used for type inference. */
   @AutoValue
-  public abstract static class InferredType {
+  abstract static class InferredType {
 
-    public static final String UNINITIALIZED_PREFIX = "UNINIT@";
+    static final String UNINITIALIZED_PREFIX = "UNINIT@";
 
-    public static final InferredType BOOLEAN =
-        new AutoValue_BytecodeTypeInference_InferredType("Z");
-    public static final InferredType BYTE = new AutoValue_BytecodeTypeInference_InferredType("B");
-    public static final InferredType INT = new AutoValue_BytecodeTypeInference_InferredType("I");
-    public static final InferredType FLOAT = new AutoValue_BytecodeTypeInference_InferredType("F");
-    public static final InferredType LONG = new AutoValue_BytecodeTypeInference_InferredType("J");
-    public static final InferredType DOUBLE = new AutoValue_BytecodeTypeInference_InferredType("D");
+    static final InferredType BOOLEAN = new AutoValue_BytecodeTypeInference_InferredType("Z");
+    static final InferredType BYTE = new AutoValue_BytecodeTypeInference_InferredType("B");
+    static final InferredType INT = new AutoValue_BytecodeTypeInference_InferredType("I");
+    static final InferredType FLOAT = new AutoValue_BytecodeTypeInference_InferredType("F");
+    static final InferredType LONG = new AutoValue_BytecodeTypeInference_InferredType("J");
+    static final InferredType DOUBLE = new AutoValue_BytecodeTypeInference_InferredType("D");
     /** Not a real value. */
-    public static final InferredType TOP = new AutoValue_BytecodeTypeInference_InferredType("TOP");
+    static final InferredType TOP = new AutoValue_BytecodeTypeInference_InferredType("TOP");
     /** The value NULL */
-    public static final InferredType NULL =
-        new AutoValue_BytecodeTypeInference_InferredType("NULL");
+    static final InferredType NULL = new AutoValue_BytecodeTypeInference_InferredType("NULL");
 
-    public static final InferredType UNINITIALIZED_THIS =
+    static final InferredType UNINITIALIZED_THIS =
         new AutoValue_BytecodeTypeInference_InferredType("UNINITIALIZED_THIS");
 
+    static final InferredType UNINITIALIZED =
+        new AutoValue_BytecodeTypeInference_InferredType(UNINITIALIZED_PREFIX);
+
+    /** Create a type for a value. */
     static InferredType create(String descriptor) {
+      if (UNINITIALIZED_PREFIX.equals(descriptor)) {
+        return UNINITIALIZED;
+      }
       char firstChar = descriptor.charAt(0);
-      if (firstChar == 'L' || firstChar == '[' || descriptor.startsWith(UNINITIALIZED_PREFIX)) {
-        // Reference, array, or uninitialized values.
+      if (firstChar == 'L' || firstChar == '[') {
+        // Reference, array.
         return new AutoValue_BytecodeTypeInference_InferredType(descriptor);
       }
       switch (descriptor) {
@@ -961,11 +966,6 @@ public final class BytecodeTypeInference extends MethodVisitor {
       }
     }
 
-    /** Create a type for uninitialized value. The label is generated by ASM. */
-    static InferredType createUninitialized(int label) {
-      return create(UNINITIALIZED_PREFIX + label);
-    }
-
     abstract String descriptor();
 
     @Override
@@ -974,40 +974,39 @@ public final class BytecodeTypeInference extends MethodVisitor {
     }
 
     /** Is a category 2 value? */
-    public boolean isCategory2() {
+    boolean isCategory2() {
       String descriptor = descriptor();
       return descriptor.equals("J") || descriptor.equals("D");
     }
 
     /** If the type is an array, return the element type. Otherwise, throw an exception. */
-    public InferredType getElementTypeIfArrayOrThrow() {
+    InferredType getElementTypeIfArrayOrThrow() {
       String descriptor = descriptor();
       checkState(descriptor.charAt(0) == '[', "This type %s is not an array.", this);
       return create(descriptor.substring(1));
     }
 
     /** Is an uninitialized value? */
-    public boolean isUninitialized() {
+    boolean isUninitialized() {
       return descriptor().startsWith(UNINITIALIZED_PREFIX);
     }
 
     /** Is a null value? */
-    public boolean isNull() {
+    boolean isNull() {
       return NULL.equals(this);
     }
 
     /**
-     * If this type is a reference type, then return the internal name. Otherwise, throw an
-     * exception.
+     * If this type is a reference type, then return the internal name. Otherwise, returns empty.
      */
-    public String getInternalNameOrThrow() {
+    Optional<String> getInternalName() {
       String descriptor = descriptor();
       int length = descriptor.length();
-      checkState(
-          descriptor.charAt(0) == 'L' && descriptor.charAt(length - 1) == ';',
-          "The type is expected to be either a class or an interface: %s",
-          descriptor);
-      return descriptor.substring(1, length - 1);
+      if (length > 0 && descriptor.charAt(0) == 'L' && descriptor.charAt(length - 1) == ';') {
+        return Optional.of(descriptor.substring(1, length - 1));
+      } else {
+        return Optional.empty();
+      }
     }
   }
 }
