@@ -394,7 +394,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       fdoMode = FdoMode.VANILLA;
     }
 
-    SkyKey fdoKey = FdoSupportValue.key(fdoZip);
+    SkyKey fdoKey =
+        FdoSupportValue.key(
+            fdoZip,
+            prefetchHints,
+            cppConfiguration.getFdoInstrument(),
+            fdoMode);
 
     SkyFunction.Environment skyframeEnv = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     FdoSupportValue fdoSupport = (FdoSupportValue) skyframeEnv.getValue(fdoKey);
@@ -604,9 +609,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         new RuleConfiguredTargetBuilder(ruleContext)
             .addNativeDeclaredProvider(ccProvider)
             .addNativeDeclaredProvider(templateVariableInfo)
-            .addProvider(new FdoSupportProvider(
-                fdoSupport.getFdoSupport(), fdoMode, cppConfiguration.getFdoInstrument(),
-                profileArtifacts))
+            .addProvider(new FdoSupportProvider(fdoSupport.getFdoSupport(), profileArtifacts))
             .setFilesToBuild(crosstool)
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
 
