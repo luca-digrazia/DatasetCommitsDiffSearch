@@ -170,9 +170,6 @@ public interface QueryableGraph {
     /** The node is being looked up to service {@link WalkableGraph#getValueAndRdeps}. */
     WALKABLE_GRAPH_VALUE_AND_RDEPS,
 
-    /** The node is being looked up to service another "graph lookup" function. */
-    WALKABLE_GRAPH_OTHER,
-
     /** Some other reason than one of the above that needs the node's value and deps. */
     OTHER_NEEDING_VALUE_AND_DEPS,
 
@@ -189,8 +186,7 @@ public interface QueryableGraph {
       return this == WALKABLE_GRAPH_VALUE
           || this == WALKABLE_GRAPH_DEPS
           || this == WALKABLE_GRAPH_RDEPS
-          || this == WALKABLE_GRAPH_VALUE_AND_RDEPS
-          || this == WALKABLE_GRAPH_OTHER;
+          || this == WALKABLE_GRAPH_VALUE_AND_RDEPS;
     }
   }
 
