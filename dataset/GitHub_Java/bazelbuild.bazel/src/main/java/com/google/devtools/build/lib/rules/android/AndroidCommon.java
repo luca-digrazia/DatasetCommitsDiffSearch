@@ -995,7 +995,7 @@ public class AndroidCommon {
       // If ApkProvider is present, do not check FileProvider for .apk files. For example,
       // android_binary creates a FileProvider containing both the signed and unsigned APKs.
       if (apkProvider != null) {
-        supportApks.add(apkProvider.getApk());
+        supportApks.addTransitive(apkProvider.getTransitiveApks());
       } else if (fileProvider != null) {
         // The rule definition should enforce that only .apk files are allowed, however, it can't
         // hurt to double check.
