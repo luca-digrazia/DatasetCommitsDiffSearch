@@ -14,15 +14,15 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.skyframe.DirectoryListingValue;
 import com.google.devtools.build.lib.skyframe.Dirents;
-import com.google.devtools.build.lib.skyframe.FileSymlinkException;
-import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -50,15 +50,10 @@ abstract class AndroidRepositoryFunction extends RepositoryFunction {
    */
   final DirectoryListingValue getDirectoryListing(Path root, PathFragment dirPath, Environment env)
       throws RepositoryFunctionException, InterruptedException {
-    RootedPath rootedPath = RootedPath.toRootedPath(root, dirPath);
+    RootedPath rootedPath = RootedPath.toRootedPath(Root.fromPath(root), dirPath);
     try {
       FileValue dirFileValue =
-          (FileValue)
-              env.getValueOrThrow(
-                  FileValue.key(rootedPath),
-                  IOException.class,
-                  FileSymlinkException.class,
-                  InconsistentFilesystemException.class);
+          (FileValue) env.getValueOrThrow(FileValue.key(rootedPath), IOException.class);
       if (dirFileValue == null) {
         return null;
       }
@@ -72,12 +67,10 @@ abstract class AndroidRepositoryFunction extends RepositoryFunction {
       }
       return (DirectoryListingValue)
           env.getValueOrThrow(
-              DirectoryListingValue.key(RootedPath.toRootedPath(root, dirPath)),
+              DirectoryListingValue.key(RootedPath.toRootedPath(Root.fromPath(root), dirPath)),
               InconsistentFilesystemException.class);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.PERSISTENT);
-    } catch (FileSymlinkException | InconsistentFilesystemException e) {
-      throw new RepositoryFunctionException(new IOException(e), Transience.PERSISTENT);
     }
   }
 
@@ -90,12 +83,12 @@ abstract class AndroidRepositoryFunction extends RepositoryFunction {
   static final ImmutableSortedSet<Integer> getApiLevels(Dirents platformsDirectories) {
     ImmutableSortedSet.Builder<Integer> apiLevels = ImmutableSortedSet.reverseOrder();
     for (Dirent platformDirectory : platformsDirectories) {
-      if (platformDirectory.getType() != Dirent.Type.DIRECTORY) {
-        continue;
-      }
-      Matcher matcher = PLATFORMS_API_LEVEL_PATTERN.matcher(platformDirectory.getName());
-      if (matcher.matches()) {
-        apiLevels.add(Integer.parseInt(matcher.group(1)));
+      if (platformDirectory.getType() == Dirent.Type.DIRECTORY
+          || platformDirectory.getType() == Dirent.Type.SYMLINK) {
+        Matcher matcher = PLATFORMS_API_LEVEL_PATTERN.matcher(platformDirectory.getName());
+        if (matcher.matches()) {
+          apiLevels.add(Integer.parseInt(matcher.group(1)));
+        }
       }
     }
     return apiLevels.build();
