@@ -166,7 +166,10 @@ public class ExecutionTool {
     spawnActionContextMaps =
         builder
             .getSpawnActionContextMapsBuilder()
-            .build(actionContextProviders, options.testStrategy);
+            .build(
+                actionContextProviders,
+                options.testStrategy,
+                options.incompatibleListBasedExecutionStrategySelection);
 
     if (options.availableResources != null && options.removeLocalResources) {
       throw new ExecutorInitException(
@@ -274,8 +277,7 @@ public class ExecutionTool {
           getReporter(),
           targetConfigurations,
           request.getBuildOptions().getSymlinkPrefix(productName),
-          productName,
-          !request.getBuildOptions().incompatibleSkipGenfilesSymlink);
+          productName);
     }
 
     ActionCache actionCache = getActionCache();
@@ -342,7 +344,7 @@ public class ExecutionTool {
       skyframeExecutor.drainChangedFiles();
 
       try (SilentCloseable c = Profiler.instance().profile("configureResourceManager")) {
-        configureResourceManager(env.getLocalResourceManager(), request);
+        configureResourceManager(request);
       }
 
       Profiler.instance().markPhase(ProfilePhase.EXECUTE);
@@ -616,7 +618,6 @@ public class ExecutionTool {
     ArtifactFactory artifactFactory = env.getSkyframeBuildView().getArtifactFactory();
     return new SkyframeBuilder(
         skyframeExecutor,
-        env.getLocalResourceManager(),
         new ActionCacheChecker(
             actionCache,
             artifactFactory,
@@ -626,7 +627,6 @@ public class ExecutionTool {
                 .setEnabled(options.useActionCache)
                 .setVerboseExplanations(options.verboseExplanations)
                 .build()),
-        env.getTopDownActionCache(),
         request.getPackageCacheOptions().checkOutputFiles
             ? modifiedOutputFiles
             : ModifiedFileSet.NOTHING_MODIFIED,
@@ -635,7 +635,8 @@ public class ExecutionTool {
   }
 
   @VisibleForTesting
-  public static void configureResourceManager(ResourceManager resourceMgr, BuildRequest request) {
+  public static void configureResourceManager(BuildRequest request) {
+    ResourceManager resourceMgr = ResourceManager.instance();
     ExecutionOptions options = request.getOptions(ExecutionOptions.class);
     ResourceSet resources;
     if (options.availableResources != null && !options.removeLocalResources) {
