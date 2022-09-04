@@ -52,7 +52,7 @@ public class DocstringCheckerTests {
             "def f(param1, param2):",
             "  \"\"\"summary",
             "",
-            "  more description",
+            "more description",
             "\"\"\"",
             "  pass");
     Truth.assertThat(errors).hasSize(1);
@@ -142,37 +142,7 @@ public class DocstringCheckerTests {
     Truth.assertThat(errorMessage)
         .contains(
             ":5:1: invalid docstring format: "
-                + "line indented too little (here: 1 spaces; expected: 2 spaces)");
-  }
-
-  @Test
-  public void reportMissingReturnDocumentation() throws Exception {
-    List<Issue> errors =
-        findIssues(
-            "\"\"\" module docstring \"\"\"",
-            "def f():",
-            "  \"\"\"summary",
-            "",
-            "  more description",
-            "  \"\"\"",
-            "  return True");
-    Truth.assertThat(errors).hasSize(1);
-    Truth.assertThat(errors.toString())
-        .contains(":3:3: incomplete docstring: the return value is not documented");
-  }
-
-  @Test
-  public void dontReportReturnDocumentationIfNoReturnValue() throws Exception {
-    Truth.assertThat(
-            findIssues(
-                "\"\"\" module docstring \"\"\"",
-                "def f():",
-                "  \"\"\"summary",
-                "",
-                "  more description",
-                "  \"\"\"",
-                "  return"))
-        .isEmpty();
+                + "line indented too little (here: 1 spaces; before: 2 spaces)");
   }
 
   @Test
@@ -187,13 +157,12 @@ public class DocstringCheckerTests {
   }
 
   @Test
-  public void dontReportSingleLineDocstring() throws Exception {
+  public void dontReportSummaryDocstringWithoutParameters() throws Exception {
     Truth.assertThat(
             findIssues(
                 "\"\"\"module docstring\"\"\"",
                 "def function(param1, param2):",
-                "  \"\"\"single line docstring is fine\"\"\"",
-                "  return True"))
+                "  \"\"\"summary without parameter docs is fine\"\"\""))
         .isEmpty();
   }
 
@@ -208,7 +177,7 @@ public class DocstringCheckerTests {
   }
 
   @Test
-  public void dontReportCorrectFunctionDocstring() throws Exception {
+  public void dontReportFunctionDocstringWithCorrectParameters() throws Exception {
     Truth.assertThat(
             findIssues(
                 "\"\"\" module docstring \"\"\"",
@@ -220,11 +189,8 @@ public class DocstringCheckerTests {
                 "    param2 (foo, bar): baz",
                 "    *args: foo",
                 "    **kwargs: bar",
-                "",
-                "  Returns:",
-                "    True",
                 "  \"\"\"",
-                "  return True"))
+                "  pass"))
         .isEmpty();
   }
 }
