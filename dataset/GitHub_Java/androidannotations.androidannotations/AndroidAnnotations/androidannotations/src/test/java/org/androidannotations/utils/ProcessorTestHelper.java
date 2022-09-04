@@ -151,7 +151,13 @@ public class ProcessorTestHelper {
 						CharSequence sourceContent = source.getCharContent(true);
 						if (diagnostic.getPosition() != Diagnostic.NOPOS) {
 							CharSequence contentInError = sourceContent.subSequence((int) diagnostic.getStartPosition(), (int) diagnostic.getEndPosition());
-							if (contentInError.toString().contains(expectedContentInError)) {
+							String contentInErrorString = contentInError.toString();
+							int parenIndex = contentInErrorString.indexOf("(");
+							if (parenIndex != -1)
+							{
+								    contentInErrorString = contentInErrorString.substring(0, parenIndex);
+							}
+							if (expectedContentInError.equals(contentInErrorString)) {
 								return;
 							}
 						}
