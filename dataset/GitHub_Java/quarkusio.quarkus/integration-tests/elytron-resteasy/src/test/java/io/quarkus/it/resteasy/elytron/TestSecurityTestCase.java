@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.security.SecurityAttribute;
 import io.quarkus.test.security.TestSecurity;
 
 @QuarkusTest
@@ -64,7 +63,7 @@ class TestSecurityTestCase {
 
     @Test
     @TestSecurity(user = "testUser", roles = "wrong")
-    void testGetWithTestUserWrongRole() {
+    void testGetWithTestUserwrongRole() {
         given()
                 .when()
                 .get("/user")
@@ -81,17 +80,6 @@ class TestSecurityTestCase {
                 .then()
                 .statusCode(200)
                 .body(is("testUser"));
-    }
-
-    @Test
-    @TestSecurity(user = "testUser", roles = "user", attributes = { @SecurityAttribute(key = "foo", value = "bar") })
-    void testAttributes() {
-        given()
-                .when()
-                .get("/attributes")
-                .then()
-                .statusCode(200)
-                .body(is("foo=bar"));
     }
 
     static Stream<Arguments> arrayParams() {
