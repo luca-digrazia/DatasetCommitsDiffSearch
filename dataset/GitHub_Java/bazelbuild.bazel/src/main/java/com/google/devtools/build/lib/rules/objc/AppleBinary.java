@@ -338,7 +338,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
   private static ConfiguredTarget ruleConfiguredTargetFromProvider(
       RuleContext ruleContext, AppleBinaryOutput appleBinaryOutput)
-      throws RuleErrorException, ActionConflictException, InterruptedException {
+      throws RuleErrorException, ActionConflictException {
     NativeInfo nativeInfo = appleBinaryOutput.getBinaryInfoProvider();
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
