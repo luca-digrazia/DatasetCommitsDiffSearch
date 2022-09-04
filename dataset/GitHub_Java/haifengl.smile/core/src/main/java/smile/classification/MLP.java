@@ -123,10 +123,11 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
     /**
      * Constructor.
      *
+     * @param p the number of variables in input layer.
      * @param builders the builders of layers from bottom to top.
      */
-    public MLP(LayerBuilder... builders) {
-        super(net(builders));
+    public MLP(int p, LayerBuilder... builders) {
+        super(net(p, builders));
 
         int outSize = output.getOutputSize();
         this.k = outSize == 1 ? 2 : outSize;
@@ -137,10 +138,11 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
      * Constructor.
      *
      * @param classes the class labels.
+     * @param p the number of variables in input layer.
      * @param builders the builders of layers from bottom to top.
      */
-    public MLP(IntSet classes, LayerBuilder... builders) {
-        super(net(builders));
+    public MLP(IntSet classes, int p, LayerBuilder... builders) {
+        super(net(p, builders));
 
         int outSize = output.getOutputSize();
         this.k = outSize == 1 ? 2 : outSize;
@@ -148,8 +150,7 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
     }
 
     /** Builds the layers. */
-    private static Layer[] net(LayerBuilder... builders) {
-        int p = 0;
+    private static Layer[] net(int p, LayerBuilder... builders) {
         int l = builders.length;
         Layer[] net = new Layer[l];
 
@@ -213,7 +214,7 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
     public void update(double[] x, int y) {
         propagate(x, true);
         setTarget(classes.indexOf(y));
-        backpropagate(true);
+        backpropagate(x, true);
         t++;
     }
 
@@ -223,27 +224,11 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
         for (int i = 0; i < x.length; i++) {
             propagate(x[i], true);
             setTarget(classes.indexOf(y[i]));
-            backpropagate(false);
+            backpropagate(x[i], false);
         }
 
         update(x.length);
         t++;
-    }
-
-    /** Sets the network target vector. */
-    private void setTarget(int y) {
-        int n = output.getOutputSize();
-
-        double t = output.cost() == Cost.LIKELIHOOD ? 1.0 : 0.9;
-        double f = 1.0 - t;
-
-        double[] target = this.target.get();
-        if (n == 1) {
-            target[0] = y == 1 ? t : f;
-        } else {
-            Arrays.fill(target, f);
-            target[y] = t;
-        }
     }
 
     /**
@@ -257,8 +242,8 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
         int p = x[0].length;
         int k = MathEx.max(y) + 1;
 
-        LayerBuilder[] layers = Layer.of(k, p, prop.getProperty("smile.mlp.layers", "ReLU(100)"));
-        MLP model = new MLP(layers);
+        LayerBuilder[] layers = Layer.of(k, prop.getProperty("smile.mlp.layers", "ReLU(100)"));
+        MLP model = new MLP(p, layers);
         model.setProperties(prop);
 
         int epochs = Integer.parseInt(prop.getProperty("smile.mlp.epochs", "100"));
@@ -279,5 +264,21 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
         }
 
         return model;
+    }
+
+    /** Sets the network target vector. */
+    private void setTarget(int y) {
+        int n = output.getOutputSize();
+
+        double t = output.cost() == Cost.LIKELIHOOD ? 1.0 : 0.9;
+        double f = 1.0 - t;
+
+        double[] target = this.target.get();
+        if (n == 1) {
+            target[0] = y == 1 ? t : f;
+        } else {
+            Arrays.fill(target, f);
+            target[y] = t;
+        }
     }
 }

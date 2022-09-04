@@ -24,7 +24,6 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import smile.feature.FeatureTransform;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 
@@ -47,7 +46,13 @@ public abstract class Layer implements Serializable {
      * The dropout rate. Dropout randomly sets input units to 0 with this rate
      * at each step during training time, which helps prevent overfitting.
      */
-    protected final double dropout;
+    protected final double dropoutRate;
+    /**
+     * The dropout scaling factor.
+     * Inputs not set to 0 are scaled up by 1/(1 - rate) such that the sum
+     * over all inputs is unchanged.
+     */
+    protected final double dropoutScale;
     /**
      * The affine transformation matrix.
      */
@@ -56,6 +61,10 @@ public abstract class Layer implements Serializable {
      * The bias.
      */
     protected double[] bias;
+    /**
+     * The input vector in case of batch normalization and/or dropout.
+     */
+    protected transient ThreadLocal<double[]> input;
     /**
      * The output vector.
      */
@@ -91,7 +100,7 @@ public abstract class Layer implements Serializable {
     /**
      * The dropout mask.
      */
-    protected transient ThreadLocal<byte[]> mask;
+    protected transient ThreadLocal<byte[]> dropoutMask;
 
     /**
      * Constructor. Randomly initialized weights and zero bias.
@@ -138,7 +147,8 @@ public abstract class Layer implements Serializable {
         this.p = weight.ncol();
         this.weight = weight;
         this.bias = bias;
-        this.dropout = dropout;
+        this.dropoutRate = dropout;
+        this.dropoutScale = dropout > 0 ? 1.0 / (1.0 - dropout) : 1.0;
 
         init();
     }
@@ -158,21 +168,56 @@ public abstract class Layer implements Serializable {
      * Initializes the workspace.
      */
     private void init() {
-        output = ThreadLocal.withInitial(() -> new double[n]);
-
-        if (dropout > 0.0) {
-            mask = ThreadLocal.withInitial(() -> new byte[n]);
-        }
-
-        if (!(this instanceof InputLayer)) {
-            outputGradient = ThreadLocal.withInitial(() -> new double[n]);
-            weightGradient = ThreadLocal.withInitial(() -> new Matrix(n, p));
-            biasGradient = ThreadLocal.withInitial(() -> new double[n]);
-            rmsWeightGradient = ThreadLocal.withInitial(() -> new Matrix(n, p));
-            rmsBiasGradient = ThreadLocal.withInitial(() -> new double[n]);
-            weightUpdate = ThreadLocal.withInitial(() -> new Matrix(n, p));
-            biasUpdate = ThreadLocal.withInitial(() -> new double[n]);
-        }
+        input = new ThreadLocal<double[]>() {
+            protected double[] initialValue() {
+                return new double[p];
+            }
+        };
+        output = new ThreadLocal<double[]>() {
+            protected double[] initialValue() {
+                return new double[n];
+            }
+        };
+        outputGradient = new ThreadLocal<double[]>() {
+            protected double[] initialValue() {
+                return new double[n];
+            }
+        };
+        weightGradient = new ThreadLocal<Matrix>() {
+            protected Matrix initialValue() {
+                return new Matrix(n, p);
+            }
+        };
+        biasGradient = new ThreadLocal<double[]>() {
+            protected double[] initialValue() {
+                return new double[n];
+            }
+        };
+        rmsWeightGradient = new ThreadLocal<Matrix>() {
+            protected Matrix initialValue() {
+                return new Matrix(n, p);
+            }
+        };
+        rmsBiasGradient = new ThreadLocal<double[]>() {
+            protected double[] initialValue() {
+                return new double[n];
+            }
+        };
+        weightUpdate = new ThreadLocal<Matrix>() {
+            protected Matrix initialValue() {
+                return new Matrix(n, p);
+            }
+        };
+        biasUpdate = new ThreadLocal<double[]>() {
+            protected double[] initialValue() {
+                return new double[n];
+            }
+        };
+        dropoutMask = new ThreadLocal<byte[]>() {
+            protected byte[] initialValue() {
+                return new byte[p];
+            }
+        };
     }
 
     /**
@@ -208,30 +253,29 @@ public abstract class Layer implements Serializable {
     }
 
     /**
-     * Propagates the signals from a lower layer to this layer.
+     * Propagates signals from a lower layer to this layer.
      * @param x the lower layer signals.
+     * @param train true if this is in training pass.
      */
-    public void propagate(double[] x) {
+    public void propagate(double[] x, boolean train) {
         double[] output = this.output.get();
         System.arraycopy(bias, 0, output, 0, n);
         weight.mv(1.0, x, 1.0, output);
-        transform(output);
+        f(output);
     }
 
     /**
-     * Propagates the output signals through the implicit dropout layer.
      * Dropout randomly sets output units to 0. It should only be applied
      * during training.
      */
-    public void propagateDropout() {
-        if (dropout > 0.0) {
+    public void dropout() {
+        if (dropoutRate > 0.0) {
             double[] output = this.output.get();
-            byte[] mask = this.mask.get();
-            double scale = 1.0 / (1.0 - dropout);
-            for (int i = 0; i < n; i++) {
-                byte retain = (byte) (MathEx.random() < dropout ? 0 : 1);
+            byte[] mask = this.dropoutMask.get();
+            for (int i = 0; i < p; i++) {
+                byte retain = (byte) (MathEx.random() < dropoutRate ? 0 : 1);
                 mask[i] = retain;
-                output[i] *= retain * scale;
+                output[i] *= retain * dropoutScale;
             }
         }
     }
@@ -240,7 +284,7 @@ public abstract class Layer implements Serializable {
      * The activation or output function.
      * @param x the input and output values.
      */
-    public abstract void transform(double[] x);
+    public abstract void f(double[] x);
 
     /**
      * Propagates the errors back to a lower layer.
@@ -249,15 +293,14 @@ public abstract class Layer implements Serializable {
     public abstract void backpropagate(double[] lowerLayerGradient);
 
     /**
-     * Propagates the errors back through the (implicit) dropout layer.
+     * Propagates back the (implicit) dropout layer.
+     * @param lowerLayerGradient the gradient vector of lower layer.
      */
-    public void backpopagateDropout() {
-        if (dropout > 0.0) {
-            double[] gradient = this.outputGradient.get();
-            byte[] mask = this.mask.get();
-            double scale = 1.0 / (1.0 - dropout);
-            for (int i = 0; i < n; i++) {
-                gradient[i] *= mask[i] * scale;
+    public void backpopagateDropout(double[] lowerLayerGradient) {
+        if (dropoutRate > 0.0) {
+            byte[] mask = this.dropoutMask.get();
+            for (int i = 0; i < lowerLayerGradient.length; i++) {
+                lowerLayerGradient[i] *= mask[i] * dropoutScale;
             }
         }
     }
@@ -396,57 +439,21 @@ public abstract class Layer implements Serializable {
      * Returns a hidden layer.
      * @param activation the activation function.
      * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
      * @return the layer builder.
      */
-    public static HiddenLayerBuilder builder(String activation, int neurons, double dropout) {
+    public static HiddenLayerBuilder builder(String activation, int neurons) {
         switch(activation.toLowerCase(Locale.ROOT)) {
             case "relu":
-                return rectifier(neurons, dropout);
+                return rectifier(neurons);
             case "sigmoid":
-                return sigmoid(neurons, dropout);
+                return sigmoid(neurons);
             case "tanh":
-                return tanh(neurons, dropout);
+                return tanh(neurons);
             case "linear":
-                return linear(neurons, dropout);
+                return linear(neurons);
             default:
                 throw new IllegalArgumentException("Unsupported activation function: " + activation);
         }
-    }
-
-    /**
-     * Returns an input layer.
-     * @param neurons the number of neurons.
-     * @return the layer builder.
-     */
-    public static LayerBuilder input(int neurons) {
-        return input(neurons, 0.0);
-    }
-
-    /**
-     * Returns an input layer.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @return the layer builder.
-     */
-    public static LayerBuilder input(int neurons, double dropout) {
-        return input(neurons, dropout, null);
-    }
-
-    /**
-     * Returns an input layer.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @param transformer the optional input feature transformation.
-     * @return the layer builder.
-     */
-    public static LayerBuilder input(int neurons, double dropout, FeatureTransform transformer) {
-        return new LayerBuilder(neurons, dropout) {
-            @Override
-            public InputLayer build(int p) {
-                return new InputLayer(neurons, dropout, transformer);
-            }
-        };
     }
 
     /**
@@ -455,17 +462,7 @@ public abstract class Layer implements Serializable {
      * @return the layer builder.
      */
     public static HiddenLayerBuilder linear(int neurons) {
-        return linear(neurons, 0.0);
-    }
-
-    /**
-     * Returns a hidden layer with linear activation function.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder linear(int neurons, double dropout) {
-        return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.linear());
+        return new HiddenLayerBuilder(neurons, ActivationFunction.linear());
     }
 
     /**
@@ -474,17 +471,7 @@ public abstract class Layer implements Serializable {
      * @return the layer builder.
      */
     public static HiddenLayerBuilder rectifier(int neurons) {
-        return rectifier(neurons, 0.0);
-    }
-
-    /**
-     * Returns a hidden layer with rectified linear activation function.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder rectifier(int neurons, double dropout) {
-        return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.rectifier());
+        return new HiddenLayerBuilder(neurons, ActivationFunction.rectifier());
     }
 
     /**
@@ -493,17 +480,7 @@ public abstract class Layer implements Serializable {
      * @return the layer builder.
      */
     public static HiddenLayerBuilder sigmoid(int neurons) {
-        return sigmoid(neurons, 0.0);
-    }
-
-    /**
-     * Returns a hidden layer with sigmoid activation function.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder sigmoid(int neurons, double dropout) {
-        return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.sigmoid());
+        return new HiddenLayerBuilder(neurons, ActivationFunction.sigmoid());
     }
 
     /**
@@ -512,17 +489,7 @@ public abstract class Layer implements Serializable {
      * @return the layer builder.
      */
     public static HiddenLayerBuilder tanh(int neurons) {
-        return tanh(neurons, 0.0);
-    }
-
-    /**
-     * Returns a hidden layer with hyperbolic tangent activation function.
-     * @param neurons the number of neurons.
-     * @param dropout the dropout rate.
-     * @return the layer builder.
-     */
-    public static HiddenLayerBuilder tanh(int neurons, double dropout) {
-        return new HiddenLayerBuilder(neurons, dropout, ActivationFunction.tanh());
+        return new HiddenLayerBuilder(neurons, ActivationFunction.tanh());
     }
 
     /**
@@ -547,14 +514,14 @@ public abstract class Layer implements Serializable {
 
     /**
      * Returns the layer builders given a string representation such as
-     * "Input(10, 0.2)|ReLU(50, 0.5)|Sigmoid(30, 0.5)|...".
+     * "ReLU(50)|Sigmoid(30)|...".
      *
      * @param k the number of classes. k < 2 for regression.
      * @param spec the hidden layer specification.
      * @return the layer builders.
      */
     public static LayerBuilder[] of(int k, String spec) {
-        Pattern regex = Pattern.compile("(\\w+)\\((\\d+)(,\\s*)?\\)");
+        Pattern regex = Pattern.compile("(\\w+)\\((\\d+)\\)");
         String[] layers = spec.split("\\|");
         LayerBuilder[] builders = new LayerBuilder[layers.length + 1];
         for (int i = 0; i < layers.length; i++) {
@@ -562,7 +529,7 @@ public abstract class Layer implements Serializable {
             if (m.matches()) {
                 String activation = m.group(1);
                 int nodes = Integer.parseInt(m.group(2));
-                builders[i] = null;//Layer.builder(activation, nodes);
+                builders[i] = Layer.builder(activation, nodes);
             } else {
                 throw new IllegalArgumentException("Invalid layer: " + layers[i]);
             }

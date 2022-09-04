@@ -17,7 +17,6 @@
 
 package smile.regression;
 
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
 import smile.base.mlp.*;
@@ -50,38 +49,37 @@ import smile.util.Strings;
     /**
      * Constructor.
      *
-     * @param builders the builders of input and hidden layers from bottom to top.
+     * @param p the number of variables in input layer.
+     * @param builders the builders of hidden layers from bottom to top.
      */
-    public MLP(LayerBuilder... builders) {
-        this(null, builders);
+    public MLP(int p, LayerBuilder... builders) {
+        super(net(p, builders));
+        scaler = null;
     }
 
     /**
      * Constructor.
      *
      * @param scaler the scaling function of output values.
-     * @param builders the builders of input and hidden layers from bottom to top.
+     * @param p the number of variables in input layer.
+     * @param builders the builders of hidden layers from bottom to top.
      */
-    public MLP(Scaler scaler, LayerBuilder... builders) {
-        super(net(builders));
+    public MLP(Scaler scaler, int p, LayerBuilder... builders) {
+        super(net(p, builders));
         this.scaler = scaler;
     }
 
     /** Builds the layers. */
-    private static Layer[] net(LayerBuilder... builders) {
-        int p = 0;
+    private static Layer[] net(int p, LayerBuilder... builders) {
         int l = builders.length;
-        Layer[] net = new Layer[l];
+        Layer[] net = new Layer[l+1];
 
         for (int i = 0; i < l; i++) {
             net[i] = builders[i].build(p);
             p = builders[i].neurons();
         }
 
-        if (!(net[l-1] instanceof OutputLayer)) {
-            net = Arrays.copyOf(net, l + 1);
-            net[l] = new OutputLayer(1, p, OutputFunction.LINEAR, Cost.MEAN_SQUARED_ERROR);
-        }
+        net[l] = new OutputLayer(1, p, OutputFunction.LINEAR, Cost.MEAN_SQUARED_ERROR);
         return net;
     }
 
@@ -102,7 +100,7 @@ import smile.util.Strings;
     public void update(double[] x, double y) {
         propagate(x, true);
         setTarget(y);
-        backpropagate(true);
+        backpropagate(x, true);
         t++;
     }
 
@@ -112,7 +110,7 @@ import smile.util.Strings;
         for (int i = 0; i < x.length; i++) {
             propagate(x[i], true);
             setTarget(y[i]);
-            backpropagate(false);
+            backpropagate(x[i], false);
         }
 
         update(x.length);
@@ -139,8 +137,8 @@ import smile.util.Strings;
         int p = x[0].length;
 
         Scaler scaler = Scaler.of(prop.getProperty("smile.mlp.scaler"), y);
-        LayerBuilder[] layers = Layer.of(0, prop.getProperty("smile.mlp.layers", String.format("Input(%d)|ReLU(100)", p)));
-        MLP model = new MLP(scaler, layers);
+        LayerBuilder[] layers = Layer.of(0, prop.getProperty("smile.mlp.layers", "ReLU(100)"));
+        MLP model = new MLP(scaler, p, layers);
         model.setProperties(prop);
 
         int epochs = Integer.parseInt(prop.getProperty("smile.mlp.epochs", "100"));

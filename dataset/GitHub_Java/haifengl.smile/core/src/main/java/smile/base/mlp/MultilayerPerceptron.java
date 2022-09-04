@@ -50,7 +50,7 @@ public abstract class MultilayerPerceptron implements Serializable {
      */
     protected OutputLayer output;
     /**
-     * The input and hidden layers.
+     * The hidden layers.
      */
     protected Layer[] net;
     /**
@@ -86,25 +86,24 @@ public abstract class MultilayerPerceptron implements Serializable {
      */
     protected double clipNorm = 0.0;
     /**
+     * Batch normalization standardizes the inputs to a layer for each mini-batch.
+     * This has the effect of stabilizing the learning process and dramatically
+     * reducing the number of training epochs required to train deep networks.
+     */
+    protected boolean batchNormalization = false;
+    /**
      * The training iterations.
      */
     protected int t = 0;
 
     /**
      * Constructor.
-     * @param net the input layer, hidden layers, and output layer in order.
+     * @param net the layers from bottom to top.
+     *            The input layer should not be included.
      */
     public MultilayerPerceptron(Layer... net) {
-        if (net.length <= 2) {
+        if (net.length < 2) {
             throw new IllegalArgumentException("Too few layers: " + net.length);
-        }
-
-        if (!(net[0] instanceof InputLayer)) {
-            throw new IllegalArgumentException("The first layer is not an InputLayer: " + net[0]);
-        }
-
-        if (!(net[net.length-1] instanceof OutputLayer)) {
-            throw new IllegalArgumentException("The last layer is not an OutputLayer: " + net[net.length-1]);
         }
 
         Layer lower = net[0];
@@ -141,12 +140,16 @@ public abstract class MultilayerPerceptron implements Serializable {
      * Initializes the workspace.
      */
     private void init() {
-        target = ThreadLocal.withInitial(() -> new double[output.getOutputSize()]);
+        target = new ThreadLocal<double[]>() {
+            protected synchronized double[] initialValue() {
+                return new double[output.getOutputSize()];
+            }
+        };
     }
 
     @Override
     public String toString() {
-        return String.format("%s -> %s(learning rate = %s, momentum = %s, weight decay = %.2f)",
+        return String.format("x(%d) -> %s -> %s(learning rate = %s, momentum = %s, weight decay = %.2f)", p,
                 Arrays.stream(net).map(Object::toString).collect(Collectors.joining(" -> ")),
                 output, learningRate, momentum, lambda);
     }
@@ -227,6 +230,17 @@ public abstract class MultilayerPerceptron implements Serializable {
     }
 
     /**
+     * Turn on/off batch normalization. Batch normalization standardizes
+     * the inputs to a layer for each mini-batch. This has the effect of
+     * stabilizing the learning process and dramatically reducing the
+     * number of training epochs required to train deep networks.
+     * @param batchNormalization the flag to turn on/off batch normalization.
+     */
+    public void setBatchNormalization(boolean batchNormalization) {
+        this.batchNormalization = batchNormalization;
+    }
+
+    /**
      * Returns the learning rate.
      * @return the learning rate.
      */
@@ -267,6 +281,14 @@ public abstract class MultilayerPerceptron implements Serializable {
     }
 
     /**
+     * Returns true if batch normalization is on.
+     * @return True if batch normalization is on.
+     */
+    public boolean getBatchNormalization() {
+        return batchNormalization;
+    }
+
+    /**
      * Propagates the signals through the neural network.
      * @param x the input signal.
      * @param train true if this is in training pass.
@@ -274,13 +296,10 @@ public abstract class MultilayerPerceptron implements Serializable {
     protected void propagate(double[] x, boolean train) {
         double[] input = x;
         for (Layer layer : net) {
-            layer.propagate(input);
-            if (train) {
-                layer.propagateDropout();;
-            }
+            layer.propagate(input, train);
             input = layer.output();
         }
-        output.propagate(input);
+        output.propagate(input, train);
     }
 
     /**
@@ -310,18 +329,19 @@ public abstract class MultilayerPerceptron implements Serializable {
 
     /**
      * Propagates the errors back through the network.
+     * @param x the input signal.
      * @param update the flag if update the weights directly.
      *               It should be false for (mini-)batch.
      */
-    protected void backpropagate(boolean update) {
+    protected void backpropagate(double[] x, boolean update) {
         output.computeOutputGradient(target.get(), 1.0);
-        clipGradient(output.gradient());
 
         Layer upper = output;
-        for (int i = net.length; --i > 0;) {
+        clipGradient(upper.gradient());
+        for (int i = net.length - 1; i >= 0; i--) {
             upper.backpropagate(net[i].gradient());
+            upper.backpopagateDropout(net[i].gradient());
             upper = net[i];
-            upper.backpopagateDropout();
             clipGradient(upper.gradient());
         }
         // first hidden layer
@@ -343,18 +363,14 @@ public abstract class MultilayerPerceptron implements Serializable {
                 throw new IllegalStateException(String.format("Invalid learning rate (eta = %.2f) and/or L2 regularization (lambda = %.2f) such that weight decay = %.2f", eta, lambda, decay));
             }
 
-            double[] x = net[0].output();
-            for (int i = 1; i < net.length; i++) {
-                Layer layer = net[i];
+            for (Layer layer : net) {
                 layer.computeGradientUpdate(x, eta, alpha, decay);
                 x = layer.output();
             }
 
             output.computeGradientUpdate(x, eta, alpha, decay);
         } else {
-            double[] x = net[0].output();
-            for (int i = 1; i < net.length; i++) {
-                Layer layer = net[i];
+            for (Layer layer : net) {
                 layer.computeGradient(x);
                 x = layer.output();
             }
@@ -384,8 +400,8 @@ public abstract class MultilayerPerceptron implements Serializable {
             throw new IllegalStateException(String.format("Invalid learning rate (eta = %.2f) and/or decay (lambda = %.2f)", eta, lambda));
         }
 
-        for (int i = 1; i < net.length; i++) {
-            net[i].update(m, eta, alpha, decay, rho, epsilon);
+        for (Layer layer : net) {
+            layer.update(m, eta, alpha, decay, rho, epsilon);
         }
 
         output.update(m, eta, alpha, decay, rho, epsilon);
@@ -420,6 +436,11 @@ public abstract class MultilayerPerceptron implements Serializable {
         String clipNorm = prop.getProperty("smile.mlp.clip_norm");
         if (clipNorm != null) {
             setClipNorm(Double.parseDouble(clipNorm));
+        }
+
+        String batchNormalization = prop.getProperty("smile.mlp.batch_normalization");
+        if (batchNormalization != null) {
+            setBatchNormalization(Boolean.parseBoolean(batchNormalization));
         }
 
         String rho = prop.getProperty("smile.mlp.RMSProp.rho");

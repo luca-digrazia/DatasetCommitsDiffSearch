@@ -35,23 +35,14 @@ public class InputLayer extends Layer {
      * @param p the number of input variables (not including bias value).
      */
     public InputLayer(int p) {
-        this(p, 0.0);
+        this(p, 0.0, null);
     }
 
     /**
      * Constructor.
      * @param p the number of input variables (not including bias value).
      * @param dropout the dropout rate.
-     */
-    public InputLayer(int p, double dropout) {
-        this(p, dropout, null);
-    }
-
-    /**
-     * Constructor.
-     * @param p the number of input variables (not including bias value).
-     * @param dropout the dropout rate.
-     * @param transformer the optional input feature transformation.
+     * @param transformer the input feature transformation.
      */
     public InputLayer(int p, double dropout, FeatureTransform transformer) {
         super(p, p, dropout);
@@ -60,18 +51,16 @@ public class InputLayer extends Layer {
 
     @Override
     public String toString() {
-        String s = String.format("Input(%d", p);
-        if (dropout > 0.0) {
-            s = String.format("%s, %.2f", s, dropout);
-        }
-        if (transformer != null) {
-            s = String.format("%s, %s", s, transformer.getClass().getSimpleName());
-        }
-        return s + ")";
+        return String.format("Input(%d)", p);
     }
 
     @Override
-    public void propagate(double[] x) {
+    public void f(double[] x) {
+        // nop
+    }
+
+    @Override
+    public void propagate(double[] x, boolean train) {
         if (transformer == null) {
             System.arraycopy(x, 0, output.get(), 0, p);
         } else {
@@ -81,26 +70,6 @@ public class InputLayer extends Layer {
 
     @Override
     public void backpropagate(double[] lowerLayerGradient) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void transform(double[] x) {
-        // identity activation function
-    }
-
-    @Override
-    public void computeGradient(double[] x) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void computeGradientUpdate(double[] x, double learningRate, double momentum, double decay) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void update(int m, double learningRate, double momentum, double decay, double rho, double epsilon) {
-        throw new UnsupportedOperationException();
+        // nop
     }
 }
