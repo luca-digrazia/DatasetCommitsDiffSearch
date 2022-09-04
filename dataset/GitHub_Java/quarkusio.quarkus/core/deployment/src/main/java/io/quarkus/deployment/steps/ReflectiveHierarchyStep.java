@@ -120,7 +120,8 @@ public class ReflectiveHierarchyStep {
                 type instanceof UnresolvedTypeVariable) {
             return;
         } else if (type instanceof ClassType) {
-            if (reflectiveHierarchyBuildItem.getIgnoreTypePredicate().test(type.name())) {
+            if (reflectiveHierarchyBuildItem.getIgnoreTypePredicate().test(type.name())
+                    || processedReflectiveHierarchies.contains(type.name())) {
                 return;
             }
 
@@ -196,7 +197,6 @@ public class ReflectiveHierarchyStep {
                         .methods(true)
                         .fields(true)
                         .finalFieldsWritable(doFinalFieldsNeedToBeWritable(info, finalFieldsWritable))
-                        .serialization(reflectiveHierarchyBuildItem.isSerialization())
                         .build());
 
         processedReflectiveHierarchies.add(name);
