@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.RequestMetadata;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -44,6 +43,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.Options;
 import com.google.protobuf.ByteString;
+import io.grpc.Context;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -85,7 +85,7 @@ public class RemoteActionInputFetcherTest {
     MetadataProvider metadataProvider = new StaticMetadataProvider(metadata);
     RemoteCache remoteCache = newCache(options, digestUtil, cacheEntries);
     RemoteActionInputFetcher actionInputFetcher =
-        new RemoteActionInputFetcher(remoteCache, execRoot, RequestMetadata.getDefaultInstance());
+        new RemoteActionInputFetcher(remoteCache, execRoot, Context.current());
 
     // act
     actionInputFetcher.prefetchFiles(metadata.keySet(), metadataProvider);
@@ -108,7 +108,7 @@ public class RemoteActionInputFetcherTest {
     MetadataProvider metadataProvider = new StaticMetadataProvider(new HashMap<>());
     RemoteCache remoteCache = newCache(options, digestUtil, new HashMap<>());
     RemoteActionInputFetcher actionInputFetcher =
-        new RemoteActionInputFetcher(remoteCache, execRoot, RequestMetadata.getDefaultInstance());
+        new RemoteActionInputFetcher(remoteCache, execRoot, Context.current());
     VirtualActionInput a = new StringActionInput("hello world", PathFragment.create("file1"));
 
     // act
@@ -133,7 +133,7 @@ public class RemoteActionInputFetcherTest {
     MetadataProvider metadataProvider = new StaticMetadataProvider(metadata);
     RemoteCache remoteCache = newCache(options, digestUtil, new HashMap<>());
     RemoteActionInputFetcher actionInputFetcher =
-        new RemoteActionInputFetcher(remoteCache, execRoot, RequestMetadata.getDefaultInstance());
+        new RemoteActionInputFetcher(remoteCache, execRoot, Context.current());
 
     // act
     assertThrows(
@@ -157,7 +157,7 @@ public class RemoteActionInputFetcherTest {
     MetadataProvider metadataProvider = new StaticMetadataProvider(ImmutableMap.of(a, f));
     RemoteCache remoteCache = newCache(options, digestUtil, new HashMap<>());
     RemoteActionInputFetcher actionInputFetcher =
-        new RemoteActionInputFetcher(remoteCache, execRoot, RequestMetadata.getDefaultInstance());
+        new RemoteActionInputFetcher(remoteCache, execRoot, Context.current());
 
     // act
     actionInputFetcher.prefetchFiles(ImmutableList.of(a), metadataProvider);
@@ -175,7 +175,7 @@ public class RemoteActionInputFetcherTest {
     Artifact a1 = createRemoteArtifact("file1", "hello world", metadata, cacheEntries);
     RemoteCache remoteCache = newCache(options, digestUtil, cacheEntries);
     RemoteActionInputFetcher actionInputFetcher =
-        new RemoteActionInputFetcher(remoteCache, execRoot, RequestMetadata.getDefaultInstance());
+        new RemoteActionInputFetcher(remoteCache, execRoot, Context.current());
 
     // act
     actionInputFetcher.downloadFile(a1.getPath(), metadata.get(a1));
@@ -198,7 +198,7 @@ public class RemoteActionInputFetcherTest {
     byte[] b = contents.getBytes(StandardCharsets.UTF_8);
     HashCode h = HASH_FUNCTION.getHashFunction().hashBytes(b);
     FileArtifactValue f =
-        new RemoteFileArtifactValue(h.asBytes(), b.length, /* locationIndex= */ 1, "action-id");
+        new RemoteFileArtifactValue(h.asBytes(), b.length, /* locationIndex= */ 1);
     metadata.put(a, f);
     cacheEntries.put(DigestUtil.buildDigest(h.asBytes(), b.length), ByteString.copyFrom(b));
     return a;
