@@ -65,9 +65,8 @@ import org.jboss.protean.gizmo.TryBlock;
  */
 public class SubclassGenerator extends AbstractGenerator {
 
-    private static final DotName JAVA_LANG_THROWABLE = DotNames.create(Throwable.class.getName());
-    private static final DotName JAVA_LANG_EXCEPTION = DotNames.create(Exception.class.getName());
-    private static final DotName JAVA_LANG_RUNTIME_EXCEPTION = DotNames.create(RuntimeException.class.getName());
+    private static final DotName JAVA_LANG_EXCEPTION = DotName.createSimple(Exception.class.getName());
+    private static final DotName JAVA_LANG_RUNTIME_EXCEPTION = DotName.createSimple(RuntimeException.class.getName());
 
     static final String SUBCLASS_SUFFIX = "_Subclass";
 
@@ -282,12 +281,10 @@ public class SubclassGenerator extends AbstractGenerator {
             CatchBlockCreator catchDeclaredException = tryCatch.addCatch(declaredException.name().toString());
             catchDeclaredException.throwException(catchDeclaredException.getCaughtException());
 
-            if (JAVA_LANG_RUNTIME_EXCEPTION.equals(declaredException.name()) ||
-                    JAVA_LANG_THROWABLE.equals(declaredException.name())) {
+            if (JAVA_LANG_RUNTIME_EXCEPTION.equals(declaredException.name())) {
                 addCatchRuntimeException = false;
             }
-            if (JAVA_LANG_EXCEPTION.equals(declaredException.name()) ||
-                    JAVA_LANG_THROWABLE.equals(declaredException.name())) {
+            if (JAVA_LANG_EXCEPTION.equals(declaredException.name())) {
                 addCatchException = false;
             }
         }
