@@ -14,54 +14,61 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.Path;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * Represents the server install directory, which contains the Bazel installation and embedded
- * binaries.
- *
- * <p>The <code>installBase</code> is the directory where the Blaze binary has been installed. The
- * <code>outputBase</code> is the directory below which Blaze puts all its state.
+ * Represents the relevant directories for the server: the location of the embedded binaries and the
+ * output directories.
  */
-@AutoCodec(dependency = FileSystemProvider.class)
 @Immutable
 public final class ServerDirectories {
-  public static final InjectingObjectCodec<ServerDirectories, FileSystemProvider> CODEC =
-      new ServerDirectories_AutoCodec();
+  public static final String EXECROOT = "execroot";
 
-  /** Where Blaze gets unpacked. */
+  /** Where Bazel gets unpacked. */
   private final Path installBase;
   /** The content hash of everything in installBase. */
   @Nullable private final HashCode installMD5;
+
   /** The root of the temp and output trees. */
   private final Path outputBase;
 
-  public ServerDirectories(Path installBase, Path outputBase, @Nullable String installMD5) {
-    this(
-        installBase,
-        outputBase,
-        Strings.isNullOrEmpty(installMD5) ? null : checkMD5(HashCode.fromString(installMD5)));
-  }
+  /** Top-level user output directory; used, e.g., as default location for caches. */
+  private final Path outputUserRoot;
 
-  @AutoCodec.Constructor
-  ServerDirectories(Path installBase, Path outputBase, HashCode installMD5) {
+  private final Path execRootBase;
+
+  // TODO(bazel-team): Use a builder to simplify/unify these constructors. This makes it easier to
+  // have sensible defaults, e.g. execRootBase = outputBase + "/execroot". Then reorder the fields
+  // to be consistent throughout this class.
+
+  public ServerDirectories(
+      Path installBase,
+      Path outputBase,
+      Path outputUserRoot,
+      Path execRootBase,
+      @Nullable String installMD5) {
     this.installBase = installBase;
+    this.installMD5 =
+        Strings.isNullOrEmpty(installMD5) ? null : checkMD5(HashCode.fromString(installMD5));
     this.outputBase = outputBase;
-    this.installMD5 = installMD5;
+    this.outputUserRoot = outputUserRoot;
+    this.execRootBase = execRootBase;
   }
 
-  public ServerDirectories(Path installBase, Path outputBase) {
-    this(installBase, outputBase, (HashCode) null);
+  public ServerDirectories(Path installBase, Path outputBase, Path outputUserRoot) {
+    this(
+        // Some tests set installBase to null.
+        // TODO(bazel-team): Be more consistent about whether nulls are permitted. (e.g. equals()
+        // presently doesn't tolerate them for some fields). We should probably just disallow them.
+        installBase, outputBase, outputUserRoot, outputBase.getRelative(EXECROOT), null);
   }
 
   private static HashCode checkMD5(HashCode hash) {
@@ -70,22 +77,9 @@ public final class ServerDirectories {
     return hash;
   }
 
-  /** Returns the installation base directory. Currently used by info command only. */
+  /** Returns the installation base directory. */
   public Path getInstallBase() {
     return installBase;
-  }
-
-  /**
-   * Returns the base of the output tree, which hosts all build and scratch output for a user and
-   * workspace.
-   */
-  public Path getOutputBase() {
-    return outputBase;
-  }
-
-  /** Returns the installed embedded binaries directory, under the shared installBase location. */
-  public Path getEmbeddedBinariesRoot() {
-    return installBase.getChild("_embedded_binaries");
   }
 
   /**
@@ -96,9 +90,43 @@ public final class ServerDirectories {
     return installMD5;
   }
 
+  /**
+   * Returns the base of the output tree, which hosts all build and scratch output for a user and
+   * workspace.
+   */
+  public Path getOutputBase() {
+    return outputBase;
+  }
+
+  /**
+   * Returns the root directory for user output. In particular default caches will be located here.
+   */
+  public Path getOutputUserRoot() {
+    return outputUserRoot;
+  }
+
+  /**
+   * Parent of all execution roots.
+   *
+   * <p>This is physically, always /outputbase/execroot, but might be virtualized.
+   */
+  public Path getExecRootBase() {
+    return execRootBase;
+  }
+
+  /** Returns the installed embedded binaries directory, under the shared installBase location. */
+  public Path getEmbeddedBinariesRoot() {
+    return getEmbeddedBinariesRoot(installBase);
+  }
+
+  @VisibleForTesting
+  public static Path getEmbeddedBinariesRoot(Path installBase) {
+    return installBase;
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(installBase, installMD5, outputBase);
+    return Objects.hash(installBase, installMD5, outputBase, outputUserRoot, execRootBase);
   }
 
   @Override
@@ -112,6 +140,8 @@ public final class ServerDirectories {
     ServerDirectories that = (ServerDirectories) obj;
     return this.installBase.equals(that.installBase)
         && Objects.equals(this.installMD5, that.installMD5)
-        && this.outputBase.equals(that.outputBase);
+        && this.outputBase.equals(that.outputBase)
+        && this.outputUserRoot.equals(that.outputUserRoot)
+        && this.execRootBase.equals(that.execRootBase);
   }
 }
