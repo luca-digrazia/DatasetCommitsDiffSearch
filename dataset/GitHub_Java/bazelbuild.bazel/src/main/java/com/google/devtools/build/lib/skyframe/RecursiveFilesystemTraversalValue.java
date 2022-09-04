@@ -13,14 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
-import com.google.devtools.build.lib.actions.HasDigest;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -65,7 +64,6 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
   /** The transitive closure of {@link ResolvedFile}s. */
   private final NestedSet<ResolvedFile> resolvedPaths;
-
 
   private RecursiveFilesystemTraversalValue(Optional<ResolvedFile> resolvedRoot,
       NestedSet<ResolvedFile> resolvedPaths) {
@@ -126,9 +124,6 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
     /** Whether traversal should descend into directories that are roots of subpackages. */
     final PackageBoundaryMode crossPkgBoundaries;
 
-    /** Whether Fileset assumes that output Artifacts are regular files. */
-    final boolean strictOutputFiles;
-
     /**
      * Whether to skip checking if the root (if it's a directory) contains a BUILD file.
      *
@@ -145,13 +140,11 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
         DirectTraversalRoot root,
         boolean isRootGenerated,
         PackageBoundaryMode crossPkgBoundaries,
-        boolean strictOutputFiles,
         boolean skipTestingForSubpackage,
         @Nullable String errorInfo) {
       this.root = root;
       this.isRootGenerated = isRootGenerated;
       this.crossPkgBoundaries = crossPkgBoundaries;
-      this.strictOutputFiles = strictOutputFiles;
       this.skipTestingForSubpackage = skipTestingForSubpackage;
       this.errorInfo = errorInfo;
     }
@@ -162,20 +155,17 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
         DirectTraversalRoot root,
         boolean isRootGenerated,
         PackageBoundaryMode crossPkgBoundaries,
-        boolean strictOutputFiles,
         boolean skipTestingForSubpackage,
         @Nullable String errorInfo) {
       return interner.intern(
           new TraversalRequest(
-              root, isRootGenerated, crossPkgBoundaries, strictOutputFiles,
-              skipTestingForSubpackage, errorInfo));
+              root, isRootGenerated, crossPkgBoundaries, skipTestingForSubpackage, errorInfo));
     }
 
     private TraversalRequest duplicate(DirectTraversalRoot newRoot,
         boolean newSkipTestingForSubpackage) {
       return create(
-          newRoot, isRootGenerated, crossPkgBoundaries, strictOutputFiles,
-          newSkipTestingForSubpackage, errorInfo);
+          newRoot, isRootGenerated, crossPkgBoundaries, newSkipTestingForSubpackage, errorInfo);
     }
 
     /** Creates a new request to traverse a child element in the current directory (the root). */
@@ -196,11 +186,6 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
               skipTestingForSubpackage);
     }
 
-    @VisibleForTesting
-    public DirectTraversalRoot getRoot() {
-      return root;
-    }
-
     @Override
     public boolean equals(Object obj) {
       if (this == obj) {
@@ -213,23 +198,20 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
       return root.equals(o.root)
           && isRootGenerated == o.isRootGenerated
           && crossPkgBoundaries == o.crossPkgBoundaries
-          && strictOutputFiles == o.strictOutputFiles
           && skipTestingForSubpackage == o.skipTestingForSubpackage;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(root, isRootGenerated, crossPkgBoundaries, strictOutputFiles,
-          skipTestingForSubpackage);
+      return Objects.hashCode(root, isRootGenerated, crossPkgBoundaries, skipTestingForSubpackage);
     }
 
     @Override
     public String toString() {
       return String.format(
           "TraversalParams(root=%s, is_generated=%d, skip_testing_for_subpkg=%d,"
-              + " pkg_boundaries=%s, strictOutputFiles=%d)",
-          root, isRootGenerated ? 1 : 0, skipTestingForSubpackage ? 1 : 0, crossPkgBoundaries,
-          strictOutputFiles ? 1 : 0);
+              + " pkg_boundaries=%s)",
+          root, isRootGenerated ? 1 : 0, skipTestingForSubpackage ? 1 : 0, crossPkgBoundaries);
     }
 
     @Override
@@ -278,9 +260,9 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
   private static final class RegularFile implements ResolvedFile {
     private final RootedPath path;
-    private final HasDigest metadata;
+    private final Object metadata;
 
-    RegularFile(RootedPath path, HasDigest metadata) {
+    RegularFile(RootedPath path, Object metadata) {
       this.path = Preconditions.checkNotNull(path);
       this.metadata = Preconditions.checkNotNull(metadata);
     }
@@ -297,7 +279,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
     @Override
     @Nullable
-    public HasDigest getMetadata() {
+    public Object getMetadata() {
       return metadata;
     }
 
@@ -320,7 +302,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
     @Override
     public String toString() {
-      return String.format("RegularFile(path=%s -- %s)", path, metadata);
+      return String.format("RegularFile(path=%s)", path);
     }
 
     @Override
@@ -352,8 +334,8 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
     }
 
     @Override
-    public HasDigest getMetadata() {
-      return HasDigest.EMPTY;
+    public Object getMetadata() {
+      return FileStateValue.DIRECTORY_FILE_STATE_NODE;
     }
 
     @Override
@@ -390,9 +372,9 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
   private static final class DanglingSymlink implements ResolvedFile {
     private final Symlink symlink;
-    private final HasDigest metadata;
+    private final Object metadata;
 
-    DanglingSymlink(RootedPath linkNamePath, PathFragment linkTargetPath, HasDigest metadata) {
+    DanglingSymlink(RootedPath linkNamePath, PathFragment linkTargetPath, Object metadata) {
       this.symlink = new Symlink(linkNamePath, linkTargetPath);
       this.metadata = Preconditions.checkNotNull(metadata);
     }
@@ -409,7 +391,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
     }
 
     @Override
-    public HasDigest getMetadata() {
+    public Object getMetadata() {
       return metadata;
     }
 
@@ -454,14 +436,14 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
   private static final class SymlinkToFile implements ResolvedFile {
     private final RootedPath path;
-    private final HasDigest metadata;
+    private final Object metadata;
     private final Symlink symlink;
 
     SymlinkToFile(
         RootedPath targetPath,
         RootedPath linkNamePath,
         PathFragment linkTargetPath,
-        HasDigest metadata) {
+        Object metadata) {
       this.path = Preconditions.checkNotNull(targetPath);
       this.metadata = Preconditions.checkNotNull(metadata);
       this.symlink = new Symlink(linkNamePath, linkTargetPath);
@@ -478,7 +460,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
     }
 
     @Override
-    public HasDigest getMetadata() {
+    public Object getMetadata() {
       return metadata;
     }
 
@@ -518,14 +500,11 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
 
   private static final class SymlinkToDirectory implements ResolvedFile {
     private final RootedPath path;
-    private final HasDigest metadata;
+    private final Object metadata;
     private final Symlink symlink;
 
     SymlinkToDirectory(
-        RootedPath targetPath,
-        RootedPath linkNamePath,
-        PathFragment linkValue,
-        HasDigest metadata) {
+        RootedPath targetPath, RootedPath linkNamePath, PathFragment linkValue, Object metadata) {
       this.path = Preconditions.checkNotNull(targetPath);
       this.metadata = Preconditions.checkNotNull(metadata);
       this.symlink = new Symlink(linkNamePath, linkValue);
@@ -542,7 +521,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
     }
 
     @Override
-    public HasDigest getMetadata() {
+    public Object getMetadata() {
       return metadata;
     }
 
@@ -583,7 +562,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
   static final class ResolvedFileFactory {
     private ResolvedFileFactory() {}
 
-    public static ResolvedFile regularFile(RootedPath path, HasDigest metadata) {
+    public static ResolvedFile regularFile(RootedPath path, Object metadata) {
       return new RegularFile(path, metadata);
     }
 
@@ -595,20 +574,17 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
         RootedPath targetPath,
         RootedPath linkNamePath,
         PathFragment linkTargetPath,
-        HasDigest metadata) {
+        Object metadata) {
       return new SymlinkToFile(targetPath, linkNamePath, linkTargetPath, metadata);
     }
 
     public static ResolvedFile symlinkToDirectory(
-        RootedPath targetPath,
-        RootedPath linkNamePath,
-        PathFragment linkValue,
-        HasDigest metadata) {
+        RootedPath targetPath, RootedPath linkNamePath, PathFragment linkValue, Object metadata) {
       return new SymlinkToDirectory(targetPath, linkNamePath, linkValue, metadata);
     }
 
     public static ResolvedFile danglingSymlink(
-        RootedPath linkNamePath, PathFragment linkValue, HasDigest metadata) {
+        RootedPath linkNamePath, PathFragment linkValue, Object metadata) {
       return new DanglingSymlink(linkNamePath, linkValue, metadata);
     }
   }
@@ -636,7 +612,7 @@ public final class RecursiveFilesystemTraversalValue implements SkyValue {
      * source targets. For generated targets we try to return a FileArtifactValue when possible, or
      * else this will be a Integer hashcode of the target.
      */
-    HasDigest getMetadata();
+    Object getMetadata();
 
     /**
      * Returns the path of the Fileset-output symlink relative to the output directory.
