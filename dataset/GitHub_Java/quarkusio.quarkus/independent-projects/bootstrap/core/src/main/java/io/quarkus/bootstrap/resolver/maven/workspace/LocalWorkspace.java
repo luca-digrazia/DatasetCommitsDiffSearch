@@ -1,18 +1,36 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.bootstrap.resolver.maven.workspace;
 
-import io.quarkus.bootstrap.model.AppArtifactCoords;
-import io.quarkus.bootstrap.model.AppArtifactKey;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.maven.model.Model;
 import org.apache.maven.model.resolution.UnresolvableModelException;
 import org.apache.maven.model.resolution.WorkspaceModelResolver;
 import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.repository.WorkspaceReader;
 import org.eclipse.aether.repository.WorkspaceRepository;
+
+import io.quarkus.bootstrap.model.AppArtifactCoords;
+import io.quarkus.bootstrap.model.AppArtifactKey;
 
 /**
  *
@@ -30,7 +48,7 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
 
     protected void addProject(LocalProject project, long lastModified) {
         projects.put(project.getKey(), project);
-        if (lastModified > this.lastModified) {
+        if(lastModified > this.lastModified) {
             this.lastModified = lastModified;
         }
         id = 31 * id + (int) (lastModified ^ (lastModified >>> 32));
@@ -56,7 +74,7 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
     public Model resolveRawModel(String groupId, String artifactId, String versionConstraint)
             throws UnresolvableModelException {
         final LocalProject project = getProject(groupId, artifactId);
-        if (project == null || !project.getVersion().equals(versionConstraint)) {
+        if(project == null || !project.getVersion().equals(versionConstraint)) {
             return null;
         }
         return project.getRawModel();
@@ -66,10 +84,6 @@ public class LocalWorkspace implements WorkspaceModelResolver, WorkspaceReader {
     public Model resolveEffectiveModel(String groupId, String artifactId, String versionConstraint)
             throws UnresolvableModelException {
         return null;
-    }
-
-    public Map<AppArtifactKey, LocalProject> getProjects() {
-        return projects;
     }
 
     @Override

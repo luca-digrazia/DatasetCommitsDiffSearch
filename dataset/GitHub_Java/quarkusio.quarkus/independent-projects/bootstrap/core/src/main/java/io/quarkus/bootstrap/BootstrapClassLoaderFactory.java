@@ -24,6 +24,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,6 +38,7 @@ import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
+import io.quarkus.bootstrap.util.PropertyUtils;
 
 /**
  *
@@ -44,6 +46,7 @@ import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
  */
 public class BootstrapClassLoaderFactory {
 
+    private static final String DOT_QUARKUS = ".quarkus";
     private static final String BOOTSTRAP = "bootstrap";
     private static final String DEPLOYMENT_CP = "deployment.cp";
 
@@ -59,7 +62,7 @@ public class BootstrapClassLoaderFactory {
         return new BootstrapClassLoaderFactory();
     }
 
-    private static URL[] toURLs(List<AppDependency> deps, List<Path> extraPaths) {
+    public static URLClassLoader newClassLoader(ClassLoader parent, List<AppDependency> deps, List<Path> extraPaths) {
         final URL[] urls = new URL[deps.size() + extraPaths.size()];
         try {
             int i = 0;
@@ -73,33 +76,20 @@ public class BootstrapClassLoaderFactory {
                 }
                 urls[i++] = p.toUri().toURL();
             }
-            return i != urls.length ? Arrays.copyOf(urls, i) : urls;
+            return new URLClassLoader(i != urls.length ? Arrays.copyOf(urls, i) : urls, parent);
         } catch (MalformedURLException e) {
             throw new IllegalStateException("Failed to create a URL", e);
         }
     }
 
     private static Path resolveCachedCpPath(LocalProject project) {
-        return project.getOutputDir().resolve(BOOTSTRAP).resolve(DEPLOYMENT_CP);
-    }
-
-    private static void persistCp(LocalProject project, URL[] urls, Path p) {
-        try {
-            Files.createDirectories(p.getParent());
-            try (BufferedWriter writer = Files.newBufferedWriter(p)) {
-                writer.write(Integer.toString(CP_CACHE_FORMAT_ID));
-                writer.newLine();
-                writer.write(Integer.toString(project.getWorkspace().getId()));
-                writer.newLine();
-                for (URL url : urls) {
-                    writer.write(url.toExternalForm());
-                    writer.newLine();
-                }
-            }
-            debug("Deployment classpath for %s was cached in %s", project.getAppArtifact(), p);
-        } catch (IOException e) {
-            log.warn("Failed to persist deployment classpath cache in " + p + " for " + project.getAppArtifact(), e);
-        }
+        return Paths.get(PropertyUtils.getUserHome())
+                .resolve(DOT_QUARKUS)
+                .resolve(BOOTSTRAP)
+                .resolve(project.getGroupId())
+                .resolve(project.getArtifactId())
+                .resolve(project.getVersion())
+                .resolve(DEPLOYMENT_CP);
     }
 
     private ClassLoader parent;
@@ -138,7 +128,7 @@ public class BootstrapClassLoaderFactory {
         return this;
     }
 
-    public BootstrapClassLoaderFactory setEnableClasspathCache(boolean enable) {
+    public BootstrapClassLoaderFactory setClasspathCache(boolean enable) {
         this.enableClasspathCache = enable;
         return this;
     }
@@ -171,9 +161,9 @@ public class BootstrapClassLoaderFactory {
             }
             final AppModel appModel = new BootstrapAppModelResolver(mvnBuilder.build()).resolveModel(localProject.getAppArtifact());
             if (hierarchical) {
-                final URLClassLoader cl = new URLClassLoader(toURLs(appModel.getUserDependencies(), appCp), parent);
+                final URLClassLoader cl = newClassLoader(parent, appModel.getUserDependencies(), appCp);
                 try {
-                    return new URLClassLoader(toURLs(appModel.getDeploymentDependencies(), Collections.emptyList()), cl);
+                    return newClassLoader(cl, appModel.getDeploymentDependencies(), Collections.emptyList());
                 } catch (Throwable e) {
                     try {
                         cl.close();
@@ -183,7 +173,7 @@ public class BootstrapClassLoaderFactory {
                     throw e;
                 }
             }
-            return new URLClassLoader(toURLs(appModel.getAllDependencies(), appCp), parent);
+            return newClassLoader(parent, appModel.getAllDependencies(), appCp);
         } catch (AppModelResolverException e) {
             throw new BootstrapException("Failed to init application classloader", e);
         }
@@ -195,16 +185,18 @@ public class BootstrapClassLoaderFactory {
         }
         final URLClassLoader ucl;
         Path cachedCpPath = null;
+        int wsId = 0;
         final LocalProject localProject = localProjectsDiscovery || enableClasspathCache
                 ? LocalProject.resolveLocalProjectWithWorkspace(LocalProject.locateCurrentProjectDir(appClasses))
                 : LocalProject.resolveLocalProject(LocalProject.locateCurrentProjectDir(appClasses));
         try {
             if (enableClasspathCache) {
+                wsId = localProject.getWorkspace().getId();
                 cachedCpPath = resolveCachedCpPath(localProject);
                 if (Files.exists(cachedCpPath)) {
                     try (BufferedReader reader = Files.newBufferedReader(cachedCpPath)) {
                         if (matchesInt(reader.readLine(), CP_CACHE_FORMAT_ID)) {
-                            if (matchesInt(reader.readLine(), localProject.getWorkspace().getId())) {
+                            if (matchesInt(reader.readLine(), wsId)) {
                                 final List<URL> urls = new ArrayList<>();
                                 String line = reader.readLine();
                                 while (line != null) {
@@ -231,13 +223,27 @@ public class BootstrapClassLoaderFactory {
             if (offline != null) {
                 mvn.setOffline(offline);
             }
-            final URL[] urls = toURLs(new BootstrapAppModelResolver(mvn.build()).resolveModel(localProject.getAppArtifact()).getDeploymentDependencies(), Collections.emptyList());
-            if(cachedCpPath != null) {
-                persistCp(localProject, urls, cachedCpPath);
-            }
-            ucl = new URLClassLoader(urls, parent);
+            ucl = newClassLoader(parent, new BootstrapAppModelResolver(mvn.build()).resolveModel(localProject.getAppArtifact()).getDeploymentDependencies(), Collections.emptyList());
         } catch (AppModelResolverException e) {
             throw new BootstrapException("Failed to create a deployment classloader for " + localProject.getAppArtifact(), e);
+        }
+        if(cachedCpPath != null) {
+            try {
+                Files.createDirectories(cachedCpPath.getParent());
+                try(BufferedWriter writer = Files.newBufferedWriter(cachedCpPath)) {
+                    writer.write(Integer.toString(CP_CACHE_FORMAT_ID));
+                    writer.newLine();
+                    writer.write(Integer.toString(wsId));
+                    writer.newLine();
+                    for(URL url : ucl.getURLs()) {
+                        writer.write(url.toExternalForm());
+                        writer.newLine();
+                    }
+                }
+                debug("Deployment classpath was cached for %s", localProject.getAppArtifact());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         return ucl;
     }
