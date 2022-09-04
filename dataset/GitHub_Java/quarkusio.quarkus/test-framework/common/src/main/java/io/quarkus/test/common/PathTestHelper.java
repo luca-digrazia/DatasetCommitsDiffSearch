@@ -9,9 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Stream;
 
-import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.runtime.util.ClassPathUtils;
 
 /**
@@ -101,20 +99,6 @@ public final class PathTestHelper {
                 File.separator + "test-classes",
                 File.separator + "classes");
         //endregion
-
-        String mappings = System.getenv(BootstrapConstants.TEST_TO_MAIN_MAPPINGS);
-        if (mappings != null) {
-            Stream.of(mappings.split(","))
-                    .filter(s -> !s.isEmpty())
-                    .forEach(s -> {
-                        String[] entry = s.split(":");
-                        if (entry.length == 2) {
-                            TEST_TO_MAIN_DIR_FRAGMENTS.put(entry[0], entry[1]);
-                        } else {
-                            throw new IllegalStateException("Unable to parse additional test-to-main mapping: " + s);
-                        }
-                    });
-        }
     }
 
     private PathTestHelper() {
@@ -227,12 +211,13 @@ public final class PathTestHelper {
     }
 
     public static boolean isTestClass(String className, ClassLoader classLoader, Path testLocation) {
-        URL resource = classLoader.getResource(className.replace('.', '/') + ".class");
+        String classFileName = className.replace('.', File.separatorChar) + ".class";
+        URL resource = classLoader.getResource(classFileName);
         if (resource == null) {
             return false;
         }
         if (Files.isDirectory(testLocation)) {
-            return resource.getProtocol().startsWith("file") && toPath(resource).startsWith(testLocation);
+            return resource.getProtocol().startsWith("file") && isInTestDir(resource);
         }
         if (!resource.getProtocol().equals("jar")) {
             return false;
