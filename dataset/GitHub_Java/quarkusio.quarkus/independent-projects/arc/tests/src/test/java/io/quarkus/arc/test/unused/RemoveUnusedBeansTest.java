@@ -29,7 +29,7 @@ public class RemoveUnusedBeansTest {
     public ArcTestContainer container = ArcTestContainer.builder()
             .beanClasses(HasObserver.class, Foo.class, FooAlternative.class, HasName.class, UnusedProducers.class,
                     InjectedViaInstance.class, InjectedViaProvider.class, Excluded.class, UsedProducers.class,
-                    UnusedProducerButInjected.class, UsedViaInstanceWithUnusedProducer.class, UsesBeanViaInstance.class)
+                    UnusedProducerButInjected.class)
             .removeUnusedBeans(true)
             .addRemovalExclusion(b -> b.getBeanClass().toString().equals(Excluded.class.getName()))
             .build();
@@ -54,9 +54,6 @@ public class RemoveUnusedBeansTest {
         // Producer is unused but declaring bean is injected
         assertTrue(container.instance(UnusedProducerButInjected.class).isAvailable());
         assertFalse(container.instance(BigInteger.class).isAvailable());
-        // Producer is unused, declaring bean is only used via Instance
-        assertTrue(container.instance(UsedViaInstanceWithUnusedProducer.class).isAvailable());
-        assertFalse(container.instance(Long.class).isAvailable());
     }
 
     @Dependent
@@ -159,20 +156,6 @@ public class RemoveUnusedBeansTest {
             return BigInteger.ZERO;
         }
 
-    }
-
-    @Singleton
-    static class UsedViaInstanceWithUnusedProducer {
-
-        @Produces
-        Long unusedLong = new Long(0);
-    }
-
-    @Singleton
-    static class UsesBeanViaInstance {
-
-        @Inject
-        Instance<UsedViaInstanceWithUnusedProducer> instance;
     }
 
 }

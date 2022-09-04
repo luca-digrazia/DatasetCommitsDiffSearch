@@ -1,7 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
-
 import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext;
 import io.quarkus.arc.processor.BeanProcessor.BuildContextImpl;
 import io.quarkus.arc.processor.BeanRegistrar.RegistrationContext;
@@ -125,9 +123,12 @@ public class BeanDeployment {
         this.interceptorBindings = findInterceptorBindings(index);
         for (InterceptorBindingRegistrar registrar : bindingRegistrars) {
             for (DotName dotName : registrar.registerAdditionalBindings()) {
-                ClassInfo classInfo = getClassByName(index, dotName);
+                ClassInfo classInfo = index.getClassByName(dotName);
                 if (classInfo != null) {
                     interceptorBindings.put(dotName, classInfo);
+                } else {
+                    throw new RuntimeException("An attempt was made to turn class " + dotName + " into an interceptor " +
+                            "binding but the class was not found in Jandex index.");
                 }
             }
         }
@@ -452,7 +453,7 @@ public class BeanDeployment {
         }
         for (AnnotationInstance stereotype : stereotypeAnnotations) {
             final DotName stereotypeName = stereotype.target().asClass().name();
-            ClassInfo stereotypeClass = getClassByName(index, stereotypeName);
+            ClassInfo stereotypeClass = index.getClassByName(stereotypeName);
             if (stereotypeClass != null) {
 
                 boolean isAlternative = false;
@@ -493,12 +494,9 @@ public class BeanDeployment {
             for (BeanDefiningAnnotation i : additionalBeanDefiningAnnotations) {
                 if (i.getDefaultScope() != null) {
                     ScopeInfo scope = getScope(i.getDefaultScope(), customContexts);
-                    ClassInfo stereotypeClassInfo = getClassByName(index, i.getAnnotation());
-                    if (stereotypeClassInfo != null) {
-                        stereotypes.put(i.getAnnotation(), new StereotypeInfo(scope, Collections.emptyList(),
-                                false, null, false, true,
-                                stereotypeClassInfo));
-                    }
+                    stereotypes.put(i.getAnnotation(), new StereotypeInfo(scope, Collections.emptyList(),
+                            false, null, false, true,
+                            index.getClassByName(i.getAnnotation())));
                 }
             }
         }
@@ -662,7 +660,7 @@ public class BeanDeployment {
                 Type superType = aClass.superClassType();
                 aClass = superType != null && !superType.name().equals(DotNames.OBJECT)
                         && CLASS_TYPES.contains(superType.kind())
-                                ? getClassByName(index, superType.name())
+                                ? index.getClassByName(superType.name())
                                 : null;
             }
             for (FieldInfo field : beanClass.fields()) {
