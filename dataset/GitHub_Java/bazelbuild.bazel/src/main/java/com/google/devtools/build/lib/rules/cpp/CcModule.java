@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.SkylarkInfo;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper.LinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ActionConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ArtifactNamePattern;
@@ -87,8 +88,7 @@ public class CcModule
         CcCompilationContext,
         CcLinkingContext,
         LibraryToLinkWrapper,
-        CcToolchainVariables,
-        SkylarkRuleContext> {
+        CcToolchainVariables> {
 
   private enum RegisterActions {
     ALWAYS,
@@ -504,8 +504,7 @@ public class CcModule
         ccLinkingContextBuilder.addUserLinkFlags(
             NestedSetBuilder.wrap(
                 Order.LINK_ORDER,
-                ImmutableList.of(
-                    CcLinkingContext.LinkOptions.of(userLinkFlags.getImmutableList()))));
+                ImmutableList.of(LinkOptions.of(userLinkFlags.getImmutableList()))));
       }
       return ccLinkingContextBuilder.build();
     }
@@ -637,16 +636,18 @@ public class CcModule
             .setNeverLink(neverLink);
     try {
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-      ImmutableList<LibraryToLinkWrapper> libraryToLinkWrapper = ImmutableList.of();
+      ImmutableList.Builder<LibraryToLinkWrapper> libraryToLinkWrapperBuilder =
+          ImmutableList.builder();
       if (!ccCompilationOutputs.isEmpty()) {
         ccLinkingOutputs = helper.link(ccCompilationOutputs);
-        if (!neverLink && !ccLinkingOutputs.isEmpty()) {
-          libraryToLinkWrapper = ImmutableList.of(ccLinkingOutputs.getLibraryToLink());
+        if (!neverLink) {
+          libraryToLinkWrapperBuilder.add(
+              LibraryToLinkWrapper.convertLinkOutputsToLibraryToLinkWrapper(ccLinkingOutputs));
         }
       }
       CcLinkingContext ccLinkingContext =
           helper.buildCcLinkingContextFromLibraryToLinkWrappers(
-              libraryToLinkWrapper, CcCompilationContext.EMPTY);
+              libraryToLinkWrapperBuilder.build(), CcCompilationContext.EMPTY);
       return new LinkingInfo(ccLinkingContext, ccLinkingOutputs);
     } catch (RuleErrorException e) {
       throw new EvalException(ruleContext.getRule().getLocation(), e);
@@ -1506,10 +1507,5 @@ public class CcModule
   @Nullable
   private static <T> T nullIfNone(Object object, Class<T> type) {
     return object != Runtime.NONE ? type.cast(object) : null;
-  }
-
-  @Override
-  public boolean isCcToolchainResolutionEnabled(SkylarkRuleContext skylarkRuleContext) {
-    return CppHelper.useToolchainResolution(skylarkRuleContext.getRuleContext());
   }
 }

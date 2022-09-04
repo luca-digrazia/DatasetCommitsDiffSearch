@@ -4093,7 +4093,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         (CcToolchainConfigInfo) target.get(CcToolchainConfigInfo.PROVIDER.getKey());
     assertThat(ccToolchainConfigInfo).isNotNull();
 
-    useConfiguration("--experimental_enable_cc_toolchain_config_info=false");
+    useConfiguration();
     AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//foo:r"));
     assertThat(e).hasMessageThat().contains("Creating a CcToolchainConfigInfo is not enabled.");
   }
