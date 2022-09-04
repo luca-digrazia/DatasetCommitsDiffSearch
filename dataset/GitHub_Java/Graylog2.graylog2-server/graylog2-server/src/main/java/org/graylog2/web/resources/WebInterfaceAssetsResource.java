@@ -16,92 +16,110 @@
  */
 package org.graylog2.web.resources;
 
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
-import com.google.common.io.Files;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.graylog2.plugin.Plugin;
 import org.graylog2.web.IndexHtmlGenerator;
-import org.graylog2.web.PluginAssets;
+import org.graylog2.web.ModuleManifest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.core.CacheControl;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.EntityTag;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Date;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
 @Path("{filename: .*}")
 public class WebInterfaceAssetsResource {
+    private static final Logger LOG = LoggerFactory.getLogger(WebInterfaceAssetsResource.class);
+
+    private static String pathPrefix = "web-interface/assets";
+    private static String pluginPathPrefix = "/plugin/";
+    private static String manifestFilename = "module.json";
     private final IndexHtmlGenerator indexHtmlGenerator;
+    private final ObjectMapper objectMapper;
 
     @Inject
-    public WebInterfaceAssetsResource(IndexHtmlGenerator indexHtmlGenerator) {
-        this.indexHtmlGenerator = indexHtmlGenerator;
+    public WebInterfaceAssetsResource(ObjectMapper objectMapper,
+                                      Set<Plugin> plugins) throws IOException {
+        this.objectMapper = objectMapper;
+        final List<String> jsFiles = new ArrayList<>();
+        final List<String> cssFiles = new ArrayList<>();
+
+        plugins.stream().forEach(plugin -> {
+            final ModuleManifest pluginManifest = manifestForPlugin(plugin);
+            final String pathPrefix = pluginPathPrefix + plugin.metadata().getUniqueId() + "/";
+            if (pluginManifest != null) {
+                jsFiles.addAll(pluginManifest.files().jsFiles().stream().map(file -> file.startsWith(pathPrefix) ? file : pathPrefix + file).collect(Collectors.toList()));
+                cssFiles.addAll(pluginManifest.files().cssFiles().stream().map(file -> file.startsWith(pathPrefix) ? file : pathPrefix + file).collect(Collectors.toList()));
+            }
+        });
+        final InputStream packageManifest = ClassLoader.getSystemResourceAsStream(pathPrefix + "/" + manifestFilename);
+        if (packageManifest != null) {
+            final ModuleManifest manifest = objectMapper.readValue(packageManifest, ModuleManifest.class);
+            jsFiles.addAll(manifest.files().jsFiles());
+            cssFiles.addAll(manifest.files().cssFiles());
+        } else {
+            LOG.warn("Unable to find web interface assets. Maybe the web interface was not built into server?");
+        }
+        this.indexHtmlGenerator = new IndexHtmlGenerator("Graylog Web Interface", cssFiles, jsFiles);
     }
 
     @GET
-    public Response get(@Context Request request, @Context HttpHeaders httpheaders, @PathParam("filename") String filename) {
+    public Response get(@PathParam("filename") String filename) {
         if (filename == null || filename.isEmpty() || filename.equals("/") || filename.equals("index.html")) {
             return getDefaultResponse();
         }
-        try {
-            final File resourceFile = getResourceFile(filename);
-            final InputStream stream = new FileInputStream(resourceFile);
-            final HashCode hashCode = Files.hash(resourceFile, Hashing.sha256());
-            final EntityTag entityTag = new EntityTag(hashCode.toString());
-            final Date lastModified = new Date(resourceFile.lastModified());
-
-            final Response.ResponseBuilder response = request.evaluatePreconditions(lastModified, entityTag);
-            if (response != null) {
-                return response.build();
-            }
-
-            final String contentType = firstNonNull(URLConnection.guessContentTypeFromName(filename), MediaType.APPLICATION_OCTET_STREAM);
-            final CacheControl cacheControl = new CacheControl();
-            cacheControl.setMaxAge((int)TimeUnit.DAYS.toSeconds(365));
-            cacheControl.setNoCache(false);
-            cacheControl.setPrivate(false);
-            return Response
-                .ok(stream)
-                .header(HttpHeaders.CONTENT_TYPE, contentType)
-                .tag(entityTag)
-                .cacheControl(cacheControl)
-                .lastModified(lastModified)
-                .build();
-        } catch (IOException | URISyntaxException e) {
+        final InputStream stream = getStreamForFile(filename);
+        if (stream == null) {
             return getDefaultResponse();
         }
+
+        final String contentType = firstNonNull(URLConnection.guessContentTypeFromName(filename), MediaType.APPLICATION_OCTET_STREAM);
+        return Response
+                .ok(stream)
+                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .build();
     }
 
-    private File getResourceFile(String filename) throws URISyntaxException, FileNotFoundException {
-        final URL resourceUrl =  this.getClass().getResource("/" + PluginAssets.pathPrefix + "/" + filename);
-        if (resourceUrl == null) {
-            throw new FileNotFoundException("Resource file " + filename + " not found.");
+    private ModuleManifest manifestForPlugin(Plugin plugin) {
+        final InputStream manifestStream = plugin.metadata().getClass().getResourceAsStream("/" + manifestFilename);
+        if (manifestStream != null) {
+            try {
+                final ModuleManifest manifest = objectMapper.readValue(manifestStream, ModuleManifest.class);
+                return manifest;
+            } catch (IOException e) {
+                LOG.warn("Unable to read manifest from plugin " + plugin + ": ", e);
+            }
         }
-        return new File(resourceUrl.toURI());
+
+        LOG.debug("No valid manifest found for plugin " + plugin);
+
+        return null;
+    }
+
+    private static InputStream getStreamForFile(String filename) {
+        return ClassLoader.getSystemResourceAsStream(pathPrefix + "/" + filename);
     }
 
     private Response getDefaultResponse() {
         return Response
                 .ok(this.indexHtmlGenerator.get())
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML)
-                .header("X-UA-Compatible", "IE=edge")
                 .build();
     }
 }
