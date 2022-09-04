@@ -6,7 +6,6 @@ import javax.jms.ConnectionFactory;
 
 import org.apache.activemq.artemis.jms.client.ActiveMQJMSConnectionFactory;
 
-import io.quarkus.arc.DefaultBean;
 import io.quarkus.artemis.core.runtime.ArtemisRuntimeConfig;
 
 @ApplicationScoped
@@ -15,9 +14,7 @@ public class ArtemisJmsProducer {
     private ArtemisRuntimeConfig config;
 
     @Produces
-    @ApplicationScoped
-    @DefaultBean
-    public ConnectionFactory connectionFactory() {
+    public ConnectionFactory producesConnectionFactory() {
         return new ActiveMQJMSConnectionFactory(config.url,
                 config.username.orElse(null), config.password.orElse(null));
     }
