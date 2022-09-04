@@ -19,8 +19,5 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @Documented
 public @interface Transactional {
-    /**
-     * If {@code true}, the Hibernate session will default to loading read-only entities.
-     */
-    boolean readOnly() default false;
+
 }
