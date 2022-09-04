@@ -22,7 +22,7 @@
  */
 package org.graylog2.plugin.inputs.transports;
 
-import org.graylog2.plugin.LocalMetricRegistry;
+import com.codahale.metrics.MetricRegistry;
 import org.graylog2.plugin.collections.Pair;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput2;
@@ -38,6 +38,8 @@ import javax.inject.Provider;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 public abstract class AbstractTcpTransport extends NettyTransport {
     protected final Executor bossExecutor;
     protected final Executor workerExecutor;
@@ -46,17 +48,14 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     public AbstractTcpTransport(
             Configuration configuration,
             ThroughputCounter throughputCounter,
-            LocalMetricRegistry localRegistry,
+            MetricRegistry metricRegistry,
             Executor bossPool,
             Provider<Executor> workerPoolProvider,
             ConnectionCounter connectionCounter) {
-        super(configuration, throughputCounter, localRegistry);
+        super(configuration, throughputCounter, metricRegistry);
         this.bossExecutor = bossPool;
         this.workerExecutor = workerPoolProvider.get();
         this.connectionCounter = connectionCounter;
-
-        this.localRegistry.register("open_connections", connectionCounter.gaugeCurrent());
-        this.localRegistry.register("total_connections", connectionCounter.gaugeTotal());
     }
 
     @Override
@@ -75,6 +74,13 @@ public abstract class AbstractTcpTransport extends NettyTransport {
         final List<Pair<String, ? extends ChannelHandler>> baseChannelHandlers = super.getBaseChannelHandlers(input);
         baseChannelHandlers.add(Pair.of("connection-counter", connectionCounter));
         return baseChannelHandlers;
+    }
+
+    @Override
+    public void setupMetrics(MessageInput2 input) {
+        super.setupMetrics(input);
+        metricRegistry.register(name(input.getUniqueReadableId(), "open_connections"), connectionCounter.gaugeCurrent());
+        metricRegistry.register(name(input.getUniqueReadableId(), "total_connections"), connectionCounter.gaugeTotal());
     }
 
 }
