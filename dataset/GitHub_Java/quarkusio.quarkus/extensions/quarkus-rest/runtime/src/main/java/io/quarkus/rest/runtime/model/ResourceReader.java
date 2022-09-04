@@ -11,7 +11,6 @@ import javax.ws.rs.ext.MessageBodyReader;
 
 import io.quarkus.rest.runtime.spi.BeanFactory;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
-import io.quarkus.runtime.annotations.IgnoreProperty;
 
 public class ResourceReader {
 
@@ -56,7 +55,6 @@ public class ResourceReader {
         this.builtin = builtin;
     }
 
-    @IgnoreProperty
     public MessageBodyReader<?> getInstance() {
         if (instance == null) {
             synchronized (this) {

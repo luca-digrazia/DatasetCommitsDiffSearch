@@ -12,6 +12,7 @@ import javax.ws.rs.ext.MessageBodyWriter;
 
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
 import io.quarkus.rest.runtime.core.Serialisers;
+import io.quarkus.rest.runtime.util.HttpHeaderNames;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
 import io.vertx.core.http.HttpServerRequest;
 
@@ -36,7 +37,7 @@ public class DynamicEntityWriter implements EntityWriter {
             HttpServerRequest vertxRequest = context.getContext().request();
             // first check and see if the resource method defined a media type and try to use it
             if ((context.getTarget() != null) && (context.getTarget().getProduces() != null)) {
-                MediaType res = context.getTarget().getProduces().negotiateProduces(vertxRequest).getKey();
+                MediaType res = context.getTarget().getProduces().negotiateProduces(vertxRequest);
                 List<MessageBodyWriter<?>> writersList = serialisers.findWriters(null, entity.getClass(), res,
                         RuntimeType.SERVER);
                 if (!writersList.isEmpty()) {
@@ -58,7 +59,7 @@ public class DynamicEntityWriter implements EntityWriter {
             // try to find a Writer based on the entity type
             if (writers == null) {
                 Serialisers.NoMediaTypeResult writerNoMediaType = serialisers.findWriterNoMediaType(context, entity,
-                        serialisers, RuntimeType.SERVER);
+                        RuntimeType.SERVER);
                 writers = writerNoMediaType.getWriters();
                 selectedMediaType = writerNoMediaType.getMediaType();
             }
@@ -73,7 +74,7 @@ public class DynamicEntityWriter implements EntityWriter {
                 } else {
                     context.setProducesMediaType(selectedMediaType);
                     // this will be used as the fallback if Response does NOT contain a type
-                    context.getContext().response().headers().add(HttpHeaders.CONTENT_TYPE, selectedMediaType.toString());
+                    context.getContext().response().headers().add(HttpHeaderNames.CONTENT_TYPE, selectedMediaType.toString());
                 }
             }
         } else {
@@ -81,7 +82,7 @@ public class DynamicEntityWriter implements EntityWriter {
                     .toArray(Serialisers.NO_WRITER);
         }
         for (MessageBodyWriter<?> w : writers) {
-            if (Serialisers.invokeWriter(context, entity, w, serialisers)) {
+            if (Serialisers.invokeWriter(context, entity, w)) {
                 return;
             }
         }

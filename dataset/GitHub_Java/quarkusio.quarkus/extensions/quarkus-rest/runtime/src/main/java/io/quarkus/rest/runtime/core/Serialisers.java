@@ -797,13 +797,12 @@ public class Serialisers {
 
     public static Object invokeClientReader(Annotation[] annotations, Class<?> entityClass, Type entityType,
             MediaType mediaType, Map<String, Object> properties,
-            MultivaluedMap metadata, Serialisers serialisers, InputStream in, ReaderInterceptor[] interceptors,
-            QuarkusRestConfiguration configuration)
+            MultivaluedMap metadata, MessageBodyReader<?> reader, InputStream in, ReaderInterceptor[] interceptors)
             throws WebApplicationException, IOException {
         // FIXME: perhaps optimise for when we have no interceptor?
         QuarkusRestClientReaderInterceptorContext context = new QuarkusRestClientReaderInterceptorContext(annotations,
                 entityClass, entityType, mediaType,
-                properties, (MultivaluedMap) metadata, configuration, serialisers, in, interceptors, RuntimeType.CLIENT);
+                properties, (MultivaluedMap) metadata, reader, in, interceptors);
         return context.proceed();
     }
 }
