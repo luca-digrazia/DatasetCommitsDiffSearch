@@ -52,8 +52,8 @@ public abstract class Serialisers {
         QuarkusMultivaluedMap<Class<?>, ResourceReader> readers;
         if (configuration != null && !configuration.getResourceReaders().isEmpty()) {
             readers = new QuarkusMultivaluedHashMap<>();
-            readers.putAll(this.readers);
             readers.addAll(configuration.getResourceReaders());
+            readers.addAll(this.readers);
         } else {
             readers = this.readers;
         }
@@ -91,11 +91,12 @@ public abstract class Serialisers {
             List<ResourceReader> goodTypeReaders) {
         if (goodTypeReaders != null && !goodTypeReaders.isEmpty()) {
             List<ResourceReader> mediaTypeMatchingReaders = new ArrayList<>(goodTypeReaders.size());
-            for (ResourceReader goodTypeReader : goodTypeReaders) {
+            for (int i = 0; i < goodTypeReaders.size(); i++) {
+                ResourceReader goodTypeReader = goodTypeReaders.get(i);
                 if (!goodTypeReader.matchesRuntimeType(runtimeType)) {
                     continue;
                 }
-                MediaType match = MediaTypeHelper.getBestMatch(mt, goodTypeReader.mediaTypes());
+                MediaType match = MediaTypeHelper.getFirstMatch(mt, goodTypeReader.mediaTypes());
                 if (match != null || mediaType == null) {
                     mediaTypeMatchingReaders.add(goodTypeReader);
                 }
@@ -115,15 +116,7 @@ public abstract class Serialisers {
         readers.add(entityClass, reader);
     }
 
-    public List<MessageBodyWriter<?>> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType, String... produces) {
-        List<MediaType> type = new ArrayList<>();
-        for (String i : produces) {
-            type.add(MediaType.valueOf(i));
-        }
-        return findBuildTimeWriters(entityType, runtimeType, type);
-    }
-
-    private List<MessageBodyWriter<?>> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType,
+    public List<MessageBodyWriter<?>> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType,
             List<MediaType> produces) {
         if (Response.class.isAssignableFrom(entityType)) {
             return Collections.emptyList();
@@ -142,8 +135,9 @@ public abstract class Serialisers {
                 if (produces == null || produces.isEmpty()) {
                     return null;
                 } else {
-                    for (ResourceWriter writer : entry.getValue()) {
-                        MediaType match = MediaTypeHelper.getBestMatch(produces, writer.modifiableMediaTypes());
+                    List<ResourceWriter> writers = entry.getValue();
+                    for (int i = 0; i < writers.size(); i++) {
+                        MediaType match = MediaTypeHelper.getFirstMatch(produces, writers.get(i).mediaTypes());
                         if (match != null) {
                             return null;
                         }
@@ -209,11 +203,12 @@ public abstract class Serialisers {
             List<ResourceWriter> goodTypeWriters) {
         if (goodTypeWriters != null && !goodTypeWriters.isEmpty()) {
             List<ResourceWriter> mediaTypeMatchingWriters = new ArrayList<>(goodTypeWriters.size());
-            for (ResourceWriter goodTypeWriter : goodTypeWriters) {
+            for (int i = 0; i < goodTypeWriters.size(); i++) {
+                ResourceWriter goodTypeWriter = goodTypeWriters.get(i);
                 if (!goodTypeWriter.matchesRuntimeType(runtimeType)) {
                     continue;
                 }
-                MediaType match = MediaTypeHelper.getBestMatch(mt, goodTypeWriter.modifiableMediaTypes());
+                MediaType match = MediaTypeHelper.getFirstMatch(mt, goodTypeWriter.mediaTypes());
                 if (match != null) {
                     mediaTypeMatchingWriters.add(goodTypeWriter);
                 }
@@ -224,12 +219,12 @@ public abstract class Serialisers {
         }
     }
 
-    public abstract BuiltinWriter[] getBultinWriters();
+    public abstract BuiltinWriter[] getBuiltinWriters();
 
-    public abstract BuiltinReader[] getBultinReaders();
+    public abstract BuiltinReader[] getBuiltinReaders();
 
     public void registerBuiltins(RuntimeType constraint) {
-        for (BuiltinWriter builtinWriter : getBultinWriters()) {
+        for (BuiltinWriter builtinWriter : getBuiltinWriters()) {
             if (builtinWriter.constraint == null || builtinWriter.constraint == constraint) {
                 MessageBodyWriter<?> writer;
                 try {
@@ -246,7 +241,7 @@ public abstract class Serialisers {
                 addWriter(builtinWriter.entityClass, resourceWriter);
             }
         }
-        for (BuiltinReader builtinReader : getBultinReaders()) {
+        for (BuiltinReader builtinReader : getBuiltinReaders()) {
             if (builtinReader.constraint == null || builtinReader.constraint == constraint) {
                 MessageBodyReader<?> reader;
                 try {
@@ -255,12 +250,12 @@ public abstract class Serialisers {
                     e.printStackTrace();
                     continue;
                 }
-                ResourceReader resourceWriter = new ResourceReader();
-                resourceWriter.setConstraint(builtinReader.constraint);
-                resourceWriter.setMediaTypeStrings(Collections.singletonList(builtinReader.mediaType));
+                ResourceReader resourceReader = new ResourceReader();
+                resourceReader.setConstraint(builtinReader.constraint);
+                resourceReader.setMediaTypeStrings(Collections.singletonList(builtinReader.mediaType));
                 // FIXME: we could still support beans
-                resourceWriter.setFactory(new UnmanagedBeanFactory<MessageBodyReader<?>>(reader));
-                addReader(builtinReader.entityClass, resourceWriter);
+                resourceReader.setFactory(new UnmanagedBeanFactory<MessageBodyReader<?>>(reader));
+                addReader(builtinReader.entityClass, resourceReader);
             }
         }
     }
@@ -281,8 +276,10 @@ public abstract class Serialisers {
         QuarkusMultivaluedMap<Class<?>, ResourceWriter> writers;
         if (configuration != null && !configuration.getResourceWriters().isEmpty()) {
             writers = new QuarkusMultivaluedHashMap<>();
-            writers.putAll(this.writers);
             writers.addAll(configuration.getResourceWriters());
+            for (Map.Entry<Class<?>, List<ResourceWriter>> writersEntry : this.writers.entrySet()) {
+                writers.addAll(writersEntry.getKey(), writersEntry.getValue());
+            }
         } else {
             writers = this.writers;
         }
