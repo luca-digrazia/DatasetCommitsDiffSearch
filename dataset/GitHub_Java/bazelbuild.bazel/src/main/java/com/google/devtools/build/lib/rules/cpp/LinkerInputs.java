@@ -154,7 +154,7 @@ public abstract class LinkerInputs {
    * has a library identifier.
    */
   public interface LibraryToLink extends LinkerInput, LibraryToLinkApi {
-    LtoCompilationContext getLtoCompilationContext();
+    ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles();
 
     /**
      * Return a map of object file artifacts to associated LTOBackendArtifacts objects generated
@@ -222,8 +222,8 @@ public abstract class LinkerInputs {
     }
 
     @Override
-    public LtoCompilationContext getLtoCompilationContext() {
-      return new LtoCompilationContext(ImmutableMap.of());
+    public ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles() {
+      return ImmutableMap.of();
     }
 
     @Override
@@ -289,7 +289,7 @@ public abstract class LinkerInputs {
     private final ArtifactCategory category;
     private final String libraryIdentifier;
     private final Iterable<Artifact> objectFiles;
-    private final LtoCompilationContext ltoCompilationContext;
+    private final ImmutableMap<Artifact, Artifact> ltoBitcodeFiles;
     private final ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends;
     private final boolean mustKeepDebug;
 
@@ -300,14 +300,14 @@ public abstract class LinkerInputs {
         ArtifactCategory category,
         String libraryIdentifier,
         Iterable<Artifact> objectFiles,
-        LtoCompilationContext ltoCompilationContext,
+        ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
         ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends,
         boolean mustKeepDebug) {
       this.libraryArtifact = libraryArtifact;
       this.category = category;
       this.libraryIdentifier = libraryIdentifier;
       this.objectFiles = objectFiles;
-      this.ltoCompilationContext = ltoCompilationContext;
+      this.ltoBitcodeFiles = ltoBitcodeFiles;
       this.sharedNonLtoBackends = sharedNonLtoBackends;
       this.mustKeepDebug = mustKeepDebug;
     }
@@ -317,7 +317,7 @@ public abstract class LinkerInputs {
         ArtifactCategory category,
         String libraryIdentifier,
         Iterable<Artifact> objectFiles,
-        LtoCompilationContext ltoCompilationContext,
+        ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
         ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends,
         boolean allowArchiveTypeInAlwayslink,
         boolean mustKeepDebug) {
@@ -346,10 +346,8 @@ public abstract class LinkerInputs {
       this.category = category;
       this.libraryIdentifier = libraryIdentifier;
       this.objectFiles = objectFiles == null ? null : CollectionUtils.makeImmutable(objectFiles);
-      this.ltoCompilationContext =
-          (ltoCompilationContext == null)
-              ? new LtoCompilationContext(ImmutableMap.of())
-              : ltoCompilationContext;
+      this.ltoBitcodeFiles =
+          (ltoBitcodeFiles == null) ? ImmutableMap.<Artifact, Artifact>of() : ltoBitcodeFiles;
       this.sharedNonLtoBackends = sharedNonLtoBackends;
       this.mustKeepDebug = mustKeepDebug;
     }
@@ -401,8 +399,8 @@ public abstract class LinkerInputs {
     }
 
     @Override
-    public LtoCompilationContext getLtoCompilationContext() {
-      return ltoCompilationContext;
+    public ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles() {
+      return ltoBitcodeFiles;
     }
 
     @Override
@@ -493,7 +491,7 @@ public abstract class LinkerInputs {
         category,
         CcLinkingOutputs.libraryIdentifierOf(artifact),
         /* objectFiles= */ null,
-        /* ltoCompilationContext= */ null,
+        /* ltoBitcodeFiles= */ null,
         /* sharedNonLtoBackends= */ null,
         /* allowArchiveTypeInAlwayslink= */ false,
         /* mustKeepDebug= */ false);
@@ -506,7 +504,7 @@ public abstract class LinkerInputs {
         category,
         libraryIdentifier,
         /* objectFiles= */ null,
-        /* ltoCompilationContext= */ null,
+        /* ltoBitcodeFiles= */ null,
         /* sharedNonLtoBackends= */ null,
         /* allowArchiveTypeInAlwayslink= */ category.equals(
             ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY),
@@ -521,7 +519,7 @@ public abstract class LinkerInputs {
         category,
         libraryIdentifier,
         /* objectFiles= */ null,
-        /* ltoCompilationContext= */ null,
+        /* ltoBitcodeFiles= */ null,
         /* sharedNonLtoBackends= */ null,
         /* allowArchiveTypeInAlwayslink= */ false,
         /* mustKeepDebug= */ stripMode == CppConfiguration.StripMode.NEVER);
@@ -533,7 +531,7 @@ public abstract class LinkerInputs {
       ArtifactCategory category,
       String libraryIdentifier,
       Iterable<Artifact> objectFiles,
-      LtoCompilationContext ltoCompilationContext,
+      ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
       ImmutableMap<Artifact, LtoBackendArtifacts> sharedNonLtoBackends,
       boolean mustKeepDebug) {
     return new CompoundLibraryToLink(
@@ -541,9 +539,9 @@ public abstract class LinkerInputs {
         category,
         libraryIdentifier,
         objectFiles,
-        ltoCompilationContext,
+        ltoBitcodeFiles,
         sharedNonLtoBackends,
-        /* allowArchiveTypeInAlwayslink= */ true,
+        /* allowArchiveTypeInAlwayslink= */ false,
         mustKeepDebug);
   }
 
