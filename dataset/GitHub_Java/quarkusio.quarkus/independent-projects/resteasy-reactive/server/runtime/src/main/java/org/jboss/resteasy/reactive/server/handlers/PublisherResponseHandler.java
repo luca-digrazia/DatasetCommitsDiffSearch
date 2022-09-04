@@ -135,10 +135,6 @@ public class PublisherResponseHandler implements ServerRestHandler {
             // no need to cancel on complete
             // FIXME: are we interested in async completion?
             requestContext.serverResponse().end();
-            // so, if I don't also close the connection, the client isn't notified that the request is over
-            // I guess that's true of chunked responses, but not clear why I need to close the connection
-            // because it means it can't get reused, right?
-            requestContext.serverRequest().closeConnection();
             requestContext.close();
         }
 
@@ -155,7 +151,7 @@ public class PublisherResponseHandler implements ServerRestHandler {
                 log.error("Exception in SSE server handling, impossible to send it to client", t);
             } else {
                 // we can go through the abort chain
-                requestContext.resume(t);
+                requestContext.resume(t, true);
             }
         }
     }
