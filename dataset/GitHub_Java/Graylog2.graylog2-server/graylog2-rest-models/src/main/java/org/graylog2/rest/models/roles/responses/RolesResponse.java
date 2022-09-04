@@ -33,12 +33,12 @@ public abstract class RolesResponse {
     public abstract Set<RoleResponse> roles();
 
     @JsonProperty
-    public int total() {
+    public int getTotal() {
         return roles().size();
     }
 
     @JsonCreator
-    public static RolesResponse create(@JsonProperty("roles") @NotNull Set<RoleResponse> roles) {
+    public static RolesResponse create(@JsonProperty("roles") Set<RoleResponse> roles) {
         return new AutoValue_RolesResponse(roles);
     }
 }
