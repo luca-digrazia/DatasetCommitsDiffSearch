@@ -206,9 +206,7 @@ public class SkylarkActionFactory implements SkylarkValue {
         "Creates a file write action. When the action is executed, it will write the given content "
             + "to a file. This is used to generate files using information available in the "
             + "analysis phase. If the file is large and with a lot of static content, consider "
-            + "using <a href=\"#expand_template\">expand_template</a>. "
-            + "<a href=\"https://github.com/laurentlb/examples/blob/master/rules/executable/executable.bzl\">"
-            + "See example of use</a>",
+            + "using <a href=\"#expand_template\">expand_template</a>.",
     parameters = {
       @Param(name = "output", type = Artifact.class, doc = "the output file.", named = true),
       @Param(
@@ -263,7 +261,7 @@ public class SkylarkActionFactory implements SkylarkValue {
               type = Object.class,
               allowedTypes = {
                   @ParamType(type = Artifact.class),
-                  @ParamType(type = String.class),
+                  @ParamType(type = PathFragment.class),
               },
               named = true,
               positional = false,
@@ -371,12 +369,12 @@ public class SkylarkActionFactory implements SkylarkValue {
       } else {
         builder.setExecutable(provider);
       }
-    } else if (executableUnchecked instanceof String) {
-      builder.setExecutable(PathFragment.create((String) executableUnchecked));
+    } else if (executableUnchecked instanceof PathFragment) {
+      builder.setExecutable((PathFragment) executableUnchecked);
     } else {
       throw new EvalException(
           null,
-          "expected file or string for "
+          "expected file or PathFragment for "
               + "executable but got "
               + EvalUtils.getDataTypeName(executableUnchecked)
               + " instead");
@@ -643,9 +641,7 @@ public class SkylarkActionFactory implements SkylarkValue {
             + "using the <code>substitutions</code> dictionary. Whenever a key of the "
             + "dictionary appears in the template, it is replaced with the associated value. "
             + "There is no special syntax for the keys. You may for example use curly braces "
-            + "to avoid conflicts (e.g. <code>{KEY}</code>). "
-            + "<a href=\"https://github.com/laurentlb/examples/blob/master/rules/expand_template/hello.bzl\">"
-            + "See example of use</a>",
+            + "to avoid conflicts (e.g. <code>{KEY}</code>).",
     parameters = {
       @Param(
         name = "template",
