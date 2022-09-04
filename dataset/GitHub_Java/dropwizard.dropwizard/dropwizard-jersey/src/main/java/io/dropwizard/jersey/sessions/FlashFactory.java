@@ -21,7 +21,8 @@ public final class FlashFactory extends AbstractContainerRequestValueFactory<Fla
             return null;
         }
 
-        final HttpSession session = request.getSession(!this.doNotCreate);
+        HttpSession session = request.getSession(!this.doNotCreate);
+
         if (session != null) {
             return new Flash(session);
         }

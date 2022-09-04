@@ -50,7 +50,7 @@ public class UnitOfWorkApplicationListener implements ApplicationEventListener {
         private final Map<Method,UnitOfWork> methodMap;
         private final SessionFactory sessionFactory;
         private UnitOfWork unitOfWork;
-        private Session session;
+        Session session;
 
 
         public UnitOfWorkEventListener (Map<Method,UnitOfWork> methodMap,
