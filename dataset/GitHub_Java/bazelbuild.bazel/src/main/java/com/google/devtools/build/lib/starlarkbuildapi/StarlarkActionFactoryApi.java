@@ -52,7 +52,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
               + "need to be (and cannot be) declared using this function. You can obtain their "
               + "<code>File</code> objects from "
               + "<a href=\"ctx.html#outputs\"><code>ctx.outputs</code></a> instead. "
-              + "<a href=\"https://github.com/bazelbuild/examples/tree/main/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/tree/master/rules/"
               + "computed_dependencies/hash.bzl\">See example of use</a>.",
       parameters = {
         @Param(
@@ -268,7 +268,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
       name = "run",
       doc =
           "Creates an action that runs an executable. "
-              + "<a href=\"https://github.com/bazelbuild/examples/tree/main/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/tree/master/rules/"
               + "actions_run/execute.bzl\">See example of use</a>.",
       parameters = {
         @Param(
@@ -360,12 +360,8 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             named = true,
             positional = false,
             doc =
-                "Progress message to show to the user during the build, for example, \"Compiling"
-                    + " foo.cc to create foo.o\". The message may contain <code>%{label}</code>,"
-                    + " <code>%{input}</code>, or <code>%{output}</code> patterns, which are"
-                    + " substituted with label string, first input, or output's path,"
-                    + " respectively. Prefer to use patterns instead of static strings, because"
-                    + " the former are more efficient."),
+                "Progress message to show to the user during the build, "
+                    + "for example, \"Compiling foo.cc to create foo.o\"."),
         @Param(
             name = "use_default_shell_env",
             defaultValue = "False",
@@ -457,7 +453,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
       name = "run_shell",
       doc =
           "Creates an action that runs a shell command. "
-              + "<a href=\"https://github.com/bazelbuild/examples/tree/main/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/tree/master/rules/"
               + "shell_command/rules.bzl\">See example of use</a>.",
       parameters = {
         @Param(
@@ -565,12 +561,8 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             named = true,
             positional = false,
             doc =
-                "Progress message to show to the user during the build, for example, \"Compiling"
-                    + " foo.cc to create foo.o\". The message may contain <code>%{label}</code>,"
-                    + " <code>%{input}</code>, or <code>%{output}</code> patterns, which are"
-                    + " substituted with label string, first input, or output's path,"
-                    + " respectively. Prefer to use patterns instead of static strings, because"
-                    + " the former are more efficient."),
+                "Progress message to show to the user during the build, "
+                    + "for example, \"Compiling foo.cc to create foo.o\"."),
         @Param(
             name = "use_default_shell_env",
             defaultValue = "False",
@@ -666,7 +658,7 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
               + "result of a previous substitution), it is replaced with the associated value. "
               + "There is no special syntax for the keys. You may, for example, use curly braces "
               + "to avoid conflicts (for example, <code>{KEY}</code>). "
-              + "<a href=\"https://github.com/bazelbuild/examples/blob/main/rules/"
+              + "<a href=\"https://github.com/bazelbuild/examples/blob/master/rules/"
               + "expand_template/hello.bzl\">"
               + "See example of use</a>.",
       parameters = {
