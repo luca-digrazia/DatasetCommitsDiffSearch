@@ -35,7 +35,6 @@ import javax.ws.rs.HttpMethod;
 import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
 import java.util.EventListener;
-import java.util.List;
 import java.util.concurrent.*;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -63,13 +62,14 @@ public class Environment extends AbstractLifeCycle {
     private final ImmutableSet.Builder<EventListener> servletListeners;
     private final ImmutableSet.Builder<Task> tasks;
     private final ImmutableSet.Builder<String> protectedTargets;
-    private final ImmutableList.Builder<ServerLifecycleListener> serverListeners;
     private Resource baseResource;
     private final AggregateLifeCycle lifeCycle;
     private final ObjectMapperFactory objectMapperFactory;
     private SessionHandler sessionHandler;
     private ServletContainer jerseyServletContainer;
     private Validator validator;
+
+    private ServerLifecycleListener serverListener;
 
     /**
      * Creates a new environment.
@@ -105,7 +105,6 @@ public class Environment extends AbstractLifeCycle {
         this.tasks = ImmutableSet.builder();
         this.baseResource = Resource.newClassPathResource(".");
         this.protectedTargets = ImmutableSet.builder();
-        this.serverListeners = ImmutableList.builder();
         this.lifeCycle = new AggregateLifeCycle();
         this.jerseyServletContainer = new ServletContainer(config);
         addTask(new GarbageCollectionTask());
@@ -587,11 +586,11 @@ public class Environment extends AbstractLifeCycle {
         return name;
     }
 
-    public List<ServerLifecycleListener> getServerListeners() {
-        return serverListeners.build();
+    public ServerLifecycleListener getServerListener() {
+        return serverListener;
     }
 
-    public void addServerLifecycleListener(ServerLifecycleListener listener) {
-        serverListeners.add(listener);
+    public void setServerLifecycleListener(ServerLifecycleListener listener) {
+        this.serverListener = listener;
     }
 }
