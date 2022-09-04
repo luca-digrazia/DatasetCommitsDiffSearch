@@ -159,6 +159,7 @@ public final class JavaCompileActionBuilder {
   private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
   private ImmutableList<Artifact> extdirInputs = ImmutableList.of();
   private FilesToRunProvider javaBuilder;
+  private Artifact langtoolsJar;
   private NestedSet<Artifact> toolsJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private PathFragment sourceGenDirectory;
   private PathFragment tempDirectory;
@@ -223,7 +224,7 @@ public final class JavaCompileActionBuilder {
           .add("-jar")
           .addPath(javaBuilderJar.getExecPath());
     }
-    toolsBuilder.addTransitive(toolsJars);
+    toolsBuilder.add(langtoolsJar).addTransitive(toolsJars);
 
     ActionEnvironment actionEnvironment =
         ruleContext.getConfiguration().getActionEnvironment().addFixedVariables(UTF8_ENVIRONMENT);
@@ -531,6 +532,11 @@ public final class JavaCompileActionBuilder {
     checkNotNull(extraData, "extraData must not be null");
     checkState(this.extraData.isEmpty());
     this.extraData = extraData;
+  }
+
+  public JavaCompileActionBuilder setLangtoolsJar(Artifact langtoolsJar) {
+    this.langtoolsJar = langtoolsJar;
+    return this;
   }
 
   /** Sets the tools jars. */

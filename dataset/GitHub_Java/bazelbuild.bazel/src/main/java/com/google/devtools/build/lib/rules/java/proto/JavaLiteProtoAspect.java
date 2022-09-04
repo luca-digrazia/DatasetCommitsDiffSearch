@@ -120,7 +120,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                     .value(getProtoToolchainLabel(defaultProtoToolchainLabel)))
             .add(
                 attr(HOST_JAVA_RUNTIME_ATTRIBUTE_NAME, LABEL)
-                    .cfg(HostTransition.createFactory())
+                    .cfg(HostTransition.INSTANCE)
                     .value(hostJdkAttribute)
                     .mandatoryProviders(ToolchainInfo.PROVIDER.id()))
             .add(

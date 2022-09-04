@@ -129,7 +129,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                     .value(getSpeedProtoToolchainLabel(defaultSpeedProtoToolchainLabel)))
             .add(
                 attr(HOST_JAVA_RUNTIME_ATTRIBUTE_NAME, LABEL)
-                    .cfg(HostTransition.createFactory())
+                    .cfg(HostTransition.INSTANCE)
                     .value(hostJdkAttribute)
                     .mandatoryProviders(ToolchainInfo.PROVIDER.id()))
             .add(

@@ -242,6 +242,7 @@ public final class JavaLibraryHelper {
             output,
             manifestProtoOutput,
             genSourceJar,
+            /* instrumentationMetadataJar= */ null,
             nativeHeaderOutput);
 
     Artifact iJar = null;
@@ -338,6 +339,7 @@ public final class JavaLibraryHelper {
 
     attributes.addCompileTimeClassPathEntries(argsProvider.getTransitiveCompileTimeJars());
     attributes.addRuntimeClassPathEntries(argsProvider.getRuntimeJars());
+    attributes.addInstrumentationMetadataEntries(argsProvider.getInstrumentationMetadata());
   }
 
   private boolean isStrict() {
