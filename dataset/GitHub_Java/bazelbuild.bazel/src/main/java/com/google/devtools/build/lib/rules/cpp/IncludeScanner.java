@@ -133,16 +133,12 @@ public interface IncludeScanner {
       this.isValidUndeclaredHeader = isValidUndeclaredHeader;
     }
 
-    public boolean isDeclaredHeader(PathFragment header) {
-      return pathToDeclaredHeader.containsKey(header);
+    public Set<Artifact> getModularHeaders() {
+      return modularHeaders;
     }
 
-    public Artifact getHeaderArtifact(PathFragment header) {
-      return pathToDeclaredHeader.get(header);
-    }
-
-    public boolean isModularHeader(Artifact header) {
-      return modularHeaders.contains(header);
+    public Map<PathFragment, Artifact> getPathToDeclaredHeader() {
+      return pathToDeclaredHeader;
     }
 
     public List<PathFragment> getSystemIncludeDirs() {

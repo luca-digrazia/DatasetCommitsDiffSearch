@@ -16,26 +16,22 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScannerSupplier;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /** Always performs no include processing and returns null. */
-@AutoCodec(strategy = Strategy.SINGLETON)
 public class NoProcessing implements IncludeProcessing {
-  public static final ObjectCodec<NoProcessing> CODEC = new NoProcessing_AutoCodec();
-
-  public static final NoProcessing INSTANCE = new NoProcessing();
+  @AutoCodec public static final NoProcessing INSTANCE = new NoProcessing();
 
   @Override
-  public Iterable<Artifact> determineAdditionalInputs(
+  public List<Artifact> determineAdditionalInputs(
       @Nullable IncludeScannerSupplier includeScannerSupplier,
       CppCompileAction action,
-      ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException {
+      ActionExecutionContext actionExecutionContext,
+      IncludeScanningHeaderData includeScanningHeaderData) {
     return null;
   }
 }

@@ -37,6 +37,7 @@ public interface CppIncludeScanningContext extends ActionContext {
   List<Artifact> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
+      IncludeProcessing includeProcessing,
       IncludeScanningHeaderData includeScanningHeaderData)
       throws ExecException, InterruptedException, ActionExecutionException;
 }
