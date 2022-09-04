@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Target;
@@ -97,23 +95,6 @@ public final class AnalysisUtils {
   public static <T extends Info> Iterable<T> getProviders(
       Iterable<? extends TransitiveInfoCollection> prerequisites,
       final NativeProvider<T> skylarkKey) {
-    ImmutableList.Builder<T> result = ImmutableList.builder();
-    for (TransitiveInfoCollection prerequisite : prerequisites) {
-      T prerequisiteProvider = prerequisite.get(skylarkKey);
-      if (prerequisiteProvider != null) {
-        result.add(prerequisiteProvider);
-      }
-    }
-    return result.build();
-  }
-
-  /**
-   * Returns the list of declared providers (native and Skylark) of the specified Skylark key from a
-   * set of transitive info collections.
-   */
-  public static <T extends Info> Iterable<T> getProviders(
-      Iterable<? extends TransitiveInfoCollection> prerequisites,
-      final BuiltinProvider<T> skylarkKey) {
     ImmutableList.Builder<T> result = ImmutableList.builder();
     for (TransitiveInfoCollection prerequisite : prerequisites) {
       T prerequisiteProvider = prerequisite.get(skylarkKey);
@@ -223,7 +204,6 @@ public final class AnalysisUtils {
             nodes, asDeps, eventHandler, skyframeExecutor));
   }
 
-  @VisibleForTesting
   public static Multimap<BuildConfiguration, Dependency> targetsToDeps(
       LinkedHashSet<TargetAndConfiguration> nodes, ConfiguredRuleClassProvider ruleClassProvider) {
     Multimap<BuildConfiguration, Dependency> asDeps =

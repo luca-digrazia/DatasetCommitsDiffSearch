@@ -316,10 +316,8 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
         "cc_binary(name = 'binary', srcs = ['main.cc'], deps = [':dep1', ':dep2'])");
     List<ConfiguredTarget> deps = getConfiguredDeps("//a:binary", "deps");
     assertThat(deps).hasSize(2);
-    BuildConfiguration topLevelConfiguration =
-        getConfiguration(Iterables.getOnlyElement(update("//a:binary").getTargetsToBuild()));
     for (ConfiguredTarget dep : deps) {
-      assertThat(topLevelConfiguration.equalsOrIsSupersetOf(getConfiguration(dep))).isTrue();
+      assertThat(getTargetConfiguration().equalsOrIsSupersetOf(getConfiguration(dep))).isTrue();
     }
   }
 

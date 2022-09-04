@@ -843,7 +843,7 @@ public abstract class DependencyResolver {
     }
 
     @Override
-    public BuildOptions patch(BuildOptions options) {
+    public BuildOptions apply(BuildOptions options) {
       return toOptions;
     }
   }
