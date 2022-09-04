@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.rules.java.ProguardHelper;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.List;
@@ -69,8 +68,7 @@ public class ProcessedAndroidData {
       boolean crunchPng,
       boolean dataBindingEnabled,
       @Nullable Artifact featureOf,
-      @Nullable Artifact featureAfter,
-      DataBindingContext dataBindingContext)
+      @Nullable Artifact featureAfter)
       throws RuleErrorException, InterruptedException {
     if (conditionalKeepRules && aaptVersion != AndroidAaptVersion.AAPT2) {
       throw errorConsumer.throwWithRuleError(
@@ -98,7 +96,6 @@ public class ProcessedAndroidData {
             .setFeatureAfter(featureAfter);
     return buildActionForBinary(
         dataContext,
-        dataBindingContext,
         errorConsumer,
         builder,
         manifest,
@@ -128,7 +125,6 @@ public class ProcessedAndroidData {
 
     return buildActionForBinary(
         dataContext,
-        DataBinding.contextFrom(ruleContext),
         ruleContext,
         builder,
         manifest,
@@ -143,7 +139,6 @@ public class ProcessedAndroidData {
 
   private static ProcessedAndroidData buildActionForBinary(
       AndroidDataContext dataContext,
-      DataBindingContext dataBindingContext,
       RuleErrorConsumer errorConsumer,
       AndroidResourcesProcessorBuilder builder,
       StampedAndroidManifest manifest,
@@ -169,13 +164,12 @@ public class ProcessedAndroidData {
         .setCrunchPng(crunchPng)
         .withResourceDependencies(resourceDeps)
         .withAssetDependencies(assetDeps)
-        .build(dataContext, resources, assets, manifest, dataBindingContext);
+        .build(dataContext, resources, assets, manifest);
   }
 
   /** Processes Android data (assets, resources, and manifest) for android_local_test targets. */
   public static ProcessedAndroidData processLocalTestDataFrom(
       AndroidDataContext dataContext,
-      DataBindingContext dataBindingContext,
       StampedAndroidManifest manifest,
       Map<String, String> manifestValues,
       AndroidAaptVersion aaptVersion,
@@ -197,13 +191,12 @@ public class ProcessedAndroidData {
         .setCrunchPng(false)
         .withResourceDependencies(resourceDeps)
         .withAssetDependencies(assetDeps)
-        .build(dataContext, resources, assets, manifest, dataBindingContext);
+        .build(dataContext, resources, assets, manifest);
   }
 
   /** Processes Android data (assets, resources, and manifest) for android_test targets. */
   public static ProcessedAndroidData processTestDataFrom(
       AndroidDataContext dataContext,
-      DataBindingContext dataBindingContext,
       StampedAndroidManifest manifest,
       String packageUnderTest,
       boolean hasLocalResourceFiles,
@@ -227,7 +220,7 @@ public class ProcessedAndroidData {
             .withResourceDependencies(resourceDeps)
             .withAssetDependencies(assetDeps);
 
-    return builder.build(dataContext, resources, assets, manifest, dataBindingContext);
+    return builder.build(dataContext, resources, assets, manifest);
   }
 
   /**
