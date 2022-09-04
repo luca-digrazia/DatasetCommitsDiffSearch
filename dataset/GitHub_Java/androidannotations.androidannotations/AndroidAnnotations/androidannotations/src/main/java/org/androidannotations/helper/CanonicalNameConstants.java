@@ -17,7 +17,6 @@ package org.androidannotations.helper;
 
 import java.net.URI;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Set;
 
@@ -34,7 +33,6 @@ public final class CanonicalNameConstants {
 	public static final String SQL_EXCEPTION = SQLException.class.getCanonicalName();
 	public static final String INTEGER = Integer.class.getCanonicalName();
 	public static final String BOOLEAN = Boolean.class.getCanonicalName();
-	public static final String ARRAYLIST = ArrayList.class.getCanonicalName();
 
 	/*
 	 * Android
@@ -52,6 +50,9 @@ public final class CanonicalNameConstants {
 	public static final String TEXT_VIEW = "android.widget.TextView";
 	public static final String VIEW = "android.view.View";
 	public static final String VIEW_ON_CLICK_LISTENER = "android.view.View.OnClickListener";
+	public static final String VIEW_ON_TOUCH_LISTENER = "android.view.View.OnTouchListener";
+	public static final String VIEW_ON_LONG_CLICK_LISTENER = "android.view.View.OnLongClickListener";
+	public static final String VIEW_ON_FOCUS_CHANGE_LISTENER = "android.view.View.OnFocusChangeListener";
 	public static final String VIEW_GROUP_LAYOUT_PARAMS = "android.view.ViewGroup.LayoutParams";
 	public static final String VIEW_GROUP = "android.view.ViewGroup";
 	public static final String CONTEXT = "android.content.Context";
@@ -66,7 +67,6 @@ public final class CanonicalNameConstants {
 	public static final String ON_ITEM_CLICK_LISTENER = "android.widget.AdapterView.OnItemClickListener";
 	public static final String ON_ITEM_LONG_CLICK_LISTENER = "android.widget.AdapterView.OnItemLongClickListener";
 	public static final String ON_ITEM_SELECTED_LISTENER = "android.widget.AdapterView.OnItemSelectedListener";
-	public static final String ON_LONG_CLICK_LISTENER = "android.view.View.OnLongClickListener";
 	public static final String WINDOW = "android.view.Window";
 	public static final String MENU_ITEM = "android.view.MenuItem";
 	public static final String MENU_INFLATER = "android.view.MenuInflater";
@@ -76,7 +76,6 @@ public final class CanonicalNameConstants {
 	public static final String RESOURCES = "android.content.res.Resources";
 	public static final String CONFIGURATION = "android.content.res.Configuration";
 	public static final String MOTION_EVENT = "android.view.MotionEvent";
-	public static final String ON_TOUCH_LISTENER = "android.view.View.OnTouchListener";
 	public static final String HANDLER = "android.os.Handler";
 	public static final String SERVICE = "android.app.Service";
 	public static final String BROADCAST_RECEIVER = "android.content.BroadcastReceiver";
@@ -102,7 +101,6 @@ public final class CanonicalNameConstants {
 	public static final String HTTP_ENTITY = "org.springframework.http.HttpEntity";
 	public static final String REST_TEMPLATE = "org.springframework.web.client.RestTemplate";
 	public static final String HTTP_MESSAGE_CONVERTER = "org.springframework.http.converter.HttpMessageConverter";
-	public static final String CLIENT_HTTP_REQUEST_INTERCEPTOR = "org.springframework.http.client.ClientHttpRequestInterceptor";
 
 	/*
 	 * RoboGuice

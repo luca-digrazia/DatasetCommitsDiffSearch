@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -40,23 +40,27 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
+/**
+ * @author Pierre-Yves Ricau
+ * @author Mathieu Boniface
+ * @author Rostislav Chekan
+ */
 public abstract class AbstractListenerProcessor implements DecoratingElementProcessor {
 
 	private IdAnnotationHelper helper;
 	protected Classes classes;
 	protected JCodeModel codeModel;
-	protected EBeanHolder holder;
 
 	public AbstractListenerProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
 		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel jcodeModel, EBeanHolder holder) {
 		classes = holder.classes();
-		this.codeModel = codeModel;
-		this.holder = holder;
+		codeModel = jcodeModel;
 
 		String methodName = element.getSimpleName().toString();
 
@@ -80,12 +84,11 @@ public abstract class AbstractListenerProcessor implements DecoratingElementProc
 		processParameters(listenerMethod, call, parameters);
 
 		for (JFieldRef idRef : idsRefs) {
-			ViewChangedHolder onViewChanged = holder.onViewChanged();
+			JBlock block = holder.afterSetContentView.body().block();
+			JInvocation findViewById = invoke("findViewById");
 
-			JBlock block = onViewChanged.body().block();
-			JInvocation view = onViewChanged.findViewById(idRef);
-
-			block._if(view.ne(_null()))._then().invoke(castWidget(view), getSetterName()).arg(_new(listenerAnonymousClass));
+			JVar view = block.decl(classes.VIEW, "view", findViewById.arg(idRef));
+			block._if(view.ne(_null()))._then().invoke(view, getSetterName()).arg(_new(listenerAnonymousClass));
 		}
 	}
 
@@ -98,9 +101,5 @@ public abstract class AbstractListenerProcessor implements DecoratingElementProc
 	protected abstract String getSetterName();
 
 	protected abstract JClass getListenerClass();
-
-	protected JExpression castWidget(JInvocation view) {
-		return view;
-	}
 
 }
