@@ -64,7 +64,6 @@ public class SimpleParagraphSplitter implements ParagraphSplitter {
 
     /**
      * Returns the singleton instance.
-     * @return the singleton instance.
      */
     public static SimpleParagraphSplitter getInstance() {
         return singleton;

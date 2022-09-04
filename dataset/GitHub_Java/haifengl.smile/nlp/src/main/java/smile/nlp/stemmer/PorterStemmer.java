@@ -580,9 +580,7 @@ public class PorterStemmer implements Stemmer {
     }
     
     /**
-     * Removes plurals and participles.
-     * @param word the word.
-     * @return the word without plurals and participles.
+     * Remove plurals and participles.
      */
     public String stripPluralParticiple(String word) {
         b = word.toCharArray();

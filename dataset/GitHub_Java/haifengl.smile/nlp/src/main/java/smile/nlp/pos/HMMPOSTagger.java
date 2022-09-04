@@ -18,13 +18,11 @@
 package smile.nlp.pos;
 
 import java.io.*;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import smile.math.MathEx;
-import smile.util.Paths;
 
 /**
  * Part-of-speech tagging with hidden Markov model.
@@ -256,9 +254,6 @@ public class HMMPOSTagger implements POSTagger, Serializable {
 
     /**
      * Fits an HMM POS tagger by maximum likelihood estimation.
-     * @param sentences the training sentences.
-     * @param labels the training labels.
-     * @return the model.
      */
     public static HMMPOSTagger fit(String[][] sentences, PennTreebankPOS[][] labels) {
         int index = 1;
@@ -327,13 +322,11 @@ public class HMMPOSTagger implements POSTagger, Serializable {
     
     /**
      * Load training data from a corpora.
-     * @param dir the top directory of training data.
-     * @param sentences the output list of training sentences.
-     * @param labels the output list of training labels.
+     * @param dir a file object defining the top directory
      */
-    public static void read(Path dir, List<String[]> sentences, List<PennTreebankPOS[]> labels) {
+    public static void read(String dir, List<String[]> sentences, List<PennTreebankPOS[]> labels) {
         List<File> files = new ArrayList<>();
-        walkin(dir.toFile(), files);
+        walkin(new File(dir), files);
 
         for (File file : files) {
             try {
@@ -385,9 +378,8 @@ public class HMMPOSTagger implements POSTagger, Serializable {
     /**  
      * Recursive function to descend into the directory tree and find all the files
      * that end with ".POS"
-     * @param dir the top directory of training data.
-     * @param files the output list of training files.
-     */
+     * @param dir a file object defining the top directory
+     **/
     public static void walkin(File dir, List<File> files) {
         String pattern = ".POS";
         File[] listFile = dir.listFiles();
@@ -406,14 +398,13 @@ public class HMMPOSTagger implements POSTagger, Serializable {
     
     /**
      * Train the default model on WSJ and BROWN datasets.
-     * @param argv the command line arguments.
      */
-    public static void main(String[] argv) {
+    public static void main(String[] argvs) {
         List<String[]> sentences = new ArrayList<>();
         List<PennTreebankPOS[]> labels = new ArrayList<>();
         
-        read(Paths.getTestData("nlp/PennTreebank/PennTreebank2/TAGGED/POS/WSJ"), sentences, labels);
-        read(Paths.getTestData("nlp/PennTreebank/PennTreebank2/TAGGED/POS/BROWN"), sentences, labels);
+        read("PennTreebank/PennTreebank2/TAGGED/POS/WSJ", sentences, labels);
+        read("PennTreebank/PennTreebank2/TAGGED/POS/BROWN", sentences, labels);
         
         String[][] x = sentences.toArray(new String[sentences.size()][]);
         PennTreebankPOS[][] y = labels.toArray(new PennTreebankPOS[labels.size()][]);

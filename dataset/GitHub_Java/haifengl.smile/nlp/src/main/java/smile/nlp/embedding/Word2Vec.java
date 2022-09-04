@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.nlp.embedding;
 
@@ -38,7 +38,7 @@ import smile.data.vector.FloatVector;
  * corpus being assigned a corresponding vector in the space. Word vectors
  * are positioned in the vector space such that words that share common
  * contexts in the corpus are located close to one another in the space.
- *
+ * <p>
  * Word2vec can utilize either of two model architectures to produce
  * a distributed representation of words: continuous bag-of-words (CBOW)
  * or continuous skip-gram. In the continuous bag-of-words architecture,
@@ -59,7 +59,7 @@ public class Word2Vec {
     /** The vector space. */
     public final DataFrame vectors;
     /** The word-to-index map. */
-    private HashMap<String, Integer> map;
+    private final HashMap<String, Integer> map;
 
     /**
      * Constructor.
@@ -83,7 +83,7 @@ public class Word2Vec {
     }
 
     /** Returns the dimension of vector space. */
-    public int dim() {
+    public int dimension() {
         return vectors.ncols();
     }
 
@@ -108,14 +108,16 @@ public class Word2Vec {
     }
 
     /**
-     * Loads a model from the file of word2vec binary format with ByteOrder.LITTLE_ENDIAN.
+     * Loads a <a href="https://code.google.com/archive/p/word2vec/">pre-trained</a>
+     * word2vec model from binary file of ByteOrder.LITTLE_ENDIAN.
      */
     public static Word2Vec of(Path file) throws IOException {
         return of(file, ByteOrder.LITTLE_ENDIAN);
     }
 
     /**
-     * Loads a model from the file of word2vec binary format.
+     * Loads a <a href="https://code.google.com/archive/p/word2vec/">pre-trained</a>
+     * word2vec model from binary file.
      */
     public static Word2Vec of(Path file, ByteOrder order) throws IOException {
         final long GB = 1024 * 1024 * 1024;

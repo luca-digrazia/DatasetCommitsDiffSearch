@@ -54,7 +54,6 @@ public class SimpleNormalizer implements Normalizer {
 
     /**
      * Returns the singleton instance.
-     * @return the singleton instance.
      */
     public static SimpleNormalizer getInstance() {
         return singleton;

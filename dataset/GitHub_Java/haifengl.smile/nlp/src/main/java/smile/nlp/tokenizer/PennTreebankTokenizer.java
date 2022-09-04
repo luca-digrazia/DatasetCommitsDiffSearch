@@ -94,7 +94,6 @@ public class PennTreebankTokenizer implements Tokenizer {
 
     /**
      * Returns the singleton instance.
-     * @return the singleton instance.
      */
     public static PennTreebankTokenizer getInstance() {
         return singleton;

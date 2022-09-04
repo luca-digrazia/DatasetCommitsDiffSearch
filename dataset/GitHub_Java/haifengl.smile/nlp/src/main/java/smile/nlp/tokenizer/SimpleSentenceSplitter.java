@@ -88,7 +88,6 @@ public class SimpleSentenceSplitter implements SentenceSplitter {
 
     /**
      * Returns the singleton instance.
-     * @return the singleton instance.
      */
     public static SimpleSentenceSplitter getInstance() {
         return singleton;

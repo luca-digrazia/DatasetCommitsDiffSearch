@@ -43,7 +43,6 @@ public class BreakIteratorSentenceSplitter implements SentenceSplitter {
 
     /**
      * Constructor for the given locale.
-     * @param locale the locale.
      */
     public BreakIteratorSentenceSplitter(Locale locale) {
         boundary = BreakIterator.getSentenceInstance(locale);
