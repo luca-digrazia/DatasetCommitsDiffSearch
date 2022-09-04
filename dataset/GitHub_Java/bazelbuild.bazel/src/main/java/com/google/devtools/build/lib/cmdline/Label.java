@@ -155,17 +155,22 @@ public final class Label
       repo = absName;
       absName = "//:" + absName.substring(1);
     }
+    String error = RepositoryName.validate(repo);
+    if (error != null) {
+      throw new LabelSyntaxException(
+          "invalid repository name '" + StringUtilities.sanitizeControlChars(repo) + "': " + error);
+    }
     try {
       LabelValidator.PackageAndTarget labelParts = LabelValidator.parseAbsoluteLabel(absName);
-      PackageIdentifier pkgIdWithoutRepo =
-          validatePackageName(labelParts.getPackageName(), labelParts.getTargetName());
-      PathFragment packageFragment = pkgIdWithoutRepo.getPackageFragment();
+      PackageIdentifier pkgId =
+          validatePackageName(
+              labelParts.getPackageName(), labelParts.getTargetName(), repo, repositoryMapping);
+      PathFragment packageFragment = pkgId.getPackageFragment();
       if (repo.isEmpty() && ABSOLUTE_PACKAGE_NAMES.contains(packageFragment)) {
-        repo = "@";
+        pkgId =
+            PackageIdentifier.create(getGlobalRepoName("@", repositoryMapping), packageFragment);
       }
-      RepositoryName globalRepoName = getGlobalRepoName(repo, repositoryMapping);
-      return create(
-          PackageIdentifier.create(globalRepoName, packageFragment), labelParts.getTargetName());
+      return create(pkgId, labelParts.getTargetName());
     } catch (BadLabelException e) {
       throw new LabelSyntaxException(e.getMessage());
     }
@@ -289,15 +294,25 @@ public final class Label
     return name;
   }
 
+  private static PackageIdentifier validatePackageName(String packageIdentifier, String name)
+      throws LabelSyntaxException {
+    return validatePackageName(
+        packageIdentifier, name, /* repo= */ null, /* repositoryMapping= */ null);
+  }
+
   /**
    * Validates the given package name and returns a canonical {@link PackageIdentifier} instance if
    * it is valid. Otherwise it throws a SyntaxException.
    */
-  private static PackageIdentifier validatePackageName(String packageIdentifier, String name)
+  private static PackageIdentifier validatePackageName(
+      String packageIdentifier,
+      String name,
+      String repo,
+      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws LabelSyntaxException {
     String error = null;
     try {
-      return PackageIdentifier.parse(packageIdentifier);
+      return PackageIdentifier.parse(packageIdentifier, repo, repositoryMapping);
     } catch (LabelSyntaxException e) {
       error = e.getMessage();
       error = "invalid package name '" + packageIdentifier + "': " + error;
@@ -518,32 +533,12 @@ public final class Label
     }
   )
   public Label getRelative(String relName) throws LabelSyntaxException {
-    return getRelativeWithRemapping(relName, /* repositoryMapping= */ ImmutableMap.of());
-  }
-
-  /**
-   * Resolves a relative or absolute label name. If given name is absolute, then this method calls
-   * {@link #parseAbsolute}. Otherwise, it calls {@link #getLocalTargetLabel}.
-   *
-   * <p>For example: {@code :quux} relative to {@code //foo/bar:baz} is {@code //foo/bar:quux};
-   * {@code //wiz:quux} relative to {@code //foo/bar:baz} is {@code //wiz:quux};
-   * {@code @repo//foo:bar} relative to anything will be {@code @repo//foo:bar} if {@code @repo} is
-   * not in {@code repositoryMapping} but will be {@code @other_repo//foo:bar} if there is an entry
-   * {@code @repo -> @other_repo} in {@code repositoryMapping}
-   *
-   * @param relName the relative label name; must be non-empty
-   * @param repositoryMapping the map of local repository names in external repository to global
-   *     repository names in main repo; can be empty, but not null
-   */
-  public Label getRelativeWithRemapping(
-      String relName, ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
-      throws LabelSyntaxException {
     if (relName.length() == 0) {
       throw new LabelSyntaxException("empty package-relative label");
     }
 
     if (LabelValidator.isAbsolute(relName)) {
-      return resolveRepositoryRelative(parseAbsolute(relName, false, repositoryMapping));
+      return resolveRepositoryRelative(parseAbsolute(relName, false));
     } else if (relName.equals(":")) {
       throw new LabelSyntaxException("':' is not a valid package-relative label");
     } else if (relName.charAt(0) == ':') {
