@@ -34,7 +34,6 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
-import io.quarkus.deployment.pkg.builditem.AppCDSResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
@@ -71,10 +70,9 @@ public class DockerProcessor {
             ContainerImageInfoBuildItem containerImageInfo,
             Optional<ContainerImageBuildRequestBuildItem> buildRequest,
             Optional<ContainerImagePushRequestBuildItem> pushRequest,
-            @SuppressWarnings("unused") Optional<AppCDSResultBuildItem> appCDSResult, // ensure docker build will be performed after AppCDS creation 
             BuildProducer<ArtifactResultBuildItem> artifactResultProducer,
             PackageConfig packageConfig,
-            @SuppressWarnings("unused") // used to ensure that the jar has been built
+            // used to ensure that the jar has been built
             JarBuildItem jar) {
 
         if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
