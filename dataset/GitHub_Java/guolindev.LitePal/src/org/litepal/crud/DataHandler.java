@@ -96,8 +96,6 @@ abstract class DataHandler extends LitePalBase {
 					Constructor<?> constructor = findBestSuitConstructor(modelClass);
 					T modelInstance = (T) constructor
 							.newInstance(getConstructorParams(constructor));
-					giveBaseObjIdValue((DataSupport) modelInstance,
-							cursor.getLong(cursor.getColumnIndexOrThrow("id")));
 					setValueToModel(modelInstance, supportedFields, cursor);
 					dataList.add(modelInstance);
 				} while (cursor.moveToNext());
@@ -821,7 +819,7 @@ abstract class DataHandler extends LitePalBase {
 			}
 			String[] customizedColumns = new String[columns.length + 1];
 			System.arraycopy(columns, 0, customizedColumns, 0, columns.length);
-			customizedColumns[columns.length] = BaseUtility.changeCase("id");
+			customizedColumns[columns.length + 1] = BaseUtility.changeCase("id");
 			return customizedColumns;
 		}
 		return null;
