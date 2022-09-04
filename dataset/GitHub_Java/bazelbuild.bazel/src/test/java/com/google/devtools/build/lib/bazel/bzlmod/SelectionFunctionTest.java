@@ -63,7 +63,7 @@ public class SelectionFunctionTest extends FoundationTestCase {
                     new SkyFunction() {
                       @Override
                       public SkyValue compute(SkyKey skyKey, Environment env) {
-                        return DiscoveryValue.create(rootModuleName, depGraph);
+                        return DiscoveryValue.create(rootModuleName, depGraph, ImmutableMap.of());
                       }
 
                       @Override
