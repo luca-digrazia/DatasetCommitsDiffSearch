@@ -27,7 +27,6 @@ import com.mongodb.DBObject;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.log4j.Logger;
-import org.bson.types.ObjectId;
 import org.graylog2.Core;
 
 /**
@@ -39,7 +38,6 @@ public class AMQPQueueConfiguration {
     
     public enum InputType { GELF, SYSLOG, UNKNOWN }
     
-    private ObjectId id;
     private String exchange;
     private String routingKey;
     private int ttl;
@@ -62,7 +60,6 @@ public class AMQPQueueConfiguration {
                 DBObject config = cur.next();
 
                 configs.add(new AMQPQueueConfiguration(
-                            (ObjectId) config.get("_id"),
                             (String) config.get("exchange"),
                             (String) config.get("routing_key"),
                             (Integer) config.get("ttl"),
@@ -77,19 +74,15 @@ public class AMQPQueueConfiguration {
         return configs;
     }
     
-    public AMQPQueueConfiguration(ObjectId id, String exchange, String routingKey, int ttl, InputType inputType, String gl2NodeId) {
-        this.id = id;
+    public AMQPQueueConfiguration(String exchange, String routingKey, int ttl, InputType inputType, String gl2NodeId) {
         this.exchange = exchange;
         this.routingKey = routingKey;
         this.ttl = ttl;
         this.inputType = inputType;
         this.gl2NodeId = gl2NodeId;
+        this.uuid = UUID.randomUUID().toString();
         
         queueName = generateQueueName();
-    }
-    
-    public String getId() {
-        return id.toString();
     }
     
     public String getExchange() {
@@ -124,6 +117,10 @@ public class AMQPQueueConfiguration {
         return InputType.UNKNOWN;
     }
     
+    public String getQueueUUID() {
+        return uuid;
+    }
+    
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -136,9 +133,9 @@ public class AMQPQueueConfiguration {
     
     private String generateQueueName() {
         StringBuilder sb = new StringBuilder();
-        sb.append("gl2-").append(inputType.toString().toLowerCase())
-                .append("-").append(exchange).append("-")
-                .append(id.toString());
+        sb.append("gl2-").append(gl2NodeId).append("-q-")
+                .append(inputType.toString().toLowerCase())
+                .append("-").append(uuid);
 
         return sb.toString();
     }
