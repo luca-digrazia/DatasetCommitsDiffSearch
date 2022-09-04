@@ -18,8 +18,7 @@ package smile.sequence;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import smile.data.Attribute;
 import smile.data.NominalAttribute;
 import smile.data.NumericAttribute;
@@ -50,7 +49,6 @@ import smile.util.MulticoreExecutor;
  * @author Haifeng Li
  */
 public class CRF implements SequenceLabeler<double[]> {
-    private static final Logger logger = LoggerFactory.getLogger(CRF.class);
 
     /**
      * The number of classes.
@@ -145,7 +143,7 @@ public class CRF implements SequenceLabeler<double[]> {
         /**
          * Gradient regression tree boosting.
          */
-        private List<RegressionTree> trees = new ArrayList<>();
+        private List<RegressionTree> trees = new ArrayList<RegressionTree>();
     }
 
     /**
@@ -560,12 +558,12 @@ public class CRF implements SequenceLabeler<double[]> {
                 trellis[i] = crf.getTrellis(sequences[i]);
             }
 
-            List<GradientTask> gradientTasks = new ArrayList<>();
+            List<GradientTask> gradientTasks = new ArrayList<GradientTask>();
             for (int i = 0; i < sequences.length; i++) {
                 gradientTasks.add(new GradientTask(crf, trellis[i], scaling[i], labels[i]));
             }
 
-            List<BoostingTask> boostingTasks = new ArrayList<>();
+            List<BoostingTask> boostingTasks = new ArrayList<BoostingTask>();
             for (int i = 0; i < numClasses; i++) {
                 boostingTasks.add(new BoostingTask(crf.potentials[i], trellis, i));
             }
@@ -575,7 +573,7 @@ public class CRF implements SequenceLabeler<double[]> {
                     MulticoreExecutor.run(gradientTasks);
                     MulticoreExecutor.run(boostingTasks);
                 } catch (Exception e) {
-                    logger.error("Failed to train CRF on multi-core", e);
+                    System.err.println(e.getMessage());
                 }
             }
 
@@ -592,12 +590,12 @@ public class CRF implements SequenceLabeler<double[]> {
                 trellis[i] = crf.getTrellis(sequences[i]);
             }
 
-            List<GradientTask> gradientTasks = new ArrayList<>();
+            List<GradientTask> gradientTasks = new ArrayList<GradientTask>();
             for (int i = 0; i < sequences.length; i++) {
                 gradientTasks.add(new GradientTask(crf, trellis[i], scaling[i], labels[i]));
             }
 
-            List<BoostingTask> boostingTasks = new ArrayList<>();
+            List<BoostingTask> boostingTasks = new ArrayList<BoostingTask>();
             for (int i = 0; i < numClasses; i++) {
                 boostingTasks.add(new BoostingTask(crf.potentials[i], trellis, i));
             }
@@ -607,7 +605,7 @@ public class CRF implements SequenceLabeler<double[]> {
                     MulticoreExecutor.run(gradientTasks);
                     MulticoreExecutor.run(boostingTasks);
                 } catch (Exception e) {
-                    logger.error("Failed to train CRF on multi-core", e);
+                    System.err.println(e.getMessage());
                 }
             }
 
