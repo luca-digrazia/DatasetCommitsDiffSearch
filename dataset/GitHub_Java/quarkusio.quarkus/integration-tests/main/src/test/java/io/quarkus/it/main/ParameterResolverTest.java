@@ -3,7 +3,8 @@ package io.quarkus.it.main;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.Serializable;
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -61,8 +62,7 @@ public class ParameterResolverTest {
         @Override
         public Object resolveParameter(ParameterContext parameterContext,
                 ExtensionContext extensionContext) throws ParameterResolutionException {
-            // note: List.of(...) or Arrays.asList() fails on Java 16 due to: https://github.com/x-stream/xstream/issues/253
-            return new UnusedBean.DummyInput("whatever", new UnusedBean.NestedDummyInput(new ArrayList<>(List.of(1, 2, 3))));
+            return new UnusedBean.DummyInput("whatever", new UnusedBean.NestedDummyInput(Arrays.asList(1, 2, 3)));
         }
     }
 
@@ -78,8 +78,7 @@ public class ParameterResolverTest {
         public Object resolveParameter(ParameterContext parameterContext, ExtensionContext extensionContext)
                 throws ParameterResolutionException {
             return (Supplier<UnusedBean.DummyInput>) () -> new UnusedBean.DummyInput("fromSupplier",
-                    // note: Collections.emptyList() fails on Java 16 due to: https://github.com/x-stream/xstream/issues/253
-                    new UnusedBean.NestedDummyInput(new ArrayList<>()));
+                    new UnusedBean.NestedDummyInput(Collections.emptyList()));
         }
     }
 
@@ -109,8 +108,7 @@ public class ParameterResolverTest {
         @Override
         public Object resolveParameter(ParameterContext parameterContext, ExtensionContext extensionContext)
                 throws ParameterResolutionException {
-            // note: List.of(...) or Arrays.asList() fails on Java 16 due to: https://github.com/x-stream/xstream/issues/253
-            return new ArrayList<>(List.of(new NonSerializable("foo"), new NonSerializable("bar")));
+            return Arrays.asList(new NonSerializable("foo"), new NonSerializable("bar"));
         }
     }
 

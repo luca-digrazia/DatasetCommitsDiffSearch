@@ -73,8 +73,6 @@ import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.bootstrap.app.StartupAction;
-import io.quarkus.bootstrap.classloading.ClassPathElement;
-import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.bootstrap.resolver.model.QuarkusModel;
 import io.quarkus.bootstrap.runner.Timing;
@@ -82,17 +80,13 @@ import io.quarkus.bootstrap.utils.BuildToolHelper;
 import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildStep;
-import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.TestAnnotationBuildItem;
 import io.quarkus.deployment.builditem.TestClassBeanBuildItem;
 import io.quarkus.deployment.builditem.TestClassPredicateBuildItem;
-import io.quarkus.deployment.dev.testing.CurrentTestApplication;
-import io.quarkus.dev.testing.TracingHandler;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.DurationConverter;
 import io.quarkus.runtime.configuration.ProfileManager;
 import io.quarkus.runtime.test.TestHttpEndpointProvider;
-import io.quarkus.test.common.GroovyCacheCleaner;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -185,7 +179,6 @@ public class QuarkusTestExtension
     };
 
     private ExtensionState doJavaStart(ExtensionContext context, Class<? extends QuarkusTestProfile> profile) throws Throwable {
-        TracingHandler.quarkusStarting();
         hangDetectionExecutor = Executors.newSingleThreadScheduledExecutor();
         String time = "10m";
         //config is not established yet
@@ -227,6 +220,9 @@ public class QuarkusTestExtension
             // clear the test.url system property as the value leaks into the run when using different profiles
             System.clearProperty("test.url");
 
+            final QuarkusBootstrap.Builder runnerBuilder = QuarkusBootstrap.builder()
+                    .setIsolateDeployment(true)
+                    .setMode(QuarkusBootstrap.Mode.TEST);
             QuarkusTestProfile profileInstance = null;
             if (profile != null) {
                 profileInstance = profile.getConstructor().newInstance();
@@ -258,6 +254,7 @@ public class QuarkusTestExtension
             }
 
             final Path projectRoot = Paths.get("").normalize().toAbsolutePath();
+            runnerBuilder.setProjectRoot(projectRoot);
             Path outputDir;
             try {
                 // this should work for both maven and gradle
@@ -266,6 +263,7 @@ public class QuarkusTestExtension
                 // this shouldn't happen since testClassLocation is usually found under the project dir
                 outputDir = projectRoot;
             }
+            runnerBuilder.setTargetDirectory(outputDir);
 
             rootBuilder.add(appClassLocation);
             final Path appResourcesLocation = PathTestHelper.getResourcesForClassesDirOrNull(appClassLocation, "main");
@@ -274,7 +272,7 @@ public class QuarkusTestExtension
             }
 
             // If gradle project running directly with IDE
-            if (System.getProperty(BootstrapConstants.SERIALIZED_TEST_APP_MODEL) == null) {
+            if (System.getProperty(BootstrapConstants.SERIALIZED_APP_MODEL) == null) {
                 QuarkusModel model = BuildToolHelper.enableGradleAppModelForTest(projectRoot);
                 if (model != null) {
                     final Set<File> classDirectories = model.getWorkspace().getMainModule().getSourceSet()
@@ -294,29 +292,18 @@ public class QuarkusTestExtension
                     }
                 }
             }
-            CuratedApplication curatedApplication;
-            if (CurrentTestApplication.curatedApplication != null) {
-                curatedApplication = CurrentTestApplication.curatedApplication;
-            } else {
-                final QuarkusBootstrap.Builder runnerBuilder = QuarkusBootstrap.builder()
-                        .setIsolateDeployment(true)
-                        .setMode(QuarkusBootstrap.Mode.TEST);
-                runnerBuilder.setTargetDirectory(outputDir);
-                runnerBuilder.setProjectRoot(projectRoot);
-                runnerBuilder.setApplicationRoot(rootBuilder.build());
+            runnerBuilder.setApplicationRoot(rootBuilder.build());
 
-                curatedApplication = runnerBuilder
-                        .setTest(true)
-                        .build()
-                        .bootstrap();
-            }
+            CuratedApplication curatedApplication = runnerBuilder
+                    .setTest(true)
+                    .build()
+                    .bootstrap();
 
             Index testClassesIndex = TestClassIndexer.indexTestClasses(requiredTestClass);
             // we need to write the Index to make it reusable from other parts of the testing infrastructure that run in different ClassLoaders
             TestClassIndexer.writeIndex(testClassesIndex, requiredTestClass);
 
-            Timing.staticInitStarted(curatedApplication.getBaseRuntimeClassLoader(),
-                    curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication());
+            Timing.staticInitStarted(curatedApplication.getBaseRuntimeClassLoader());
             final Map<String, Object> props = new HashMap<>();
             props.put(TEST_LOCATION, testClassLocation);
             props.put(TEST_CLASS, requiredTestClass);
@@ -342,7 +329,6 @@ public class QuarkusTestExtension
             populateCallbacks(startupAction.getClassLoader());
 
             runningQuarkusApplication = startupAction.run();
-            TracingHandler.quarkusStarted();
 
             //now we have full config reset the hang timer
 
@@ -360,13 +346,11 @@ public class QuarkusTestExtension
             Closeable shutdownTask = new Closeable() {
                 @Override
                 public void close() throws IOException {
-                    TracingHandler.quarkusStopping();
                     try {
                         runningQuarkusApplication.close();
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     } finally {
-                        TracingHandler.quarkusStopped();
                         try {
                             while (!shutdownTasks.isEmpty()) {
                                 shutdownTasks.pop().run();
@@ -383,13 +367,7 @@ public class QuarkusTestExtension
                                 }
                                 tm.close();
                             } finally {
-                                GroovyCacheCleaner.clearGroovyCache();
-                                if (hangTaskKey != null) {
-                                    hangTaskKey.cancel(true);
-                                    hangTaskKey = null;
-                                }
-                                hangDetectionExecutor.shutdownNow();
-                                hangDetectionExecutor = null;
+                                hangDetectionExecutor.shutdown();
                             }
                         }
                         try {
@@ -662,7 +640,6 @@ public class QuarkusTestExtension
             } catch (Throwable e) {
                 failedBoot = true;
                 firstException = e;
-                store.put(FailedCleanup.class.getName(), new FailedCleanup());
             }
         }
         return state;
@@ -1099,21 +1076,10 @@ public class QuarkusTestExtension
                         log.error("Failed to shutdown Quarkus test resources", e);
                     } finally {
                         Thread.currentThread().setContextClassLoader(old);
-                        ConfigProviderResolver.setInstance(null);
                     }
                 }
                 Runtime.getRuntime().removeShutdownHook(shutdownHook);
             }
-        }
-    }
-
-    class FailedCleanup implements ExtensionContext.Store.CloseableResource {
-
-        @Override
-        public void close() {
-            firstException = null;
-            failedBoot = false;
-            ConfigProviderResolver.setInstance(null);
         }
     }
 
@@ -1149,23 +1115,7 @@ public class QuarkusTestExtension
                         }
                     }).produces(TestClassPredicateBuildItem.class)
                             .build();
-                    buildChainBuilder.addBuildStep(new BuildStep() {
-                        @Override
-                        public void execute(BuildContext context) {
-                            //we need to make sure all hot reloadable classes are application classes
-                            context.produce(new ApplicationClassPredicateBuildItem(new Predicate<String>() {
-                                @Override
-                                public boolean test(String s) {
-                                    QuarkusClassLoader cl = (QuarkusClassLoader) Thread.currentThread()
-                                            .getContextClassLoader();
-                                    //if the class file is present in this (and not the parent) CL then it is an application class
-                                    List<ClassPathElement> res = cl
-                                            .getElementsWithResource(s.replace(".", "/") + ".class", true);
-                                    return !res.isEmpty();
-                                }
-                            }));
-                        }
-                    }).produces(ApplicationClassPredicateBuildItem.class).build();
+
                     buildChainBuilder.addBuildStep(new BuildStep() {
                         @Override
                         public void execute(BuildContext context) {
