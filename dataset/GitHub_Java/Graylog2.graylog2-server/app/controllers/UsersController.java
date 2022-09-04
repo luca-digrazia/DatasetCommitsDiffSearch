@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2013 TORCH UG
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -108,7 +110,6 @@ public class UsersController extends AuthenticatedController {
         if (!Permissions.isPermitted(RestPermissions.USERS_CREATE)) {
             return redirect(routes.StartpageController.redirect());
         }
-
         BreadcrumbList bc = breadcrumbs();
         bc.addCrumb("New", routes.UsersController.newUserForm());
 
@@ -135,7 +136,6 @@ public class UsersController extends AuthenticatedController {
         if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
             return redirect(routes.StartpageController.redirect());
         }
-
         BreadcrumbList bc = breadcrumbs();
         bc.addCrumb("Edit " + username, routes.UsersController.editUserForm(username));
 
@@ -165,10 +165,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result loadUser(String username) {
-        if (!currentUser().getName().equals(username) && !Permissions.isPermitted(RestPermissions.USERS_LIST)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         User user = userService.load(username);
         if (user != null) {
             Map<String, Object> result = Maps.newHashMap();
@@ -182,10 +178,6 @@ public class UsersController extends AuthenticatedController {
 
     @BodyParser.Of(BodyParser.Json.class)
     public Result saveUserPreferences(String username) throws IOException {
-        if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         Map<String, Object> preferences = Json.fromJson(request().body().asJson(), Map.class);
         Map<String, Object> normalizedPreferences = normalizePreferences(preferences);
         if (userService.savePreferences(username, normalizedPreferences)) {
@@ -234,10 +226,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result create() {
-        if (!Permissions.isPermitted(RestPermissions.USERS_CREATE)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         Form<CreateUserRequestForm> createUserRequestForm = Tools.bindMultiValueFormFromRequest(CreateUserRequestForm.class);
         final CreateUserRequestForm request = createUserRequestForm.get();
 
@@ -275,10 +263,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result delete(String username) {
-        if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         userService.delete(username);
         return redirect(routes.UsersController.index());
     }
@@ -295,10 +279,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result saveChanges(String username) {
-        if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         final Form<ChangeUserRequestForm> requestForm = Form.form(ChangeUserRequestForm.class).bindFromRequest();
         final User user = userService.load(username);
 
@@ -391,10 +371,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result changePassword(String username) {
-        if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         final Form<ChangePasswordRequest> requestForm = changePasswordForm.bindFromRequest("old_password", "password");
 
         final ChangePasswordRequest request = requestForm.get();
@@ -413,10 +389,6 @@ public class UsersController extends AuthenticatedController {
     }
 
     public Result resetPermissions(String username) {
-        if (!Permissions.isPermitted(RestPermissions.USERS_EDIT, username)) {
-            return redirect(routes.StartpageController.redirect());
-        }
-
         final DynamicForm requestForm = Form.form().bindFromRequest();
 
         boolean isAdmin = false;
