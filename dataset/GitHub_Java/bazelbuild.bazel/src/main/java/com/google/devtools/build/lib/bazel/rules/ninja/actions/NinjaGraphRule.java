@@ -101,7 +101,7 @@ public class NinjaGraphRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("ninja_graph")
         .type(RuleClassType.NORMAL)
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .factoryClass(NinjaGraph.class)
         .build();
   }

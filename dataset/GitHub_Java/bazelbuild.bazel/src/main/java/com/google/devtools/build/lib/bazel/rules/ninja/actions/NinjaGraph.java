@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -22,28 +23,27 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget;
-import com.google.devtools.build.lib.bazel.rules.ninja.pipeline.NinjaPipeline;
+import com.google.devtools.build.lib.bazel.rules.ninja.pipeline.NinjaPipelineImpl;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.repository.ExternalPackageUtil;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -53,8 +53,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 
@@ -72,22 +70,19 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    if (!ruleContext.getAnalysisEnvironment().getSkylarkSemantics().experimentalNinjaActions()) {
-      throw new RuleErrorException(
+    if (!ruleContext
+        .getAnalysisEnvironment()
+        .getStarlarkSemantics()
+        .getBool(BuildLanguageOptions.EXPERIMENTAL_NINJA_ACTIONS)) {
+      throw ruleContext.throwWithRuleError(
           "Usage of ninja_graph is only allowed with --experimental_ninja_actions flag");
     }
-    Artifact mainArtifact = ruleContext.getPrerequisiteArtifact("main", Mode.TARGET);
-    ImmutableList<Artifact> ninjaSrcs =
-        ruleContext.getPrerequisiteArtifacts("ninja_srcs", Mode.TARGET).list();
+    Artifact mainArtifact = ruleContext.getPrerequisiteArtifact("main");
+    ImmutableList<Artifact> ninjaSrcs = ruleContext.getPrerequisiteArtifacts("ninja_srcs").list();
     PathFragment outputRoot =
         PathFragment.create(ruleContext.attributes().get("output_root", Type.STRING));
     PathFragment workingDirectory =
         PathFragment.create(ruleContext.attributes().get("working_directory", Type.STRING));
-    List<String> outputRootInputs =
-        ruleContext.attributes().get("output_root_inputs", Type.STRING_LIST);
-    Map<String, List<String>> outputGroupsMap =
-        ruleContext.attributes().get("output_groups", Type.STRING_LIST_DICT);
-
     Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     establishDependencyOnNinjaFiles(env, mainArtifact, ninjaSrcs);
     checkDirectoriesAttributes(ruleContext, outputRoot, workingDirectory);
@@ -97,26 +92,28 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
     }
 
     Root sourceRoot = mainArtifact.getRoot().getRoot();
-    List<PathFragment> pathsToBuild =
-        outputGroupsMap.values().stream()
-            .flatMap(List::stream)
-            .map(PathFragment::create)
-            .collect(Collectors.toList());
     NinjaGraphArtifactsHelper artifactsHelper =
         new NinjaGraphArtifactsHelper(
             ruleContext,
-            sourceRoot,
             outputRoot,
             workingDirectory,
-            createSrcsMap(ruleContext),
-            createDepsMap(ruleContext),
-            pathsToBuild);
+            ImmutableSortedMap.of(),
+            ImmutableSortedSet.of());
     if (ruleContext.hasErrors()) {
       return null;
     }
-    TargetsPreparer targetsPreparer = new TargetsPreparer();
+
+    ImmutableSet<PathFragment> outputRootInputs =
+        ruleContext.attributes().get("output_root_inputs", Type.STRING_LIST).stream()
+            .map(s -> workingDirectoryRelativePath(artifactsHelper, s))
+            .collect(toImmutableSet());
+    ImmutableSet<PathFragment> outputRootInputDirs =
+        ruleContext.attributes().get("output_root_input_dirs", Type.STRING_LIST).stream()
+            .map(s -> workingDirectoryRelativePath(artifactsHelper, s))
+            .collect(toImmutableSet());
 
     try {
+      TargetsPreparer targetsPreparer = new TargetsPreparer();
       List<Path> childNinjaFiles =
           ninjaSrcs.stream().map(Artifact::getPath).collect(Collectors.toList());
       Path workspace =
@@ -125,99 +122,187 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
               .getWorkspace();
       String ownerTargetName = ruleContext.getLabel().getName();
       List<NinjaTarget> ninjaTargets =
-          new NinjaPipeline(
+          new NinjaPipelineImpl(
                   workspace.getRelative(workingDirectory),
                   MoreExecutors.listeningDecorator(NINJA_POOL),
                   childNinjaFiles,
                   ownerTargetName)
               .pipeline(mainArtifact.getPath());
-      targetsPreparer.process(ninjaTargets, artifactsHelper);
-      new NinjaActionsHelper(
+      targetsPreparer.prepareTargets(ninjaTargets, outputRootInputs, outputRootInputDirs);
+
+      NestedSet<Artifact> outputRootInputsSymlinks =
+          createSymlinkActions(
               ruleContext,
-              artifactsHelper,
-              outputRootInputs,
-              targetsPreparer.getUsualTargets(),
-              targetsPreparer.getPhonyTargetsMap())
-          .process();
+              sourceRoot,
+              targetsPreparer.getConfirmedOutputRootInputs(),
+              artifactsHelper);
+      if (ruleContext.hasErrors()) {
+        return null;
+      }
+
+      ImmutableSet<PathFragment> outputRootInputsSymlinksPathFragments =
+          outputRootInputsSymlinks.toList().stream()
+              .map(Artifact::getExecPath)
+              .collect(toImmutableSet());
+
+      NinjaGraphProvider ninjaGraphProvider =
+          new NinjaGraphProvider(
+              outputRoot,
+              workingDirectory,
+              targetsPreparer.getTargetsMap(),
+              targetsPreparer.getPhonyTargetsMap(),
+              targetsPreparer.getSymlinkOutputs(),
+              outputRootInputsSymlinksPathFragments);
+
+      return new RuleConfiguredTargetBuilder(ruleContext)
+          .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
+          .addProvider(NinjaGraphProvider.class, ninjaGraphProvider)
+          .setFilesToBuild(outputRootInputsSymlinks)
+          .build();
     } catch (GenericParsingException | IOException e) {
       // IOException is possible with reading Ninja file, describing the action graph.
       ruleContext.ruleError(e.getMessage());
       return null;
     }
-
-    if (!checkOrphanArtifacts(ruleContext)) {
-      return null;
-    }
-
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
-    TreeMap<String, NestedSet<Artifact>> groups = Maps.newTreeMap();
-    for (Map.Entry<String, List<String>> entry : outputGroupsMap.entrySet()) {
-      NestedSet<Artifact> artifacts =
-          getGroupArtifacts(
-              ruleContext,
-              entry.getValue(),
-              targetsPreparer.getPhonyTargetsMap(),
-              artifactsHelper.getOutputsMap());
-      groups.put(entry.getKey(), artifacts);
-      filesToBuild.addTransitive(artifacts);
-    }
-
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-
-    return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
-        .setFilesToBuild(filesToBuild.build())
-        .addOutputGroups(groups)
-        .build();
   }
 
-  private static boolean checkOrphanArtifacts(RuleContext ruleContext) {
-    ImmutableSet<Artifact> orphanArtifacts =
-        ruleContext.getAnalysisEnvironment().getOrphanArtifacts();
-    if (!orphanArtifacts.isEmpty()) {
-      List<String> paths =
-          orphanArtifacts.stream().map(Artifact::getExecPathString).collect(Collectors.toList());
-      ruleContext.ruleError(
-          "The following artifacts do not have a generating action in Ninja file: "
-              + String.join(", ", paths));
-      return false;
+  /**
+   * Given a path string, returns a path fragment representing the path relative to the working
+   * directory.
+   */
+  private PathFragment workingDirectoryRelativePath(
+      NinjaGraphArtifactsHelper artifactsHelper, String pathString) {
+    return artifactsHelper
+        .getOutputRootPath()
+        .getRelative(pathString)
+        .relativeTo(artifactsHelper.getWorkingDirectory());
+  }
+
+  private static NestedSet<Artifact> createSymlinkActions(
+      RuleContext ruleContext,
+      Root sourceRoot,
+      ImmutableSet<PathFragment> outputRootInputs,
+      NinjaGraphArtifactsHelper artifactsHelper)
+      throws GenericParsingException {
+
+    if (outputRootInputs.isEmpty()) {
+      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
-    return true;
+
+    NestedSetBuilder<Artifact> symlinks = NestedSetBuilder.stableOrder();
+
+    Path workingDirectoryRoot =
+        Preconditions.checkNotNull(sourceRoot.asPath())
+            .getRelative(artifactsHelper.getWorkingDirectory());
+
+    for (PathFragment input : outputRootInputs) {
+      // output_root_inputs are relative to the output_root directory, and we should
+      // pass inside createOutputArtifact() paths, relative to working directory.
+      DerivedArtifact derivedArtifact = artifactsHelper.createOutputArtifact(input);
+      symlinks.add(derivedArtifact);
+
+      PathFragment absolutePath = workingDirectoryRoot.getRelative(input).asFragment();
+
+      SymlinkAction symlinkAction =
+          SymlinkAction.toAbsolutePath(
+              ruleContext.getActionOwner(),
+              absolutePath,
+              derivedArtifact,
+              String.format(
+                  "Symlinking %s under <execroot>/%s", input, artifactsHelper.getOutputRootPath()));
+      ruleContext.registerAction(symlinkAction);
+    }
+    return symlinks.build();
   }
 
   private static class TargetsPreparer {
-    private ImmutableSortedMap<PathFragment, NinjaTarget> usualTargets;
-    private ImmutableSortedMap<PathFragment, NestedSet<Artifact>> phonyTargetsMap;
+    private ImmutableSortedMap<PathFragment, NinjaTarget> targetsMap;
+    private ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargetsMap;
+    private ImmutableSet<PathFragment> symlinkOutputs;
+    // Path fragments of files which are inputs of some NinjaTarget, and also classified as
+    // an "output root input". Such files must be symlinked from the output root separately.
+    private ImmutableSet<PathFragment> confirmedOutputRootInputs;
 
-    public ImmutableSortedMap<PathFragment, NinjaTarget> getUsualTargets() {
-      return usualTargets;
+    public ImmutableSortedMap<PathFragment, NinjaTarget> getTargetsMap() {
+      return targetsMap;
     }
 
-    public ImmutableSortedMap<PathFragment, NestedSet<Artifact>> getPhonyTargetsMap() {
+    public ImmutableSortedMap<PathFragment, PhonyTarget> getPhonyTargetsMap() {
       return phonyTargetsMap;
     }
 
-    void process(List<NinjaTarget> ninjaTargets, NinjaGraphArtifactsHelper artifactsHelper)
+    public ImmutableSet<PathFragment> getSymlinkOutputs() {
+      return symlinkOutputs;
+    }
+
+    public ImmutableSet<PathFragment> getConfirmedOutputRootInputs() {
+      return confirmedOutputRootInputs;
+    }
+
+    void prepareTargets(
+        List<NinjaTarget> ninjaTargets,
+        ImmutableSet<PathFragment> outputRootInputs,
+        ImmutableSet<PathFragment> outputRootInputDirs)
         throws GenericParsingException {
-      ImmutableSortedMap.Builder<PathFragment, NinjaTarget> usualTargetsBuilder =
+      ImmutableSortedMap.Builder<PathFragment, NinjaTarget> targetsMapBuilder =
           ImmutableSortedMap.naturalOrder();
       ImmutableSortedMap.Builder<PathFragment, NinjaTarget> phonyTargetsBuilder =
           ImmutableSortedMap.naturalOrder();
-      separatePhonyTargets(ninjaTargets, usualTargetsBuilder, phonyTargetsBuilder);
-      usualTargets = usualTargetsBuilder.build();
-      phonyTargetsMap =
-          NinjaPhonyTargetsUtil.getPhonyPathsMap(
-              phonyTargetsBuilder.build(), artifactsHelper::getInputArtifact);
+      ImmutableSet.Builder<PathFragment> symlinkOutputsBuilder = ImmutableSet.builder();
+      ImmutableSet.Builder<PathFragment> outputRootInputsBuilder = ImmutableSet.builder();
+      categorizeTargetsAndOutputs(
+          ninjaTargets,
+          outputRootInputs,
+          outputRootInputDirs,
+          targetsMapBuilder,
+          phonyTargetsBuilder,
+          symlinkOutputsBuilder,
+          outputRootInputsBuilder);
+      targetsMap = targetsMapBuilder.build();
+      phonyTargetsMap = NinjaPhonyTargetsUtil.getPhonyPathsMap(phonyTargetsBuilder.build());
+      symlinkOutputs = symlinkOutputsBuilder.build();
+      confirmedOutputRootInputs = outputRootInputsBuilder.build();
     }
 
-    private static void separatePhonyTargets(
+    /**
+     * Iterate over all parsed Ninja targets into phony and non-phony targets in a single pass, and
+     * run validations along the way. For non-phony targets, also extract the symlink_outputs for
+     * registering symlink artifacts in actions later on, in ninja_build.
+     *
+     * @param ninjaTargets list of all parsed Ninja targets
+     * @param outputRootInputs list of paths under the output root which may be valid input files
+     *     and thus may be added to {@code outputRootInputsBuilder}
+     * @param outputRootInputs list of directory paths under the output root which may contain valid
+     *     input files to be added to {@code outputRootInputsBuilder}
+     * @param targetsBuilder builder for map of path fragments to the non-phony targets
+     * @param phonyTargetsBuilder builder for map of path fragments to the phony targets
+     * @param symlinkOutputsBuilder builder for set of declared symlink outputs
+     * @param symlinkOutputsBuilder builder for set of input files under the output root directory
+     */
+    private static void categorizeTargetsAndOutputs(
         List<NinjaTarget> ninjaTargets,
-        ImmutableSortedMap.Builder<PathFragment, NinjaTarget> usualTargetsBuilder,
-        ImmutableSortedMap.Builder<PathFragment, NinjaTarget> phonyTargetsBuilder)
+        ImmutableSet<PathFragment> outputRootInputs,
+        ImmutableSet<PathFragment> outputRootInputDirs,
+        ImmutableSortedMap.Builder<PathFragment, NinjaTarget> targetsBuilder,
+        ImmutableSortedMap.Builder<PathFragment, NinjaTarget> phonyTargetsBuilder,
+        ImmutableSet.Builder<PathFragment> symlinkOutputsBuilder,
+        ImmutableSet.Builder<PathFragment> outputRootInputsBuilder)
         throws GenericParsingException {
       for (NinjaTarget target : ninjaTargets) {
+        // Add input path to outputRootInputs if either it's listed in outputRootInputs or it starts
+        // with a path in outputRootInputDirs.
+        for (PathFragment input : target.getAllInputs()) {
+          if (outputRootInputs.contains(input)) {
+            outputRootInputsBuilder.add(input);
+          } else {
+            for (PathFragment outputRootInputDir : outputRootInputDirs) {
+              if (input.startsWith(outputRootInputDir)) {
+                outputRootInputsBuilder.add(input);
+              }
+            }
+          }
+        }
+
         if ("phony".equals(target.getRuleName())) {
           if (target.getAllOutputs().size() != 1) {
             String allOutputs =
@@ -232,8 +317,9 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
           phonyTargetsBuilder.put(Iterables.getOnlyElement(target.getAllOutputs()), target);
         } else {
           for (PathFragment output : target.getAllOutputs()) {
-            usualTargetsBuilder.put(output, target);
+            targetsBuilder.put(output, target);
           }
+          symlinkOutputsBuilder.addAll(target.getAllSymlinkOutputs());
         }
       }
     }
@@ -244,14 +330,19 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
       throws InterruptedException {
     Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     ImmutableSortedSet<String> notSymlinkedDirs =
-        ExternalPackageUtil.getNotSymlinkedInExecrootDirectories(env);
+        BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER.getNotSymlinkedInExecrootDirectories(
+            env);
+    if (env.valuesMissing()) {
+      return;
+    }
+
     // We can compare strings because notSymlinkedDirs contains normalized directory names
     if (!notSymlinkedDirs.contains(outputRoot.getPathString())) {
       ruleContext.attributeError(
           "output_root",
           String.format(
               "Ninja output root directory '%s' must be declared"
-                  + " using global workspace function dont_symlink_directories_in_execroot().",
+                  + " using global workspace function toplevel_output_directories().",
               outputRoot.getPathString()));
     }
 
@@ -263,58 +354,6 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
                   + " or be the same as output root '%s'.",
               workingDirectory.getPathString(), outputRoot.getPathString()));
     }
-  }
-
-  private static NestedSet<Artifact> getGroupArtifacts(
-      RuleContext ruleContext,
-      List<String> targets,
-      ImmutableSortedMap<PathFragment, NestedSet<Artifact>> phonyTargetsMap,
-      ImmutableSortedMap<PathFragment, Artifact> outputsMap) {
-    NestedSetBuilder<Artifact> nestedSetBuilder = NestedSetBuilder.stableOrder();
-    for (String target : targets) {
-      PathFragment path = PathFragment.create(target);
-      NestedSet<Artifact> artifacts = phonyTargetsMap.get(path);
-      if (artifacts != null) {
-        nestedSetBuilder.addTransitive(artifacts);
-      } else {
-        Artifact usualArtifact = outputsMap.get(path);
-        if (usualArtifact == null) {
-          ruleContext.ruleError(
-              String.format("Required target '%s' is not created in ninja_graph.", path));
-          return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-        }
-        nestedSetBuilder.add(usualArtifact);
-      }
-    }
-    return nestedSetBuilder.build();
-  }
-
-  private static ImmutableSortedMap<PathFragment, Artifact> createSrcsMap(RuleContext ruleContext) {
-    ImmutableList<Artifact> srcs = ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list();
-    ImmutableSortedMap.Builder<PathFragment, Artifact> inputsMapBuilder =
-        ImmutableSortedMap.naturalOrder();
-    srcs.forEach(a -> inputsMapBuilder.put(a.getRootRelativePath(), a));
-    return inputsMapBuilder.build();
-  }
-
-  private static ImmutableSortedMap<PathFragment, Artifact> createDepsMap(RuleContext ruleContext) {
-    Map<String, TransitiveInfoCollection> mapping = ruleContext.getPrerequisiteMap("deps_mapping");
-    ImmutableSortedMap.Builder<PathFragment, Artifact> builder = ImmutableSortedMap.naturalOrder();
-    for (Map.Entry<String, TransitiveInfoCollection> entry : mapping.entrySet()) {
-      NestedSet<Artifact> filesToBuild =
-          entry.getValue().getProvider(FileProvider.class).getFilesToBuild();
-      if (!filesToBuild.isSingleton()) {
-        ruleContext.attributeError(
-            "deps_mapping",
-            String.format(
-                "'%s' contains more than one output. "
-                    + "deps_mapping should only contain targets, producing a single output file.",
-                entry.getValue().getLabel().getCanonicalForm()));
-        return ImmutableSortedMap.of();
-      }
-      builder.put(PathFragment.create(entry.getKey()), filesToBuild.getSingleton());
-    }
-    return builder.build();
   }
 
   /**
