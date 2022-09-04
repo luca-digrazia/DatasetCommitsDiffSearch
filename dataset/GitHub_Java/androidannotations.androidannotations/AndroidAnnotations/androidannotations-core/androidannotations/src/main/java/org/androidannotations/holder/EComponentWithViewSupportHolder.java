@@ -37,7 +37,6 @@ import org.androidannotations.api.view.OnViewChangedNotifier;
 import org.androidannotations.internal.helper.ViewNotifierHelper;
 
 import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJAssignmentTarget;
 import com.helger.jcodemodel.IJExpression;
 import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JDefinedClass;
@@ -127,23 +126,47 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		return findViewById;
 	}
 
-	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, AbstractJClass viewClass) {
-		return getFoundViewHolder(idRef, viewClass, null);
+	public void processViewById(JFieldRef idRef, AbstractJClass viewClass, JFieldRef fieldRef) {
+		assignFindViewById(idRef, viewClass, fieldRef);
 	}
 
-	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, AbstractJClass viewClass, IJAssignmentTarget fieldRef) {
+	public void assignFindViewById(JFieldRef idRef, AbstractJClass viewClass, JFieldRef fieldRef) {
+		String idRefString = idRef.name();
+		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
+
+		JBlock block = getOnViewChangedBodyInjectionBlock();
+		IJExpression assignExpression;
+
+		if (foundViewHolder != null) {
+			assignExpression = foundViewHolder.getOrCastRef(viewClass);
+		} else {
+			assignExpression = findViewById(idRef);
+			if (viewClass != null && viewClass != getClasses().VIEW) {
+				assignExpression = cast(viewClass, assignExpression);
+
+				if (viewClass.isParameterized()) {
+					codeModelHelper.addSuppressWarnings(onViewChanged, "unchecked");
+				}
+			}
+			foundHolders.put(idRefString, new FoundViewHolder(this, viewClass, fieldRef, block));
+		}
+
+		block.assign(fieldRef, assignExpression);
+	}
+
+	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, AbstractJClass viewClass) {
 		String idRefString = idRef.name();
 		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
 		if (foundViewHolder == null) {
-			foundViewHolder = createFoundViewAndIfNotNullBlock(idRef, viewClass, fieldRef);
+			foundViewHolder = createFoundViewAndIfNotNullBlock(idRef, viewClass);
 			foundHolders.put(idRefString, foundViewHolder);
 		}
 		return foundViewHolder;
 	}
 
-	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, AbstractJClass viewClass, IJAssignmentTarget fieldRef) {
+	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, AbstractJClass viewClass) {
 		IJExpression findViewExpression = findViewById(idRef);
-		JBlock block = getOnViewChangedBodyBeforeInjectionBlock();
+		JBlock block = getOnViewChangedBodyInjectionBlock().blockSimple();
 
 		if (viewClass == null) {
 			viewClass = getClasses().VIEW;
@@ -151,17 +174,8 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 			findViewExpression = cast(viewClass, findViewExpression);
 		}
 
-		IJAssignmentTarget foundView = fieldRef;
-		if (foundView == null) {
-			JVar view = block.decl(viewClass, "view_" + idRef.name(), findViewExpression);
-			if (viewClass.isParameterized()) {
-				codeModelHelper.addSuppressWarnings(view, "unchecked");
-			}
-			foundView = view;
-		} else {
-			block.add(foundView.assign(findViewExpression));
-		}
-		return new FoundViewHolder(this, viewClass, foundView, getOnViewChangedBodyInjectionBlock());
+		JVar view = block.decl(viewClass, "view", findViewExpression);
+		return new FoundViewHolder(this, viewClass, view, block);
 	}
 
 	public JMethod getFindNativeFragmentById() {

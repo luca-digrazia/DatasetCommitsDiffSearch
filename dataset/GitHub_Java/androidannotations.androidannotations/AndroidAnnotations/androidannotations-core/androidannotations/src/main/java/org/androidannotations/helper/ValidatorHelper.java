@@ -568,14 +568,9 @@ public class ValidatorHelper {
 			if (typeMirror.getKind() != TypeKind.NONE) {
 				TypeMirror parcelableType = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.PARCELABLE).asType();
 				TypeMirror serializableType = annotationHelper.typeElementFromQualifiedName("java.io.Serializable").asType();
-
-				if (typeString.startsWith(CanonicalNameConstants.SPARSE_ARRAY)) {
-					DeclaredType declaredType = (DeclaredType) typeMirror;
-					List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
-					if (typeArguments.size() != 1 || !annotationHelper.isSubtype(typeArguments.get(0), parcelableType)) {
-						valid.addError("Unrecognized type. The type argument of SparseArray should implement Parcelable.");
-					}
-				} else if (!annotationHelper.isSubtype(typeMirror, parcelableType) && !annotationHelper.isSubtype(typeMirror, serializableType) && !parcelerHelper.isParcelType(typeMirror)) {
+				if (!annotationHelper.isSubtype(typeMirror, parcelableType)
+						&& !annotationHelper.isSubtype(typeMirror, serializableType)
+						&& !parcelerHelper.isParcelType(typeMirror)) {
 					valid.addError("Unrecognized type. Please let your attribute be primitive or implement Serializable or Parcelable or an annotated Parceler bean.");
 				}
 			}
