@@ -1,6 +1,5 @@
 package io.quarkus.infinispan.client.runtime;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.util.Map;
@@ -27,14 +26,12 @@ import org.infinispan.client.hotrod.impl.ConfigurationProperties;
 import org.infinispan.client.hotrod.logging.Log;
 import org.infinispan.client.hotrod.logging.LogFactory;
 import org.infinispan.client.hotrod.marshall.ProtoStreamMarshaller;
-import org.infinispan.commons.CacheConfigurationException;
 import org.infinispan.commons.marshall.Marshaller;
 import org.infinispan.commons.util.Util;
 import org.infinispan.counter.api.CounterManager;
 import org.infinispan.protostream.BaseMarshaller;
 import org.infinispan.protostream.FileDescriptorSource;
 import org.infinispan.protostream.SerializationContext;
-import org.infinispan.protostream.SerializationContextInitializer;
 import org.infinispan.query.remote.client.ProtobufMetadataManagerConstants;
 import org.infinispan.query.remote.client.impl.MarshallerRegistration;
 
@@ -46,7 +43,6 @@ public class InfinispanClientProducer {
     private static final Log log = LogFactory.getLog(InfinispanClientProducer.class);
 
     public static final String PROTOBUF_FILE_PREFIX = "infinispan.client.hotrod.protofile.";
-    public static final String PROTOBUF_INITIALIZERS = "infinispan.client.hotrod.proto-initializers";
 
     @Inject
     private BeanManager beanManager;
@@ -72,18 +68,6 @@ public class InfinispanClientProducer {
 
         // TODO: do we want to automatically register all the proto file definitions?
         RemoteCache<String, String> protobufMetadataCache = null;
-
-        Set<SerializationContextInitializer> initializers = (Set) properties.remove(PROTOBUF_INITIALIZERS);
-        if (initializers != null) {
-            for (SerializationContextInitializer initializer : initializers) {
-                if (protobufMetadataCache == null) {
-                    protobufMetadataCache = cacheManager.getCache(
-                            ProtobufMetadataManagerConstants.PROTOBUF_METADATA_CACHE_NAME);
-                }
-                protobufMetadataCache.put(initializer.getProtoFileName(), initializer.getProtoFile());
-            }
-        }
-
         for (Map.Entry<Object, Object> property : properties.entrySet()) {
             Object key = property.getKey();
             if (key instanceof String) {
@@ -162,7 +146,7 @@ public class InfinispanClientProducer {
         Object marshallerInstance = properties.remove(ConfigurationProperties.MARSHALLER);
         if (marshallerInstance != null) {
             if (marshallerInstance instanceof ProtoStreamMarshaller) {
-                handleProtoStreamMarshaller((ProtoStreamMarshaller) marshallerInstance, properties, beanManager);
+                handleProtoStreamMarshaller(marshallerInstance, properties, beanManager);
             }
             builder.marshaller((Marshaller) marshallerInstance);
         }
@@ -180,22 +164,9 @@ public class InfinispanClientProducer {
         return builder;
     }
 
-    private static void handleProtoStreamMarshaller(ProtoStreamMarshaller marshaller, Properties properties,
-            BeanManager beanManager) {
+    private static void handleProtoStreamMarshaller(Object marshallerInstance, Properties properties, BeanManager beanManager) {
+        ProtoStreamMarshaller marshaller = (ProtoStreamMarshaller) marshallerInstance;
         SerializationContext serializationContext = marshaller.getSerializationContext();
-
-        Set<SerializationContextInitializer> initializers = (Set) properties
-                .get(InfinispanClientProducer.PROTOBUF_INITIALIZERS);
-        if (initializers != null) {
-            initializers.forEach(sci -> {
-                try {
-                    sci.registerSchema(serializationContext);
-                } catch (IOException e) {
-                    throw new CacheConfigurationException(e);
-                }
-                sci.registerMarshallers(serializationContext);
-            });
-        }
 
         FileDescriptorSource fileDescriptorSource = null;
         for (Map.Entry<Object, Object> property : properties.entrySet()) {
@@ -223,10 +194,6 @@ public class InfinispanClientProducer {
             FileDescriptorSource fds = (FileDescriptorSource) beanManager.getReference(bean, FileDescriptorSource.class,
                     ctx);
             serializationContext.registerProtoFiles(fds);
-            // Register all of the fds so they can be queried
-            for (Map.Entry<String, char[]> fdEntry : fds.getFileDescriptors().entrySet()) {
-                properties.put(PROTOBUF_FILE_PREFIX + fdEntry.getKey(), new String(fdEntry.getValue()));
-            }
         }
 
         Set<Bean<BaseMarshaller>> beans = (Set) beanManager.getBeans(BaseMarshaller.class);
