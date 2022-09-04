@@ -272,43 +272,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testActionIsEnabled() throws Exception {
-    scratch.file(
-        "a/BUILD",
-        "load(':rule.bzl', 'crule')",
-        "cc_toolchain_alias(name='alias')",
-        "crule(name='r')");
-
-    scratch.file(
-        "a/rule.bzl",
-        "def _impl(ctx):",
-        "  toolchain = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
-        "  feature_configuration = cc_common.configure_features(cc_toolchain = toolchain)",
-        "  return struct(",
-        "    enabled_action = cc_common.action_is_enabled(",
-        "        feature_configuration = feature_configuration,",
-        "        action_name = 'c-compile'),",
-        "    disabled_action = cc_common.action_is_enabled(",
-        "        feature_configuration = feature_configuration,",
-        "        action_name = 'wololoo'))",
-        "crule = rule(",
-        "  _impl,",
-        "  attrs = { ",
-        "    '_cc_toolchain': attr.label(default=Label('//a:alias'))",
-        "  },",
-        "  fragments = ['cpp'],",
-        ");");
-
-    ConfiguredTarget r = getConfiguredTarget("//a:r");
-    @SuppressWarnings("unchecked")
-    boolean enabledActionIsEnabled = (boolean) r.get("enabled_action");
-    @SuppressWarnings("unchecked")
-    boolean disabledActionIsDisabled = (boolean) r.get("disabled_action");
-    assertThat(enabledActionIsEnabled).isTrue();
-    assertThat(disabledActionIsDisabled).isFalse();
-  }
-
-  @Test
   public void testIsEnabled() throws Exception {
     scratch.file(
         "a/BUILD",
@@ -364,7 +327,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "    'C_COMPILE_ACTION_NAME',",
         "    'CPP_COMPILE_ACTION_NAME',",
         "    'LINKSTAMP_COMPILE_ACTION_NAME',",
-        "    'CC_FLAGS_MAKE_VARIABLE_ACTION_NAME',",
+        "    'CC_FLAGS_MAKE_VARIABLE_ACTION_NAME_ACTION_NAME',",
         "    'CPP_MODULE_CODEGEN_ACTION_NAME',",
         "    'CPP_HEADER_PARSING_ACTION_NAME',",
         "    'CPP_MODULE_COMPILE_ACTION_NAME',",
@@ -384,7 +347,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "      c_compile_action_name=C_COMPILE_ACTION_NAME,",
         "      cpp_compile_action_name=CPP_COMPILE_ACTION_NAME,",
         "      linkstamp_compile_action_name=LINKSTAMP_COMPILE_ACTION_NAME,",
-        "      cc_flags_make_variable_action_name_action_name=CC_FLAGS_MAKE_VARIABLE_ACTION_NAME,",
+        "      cc_flags_make_variable_action_name_action_name=CC_FLAGS_MAKE_VARIABLE_ACTION_NAME_ACTION_NAME,",
         "      cpp_module_codegen_action_name=CPP_MODULE_CODEGEN_ACTION_NAME,",
         "      cpp_header_parsing_action_name=CPP_HEADER_PARSING_ACTION_NAME,",
         "      cpp_module_compile_action_name=CPP_MODULE_COMPILE_ACTION_NAME,",
@@ -1057,7 +1020,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "      cc_infos.append(dep[CcInfo])",
         "  merged_cc_info=cc_common.merge_cc_infos(cc_infos=cc_infos)",
         "  return struct(",
-        "    providers=[merged_cc_info],",
+        "    providers=[merged_cc_info, cc_common.create_cc_skylark_info(ctx=ctx)],",
         "    merged_headers=merged_cc_info.compilation_context.headers,",
         "    merged_system_includes=merged_cc_info.compilation_context.system_includes,",
         "    merged_includes=merged_cc_info.compilation_context.includes,",
