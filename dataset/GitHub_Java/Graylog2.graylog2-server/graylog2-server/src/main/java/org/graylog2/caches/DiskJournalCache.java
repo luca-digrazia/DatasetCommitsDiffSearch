@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
  * @author Bernd Ahlers <bernd@torch.sh>
  */
 public abstract class DiskJournalCache implements InputCache, OutputCache {
-    private static final Logger LOG = LoggerFactory.getLogger(DiskJournalCache.class);
+    private final Logger LOG = LoggerFactory.getLogger(DiskJournalCache.class);
 
     private final DB db;
     private final BlockingQueue<byte[]> queue;
@@ -64,7 +64,7 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
 
     public static class Input extends DiskJournalCache {
         @Inject
-        public Input(Configuration config, MessageToJsonSerializer serializer, MetricRegistry metricRegistry) throws IOException, DiskJournalCacheCorruptSpoolException {
+        public Input(Configuration config, MessageToJsonSerializer serializer, MetricRegistry metricRegistry) throws IOException {
             super(config, serializer, metricRegistry);
         }
 
@@ -76,7 +76,7 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
 
     public static class Output extends DiskJournalCache {
         @Inject
-        public Output(Configuration config, MessageToJsonSerializer serializer, MetricRegistry metricRegistry) throws IOException, DiskJournalCacheCorruptSpoolException {
+        public Output(Configuration config, MessageToJsonSerializer serializer, MetricRegistry metricRegistry) throws IOException {
             super(config, serializer, metricRegistry);
         }
 
@@ -87,17 +87,12 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
     }
 
     @Inject
-    public DiskJournalCache(final Configuration config, final MessageToJsonSerializer serializer, final MetricRegistry metricRegistry) throws IOException, DiskJournalCacheCorruptSpoolException {
+    public DiskJournalCache(final Configuration config, final MessageToJsonSerializer serializer, final MetricRegistry metricRegistry) throws IOException {
         // Ensure the spool directory exists.
         Files.createDirectories(new File(config.getMessageCacheSpoolDir()).toPath());
 
         this.metricRegistry = metricRegistry;
-        try {
-            this.db = DBMaker.newFileDB(getDbFile(config)).mmapFileEnable().checksumEnable().closeOnJvmShutdown().make();
-        } catch (ArrayIndexOutOfBoundsException e) {
-            LOG.error("Caught exception during disk journal initialization: ", e);
-            throw new DiskJournalCacheCorruptSpoolException();
-        }
+        this.db = DBMaker.newFileDB(getDbFile(config)).mmapFileEnable().checksumEnable().closeOnJvmShutdown().make();
         this.store = Store.forDB(this.db);
         this.queue = db.getQueue("messages");
         this.counter = db.getAtomicLong("counter");
