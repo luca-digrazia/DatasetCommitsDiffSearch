@@ -29,20 +29,21 @@ import java.util.stream.Stream;
 
 import org.jboss.logging.Logger;
 
+import io.dekorate.deps.kubernetes.api.model.HasMetadata;
+import io.dekorate.deps.kubernetes.api.model.KubernetesList;
+import io.dekorate.deps.kubernetes.api.model.Secret;
+import io.dekorate.deps.kubernetes.client.KubernetesClient;
+import io.dekorate.deps.kubernetes.client.dsl.LogWatch;
+import io.dekorate.deps.openshift.api.model.Build;
+import io.dekorate.deps.openshift.api.model.BuildConfig;
+import io.dekorate.deps.openshift.api.model.ImageStream;
+import io.dekorate.deps.openshift.client.OpenShiftClient;
 import io.dekorate.utils.Clients;
 import io.dekorate.utils.Packaging;
 import io.dekorate.utils.Serialization;
-import io.fabric8.kubernetes.api.model.HasMetadata;
-import io.fabric8.kubernetes.api.model.KubernetesList;
-import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.kubernetes.client.dsl.LogWatch;
-import io.fabric8.openshift.api.model.Build;
-import io.fabric8.openshift.api.model.BuildConfig;
-import io.fabric8.openshift.api.model.ImageStream;
-import io.fabric8.openshift.client.OpenShiftClient;
+import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.container.image.deployment.ContainerImageConfig;
 import io.quarkus.container.image.deployment.util.ImageUtil;
 import io.quarkus.container.spi.AvailableContainerImageExtensionBuildItem;
@@ -131,11 +132,13 @@ public class OpenshiftProcessor {
             BuildProducer<KubernetesCommandBuildItem> commandProducer) {
 
         OpenshiftConfig config = mergeConfig(openshiftConfig, s2iConfig);
+        final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
         String outputJarFileName = jarBuildItem.getPath().getFileName().toString();
         String jarFileName = config.jarFileName.orElse(outputJarFileName);
 
         builderImageProducer.produce(new BaseImageInfoBuildItem(config.baseJvmImage));
         Optional<OpenshiftBaseJavaImage> baseImage = OpenshiftBaseJavaImage.findMatching(config.baseJvmImage);
+        boolean libRequired = !packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR);
 
         if (config.buildStrategy == BuildStrategy.BINARY) {
             // Jar directory priorities:
@@ -145,18 +148,32 @@ public class OpenshiftProcessor {
             String jarDirectory = config.jarDirectory
                     .orElse(baseImage.map(i -> i.getJarDirectory()).orElse(config.FALLBACK_JAR_DIRECTORY));
             String pathToJar = concatUnixPaths(jarDirectory, jarFileName);
+            String classpath = appDeps.stream()
+                    .map(d -> d.getArtifact().getGroupId() + "." + d.getArtifact().getPath().getFileName())
+                    .map(s -> concatUnixPaths(jarDirectory, "lib", s))
+                    .collect(Collectors.joining(":"));
 
             // If the image is known, we can define env vars for classpath, jar, lib etc.
             baseImage.ifPresent(b -> {
                 envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJarEnvVar(), pathToJar, null));
+                if (libRequired) {
+                    envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJarLibEnvVar(),
+                            concatUnixPaths(jarDirectory, "lib"), null));
+                    envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getClasspathEnvVar(), classpath, null));
+                }
                 envProducer.produce(KubernetesEnvBuildItem.createSimpleVar(b.getJvmOptionsEnvVar(),
                         String.join(" ", config.jvmArguments), null));
             });
             //In all other cases its the responsibility of the image to set those up correctly.
             if (!baseImage.isPresent()) {
                 List<String> args = new ArrayList<>();
-                args.addAll(config.jvmArguments);
                 args.addAll(Arrays.asList("-jar", pathToJar));
+                if (libRequired) {
+                    args.addAll(Arrays.asList("-cp", classpath));
+                    envProducer.produce(
+                            KubernetesEnvBuildItem.createSimpleVar("JAVA_LIB_DIR", concatUnixPaths(jarDirectory, "lib"), null));
+                }
+                args.addAll(config.jvmArguments);
                 envProducer.produce(KubernetesEnvBuildItem.createSimpleVar("JAVA_APP_JAR", pathToJar, null));
                 commandProducer.produce(new KubernetesCommandBuildItem("java", args.toArray(new String[args.size()])));
             }
