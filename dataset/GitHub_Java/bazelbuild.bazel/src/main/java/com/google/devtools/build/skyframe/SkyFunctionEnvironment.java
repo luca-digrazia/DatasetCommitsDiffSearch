@@ -225,28 +225,38 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     Preconditions.checkState(building, skyKey);
   }
 
-  NestedSet<TaggedEvents> buildEvents(NodeEntry entry, boolean expectDoneDeps)
+  NestedSet<TaggedEvents> buildEvents(NodeEntry entry, boolean missingChildren)
       throws InterruptedException {
     if (!evaluatorContext.getStoredEventFilter().storeEventsAndPosts()) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
+    // Aggregate the nested set of events from the direct deps, also adding the events from
+    // building this value.
     NestedSetBuilder<TaggedEvents> eventBuilder = NestedSetBuilder.stableOrder();
     ImmutableList<Event> events = eventHandler.getEvents();
     if (!events.isEmpty()) {
       eventBuilder.add(new TaggedEvents(getTagFromKey(), events));
     }
-
     GroupedList<SkyKey> depKeys = entry.getTemporaryDirectDeps();
-    Collection<SkyValue> deps =
-        getDepValuesForDoneNodeFromErrorOrDepsOrGraph(depKeys, expectDoneDeps);
+    Collection<SkyValue> deps = getDepValuesForDoneNodeMaybeFromError(depKeys);
+    if (!missingChildren && depKeys.numElements() != deps.size()) {
+      throw new IllegalStateException(
+          "Missing keys for "
+              + skyKey
+              + ". Present values: "
+              + deps
+              + " requested from: "
+              + depKeys
+              + ", "
+              + entry);
+    }
     for (SkyValue value : deps) {
       eventBuilder.addTransitive(ValueWithMetadata.getEvents(value));
     }
     return eventBuilder.build();
   }
 
-  NestedSet<Postable> buildPosts(NodeEntry entry, boolean expectDoneDeps)
-      throws InterruptedException {
+  NestedSet<Postable> buildPosts(NodeEntry entry) throws InterruptedException {
     if (!evaluatorContext.getStoredEventFilter().storeEventsAndPosts()) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
@@ -254,8 +264,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     postBuilder.addAll(eventHandler.getPosts());
 
     GroupedList<SkyKey> depKeys = entry.getTemporaryDirectDeps();
-    Collection<SkyValue> deps =
-        getDepValuesForDoneNodeFromErrorOrDepsOrGraph(depKeys, expectDoneDeps);
+    Collection<SkyValue> deps = getDepValuesForDoneNodeMaybeFromError(depKeys);
     for (SkyValue value : deps) {
       postBuilder.addTransitive(ValueWithMetadata.getPosts(value));
     }
@@ -320,8 +329,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
    * <p>Any key whose {@link NodeEntry}--or absence thereof--had to be read from the graph will also
    * be entered into {@link #newlyRequestedDepsValues} with its value or a {@link #NULL_MARKER}.
    */
-  private Map<SkyKey, SkyValue> getValuesFromErrorOrDepsOrGraph(Iterable<? extends SkyKey> keys)
-      throws InterruptedException {
+  private Map<SkyKey, SkyValue> maybeGetValuesFromErrorOrDepsOrGraph(
+      Iterable<? extends SkyKey> keys) throws InterruptedException {
     // Uses a HashMap, not an ImmutableMap.Builder, because we have not yet deduplicated these keys
     // and ImmutableMap.Builder does not tolerate duplicates.  The map will be thrown away
     // shortly in any case.
@@ -339,9 +348,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         result.put(key, value);
       }
     }
-    if (missingKeys.isEmpty()) {
-      return result;
-    }
     Map<SkyKey, ? extends NodeEntry> missingEntries =
         evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
     for (SkyKey key : missingKeys) {
@@ -353,64 +359,36 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   }
 
   /**
-   * Returns the values of done deps in {@code depKeys}, by looking in order at:
-   *
-   * <ol>
-   *   <li>{@link #bubbleErrorInfo}
-   *   <li>{@link #previouslyRequestedDepsValues}
-   *   <li>{@link #newlyRequestedDepsValues}
-   *   <li>{@link #evaluatorContext}'s graph accessing methods
-   * </ol>
-   *
-   * <p>Any key whose {@link NodeEntry}--or absence thereof--had to be read from the graph will also
-   * be entered into {@link #newlyRequestedDepsValues} with its value or a {@link #NULL_MARKER}.
-   *
-   * <p>This asserts that only keys in {@link #newlyRegisteredDeps} require reading from the graph,
-   * because this node is done, and so all other deps must have been previously or newly requested.
-   *
-   * <p>If {@code assertDone}, this asserts that all deps in {@code depKeys} are done.
+   * Returns just the values of the deps in {@code depKeys}, looking at {@code bubbleErrorInfo},
+   * {@link #previouslyRequestedDepsValues}, and the backing {@link #evaluatorContext#graph} in that
+   * order. Any deps that are not yet done will not have their values present in the returned
+   * collection.
    */
-  private Collection<SkyValue> getDepValuesForDoneNodeFromErrorOrDepsOrGraph(
-      GroupedList<SkyKey> depKeys, boolean assertDone) throws InterruptedException {
+  private Collection<SkyValue> getDepValuesForDoneNodeMaybeFromError(GroupedList<SkyKey> depKeys)
+      throws InterruptedException {
     int keySize = depKeys.numElements();
     List<SkyValue> result = new ArrayList<>(keySize);
-    // depKeys may contain keys in newlyRegisteredDeps whose values have not yet been retrieved from
-    // the graph during this environment's lifetime.
-    int expectedMissingKeys = newlyRegisteredDeps.size();
-    ArrayList<SkyKey> missingKeys =
-        expectedMissingKeys > 0 ? new ArrayList<>(expectedMissingKeys) : null;
-
+    // depKeys consists of all known deps of this entry. That should include all the keys in
+    // previouslyRequestedDepsValues, and any keys in bubbleErrorInfo. We expect to have to retrieve
+    // the keys that are not in either one.
+    int expectedMissingKeySize =
+        Math.max(
+            keySize
+                - previouslyRequestedDepsValues.size()
+                - (bubbleErrorInfo == null ? 0 : bubbleErrorInfo.size()),
+            0);
+    ArrayList<SkyKey> missingKeys = new ArrayList<>(expectedMissingKeySize);
     for (SkyKey key : depKeys.getAllElementsAsIterable()) {
       SkyValue value = maybeGetValueFromErrorOrDeps(key);
       if (value == null) {
-        if (key == ErrorTransienceValue.KEY) {
-          continue;
-        }
-        Preconditions.checkState(
-            newlyRegisteredDeps.contains(key),
-            "Dep was not previously or newly requested, nor registered, nor error transient: %s",
-            key);
         missingKeys.add(key);
-      } else if (value == NULL_MARKER) {
-        Preconditions.checkState(!assertDone, "%s had not done %s", skyKey, key);
       } else {
         result.add(value);
       }
     }
-    if (missingKeys == null || missingKeys.isEmpty()) {
-      return result;
-    }
-    Map<SkyKey, ? extends NodeEntry> missingEntries =
-        evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
-    for (SkyKey key : missingKeys) {
-      SkyValue valueOrNullMarker = getValueOrNullMarker(missingEntries.get(key));
-      newlyRequestedDepsValues.put(key, valueOrNullMarker);
-      if (valueOrNullMarker == NULL_MARKER) {
-        // TODO(mschaller): handle registered deps that transitioned from done to dirty during eval
-        Preconditions.checkState(!assertDone, "%s had not done: %s", skyKey, key);
-        continue;
-      }
-      result.add(valueOrNullMarker);
+    for (NodeEntry entry :
+        evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys).values()) {
+      result.add(getValueOrNullMarker(entry));
     }
     return result;
   }
@@ -463,27 +441,24 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       Iterable<? extends SkyKey> depKeys) throws InterruptedException {
     checkActive();
     newlyRequestedDeps.startGroup();
-    Map<SkyKey, SkyValue> values = getValuesFromErrorOrDepsOrGraph(depKeys);
+    Map<SkyKey, SkyValue> values = maybeGetValuesFromErrorOrDepsOrGraph(depKeys);
     for (Map.Entry<SkyKey, SkyValue> depEntry : values.entrySet()) {
       SkyKey depKey = depEntry.getKey();
       SkyValue depValue = depEntry.getValue();
-
       if (depValue == NULL_MARKER) {
-        valuesMissing = true;
         if (previouslyRequestedDepsValues.containsKey(depKey)) {
-          Preconditions.checkState(
-              bubbleErrorInfo != null,
-              "Undone key %s was already in deps of %s( dep: %s, parent: %s )",
-              depKey,
-              skyKey,
-              evaluatorContext.getGraph().get(skyKey, Reason.OTHER, depKey),
-              evaluatorContext.getGraph().get(null, Reason.OTHER, skyKey));
-        } else {
-          newlyRequestedDeps.add(depKey);
+          throw new IllegalStateException(
+              String.format(
+                  "Undone key %s was already in deps of %s( dep: %s, parent: %s )",
+                  depKey,
+                  skyKey,
+                  evaluatorContext.getGraph().get(skyKey, Reason.OTHER, depKey),
+                  evaluatorContext.getGraph().get(null, Reason.OTHER, skyKey)));
         }
+        valuesMissing = true;
+        newlyRequestedDeps.add(depKey);
         continue;
       }
-
       ErrorInfo errorInfo = ValueWithMetadata.getMaybeErrorInfo(depValue);
       if (errorInfo != null) {
         childErrorInfos.add(errorInfo);
@@ -505,7 +480,9 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       }
 
       if (!previouslyRequestedDepsValues.containsKey(depKey)) {
-        newlyRequestedDeps.add(depKey);
+        if (bubbleErrorInfo == null) {
+          newlyRequestedDeps.add(depKey);
+        }
         evaluatorContext
             .getReplayingNestedSetPostableVisitor()
             .visit(ValueWithMetadata.getPosts(depValue));
@@ -658,8 +635,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     // (2) value == null && enqueueParents happens for values that are found to have errors
     // during a --keep_going build.
 
-    NestedSet<Postable> posts = buildPosts(primaryEntry, /*expectDoneDeps=*/ true);
-    NestedSet<TaggedEvents> events = buildEvents(primaryEntry, /*expectDoneDeps=*/ true);
+    NestedSet<Postable> posts = buildPosts(primaryEntry);
+    NestedSet<TaggedEvents> events = buildEvents(primaryEntry, /*missingChildren=*/ false);
 
     Version valueVersion;
     SkyValue valueWithMetadata;
