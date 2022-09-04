@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.InfoInterface;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -375,6 +376,14 @@ public final class RuleConfiguredTargetBuilder {
     return this;
   }
 
+  private <T extends TransitiveInfoProvider> void maybeAddSkylarkLegacyProvider(
+      InfoInterface value) {
+    if (value.getProvider() instanceof NativeProvider.WithLegacySkylarkName) {
+      addSkylarkTransitiveInfo(
+          ((NativeProvider.WithLegacySkylarkName) value.getProvider()).getSkylarkName(), value);
+    }
+  }
+
   /**
    * Add a Skylark transitive info. The provider value must be safe (i.e. a String, a Boolean,
    * an Integer, an Artifact, a Label, None, a Java TransitiveInfoProvider or something composed
@@ -437,6 +446,7 @@ public final class RuleConfiguredTargetBuilder {
     Provider constructor = provider.getProvider();
     Preconditions.checkState(constructor.isExported());
     providersBuilder.put(provider);
+    maybeAddSkylarkLegacyProvider(provider);
     return this;
   }
 
