@@ -3,20 +3,11 @@ package io.quarkus.it.jackson.model;
 import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.quarkus.arc.Arc;
 
 /**
  * Model class with inheritance and builder.
  */
 abstract class InheritedModelWithBuilderBase {
-
-    // -------------------------------------------------------------------------
-    // Class attributes
-    // -------------------------------------------------------------------------
-
-    private static ObjectMapper objectMapper;
 
     // -------------------------------------------------------------------------
     // Object attributes
@@ -87,14 +78,6 @@ abstract class InheritedModelWithBuilderBase {
         }
 
         abstract public T build();
-    }
-
-    // -------------------------------------------------------------------------
-    // Private methods
-    // -------------------------------------------------------------------------
-
-    protected static ObjectMapper getObjectMapper() {
-        return Arc.container().instance(ObjectMapper.class).get();
     }
 
 }
