@@ -54,7 +54,7 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
-import com.google.devtools.build.lib.query2.query.output.OutputFormatter;
+import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.commands.InfoItem;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
@@ -112,7 +112,6 @@ import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -151,7 +150,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final ImmutableList<QueryFunction> queryFunctions;
   private final ImmutableList<OutputFormatter> queryOutputFormatters;
 
-  private final AtomicReference<ExitCode> storedExitCode = new AtomicReference<>();
+  private final AtomicInteger storedExitCode = new AtomicInteger();
 
   // We pass this through here to make it available to the MasterLogWriter.
   private final OptionsParsingResult startupOptionsProvider;
@@ -518,68 +517,52 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     }
 
     // Initialize exit code to dummy value for afterCommand.
-    storedExitCode.set(ExitCode.RESERVED);
+    storedExitCode.set(ExitCode.RESERVED.getNumericExitCode());
   }
 
   @Override
-  public void cleanUpForCrash(ExitCode exitCode) {
-    if (declareExitCode(exitCode)) {
-      // Only try to publish events if we won the exit code race. Otherwise someone else is already
-      // exiting for us.
-      EventBus eventBus = workspace.getSkyframeExecutor().getEventBus();
-      if (eventBus != null) {
-        try {
-          workspace
-              .getSkyframeExecutor()
-              .notifyCommandComplete(
-                  new ExtendedEventHandler() {
-                    @Override
-                    public void post(Postable obj) {
-                      eventBus.post(obj);
-                    }
+  public void cleanUpForCrash(int exitCode) {
+    EventBus eventBus = workspace.getSkyframeExecutor().getEventBus();
+    if (eventBus != null) {
+      try {
+        workspace
+            .getSkyframeExecutor()
+            .notifyCommandComplete(
+                new ExtendedEventHandler() {
+                  @Override
+                  public void post(Postable obj) {
+                    eventBus.post(obj);
+                  }
 
-                    @Override
-                    public void handle(Event event) {}
-                  });
-        } catch (InterruptedException e) {
-          logger.severe("InterruptedException when crashing: " + e);
-          // Follow the convention of interrupting the current thread, even though nothing can throw
-          // an interrupt after this.
-          Thread.currentThread().interrupt();
-        }
-        eventBus.post(new CommandCompleteEvent(exitCode.getNumericExitCode()));
+                  @Override
+                  public void handle(Event event) {}
+                });
+      } catch (InterruptedException e) {
+        logger.severe("InterruptedException when crashing: " + e);
+        // Follow the convention of interrupting the current thread, even though nothing can throw
+        // an interrupt after this.
+        Thread.currentThread().interrupt();
       }
     }
+    notifyCommandComplete(exitCode);
     // We don't call #shutDown() here because all it does is shut down the modules, and who knows if
     // they can be trusted.  Instead, we call runtime#shutdownOnCrash() which attempts to cleanly
     // shut down those modules that might have something pending to do as a best-effort operation.
     shutDownModulesOnCrash();
   }
 
-  private boolean declareExitCode(ExitCode exitCode) {
-    return storedExitCode.compareAndSet(ExitCode.RESERVED, exitCode);
-  }
-
   /**
    * Posts the {@link CommandCompleteEvent}, so that listeners can tidy up. Called by {@link
    * #afterCommand}, and by BugReport when crashing from an exception in an async thread.
-   *
-   * <p>Returns null if {@code exitCode} was registered as the exit code, and the {@link ExitCode}
-   * to use if another thread already registered an exit code.
    */
-  @Nullable
-  private ExitCode notifyCommandComplete(ExitCode exitCode) {
-    if (!declareExitCode(exitCode)) {
+  private void notifyCommandComplete(int exitCode) {
+    if (!storedExitCode.compareAndSet(ExitCode.RESERVED.getNumericExitCode(), exitCode)) {
       // This command has already been called, presumably because there is a race between the main
       // thread and a worker thread that crashed. Don't try to arbitrate the dispute. If the main
       // thread won the race (unlikely, but possible), this may be incorrectly logged as a success.
-      return storedExitCode.get();
+      return;
     }
-    workspace
-        .getSkyframeExecutor()
-        .getEventBus()
-        .post(new CommandCompleteEvent(exitCode.getNumericExitCode()));
-    return null;
+    workspace.getSkyframeExecutor().getEventBus().post(new CommandCompleteEvent(exitCode));
   }
 
   /**
@@ -630,10 +613,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     } else {
       finalCommandResult = commandResult;
     }
-    ExitCode otherThreadWonExitCode = notifyCommandComplete(finalCommandResult.getExitCode());
-    if (otherThreadWonExitCode != null) {
-      finalCommandResult = BlazeCommandResult.exitCode(otherThreadWonExitCode);
-    }
+    notifyCommandComplete(finalCommandResult.getExitCode().getNumericExitCode());
     env.getBlazeWorkspace().clearEventBus();
 
     try {
