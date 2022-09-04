@@ -77,6 +77,7 @@ public final class CanonicalNameConstants {
 	public static final String VIEW_GROUP = "android.view.ViewGroup";
 	public static final String CONTEXT = "android.content.Context";
 	public static final String KEY_EVENT = "android.view.KeyEvent";
+	public static final String KEY_EVENT_CALLBACK = "android.view.KeyEvent.Callback";
 	public static final String LAYOUT_INFLATER = "android.view.LayoutInflater";
 	public static final String FRAGMENT_ACTIVITY = "android.support.v4.app.FragmentActivity";
 	public static final String FRAGMENT = "android.app.Fragment";
@@ -114,17 +115,12 @@ public final class CanonicalNameConstants {
 	public static final String PREFERENCE_ACTIVITY = "android.preference.PreferenceActivity";
 	public static final String PREFERENCE_FRAGMENT = "android.preference.PreferenceFragment";
 	public static final String SUPPORT_V4_PREFERENCE_FRAGMENT = "android.support.v4.preference.PreferenceFragment";
-	public static final String SUPPORT_V7_PREFERENCE_FRAGMENTCOMPAT = "android.support.v7.preference.PreferenceFragmentCompat";
-	public static final String SUPPORT_V14_PREFERENCE_FRAGMENT = "android.support.v14.preference.PreferenceFragment";
 	public static final String MACHINARIUS_V4_PREFERENCE_FRAGMENT = "com.github.machinarius.preferencefragment.PreferenceFragment";
 	public static final String ACTIVITY_COMPAT = "android.support.v4.app.ActivityCompat";
 	public static final String CONTEXT_COMPAT = "android.support.v4.content.ContextCompat";
 	public static final String PREFERENCE = "android.preference.Preference";
-	public static final String SUPPORT_V7_PREFERENCE = "android.support.v7.preference.Preference";
 	public static final String PREFERENCE_CHANGE_LISTENER = "android.preference.Preference.OnPreferenceChangeListener";
-	public static final String SUPPORT_V7_PREFERENCE_CHANGE_LISTENER = "android.support.v7.preference.Preference.OnPreferenceChangeListener";
 	public static final String PREFERENCE_CLICK_LISTENER = "android.preference.Preference.OnPreferenceClickListener";
-	public static final String SUPPORT_V7_PREFERENCE_CLICK_LISTENER = "android.support.v7.preference.Preference.OnPreferenceClickListener";
 	public static final String PREFERENCE_ACTIVITY_HEADER = "android.preference.PreferenceActivity.Header";
 	public static final String APP_WIDGET_MANAGER = "android.appwidget.AppWidgetManager";
 
