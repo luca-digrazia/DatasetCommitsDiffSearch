@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -62,11 +63,13 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
         ruleContext.attributes().get("javac_supports_workers", Type.BOOLEAN);
     boolean javacSupportsMultiplexWorkers =
         ruleContext.attributes().get("javac_supports_multiplex_workers", Type.BOOLEAN);
-    Artifact javac = ruleContext.getPrerequisiteArtifact("javac");
-    FilesToRunProvider javabuilder = ruleContext.getExecutablePrerequisite("javabuilder");
-    FilesToRunProvider headerCompiler = ruleContext.getExecutablePrerequisite("header_compiler");
+    Artifact javac = ruleContext.getPrerequisiteArtifact("javac", TransitionMode.HOST);
+    FilesToRunProvider javabuilder =
+        ruleContext.getExecutablePrerequisite("javabuilder", TransitionMode.HOST);
+    FilesToRunProvider headerCompiler =
+        ruleContext.getExecutablePrerequisite("header_compiler", TransitionMode.HOST);
     FilesToRunProvider headerCompilerDirect =
-        ruleContext.getExecutablePrerequisite("header_compiler_direct");
+        ruleContext.getExecutablePrerequisite("header_compiler_direct", TransitionMode.HOST);
     ImmutableSet<String> headerCompilerBuiltinProcessors =
         ImmutableSet.copyOf(
             ruleContext.attributes().get("header_compiler_builtin_processors", Type.STRING_LIST));
@@ -85,24 +88,26 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             ruleContext.attributes().get("turbine_incompatible_processors", Type.STRING_LIST));
     boolean forciblyDisableHeaderCompilation =
         ruleContext.attributes().get("forcibly_disable_header_compilation", Type.BOOLEAN);
-    Artifact singleJar = ruleContext.getPrerequisiteArtifact("singlejar");
-    Artifact oneVersion = ruleContext.getPrerequisiteArtifact("oneversion");
-    Artifact oneVersionAllowlist = ruleContext.getPrerequisiteArtifact("oneversion_whitelist");
-    Artifact genClass = ruleContext.getPrerequisiteArtifact("genclass");
-    Artifact resourceJarBuilder = ruleContext.getPrerequisiteArtifact("resourcejar");
-    Artifact timezoneData = ruleContext.getPrerequisiteArtifact("timezone_data");
-    FilesToRunProvider ijar = ruleContext.getExecutablePrerequisite("ijar");
-    FilesToRunProvider proguardAllowlister =
-        ruleContext.getExecutablePrerequisite("proguard_allowlister");
+    Artifact singleJar = ruleContext.getPrerequisiteArtifact("singlejar", TransitionMode.HOST);
+    Artifact oneVersion = ruleContext.getPrerequisiteArtifact("oneversion", TransitionMode.HOST);
+    Artifact oneVersionAllowlist =
+        ruleContext.getPrerequisiteArtifact("oneversion_whitelist", TransitionMode.HOST);
+    Artifact genClass = ruleContext.getPrerequisiteArtifact("genclass", TransitionMode.HOST);
+    Artifact resourceJarBuilder =
+        ruleContext.getPrerequisiteArtifact("resourcejar", TransitionMode.HOST);
+    Artifact timezoneData =
+        ruleContext.getPrerequisiteArtifact("timezone_data", TransitionMode.HOST);
+    FilesToRunProvider ijar = ruleContext.getExecutablePrerequisite("ijar", TransitionMode.HOST);
     ImmutableListMultimap<String, String> compatibleJavacOptions =
         getCompatibleJavacOptions(ruleContext);
 
-    NestedSet<Artifact> tools = PrerequisiteArtifacts.nestedSet(ruleContext, "tools");
+    NestedSet<Artifact> tools =
+        PrerequisiteArtifacts.nestedSet(ruleContext, "tools", TransitionMode.HOST);
     if (javac != null) {
       tools = NestedSetBuilder.fromNestedSet(tools).add(javac).build();
     }
 
-    TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac");
+    TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac", TransitionMode.HOST);
 
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> locationsBuilder =
         ImmutableMap.builder();
@@ -127,9 +132,11 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
         ImmutableList.copyOf(
             ruleContext.getPrerequisites(
                 "package_configuration",
+                TransitionMode.HOST,
                 JavaPackageConfigurationProvider.class));
 
-    FilesToRunProvider jacocoRunner = ruleContext.getExecutablePrerequisite("jacocorunner");
+    FilesToRunProvider jacocoRunner =
+        ruleContext.getExecutablePrerequisite("jacocorunner", TransitionMode.HOST);
 
     JavaToolchainProvider provider =
         JavaToolchainProvider.create(
@@ -161,7 +168,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             compatibleJavacOptions,
             packageConfiguration,
             jacocoRunner,
-            proguardAllowlister,
             semantics);
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
@@ -211,7 +217,8 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
 
   private static BootClassPathInfo getBootClassPathInfo(RuleContext ruleContext) {
     List<BootClassPathInfo> bootClassPathInfos =
-        ruleContext.getPrerequisites("bootclasspath", BootClassPathInfo.PROVIDER);
+        ruleContext.getPrerequisites(
+            "bootclasspath", TransitionMode.TARGET, BootClassPathInfo.PROVIDER);
     if (!bootClassPathInfos.isEmpty()) {
       if (bootClassPathInfos.size() != 1) {
         ruleContext.attributeError(
@@ -219,6 +226,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
       }
       return getOnlyElement(bootClassPathInfos);
     }
-    return BootClassPathInfo.create(PrerequisiteArtifacts.nestedSet(ruleContext, "bootclasspath"));
+    return BootClassPathInfo.create(
+        PrerequisiteArtifacts.nestedSet(ruleContext, "bootclasspath", TransitionMode.TARGET));
   }
 }

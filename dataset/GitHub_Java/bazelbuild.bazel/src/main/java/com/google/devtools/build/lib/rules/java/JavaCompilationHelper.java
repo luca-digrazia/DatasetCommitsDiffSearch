@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -296,9 +297,7 @@ public final class JavaCompilationHelper {
     if (!turbineAnnotationProcessing) {
       builder.setGenSourceOutput(outputs.genSource());
       builder.setAdditionalOutputs(attributes.getAdditionalOutputs());
-      if (semantics.shouldSetupJavaBuilderTemporaryDirectories()) {
-        builder.setSourceGenDirectory(sourceGenDir(outputs.output(), label));
-      }
+      builder.setSourceGenDirectory(sourceGenDir(outputs.output(), label));
       builder.setPlugins(plugins);
       builder.setManifestOutput(outputs.manifestProto());
     } else {
@@ -319,10 +318,8 @@ public final class JavaCompilationHelper {
     builder.setJavacJvmOpts(customJavacJvmOpts);
     builder.setJavacExecutionInfo(getExecutionInfo());
     builder.setCompressJar(true);
-    if (semantics.shouldSetupJavaBuilderTemporaryDirectories()) {
-      builder.setTempDirectory(tempDir(outputs.output(), label));
-      builder.setClassDirectory(classDir(outputs.output(), label));
-    }
+    builder.setTempDirectory(tempDir(outputs.output(), label));
+    builder.setClassDirectory(classDir(outputs.output(), label));
     builder.setBuiltinProcessorNames(javaToolchain.getHeaderCompilerBuiltinProcessors());
     builder.setExtraData(JavaCommon.computePerPackageData(ruleContext, javaToolchain));
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
@@ -559,6 +556,8 @@ public final class JavaCompilationHelper {
                         .addExecPath("--manifest_proto", manifestProto)
                         .addExecPath("--class_jar", classJar)
                         .addExecPath("--output_jar", genClassJar)
+                        .add("--temp_dir")
+                        .addPath(tempDir(genClassJar, ruleContext.getLabel()))
                         .build())
                 .setProgressMessage("Building genclass jar %s", genClassJar.prettyPrint())
                 .setMnemonic("JavaSourceJar")
@@ -571,7 +570,7 @@ public final class JavaCompilationHelper {
     if (genClass != null) {
       return genClass;
     }
-    return ruleContext.getPrerequisiteArtifact("$genclass");
+    return ruleContext.getPrerequisiteArtifact("$genclass", TransitionMode.HOST);
   }
 
   /**
@@ -619,7 +618,7 @@ public final class JavaCompilationHelper {
   }
 
   /** Produces a derived directory where class outputs should be stored. */
-  private static PathFragment classDir(Artifact outputJar, Label label) {
+  public static PathFragment classDir(Artifact outputJar, Label label) {
     return workDir(outputJar, "_classes", label);
   }
 

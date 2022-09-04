@@ -23,39 +23,69 @@ import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule;
 import com.google.devtools.build.buildjar.javac.plugins.errorprone.ErrorPronePlugin;
+import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
+import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.Writer;
+import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.List;
 
 /** The JavaBuilder main called by bazel. */
-public class BazelJavaBuilder {
+public abstract class BazelJavaBuilder {
 
   private static final String CMDNAME = "BazelJavaBuilder";
 
   /** The main method of the BazelJavaBuilder. */
   public static void main(String[] args) {
-    BazelJavaBuilder builder = new BazelJavaBuilder();
     if (args.length == 1 && args[0].equals("--persistent_worker")) {
-      WorkRequestHandler workerHandler = new WorkRequestHandler(builder::parseAndBuild);
-      System.exit(workerHandler.processRequests(System.in, System.out, System.err));
+      System.exit(runPersistentWorker());
     } else {
-      PrintWriter pw =
+      // This is a single invocation of JavaBuilder that exits after it processed the request.
+      PrintWriter err =
           new PrintWriter(new OutputStreamWriter(System.err, Charset.defaultCharset()));
-      int returnCode;
-      try {
-        returnCode = builder.parseAndBuild(Arrays.asList(args), pw);
-      } finally {
-        pw.flush();
-      }
-      System.exit(returnCode);
+      int exitCode = processRequest(Arrays.asList(args), err);
+      err.flush();
+      System.exit(exitCode);
     }
   }
 
-  public int parseAndBuild(List<String> args, PrintWriter pw) {
+  private static int runPersistentWorker() {
+    while (true) {
+      try {
+        WorkRequest request = WorkRequest.parseDelimitedFrom(System.in);
+
+        if (request == null) {
+          break;
+        }
+
+        try (StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw)) {
+          int exitCode = processRequest(request.getArgumentsList(), pw);
+          WorkResponse.newBuilder()
+              .setOutput(sw.toString())
+              .setExitCode(exitCode)
+              .setRequestId(request.getRequestId())
+              .build()
+              .writeDelimitedTo(System.out);
+          System.out.flush();
+
+          // Hint to the system that now would be a good time to run a gc.  After a compile
+          // completes lots of objects should be available for collection and it should be cheap to
+          // collect them.
+          System.gc();
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+        return 1;
+      }
+    }
+    return 0;
+  }
+
+  public static int processRequest(List<String> args, PrintWriter err) {
     try {
       JavaLibraryBuildRequest build = parse(args);
       try (SimpleJavaLibraryBuilder builder =
@@ -63,35 +93,23 @@ public class BazelJavaBuilder {
               ? new ReducedClasspathJavaLibraryBuilder()
               : new SimpleJavaLibraryBuilder()) {
 
-        return build(builder, build, pw);
+        BlazeJavacResult result = builder.run(build);
+        if (result.status() == Status.REQUIRES_FALLBACK) {
+          return 0;
+        }
+        for (FormattedDiagnostic d : result.diagnostics()) {
+          err.write(d.getFormatted() + "\n");
+        }
+        err.write(result.output());
+        return result.isOk() ? 0 : 1;
       }
     } catch (InvalidCommandLineException e) {
-      pw.println(CMDNAME + " threw exception: " + e.getMessage());
+      err.println(CMDNAME + " threw exception: " + e.getMessage());
       return 1;
     } catch (Exception e) {
-      e.printStackTrace();
+      e.printStackTrace(err);
       return 1;
     }
-  }
-
-  /**
-   * Uses {@code builder} to build the target passed in {@code buildRequest}. All errors and
-   * diagnostics should be written to {@code err}.
-   *
-   * @return An error code, 0 is success, any other value is an error.
-   */
-  protected int build(
-      SimpleJavaLibraryBuilder builder, JavaLibraryBuildRequest buildRequest, Writer err)
-      throws Exception {
-    BlazeJavacResult result = builder.run(buildRequest);
-    if (result.status() == Status.REQUIRES_FALLBACK) {
-      return 0;
-    }
-    for (FormattedDiagnostic d : result.diagnostics()) {
-      err.write(d.getFormatted() + "\n");
-    }
-    err.write(result.output());
-    return result.isOk() ? 0 : 1;
   }
 
   /**
@@ -103,11 +121,13 @@ public class BazelJavaBuilder {
    * @throws InvalidCommandLineException on any command line error
    */
   @VisibleForTesting
-  public JavaLibraryBuildRequest parse(List<String> args)
+  public static JavaLibraryBuildRequest parse(List<String> args)
       throws IOException, InvalidCommandLineException {
     OptionsParser optionsParser =
         new OptionsParser(args, JavacOptions.createWithWarningsAsErrorsDefault(ImmutableList.of()));
     ImmutableList<BlazeJavaCompilerPlugin> plugins = ImmutableList.of(new ErrorPronePlugin());
-    return new JavaLibraryBuildRequest(optionsParser, plugins, new DependencyModule.Builder());
+    JavaLibraryBuildRequest build =
+        new JavaLibraryBuildRequest(optionsParser, plugins, new DependencyModule.Builder());
+    return build;
   }
 }

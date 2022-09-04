@@ -23,22 +23,23 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.ProviderCollection;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaToolchainStarlarkApiProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaToolchainStarlarkApiProviderApi;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkList;
 import java.util.Iterator;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.syntax.Location;
 
 /** Information about the JDK used by the <code>java_*</code> rules. */
 @Immutable
@@ -49,7 +50,8 @@ public class JavaToolchainProvider extends ToolchainInfo
   /** Returns the Java Toolchain associated with the rule being analyzed or {@code null}. */
   public static JavaToolchainProvider from(RuleContext ruleContext) {
     TransitiveInfoCollection prerequisite =
-        ruleContext.getPrerequisite(JavaRuleClasses.JAVA_TOOLCHAIN_ATTRIBUTE_NAME);
+        ruleContext.getPrerequisite(
+            JavaRuleClasses.JAVA_TOOLCHAIN_ATTRIBUTE_NAME, TransitionMode.TARGET);
     return from(prerequisite, ruleContext);
   }
 
@@ -98,7 +100,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       ImmutableListMultimap<String, String> compatibleJavacOptions,
       ImmutableList<JavaPackageConfigurationProvider> packageConfiguration,
       FilesToRunProvider jacocoRunner,
-      FilesToRunProvider proguardAllowlister,
       JavaSemantics javaSemantics) {
     return new JavaToolchainProvider(
         label,
@@ -129,7 +130,6 @@ public class JavaToolchainProvider extends ToolchainInfo
         javacSupportsMultiplexWorkers,
         packageConfiguration,
         jacocoRunner,
-        proguardAllowlister,
         javaSemantics);
   }
 
@@ -161,7 +161,6 @@ public class JavaToolchainProvider extends ToolchainInfo
   private final boolean javacSupportsMultiplexWorkers;
   private final ImmutableList<JavaPackageConfigurationProvider> packageConfiguration;
   private final FilesToRunProvider jacocoRunner;
-  private final FilesToRunProvider proguardAllowlister;
   private final JavaSemantics javaSemantics;
 
   @VisibleForSerialization
@@ -194,7 +193,6 @@ public class JavaToolchainProvider extends ToolchainInfo
       boolean javacSupportsMultiplexWorkers,
       ImmutableList<JavaPackageConfigurationProvider> packageConfiguration,
       FilesToRunProvider jacocoRunner,
-      FilesToRunProvider proguardAllowlister,
       JavaSemantics javaSemantics) {
     super(ImmutableMap.of(), Location.BUILTIN);
 
@@ -226,7 +224,6 @@ public class JavaToolchainProvider extends ToolchainInfo
     this.javacSupportsMultiplexWorkers = javacSupportsMultiplexWorkers;
     this.packageConfiguration = packageConfiguration;
     this.jacocoRunner = jacocoRunner;
-    this.proguardAllowlister = proguardAllowlister;
     this.javaSemantics = javaSemantics;
   }
 
@@ -400,10 +397,6 @@ public class JavaToolchainProvider extends ToolchainInfo
 
   public FilesToRunProvider getJacocoRunner() {
     return jacocoRunner;
-  }
-
-  public FilesToRunProvider getProguardAllowlister() {
-    return proguardAllowlister;
   }
 
   public JavaSemantics getJavaSemantics() {
