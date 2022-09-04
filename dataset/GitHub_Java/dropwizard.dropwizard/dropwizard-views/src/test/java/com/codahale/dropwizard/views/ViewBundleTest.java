@@ -1,7 +1,7 @@
 package com.codahale.dropwizard.views;
 
-import com.codahale.dropwizard.setup.Environment;
 import com.codahale.dropwizard.jersey.setup.JerseyEnvironment;
+import com.codahale.dropwizard.setup.Environment;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -14,13 +14,13 @@ public class ViewBundleTest {
 
     @Before
     public void setUp() throws Exception {
-        when(environment.getJerseyEnvironment()).thenReturn(jerseyEnvironment);
+        when(environment.jersey()).thenReturn(jerseyEnvironment);
     }
 
     @Test
     public void addsTheViewMessageBodyWriterToTheEnvironment() throws Exception {
         new ViewBundle().run(environment);
 
-        verify(jerseyEnvironment).addProvider(any(ViewMessageBodyWriter.class));
+        verify(jerseyEnvironment).register(any(ViewMessageBodyWriter.class));
     }
 }
