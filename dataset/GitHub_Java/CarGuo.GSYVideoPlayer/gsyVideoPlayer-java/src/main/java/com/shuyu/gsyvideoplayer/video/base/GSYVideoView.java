@@ -87,6 +87,9 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     //从哪个开始播放
     protected long mSeekOnStart = -1;
 
+    //保存暂停时的时间
+    protected long mPauseTime;
+
     //当前的播放位置
     protected long mCurrentPosition;
 
@@ -119,9 +122,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
     //是否需要显示暂停锁定效果
     protected boolean mShowPauseCover = true;
-
-    //是否准备完成前调用了暂停
-    protected boolean mPauseBeforePrepared = false;
 
     //音频焦点的监听
     protected AudioManager mAudioManager;
@@ -411,13 +411,11 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      */
     @Override
     public void onVideoPause() {
-        if (mCurrentState == CURRENT_STATE_PREPAREING) {
-            mPauseBeforePrepared = true;
-        }
         try {
             if (GSYVideoManager.instance().getMediaPlayer() != null &&
                     GSYVideoManager.instance().getMediaPlayer().isPlaying()) {
                 setStateAndUi(CURRENT_STATE_PAUSE);
+                mPauseTime = System.currentTimeMillis();
                 mCurrentPosition = GSYVideoManager.instance().getMediaPlayer().getCurrentPosition();
                 if (GSYVideoManager.instance().getMediaPlayer() != null)
                     GSYVideoManager.instance().getMediaPlayer().pause();
@@ -432,7 +430,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      */
     @Override
     public void onVideoResume() {
-        mPauseBeforePrepared = false;
+        mPauseTime = 0;
         if (mCurrentState == CURRENT_STATE_PAUSE) {
             try {
                 if (mCurrentPosition > 0 && GSYVideoManager.instance().getMediaPlayer() != null) {
@@ -508,11 +506,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
         if (mTextureView != null) {
             mTextureView.onResume();
-        }
-
-        if (mPauseBeforePrepared) {
-            onVideoPause();
-            mPauseBeforePrepared = false;
         }
     }
 
@@ -608,7 +601,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
             }
         } else if (what == IMediaPlayer.MEDIA_INFO_VIDEO_ROTATION_CHANGED) {
             mRotate = extra;
-            Debuger.printfLog("Video Rotate Info " + extra);
             if (mTextureView != null)
                 mTextureView.setRotation(mRotate);
         }
@@ -665,7 +657,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
             }
         }
         if (position == 0 && mCurrentPosition > 0) {
-            return (int) mCurrentPosition;
+            return (int)mCurrentPosition;
         }
         return position;
     }
