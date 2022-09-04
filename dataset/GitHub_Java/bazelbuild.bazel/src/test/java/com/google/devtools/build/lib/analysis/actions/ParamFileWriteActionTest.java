@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
@@ -84,8 +83,7 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
     Action action = createParameterFileWriteAction(
         ImmutableList.<Artifact>of(), createNormalCommandLine());
     ActionExecutionContext context = actionExecutionContext();
-    ActionResult actionResult = action.execute(context);
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(context);
     String content = new String(FileSystemUtils.readContentAsLatin1(outputArtifact.getPath()));
     assertThat(content.trim()).isEqualTo("--flag1\n--flag2\n--flag3\nvalue1\nvalue2");
   }
@@ -96,8 +94,7 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
         ImmutableList.of(treeArtifact),
         createTreeArtifactExpansionCommandLine());
     ActionExecutionContext context = actionExecutionContext();
-    ActionResult actionResult = action.execute(context);
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(context);
     String content = new String(FileSystemUtils.readContentAsLatin1(outputArtifact.getPath()));
     assertThat(content.trim())
         .isEqualTo(
