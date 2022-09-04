@@ -707,12 +707,12 @@ public class MethodLibrary {
   private static final BuiltinFunction hasattr =
       new BuiltinFunction("hasattr") {
         @SuppressWarnings("unused")
-        public Boolean invoke(Object obj, String name, Environment env) throws EvalException {
+        public Boolean invoke(Object obj, String name, Environment env)
+            throws EvalException {
           if (obj instanceof ClassObject && ((ClassObject) obj).getValue(name) != null) {
             return true;
           }
-          // shouldn't this filter things with struct_field = false?
-          return DotExpression.hasMethod(obj, name);
+          return hasMethod(obj, name);
         }
       };
 
@@ -748,14 +748,34 @@ public class MethodLibrary {
             throws EvalException, InterruptedException {
           Object result = DotExpression.eval(obj, name, loc, env);
           if (result == null) {
+            // 'Real' describes methods with structField() == false. Because DotExpression.eval
+            // returned null in this case, we know that structField() cannot return true.
+            boolean isRealMethod = hasMethod(obj, name);
             if (defaultValue != Runtime.UNBOUND) {
               return defaultValue;
             }
-            throw DotExpression.getMissingFieldException(obj, name, loc, "attribute");
+            throw new EvalException(
+                loc,
+                Printer.format(
+                    "object of type '%s' has no attribute %r%s",
+                    EvalUtils.getDataTypeName(obj),
+                    name,
+                    isRealMethod ? ", however, a method of that name exists" : ""));
           }
           return result;
         }
       };
+
+  /**
+   * Returns whether the given object has a method with the given name.
+   */
+  private static boolean hasMethod(Object obj, String name) throws EvalException {
+    if (Runtime.getBuiltinRegistry().getFunctionNames(obj.getClass()).contains(name)) {
+      return true;
+    }
+
+    return FuncallExpression.getMethodNames(obj.getClass()).contains(name);
+  }
 
   @SkylarkSignature(
     name = "dir",
@@ -940,14 +960,7 @@ public class MethodLibrary {
   )
   public static final class BoolModule {}
 
-  /** Adds bindings for all the builtin functions of this class to the given map builder. */
-  public static void addBindingsToBuilder(ImmutableMap.Builder<String, Object> builder) {
-    for (BaseFunction function : allFunctions) {
-      builder.put(function.getName(), function);
-    }
-  }
-
-  private static final ImmutableList<BaseFunction> allFunctions =
+  static final List<BaseFunction> defaultGlobalFunctions =
       ImmutableList.of(
           all, any, bool, dict, dir, fail, getattr, hasattr, hash, enumerate, int_, len, list, max,
           min, print, range, repr, reversed, sorted, str, tuple, zip);
