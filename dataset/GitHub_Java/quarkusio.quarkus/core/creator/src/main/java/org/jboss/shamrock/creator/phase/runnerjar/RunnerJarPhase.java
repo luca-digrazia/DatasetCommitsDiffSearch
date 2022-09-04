@@ -171,11 +171,21 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
         }
 
         runnerJar = outputDir.resolve(finalName + "-runner.jar");
-
+        IoUtils.recursiveDelete(runnerJar);
         try (FileSystem zipFs = ZipUtils.newZip(runnerJar)) {
             buildRunner(zipFs, appState, ctx.resolveOutcome(AugmentOutcome.class));
         } catch (Exception e) {
             throw new AppCreatorException("Failed to build a runner jar", e);
+        }
+
+        // when using uberJar, we rename the standard jar to include the .original suffix
+        // this greatly aids tools (such as s2i) that look for a single jar in the output directory to work OOTB
+        if (uberJar) {
+            try {
+                Files.move(outputDir.resolve(finalName + ".jar"), outputDir.resolve(finalName + ".jar.original"));
+            } catch (IOException e) {
+                throw new AppCreatorException("Unable to build uberjar", e);
+            }
         }
 
         ctx.pushOutcome(RunnerJarOutcome.class, this);
@@ -208,7 +218,10 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
                                     @Override
                                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                                         throws IOException {
-                                        addDir(runnerZipFs, dir, root.relativize(dir).toString());
+                                        final String relativePath = root.relativize(dir).toString();
+                                        if (!relativePath.isEmpty()) {
+                                            addDir(runnerZipFs, dir, relativePath);
+                                        }
                                         return FileVisitResult.CONTINUE;
                                     }
                                     @Override
