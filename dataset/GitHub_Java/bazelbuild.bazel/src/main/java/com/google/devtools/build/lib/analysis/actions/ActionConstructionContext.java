@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
@@ -157,10 +156,4 @@ public interface ActionConstructionContext {
   /** Returns the {@link PlatformInfo} describing the execution platform this action should use. */
   @Nullable
   PlatformInfo getExecutionPlatform();
-
-  /**
-   * Returns the {@link com.google.devtools.build.lib.packages.RuleErrorConsumer} for reporting rule
-   * errors.
-   */
-  RuleErrorConsumer getRuleErrorConsumer();
 }
