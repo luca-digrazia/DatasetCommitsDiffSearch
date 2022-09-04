@@ -7,9 +7,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
 import io.quarkus.builder.item.MultiBuildItem;
@@ -33,87 +31,43 @@ import io.quarkus.builder.item.MultiBuildItem;
  */
 public final class ReflectiveHierarchyBuildItem extends MultiBuildItem {
 
-    private static final String UNKNOWN_SOURCE = "<unknown>";
-
     private final Type type;
     private final IndexView index;
-    private final Predicate<DotName> ignoreTypePredicate;
-    private final Predicate<FieldInfo> ignoreFieldPredicate;
-    private final Predicate<MethodInfo> ignoreMethodPredicate;
+    private final Predicate<DotName> ignorePredicate;
     private final String source;
 
-    /**
-     * @deprecated Use the Builder instead.
-     */
-    @Deprecated
     public ReflectiveHierarchyBuildItem(Type type) {
-        this(type, DefaultIgnoreTypePredicate.INSTANCE);
+        this(type, DefaultIgnorePredicate.INSTANCE);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
     public ReflectiveHierarchyBuildItem(Type type, IndexView index) {
-        this(type, index, DefaultIgnoreTypePredicate.INSTANCE);
+        this(type, index, DefaultIgnorePredicate.INSTANCE);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
-    public ReflectiveHierarchyBuildItem(Type type, Predicate<DotName> ignoreTypePredicate) {
-        this(type, ignoreTypePredicate, UNKNOWN_SOURCE);
+    public ReflectiveHierarchyBuildItem(Type type, Predicate<DotName> ignorePredicate) {
+        this(type, ignorePredicate, null);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
-    public ReflectiveHierarchyBuildItem(Type type, IndexView index, Predicate<DotName> ignoreTypePredicate) {
-        this(type, index, ignoreTypePredicate, UNKNOWN_SOURCE);
+    public ReflectiveHierarchyBuildItem(Type type, IndexView index, Predicate<DotName> ignorePredicate) {
+        this(type, index, ignorePredicate, null);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
     public ReflectiveHierarchyBuildItem(Type type, String source) {
-        this(type, DefaultIgnoreTypePredicate.INSTANCE, source);
+        this(type, DefaultIgnorePredicate.INSTANCE, source);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
     public ReflectiveHierarchyBuildItem(Type type, IndexView index, String source) {
-        this(type, index, DefaultIgnoreTypePredicate.INSTANCE, source);
+        this(type, index, DefaultIgnorePredicate.INSTANCE, source);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
-    public ReflectiveHierarchyBuildItem(Type type, Predicate<DotName> ignoreTypePredicate, String source) {
-        this(type, null, ignoreTypePredicate, source);
+    public ReflectiveHierarchyBuildItem(Type type, Predicate<DotName> ignorePredicate, String source) {
+        this(type, null, ignorePredicate, source);
     }
 
-    /**
-     * @deprecated Use the Builder instead and provide a source for easy debugging.
-     */
-    @Deprecated
-    public ReflectiveHierarchyBuildItem(Type type, IndexView index, Predicate<DotName> ignoreTypePredicate, String source) {
-        this(type, index, ignoreTypePredicate, DefaultIgnoreFieldPredicate.INSTANCE, DefaultIgnoreMethodPredicate.INSTANCE,
-                source);
-    }
-
-    private ReflectiveHierarchyBuildItem(Type type, IndexView index, Predicate<DotName> ignoreTypePredicate,
-            Predicate<FieldInfo> ignoreFieldPredicate, Predicate<MethodInfo> ignoreMethodPredicate, String source) {
+    public ReflectiveHierarchyBuildItem(Type type, IndexView index, Predicate<DotName> ignorePredicate, String source) {
         this.type = type;
         this.index = index;
-        this.ignoreTypePredicate = ignoreTypePredicate;
-        this.ignoreFieldPredicate = ignoreFieldPredicate;
-        this.ignoreMethodPredicate = ignoreMethodPredicate;
+        this.ignorePredicate = ignorePredicate;
         this.source = source;
     }
 
@@ -125,16 +79,8 @@ public final class ReflectiveHierarchyBuildItem extends MultiBuildItem {
         return index;
     }
 
-    public Predicate<DotName> getIgnoreTypePredicate() {
-        return ignoreTypePredicate;
-    }
-
-    public Predicate<FieldInfo> getIgnoreFieldPredicate() {
-        return ignoreFieldPredicate;
-    }
-
-    public Predicate<MethodInfo> getIgnoreMethodPredicate() {
-        return ignoreMethodPredicate;
+    public Predicate<DotName> getIgnorePredicate() {
+        return ignorePredicate;
     }
 
     public boolean hasSource() {
@@ -145,54 +91,9 @@ public final class ReflectiveHierarchyBuildItem extends MultiBuildItem {
         return source;
     }
 
-    public static class Builder {
+    public static class DefaultIgnorePredicate implements Predicate<DotName> {
 
-        private Type type;
-        private IndexView index;
-        private Predicate<DotName> ignoreTypePredicate = DefaultIgnoreTypePredicate.INSTANCE;
-        private Predicate<FieldInfo> ignoreFieldPredicate = DefaultIgnoreFieldPredicate.INSTANCE;
-        private Predicate<MethodInfo> ignoreMethodPredicate = DefaultIgnoreMethodPredicate.INSTANCE;
-        private String source = UNKNOWN_SOURCE;
-
-        public Builder type(Type type) {
-            this.type = type;
-            return this;
-        }
-
-        public Builder index(IndexView index) {
-            this.index = index;
-            return this;
-        }
-
-        public Builder ignoreTypePredicate(Predicate<DotName> ignoreTypePredicate) {
-            this.ignoreTypePredicate = ignoreTypePredicate;
-            return this;
-        }
-
-        public Builder ignoreFieldPredicate(Predicate<FieldInfo> ignoreFieldPredicate) {
-            this.ignoreFieldPredicate = ignoreFieldPredicate;
-            return this;
-        }
-
-        public Builder ignoreMethodPredicate(Predicate<MethodInfo> ignoreMethodPredicate) {
-            this.ignoreMethodPredicate = ignoreMethodPredicate;
-            return this;
-        }
-
-        public Builder source(String source) {
-            this.source = source;
-            return this;
-        }
-
-        public ReflectiveHierarchyBuildItem build() {
-            return new ReflectiveHierarchyBuildItem(type, index, ignoreTypePredicate, ignoreFieldPredicate,
-                    ignoreMethodPredicate, source);
-        }
-    }
-
-    public static class DefaultIgnoreTypePredicate implements Predicate<DotName> {
-
-        public static final DefaultIgnoreTypePredicate INSTANCE = new DefaultIgnoreTypePredicate();
+        public static final DefaultIgnorePredicate INSTANCE = new DefaultIgnorePredicate();
 
         private static final List<String> DEFAULT_IGNORED_PACKAGES = Arrays.asList("java.", "io.reactivex.",
                 "org.reactivestreams.", "org.slf4j.", "javax.json.", "com.fasterxml.jackson.databind.",
@@ -226,27 +127,7 @@ public final class ReflectiveHierarchyBuildItem extends MultiBuildItem {
 
         @Override
         public boolean test(DotName dotName) {
-            return DefaultIgnoreTypePredicate.WHITELISTED_FROM_IGNORED_PACKAGES.contains(dotName.toString());
-        }
-    }
-
-    public static class DefaultIgnoreFieldPredicate implements Predicate<FieldInfo> {
-
-        public static DefaultIgnoreFieldPredicate INSTANCE = new DefaultIgnoreFieldPredicate();
-
-        @Override
-        public boolean test(FieldInfo fieldInfo) {
-            return false;
-        }
-    }
-
-    public static class DefaultIgnoreMethodPredicate implements Predicate<MethodInfo> {
-
-        public static DefaultIgnoreMethodPredicate INSTANCE = new DefaultIgnoreMethodPredicate();
-
-        @Override
-        public boolean test(MethodInfo methodInfo) {
-            return false;
+            return DefaultIgnorePredicate.WHITELISTED_FROM_IGNORED_PACKAGES.contains(dotName.toString());
         }
     }
 
