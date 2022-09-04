@@ -168,10 +168,7 @@ public class CriticalPathComputer {
 
     SpawnResult spawnResult = event.getSpawnResult();
     stats.addSpawnResult(
-        spawnResult.getMetrics(),
-        spawnResult.getRunnerName(),
-        spawnResult.getRunnerSubtype(),
-        spawnResult.wasRemote());
+        spawnResult.getMetrics(), spawnResult.getRunnerName(), spawnResult.wasRemote());
   }
 
   /** Returns the list of components using the most memory. */
@@ -216,7 +213,7 @@ public class CriticalPathComputer {
   public void discoverInputs(DiscoveredInputsEvent event) {
     CriticalPathComponent stats =
         tryAddComponent(createComponent(event.getAction(), event.getStartTimeNanos()));
-    stats.addSpawnResult(event.getMetrics(), null, "", /* wasRemote=*/ false);
+    stats.addSpawnResult(event.getMetrics(), null, /* wasRemote=*/ false);
     stats.changePhase();
   }
 
