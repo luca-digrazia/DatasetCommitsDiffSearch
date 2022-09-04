@@ -86,7 +86,7 @@ final class ProtocolBuffers2Support {
             .addInputs(attributes.getOptionsFile().asSet())
             .addOutputs(getGeneratedProtoOutputs(getHeaderExtension()))
             .addOutputs(getGeneratedProtoOutputs(getSourceExtension()))
-            .setExecutable(PathFragment.create("/usr/bin/python"))
+            .setExecutable(new PathFragment("/usr/bin/python"))
             .setCommandLine(getGenerationCommandLine())
             .build(ruleContext));
     return this;
@@ -203,8 +203,9 @@ final class ProtocolBuffers2Support {
         new ImmutableSet.Builder<PathFragment>().add(getWorkspaceRelativeOutputDir());
 
     if (attributes.needsPerProtoIncludes()) {
-      PathFragment generatedProtoDir = PathFragment.create(
-          getWorkspaceRelativeOutputDir(), ruleContext.getLabel().getPackageFragment());
+      PathFragment generatedProtoDir =
+          new PathFragment(
+              getWorkspaceRelativeOutputDir(), ruleContext.getLabel().getPackageFragment());
 
       searchPathEntriesBuilder
           .add(generatedProtoDir)
@@ -222,7 +223,7 @@ final class ProtocolBuffers2Support {
     // of dependers.
     PathFragment rootRelativeOutputDir = ruleContext.getUniqueDirectory(UNIQUE_DIRECTORY_NAME);
 
-    return PathFragment.create(
+    return new PathFragment(
         ruleContext.getBinOrGenfilesDirectory().getExecPath(), rootRelativeOutputDir);
   }
 
@@ -232,9 +233,10 @@ final class ProtocolBuffers2Support {
       String protoFileName = FileSystemUtils.removeExtension(protoFile.getFilename());
       String generatedOutputName = attributes.getGeneratedProtoFilename(protoFileName, false);
 
-      PathFragment generatedFilePath = PathFragment.create(
-          protoFile.getRootRelativePath().getParentDirectory(),
-          PathFragment.create(generatedOutputName));
+      PathFragment generatedFilePath =
+          new PathFragment(
+              protoFile.getRootRelativePath().getParentDirectory(),
+              new PathFragment(generatedOutputName));
 
       PathFragment outputFile = FileSystemUtils.appendExtension(generatedFilePath, extension);
 

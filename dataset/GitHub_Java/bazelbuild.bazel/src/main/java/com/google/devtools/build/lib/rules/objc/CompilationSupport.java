@@ -65,12 +65,9 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
-import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
-import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider.Builder;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
@@ -84,7 +81,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Support for rules that compile sources. Provides ways to determine files that should be output,
@@ -371,7 +367,7 @@ public abstract class CompilationSupport {
    * @param intermediateArtifacts IntermediateArtifacts for deriving artifact paths
    * @param compilationAttributes attributes of the calling target
    */
-   static CompilationSupport createWithSelectedImplementation(
+  private static CompilationSupport createWithSelectedImplementation(
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
@@ -396,12 +392,8 @@ public abstract class CompilationSupport {
       CompilationArtifacts compilationArtifacts,
       ObjcProvider objcProvider) throws RuleErrorException, InterruptedException {
     return registerCompileAndArchiveActions(
-        compilationArtifacts,
-        objcProvider,
-        ExtraCompileArgs.NONE,
-        ImmutableList.<PathFragment>of(),
-        maybeGetCcToolchain(),
-        maybeGetFdoSupport());
+        compilationArtifacts, objcProvider, ExtraCompileArgs.NONE,
+        ImmutableList.<PathFragment>of());
   }
 
   /**
@@ -455,35 +447,11 @@ public abstract class CompilationSupport {
    */
   public CompilationSupport registerFullyLinkAction(
       ObjcProvider objcProvider, Artifact outputArchive) throws InterruptedException {
-    return registerFullyLinkAction(
-        objcProvider,
-        outputArchive,
-        maybeGetCcToolchain(),
-        maybeGetFdoSupport());
-  }
-
-  /**
-   * Registers an action to create an archive artifact by fully (statically) linking all transitive
-   * dependencies of this rule.
-   *
-   * @param objcProvider provides all compiling and linking information to create this artifact
-   * @param outputArchive the output artifact for this action
-   * @param ccToolchain the cpp toolchain provider, may be null
-   * @param fdoSupport the cpp FDO support provider, may be null
-   */
-  public CompilationSupport registerFullyLinkAction(
-      ObjcProvider objcProvider, Artifact outputArchive, @Nullable CcToolchainProvider ccToolchain,
-      @Nullable FdoSupportProvider fdoSupport) throws InterruptedException {
     ImmutableList<Artifact> inputArtifacts = ImmutableList.<Artifact>builder()
         .addAll(objcProvider.getObjcLibraries())
         .addAll(objcProvider.get(IMPORTED_LIBRARY))
         .addAll(objcProvider.getCcLibraries()).build();
-    return registerFullyLinkAction(
-        objcProvider,
-        inputArtifacts,
-        outputArchive,
-        ccToolchain,
-        fdoSupport);
+    return registerFullyLinkAction(objcProvider, inputArtifacts, outputArchive);
   }
   
   /**
@@ -512,12 +480,7 @@ public abstract class CompilationSupport {
     
     Iterable<Artifact> inputArtifacts = Iterables.filter(depsArtifacts,
         Predicates.not(Predicates.in(avoidsDepsArtifacts.build())));
-    return registerFullyLinkAction(
-        objcProvider,
-        inputArtifacts,
-        outputArchive,
-        maybeGetCcToolchain(),
-        maybeGetFdoSupport());
+    return registerFullyLinkAction(objcProvider, inputArtifacts, outputArchive);
   }
     
   /**
@@ -656,15 +619,12 @@ public abstract class CompilationSupport {
    * @param objcProvider provides all compiling and linking information to register these actions
    * @param extraCompileArgs args to be added to compile actions
    * @param priorityHeaders priority headers to be included before the dependency headers
-   * @param ccToolchain the cpp toolchain provider, may be null
-   * @param fdoSupport the cpp FDO support provider, may be null
    * @return this compilation support
    * @throws RuleErrorException for invalid crosstool files
    */
   abstract CompilationSupport registerCompileAndArchiveActions(
       CompilationArtifacts compilationArtifacts, ObjcProvider objcProvider,
-      ExtraCompileArgs extraCompileArgs, Iterable<PathFragment> priorityHeaders,
-      @Nullable CcToolchainProvider ccToolchain, @Nullable FdoSupportProvider fdoSupport)
+      ExtraCompileArgs extraCompileArgs, Iterable<PathFragment> priorityHeaders)
       throws RuleErrorException, InterruptedException;
 
   /**
@@ -680,16 +640,12 @@ public abstract class CompilationSupport {
       ObjcCommon common, ExtraCompileArgs extraCompileArgs, Iterable<PathFragment> priorityHeaders)
       throws RuleErrorException, InterruptedException {
     if (common.getCompilationArtifacts().isPresent()) {
-      registerCompileAndArchiveActions(
-          common.getCompilationArtifacts().get(),
-          common.getObjcProvider(),
-          extraCompileArgs,
-          priorityHeaders,
-          maybeGetCcToolchain(),
-          maybeGetFdoSupport());
+      registerCompileAndArchiveActions(common.getCompilationArtifacts().get(),
+          common.getObjcProvider(), extraCompileArgs, priorityHeaders);
     }
     return this;
   }
+
   /**
    * Registers any actions necessary to link this rule and its dependencies.
    *
@@ -787,13 +743,10 @@ public abstract class CompilationSupport {
    * @param objcProvider provides all compiling and linking information to create this artifact
    * @param inputArtifacts inputs for this action
    * @param outputArchive the output artifact for this action
-   * @param ccToolchain the cpp toolchain provider, may be null
-   * @param fdoSupport the cpp FDO support provider, may be null
    * @return this {@link CompilationSupport} instance
    */
   protected abstract CompilationSupport registerFullyLinkAction(
-      ObjcProvider objcProvider, Iterable<Artifact> inputArtifacts, Artifact outputArchive,
-      @Nullable CcToolchainProvider ccToolchain, @Nullable FdoSupportProvider fdoSupport)
+      ObjcProvider objcProvider, Iterable<Artifact> inputArtifacts, Artifact outputArchive)
       throws InterruptedException;
 
  /**
@@ -1075,23 +1028,4 @@ public abstract class CompilationSupport {
         .getProvider(FilesToRunProvider.class);
   }
 
-  @Nullable
-  private CcToolchainProvider maybeGetCcToolchain() {
-    // TODO(rduan): Remove this check once all rules are using the crosstool support.
-    if (ruleContext.attributes().has(":cc_toolchain", BuildType.LABEL)) {
-      return CppHelper.getToolchain(ruleContext, ":cc_toolchain");
-    } else {
-      return null;
-    }
-  }
-
-  @Nullable
-  private FdoSupportProvider maybeGetFdoSupport() {
-    // TODO(rduan): Remove this check once all rules are using the crosstool support.
-    if (ruleContext.attributes().has(":cc_toolchain", BuildType.LABEL)) {
-      return CppHelper.getFdoSupport(ruleContext, ":cc_toolchain");
-    } else {
-      return null;
-    }
-  }
 }
