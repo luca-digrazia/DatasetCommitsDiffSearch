@@ -378,7 +378,8 @@ public abstract class DependencyResolver {
       Target toTarget = targetMap.get(dep.getLabel());
       if (toTarget == null) {
         // Dependency pointing to non-existent target. This error was reported in getTargets(), so
-        // we can just ignore this dependency.
+        // we can just ignore this dependency. Toolchain dependencies always have toTarget == null
+        // since we do not depend on their package.
         continue;
       }
 
