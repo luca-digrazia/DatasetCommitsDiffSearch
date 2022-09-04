@@ -18,7 +18,9 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.EventCollector;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.Collections;
@@ -52,8 +54,7 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testExecutionStopsAtFirstError() throws Exception {
     EventCollector printEvents = new EventCollector();
-    StarlarkThread thread =
-        createStarlarkThread(mutability, StarlarkThread.makeDebugPrintHandler(printEvents));
+    StarlarkThread thread = createStarlarkThread(mutability, printEvents);
     ParserInput input = ParserInput.fromLines("print('hello'); x = 1//0; print('goodbye')");
 
     assertThrows(EvalException.class, () -> EvalUtils.exec(input, thread));
@@ -66,8 +67,7 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testExecutionNotStartedOnInterrupt() throws Exception {
     EventCollector printEvents = new EventCollector();
-    StarlarkThread thread =
-        createStarlarkThread(mutability, StarlarkThread.makeDebugPrintHandler(printEvents));
+    StarlarkThread thread = createStarlarkThread(mutability, printEvents);
     ParserInput input = ParserInput.fromLines("print('hello');");
 
     try {
@@ -83,7 +83,7 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testForLoopAbortedOnInterrupt() throws Exception {
-    StarlarkThread thread = createStarlarkThread(mutability, (th, msg) -> {});
+    StarlarkThread thread = createStarlarkThread(mutability, NullEventHandler.INSTANCE);
     InterruptFunction interruptFunction = new InterruptFunction();
     thread.getGlobals().put("interrupt", interruptFunction);
 
@@ -106,7 +106,7 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testForComprehensionAbortedOnInterrupt() throws Exception {
-    StarlarkThread thread = createStarlarkThread(mutability, (th, msg) -> {});
+    StarlarkThread thread = createStarlarkThread(mutability, NullEventHandler.INSTANCE);
     InterruptFunction interruptFunction = new InterruptFunction();
     thread.getGlobals().put("interrupt", interruptFunction);
 
@@ -124,7 +124,7 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testFunctionCallsNotStartedOnInterrupt() throws Exception {
-    StarlarkThread thread = createStarlarkThread(mutability, (th, msg) -> {});
+    StarlarkThread thread = createStarlarkThread(mutability, NullEventHandler.INSTANCE);
     InterruptFunction interruptFunction = new InterruptFunction();
     thread.getGlobals().put("interrupt", interruptFunction);
 
@@ -163,15 +163,14 @@ public class EvaluationTest extends EvaluationTestCase {
   }
 
   private static StarlarkThread createStarlarkThread(
-      Mutability mutability, StarlarkThread.PrintHandler printHandler) {
-    StarlarkThread thread =
-        StarlarkThread.builder(mutability)
-            .useDefaultSemantics()
-            // Provide the UNIVERSE for print... this should not be necessary
-            .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
-            .build();
-    thread.setPrintHandler(printHandler);
-    return thread;
+      Mutability mutability, EventHandler eventHandler) {
+    return StarlarkThread.builder(mutability)
+        .useDefaultSemantics()
+        .setGlobals(
+            Module.createForBuiltins(
+                Starlark.UNIVERSE)) // for print... this should not be necessary
+        .setEventHandler(eventHandler)
+        .build();
   }
 
   @Test
@@ -800,14 +799,19 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testDictKeysTooManyArgs() throws Exception {
-    newTest().testIfExactError("keys() got unexpected positional argument", "{'a': 1}.keys('abc')");
+    newTest()
+        .testIfExactError(
+            "expected no more than 0 positional arguments, but got 1, "
+                + "for call to method keys() of 'dict'",
+            "{'a': 1}.keys('abc')");
   }
 
   @Test
   public void testDictKeysTooManyKeyArgs() throws Exception {
     newTest()
         .testIfExactError(
-            "keys() got unexpected keyword argument 'arg'", "{'a': 1}.keys(arg='abc')");
+            "unexpected keyword 'arg', for call to method keys() of 'dict'",
+            "{'a': 1}.keys(arg='abc')");
   }
 
   @Test
@@ -815,17 +819,17 @@ public class EvaluationTest extends EvaluationTestCase {
     // TODO(adonovan): when the duplication is literal, this should be caught by a static check.
     newTest()
         .testIfExactError(
-            "int() got multiple values for argument 'base'", "int('1', base=10, base=16)");
-    new SkylarkTest()
-        .testIfExactError(
-            "int() got multiple values for argument 'base'", "int('1', base=10, **dict(base=16))");
+            "duplicate argument 'arg' in call to 'keys'",
+            "{'a': 1}.keys(arg='abc', arg='def', k=1, k=2)");
   }
 
   @Test
   public void testArgBothPosKey() throws Exception {
     newTest()
         .testIfErrorContains(
-            "int() got multiple values for argument 'base'", "int('2', 3, base=3)");
+            "got multiple values for keyword argument 'base', "
+                + "for call to function int(x, base = unbound)",
+            "int('2', 3, base=3)");
   }
 
   @Test

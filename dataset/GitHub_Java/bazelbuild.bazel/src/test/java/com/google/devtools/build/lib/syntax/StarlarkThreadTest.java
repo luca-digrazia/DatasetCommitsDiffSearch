@@ -125,6 +125,7 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
                 "range",
                 "repr",
                 "reversed",
+                "select",
                 "sorted",
                 "str",
                 "tuple",
@@ -163,16 +164,16 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
     // This update to an existing variable should fail because the environment was frozen.
     Mutability.MutabilityException ex =
         assertThrows(Mutability.MutabilityException.class, () -> module.put("x", 4));
-    assertThat(ex).hasMessageThat().isEqualTo("trying to mutate a frozen module");
+    assertThat(ex).hasMessageThat().isEqualTo("trying to mutate a frozen object");
 
     // This update to a new variable should also fail because the environment was frozen.
     ex = assertThrows(Mutability.MutabilityException.class, () -> module.put("newvar", 5));
-    assertThat(ex).hasMessageThat().isEqualTo("trying to mutate a frozen module");
+    assertThat(ex).hasMessageThat().isEqualTo("trying to mutate a frozen object");
   }
 
   @Test
   public void testBuiltinsCanBeShadowed() throws Exception {
-    StarlarkThread thread = newStarlarkThread();
+    StarlarkThread thread = newStarlarkThreadWithSkylarkOptions();
     EvalUtils.exec(ParserInput.fromLines("True = 123"), thread);
     assertThat(thread.getGlobals().lookup("True")).isEqualTo(123);
   }

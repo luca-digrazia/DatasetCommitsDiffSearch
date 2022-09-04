@@ -56,8 +56,7 @@ import javax.annotation.Nullable;
 // - separate the universal predeclared environment and make it implicit.
 // - eliminate initialize(). The only constructor we need is:
 //   (Mutability mu, Map<String, Object> predeclared, Object label).
-public final class Module
-    implements StarlarkThread.Frame, ValidationEnvironment.Module, Mutability.Freezable {
+public final class Module implements StarlarkThread.Frame, ValidationEnvironment.Module {
 
   /**
    * Final, except that it may be initialized after instantiation. Null mutability indicates that

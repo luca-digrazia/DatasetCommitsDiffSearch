@@ -79,8 +79,7 @@ public class EvaluationTestCase {
           "TestMode is null. Please set a Testmode via setMode() or set the "
               + "StarlarkThread manually by overriding newStarlarkThread()");
     }
-    return testMode.createStarlarkThread(
-        StarlarkThread.makeDebugPrintHandler(getEventHandler()), builtins, skylarkOptions);
+    return testMode.createStarlarkThread(getEventHandler(), builtins, skylarkOptions);
   }
 
   /**

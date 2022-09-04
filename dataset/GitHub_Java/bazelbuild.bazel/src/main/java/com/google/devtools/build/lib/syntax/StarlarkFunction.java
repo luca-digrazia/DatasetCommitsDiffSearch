@@ -26,12 +26,6 @@ public final class StarlarkFunction extends BaseFunction {
   private final Module module; // a function closes over its defining module
   private final Tuple<Object> defaultValues;
 
-  // isToplevel indicates that this is the <toplevel> function containing
-  // top-level statements of a file. It causes assignments to unresolved
-  // identifiers to update the module, not the lexical frame.
-  // TODO(adonovan): remove this hack when identifier resolution is accurate.
-  boolean isToplevel;
-
   // TODO(adonovan): make this private. The CodecTests should go through interpreter to instantiate
   // such things.
   public StarlarkFunction(
@@ -100,7 +94,7 @@ public final class StarlarkFunction extends BaseFunction {
       thread.updateLexical(names.get(i), arguments[i]);
     }
 
-    return Eval.execFunctionBody(thread, statements, isToplevel);
+    return Eval.execStatements(thread, statements);
   }
 
   @Override
