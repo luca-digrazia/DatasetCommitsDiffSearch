@@ -49,8 +49,7 @@ import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionPolicy;
 import com.google.devtools.build.lib.exec.util.FakeOwner;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
-import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
+import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -61,12 +60,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.remoteexecution.v1test.ActionResult;
-import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
 import com.google.devtools.remoteexecution.v1test.ExecuteResponse;
-import com.google.devtools.remoteexecution.v1test.LogFile;
-import com.google.protobuf.ByteString;
-import com.google.rpc.Code;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
@@ -88,7 +83,6 @@ public class RemoteSpawnRunnerTest {
       ImmutableMap.of(ExecutionRequirements.NO_CACHE, "");
 
   private Path execRoot;
-  private Path logDir;
   private DigestUtil digestUtil;
   private FakeActionInputFileCache fakeFileCache;
   private FileOutErr outErr;
@@ -101,17 +95,12 @@ public class RemoteSpawnRunnerTest {
   @Mock
   private SpawnRunner localRunner;
 
-  // The action key of the Spawn returned by newSimpleSpawn().
-  private final String simpleActionId =
-      "eb45b20cc979d504f96b9efc9a08c48103c6f017afa09c0df5c70a5f92a98ea8";
-
   @Before
   public final void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
     digestUtil = new DigestUtil(HashFunction.SHA256);
     FileSystem fs = new InMemoryFileSystem(new JavaClock(), HashFunction.SHA256);
     execRoot = fs.getPath("/exec/root");
-    logDir = fs.getPath("/server-logs");
     FileSystemUtils.createDirectoryAndParents(execRoot);
     fakeFileCache = new FakeActionInputFileCache(execRoot);
 
@@ -145,8 +134,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     ExecuteResponse succeeded = ExecuteResponse.newBuilder().setResult(
         ActionResult.newBuilder().setExitCode(0).build()).build();
@@ -204,8 +192,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             null,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     // Throw an IOException to trigger the local fallback.
     when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(IOException.class);
@@ -257,8 +244,7 @@ public class RemoteSpawnRunnerTest {
                 "command-id",
                 cache,
                 null,
-                digestUtil,
-                logDir));
+                digestUtil));
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
@@ -306,8 +292,7 @@ public class RemoteSpawnRunnerTest {
                 "command-id",
                 cache,
                 null,
-                digestUtil,
-                logDir));
+                digestUtil));
 
     try {
       runner.exec(spawn, policy);
@@ -341,8 +326,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             null,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
@@ -393,8 +377,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             null,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
@@ -433,8 +416,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             null,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
@@ -470,8 +452,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(null);
     when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(new IOException());
@@ -493,163 +474,6 @@ public class RemoteSpawnRunnerTest {
   }
 
   @Test
-  public void testHumanReadableServerLogsSavedForFailingAction() throws Exception {
-    RemoteSpawnRunner runner =
-        new RemoteSpawnRunner(
-            execRoot,
-            Options.getDefaults(RemoteOptions.class),
-            localRunner,
-            true,
-            /*cmdlineReporter=*/ null,
-            "build-req-id",
-            "command-id",
-            cache,
-            executor,
-            digestUtil,
-            logDir);
-
-    Digest logDigest = digestUtil.computeAsUtf8("bla");
-    when(executor.executeRemotely(any(ExecuteRequest.class)))
-        .thenReturn(
-            ExecuteResponse.newBuilder()
-                .putServerLogs(
-                    "logname",
-                    LogFile.newBuilder().setHumanReadable(true).setDigest(logDigest).build())
-                .setResult(ActionResult.newBuilder().setExitCode(31).build())
-                .build());
-
-    Spawn spawn = newSimpleSpawn();
-    SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
-
-    SpawnResult res = runner.exec(spawn, policy);
-    assertThat(res.status()).isEqualTo(Status.NON_ZERO_EXIT);
-
-    verify(executor).executeRemotely(any(ExecuteRequest.class));
-    Path logPath = logDir.getRelative(simpleActionId).getRelative("logname");
-    verify(cache).downloadFile(eq(logPath), eq(logDigest), eq(false), eq(null));
-  }
-
-  @Test
-  public void testHumanReadableServerLogsSavedForFailingActionWithStatus() throws Exception {
-    RemoteSpawnRunner runner =
-        new RemoteSpawnRunner(
-            execRoot,
-            Options.getDefaults(RemoteOptions.class),
-            localRunner,
-            true,
-            /*cmdlineReporter=*/ null,
-            "build-req-id",
-            "command-id",
-            cache,
-            executor,
-            digestUtil,
-            logDir);
-
-    Digest logDigest = digestUtil.computeAsUtf8("bla");
-    com.google.rpc.Status timeoutStatus =
-        com.google.rpc.Status.newBuilder().setCode(Code.DEADLINE_EXCEEDED.getNumber()).build();
-    ExecuteResponse resp =
-        ExecuteResponse.newBuilder()
-            .putServerLogs(
-                "logname", LogFile.newBuilder().setHumanReadable(true).setDigest(logDigest).build())
-            .setStatus(timeoutStatus)
-            .build();
-    when(executor.executeRemotely(any(ExecuteRequest.class)))
-        .thenThrow(new Retrier.RetryException(
-                "", 1, new ExecutionStatusException(resp.getStatus(), resp)));
-
-    Spawn spawn = newSimpleSpawn();
-    SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
-
-    SpawnResult res = runner.exec(spawn, policy);
-    assertThat(res.status()).isEqualTo(Status.TIMEOUT);
-
-    verify(executor).executeRemotely(any(ExecuteRequest.class));
-    Path logPath = logDir.getRelative(simpleActionId).getRelative("logname");
-    verify(cache).downloadFile(eq(logPath), eq(logDigest), eq(false), eq(null));
-  }
-
-  @Test
-  public void testNonHumanReadableServerLogsNotSaved() throws Exception {
-    RemoteSpawnRunner runner =
-        new RemoteSpawnRunner(
-            execRoot,
-            Options.getDefaults(RemoteOptions.class),
-            localRunner,
-            true,
-            /*cmdlineReporter=*/ null,
-            "build-req-id",
-            "command-id",
-            cache,
-            executor,
-            digestUtil,
-            logDir);
-
-    Digest logDigest = digestUtil.computeAsUtf8("bla");
-    ActionResult result = ActionResult.newBuilder().setExitCode(31).build();
-    when(executor.executeRemotely(any(ExecuteRequest.class)))
-        .thenReturn(
-            ExecuteResponse.newBuilder()
-                .putServerLogs(
-                    "logname",
-                    LogFile.newBuilder().setDigest(logDigest).build())
-                .setResult(result)
-                .build());
-
-    Spawn spawn = newSimpleSpawn();
-    SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
-
-    SpawnResult res = runner.exec(spawn, policy);
-    assertThat(res.status()).isEqualTo(Status.NON_ZERO_EXIT);
-
-    verify(executor).executeRemotely(any(ExecuteRequest.class));
-    verify(cache).download(eq(result), eq(execRoot), any(FileOutErr.class));
-    verify(cache, never())
-        .downloadFile(
-            any(Path.class), any(Digest.class), any(Boolean.class), any(ByteString.class));
-  }
-
-  @Test
-  public void testServerLogsNotSavedForSuccessfulAction() throws Exception {
-    RemoteSpawnRunner runner =
-        new RemoteSpawnRunner(
-            execRoot,
-            Options.getDefaults(RemoteOptions.class),
-            localRunner,
-            true,
-            /*cmdlineReporter=*/ null,
-            "build-req-id",
-            "command-id",
-            cache,
-            executor,
-            digestUtil,
-            logDir);
-
-    Digest logDigest = digestUtil.computeAsUtf8("bla");
-    ActionResult result = ActionResult.newBuilder().setExitCode(0).build();
-    when(executor.executeRemotely(any(ExecuteRequest.class)))
-        .thenReturn(
-            ExecuteResponse.newBuilder()
-                .putServerLogs(
-                    "logname",
-                    LogFile.newBuilder().setHumanReadable(true).setDigest(logDigest).build())
-                .setResult(result)
-                .build());
-
-    Spawn spawn = newSimpleSpawn();
-    SpawnExecutionPolicy policy = new FakeSpawnExecutionPolicy(spawn);
-
-    SpawnResult res = runner.exec(spawn, policy);
-    assertThat(res.status()).isEqualTo(Status.SUCCESS);
-
-    verify(executor).executeRemotely(any(ExecuteRequest.class));
-    verify(cache).download(eq(result), eq(execRoot), any(FileOutErr.class));
-    verify(cache, never())
-        .downloadFile(
-            any(Path.class), any(Digest.class), any(Boolean.class), any(ByteString.class));
-  }
-
-  @Test
   public void cacheDownloadFailureTriggersRemoteExecution() throws Exception {
     // If downloading a cached action fails, remote execution should be tried.
 
@@ -666,8 +490,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     ActionResult cachedResult = ActionResult.newBuilder().setExitCode(0).build();
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(cachedResult);
@@ -708,23 +531,11 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     ActionResult cachedResult = ActionResult.newBuilder().setExitCode(0).build();
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(null);
-    ExecuteResponse resp =
-        ExecuteResponse.newBuilder()
-            .setResult(cachedResult)
-            .setStatus(
-                com.google.rpc.Status.newBuilder()
-                    .setCode(Code.DEADLINE_EXCEEDED.getNumber())
-                    .build())
-            .build();
-    when(executor.executeRemotely(any(ExecuteRequest.class)))
-        .thenThrow(
-            new Retrier.RetryException(
-                "", 1, new ExecutionStatusException(resp.getStatus(), resp)));
+    when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(new TimeoutException());
 
     Spawn spawn = newSimpleSpawn();
 
@@ -734,7 +545,7 @@ public class RemoteSpawnRunnerTest {
     assertThat(res.status()).isEqualTo(Status.TIMEOUT);
 
     verify(executor).executeRemotely(any(ExecuteRequest.class));
-    verify(cache).download(eq(cachedResult), eq(execRoot), any(FileOutErr.class));
+    verify(cache, never()).download(eq(cachedResult), eq(execRoot), any(FileOutErr.class));
   }
 
   @Test
@@ -756,23 +567,11 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     ActionResult cachedResult = ActionResult.newBuilder().setExitCode(0).build();
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(null);
-    ExecuteResponse resp =
-        ExecuteResponse.newBuilder()
-            .setResult(cachedResult)
-            .setStatus(
-                com.google.rpc.Status.newBuilder()
-                    .setCode(Code.DEADLINE_EXCEEDED.getNumber())
-                    .build())
-            .build();
-    when(executor.executeRemotely(any(ExecuteRequest.class)))
-        .thenThrow(
-            new Retrier.RetryException(
-                "", 1, new ExecutionStatusException(resp.getStatus(), resp)));
+    when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(new TimeoutException());
 
     Spawn spawn = newSimpleSpawn();
 
@@ -782,7 +581,7 @@ public class RemoteSpawnRunnerTest {
     assertThat(res.status()).isEqualTo(Status.TIMEOUT);
 
     verify(executor).executeRemotely(any(ExecuteRequest.class));
-    verify(cache).download(eq(cachedResult), eq(execRoot), any(FileOutErr.class));
+    verify(cache, never()).download(eq(cachedResult), eq(execRoot), any(FileOutErr.class));
     verify(localRunner, never()).exec(eq(spawn), eq(policy));
   }
 
@@ -802,8 +601,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     ActionResult cachedResult = ActionResult.newBuilder().setExitCode(0).build();
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(null);
@@ -843,8 +641,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(null);
     when(executor.executeRemotely(any(ExecuteRequest.class))).thenThrow(new IOException());
@@ -880,8 +677,7 @@ public class RemoteSpawnRunnerTest {
             "command-id",
             cache,
             executor,
-            digestUtil,
-            logDir);
+            digestUtil);
 
     when(cache.getCachedActionResult(any(ActionKey.class))).thenThrow(new IOException());
 

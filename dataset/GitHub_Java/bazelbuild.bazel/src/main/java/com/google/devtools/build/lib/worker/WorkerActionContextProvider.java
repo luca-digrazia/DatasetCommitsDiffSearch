@@ -59,14 +59,15 @@ final class WorkerActionContextProvider extends ActionContextProvider {
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider =
         OS.getCurrent() == OS.DARWIN
-            ? new XCodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
+            ? new XCodeLocalEnvProvider()
             : (OS.getCurrent() == OS.WINDOWS
-                ? new WindowsLocalEnvProvider(env.getClientEnv())
-                : new PosixLocalEnvProvider(env.getClientEnv()));
+                ? WindowsLocalEnvProvider.INSTANCE
+                : PosixLocalEnvProvider.INSTANCE);
     return new LocalSpawnRunner(
         env.getExecRoot(),
         localExecutionOptions,
         ResourceManager.instance(),
+        env.getRuntime().getProductName(),
         localEnvProvider);
   }
 
