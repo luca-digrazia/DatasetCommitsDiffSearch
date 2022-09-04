@@ -189,7 +189,7 @@ public class TestCommand implements BlazeCommand {
     DetailedExitCode detailedExitCode =
         buildSuccess
             ? (testSuccess
-                ? DetailedExitCode.success()
+                ? DetailedExitCode.justExitCode(ExitCode.SUCCESS)
                 : DetailedExitCode.justExitCode(ExitCode.TESTS_FAILED))
             : buildResult.getDetailedExitCode();
     env.getEventBus()
