@@ -890,9 +890,12 @@ public final class Profiler {
       // Returns a TaskData object representing the merged data and clears internal data structures.
       TaskData getAndReset() {
         TaskData ret;
-        if (data == null || count <= 1) {
+        if (count <= 1) {
           ret = data;
         } else {
+          if (data == null) {
+            ret = data;
+          }
           ret =
               new TaskData(
                   data.threadId,

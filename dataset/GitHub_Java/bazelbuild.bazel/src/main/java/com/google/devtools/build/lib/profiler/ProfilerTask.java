@@ -118,4 +118,8 @@ public enum ProfilerTask {
   public boolean isVfs() {
     return vfs;
   }
+
+  public boolean isStarlark() {
+    return description.startsWith("Starlark ");
+  }
 }
