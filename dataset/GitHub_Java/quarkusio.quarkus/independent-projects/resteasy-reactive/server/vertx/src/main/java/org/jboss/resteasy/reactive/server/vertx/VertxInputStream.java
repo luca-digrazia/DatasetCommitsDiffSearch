@@ -17,6 +17,7 @@ import java.io.InterruptedIOException;
 import java.nio.channels.ClosedChannelException;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import org.jboss.resteasy.reactive.common.core.BlockingNotAllowedException;
 
 public class VertxInputStream extends InputStream {
 
@@ -27,8 +28,11 @@ public class VertxInputStream extends InputStream {
     private boolean finished;
     private ByteBuf pooled;
     private final long limit;
+    private final VertxResteasyReactiveRequestContext vertxResteasyReactiveRequestContext;
 
-    public VertxInputStream(RoutingContext request, long timeout) {
+    public VertxInputStream(RoutingContext request, long timeout,
+            VertxResteasyReactiveRequestContext vertxResteasyReactiveRequestContext) {
+        this.vertxResteasyReactiveRequestContext = vertxResteasyReactiveRequestContext;
         this.exchange = new VertxBlockingInput(request.request(), timeout);
         Long limitObj = request.get(MAX_REQUEST_SIZE_KEY);
         if (limitObj == null) {
@@ -38,7 +42,9 @@ public class VertxInputStream extends InputStream {
         }
     }
 
-    public VertxInputStream(RoutingContext request, long timeout, ByteBuf existing) {
+    public VertxInputStream(RoutingContext request, long timeout, ByteBuf existing,
+            VertxResteasyReactiveRequestContext vertxResteasyReactiveRequestContext) {
+        this.vertxResteasyReactiveRequestContext = vertxResteasyReactiveRequestContext;
         this.exchange = new VertxBlockingInput(request.request(), timeout);
         Long limitObj = request.get(MAX_REQUEST_SIZE_KEY);
         if (limitObj == null) {
@@ -68,6 +74,10 @@ public class VertxInputStream extends InputStream {
     public int read(final byte[] b, final int off, final int len) throws IOException {
         if (closed) {
             throw new IOException("Stream is closed");
+        }
+        if (vertxResteasyReactiveRequestContext.continueState == VertxResteasyReactiveRequestContext.ContinueState.REQUIRED) {
+            vertxResteasyReactiveRequestContext.continueState = VertxResteasyReactiveRequestContext.ContinueState.SENT;
+            vertxResteasyReactiveRequestContext.response.writeContinue();
         }
         readIntoBuffer();
         if (limit > 0 && exchange.request.bytesRead() > limit) {
@@ -121,7 +131,7 @@ public class VertxInputStream extends InputStream {
             throw new IOException("Stream is closed");
         }
         if (finished) {
-            return -1;
+            return 0;
         }
 
         return exchange.readBytesAvailable();
@@ -130,7 +140,7 @@ public class VertxInputStream extends InputStream {
     @Override
     public void close() throws IOException {
         if (closed) {
-            throw new IOException("Stream is closed");
+            return;
         }
         closed = true;
         try {
@@ -229,7 +239,7 @@ public class VertxInputStream extends InputStream {
 
                     try {
                         if (Context.isOnEventLoopThread()) {
-                            throw new IOException("Attempting a blocking read on io thread");
+                            throw new BlockingNotAllowedException("Attempting a blocking read on io thread");
                         }
                         waiting = true;
                         request.connection().wait(rem);
@@ -284,7 +294,12 @@ public class VertxInputStream extends InputStream {
                 return 0;
             }
 
-            return Integer.parseInt(length);
+            try {
+                return Integer.parseInt(length);
+            } catch (NumberFormatException e) {
+                Long.parseLong(length); // ignore the value as can only return an int anyway
+                return Integer.MAX_VALUE;
+            }
         }
     }
 
