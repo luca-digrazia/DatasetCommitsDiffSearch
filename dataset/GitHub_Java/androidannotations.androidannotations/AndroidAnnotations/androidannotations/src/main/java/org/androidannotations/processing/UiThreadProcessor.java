@@ -56,23 +56,18 @@ public class UiThreadProcessor implements DecoratingElementProcessor {
 	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) throws JClassAlreadyExistsException {
 
 		ExecutableElement executableElement = (ExecutableElement) element;
-		UiThread annotation = element.getAnnotation(UiThread.class);
-		boolean useDirect = annotation.useDirect();
 
 		JMethod delegatingMethod = helper.overrideAnnotatedMethod(executableElement, holder);
-		JBlock clonedBody = null;
 
-		if (useDirect) {
-			// Need to clone the body to be put in the check. This is done here
-			// because the next line
-			// will remove the body from the method.
-			clonedBody = cloneMethodBody(delegatingMethod);
-		}
+		//Need to clone the body to be put in the check. This is done here because the next line
+		//will remove the body from the method.
+		JBlock clonedBody = cloneMethodBody(delegatingMethod);
 
 		JDefinedClass anonymousRunnableClass = helper.createDelegatingAnonymousRunnableClass(holder, delegatingMethod);
 
 		{
-			// Execute Runnable
+			//Execute Runnable
+			UiThread annotation = element.getAnnotation(UiThread.class);
 			long delay = annotation.delay();
 
 			if (holder.handler == null) {
@@ -80,10 +75,8 @@ public class UiThreadProcessor implements DecoratingElementProcessor {
 				holder.handler = holder.generatedClass.field(JMod.PRIVATE, handlerClass, "handler_", JExpr._new(handlerClass));
 			}
 
-			if (useDirect) {
-				// Put in the check for the UI thread.
-				addUIThreadCheck(delegatingMethod, clonedBody, codeModel);
-			}
+			//Put in the check for the UI thread.
+			addUIThreadCheck(delegatingMethod, clonedBody, codeModel);
 
 			if (delay == 0) {
 				delegatingMethod.body().invoke(holder.handler, "post").arg(_new(anonymousRunnableClass));
@@ -96,9 +89,8 @@ public class UiThreadProcessor implements DecoratingElementProcessor {
 
 	/**
 	 * Clone a method body.
-	 * 
-	 * @param method
-	 *            the method to clone.
+	 *
+	 * @param method the method to clone.
 	 * @return A new JBlock containing the method body.
 	 */
 	private JBlock cloneMethodBody(JMethod method) {
@@ -113,28 +105,26 @@ public class UiThreadProcessor implements DecoratingElementProcessor {
 
 	/**
 	 * Add the pre-check to see if we are already in the UI thread.
-	 * 
+	 *
 	 * @param delegatingMethod
 	 * @param codeModel
 	 * @throws JClassAlreadyExistsException
 	 */
 	private void addUIThreadCheck(JMethod delegatingMethod, JBlock clonedBody, JCodeModel codeModel) throws JClassAlreadyExistsException {
-		// Get the Thread and Looper class.
+		//Get the Thread and Looper class.
 		JClass tClass = codeModel.ref(Thread.class);
 		JClass lClass = codeModel.ref(Looper.class);
 
-		// invoke the methods.
+		//invoke the methods.
 		JExpression lhs = tClass.staticInvoke(METHOD_CUR_THREAD);
 		JExpression rhs = lClass.staticInvoke(METHOD_MAIN_LOOPER).invoke(METHOD_GET_THREAD);
 
-		// create the conditional and the block.
+		//create the conditional and the block.
 		JConditional con = delegatingMethod.body()._if(JOp.eq(lhs, rhs));
 		JBlock block = con._then();
 
-		// Put the cloned method body in the if() block, this is necessary
-		// because the
-		// method may have parameters and a simple super.methodCall() won't
-		// work.
+		//Put the cloned method body in the if() block, this is necessary because the
+		//method may have parameters and a simple super.methodCall() won't work.
 		for (Object statement : clonedBody.getContents()) {
 			block.add((JStatement) statement);
 		}
