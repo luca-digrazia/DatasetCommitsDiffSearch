@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,12 +15,12 @@
  */
 package org.androidannotations.helper;
 
-import org.androidannotations.holder.EComponentHolder;
-
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeMirror;
+
+import org.androidannotations.holder.EComponentHolder;
 
 public class ActionBarSherlockHelper {
 
@@ -49,13 +49,6 @@ public class ActionBarSherlockHelper {
 			typeElement = (TypeElement) ((DeclaredType) superType).asElement();
 			String qName = typeElement.getQualifiedName().toString();
 			if (qName.startsWith("com.actionbarsherlock.app")) {
-				return true;
-			}
-			if (qName.startsWith("org.holoeverywhere")) {
-				/*
-				 * HoloEverywhere depends on ABS and uses its own provided
-				 * activity classes
-				 */
 				return true;
 			}
 		}

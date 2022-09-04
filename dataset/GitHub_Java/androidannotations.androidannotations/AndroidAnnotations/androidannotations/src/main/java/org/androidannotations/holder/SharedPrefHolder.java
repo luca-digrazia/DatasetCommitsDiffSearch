@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,11 +15,10 @@
  */
 package org.androidannotations.holder;
 
+import com.sun.codemodel.*;
 import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
-import static org.androidannotations.helper.ModelConstants.classSuffix;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,19 +35,8 @@ import org.androidannotations.api.sharedpreferences.SharedPreferencesHelper;
 import org.androidannotations.api.sharedpreferences.StringPrefEditorField;
 import org.androidannotations.api.sharedpreferences.StringSetPrefEditorField;
 import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.process.ProcessHolder;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JVar;
 
 public class SharedPrefHolder extends BaseGeneratedClassHolder {
 
@@ -96,7 +84,7 @@ public class SharedPrefHolder extends BaseGeneratedClassHolder {
 
 	private void createEditorClass() throws JClassAlreadyExistsException {
 		String interfaceSimpleName = annotatedElement.getSimpleName().toString();
-		editorClass = generatedClass._class(PUBLIC | STATIC | FINAL, interfaceSimpleName + "Editor" + classSuffix());
+		editorClass = generatedClass._class(PUBLIC | STATIC | FINAL, interfaceSimpleName + "Editor" + ModelConstants.GENERATION_SUFFIX);
 		editorClass._extends(processHolder.refClass(EditorHelper.class).narrow(editorClass));
 
 		createEditorConstructor();
@@ -165,7 +153,7 @@ public class SharedPrefHolder extends BaseGeneratedClassHolder {
 	}
 
 	protected void setContextField() {
-		contextField = generatedClass.field(JMod.PRIVATE, classes().CONTEXT, "context" + generationSuffix());
+		contextField = generatedClass.field(JMod.PRIVATE, classes().CONTEXT, "context_");
 		getConstructor().body().assign(JExpr._this().ref(contextField), getConstructorContextParam());
 	}
 
@@ -177,7 +165,7 @@ public class SharedPrefHolder extends BaseGeneratedClassHolder {
 	}
 
 	protected void setEditorContextField() {
-		editorContextField = editorClass.field(JMod.PRIVATE, classes().CONTEXT, "context" + generationSuffix());
+		editorContextField = editorClass.field(JMod.PRIVATE, classes().CONTEXT, "context_");
 		JVar contextParam = editorConstructor.param(classes().CONTEXT, "context");
 		editorConstructor.body().assign(JExpr._this().ref(editorContextField), contextParam);
 		editMethodEditorInvocation.arg(getContextField());
