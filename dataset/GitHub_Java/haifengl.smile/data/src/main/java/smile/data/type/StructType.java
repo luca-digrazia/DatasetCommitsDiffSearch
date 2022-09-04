@@ -18,8 +18,6 @@ package smile.data.type;
 import java.util.*;
 import java.util.stream.Collectors;
 import smile.data.Tuple;
-import smile.data.measure.DiscreteMeasure;
-import smile.data.measure.Measure;
 
 /**
  * Struct data type is determined by the fixed order of the fields
@@ -56,11 +54,6 @@ public class StructType implements DataType {
         }
     }
 
-    /** Returns the number of fields. */
-    public int length() {
-        return fields.length;
-    }
-
     /** Returns the fields. */
     public StructField[] fields() {
         return fields;
@@ -71,11 +64,6 @@ public class StructType implements DataType {
         return fields[fieldIndex(name)];
     }
 
-    /** Return the field at position i. */
-    public StructField field(int i) {
-        return fields[i];
-    }
-
     /** Returns the index of a field. */
     public int fieldIndex(String field) {
         return index.get(field);
@@ -84,25 +72,6 @@ public class StructType implements DataType {
     /** Returns the map of field name to its (optional) scale of measure. */
     public Map<String, Measure> measure() {
         return measure;
-    }
-
-    /**
-     * Updates the field type to the boxed one if the field has
-     * null/missing values in the data.
-     *
-     * @param rows a set of tuples.
-     */
-    public void boxed(Collection<Tuple> rows) {
-        for (int i = 0; i < fields.length; i++) {
-            StructField field = fields[i];
-            if (field.type.isPrimitive()) {
-                final int idx = i;
-                boolean missing = rows.stream().filter(t -> t.isNullAt(idx)).findAny().isPresent();
-                if (missing) {
-                    fields[i] = new StructField(field.name, field.type.boxed());
-                }
-            }
-        }
     }
 
     @Override
