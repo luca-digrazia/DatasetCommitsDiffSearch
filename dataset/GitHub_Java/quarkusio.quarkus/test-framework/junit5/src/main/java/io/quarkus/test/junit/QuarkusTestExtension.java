@@ -6,7 +6,6 @@ import static io.quarkus.test.common.PathTestHelper.getTestClassesLocation;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.lang.annotation.Annotation;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.reflect.Constructor;
@@ -56,8 +55,6 @@ import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
-import org.junit.jupiter.api.extension.ConditionEvaluationResult;
-import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.InvocationInterceptor;
 import org.junit.jupiter.api.extension.ParameterContext;
@@ -107,7 +104,7 @@ import io.quarkus.test.junit.internal.XStreamDeepClone;
 
 public class QuarkusTestExtension
         implements BeforeEachCallback, AfterEachCallback, BeforeAllCallback, InvocationInterceptor, AfterAllCallback,
-        ParameterResolver, ExecutionCondition {
+        ParameterResolver {
 
     private static final Logger log = Logger.getLogger(QuarkusTestExtension.class);
 
@@ -401,14 +398,14 @@ public class QuarkusTestExtension
         try {
             Constructor<?> testResourceClassEntryConstructor = Class
                     .forName(TestResourceManager.TestResourceClassEntry.class.getName(), true, classLoader)
-                    .getConstructor(Class.class, Map.class, Annotation.class, boolean.class);
+                    .getConstructor(Class.class, Map.class, boolean.class);
 
             List<QuarkusTestProfile.TestResourceEntry> testResources = profileInstance.testResources();
             List<Object> result = new ArrayList<>(testResources.size());
             for (QuarkusTestProfile.TestResourceEntry testResource : testResources) {
                 Object instance = testResourceClassEntryConstructor.newInstance(
                         Class.forName(testResource.getClazz().getName(), true, classLoader), testResource.getArgs(),
-                        null, testResource.isParallel());
+                        testResource.isParallel());
                 result.add(instance);
             }
 
@@ -608,7 +605,11 @@ public class QuarkusTestExtension
         ExtensionContext root = extensionContext.getRoot();
         ExtensionContext.Store store = root.getStore(ExtensionContext.Namespace.GLOBAL);
         ExtensionState state = store.get(ExtensionState.class.getName(), ExtensionState.class);
-        Class<? extends QuarkusTestProfile> selectedProfile = getQuarkusTestProfile(extensionContext);
+        TestProfile annotation = extensionContext.getRequiredTestClass().getAnnotation(TestProfile.class);
+        Class<? extends QuarkusTestProfile> selectedProfile = null;
+        if (annotation != null) {
+            selectedProfile = annotation.value();
+        }
         boolean wrongProfile = !Objects.equals(selectedProfile, quarkusTestProfile);
         if ((state == null && !failedBoot) || wrongProfile) {
             if (wrongProfile) {
@@ -631,15 +632,6 @@ public class QuarkusTestExtension
             }
         }
         return state;
-    }
-
-    private Class<? extends QuarkusTestProfile> getQuarkusTestProfile(ExtensionContext extensionContext) {
-        TestProfile annotation = extensionContext.getRequiredTestClass().getAnnotation(TestProfile.class);
-        Class<? extends QuarkusTestProfile> selectedProfile = null;
-        if (annotation != null) {
-            selectedProfile = annotation.value();
-        }
-        return selectedProfile;
     }
 
     private static ClassLoader setCCL(ClassLoader cl) {
@@ -985,42 +977,6 @@ public class QuarkusTestExtension
             default:
                 return null;
         }
-    }
-
-    @Override
-    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
-        if (!context.getTestClass().isPresent()) {
-            return ConditionEvaluationResult.enabled("No test class specified");
-        }
-        if (context.getTestInstance().isPresent()) {
-            return ConditionEvaluationResult.enabled("Quarkus Test Profile tags only affect classes");
-        }
-        String tagsStr = System.getProperty("quarkus.test.profile.tags");
-        if ((tagsStr == null) || tagsStr.isEmpty()) {
-            return ConditionEvaluationResult.enabled("No Quarkus Test Profile tags");
-        }
-        Class<? extends QuarkusTestProfile> testProfile = getQuarkusTestProfile(context);
-        if (testProfile == null) {
-            return ConditionEvaluationResult.disabled("Test '" + context.getRequiredTestClass()
-                    + "' is not annotated with '@QuarkusTestProfile' but 'quarkus.profile.test.tags' was set");
-        }
-        QuarkusTestProfile profileInstance;
-        try {
-            profileInstance = testProfile.getConstructor().newInstance();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        Set<String> testProfileTags = profileInstance.tags();
-        String[] tags = tagsStr.split(",");
-        for (String tag : tags) {
-            String trimmedTag = tag.trim();
-            if (testProfileTags.contains(trimmedTag)) {
-                return ConditionEvaluationResult.enabled("Tag '" + trimmedTag + "' is present on '" + testProfile
-                        + "' which is used on test '" + context.getRequiredTestClass());
-            }
-        }
-        return ConditionEvaluationResult.disabled("Test '" + context.getRequiredTestClass()
-                + "' disabled because 'quarkus.profile.test.tags' don't match the tags of '" + testProfile + "'");
     }
 
     class ExtensionState implements ExtensionContext.Store.CloseableResource {
