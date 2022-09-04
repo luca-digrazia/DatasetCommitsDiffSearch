@@ -20,9 +20,11 @@
 package org.graylog2.inputs.amqp;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.AlreadyClosedException;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 import com.yammer.metrics.Metrics;
@@ -30,21 +32,25 @@ import com.yammer.metrics.core.Meter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import org.apache.log4j.Logger;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
+import org.graylog2.activities.Activity;
 import org.graylog2.gelf.GELFMessage;
 import org.graylog2.gelf.GELFProcessor;
 import org.graylog2.inputs.syslog.SyslogProcessor;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class AMQPConsumer implements Runnable {
 
-    private static final Logger LOG = Logger.getLogger(AMQPConsumer.class);
-    
-    public static final int INITIAL_IO_RETRY_DELAY_SECONDS = 5;
+    private static final Logger LOG = LoggerFactory.getLogger(AMQPConsumer.class);
 
     private Core server;
     private GELFProcessor gelfProcessor;
@@ -54,9 +60,13 @@ public class AMQPConsumer implements Runnable {
     
     Connection connection;
     Channel channel;
+    ExecutorService executor;
     
-    Meter handledMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPMessages", "messages", TimeUnit.SECONDS);
-
+    private final Meter handledMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPMessages", "messages", TimeUnit.SECONDS);
+    private final Meter handledSyslogMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPSyslogMessages", "messages", TimeUnit.SECONDS);
+    private final Meter handledGELFMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPGELFMessages", "messages", TimeUnit.SECONDS);
+    private final Meter reQueuedMessages = Metrics.newMeter(AMQPConsumer.class, "ReQueuedAMQPMessages", "messages", TimeUnit.SECONDS);
+    
     public AMQPConsumer(Core server, AMQPQueueConfiguration queueConfig) {
         this.server = server;
         this.queueConfig = queueConfig;
@@ -68,14 +78,17 @@ public class AMQPConsumer implements Runnable {
             case SYSLOG:
                 this.syslogProcessor = new SyslogProcessor(server);
                 break;
+            default:
+            	LOG.error("Unknown input type {} for queue {}", queueConfig.getInputType(), queueConfig.getQueueName());
+            	break;
         }
-        
-        Runtime.getRuntime().addShutdownHook(new AMQPCleaner(this));
     }
     
     @Override
     public void run() {
-        LOG.info("Setting up AMQP connection to <" + queueConfig + ">");
+        String msg = "Setting up AMQP connection to <" + queueConfig + ">";
+        LOG.info(msg);
+        server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
         listen();
     }
 
@@ -87,8 +100,8 @@ public class AMQPConsumer implements Runnable {
             Map<String, Object> arguments = new HashMap<String, Object>();
             boolean isDurable = false;
             boolean isExclusive = false;
-            boolean isAutoDelete = true;
-            arguments.put("x-message-ttl", 900000); // 15 minutes.
+            boolean isAutoDelete = false;
+            arguments.put("x-message-ttl", queueConfig.getTtl()); // 15 minutes.
 
             // Automatically re-connect.
             this.connection.addShutdownListener(new AMQPReconnector(server, queueConfig));
@@ -99,49 +112,64 @@ public class AMQPConsumer implements Runnable {
 
             consume();
 
-            LOG.info("Connected to broker <" + queueConfig + ">");
+            String msg = "Connected to broker <" + queueConfig + ">";
+            LOG.info(msg);
+            server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
         } catch(IOException e) {
-           LOG.error("IO error on broker <" + queueConfig + "> - Retrying in " + INITIAL_IO_RETRY_DELAY_SECONDS + " seconds", e);
-
-           try {
-               Thread.sleep(INITIAL_IO_RETRY_DELAY_SECONDS*1000);
-           } catch(InterruptedException ie) {}
-
-           // Retry.
-           this.listen();
+           String msg = "IO error on broker <" + queueConfig + ">. ("+ e.getMessage() + ")";
+           LOG.error(msg, e);
+           server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
+           
+           disconnect();
         }
+    }
+    
+    public void deleteQueueAndDisconnect() {
+        String msg = "Attempting to delete and disconnect from queue [" + queueConfig.getQueueName() + "]";
+        LOG.debug(msg);
+        server.getActivityWriter().write(new Activity(msg, AMQPConsumer.class));
+        
+        try {
+            channel.queueDelete(queueConfig.getQueueName());
+        } catch(IOException e) {
+            String msg2 = "Could not delete queue [" + queueConfig.getQueueName() + "]";
+            LOG.error(msg2);
+            server.getActivityWriter().write(new Activity(msg2, AMQPConsumer.class));
+        }
+        
+        disconnect();
     }
 
     public void disconnect() {
         try {
-            channel.queueDelete(queueConfig.getQueueName());
+            AMQPInput.getConsumers().remove(queueConfig.getId());
+            
             channel.close();
-            connection.close();
+        } catch (AlreadyClosedException ignore) {
+            // do nothing
         } catch(IOException e) {
             LOG.error("Could not disconnect from AMQP broker!", e);
+        } finally {
+            if (executor != null) {
+                executor.shutdownNow();
+                executor = null;
+            }
+            try {
+                if (connection != null && connection.isOpen()) {
+                    connection.close();
+                }
+            } catch (AlreadyClosedException ignore) {
+                // do nothing
+            } catch (IOException e) {
+                LOG.error("Could not disconnect from AMQP broker!", e);
+            }
         }
     }
 
     public void consume() throws IOException {
-        boolean autoAck = true;
-        channel.basicConsume(queueConfig.getQueueName(), autoAck,
-            new DefaultConsumer(channel) {
-                @Override
-                public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                    handledMessages.mark();
-                    
-                    switch (queueConfig.getInputType()) {
-                        case GELF:
-                            GELFMessage gelf = new GELFMessage(body);
-                            gelfProcessor.messageReceived(gelf);
-                            break;
-                        case SYSLOG:
-                            syslogProcessor.messageReceived(new String(body), null);
-                            break;
-                    }
-                }
-             }
-        );
+        boolean autoAck = false;
+
+        channel.basicConsume(queueConfig.getQueueName(), autoAck, createConsumer(channel));
     }
 
     private Channel connect() throws IOException {
@@ -152,13 +180,61 @@ public class AMQPConsumer implements Runnable {
         factory.setHost(server.getConfiguration().getAmqpHost());
         factory.setPort(server.getConfiguration().getAmqpPort());
 
-        connection = factory.newConnection();
-
+        executor = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                    .setNameFormat("amqp-consumer-" + queueConfig.getId() + "-%d")
+                    .build());
+        connection = factory.newConnection(executor);
+        
         return connection.createChannel();
+    }
+    
+    public Consumer createConsumer(final Channel channel) {
+    	 return new DefaultConsumer(channel) {
+             @Override
+             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                try {
+                    // The duplication here is a bit unfortunate. Improve by having a Processor Interface.
+                    switch (queueConfig.getInputType()) {
+                        case GELF:
+                            GELFMessage gelf = new GELFMessage(body);
+                            try {
+                               gelfProcessor.messageReceived(gelf);
+                            } catch (BufferOutOfCapacityException e) {
+                                LOG.warn("ProcessBufferProcessor is out of capacity. Requeuing message!");
+                                channel.basicReject(envelope.getDeliveryTag(), true);
+                                reQueuedMessages.mark();
+                                return;
+                            }
+                             
+                            handledGELFMessages.mark();
+                            break;
+                         case SYSLOG:
+                            try {
+                                syslogProcessor.messageReceived(new String(body), connection.getAddress());
+                             } catch (BufferOutOfCapacityException e) {
+                                LOG.warn("ProcessBufferProcessor is out of capacity. Requeuing message!");
+                                channel.basicReject(envelope.getDeliveryTag(), true);
+                                reQueuedMessages.mark();
+                                return;
+                             }
+
+                             handledSyslogMessages.mark();
+                             break;
+                         default:
+                        	 LOG.error("Unknown input type {} for queue {}", queueConfig.getInputType(), queueConfig.getQueueName());
+                     }
+                     
+                     channel.basicAck(envelope.getDeliveryTag(), false);
+                     handledMessages.mark();
+                 } catch(Exception e) {
+                     LOG.error("Could not handle message from AMQP.", e);
+                 }
+             }
+    	 };
     }
     
     public String getQueueName() {
         return queueConfig.getQueueName();
     }
-    
 }

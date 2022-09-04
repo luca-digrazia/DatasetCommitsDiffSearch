@@ -20,36 +20,31 @@
 
 package org.graylog2.inputs.syslog;
 
-import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
 
+import com.google.common.collect.Maps;
+
 /**
- * StructuredSyslog.java: Dec 24, 2011 5:32:06 PM
- *
  * Parses structured syslog data.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StructuredSyslog {
 
-    private static final Logger LOG = Logger.getLogger(StructuredSyslog.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StructuredSyslog.class);
 
-    public static Map<String, String> extractFields(byte[] rawSyslogMessage) {
-        Map<String, String> fields = new HashMap<String, String>();
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+	public static Map<String, String> extractFields(StructuredSyslogServerEvent msg) {
+        Map<String, String> fields = Maps.newHashMap();
         try {
-            StructuredSyslogServerEvent s = new StructuredSyslogServerEvent(
-                    rawSyslogMessage,
-                    rawSyslogMessage.length,
-                    InetAddress.getLocalHost()
-             );
-
-            Map raw = s.getStructuredMessage().getStructuredData();
+			Map raw = msg.getStructuredMessage().getStructuredData();
             if (raw != null) {
-                Set ks = raw.keySet();
+				Set ks = raw.keySet();
                 if (ks.size() > 0) {
                     Object[] fl = raw.keySet().toArray();
 
@@ -61,7 +56,7 @@ public class StructuredSyslog {
             }
         } catch (Exception e) {
             LOG.debug("Could not extract structured syslog", e);
-            return new HashMap();
+            return Maps.newHashMap();
         }
         
         return fields;

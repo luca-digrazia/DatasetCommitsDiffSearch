@@ -23,57 +23,77 @@ package org.graylog2.inputs.gelf;
 
 
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.apache.log4j.Logger;
+
 import org.elasticsearch.common.netty.channel.ChannelException;
-import org.graylog2.Configuration;
-import org.graylog2.GraylogServer;
-import org.graylog2.inputs.MessageInput;
+import org.graylog2.Core;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
+import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
- * GELFUDPInput.java: 11.04.2012 22:29:01
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFUDPInput implements MessageInput {
 
-    private static final Logger LOG = Logger.getLogger(GELFUDPInput.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GELFUDPInput.class);
 
     private static final String NAME = "GELF UDP";
     
-    private Configuration configuration;
-    private GraylogServer graylogServer;
+    private Core graylogServer;
     private InetSocketAddress socketAddress;
     
     @Override
-    public void initialize(Configuration configuration, GraylogServer graylogServer) {
-        this.configuration = configuration;
-        this.graylogServer = graylogServer;
-        this.socketAddress = new InetSocketAddress(configuration.getGelfListenAddress(), configuration.getGelfListenPort());
+    public void initialize(Map<String, String> configuration, GraylogServer graylogServer) {
+        this.graylogServer = (Core) graylogServer;
+        this.socketAddress = new InetSocketAddress(
+                    configuration.get("listen_address"),
+                    Integer.parseInt(configuration.get("listen_port"))
+        );
 
         spinUp();
     }
     
     private void spinUp() {
-        final ExecutorService workerThreadPool = Executors.newCachedThreadPool();
+        
+        final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                .setNameFormat("input-gelfudp-worker-%d")
+                .build());
+        
         final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
 
-        bootstrap.setPipelineFactory(new GELFPipelineFactory(graylogServer));
+        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(
+                graylogServer.getConfiguration().getUdpRecvBufferSizes())
+        );
+        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(graylogServer));
 
         try {
             bootstrap.bind(socketAddress);
-            LOG.info("Started UDP GELF server on " + socketAddress);
+            LOG.info("Started UDP GELF server on {}", socketAddress);
         } catch (ChannelException e) {
-            LOG.fatal("Could not bind GELF server to address " + socketAddress, e);
+            LOG.error("Could not bind UDP GELF server to address " + socketAddress, e);
         }
     }
 
     @Override
     public String getName() {
         return NAME;
+    }
+
+    @Override
+    public Map<String, String> getRequestedConfiguration() {
+        // Built in input. This is just for plugin compat. No special configuration required.
+        return Maps.newHashMap();
     }
     
 }

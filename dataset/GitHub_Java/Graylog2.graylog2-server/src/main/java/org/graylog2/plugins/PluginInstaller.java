@@ -205,7 +205,7 @@ public class PluginInstaller {
         }
     }
     
-    public Map<String, String> getRequestedConfiguration(String jarPath, Class type) throws Exception {
+    public Map<String, String> getRequestedConfiguration(String jarPath, Class<?> type) throws Exception {
         File file = new File(jarPath);
 
         ClassLoader loader = URLClassLoader.newInstance(
@@ -230,7 +230,7 @@ public class PluginInstaller {
             pluginName = plugin.getName();
             return plugin.getRequestedConfiguration();
         }
-        
+
         if (pluginObj instanceof MessageFilter) {
             MessageFilter plugin = (MessageFilter) pluginObj;
             pluginName = plugin.getName();

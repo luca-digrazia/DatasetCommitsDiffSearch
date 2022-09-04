@@ -1,5 +1,5 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,35 +20,65 @@
 
 package org.graylog2;
 
+import org.glassfish.grizzly.http.server.HttpServer;
+import org.graylog2.plugin.Tools;
+
+import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.graylog2.blacklists.BlacklistCache;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.forwarders.forwarders.LogglyForwarder;
-import org.graylog2.indexer.EmbeddedElasticSearchClient;
-import org.graylog2.initializers.Initializer;
-import org.graylog2.inputs.MessageInput;
-import org.graylog2.inputs.gelf.GELFChunkManager;
-import org.graylog2.outputs.MessageOutput;
+import org.graylog2.indexer.Indexer;
+import org.graylog2.plugin.initializers.Initializer;
+import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.gelf.GELFChunkManager;
+import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
 import com.google.common.collect.Lists;
+import java.util.concurrent.atomic.AtomicInteger;
+import com.google.common.collect.Maps;
+import java.util.Map;
+
+import javax.ws.rs.core.UriBuilder;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.sun.jersey.api.container.grizzly2.GrizzlyServerFactory;
+import com.sun.jersey.api.core.PackagesResourceConfig;
+import com.sun.jersey.api.core.ResourceConfig;
+
+import org.cliffc.high_scale_lib.Counter;
 import org.graylog2.activities.Activity;
 import org.graylog2.activities.ActivityWriter;
+import org.graylog2.buffers.BasicCache;
+import org.graylog2.buffers.Cache;
 import org.graylog2.cluster.Cluster;
-import org.graylog2.communicator.Communicator;
-import org.graylog2.communicator.methods.CommunicatorMethod;
 import org.graylog2.database.HostCounterCacheImpl;
 import org.graylog2.indexer.Deflector;
+import org.graylog2.initializers.*;
+import org.graylog2.inputs.StandardInputSet;
 import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
+import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
+import org.graylog2.plugin.alarms.transports.Transport;
+import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.indexer.MessageGateway;
+import org.graylog2.plugin.initializers.InitializerConfigurationException;
+import org.graylog2.plugin.inputs.MessageInputConfigurationException;
+import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
+import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugins.PluginConfiguration;
 import org.graylog2.plugins.PluginLoader;
+import org.graylog2.streams.StreamImpl;
 
 /**
  * Server core, handling and holding basically everything.
@@ -59,7 +89,7 @@ import org.graylog2.plugins.PluginLoader;
  */
 public class Core implements GraylogServer {
 
-    private static final Logger LOG = Logger.getLogger(Core.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Core.class);
 
     private MongoConnection mongoConnection;
     private MongoBridge mongoBridge;
@@ -68,16 +98,15 @@ public class Core implements GraylogServer {
     private ServerValue serverValues;
     private GELFChunkManager gelfChunkManager;
 
-    private static final int SCHEDULED_THREADS_POOL_SIZE = 15;
+    private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
 
-    public static final String GRAYLOG2_VERSION = "0.9.7-dev";
+    public static final String GRAYLOG2_VERSION = "0.20.0-dev";
+    public static final String GRAYLOG2_CODENAME = "Amigo Humanos (Flipper)";
 
     public static final String MASTER_COUNTER_NAME = "master";
-    
-    private int lastReceivedMessageTimestamp = 0;
 
-    private EmbeddedElasticSearchClient indexer;
+    private Indexer indexer;
 
     private HostCounterCacheImpl hostCounterCache;
 
@@ -85,28 +114,36 @@ public class Core implements GraylogServer {
 
     private Cluster cluster;
     
+    private Counter benchmarkCounter = new Counter();
+    
     private List<Initializer> initializers = Lists.newArrayList();
     private List<MessageInput> inputs = Lists.newArrayList();
-    private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
-    private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
-    private List<Class<? extends CommunicatorMethod>> communicatorMethods = Lists.newArrayList();
-    
-    private int loadedFilterPlugins = 0;
+    private List<MessageFilter> filters = Lists.newArrayList();
+    private List<MessageOutput> outputs = Lists.newArrayList();
+    private List<Transport> transports = Lists.newArrayList();
+    private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
     
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
+    private AtomicInteger outputBufferWatermark = new AtomicInteger();
+    private AtomicInteger processBufferWatermark = new AtomicInteger();
+    
+    private Cache inputCache;
+    private Cache outputCache;
     
     private Deflector deflector;
     
     private ActivityWriter activityWriter;
-    
-    private Communicator communicator;
-    
+
     private String serverId;
     
     private boolean localMode = false;
+    private boolean statsMode = false;
+    
+    private int startedAt;
 
     public void initialize(Configuration configuration) {
+    	startedAt = Tools.getUTCTimestamp();
         serverId = Tools.generateServerId();
         
         this.configuration = configuration; // TODO use dependency injection
@@ -122,30 +159,31 @@ public class Core implements GraylogServer {
         mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
         mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
 
-        mongoBridge = new MongoBridge();
+        mongoBridge = new MongoBridge(this);
         mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
         mongoConnection.connect();
         
         cluster = new Cluster(this);
         
-        communicator = new Communicator(this);
-        
-        activityWriter = new ActivityWriter(mongoBridge, communicator);
+        activityWriter = new ActivityWriter(this);
         
         messageCounterManager = new MessageCounterManagerImpl();
         messageCounterManager.register(MASTER_COUNTER_NAME);
 
         hostCounterCache = new HostCounterCacheImpl();
-
-        processBuffer = new ProcessBuffer(this);
+        
+        inputCache = new BasicCache();
+        outputCache = new BasicCache();
+    
+        processBuffer = new ProcessBuffer(this, inputCache);
         processBuffer.initialize();
 
-        outputBuffer = new OutputBuffer(this);
+        outputBuffer = new OutputBuffer(this, outputCache);
         outputBuffer.initialize();
 
         gelfChunkManager = new GELFChunkManager(this);
 
-        indexer = new EmbeddedElasticSearchClient(this);
+        indexer = new Indexer(this);
         serverValues = new ServerValue(this);
                 
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -158,12 +196,10 @@ public class Core implements GraylogServer {
     
     public void registerInitializer(Initializer initializer) {
         if (initializer.masterOnly() && !this.isMaster()) {
-            LOG.info("Not registering initializer " + initializer.getClass().getSimpleName()
-                    + " because it is marked as master only.");
+            LOG.info("Not registering initializer {} because it is marked as master only.", initializer.getClass().getSimpleName());
             return;
         }
         
-            
         this.initializers.add(initializer);
     }
 
@@ -171,22 +207,25 @@ public class Core implements GraylogServer {
         this.inputs.add(input);
     }
 
-    public <T extends MessageFilter> void registerFilter(Class<T> klazz) {
-        this.filters.add(klazz);
+    public void registerFilter(MessageFilter filter) {
+        this.filters.add(filter);
     }
 
-    public <T extends MessageOutput> void registerOutput(Class<T> klazz) {
-        this.outputs.add(klazz);
+    public void registerOutput(MessageOutput output) {
+        this.outputs.add(output);
     }
-
-    public <T extends CommunicatorMethod> void registerCommunicatorMethod(Class<T> klazz) {
-        this.communicatorMethods.add(klazz);
+    
+    public void registerTransport(Transport transport) {
+        this.transports.add(transport);
+    }
+    
+    public void registerAlarmCallback(AlarmCallback alarmCallback) {
+        this.alarmCallbacks.add(alarmCallback);
     }
 
     @Override
     public void run() {
 
-        // initiate the mongodb connection, this might fail but it will retry to establish the connection
         gelfChunkManager.start();
         BlacklistCache.initialize(this);
         StreamCache.initialize(this);
@@ -195,38 +234,104 @@ public class Core implements GraylogServer {
         LOG.info("Setting up deflector.");
         deflector = new Deflector(this);
         deflector.setUp();
+
+        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
+                new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
+        );
+
+        // Load and register plugins.
+        loadPlugins(MessageFilter.class, "filters");
+        loadPlugins(MessageOutput.class, "outputs");
+        loadPlugins(AlarmCallback.class, "alarm_callbacks");
+        loadPlugins(Transport.class, "transports");
+        loadPlugins(Initializer.class, "initializers");
+        loadPlugins(MessageInput.class, "inputs");
         
-        // Set up recent index.
-        if (indexer.indexExists(EmbeddedElasticSearchClient.RECENT_INDEX_NAME)) {
-            LOG.info("Recent index exists. Not creating it.");
-        } else {
-            LOG.info("Recent index does not exist! Trying to create it ...");
-            if (indexer.createRecentIndex()) {
-                LOG.info("Successfully created recent index.");
-            } else {
-                LOG.fatal("Could not create recent index. Terminating.");
-                System.exit(1);
+        // Initialize all registered transports.
+        for (Transport transport : this.transports) {
+            try {
+                Map<String, String> config;
+                
+                // The built in transport methods get a more convenient configuration from graylog2.conf.
+                if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.EmailTransport")) {
+                    config = configuration.getEmailTransportConfiguration();
+                } else if (transport.getClass().getCanonicalName().equals("org.graylog2.alarms.transports.JabberTransport")) {
+                    config = configuration.getJabberTransportConfiguration();
+                } else {
+                    // Load custom plugin config.
+                    config = PluginConfiguration.load(this, transport.getClass().getCanonicalName());
+                }
+                
+                transport.initialize(config);
+                LOG.debug("Initialized transport: {}", transport.getName());
+            } catch (TransportConfigurationException e) {
+                LOG.error("Could not initialize transport <" + transport.getName() + ">"
+                        + " because of missing or invalid configuration.", e);
             }
         }
-
-        // Statically set timeout for LogglyForwarder.
-        // TODO: This is a code smell and needs to be fixed.
-        LogglyForwarder.setTimeout(configuration.getForwarderLogglyTimeout());
-
-        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE);
-
-        loadPlugins();
         
-        // Call all registered initializers.
+        // Initialize all registered alarm callbacks.
+        for (AlarmCallback callback : this.alarmCallbacks) {
+            try {
+                callback.initialize(PluginConfiguration.load(this, callback.getClass().getCanonicalName()));
+                LOG.debug("Initialized alarm callback: {}", callback.getName());
+            } catch(AlarmCallbackConfigurationException e) {
+                LOG.error("Could not initialize alarm callback <" + callback.getName() + ">"
+                        + " because of missing or invalid configuration.", e);
+            }
+        }
+        
+        // Initialize all registered initializers.
         for (Initializer initializer : this.initializers) {
-            initializer.initialize();
-            LOG.debug("Initialized: " + initializer.getClass().getSimpleName());
+            try {
+                if (StandardInitializerSet.get().contains(initializer.getClass())) {
+                    // This is a built-in initializer. We don't need special configs for them.
+                    initializer.initialize(this, null);
+                } else {
+                    // This is a plugin. Initialize with custom config from Mongo.
+                    initializer.initialize(this, PluginConfiguration.load(
+                            this,
+                            initializer.getClass().getCanonicalName())
+                    );
+                }
+                
+                LOG.debug("Initialized initializer: {}", initializer.getClass().getSimpleName());
+            } catch (InitializerConfigurationException e) {
+                
+            }
+            
         }
 
-        // Call all registered inputs.
+        // Initialize all registered inputs.
         for (MessageInput input : this.inputs) {
-            input.initialize(this.configuration, this);
-            LOG.debug("Initialized input: " + input.getName());
+            try {
+                if (StandardInputSet.get().contains(input.getClass())) {
+                    // This is a built-in input. Initialize with config from graylog2.conf.
+                    input.initialize(configuration.getInputConfig(input.getClass()), this);
+                } else {
+                    // This is a plugin. Initialize with custom config from Mongo.
+                    input.initialize(PluginConfiguration.load(
+                            this,
+                            input.getClass().getCanonicalName()),
+                            this
+                    );
+                }
+                
+                LOG.debug("Initialized input: {}", input.getName());
+            } catch (MessageInputConfigurationException e) {
+                LOG.error("Could not initialize input <{}>.", input.getClass().getCanonicalName(), e);
+            }
+        }
+        
+        // Initialize all registered outputs.
+        for (MessageOutput output : this.outputs) {
+            try {
+                output.initialize(PluginConfiguration.load(this, output.getClass().getCanonicalName()));
+                LOG.debug("Initialized output: {}", output.getName());
+            } catch(MessageOutputConfigurationException e) {
+                LOG.error("Could not initialize output <" + output.getName() + ">"
+                        + " because of missing or invalid configuration.", e);
+            }
         }
 
         activityWriter.write(new Activity("Started up.", GraylogServer.class));
@@ -238,13 +343,39 @@ public class Core implements GraylogServer {
 
     }
     
-    private void loadPlugins() {
-        PluginLoader pl = new PluginLoader("plugin");
-        for (Class<? extends MessageFilter> filter : pl.loadFilterPlugins()) {
-            LOG.info("Registering plugin filter [" + filter.getSimpleName() + "].");
-            registerFilter(filter);
-            this.loadedFilterPlugins += 1;
+    public void startRestApi() throws IOException {
+        URI restUri = UriBuilder.fromUri(configuration.getRestListenUri()).port(configuration.getRestListenPort()).build();
+        startRestServer(restUri);
+        LOG.info("Started REST API at <{}>", restUri);
+    }
+    
+    private <A> void loadPlugins(Class<A> type, String subDirectory) {
+        PluginLoader<A> pl = new PluginLoader<A>(configuration.getPluginDir(), subDirectory, type);
+        for (A plugin : pl.getPlugins()) {
+            LOG.info("Registering <{}> plugin [{}].", type.getSimpleName(), plugin.getClass().getCanonicalName());
+            
+            if (plugin instanceof MessageFilter) {
+                registerFilter((MessageFilter) plugin);
+            } else if (plugin instanceof MessageOutput) {
+                registerOutput((MessageOutput) plugin);
+            } else if (plugin instanceof AlarmCallback) {
+                registerAlarmCallback((AlarmCallback) plugin);
+            } else if (plugin instanceof Initializer) {
+                registerInitializer((Initializer) plugin);
+            } else if (plugin instanceof MessageInput) {
+                registerInput((MessageInput) plugin);
+            } else if (plugin instanceof Transport) {
+                registerTransport((Transport) plugin);
+            } else {
+                LOG.error("Could not load plugin [{}] - Not supported type.", plugin.getClass().getCanonicalName());
+            }
         }
+    }
+
+    private HttpServer startRestServer(URI restUri) throws IOException {
+        ResourceConfig rc = new PackagesResourceConfig("org.graylog2.rest.resources");
+        rc.getProperties().put("core", this);
+        return GrizzlyServerFactory.createHttpServer(restUri, rc);
     }
 
     public MongoConnection getMongoConnection() {
@@ -257,6 +388,10 @@ public class Core implements GraylogServer {
 
     public ScheduledExecutorService getScheduler() {
         return scheduler;
+    }
+    
+    public void setConfiguration(Configuration configuration) {
+        this.configuration = configuration;
     }
 
     public Configuration getConfiguration() {
@@ -271,7 +406,7 @@ public class Core implements GraylogServer {
         return rulesEngine;
     }
 
-    public EmbeddedElasticSearchClient getIndexer() {
+    public Indexer getIndexer() {
         return indexer;
     }
 
@@ -292,19 +427,40 @@ public class Core implements GraylogServer {
     public Buffer getOutputBuffer() {
         return this.outputBuffer;
     }
+    
+    public AtomicInteger outputBufferWatermark() {
+        return outputBufferWatermark;
+    }
+    
+    public AtomicInteger processBufferWatermark() {
+        return processBufferWatermark;
+    }
 
-    public List<Class<? extends MessageFilter>> getFilters() {
+    public List<Initializer> getInitializers() {
+        return this.initializers;
+    }
+    
+    public List<Transport> getTransports() {
+        return this.transports;
+    }
+    
+    public List<MessageInput> getInputs() {
+        return this.inputs;
+    }
+    
+    public List<MessageFilter> getFilters() {
         return this.filters;
     }
 
-    public List<Class<? extends MessageOutput>> getOutputs() {
+    public List<MessageOutput> getOutputs() {
         return this.outputs;
     }
 
-    public List<Class<? extends CommunicatorMethod>> getCommunicatorMethods() {
-        return this.communicatorMethods;
+    public List<AlarmCallback> getAlarmCallbacks() {
+        return this.alarmCallbacks;
     }
     
+    @Override
     public MessageCounterManagerImpl getMessageCounterManager() {
         return this.messageCounterManager;
     }
@@ -335,8 +491,9 @@ public class Core implements GraylogServer {
         return this.serverId;
     }
     
-    public int getLoadedFilterPlugins() {
-        return this.loadedFilterPlugins;
+    @Override
+    public MessageGateway getMessageGateway() {
+        return this.indexer.getMessageGateway();
     }
     
     public void setLocalMode(boolean mode) {
@@ -347,4 +504,42 @@ public class Core implements GraylogServer {
         return localMode;
     }
 
+    public void setStatsMode(boolean mode) {
+        this.statsMode = mode;
+    }
+   
+    public boolean isStatsMode() {
+        return statsMode;
+    }
+    
+    /*
+     * For plugins that need a list of all active streams. Could be moved somewhere
+     * more appropiate.
+     */
+    @Override
+    public Map<String, Stream> getEnabledStreams() {
+        Map<String, Stream> streams = Maps.newHashMap();
+        for (Stream stream : StreamImpl.fetchAllEnabled(this)) {
+            streams.put(stream.getId().toString(), stream);
+        }
+        
+        return streams;
+    }
+    
+    public Counter getBenchmarkCounter() {
+        return benchmarkCounter;
+    }
+
+    public Cache getInputCache() {
+        return inputCache;
+    }
+    
+    public Cache getOutputCache() {
+        return outputCache;
+    }
+    
+    public int getStartedAt() {
+    	return startedAt;
+    }
+    
 }

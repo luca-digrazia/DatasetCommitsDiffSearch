@@ -19,23 +19,28 @@
  */
 package org.graylog2.periodical;
 
-import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
-import org.graylog2.indexer.DeflectorInformation;
+import java.util.Map;
+
+import org.elasticsearch.action.admin.indices.stats.IndexStats;
+import org.graylog2.Core;
+import org.graylog2.activities.Activity;
+import org.graylog2.indexer.NoTargetIndexException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class DeflectorManagerThread implements Runnable { // public class Klimperkiste
     
-    private static final Logger LOG = Logger.getLogger(DeflectorManagerThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DeflectorManagerThread.class);
     
     public static final int INITIAL_DELAY = 0;
     public static final int PERIOD = 60;
     
-    private final GraylogServer graylogServer;
+    private final Core graylogServer;
     
-    public DeflectorManagerThread(GraylogServer graylogServer) {
+    public DeflectorManagerThread(Core graylogServer) {
         this.graylogServer = graylogServer;
     }
 
@@ -45,7 +50,14 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
         try {
             point();
         } catch (Exception e) {
-            LOG.error(e);
+            LOG.error("Couldn't point deflector to a new index", e);
+        }
+        
+        // Delete outdated, empty indices.
+        try {
+            deleteEmptyIndices();
+        } catch (Exception e) {
+            LOG.error("Couldn't delete outdated or empty indices", e);
         }
     }
     
@@ -63,14 +75,40 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
         }
         
         if (messageCountInTarget > graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()) {
-            LOG.info("Number of messages in <" + currentTarget + "> (" + messageCountInTarget + ") is higher "
-                    + "than the limit. (" + graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex() + ") "
-                    + "Poiting deflector to new index now!");
+            LOG.info("Number of messages in <{}> ({}) is higher than the limit ({}). Pointing deflector to new index now!",
+                    new Object[] {
+                            currentTarget, messageCountInTarget,
+                            graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
+                    });
             graylogServer.getDeflector().cycle();
         } else {
-            LOG.debug("Number of messages in <" + currentTarget + "> (" + messageCountInTarget + ") is lower "
-                    + "than the limit. (" + graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex() + ") "
-                    + "Not doing anything.");
+            LOG.debug("Number of messages in <{}> ({}) is lower than the limit ({}). Not doing anything.",
+                    new Object[] {
+                            currentTarget,messageCountInTarget,
+                            graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
+                    });
+        }
+    }
+    
+    private void deleteEmptyIndices() {
+        for(Map.Entry<String, IndexStats> e : graylogServer.getDeflector().getAllDeflectorIndices().entrySet()) {
+            if (e.getValue().getTotal().getDocs().count() == 0) {
+                String index = e.getKey();
+                
+                // Never delete the index the deflector is currently pointing to, even if it is empty.
+                try {
+                    if (index.equals(graylogServer.getDeflector().getCurrentTargetName())) {
+                        continue;
+                    }
+                } catch (NoTargetIndexException zomg) { /* I don't care */ }
+                
+                String msg = "Deleting empty index <" + index + ">";
+                graylogServer.getActivityWriter().write(new Activity(msg, DeflectorManagerThread.class));
+                LOG.info(msg);
+                
+                graylogServer.getIndexer().deleteIndex(index);
+                graylogServer.getMongoBridge().removeIndexDateRange(index);
+            }
         }
     }
     

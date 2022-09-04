@@ -19,25 +19,21 @@
  */
 package org.graylog2.activities;
 
-import org.graylog2.communicator.Communicator;
-import org.graylog2.database.MongoBridge;
+import org.graylog2.Core;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ActivityWriter {
     
-    MongoBridge mongoBridge;
-    Communicator communicator;
+    Core server;
     
-    public ActivityWriter(MongoBridge mongoBridge, Communicator communicator) {
-        this.mongoBridge = mongoBridge;
-        this.communicator = communicator;
+    public ActivityWriter(Core server) {
+        this.server = server;
     }
     
     public void write(Activity activity) {
-        mongoBridge.writeActivity(activity);
-        communicator.send(activity.getContent());
+        server.getMongoBridge().writeActivity(activity, server.getServerId());
     }
     
 }

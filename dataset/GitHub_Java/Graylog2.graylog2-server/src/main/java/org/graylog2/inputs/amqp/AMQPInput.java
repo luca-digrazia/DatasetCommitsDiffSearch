@@ -19,36 +19,62 @@
  */
 package org.graylog2.inputs.amqp;
 
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.apache.commons.lang3.concurrent.BasicThreadFactory;
-import org.graylog2.Configuration;
+
+import org.elasticsearch.common.collect.Maps;
 import org.graylog2.Core;
-import org.graylog2.inputs.MessageInput;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.inputs.MessageInput;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class AMQPInput implements MessageInput {
 
-    public static ExecutorService executor = Executors.newCachedThreadPool(
-            new BasicThreadFactory.Builder()
-                .namingPattern("amqp-consumer-%d")
+    private static ExecutorService executor = Executors.newCachedThreadPool(
+            new ThreadFactoryBuilder()
+                .setNameFormat("amqp-input-%d")
                 .build()
     );
     
+    private static Map<String, AMQPConsumer> consumers;
+    
     private static final String NAME = "AMQP syslog/GELF";
+    
+    public AMQPInput() {
+        consumers = Maps.newConcurrentMap();
+    }
 
     @Override
-    public void initialize(Configuration configuration, Core graylogServer) {
-        for (AMQPQueueConfiguration config : AMQPQueueConfiguration.fetchAll(graylogServer)) {
-            executor.submit(new AMQPConsumer(graylogServer, config));
+    public void initialize(Map<String, String> configuration, GraylogServer graylogServer) {
+        for (AMQPQueueConfiguration config : AMQPQueueConfiguration.fetchAll((Core) graylogServer)) {
+            AMQPConsumer consumer = new AMQPConsumer((Core) graylogServer, config);
+            executor.submit(consumer);
+            consumers.put(config.getId(), consumer);
         }
-     }
+    }
+    
+    public static ExecutorService getThreadPool() {
+        return executor;
+    }
+    
+    public static Map<String, AMQPConsumer> getConsumers() {
+        return consumers;
+    }
 
     @Override
     public String getName() {
         return NAME;
+    }
+
+    @Override
+    public Map<String, String> getRequestedConfiguration() {
+        // Built in input. This is just for plugin compat. No special configuration required.
+        return com.google.common.collect.Maps.newHashMap();
     }
     
 }

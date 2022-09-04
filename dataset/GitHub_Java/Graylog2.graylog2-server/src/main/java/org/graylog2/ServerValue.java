@@ -1,5 +1,5 @@
 /**
- * Copyright 2011 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,49 +20,68 @@
 
 package org.graylog2;
 
-import org.graylog2.database.MongoBridge;
+import org.graylog2.buffers.BufferWatermark;
+import org.graylog2.plugin.Tools;
 
 /**
- * ServerValue.java: Jan 16, 2011 1:35:00 PM
- *
  * Filling the server_values collection
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ServerValue {
 
-    public static void setStartupTime(int timestamp) {
+    private final Core graylogServer;
+
+    public ServerValue(Core graylogServer) {
+        this.graylogServer = graylogServer;
+    }
+
+    public void setStartupTime(int timestamp) {
         set("startup_time", timestamp);
     }
 
-    public static void setPID(int pid) {
+    public void setPID(int pid) {
         set("pid", pid);
     }
 
-    public static void setJREInfo(String info) {
+    public void setJREInfo(String info) {
         set("jre", info);
     }
 
-    public static void setAvailableProcessors(int processors) {
+    public void setAvailableProcessors(int processors) {
         set("available_processors", processors);
     }
 
-    public static void setGraylog2Version(String version) {
+    public void setGraylog2Version(String version) {
         set("graylog2_version", version);
     }
 
-    public static void setLocalHostname(String hostname) {
+    public void setLocalHostname(String hostname) {
         set("local_hostname", hostname);
     }
 
-    public static void writeThroughput(int current, int highest) {
-        MongoBridge m = new MongoBridge();
-        m.writeThroughput(current, highest);
+    public void writeThroughput(int current, int highest) {
+        graylogServer.getMongoBridge().writeThroughput(graylogServer.getServerId(), current, highest);
+    }
+    
+    public void writeBufferWatermarks(BufferWatermark outputBuffer, BufferWatermark processBuffer) {
+        graylogServer.getMongoBridge().writeBufferWatermarks(graylogServer.getServerId(), outputBuffer, processBuffer);
+    }
+    
+    public void writeMasterCacheSizes(int inputCacheSize, int outputCacheSize) {
+        graylogServer.getMongoBridge().writeMasterCacheSizes(graylogServer.getServerId(), inputCacheSize, outputCacheSize);
+    }
+    
+    public void setIsMaster(boolean isIt) {
+        set("is_master", isIt);
     }
 
-    private static void set(String key, Object value) {
-        MongoBridge m = new MongoBridge();
-        m.setSimpleServerValue(key, value);
+    public void ping() {
+        set("ping", Tools.getUTCTimestamp());
+    }
+
+    private void set(String key, Object value) {
+        graylogServer.getMongoBridge().setSimpleServerValue(graylogServer.getServerId(), key, value);
     }
 
 }

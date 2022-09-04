@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
+ * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -18,129 +18,227 @@
  *
  */
 
-/**
- * MongoBridge.java: lennart | Apr 13, 2010 9:13:03 PM
- */
-
 package org.graylog2.database;
 
-import com.mongodb.DBCollection;
-import com.mongodb.BasicDBObject;
-import com.mongodb.BasicDBObjectBuilder;
-
-import org.graylog2.Log;
-
-import java.util.Iterator;
 import java.util.List;
-import org.graylog2.Main;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
+import java.util.Map;
+import java.util.Set;
 
-import org.productivity.java.syslog4j.server.SyslogServerEventIF;
+import org.graylog2.Core;
+import org.graylog2.activities.Activity;
+import org.graylog2.buffers.BufferWatermark;
+import org.graylog2.plugin.Tools;
+import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+
+
+/**
+ * Simple mapping methods to MongoDB.
+ *
+ * @author Lennart Koopmann <lennart@socketfeed.com>
+ */
 public class MongoBridge {
-    // TODO: make configurable
-    public static final int STANDARD_PORT = 27017;
 
-    public DBCollection getMessagesColl() {
-        DBCollection coll = null;
+    private static final Logger LOG = LoggerFactory.getLogger(MongoBridge.class);
+    private MongoConnection connection;
+    
+    Core server;
 
-        // Create a capped collection if the collection does not yet exist.
-        if(MongoConnection.getInstance().getDatabase().getCollectionNames().contains("messages")) {
-            coll = MongoConnection.getInstance().getDatabase().getCollection("messages");
+    public MongoBridge(Core server) {
+        this.server = server;
+    }
+
+    public MongoConnection getConnection() {
+        return connection;
+    }
+
+    public void setConnection(MongoConnection connection) {
+        this.connection = connection;
+    }
+
+    /**
+     * Adds x to the counter of host in "hosts" collection.
+     *
+     * @param hostname The host to increment.
+     * @param add The value to add to the current counter value.
+     */
+    public void upsertHostCount(String hostname, int add) {
+        BasicDBObject query = new BasicDBObject();
+        query.put("host", hostname);
+
+        BasicDBObject update = new BasicDBObject();
+        update.put("$inc", new BasicDBObject("message_count", add));
+
+        DB db = getConnection().getDatabase();
+        if (db == null) {
+            // Not connected to DB.
+            LOG.error("MongoBridge::upsertHost(): Could not get hosts collection.");
         } else {
-            int messagesCollSize = Integer.parseInt(Main.masterConfig.getProperty("messages_collection_size").trim());
-            coll = MongoConnection.getInstance().getDatabase().createCollection("messages", BasicDBObjectBuilder.start().add("capped", true).add("size", messagesCollSize).get());
+            db.getCollection("hosts").update(query, update, true, false);
         }
-
-        coll.ensureIndex(new BasicDBObject("created_at", 1));
-        coll.ensureIndex(new BasicDBObject("host", 1));
-        coll.ensureIndex(new BasicDBObject("facility", 1));
-        coll.ensureIndex(new BasicDBObject("level", 1));
-
-        return coll;
     }
 
-    public void insert(SyslogServerEventIF event) throws Exception {
-        DBCollection coll = this.getMessagesColl();
+    public void writeThroughput(String serverId, int current, int highest) {
+        BasicDBObject query = new BasicDBObject();
+        query.put("server_id", serverId);
+        query.put("type", "total_throughput");
 
-        BasicDBObject dbObj = new BasicDBObject();
-        dbObj.put("message", event.getMessage());
-        dbObj.put("host", event.getHost());
-        dbObj.put("facility", event.getFacility());
-        dbObj.put("level", event.getLevel());
-        dbObj.put("created_at", (int) (System.currentTimeMillis()/1000));
+        BasicDBObject update = new BasicDBObject();
+        update.put("server_id", serverId);
+        update.put("type", "total_throughput");
+        update.put("current", current);
+        update.put("highest", highest);
 
-        coll.insert(dbObj);
+        DBCollection coll = getConnection().getDatabase().getCollection("server_values");
+        coll.update(query, update, true, false);
+    }
+    
+    public void writeBufferWatermarks(String serverId, BufferWatermark outputBuffer, BufferWatermark processBuffer) {
+        BasicDBObject query = new BasicDBObject();
+        query.put("server_id", serverId);
+        query.put("type", "buffer_watermarks");
+
+        BasicDBObject update = new BasicDBObject();
+        update.put("server_id", serverId);
+        update.put("type", "buffer_watermarks");
+        
+        update.put("outputbuffer", outputBuffer.getUtilization());
+        update.put("outputbuffer_percent", outputBuffer.getUtilizationPercentage());
+
+        update.put("processbuffer", processBuffer.getUtilization());
+        update.put("processbuffer_percent", processBuffer.getUtilizationPercentage());
+        
+        DBCollection coll = getConnection().getDatabase().getCollection("server_values");
+        coll.update(query, update, true, false);
+    }
+    
+    public void writeMasterCacheSizes(String serverId, int inputCacheSize, int outputCacheSize) {
+        BasicDBObject query = new BasicDBObject();
+        query.put("server_id", serverId);
+        query.put("type", "mastercache_sizes");
+
+        BasicDBObject update = new BasicDBObject();
+        update.put("server_id", serverId);
+        update.put("type", "mastercache_sizes");
+        
+        update.put("inputcache", inputCacheSize);
+        update.put("outputcache", outputCacheSize);
+        
+        DBCollection coll = getConnection().getDatabase().getCollection("server_values");
+        coll.update(query, update, true, false);
     }
 
-    public void insertGelfMessage(GELFMessage message) throws Exception {
-        // Check if all required parameters are set.
-        if (message.shortMessage == null || message.shortMessage.length() == 0 || message.host == null || message.host.length() == 0) {
-            throw new Exception("Missing GELF message parameters. short_message and host are required.");
-        }
-        DBCollection coll = this.getMessagesColl();
+    public void setSimpleServerValue(String serverId, String key, Object value) {
+        BasicDBObject query = new BasicDBObject();
+        query.put("server_id", serverId);
+        query.put("type", key);
 
-        BasicDBObject dbObj = new BasicDBObject();
+        BasicDBObject update = new BasicDBObject();
+        update.put("server_id", serverId);
+        update.put("value", value);
+        update.put("type", key);
 
-        dbObj.put("gelf", true);
-        dbObj.put("message", message.shortMessage);
-        dbObj.put("full_message", message.fullMessage);
-        dbObj.put("type", message.type);
-        dbObj.put("file", message.file);
-        dbObj.put("line", message.line);
-        dbObj.put("host", message.host);
-        dbObj.put("facility", null);
-        dbObj.put("level", message.level);
-        dbObj.put("created_at", (int) (System.currentTimeMillis()/1000));
-
-        coll.insert(dbObj);
+        MongoConnection connection2 = getConnection();
+        DB database = connection2.getDatabase();
+        DBCollection coll = database.getCollection("server_values");
+        coll.update(query, update, true, false);
     }
 
-    public void distinctHosts() throws Exception {
-        // Fetch all hosts.
-        DBCollection messages = this.getMessagesColl();
-        List<String> hosts = messages.distinct("host");
+    public void writeMessageCounts(int total, Map<String, Integer> streams, Map<String, Integer> hosts) {
+        // We store the first second of the current minute, to allow syncing (summing) message counts
+        // from different graylog-server nodes later
+        DateTime dt = new DateTime();
+        int startOfMinute = Tools.getUTCTimestamp()-dt.getSecondOfMinute();;
+        
+        BasicDBObject obj = new BasicDBObject();
+        obj.put("timestamp", startOfMinute);
+        obj.put("total", total);
+        obj.put("streams", streams);
+        obj.put("hosts", hosts);
+        obj.put("server_id", server.getServerId());
 
-        DBCollection coll = null;
+        getConnection().getMessageCountsColl().insert(obj);
+    }
 
-        // Create a capped collection if the collection does not yet exist.
-        if(MongoConnection.getInstance().getDatabase().getCollectionNames().contains("hosts")) {
-            coll = MongoConnection.getInstance().getDatabase().getCollection("hosts");
-        } else {
-            coll = MongoConnection.getInstance().getDatabase().createCollection("hosts", new BasicDBObject());
-        }
+    public void writeActivity(Activity activity, String nodeId) {
+        BasicDBObject obj = new BasicDBObject();
+        obj.put("timestamp", Tools.getUTCTimestamp());
+        obj.put("content", activity.getMessage());
+        obj.put("caller", activity.getCaller().getCanonicalName());
+        obj.put("node_id", nodeId);
+        
+        connection.getDatabase().getCollection("server_activities").insert(obj);
+    }
+    
+    public void writeDeflectorInformation(Map<String, Object> info) {
+        DBCollection coll = connection.getDatabase().getCollection("deflector_informations");
 
-        coll.ensureIndex(new BasicDBObject("name", 1));
-
-        // Truncate host collection.
+        // Delete all entries, we only have one at a time.
         coll.remove(new BasicDBObject());
         
-        // Go trough every host and insert.
-        for (Iterator<String> i = hosts.iterator(); i.hasNext( ); ) {
-            try {
-                String host = i.next();
+        BasicDBObject obj = new BasicDBObject(info);
+        coll.insert(obj);
+    }
+    
+    public void writePluginInformation(Set<Map<String, Object>> plugins, String collection) {
+        DBCollection coll = connection.getDatabase().getCollection(collection);
 
-                // Skip hosts with no name.
-                if (host != null && host.length() > 0) {
-                    // Get message count of this host.
-                    BasicDBObject countQuery = new BasicDBObject();
-                    countQuery.put("host", host);
-                    long messageCount = messages.getCount(countQuery);
-
-                    // Build document.
-                    BasicDBObject doc = new BasicDBObject();
-                    doc.put("host", host);
-                    doc.put("message_count", messageCount);
-
-                    // Store document.
-                    coll.insert(doc);
-                }
-            } catch (Exception e) {
-                Log.crit("Could not insert distinct host: " + e.toString());
-                e.printStackTrace();
-                continue;
-            }
+        // Delete all entries, we only have one at a time.
+        coll.remove(new BasicDBObject());
+        
+        for (Map<String, Object> plugin : plugins) {
+            writeSinglePluginInformation(plugin, collection);
         }
     }
+    
+    public void writeSinglePluginInformation(Map<String, Object> plugin, String collection) {
+        DBCollection coll = connection.getDatabase().getCollection(collection);
+
+        DBObject query = new BasicDBObject();
+        query.put("typeclass", plugin.get("typeclass"));
+        
+        // Upsert, because there might be a plugin already and we don't purge for single.
+        coll.update(query, new BasicDBObject(plugin), true, false);
+    }
+    
+    public void writeIndexDateRange(String indexName, int startDate) {
+        BasicDBObject obj = new BasicDBObject();
+        obj.put("index", indexName);
+        obj.put("start", startDate);
+        
+        connection.getDatabase().getCollection("index_ranges").insert(obj);
+    }
+    
+    public List<DBObject> getIndexDateRanges() {
+        return connection.getDatabase().getCollection("index_ranges").find().toArray();
+    }
+    
+    public void removeIndexDateRange(String indexName) {
+        BasicDBObject obj = new BasicDBObject();
+        obj.put("index", indexName);
+        
+        connection.getDatabase().getCollection("index_ranges").remove(obj);
+    }
+    
+    /**
+     * Get a setting from the settings collection.
+     *
+     * @param type The TYPE (See constants in Setting class) to fetch.
+     * @return The settings - Can be null.
+     */
+    public DBObject getSetting(int type) {
+        DBCollection coll = getConnection().getDatabase().getCollection("settings");
+
+        DBObject query = new BasicDBObject();
+        query.put("setting_type", type);
+        return coll.findOne(query);
+    }
+
 
 }

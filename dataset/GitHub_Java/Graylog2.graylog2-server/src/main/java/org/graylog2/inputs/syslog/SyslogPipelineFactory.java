@@ -20,29 +20,28 @@
 
 package org.graylog2.inputs.syslog;
 
-import org.graylog2.GraylogServer;
+import org.graylog2.Core;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
 
 /**
- * SyslogPipelineFactory.java: 30.04.2012 00:12:09
- *
- * Describe me.
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogPipelineFactory implements ChannelPipelineFactory {
 
-    GraylogServer server;
+    Core server;
 
-    public SyslogPipelineFactory(GraylogServer server) {
+    public SyslogPipelineFactory(Core server) {
         this.server = server;
     }
 
     @Override
     public ChannelPipeline getPipeline() throws Exception {
-        return Channels.pipeline(new SyslogUDPDispatcher(server));
+        ChannelPipeline p = Channels.pipeline();
+        p.addLast("handler", new SyslogDispatcher(server));
+        
+        return p;
     }
 
 }

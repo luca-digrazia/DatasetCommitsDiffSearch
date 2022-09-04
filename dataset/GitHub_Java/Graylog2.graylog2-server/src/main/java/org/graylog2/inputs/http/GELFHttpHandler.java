@@ -19,28 +19,42 @@
  */
 package org.graylog2.inputs.http;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.Meter;
-import org.apache.log4j.Logger;
+import static org.jboss.netty.handler.codec.http.HttpHeaders.isKeepAlive;
+
+import java.util.concurrent.TimeUnit;
+
 import org.graylog2.Core;
 import org.graylog2.gelf.GELFMessage;
 import org.graylog2.gelf.GELFProcessor;
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.*;
-import org.jboss.netty.handler.codec.http.*;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
+import org.jboss.netty.channel.ChannelHandlerContext;
+import org.jboss.netty.channel.ExceptionEvent;
+import org.jboss.netty.channel.MessageEvent;
+import org.jboss.netty.channel.SimpleChannelHandler;
+import org.jboss.netty.handler.codec.http.DefaultHttpResponse;
+import org.jboss.netty.handler.codec.http.HttpHeaders;
+import org.jboss.netty.handler.codec.http.HttpMethod;
+import org.jboss.netty.handler.codec.http.HttpRequest;
+import org.jboss.netty.handler.codec.http.HttpResponse;
+import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import org.jboss.netty.handler.codec.http.HttpVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.TimeUnit;
-
-import static org.jboss.netty.handler.codec.http.HttpHeaders.isKeepAlive;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
 
 public class GELFHttpHandler extends SimpleChannelHandler {
 
-    private static final Logger LOG = Logger.getLogger(GELFHttpHandler.class);
+    private static final Logger LOG = LoggerFactory.getLogger(GELFHttpHandler.class);
 
-    private final Core server;
+    @SuppressWarnings("unused")
+	private final Core server;
     private final Meter receivedMessages = Metrics.newMeter(GELFHttpHandler.class, "ReceivedMessages", "messages", TimeUnit.SECONDS);
     private final Meter gelfMessages = Metrics.newMeter(GELFHttpHandler.class, "ReceivedGelfMessages", "messages", TimeUnit.SECONDS);
-    private final Meter rawMessages = Metrics.newMeter(GELFHttpHandler.class, "ReceivedRawMessages", "messages", TimeUnit.SECONDS);
     private final GELFProcessor gelfProcessor;
 
     public GELFHttpHandler(Core server) {
@@ -57,23 +71,16 @@ public class GELFHttpHandler extends SimpleChannelHandler {
         final HttpVersion httpRequestVersion = request.getProtocolVersion();
 
         // to allow for future changes, let's be at least a little strict in what we accept here.
-        if (request.getMethod() != HttpMethod.PUT) {
+        if (request.getMethod() != HttpMethod.POST) {
             writeResponse(e.getChannel(), keepAlive, httpRequestVersion, HttpResponseStatus.METHOD_NOT_ALLOWED);
         }
 
-        // there are two variants to get data in via HTTP:
-        // 1. just send a common GELF message, including the header bytes (see GELFMessage.Type)
-        // 2. only sending the uncompressed "raw" message, i.e. only the actual JSON
-        //    currently GELFMessage does not support "RAW", so we jump through some hoops to avoid System.arrayCopy
         final ChannelBuffer buffer = request.getContent();
         final byte[] message = new byte[buffer.readableBytes()];
         buffer.toByteBuffer().get(message, buffer.readerIndex(), buffer.readableBytes());
 
         final GELFMessage msg;
-        if ("/gelf/raw".equals(request.getUri())) {
-            rawMessages.mark();
-            msg = new GELFMessage(message, true);
-        } else if ("/gelf".equals(request.getUri())) {
+        if ("/gelf".equals(request.getUri())) {
             gelfMessages.mark();
             msg = new GELFMessage(message);
         } else {

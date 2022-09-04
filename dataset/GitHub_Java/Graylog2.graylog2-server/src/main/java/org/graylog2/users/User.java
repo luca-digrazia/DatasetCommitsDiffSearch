@@ -19,6 +19,14 @@
  */
 package org.graylog2.users;
 
+import java.util.Map;
+import java.util.Set;
+
+import org.bson.types.ObjectId;
+import org.graylog2.Core;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.beust.jcommander.internal.Maps;
 import com.google.common.collect.Sets;
 import com.mongodb.BasicDBList;
@@ -26,25 +34,21 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
-import java.util.Map;
-import java.util.Set;
-import org.apache.log4j.Logger;
-import org.bson.types.ObjectId;
-import org.graylog2.Core;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class User {
    
-    private static final Logger LOG = Logger.getLogger(User.class);
+    private static final Logger LOG = LoggerFactory.getLogger(User.class);
     
     private final ObjectId id;
     private final String login;
     private final String name;
     private final Map<String, String> transports;
     
-    private final DBObject mongoObject;
+    @SuppressWarnings("unused")
+	private final DBObject mongoObject;
     
     public User (DBObject user) {
         this.id = (ObjectId) user.get("_id");
@@ -74,8 +78,12 @@ public class User {
     
     public static Set<User> fetchAll(Core server, Map<String, Object> additionalQueryOpts) {
         UserCache cache = UserCache.getInstance();
-        if (cache.valid()) {
-            return cache.get();
+        
+        // Only use the cache if we really fetch *all* users.
+        if (additionalQueryOpts == null || additionalQueryOpts.isEmpty()) {
+            if (cache.valid()) {
+                return cache.get();
+            }
         }
 
         Set<User> users = Sets.newHashSet();
@@ -98,7 +106,9 @@ public class User {
             }
         }
 
-        cache.set(users);
+        if (additionalQueryOpts == null || additionalQueryOpts.isEmpty()) {
+            cache.set(users);
+        }
 
         return users;
     }

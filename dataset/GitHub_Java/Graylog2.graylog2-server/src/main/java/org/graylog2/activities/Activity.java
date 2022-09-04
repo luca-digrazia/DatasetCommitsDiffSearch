@@ -24,19 +24,27 @@ package org.graylog2.activities;
  */
 public class Activity {
     
-    String content;
-    Class caller;
+    String message;
+    Class<?> caller;
     
-    public Activity(String content, Class caller) {
-        this.content = content;
+    public Activity(Class<?> caller) {
         this.caller = caller;
     }
     
-    public String getContent() {
-        return content;
+    public Activity(String content, Class<?> caller) {
+        this.message = content;
+        this.caller = caller;
     }
     
-    public Class getCaller() {
+    public void setMessage(String message) {
+        this.message = message;
+    }
+    
+    public String getMessage() {
+        return message;
+    }
+    
+    public Class<?> getCaller() {
         return caller;
     }
 

@@ -20,14 +20,11 @@
 package org.graylog2.buffers;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.log4j.Logger;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class BufferWatermark {
-    
-    private static final Logger LOG = Logger.getLogger(BufferWatermark.class);
     
     private final int bufferSize;
     private final AtomicInteger watermark;
@@ -42,7 +39,7 @@ public class BufferWatermark {
     }
     
     public float getUtilizationPercentage() {
-        return getUtilization()/bufferSize*100;
+        return (float) getUtilization()/bufferSize*100;
     }
     
 }

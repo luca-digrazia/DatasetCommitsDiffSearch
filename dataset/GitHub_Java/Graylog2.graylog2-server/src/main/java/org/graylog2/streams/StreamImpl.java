@@ -1,5 +1,5 @@
 /**
- * Copyright 2011 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2011, 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,30 +20,31 @@
 
 package org.graylog2.streams;
 
-import org.graylog2.plugin.streams.Stream;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import org.apache.log4j.Logger;
 import org.bson.types.ObjectId;
+import org.elasticsearch.common.collect.Maps;
+import org.graylog2.Core;
+import org.graylog2.alarms.AlarmReceiverImpl;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.alarms.AlarmReceiver;
+import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.streams.StreamRule;
+import org.graylog2.users.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import org.graylog2.Core;
-import org.graylog2.Tools;
-import org.graylog2.alarms.AlarmReceiverImpl;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.alarms.AlarmReceiver;
-import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.users.User;
 
 /**
  * Representing a single stream from the streams collection. Also provides method
@@ -53,7 +54,7 @@ import org.graylog2.users.User;
  */
 public class StreamImpl implements Stream {
 
-    private static final Logger LOG = Logger.getLogger(StreamImpl.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StreamImpl.class);
 
     private final ObjectId id;
     private final String title;
@@ -63,7 +64,7 @@ public class StreamImpl implements Stream {
     private final int alarmPeriod;
     private final int lastAlarm;
     
-    private final Map<String, Set<Map<String, String>>> outputs;
+    protected final Map<String, Set<Map<String, String>>> outputs;
 
     private List<StreamRule> streamRules;
     private Set<String> alarmCallbacks;
@@ -149,6 +150,16 @@ public class StreamImpl implements Stream {
 
         return streams;
     }
+    
+    public static Map<String, String> nameMap(Core server) {
+        Map<String, String> streams = Maps.newHashMap();
+        
+        for(Stream stream : fetchAllEnabled(server)) {
+            streams.put(stream.getId().toString(), stream.getTitle());
+        }
+        
+        return streams;
+    }
 
     @Override
     public List<StreamRule> getStreamRules() {
@@ -180,12 +191,11 @@ public class StreamImpl implements Stream {
         }
         
         Set<String> callbacks = Sets.newTreeSet();
+        BasicDBList objs = (BasicDBList) this.mongoObject.get("alarm_callbacks");
         
-        List objs = (BasicDBList) this.mongoObject.get("alarm_callbacks");
         if (objs != null) {
             for (Object obj : objs) {
-                DBObject callback = (BasicDBObject) obj;
-                String typeclass = (String) callback.get("typeclass");
+                String typeclass = (String) obj;
                 if (typeclass != null && !typeclass.isEmpty()) {
                     callbacks.add(typeclass);
                 }
@@ -218,7 +228,17 @@ public class StreamImpl implements Stream {
     }
     
     public Set<Map<String, String>> getOutputConfigurations(String className) {
+        
         return outputs.get(className);
+    }
+    
+    public boolean hasConfiguredOutputs(String typeClass) {
+        Set<Map<String, String>> oc = getOutputConfigurations(typeClass);
+        if (oc == null) {
+            return false;
+        }
+        
+        return !oc.isEmpty();
     }
     
     @Override
@@ -259,9 +279,9 @@ public class StreamImpl implements Stream {
     
     public boolean inAlarmGracePeriod() {
         int now = Tools.getUTCTimestamp();
-        int graceLine = lastAlarm+(alarmPeriod*60);
-        LOG.debug("Last alarm of stream <" + getId() + "> was at [" + lastAlarm + "]. "
-                + "Grace period ends at [" + graceLine + "]. It now is [" + now + "].");
+        int graceLine = lastAlarm+(alarmPeriod*60)-1;
+        LOG.debug("Last alarm of stream <{}> was at [{}]. Grace period ends at [{}]. It now is [{}].",
+                new Object[] { getId(), lastAlarm, graceLine, now });
         return now <= graceLine;
     }
     
@@ -301,11 +321,11 @@ public class StreamImpl implements Stream {
         
         return receivers;
     }
-
+    
     private Map<String, Set<Map<String, String>>> buildOutputsFromMongoDoc(DBObject stream) {
         Map<String, Set<Map<String, String>>> o = Maps.newHashMap();
         
-        List objs = (BasicDBList) stream.get("outputs");
+        BasicDBList objs = (BasicDBList) stream.get("outputs");
         
         if (objs == null || objs.isEmpty()) {
             return o;
@@ -335,5 +355,5 @@ public class StreamImpl implements Stream {
         
         return o;
     }
-    
+
 }
