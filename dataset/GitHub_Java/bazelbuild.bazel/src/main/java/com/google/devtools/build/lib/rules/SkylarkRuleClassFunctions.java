@@ -51,15 +51,14 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithCallback;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithMap;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.PredicateWithMessage;
-import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
@@ -67,12 +66,12 @@ import com.google.devtools.build.lib.packages.RuleFactory;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkExportable;
-import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.rules.SkylarkAttr.Descriptor;
-import com.google.devtools.build.lib.rules.test.TestConfiguration;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
@@ -143,68 +142,48 @@ public class SkylarkRuleClassFunctions {
   /** Parent rule class for test Skylark rules. */
   public static final RuleClass getTestBaseRule(String toolsRepository) {
     return new RuleClass.Builder("$test_base_rule", RuleClassType.ABSTRACT, true, baseRule)
-        .requiresConfigurationFragments(TestConfiguration.class)
-        .add(
-            attr("size", STRING)
-                .value("medium")
-                .taggable()
-                .nonconfigurable("used in loading phase rule validation logic"))
-        .add(
-            attr("timeout", STRING)
-                .taggable()
-                .nonconfigurable("used in loading phase rule validation logic")
-                .value(
-                    new Attribute.ComputedDefault() {
-                      @Override
-                      public Object getDefault(AttributeMap rule) {
-                        TestSize size = TestSize.getTestSize(rule.get("size", Type.STRING));
-                        if (size != null) {
-                          String timeout = size.getDefaultTimeout().toString();
-                          if (timeout != null) {
-                            return timeout;
-                          }
-                        }
-                        return "illegal";
+        .add(attr("size", STRING).value("medium").taggable()
+            .nonconfigurable("used in loading phase rule validation logic"))
+        .add(attr("timeout", STRING).taggable()
+            .nonconfigurable("used in loading phase rule validation logic").value(
+                new Attribute.ComputedDefault() {
+                  @Override
+                  public Object getDefault(AttributeMap rule) {
+                    TestSize size = TestSize.getTestSize(rule.get("size", Type.STRING));
+                    if (size != null) {
+                      String timeout = size.getDefaultTimeout().toString();
+                      if (timeout != null) {
+                        return timeout;
                       }
-                    }))
-        .add(
-            attr("flaky", BOOLEAN)
-                .value(false)
-                .taggable()
-                .nonconfigurable("taggable - called in Rule.getRuleTags"))
+                    }
+                    return "illegal";
+                  }
+                }))
+        .add(attr("flaky", BOOLEAN).value(false).taggable()
+            .nonconfigurable("taggable - called in Rule.getRuleTags"))
         .add(attr("shard_count", INTEGER).value(-1))
-        .add(
-            attr("local", BOOLEAN)
-                .value(false)
-                .taggable()
-                .nonconfigurable(
-                    "policy decision: this should be consistent across configurations"))
+        .add(attr("local", BOOLEAN).value(false).taggable()
+            .nonconfigurable("policy decision: this should be consistent across configurations"))
         .add(attr("args", STRING_LIST))
         // Input files for every test action
-        .add(
-            attr("$test_runtime", LABEL_LIST)
-                .cfg(HOST)
-                .value(
-                    ImmutableList.of(
-                        labelCache.getUnchecked(toolsRepository + "//tools/test:runtime"))))
+        .add(attr("$test_runtime", LABEL_LIST).cfg(HOST).value(ImmutableList.of(
+            labelCache.getUnchecked(toolsRepository + "//tools/test:runtime"))))
         // Input files for test actions collecting code coverage
-        .add(
-            attr("$coverage_support", LABEL)
-                .cfg(HOST)
-                .value(labelCache.getUnchecked("//tools/defaults:coverage_support")))
+        .add(attr("$coverage_support", LABEL)
+            .cfg(HOST)
+            .value(labelCache.getUnchecked("//tools/defaults:coverage_support")))
         // Used in the one-per-build coverage report generation action.
-        .add(
-            attr("$coverage_report_generator", LABEL)
-                .cfg(HOST)
-                .value(labelCache.getUnchecked("//tools/defaults:coverage_report_generator"))
-                .singleArtifact())
+        .add(attr("$coverage_report_generator", LABEL)
+            .cfg(HOST)
+            .value(labelCache.getUnchecked("//tools/defaults:coverage_report_generator"))
+            .singleArtifact())
         .add(attr(":run_under", LABEL).cfg(DATA).value(RUN_UNDER))
         .build();
   }
 
   @SkylarkSignature(
     name = "struct",
-    returnType = Info.class,
+    returnType = SkylarkClassObject.class,
     doc =
         "Creates an immutable struct using the keyword arguments as attributes. It is used to "
             + "group multiple values together. Example:<br>"
@@ -213,11 +192,11 @@ public class SkylarkRuleClassFunctions {
     extraKeywords = @Param(name = "kwargs", doc = "the struct attributes."),
     useLocation = true
   )
-  private static final Provider struct = NativeProvider.STRUCT;
+  private static final ClassObjectConstructor struct = NativeClassObjectConstructor.STRUCT;
 
   @SkylarkSignature(
     name = "DefaultInfo",
-    returnType = Provider.class,
+    returnType = ClassObjectConstructor.class,
     doc =
         "A provider that is provided by every rule, even if it is not returned explicitly. "
             + "A <code>DefaultInfo</code> accepts the following parameters:"
@@ -236,11 +215,11 @@ public class SkylarkRuleClassFunctions {
             + "<li><code>default_runfiles</code></li>"
             + "</ul>"
   )
-  private static final Provider defaultInfo = DefaultProvider.SKYLARK_CONSTRUCTOR;
+  private static final ClassObjectConstructor defaultInfo = DefaultProvider.SKYLARK_CONSTRUCTOR;
 
   @SkylarkSignature(
     name = "OutputGroupInfo",
-    returnType = Provider.class,
+    returnType = ClassObjectConstructor.class,
     doc =
         "Provides information about output groups the rule provides.<br>"
             + "Instantiate this provider with <br>"
@@ -248,33 +227,31 @@ public class SkylarkRuleClassFunctions {
             + "OutputGroupInfo(group1 = &lt;files&gt;, group2 = &lt;files&gt;...)</pre>"
             + "See <a href=\"../rules.html#output-groups\">Output Groups</a> for more information"
   )
-  private static final Provider outputGroupInfo = OutputGroupProvider.SKYLARK_CONSTRUCTOR;
+  private static final ClassObjectConstructor outputGroupInfo =
+      OutputGroupProvider.SKYLARK_CONSTRUCTOR;
 
   // TODO(bazel-team): Move to a "testing" namespace module. Normally we'd pass an objectType
   // to @SkylarkSignature to do this, but that doesn't work here because we're exposing an already-
   // configured BaseFunction, rather than defining a new BuiltinFunction. This should wait for
   // better support from the Skylark/Java interface, or perhaps support for first-class modules.
-  @SkylarkSignature(
-    name = "Actions",
-    returnType = SkylarkProvider.class,
-    doc =
-        "<i>(Note: This is a provider type. Don't instantiate it yourself; use it to retrieve a "
-            + "provider object from a <a href=\"Target.html\">Target</a>.)</i>"
-            + "<br/><br/>"
-            + "Provides access to the <a href=\"Action.html\">actions</a> generated by a rule. "
-            + "There is one field, <code>by_file</code>, which is a dictionary from an output "
-            + "of the rule to its corresponding generating action. "
-            + "<br/><br/>"
-            + "This is designed for testing rules, and should not be accessed outside "
-            + "of test logic. This provider is only available for targets generated by rules"
-            + " that have <a href=\"globals.html#rule._skylark_testable\">_skylark_testable</a> "
-            + "set to <code>True</code>."
+  @SkylarkSignature(name = "Actions", returnType = SkylarkClassObjectConstructor.class, doc =
+      "<i>(Note: This is a provider type. Don't instantiate it yourself; use it to retrieve a "
+          + "provider object from a <a href=\"Target.html\">Target</a>.)</i>"
+          + "<br/><br/>"
+          + "Provides access to the <a href=\"Action.html\">actions</a> generated by a rule. There "
+          + "is one field, <code>by_file</code>, which is a dictionary from an output of the rule "
+          + "to its corresponding generating action. "
+          + "<br/><br/>"
+          + "This is designed for testing rules, and should not be accessed outside of test logic. "
+          + "This provider is only available for targets generated by rules that have "
+          + "<a href=\"globals.html#rule._skylark_testable\">_skylark_testable</a> set to "
+          + "<code>True</code>."
   )
-  private static final Provider actions = ActionsProvider.SKYLARK_CONSTRUCTOR;
+  private static final ClassObjectConstructor actions = ActionsProvider.SKYLARK_CONSTRUCTOR;
 
   @SkylarkSignature(
     name = "provider",
-    returnType = Provider.class,
+    returnType = ClassObjectConstructor.class,
     doc =
         "Creates a declared provider 'constructor'. The return value of this "
             + "function can be used to create \"struct-like\" values. Example:<br>"
@@ -294,8 +271,8 @@ public class SkylarkRuleClassFunctions {
   )
   private static final BuiltinFunction provider =
       new BuiltinFunction("provider") {
-        public Provider invoke(String doc, Location location) {
-          return new SkylarkProvider(
+        public ClassObjectConstructor invoke(String doc, Location location) {
+          return new SkylarkClassObjectConstructor(
               "<no name>", // name is set on export.
               location);
         }
@@ -877,7 +854,8 @@ public class SkylarkRuleClassFunctions {
    * RuleFunction}s etc.
    */
   private static final ImmutableList<Class<? extends SkylarkExportable>> EXPORTABLES =
-      ImmutableList.of(SkylarkProvider.class, SkylarkAspect.class, RuleFunction.class);
+      ImmutableList.of(
+          SkylarkClassObjectConstructor.class, SkylarkAspect.class, RuleFunction.class);
 
   @SkylarkSignature(
     name = "Label",
@@ -985,17 +963,17 @@ public class SkylarkRuleClassFunctions {
             + "# key {\n#   inner_key: 1\n# }\n# key {\n#   inner_key: 2\n# }\n\n"
             + "struct(key=struct(inner_key=struct(inner_inner_key='text'))).to_proto()\n"
             + "# key {\n#    inner_key {\n#     inner_inner_key: \"text\"\n#   }\n# }\n</pre>",
-    objectType = Info.class,
+    objectType = SkylarkClassObject.class,
     returnType = String.class,
     parameters = {
       // TODO(bazel-team): shouldn't we accept any ClassObject?
-      @Param(name = "self", type = Info.class, doc = "this struct.")
+      @Param(name = "self", type = SkylarkClassObject.class, doc = "this struct.")
     },
     useLocation = true
   )
   private static final BuiltinFunction toProto =
       new BuiltinFunction("to_proto") {
-        public String invoke(Info self, Location loc) throws EvalException {
+        public String invoke(SkylarkClassObject self, Location loc) throws EvalException {
           StringBuilder sb = new StringBuilder();
           printProtoTextMessage(self, sb, 0, loc);
           return sb.toString();
@@ -1091,17 +1069,17 @@ public class SkylarkRuleClassFunctions {
             + "# {\"key\":[{\"inner_key\":1},{\"inner_key\":2}]}\n\n"
             + "struct(key=struct(inner_key=struct(inner_inner_key='text'))).to_json()\n"
             + "# {\"key\":{\"inner_key\":{\"inner_inner_key\":\"text\"}}}\n</pre>",
-    objectType = Info.class,
+    objectType = SkylarkClassObject.class,
     returnType = String.class,
     parameters = {
       // TODO(bazel-team): shouldn't we accept any ClassObject?
-      @Param(name = "self", type = Info.class, doc = "this struct.")
+      @Param(name = "self", type = SkylarkClassObject.class, doc = "this struct.")
     },
     useLocation = true
   )
   private static final BuiltinFunction toJson =
       new BuiltinFunction("to_json") {
-        public String invoke(Info self, Location loc) throws EvalException {
+        public String invoke(SkylarkClassObject self, Location loc) throws EvalException {
           StringBuilder sb = new StringBuilder();
           printJson(self, sb, loc, "struct field", null);
           return sb.toString();
