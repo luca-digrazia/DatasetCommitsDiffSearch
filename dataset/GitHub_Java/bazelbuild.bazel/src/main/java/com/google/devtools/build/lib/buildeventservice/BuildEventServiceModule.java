@@ -18,6 +18,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -70,7 +72,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -313,8 +314,8 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
             : "local";
 
     CountingArtifactGroupNamer artifactGroupNamer = new CountingArtifactGroupNamer();
-    ThrowingBuildEventArtifactUploaderSupplier uploaderSupplier =
-        new ThrowingBuildEventArtifactUploaderSupplier(
+    Supplier<BuildEventArtifactUploader> uploaderSupplier =
+        Suppliers.memoize(
             () ->
                 cmdEnv
                     .getRuntime()
@@ -333,14 +334,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       return;
     }
 
-    try {
-      bepTransports = createBepTransports(cmdEnv, uploaderSupplier, artifactGroupNamer);
-    } catch (IOException e) {
-      cmdEnv
-          .getBlazeModuleEnvironment()
-          .exit(new AbruptExitException(ExitCode.LOCAL_ENVIRONMENTAL_ERROR, e));
-      return;
-    }
+    bepTransports = createBepTransports(cmdEnv, uploaderSupplier, artifactGroupNamer);
     if (bepTransports.isEmpty()) {
       // Exit early if there are no transports to stream to.
       return;
@@ -607,9 +601,8 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   @Nullable
   private BuildEventServiceTransport createBesTransport(
       CommandEnvironment cmdEnv,
-      ThrowingBuildEventArtifactUploaderSupplier uploaderSupplier,
-      CountingArtifactGroupNamer artifactGroupNamer)
-      throws IOException {
+      Supplier<BuildEventArtifactUploader> uploaderSupplier,
+      CountingArtifactGroupNamer artifactGroupNamer) {
     if (Strings.isNullOrEmpty(besOptions.besBackend)) {
       clearBesClient();
       return null;
@@ -679,9 +672,8 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
 
   private ImmutableSet<BuildEventTransport> createBepTransports(
       CommandEnvironment cmdEnv,
-      ThrowingBuildEventArtifactUploaderSupplier uploaderSupplier,
-      CountingArtifactGroupNamer artifactGroupNamer)
-      throws IOException {
+      Supplier<BuildEventArtifactUploader> uploaderSupplier,
+      CountingArtifactGroupNamer artifactGroupNamer) {
     ImmutableSet.Builder<BuildEventTransport> bepTransportsBuilder = new ImmutableSet.Builder<>();
 
     if (!Strings.isNullOrEmpty(besStreamOptions.buildEventTextFile)) {
@@ -812,32 +804,5 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   @VisibleForTesting
   ImmutableSet<BuildEventTransport> getBepTransports() {
     return bepTransports;
-  }
-
-  private static class ThrowingBuildEventArtifactUploaderSupplier {
-    private final Callable<BuildEventArtifactUploader> callable;
-    @Nullable private BuildEventArtifactUploader memoizedValue;
-    @Nullable private IOException exception;
-
-    ThrowingBuildEventArtifactUploaderSupplier(Callable<BuildEventArtifactUploader> callable) {
-      this.callable = callable;
-    }
-
-    BuildEventArtifactUploader get() throws IOException {
-      if (memoizedValue == null && exception == null) {
-        try {
-          memoizedValue = callable.call();
-        } catch (IOException e) {
-          exception = e;
-        } catch (Exception e) {
-          Throwables.throwIfUnchecked(e);
-          throw new IllegalStateException(e);
-        }
-      }
-      if (memoizedValue != null) {
-        return memoizedValue;
-      }
-      throw exception;
-    }
   }
 }
