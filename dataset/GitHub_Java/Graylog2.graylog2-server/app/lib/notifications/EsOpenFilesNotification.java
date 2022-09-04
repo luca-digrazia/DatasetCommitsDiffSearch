@@ -19,20 +19,23 @@
  */
 package lib.notifications;
 
+import com.google.common.collect.Maps;
 import org.graylog2.restclient.models.Notification;
 import org.graylog2.restclient.models.SystemJob;
 import views.helpers.NotificationHelper;
 
-import java.util.Collections;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class EsOpenFilesNotification implements NotificationType {
-    private static final String TITLE = "Elasticsearch nodes with too low open file limit";
-    private static final String DESCRIPTION = "There are Elasticsearch nodes in the cluster that have a too low " +
-            "open file limit (current limit: <em>%d</em> on <em>%s</em>; should be at least 64000) This will " +
-            "be causing problems that can be hard to diagnose. " +
-            "Read how to raise the maximum number of open files in " +
-            NotificationHelper.linkToKnowledgeBase("configuring-and-tuning-elasticsearch-for-graylog2-v0200", "the documentation.");
+
+    private static final String TITLE = "ElasticSearch nodes with too low open file limit";
+    private static final String DESCRIPTION = "There are ElasticSearch nodes in the cluster that have a too low " +
+                                              "open file limit. (below 64000) This will be causing problems that can be hard to diagnose. " +
+                                              "Read how to raise the maximum number of open files in " +
+                                              NotificationHelper.linkToKnowledgeBase("configuring-and-tuning-elasticsearch-for-graylog2-v0200", "the documentation.");
 
     private final Notification notification;
 
@@ -47,7 +50,7 @@ public class EsOpenFilesNotification implements NotificationType {
 
     @Override
     public Map<SystemJob.Type, String> options() {
-        return Collections.emptyMap();
+        return Maps.newHashMap();
     }
 
     @Override
@@ -57,13 +60,12 @@ public class EsOpenFilesNotification implements NotificationType {
 
     @Override
     public String getDescription() {
-        return String.format(DESCRIPTION,
-                notification.getDetail("max_file_descriptors"),
-                notification.getDetail("hostname"));
+        return DESCRIPTION;
     }
 
     @Override
     public boolean isCloseable() {
         return true;
     }
+
 }
