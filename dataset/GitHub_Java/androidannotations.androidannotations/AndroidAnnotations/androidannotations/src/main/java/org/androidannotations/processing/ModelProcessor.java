@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,7 @@
  */
 package org.androidannotations.processing;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -24,7 +25,6 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 
-import org.androidannotations.exception.ProcessingException;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.model.AnnotationElements.AnnotatedAndRootElements;
 
@@ -60,15 +60,15 @@ public class ModelProcessor {
 		typeProcessors.add(processor);
 	}
 
-	public ProcessResult process(AnnotationElements validatedModel) throws ProcessingException, Exception {
+	public ProcessResult process(AnnotationElements validatedModel) throws Exception {
 
 		JCodeModel codeModel = new JCodeModel();
 
 		EBeansHolder eBeansHolder = new EBeansHolder(codeModel);
 
 		for (GeneratingElementProcessor processor : typeProcessors) {
-			String annotationName = processor.getTarget();
-			Set<? extends Element> annotatedElements = validatedModel.getRootAnnotatedElements(annotationName);
+			Class<? extends Annotation> target = processor.getTarget();
+			Set<? extends Element> annotatedElements = validatedModel.getRootAnnotatedElements(target.getName());
 			for (Element annotatedElement : annotatedElements) {
 				/*
 				 * We do not generate code for abstract classes, because the
@@ -76,7 +76,7 @@ public class ModelProcessor {
 				 * extend them).
 				 */
 				if (!isAbstractClass(annotatedElement)) {
-					processThrowing(processor, annotatedElement, codeModel, eBeansHolder);
+					processor.process(annotatedElement, codeModel, eBeansHolder);
 				}
 			}
 			/*
@@ -86,13 +86,13 @@ public class ModelProcessor {
 		}
 
 		for (DecoratingElementProcessor processor : enclosedProcessors) {
-			String annotationName = processor.getTarget();
+			Class<? extends Annotation> target = processor.getTarget();
 
 			/*
 			 * For ancestors, the processor manipulates the annotated elements,
 			 * but uses the holder for the root element
 			 */
-			Set<AnnotatedAndRootElements> ancestorAnnotatedElements = validatedModel.getAncestorAnnotatedElements(annotationName);
+			Set<AnnotatedAndRootElements> ancestorAnnotatedElements = validatedModel.getAncestorAnnotatedElements(target.getName());
 			for (AnnotatedAndRootElements elements : ancestorAnnotatedElements) {
 				EBeanHolder holder = eBeansHolder.getEBeanHolder(elements.rootTypeElement);
 				/*
@@ -100,11 +100,11 @@ public class ModelProcessor {
 				 * elements that are not validated, and therefore not available.
 				 */
 				if (holder != null) {
-					processThrowing(processor, elements.annotatedElement, codeModel, holder);
+					processor.process(elements.annotatedElement, codeModel, holder);
 				}
 			}
 
-			Set<? extends Element> rootAnnotatedElements = validatedModel.getRootAnnotatedElements(annotationName);
+			Set<? extends Element> rootAnnotatedElements = validatedModel.getRootAnnotatedElements(target.getName());
 
 			for (Element annotatedElement : rootAnnotatedElements) {
 
@@ -121,7 +121,7 @@ public class ModelProcessor {
 				 */
 				if (!isAbstractClass(enclosingElement)) {
 					EBeanHolder holder = eBeansHolder.getEBeanHolder(enclosingElement);
-					processThrowing(processor, annotatedElement, codeModel, holder);
+					processor.process(annotatedElement, codeModel, holder);
 				}
 			}
 
@@ -131,22 +131,6 @@ public class ModelProcessor {
 				codeModel, //
 				eBeansHolder.getOriginatingElements(), //
 				eBeansHolder.getApiClassesToGenerate());
-	}
-
-	private void processThrowing(GeneratingElementProcessor processor, Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception, ProcessingException {
-		try {
-			processor.process(element, codeModel, eBeansHolder);
-		} catch (Exception e) {
-			throw new ProcessingException(e, element);
-		}
-	}
-
-	private void processThrowing(DecoratingElementProcessor processor, Element element, JCodeModel codeModel, EBeanHolder eBeanHolder) throws Exception, ProcessingException {
-		try {
-			processor.process(element, codeModel, eBeanHolder);
-		} catch (Exception e) {
-			throw new ProcessingException(e, element);
-		}
 	}
 
 	private boolean isAbstractClass(Element annotatedElement) {
