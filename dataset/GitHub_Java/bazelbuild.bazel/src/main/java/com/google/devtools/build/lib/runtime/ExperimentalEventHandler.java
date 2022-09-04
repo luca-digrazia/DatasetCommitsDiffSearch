@@ -37,9 +37,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.FetchProgress;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
-import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ConfigurationPhaseStartedEvent;
 import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
 import com.google.devtools.build.lib.util.io.AnsiTerminal;
@@ -50,7 +48,6 @@ import com.google.devtools.build.lib.util.io.LineWrappingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.LoggingTerminalWriter;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -86,7 +83,7 @@ public class ExperimentalEventHandler implements EventHandler {
 
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
       DateTimeFormatter.ofPattern("(HH:mm:ss) ");
-  private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+  private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("YYYY-MM-dd");
 
   private final boolean cursorControl;
   private final Clock clock;
@@ -94,7 +91,6 @@ public class ExperimentalEventHandler implements EventHandler {
   private final AnsiTerminal terminal;
   private final boolean debugAllEvents;
   private final ExperimentalStateTracker stateTracker;
-  private final LocationPrinter locationPrinter;
   private final boolean showProgress;
   private final boolean progressInTermTitle;
   private final boolean showTimestamp;
@@ -214,10 +210,7 @@ public class ExperimentalEventHandler implements EventHandler {
   }
 
   public ExperimentalEventHandler(
-      OutErr outErr,
-      BlazeCommandEventHandler.Options options,
-      Clock clock,
-      @Nullable PathFragment workspacePathFragment) {
+      OutErr outErr, BlazeCommandEventHandler.Options options, Clock clock) {
     this.terminalWidth = (options.terminalColumns > 0 ? options.terminalColumns : 80);
     this.outputLimit = options.experimentalUiLimitConsoleOutput;
     this.counter = new AtomicLong(outputLimit);
@@ -250,8 +243,6 @@ public class ExperimentalEventHandler implements EventHandler {
     this.debugAllEvents = options.experimentalUiDebugAllEvents;
     this.deduplicate = options.experimentalUiDeduplicate;
     this.messagesSeen = new HashSet<>();
-    this.locationPrinter =
-        new LocationPrinter(options.attemptToPrintRelativePaths, workspacePathFragment);
     // If we have cursor control, we try to fit in the terminal width to avoid having
     // to wrap the progress bar. We will wrap the progress bar to terminalWidth - 1
     // characters to avoid depending on knowing whether the underlying terminal does the
@@ -470,9 +461,8 @@ public class ExperimentalEventHandler implements EventHandler {
             terminal.writeString(event.getKind() + ": ");
             terminal.resetTerminal();
             incompleteLine = true;
-            Location location = event.getLocation();
-            if (location != null) {
-              terminal.writeString(locationPrinter.getLocationString(location) + ": ");
+            if (event.getLocation() != null) {
+              terminal.writeString(event.getLocation() + ": ");
             }
             if (event.getMessage() != null) {
               terminal.writeString(event.getMessage());
@@ -499,16 +489,10 @@ public class ExperimentalEventHandler implements EventHandler {
             break;
         }
         if (event.getStdErr() != null) {
-          handleLocked(
-              Event.of(
-                  EventKind.STDERR, null, event.getStdErr().getBytes(StandardCharsets.ISO_8859_1)),
-              /* isFollowUp= */ true);
+          handleLocked(Event.of(EventKind.STDERR, null, event.getStdErr()), /* isFollowUp= */ true);
         }
         if (event.getStdOut() != null) {
-          handleLocked(
-              Event.of(
-                  EventKind.STDOUT, null, event.getStdOut().getBytes(StandardCharsets.ISO_8859_1)),
-              /* isFollowUp= */ true);
+          handleLocked(Event.of(EventKind.STDOUT, null, event.getStdOut()), /* isFollowUp= */ true);
         }
       }
     } catch (IOException e) {
@@ -562,7 +546,7 @@ public class ExperimentalEventHandler implements EventHandler {
     }
     if (event.getStdOut() == null && event.getStdErr() == null) {
       // We deduplicate on the attached output (assuming the event itself only describes
-      // the source of the output). If no output is attached it is a different kind of event
+      // the source of the output). If no output is attached it is a differnt kind of event
       // and should not be deduplicated.
       return false;
     }
@@ -646,7 +630,7 @@ public class ExperimentalEventHandler implements EventHandler {
   @Subscribe
   public void buildComplete(BuildCompleteEvent event) {
     // The final progress bar will flow into the scroll-back buffer, to if treat
-    // it as an event and add a timestamp, if events are supposed to have a timestamp.
+    // it as an event and add a timestamp, if events are supposed to have a timestmap.
     boolean done = false;
     synchronized (this) {
       stateTracker.buildComplete(event);
@@ -708,11 +692,6 @@ public class ExperimentalEventHandler implements EventHandler {
         logger.warning("IO Error writing to output stream: " + e);
       }
     }
-  }
-
-  @Subscribe
-  public void packageLocatorCreated(PathPackageLocator packageLocator) {
-    locationPrinter.packageLocatorCreated(packageLocator);
   }
 
   @Subscribe
@@ -928,7 +907,10 @@ public class ExperimentalEventHandler implements EventHandler {
     startUpdateThread();
   }
 
-  /** Decide whether the progress bar should be redrawn only for the reason that time has passed. */
+  /**
+   * Decide wheter the progress bar should be redrawn only for the reason
+   * that time has passed.
+   */
   private synchronized boolean timeBasedRefresh() {
     if (!stateTracker.progressBarTimeDependent()) {
       return false;
