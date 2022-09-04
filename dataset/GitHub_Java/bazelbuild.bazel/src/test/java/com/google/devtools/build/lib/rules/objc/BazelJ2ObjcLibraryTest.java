@@ -1169,7 +1169,9 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     assertThat(objectFilesFromGenJar.isTreeArtifact()).isTrue();
     assertThat(objectFilesFromGenJar.getRootRelativePathString())
-        .isEqualTo("java/com/google/app/test/_objs/test/non_arc/source_files");
+        .isEqualTo(
+            "java/com/google/app/test/_objs/test/java/com/google/app/test/_j2objc/"
+                + "src_jar_files/test/source_files");
 
     ActionAnalysisMetadata actionTemplate =
         getActionGraph().getGeneratingAction(objectFilesFromGenJar);
@@ -1217,7 +1219,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             .add("-F")
             .add(AppleToolchain.sdkDir() + "/Developer/Library/Frameworks")
             .add("-F")
-            .add(AppleToolchain.platformDeveloperFrameworkDir(appleConfiguration))
+            .add(AppleToolchain.platformFrameworkDirFromConfig(appleConfiguration))
             .add("-O0")
             .add("-DDEBUG=1")
             .add("-iquote")

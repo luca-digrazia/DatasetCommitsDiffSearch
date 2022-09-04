@@ -15,13 +15,19 @@ package com.google.devtools.build.lib.rules.apple.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -51,7 +57,7 @@ public class AppleCcToolchain extends CcToolchain {
   public static final String APPLE_SDK_PLATFORM_VALUE_KEY = "apple_sdk_platform_value";
 
   @Override
-  protected CcToolchainVariables getAdditionalBuildVariables(RuleContext ruleContext)
+  protected void addBuildVariables(RuleContext ruleContext, CcToolchainVariables.Builder variables)
       throws RuleErrorException {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
@@ -64,7 +70,7 @@ public class AppleCcToolchain extends CcToolchain {
     ApplePlatform platform = appleConfiguration.getSingleArchPlatform();
 
     Map<String, String> appleEnv = getEnvironmentBuildVariables(ruleContext);
-    CcToolchainVariables.Builder variables = new CcToolchainVariables.Builder();
+
     variables
         .addStringVariable(
             XCODE_VERSION_KEY,
@@ -90,7 +96,7 @@ public class AppleCcToolchain extends CcToolchain {
             SDK_FRAMEWORK_DIR_KEY, AppleToolchain.sdkFrameworkDir(platform, ruleContext))
         .addStringVariable(
             PLATFORM_DEVELOPER_FRAMEWORK_DIR,
-            AppleToolchain.platformDeveloperFrameworkDir(appleConfiguration))
+            AppleToolchain.platformFrameworkDirFromConfig(appleConfiguration))
         .addStringVariable(
             XCODE_VERISON_OVERRIDE_VALUE_KEY,
             appleEnv.getOrDefault(AppleConfiguration.XCODE_VERSION_ENV_NAME, ""))
@@ -103,12 +109,16 @@ public class AppleCcToolchain extends CcToolchain {
         .addStringVariable(
             VERSION_MIN_KEY,
             XcodeConfig.getMinimumOsForPlatformType(ruleContext, platform.getType()).toString());
-    return variables.build();
   }
 
   @Override
-  protected boolean isAppleToolchain() {
-    return true;
+  protected NestedSet<Artifact> fullInputsForLink(
+      RuleContext ruleContext, NestedSet<Artifact> link) {
+    return NestedSetBuilder.<Artifact>stableOrder()
+        .addTransitive(link)
+        .addTransitive(
+            AnalysisUtils.getMiddlemanFor(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET))
+        .build();
   }
 
   private ImmutableMap<String, String> getEnvironmentBuildVariables(RuleContext ruleContext) {
