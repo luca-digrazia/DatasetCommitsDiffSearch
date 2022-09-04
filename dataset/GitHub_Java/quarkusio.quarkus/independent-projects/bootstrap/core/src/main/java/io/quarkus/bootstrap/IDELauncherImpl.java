@@ -7,8 +7,6 @@ import io.quarkus.bootstrap.resolver.model.QuarkusModel;
 import io.quarkus.bootstrap.resolver.model.WorkspaceModule;
 import io.quarkus.bootstrap.util.QuarkusModelHelper;
 import io.quarkus.bootstrap.utils.BuildToolHelper;
-import java.io.Closeable;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -18,9 +16,10 @@ import java.util.Map;
  * This is launched from the core/launcher module. To avoid any shading issues core/launcher unpacks all its dependencies
  * into the jar file, then uses a custom class loader load them.
  */
-public class IDELauncherImpl implements Closeable {
+public class IDELauncherImpl {
 
-    public static Closeable launch(Path projectRoot, Map<String, Object> context) {
+    public static void launch(Path projectRoot, Map<String, Object> context) {
+
         try {
             //todo : proper support for everything
             final QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder()
@@ -28,8 +27,7 @@ public class IDELauncherImpl implements Closeable {
                     .setBaseClassLoader(IDELauncherImpl.class.getClassLoader())
                     .setProjectRoot(projectRoot)
                     .setIsolateDeployment(true)
-                    .setMode(QuarkusBootstrap.Mode.DEV)
-                    .setTargetDirectory(projectRoot.getParent());
+                    .setMode(QuarkusBootstrap.Mode.DEV);
 
             if (BuildToolHelper.isGradleProject(projectRoot)) {
                 final QuarkusModel quarkusModel = BuildToolHelper.enableGradleAppModelForDevMode(projectRoot);
@@ -40,8 +38,7 @@ public class IDELauncherImpl implements Closeable {
                 Path launchingModulePath = QuarkusModelHelper.getClassPath(launchingModule);
                 // Gradle uses a different output directory for classes, we override the one used by the IDE
                 builder.setProjectRoot(launchingModulePath)
-                        .setApplicationRoot(launchingModulePath)
-                        .setTargetDirectory(launchingModule.getBuildDir().toPath());
+                        .setApplicationRoot(launchingModulePath);
 
                 for (WorkspaceModule additionalModule : quarkusModel.getWorkspace().getAllModules()) {
                     if (!additionalModule.getArtifactCoords().equals(launchingModule.getArtifactCoords())) {
@@ -54,33 +51,13 @@ public class IDELauncherImpl implements Closeable {
                 }
             }
 
-            final CuratedApplication curatedApp = builder.build().bootstrap();
-            final Object appInstance = curatedApp.runInAugmentClassLoader("io.quarkus.deployment.dev.IDEDevModeMain", context);
-            return new IDELauncherImpl(curatedApp,
-                    appInstance == null ? null : appInstance instanceof Closeable ? (Closeable) appInstance : null);
+            CuratedApplication app = builder
+                    .build().bootstrap();
+
+            app.runInAugmentClassLoader("io.quarkus.deployment.dev.IDEDevModeMain", context);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    private final CuratedApplication curatedApp;
-    private final Closeable runningApp;
-
-    private IDELauncherImpl(CuratedApplication curatedApp, Closeable runningApp) {
-        this.curatedApp = curatedApp;
-        this.runningApp = runningApp;
-    }
-
-    @Override
-    public void close() throws IOException {
-        try {
-            if (runningApp != null) {
-                runningApp.close();
-            }
-        } finally {
-            if (curatedApp != null) {
-                curatedApp.close();
-            }
-        }
-    }
 }
