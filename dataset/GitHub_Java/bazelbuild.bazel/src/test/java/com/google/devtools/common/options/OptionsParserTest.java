@@ -560,7 +560,7 @@ public class OptionsParserTest {
     OptionsParser parser = newOptionsParser(ExampleInternalOptions.class);
     List<String> spacedOpts = asList("--public string=value with spaces");
     parser.parse(spacedOpts);
-    assertEquals("value with spaces", parser.getOptions(ExampleInternalOptions.class).publicString);
+    assertEquals(parser.getOptions(ExampleInternalOptions.class).publicString, "value with spaces");
   }
 
   @Test

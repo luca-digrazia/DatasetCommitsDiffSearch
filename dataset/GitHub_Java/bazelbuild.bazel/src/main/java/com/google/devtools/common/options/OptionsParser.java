@@ -553,14 +553,15 @@ public class OptionsParser implements OptionsProvider {
       for (Field optionField : allFields) {
         Option option = optionField.getAnnotation(Option.class);
         String category = option.category();
-        if (!category.equals(prevCategory)
-            && option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
+        if (!category.equals(prevCategory)) {
+          prevCategory = category;
           String description = categoryDescriptions.get(category);
           if (description == null) {
             description = "Options category '" + category + "'";
           }
-          desc.append("\n").append(description).append(":\n");
-          prevCategory = category;
+          if (option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
+            desc.append("\n").append(description).append(":\n");
+          }
         }
 
         if (option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
