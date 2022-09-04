@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.LicensesProvider;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
@@ -453,11 +454,11 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   /** Returns the static runtime libraries. */
   public NestedSet<Artifact> getStaticRuntimeLinkInputs(
-      RuleErrorConsumer ruleErrorConsumer, FeatureConfiguration featureConfiguration)
+      RuleContext ruleContext, FeatureConfiguration featureConfiguration)
       throws RuleErrorException {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
       if (staticRuntimeLinkInputs == null) {
-        throw ruleErrorConsumer.throwWithRuleError(
+        throw ruleContext.throwWithRuleError(
             "Toolchain supports embedded runtimes, but didn't "
                 + "provide static_runtime_lib attribute.");
       }
@@ -470,11 +471,11 @@ public final class CcToolchainProvider extends ToolchainInfo
   /** Returns an aggregating middleman that represents the static runtime libraries. */
   @Nullable
   public Artifact getStaticRuntimeLinkMiddleman(
-      RuleErrorConsumer ruleErrorConsumer, FeatureConfiguration featureConfiguration)
+      RuleContext ruleContext, FeatureConfiguration featureConfiguration)
       throws RuleErrorException {
     if (shouldStaticallyLinkCppRuntimes(featureConfiguration)) {
       if (staticRuntimeLinkInputs == null) {
-        throw ruleErrorConsumer.throwWithRuleError(
+        throw ruleContext.throwWithRuleError(
             "Toolchain supports embedded runtimes, but didn't "
                 + "provide static_runtime_lib attribute.");
       }
