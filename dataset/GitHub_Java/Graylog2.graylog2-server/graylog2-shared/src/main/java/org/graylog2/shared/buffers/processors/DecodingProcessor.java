@@ -146,19 +146,17 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         for (final RawMessage.SourceNode node : raw.getSourceNodes()) {
             switch (node.type) {
                 case SERVER:
-                    // Always use the last source node.
+                    // Currently only one of each type supported at the moment.
                     if (message.getField("gl2_source_input") != null) {
-                        LOG.debug("Multiple server nodes ({} {}) set for message id {}",
-                                message.getField("gl2_source_input"), node.nodeId, message.getId());
+                        throw new IllegalStateException("Multiple server nodes");
                     }
                     message.addField("gl2_source_input", node.inputId);
                     message.addField("gl2_source_node", node.nodeId);
                     break;
                 case RADIO:
-                    // Always use the last source node.
+                    // Currently only one of each type supported at the moment.
                     if (message.getField("gl2_source_radio_input") != null) {
-                        LOG.debug("Multiple radio nodes ({} {}) set for message id {}",
-                                message.getField("gl2_source_radio_input"), node.nodeId, message.getId());
+                        throw new IllegalStateException("Multiple radio nodes");
                     }
                     message.addField("gl2_source_radio_input", node.inputId);
                     message.addField("gl2_source_radio", node.nodeId);
