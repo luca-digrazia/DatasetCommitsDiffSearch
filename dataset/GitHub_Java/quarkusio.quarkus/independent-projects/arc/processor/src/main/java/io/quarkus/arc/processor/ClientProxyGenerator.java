@@ -35,6 +35,7 @@ import io.quarkus.gizmo.ResultHandle;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
+import org.jboss.jandex.TypeVariable;
 
 /**
  *
@@ -208,17 +210,29 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
         if (bean.isClassBean()) {
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getTarget().get().asClass(),
-                    methods);
+                    Collections.emptyMap(), methods);
         } else if (bean.isProducerMethod()) {
             MethodInfo producerMethod = bean.getTarget().get().asMethod();
+            Map<TypeVariable, Type> resolved = Collections.emptyMap();
             ClassInfo returnTypeClass = bean.getDeployment().getIndex().getClassByName(producerMethod.returnType().name());
-            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), returnTypeClass, methods);
+            if (!returnTypeClass.typeParameters().isEmpty() && !Modifier.isInterface(returnTypeClass.flags())) {
+                // Build the resolved map iff the return type is a parameterized class
+                resolved = Types.buildResolvedMap(producerMethod.returnType().asParameterizedType().arguments(),
+                        returnTypeClass.typeParameters(),
+                        Collections.emptyMap());
+            }
+            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), returnTypeClass, resolved, methods);
         } else if (bean.isProducerField()) {
             FieldInfo producerField = bean.getTarget().get().asField();
+            Map<TypeVariable, Type> resolved = Collections.emptyMap();
             ClassInfo fieldClass = bean.getDeployment().getIndex().getClassByName(producerField.type().name());
-            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), fieldClass, methods);
+            if (!fieldClass.typeParameters().isEmpty()) {
+                resolved = Types.buildResolvedMap(producerField.type().asParameterizedType().arguments(),
+                        fieldClass.typeParameters(), Collections.emptyMap());
+            }
+            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), fieldClass, resolved, methods);
         } else if (bean.isSynthetic()) {
-            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getImplClazz(), methods);
+            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getImplClazz(), Collections.emptyMap(), methods);
         }
         return methods.values();
     }

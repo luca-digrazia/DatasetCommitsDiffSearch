@@ -226,14 +226,7 @@ public class InterceptorGenerator extends BeanGenerator {
             BranchResult result = intercept.ifNonZero(
                     intercept.invokeVirtualMethod(MethodDescriptors.OBJECT_EQUALS, enumValue, intercept.getMethodParam(0)));
             BytecodeCreator trueBranch = result.trueBranch();
-            Class<?> retType = null;
-            if (InterceptionType.AROUND_INVOKE.equals(interceptionType)) {
-                retType = Object.class;
-            } else if (InterceptionType.AROUND_CONSTRUCT.equals(interceptionType)) {
-                retType = interceptorMethod.returnType().kind().equals(Type.Kind.VOID) ? void.class : Object.class;
-            } else {
-                retType = void.class;
-            }
+            Class<?> retType = InterceptionType.AROUND_INVOKE.equals(interceptionType) ? Object.class : void.class;
             ResultHandle ret;
             if (Modifier.isPrivate(interceptorMethod.flags())) {
                 privateMembers.add(isApplicationClass,

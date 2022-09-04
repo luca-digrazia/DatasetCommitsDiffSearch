@@ -1501,7 +1501,7 @@ public class BeanGenerator extends AbstractGenerator {
             annotations = beanDeployment.getAnnotations(field);
         } else {
             MethodInfo method = injectionPoint.getTarget().asMethod();
-            annotations = Annotations.getParameterAnnotations(beanDeployment,
+            annotations = InjectionPointInfo.getParameterAnnotations(beanDeployment,
                     method, injectionPoint.getPosition());
         }
         for (AnnotationInstance annotation : annotations) {
