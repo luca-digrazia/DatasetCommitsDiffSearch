@@ -96,7 +96,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -367,15 +366,14 @@ public class ExecutionTool {
     // deleted instead.
     Set<BuildConfiguration> targetConfigurations =
         request.getBuildOptions().useTopLevelTargetsForSymlinks()
-            ? analysisResult
-                .getTargetsToBuild()
-                .stream()
-                .map(ConfiguredTarget::getConfigurationKey)
-                .filter(configuration -> configuration != null)
-                .distinct()
-                .map((key) -> env.getSkyframeExecutor().getConfiguration(env.getReporter(), key))
-                .collect(toImmutableSet())
-            : ImmutableSet.copyOf(configurations.getTargetConfigurations());
+        ? analysisResult
+            .getTargetsToBuild()
+            .stream()
+            .map(ConfiguredTarget::getConfiguration)
+            .filter(configuration -> configuration != null)
+            .distinct()
+            .collect(toImmutableSet())
+        : ImmutableSet.copyOf(configurations.getTargetConfigurations());
     String productName = runtime.getProductName();
     String workspaceName = env.getWorkspaceName();
     OutputDirectoryLinksUtils.createOutputDirectoryLinks(
@@ -483,6 +481,8 @@ public class ExecutionTool {
         actionContextProvider.executionPhaseEnding();
       }
 
+      Profiler.instance().markPhase(ProfilePhase.FINISH);
+
       if (buildCompleted) {
         saveActionCache(actionCache);
       }
@@ -517,9 +517,8 @@ public class ExecutionTool {
     }
   }
 
-  private void prepare(PackageRoots packageRoots)
-      throws ExecutorInitException, InterruptedException {
-    Optional<ImmutableMap<PackageIdentifier, Root>> packageRootMap =
+  private void prepare(PackageRoots packageRoots) throws ExecutorInitException {
+    Optional<ImmutableMap<PackageIdentifier, Path>> packageRootMap =
         packageRoots.getPackageRootsMap();
     if (!packageRootMap.isPresent()) {
       return;

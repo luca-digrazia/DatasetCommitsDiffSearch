@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.util.RegexFilter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,8 +27,7 @@ import java.util.List;
  */
 public class ExecutorBuilder {
   private final List<ActionContextProvider> actionContextProviders = new ArrayList<>();
-  private final SpawnActionContextMaps.Builder spawnActionContextMapsBuilder =
-      new SpawnActionContextMaps.Builder();
+  private final List<ActionContextConsumer> actionContextConsumers = new ArrayList<>();
   private ActionInputPrefetcher prefetcher;
 
   // These methods shouldn't be public, but they have to be right now as ExecutionTool is in another
@@ -38,8 +36,8 @@ public class ExecutorBuilder {
     return ImmutableList.copyOf(actionContextProviders);
   }
 
-  public SpawnActionContextMaps.Builder getSpawnActionContextMapsBuilder() {
-    return spawnActionContextMapsBuilder;
+  public ImmutableList<ActionContextConsumer> getActionContextConsumers() {
+    return ImmutableList.copyOf(actionContextConsumers);
   }
 
   public ActionInputPrefetcher getActionInputPrefetcher() {
@@ -63,72 +61,10 @@ public class ExecutorBuilder {
   }
 
   /**
-   * Sets the strategy name for all given action mnemonics.
-   *
-   * <p>The calling module can either decide for itself which implementation is needed and make the
-   * value associated with this key a constant or defer that decision to the user, for example, by
-   * providing a command line option and setting the value in the map based on that.
-   *
-   * <p>Setting the strategy to the empty string "" redirects it to the value for the empty
-   * mnemonic.
-   *
-   * <p>Example: a module requires {@code SpawnActionContext} to do its job, and it creates actions
-   * with the mnemonic <code>C++</code>. The the module can call
-   * <code>addStrategyByMnemonic("C++", strategy)</code>.
+   * Adds the specified action context consumer to the executor.
    */
-  public ExecutorBuilder addStrategyByMnemonic(Iterable<String> mnemonics, String strategy) {
-    for (String mnemonic : mnemonics) {
-      addStrategyByMnemonic(mnemonic, strategy);
-    }
-    return this;
-  }
-
-  /**
-   * Sets the strategy name for a given action mnemonic.
-   *
-   * <p>The calling module can either decide for itself which implementation is needed and make the
-   * value associated with this key a constant or defer that decision to the user, for example, by
-   * providing a command line option and setting the value in the map based on that.
-   *
-   * <p>Setting the strategy to the empty string "" redirects it to the value for the empty
-   * mnemonic.
-   *
-   * <p>Example: a module requires {@code SpawnActionContext} to do its job, and it creates actions
-   * with the mnemonic <code>C++</code>. The the module can call
-   * <code>addStrategyByMnemonic("C++", strategy)</code>.
-   */
-  public ExecutorBuilder addStrategyByMnemonic(String mnemonic, String strategy) {
-    spawnActionContextMapsBuilder.strategyByMnemonicMap().put(mnemonic, strategy);
-    return this;
-  }
-
-  /**
-   * Adds an implementation with a specific strategy name.
-   *
-   * <p>Modules are free to provide different implementations of {@code ActionContext}. This can be
-   * used, for example, to implement sandboxed or distributed execution of {@code SpawnAction}s in
-   * different ways, while giving the user control over how exactly they are executed.
-   *
-   * <p>Example: a module requires {@code MyCustomActionContext} to be available, but doesn't
-   * associate it with any strategy. Call
-   * <code>addStrategyByContext(MyCustomActionContext.class, "")</code>.
-   *
-   * <p>Example: a module requires {@code MyLocalCustomActionContext} to be available, and wants
-   * it to always use the "local" strategy. Call
-   * <code>addStrategyByContext(MyCustomActionContext.class, "local")</code>.
-   */
-  public ExecutorBuilder addStrategyByContext(
-      Class<? extends ActionContext> actionContext, String strategy) {
-    spawnActionContextMapsBuilder.strategyByContextMap().put(actionContext, strategy);
-    return this;
-  }
-
-  /**
-   * Similar to {@link #addStrategyByMnemonic}, but allows specifying a regex for the set of
-   * matching mnemonics, instead of an exact string.
-   */
-  public ExecutorBuilder addStrategyByRegexp(RegexFilter regexFilter, String strategy) {
-    spawnActionContextMapsBuilder.addStrategyByRegexp(regexFilter, strategy);
+  public ExecutorBuilder addActionContextConsumer(ActionContextConsumer consumer) {
+    this.actionContextConsumers.add(consumer);
     return this;
   }
 
