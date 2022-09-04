@@ -30,6 +30,8 @@ import io.quarkus.runtime.annotations.Recorder;
 @Recorder
 public class HibernateSearchElasticsearchRecorder {
 
+    public static final String DEFAULT_BACKEND = "_quarkus_";
+
     private static HibernateSearchElasticsearchRuntimeConfig runtimeConfig;
 
     public void registerHibernateSearchIntegration(HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig) {
@@ -58,12 +60,17 @@ public class HibernateSearchElasticsearchRecorder {
                     buildTimeConfig.backgroundFailureHandler);
 
             if (buildTimeConfig.additionalBackends.defaultBackend.isPresent()) {
-                // we have a named default backend (deprecated, but still supported)
+                // we have a named default backend
                 addConfig(propertyCollector, EngineSettings.DEFAULT_BACKEND,
                         buildTimeConfig.additionalBackends.defaultBackend.get());
+            } else if (buildTimeConfig.defaultBackend.version.isPresent()) {
+                // we use the default backend configuration
+                addConfig(propertyCollector, EngineSettings.DEFAULT_BACKEND,
+                        HibernateSearchElasticsearchRecorder.DEFAULT_BACKEND);
             }
 
-            contributeBackendBuildTimeProperties(propertyCollector, null, buildTimeConfig.defaultBackend);
+            contributeBackendBuildTimeProperties(propertyCollector, HibernateSearchElasticsearchRecorder.DEFAULT_BACKEND,
+                    buildTimeConfig.defaultBackend);
 
             for (Entry<String, ElasticsearchBackendBuildTimeConfig> backendEntry : buildTimeConfig.additionalBackends.backends
                     .entrySet()) {
@@ -96,7 +103,7 @@ public class HibernateSearchElasticsearchRecorder {
                     HibernateOrmMapperSettings.QUERY_LOADING_FETCH_SIZE,
                     runtimeConfig.queryLoading.fetchSize);
 
-            contributeBackendRuntimeProperties(propertyCollector, null, runtimeConfig.defaultBackend);
+            contributeBackendRuntimeProperties(propertyCollector, DEFAULT_BACKEND, runtimeConfig.defaultBackend);
 
             for (Entry<String, ElasticsearchBackendRuntimeConfig> backendEntry : runtimeConfig.additionalBackends.backends
                     .entrySet()) {

@@ -6,7 +6,6 @@ import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.P
 import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.TYPE_MAPPING_META_ANNOTATION;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
@@ -28,7 +27,6 @@ import org.jboss.jandex.Type;
 import org.jboss.jandex.UnresolvedTypeVariable;
 import org.jboss.jandex.VoidType;
 
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -66,25 +64,16 @@ class HibernateSearchElasticsearchProcessor {
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<HibernateOrmIntegrationBuildItem> integrations,
             BuildProducer<FeatureBuildItem> feature) throws Exception {
-        feature.produce(new FeatureBuildItem(Feature.HIBERNATE_SEARCH_ELASTICSEARCH));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_SEARCH_ELASTICSEARCH));
 
         IndexView index = combinedIndexBuildItem.getIndex();
 
-        Collection<AnnotationInstance> indexedAnnotations = index.getAnnotations(INDEXED);
-        if (indexedAnnotations.isEmpty()) {
+        if (index.getAnnotations(INDEXED).isEmpty()) {
             // we don't have any indexed entity, we can bail out
             return;
         }
 
-        boolean defaultBackendIsUsed = false;
-        for (AnnotationInstance indexedAnnotation : indexedAnnotations) {
-            if (indexedAnnotation.value("backend") == null) {
-                defaultBackendIsUsed = true;
-                break;
-            }
-        }
-
-        checkConfig(buildTimeConfig, defaultBackendIsUsed);
+        checkConfig(buildTimeConfig);
 
         // Register the Hibernate Search integration
         integrations.produce(new HibernateOrmIntegrationBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH));
@@ -106,27 +95,39 @@ class HibernateSearchElasticsearchProcessor {
         runtimeConfigured.produce(new HibernateOrmIntegrationRuntimeConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH));
     }
 
-    private static void checkConfig(HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig,
-            boolean defaultBackendIsUsed) {
-        if (defaultBackendIsUsed) {
-            // we validate that the version is present for the default backend
+    private static void checkConfig(HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig) {
+        if (buildTimeConfig.additionalBackends.defaultBackend.isPresent()) {
+            String defaultBackend = buildTimeConfig.additionalBackends.defaultBackend.get();
+            // we have a default named backend
+            if (buildTimeConfig.defaultBackend.version.isPresent()) {
+                throw new ConfigurationError(
+                        "quarkus.hibernate-search.elasticsearch.default-backend cannot be used in conjunction with a default backend configuration.");
+            }
+            if (!buildTimeConfig.additionalBackends.backends.containsKey(defaultBackend)) {
+                throw new ConfigurationError(
+                        "The default backend defined does not exist: " + defaultBackend);
+            }
+        } else {
+            // we are in the default backend case
             if (!buildTimeConfig.defaultBackend.version.isPresent()) {
                 throw new ConfigurationError(
                         "The Elasticsearch version needs to be defined via the quarkus.hibernate-search.elasticsearch.version property.");
             }
         }
 
-        // we validate that the version is present for all the named backends
-        List<String> namedBackendsWithNoVersion = new ArrayList<>();
-        for (Entry<String, ElasticsearchBackendBuildTimeConfig> additionalBackendEntry : buildTimeConfig.namedBackends.backends
-                .entrySet()) {
-            if (!additionalBackendEntry.getValue().version.isPresent()) {
-                namedBackendsWithNoVersion.add(additionalBackendEntry.getKey());
+        // we validate that the version is present for all the additional backends
+        if (!buildTimeConfig.additionalBackends.backends.isEmpty()) {
+            List<String> additionalBackendsWithNoVersion = new ArrayList<>();
+            for (Entry<String, ElasticsearchBackendBuildTimeConfig> additionalBackendEntry : buildTimeConfig.additionalBackends.backends
+                    .entrySet()) {
+                if (!additionalBackendEntry.getValue().version.isPresent()) {
+                    additionalBackendsWithNoVersion.add(additionalBackendEntry.getKey());
+                }
             }
-        }
-        if (!namedBackendsWithNoVersion.isEmpty()) {
-            throw new ConfigurationError("The Elasticsearch version property needs to be defined for backends "
-                    + String.join(", ", namedBackendsWithNoVersion));
+            if (!additionalBackendsWithNoVersion.isEmpty()) {
+                throw new ConfigurationError("The Elasticsearch version property needs to be defined for backends "
+                        + String.join(", ", additionalBackendsWithNoVersion));
+            }
         }
     }
 
