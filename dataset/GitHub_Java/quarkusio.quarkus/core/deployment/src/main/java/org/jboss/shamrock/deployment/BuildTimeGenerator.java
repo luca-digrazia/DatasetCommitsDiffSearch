@@ -23,6 +23,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -32,49 +33,36 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.jboss.builder.BuildChain;
-import org.jboss.builder.BuildContext;
-import org.jboss.builder.BuildResult;
-import org.jboss.builder.BuildStep;
+import org.jboss.jandex.ArrayType;
+import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.ParameterizedType;
+import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
+import org.jboss.jandex.UnresolvedTypeVariable;
+import org.jboss.jandex.VoidType;
 import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.ExceptionTable;
 import org.jboss.protean.gizmo.FieldCreator;
 import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
-import org.jboss.protean.gizmo.TryBlock;
 import org.jboss.shamrock.deployment.buildconfig.BuildConfig;
-import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
-import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
-import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
-import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
-import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.GeneratedResourceBuildItem;
-import org.jboss.shamrock.deployment.builditem.LogSetupBuildItem;
-import org.jboss.shamrock.deployment.builditem.NativeImageSystemPropertyBuildItem;
-import org.jboss.shamrock.deployment.builditem.ProxyDefinitionBuildItem;
-import org.jboss.shamrock.deployment.builditem.ReflectiveClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.ReflectiveFieldBuildItem;
-import org.jboss.shamrock.deployment.builditem.ReflectiveMethodBuildItem;
-import org.jboss.shamrock.deployment.builditem.ResourceBuildItem;
-import org.jboss.shamrock.deployment.builditem.ResourceBundleBuildItem;
-import org.jboss.shamrock.deployment.builditem.RuntimeInitializedClassBuildItem;
+import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
+import org.jboss.shamrock.deployment.codegen.BytecodeRecorderImpl;
 import org.jboss.shamrock.deployment.index.ApplicationArchiveLoader;
-import org.jboss.shamrock.deployment.recording.BytecodeRecorderImpl;
-import org.jboss.shamrock.deployment.recording.MainBytecodeRecorderBuildItem;
-import org.jboss.shamrock.deployment.recording.StaticBytecodeRecorderBuildItem;
 import org.jboss.shamrock.runtime.ResourceHelper;
 import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
@@ -93,17 +81,34 @@ public class BuildTimeGenerator {
     public static final String MAIN_CLASS = MAIN_CLASS_INTERNAL.replace('/', '.');
     private static final String GRAAL_AUTOFEATURE = "org/jboss/shamrock/runner/AutoFeature";
     private static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
-    private static final String[] EMPTY_STRING_ARRAY = new String[0];
 
+    private final List<ResourceProcessor> processors;
     private final ClassOutput output;
+    private final DeploymentProcessorInjection injection;
     private final ClassLoader classLoader;
+    private final boolean useStaticInit;
     private final Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> byteCodeTransformers = new HashMap<>();
+    private final Set<String> applicationArchiveMarkers;
     private final ArchiveContextBuilder archiveContextBuilder;
+    private final Set<String> capabilities;
 
-    public BuildTimeGenerator(ClassOutput classOutput, ClassLoader cl, ArchiveContextBuilder contextBuilder) {
+    public BuildTimeGenerator(ClassOutput classOutput, ClassLoader cl, boolean useStaticInit, ArchiveContextBuilder contextBuilder) {
+        this.useStaticInit = useStaticInit;
+        Iterator<ShamrockSetup> loader = ServiceLoader.load(ShamrockSetup.class, cl).iterator();
+        SetupContextImpl setupContext = new SetupContextImpl();
+        while (loader.hasNext()) {
+            final ShamrockSetup setup = loader.next();
+            log.log(Level.FINE, "Loading Shamrock setup extension: " + setup.getClass());
+            setup.setup(setupContext);
+        }
+        setupContext.resourceProcessors.sort(Comparator.comparingInt(ResourceProcessor::getPriority));
+        this.processors = Collections.unmodifiableList(setupContext.resourceProcessors);
         this.output = classOutput;
+        this.injection = new DeploymentProcessorInjection(setupContext.injectionProviders);
         this.classLoader = cl;
+        this.applicationArchiveMarkers = new HashSet<>(setupContext.applicationArchiveMarkers);
         this.archiveContextBuilder = contextBuilder;
+        this.capabilities = new HashSet<>(setupContext.capabilities);
     }
 
     public Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> getByteCodeTransformers() {
@@ -143,98 +148,26 @@ public class BuildTimeGenerator {
                 }
             });
             Index appIndex = indexer.complete();
-            List<ApplicationArchive> applicationArchives = ApplicationArchiveLoader.scanForOtherIndexes(classLoader, config, Collections.emptySet(), root, archiveContextBuilder.getAdditionalApplicationArchives());
+            List<ApplicationArchive> applicationArchives = ApplicationArchiveLoader.scanForOtherIndexes(classLoader, config, applicationArchiveMarkers, root, archiveContextBuilder.getAdditionalApplicationArchives());
 
-            ArchiveContextImpl archiveContext = new ArchiveContextImpl(new ApplicationArchiveImpl(appIndex, root, null), applicationArchives, config);
+            ArchiveContextImpl context = new ArchiveContextImpl(new ApplicationArchiveImpl(appIndex, root, null), applicationArchives, config);
 
-            ProcessorContextImpl processorContext = new ProcessorContextImpl(archiveContext);
+            ProcessorContextImpl processorContext = new ProcessorContextImpl(context);
             processorContext.addResource("META-INF/microprofile-config.properties");
-
-
             try {
-
-                BuildChain chain = BuildChain.builder()
-
-                        .loadProviders(Thread.currentThread().getContextClassLoader())
-                        .addBuildStep(new BuildStep() {
-                            @Override
-                            public void execute(BuildContext context) {
-                                context.produce(ShamrockConfig.INSTANCE);
-                                context.produce(new ApplicationArchivesBuildItem(archiveContext));
-                                context.produce(new CombinedIndexBuildItem(archiveContext.getCombinedIndex()));
-                                context.produce(new ArchiveRootBuildItem(archiveContext.getRootArchive().getArchiveRoot()));
-                                context.produce(archiveContext.getBuildConfig());
-                            }
-                        })
-                        .produces(ShamrockConfig.class)
-                        .produces(ApplicationArchivesBuildItem.class)
-                        .produces(CombinedIndexBuildItem.class)
-                        .produces(ArchiveRootBuildItem.class)
-                        .produces(BuildConfig.class)
-                        .consumes(LogSetupBuildItem.class)
-                        .build()
-                        .addFinal(ReflectiveClassBuildItem.class)
-                        .addFinal(RuntimeInitializedClassBuildItem.class)
-                        .addFinal(GeneratedClassBuildItem.class)
-                        .addFinal(GeneratedResourceBuildItem.class)
-                        .addFinal(BytecodeTransformerBuildItem.class)
-                        .addFinal(ResourceBuildItem.class)
-                        .addFinal(ResourceBundleBuildItem.class)
-                        .addFinal(ReflectiveFieldBuildItem.class)
-                        .addFinal(ReflectiveMethodBuildItem.class)
-                        .addFinal(StaticBytecodeRecorderBuildItem.class)
-                        .addFinal(MainBytecodeRecorderBuildItem.class)
-                        .addFinal(NativeImageSystemPropertyBuildItem.class)
-                        .build();
-                BuildResult result = chain.createExecutionBuilder("main").execute();
-
-                for (GeneratedClassBuildItem i : result.consumeMulti(GeneratedClassBuildItem.class)) {
-                    processorContext.addGeneratedClass(i.isApplicationClass(), i.getName(), i.getClassData());
+                for (ResourceProcessor processor : processors) {
+                    try {
+                        injection.injectClass(processor);
+                        processor.process(context, processorContext);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 }
-                for (GeneratedResourceBuildItem i : result.consumeMulti(GeneratedResourceBuildItem.class)) {
-                    processorContext.createResource(i.getName(), i.getClassData());
-                }
-                for (BytecodeTransformerBuildItem i : result.consumeMulti(BytecodeTransformerBuildItem.class)) {
-                    processorContext.addByteCodeTransformer(i.getClassToTransform(), i.getVisitorFunction());
-                }
-                for (RuntimeInitializedClassBuildItem i : result.consumeMulti(RuntimeInitializedClassBuildItem.class)) {
-                    processorContext.addRuntimeInitializedClasses(i.getClassName());
-                }
-                for (ResourceBuildItem i : result.consumeMulti(ResourceBuildItem.class)) {
-                    processorContext.addResource(i.getName());
-                }
-                for (ResourceBundleBuildItem i : result.consumeMulti(ResourceBundleBuildItem.class)) {
-                    processorContext.addResourceBundle(i.getBundleName());
-                }
-                for (ReflectiveClassBuildItem i : result.consumeMulti(ReflectiveClassBuildItem.class)) {
-                    processorContext.addReflectiveClass(i.isMethods(), i.isFields(), i.getClassName().toArray(EMPTY_STRING_ARRAY));
-                }
-                for (ProxyDefinitionBuildItem i : result.consumeMulti(ProxyDefinitionBuildItem.class)) {
-                    processorContext.addProxyDefinition(i.getClasses().toArray(EMPTY_STRING_ARRAY));
-                }
-                for (ReflectiveMethodBuildItem i : result.consumeMulti(ReflectiveMethodBuildItem.class)) {
-                    processorContext.addReflectiveMethod(i.getMethod());
-                }
-                for (ReflectiveFieldBuildItem i : result.consumeMulti(ReflectiveFieldBuildItem.class)) {
-                    processorContext.addReflectiveField(i.getField());
-                }
-                for (MainBytecodeRecorderBuildItem i : result.consumeMulti(MainBytecodeRecorderBuildItem.class)) {
-                    processorContext.addDeploymentTask(i.getBytecodeRecorder());
-                }
-                for (StaticBytecodeRecorderBuildItem i : result.consumeMulti(StaticBytecodeRecorderBuildItem.class)) {
-                    processorContext.addStaticInitTask(i.getBytecodeRecorder());
-                }
-                for (NativeImageSystemPropertyBuildItem i : result.consumeMulti(NativeImageSystemPropertyBuildItem.class)) {
-                    processorContext.addNativeImageSystemProperty(i.getKey(), i.getValue());
-                }
-
                 processorContext.writeProperties(root.toFile());
                 processorContext.writeMainClass();
                 processorContext.writeReflectionAutoFeature();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
             } finally {
-                for (ApplicationArchive archive : archiveContext.getAllApplicationArchives()) {
+                for (ApplicationArchive archive : context.getAllApplicationArchives()) {
                     try {
                         archive.close();
                     } catch (Exception e) {
@@ -252,8 +185,8 @@ public class BuildTimeGenerator {
     private final class ProcessorContextImpl implements ProcessorContext {
 
 
-        private final List<BytecodeRecorderImpl> tasks = new CopyOnWriteArrayList<>();
-        private final List<BytecodeRecorderImpl> staticInitTasks = new CopyOnWriteArrayList<>();
+        private final List<DeploymentTaskHolder> tasks = new ArrayList<>();
+        private final List<DeploymentTaskHolder> staticInitTasks = new ArrayList<>();
         private final Map<String, ReflectionInfo> reflectiveClasses = new LinkedHashMap<>();
         private final Set<DotName> processedReflectiveHierarchies = new HashSet<>();
         private final Set<String> resources = new HashSet<>();
@@ -268,12 +201,18 @@ public class BuildTimeGenerator {
             this.archiveContext = archiveContext;
         }
 
-        public void addStaticInitTask(BytecodeRecorderImpl recorder) {
-            staticInitTasks.add(recorder);
+        @Override
+        public BytecodeRecorder addStaticInitTask(int priority) {
+            String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
+            staticInitTasks.add(new DeploymentTaskHolder(className, priority));
+            return new BytecodeRecorderImpl(classLoader, className, StartupTask.class, output);
         }
 
-        public void addDeploymentTask(BytecodeRecorderImpl recorder) {
-            tasks.add(recorder);
+        @Override
+        public BytecodeRecorder addDeploymentTask(int priority) {
+            String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
+            tasks.add(new DeploymentTaskHolder(className, priority));
+            return new BytecodeRecorderImpl(classLoader, className, StartupTask.class, output);
         }
 
         @Override
@@ -350,6 +289,46 @@ public class BuildTimeGenerator {
         @Override
         public void addReflectiveHierarchy(Type type) {
 
+            if (type instanceof VoidType ||
+                    type instanceof PrimitiveType ||
+                    type instanceof UnresolvedTypeVariable) {
+                return;
+            } else if (type instanceof ClassType) {
+                addClassTypeHierarchy(type.name());
+            } else if (type instanceof ArrayType) {
+                addReflectiveHierarchy(type.asArrayType().component());
+            } else if (type instanceof ParameterizedType) {
+                ParameterizedType p = (ParameterizedType) type;
+                addReflectiveHierarchy(p.owner());
+                for (Type arg : p.arguments()) {
+                    addReflectiveHierarchy(arg);
+                }
+            }
+        }
+
+        private void addClassTypeHierarchy(DotName name) {
+            if (name.toString().startsWith("java.") ||
+                    processedReflectiveHierarchies.contains(name)) {
+                return;
+            }
+            processedReflectiveHierarchies.add(name);
+            addReflectiveClass(true, true, name.toString());
+            ClassInfo info = archiveContext.getCombinedIndex().getClassByName(name);
+            if (info == null) {
+                log.warning("Unable to find annotation info for " + name + ", it may not be correctly registered for reflection");
+            } else {
+                addClassTypeHierarchy(info.superName());
+                for (FieldInfo i : info.fields()) {
+                    addReflectiveHierarchy(i.type());
+                }
+                for (MethodInfo i : info.methods()) {
+                    addReflectiveHierarchy(i.returnType());
+                    for (Type p : i.parameters()) {
+                        addReflectiveHierarchy(p);
+                    }
+                }
+            }
+
         }
 
 
@@ -394,6 +373,11 @@ public class BuildTimeGenerator {
         }
 
         @Override
+        public boolean isCapabilityPresent(String capability) {
+            return capabilities.contains(capability);
+        }
+
+        @Override
         public <T> void setProperty(String key, T value) {
             properties.put(key, value);
         }
@@ -415,6 +399,15 @@ public class BuildTimeGenerator {
 
         void writeMainClass() throws IOException {
 
+            Collections.sort(tasks);
+            if (!useStaticInit) {
+                Collections.sort(staticInitTasks);
+                tasks.addAll(0, staticInitTasks);
+                staticInitTasks.clear();
+            } else {
+                Collections.sort(staticInitTasks);
+            }
+
             ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(output, true), MAIN_CLASS, null, Object.class.getName());
 
             FieldCreator scField = file.getFieldCreator(STARTUP_CONTEXT, StartupContext.class);
@@ -425,42 +418,34 @@ public class BuildTimeGenerator {
             mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class));
             ResultHandle startupContext = mv.newInstance(ofConstructor(StartupContext.class));
             mv.writeStaticField(scField.getFieldDescriptor(), startupContext);
-            TryBlock catchBlock = mv.tryBlock();
-            for (BytecodeRecorderImpl holder : staticInitTasks) {
-                if (!holder.isEmpty()) {
-                    String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
-                    holder.writeBytecode(output, className);
-
-                    ResultHandle dup = catchBlock.newInstance(ofConstructor(className));
-                    catchBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
-                }
+            ExceptionTable catchBlock = mv.addTryCatch();
+            for (DeploymentTaskHolder holder : staticInitTasks) {
+                ResultHandle dup = mv.newInstance(ofConstructor(holder.className));
+                mv.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
-            catchBlock.returnValue(null);
+            mv.returnValue(null);
 
-            CatchBlockCreator cb = catchBlock.addCatch(Throwable.class);
+            CatchBlockCreator cb = catchBlock.addCatchClause(Throwable.class);
             cb.invokeVirtualMethod(ofMethod(StartupContext.class, "close", void.class), startupContext);
             cb.throwException(RuntimeException.class, "Failed to start shamrock", cb.getCaughtException());
+            catchBlock.complete();
 
             mv = file.getMethodCreator("main", void.class, String[].class);
             mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
             mv.invokeStaticMethod(ofMethod(Timing.class, "mainStarted", void.class));
             startupContext = mv.readStaticField(scField.getFieldDescriptor());
-            catchBlock = mv.tryBlock();
-            for (BytecodeRecorderImpl holder : tasks) {
-                if (!holder.isEmpty()) {
-                    String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
-                    holder.writeBytecode(output, className);
-                    ResultHandle dup = catchBlock.newInstance(ofConstructor(className));
-                    catchBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
-                }
+            catchBlock = mv.addTryCatch();
+            for (DeploymentTaskHolder holder : tasks) {
+                ResultHandle dup = mv.newInstance(ofConstructor(holder.className));
+                mv.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
-            catchBlock.invokeStaticMethod(ofMethod(Timing.class, "printStartupTime", void.class));
+            mv.invokeStaticMethod(ofMethod(Timing.class, "printStartupTime", void.class));
             mv.returnValue(null);
 
-            cb = catchBlock.addCatch(Throwable.class);
-            cb.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cb.getCaughtException());
+            cb = catchBlock.addCatchClause(Throwable.class);
             cb.invokeVirtualMethod(ofMethod(StartupContext.class, "close", void.class), startupContext);
             cb.throwException(RuntimeException.class, "Failed to start shamrock", cb.getCaughtException());
+            catchBlock.complete();
 
             mv = file.getMethodCreator("close", void.class);
             mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
@@ -477,82 +462,86 @@ public class BuildTimeGenerator {
 
             //MethodCreator afterReg = file.getMethodCreator("afterRegistration", void.class, "org.graalvm.nativeimage.Feature$AfterRegistrationAccess");
             MethodCreator beforeAn = file.getMethodCreator("beforeAnalysis", "V", "org/graalvm/nativeimage/Feature$BeforeAnalysisAccess");
-            TryBlock overallCatch = beforeAn.tryBlock();
+            ExceptionTable overallCatch = beforeAn.addTryCatch();
             //TODO: at some point we are going to need to break this up, as if it get too big it will hit the method size limit
 
             if (!runtimeInitializedClasses.isEmpty()) {
-                ResultHandle array = overallCatch.newArray(Class.class, overallCatch.load(1));
-                ResultHandle thisClass = overallCatch.loadClass(GRAAL_AUTOFEATURE);
-                ResultHandle cl = overallCatch.invokeVirtualMethod(ofMethod(Class.class, "getClassLoader", ClassLoader.class), thisClass);
+                ResultHandle array = beforeAn.newArray(Class.class, beforeAn.load(1));
+                ResultHandle thisClass = beforeAn.loadClass(GRAAL_AUTOFEATURE);
+                ResultHandle cl = beforeAn.invokeVirtualMethod(ofMethod(Class.class, "getClassLoader", ClassLoader.class), thisClass);
                 for (String i : runtimeInitializedClasses) {
-                    TryBlock tc = overallCatch.tryBlock();
-                    ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), tc.load(i), tc.load(false), cl);
-                    tc.writeArrayValue(array, 0, clazz);
-                    tc.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "delayClassInitialization", void.class, Class[].class), array);
+                    ExceptionTable tc = beforeAn.addTryCatch();
+                    ResultHandle clazz = beforeAn.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), beforeAn.load(i), beforeAn.load(false), cl);
+                    beforeAn.writeArrayValue(array, 0, clazz);
+                    beforeAn.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "delayClassInitialization", void.class, Class[].class), array);
 
-                    CatchBlockCreator cc = tc.addCatch(Throwable.class);
+                    CatchBlockCreator cc = tc.addCatchClause(Throwable.class);
                     cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
+                    tc.complete();
                 }
 
             }
 
             // hack in reinitialization of process info classes
             {
-                ResultHandle array = overallCatch.newArray(Class.class, overallCatch.load(1));
-                ResultHandle thisClass = overallCatch.loadClass(GRAAL_AUTOFEATURE);
-                ResultHandle cl = overallCatch.invokeVirtualMethod(ofMethod(Class.class, "getClassLoader", ClassLoader.class), thisClass);
+                ResultHandle array = beforeAn.newArray(Class.class, beforeAn.load(1));
+                ResultHandle thisClass = beforeAn.loadClass(GRAAL_AUTOFEATURE);
+                ResultHandle cl = beforeAn.invokeVirtualMethod(ofMethod(Class.class, "getClassLoader", ClassLoader.class), thisClass);
                 {
-                    TryBlock tc = overallCatch.tryBlock();
-                    ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), tc.load("org.wildfly.common.net.HostName"), tc.load(false), cl);
-                    tc.writeArrayValue(array, 0, clazz);
-                    tc.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "rerunClassInitialization", void.class, Class[].class), array);
+                    ExceptionTable tc = beforeAn.addTryCatch();
+                    ResultHandle clazz = beforeAn.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), beforeAn.load("org.wildfly.common.net.HostName"), beforeAn.load(false), cl);
+                    beforeAn.writeArrayValue(array, 0, clazz);
+                    beforeAn.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "rerunClassInitialization", void.class, Class[].class), array);
 
-                    CatchBlockCreator cc = tc.addCatch(Throwable.class);
+                    CatchBlockCreator cc = tc.addCatchClause(Throwable.class);
                     cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
+                    tc.complete();
                 }
                 {
-                    TryBlock tc = overallCatch.tryBlock();
-                    ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), tc.load("org.wildfly.common.os.Process"), tc.load(false), cl);
-                    tc.writeArrayValue(array, 0, clazz);
-                    tc.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "rerunClassInitialization", void.class, Class[].class), array);
+                    ExceptionTable tc = beforeAn.addTryCatch();
+                    ResultHandle clazz = beforeAn.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class), beforeAn.load("org.wildfly.common.os.Process"), beforeAn.load(false), cl);
+                    beforeAn.writeArrayValue(array, 0, clazz);
+                    beforeAn.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.RuntimeClassInitialization", "rerunClassInitialization", void.class, Class[].class), array);
 
-                    CatchBlockCreator cc = tc.addCatch(Throwable.class);
+                    CatchBlockCreator cc = tc.addCatchClause(Throwable.class);
                     cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
+                    tc.complete();
                 }
             }
 
             if (!proxyClasses.isEmpty()) {
-                ResultHandle proxySupportClass = overallCatch.loadClass("com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry");
-                ResultHandle proxySupport = overallCatch.invokeStaticMethod(ofMethod("org.graalvm.nativeimage.ImageSingletons", "lookup", Object.class, Class.class), proxySupportClass);
+                ResultHandle proxySupportClass = beforeAn.loadClass("com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry");
+                ResultHandle proxySupport = beforeAn.invokeStaticMethod(ofMethod("org.graalvm.nativeimage.ImageSingletons", "lookup", Object.class, Class.class), proxySupportClass);
                 for (List<String> proxy : proxyClasses) {
-                    ResultHandle array = overallCatch.newArray(Class.class, overallCatch.load(proxy.size()));
+                    ResultHandle array = beforeAn.newArray(Class.class, beforeAn.load(proxy.size()));
                     int i = 0;
                     for (String p : proxy) {
-                        ResultHandle clazz = overallCatch.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class), overallCatch.load(p));
-                        overallCatch.writeArrayValue(array, i++, clazz);
+                        ResultHandle clazz = beforeAn.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class), beforeAn.load(p));
+                        beforeAn.writeArrayValue(array, i++, clazz);
 
                     }
-                    overallCatch.invokeInterfaceMethod(ofMethod("com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry", "addProxyClass", void.class, Class[].class), proxySupport, array);
+                    beforeAn.invokeInterfaceMethod(ofMethod("com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry", "addProxyClass", void.class, Class[].class), proxySupport, array);
                 }
             }
 
             for (String i : resources) {
-                overallCatch.invokeStaticMethod(ofMethod(ResourceHelper.class, "registerResources", void.class, String.class), overallCatch.load(i));
+                beforeAn.invokeStaticMethod(ofMethod(ResourceHelper.class, "registerResources", void.class, String.class), beforeAn.load(i));
             }
             if (!resourceBundles.isEmpty()) {
-                ResultHandle locClass = overallCatch.loadClass("com.oracle.svm.core.jdk.LocalizationSupport");
+                ResultHandle locClass = beforeAn.loadClass("com.oracle.svm.core.jdk.LocalizationSupport");
 
-                ResultHandle params = overallCatch.marshalAsArray(Class.class, overallCatch.loadClass(String.class));
-                ResultHandle registerMethod = overallCatch.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethod", Method.class, String.class, Class[].class), locClass, overallCatch.load("addBundleToCache"), params);
-                overallCatch.invokeVirtualMethod(ofMethod(AccessibleObject.class, "setAccessible", void.class, boolean.class), registerMethod, overallCatch.load(true));
+                ResultHandle params = beforeAn.marshalAsArray(Class.class, beforeAn.loadClass(String.class));
+                ResultHandle registerMethod = beforeAn.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethod", Method.class, String.class, Class[].class), locClass, beforeAn.load("addBundleToCache"), params);
+                beforeAn.invokeVirtualMethod(ofMethod(AccessibleObject.class, "setAccessible", void.class, boolean.class), registerMethod, beforeAn.load(true));
 
-                ResultHandle locSupport = overallCatch.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.ImageSingletons", "lookup", Object.class, Class.class), locClass);
+                ResultHandle locSupport = beforeAn.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.ImageSingletons", "lookup", Object.class, Class.class), locClass);
                 for (String i : resourceBundles) {
-                    TryBlock et = overallCatch.tryBlock();
+                    ExceptionTable et = beforeAn.addTryCatch();
 
-                    et.invokeVirtualMethod(ofMethod(Method.class, "invoke", Object.class, Object.class, Object[].class), registerMethod, locSupport, et.marshalAsArray(Object.class, et.load(i)));
-                    CatchBlockCreator c = et.addCatch(Throwable.class);
+                    beforeAn.invokeVirtualMethod(ofMethod(Method.class, "invoke", Object.class, Object.class, Object[].class), registerMethod, locSupport, beforeAn.marshalAsArray(Object.class, beforeAn.load(i)));
+                    CatchBlockCreator c = et.addCatchClause(Throwable.class);
                     //c.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), c.getCaughtException());
+                    et.complete();
                 }
             }
             int count = 0;
@@ -561,69 +550,71 @@ public class BuildTimeGenerator {
 
                 MethodCreator mv = file.getMethodCreator("registerClass" + count++, "V");
                 mv.setModifiers(Modifier.PRIVATE | Modifier.STATIC);
-                overallCatch.invokeStaticMethod(mv.getMethodDescriptor());
+                beforeAn.invokeStaticMethod(mv.getMethodDescriptor());
 
-                TryBlock tc = mv.tryBlock();
+                ExceptionTable exceptionTable = mv.addTryCatch();
 
 
-                ResultHandle clazz = tc.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class), tc.load(entry.getKey()));
+                ResultHandle clazz = mv.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class), mv.load(entry.getKey()));
                 //we call these methods first, so if they are going to throw an exception it happens before anything has been registered
-                ResultHandle constructors = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredConstructors", Constructor[].class), clazz);
-                ResultHandle methods = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethods", Method[].class), clazz);
-                ResultHandle fields = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredFields", Field[].class), clazz);
+                ResultHandle constructors = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredConstructors", Constructor[].class), clazz);
+                ResultHandle methods = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethods", Method[].class), clazz);
+                ResultHandle fields = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredFields", Field[].class), clazz);
 
 
-                ResultHandle carray = tc.newArray(Class.class, tc.load(1));
-                tc.writeArrayValue(carray, 0, clazz);
-                tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Class[].class), carray);
+                ResultHandle carray = mv.newArray(Class.class, mv.load(1));
+                mv.writeArrayValue(carray, 0, clazz);
+                mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Class[].class), carray);
 
 
                 if (entry.getValue().constructors) {
-                    tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), constructors);
+                    mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), constructors);
                 } else if (!entry.getValue().ctorSet.isEmpty()) {
-                    ResultHandle farray = tc.newArray(Constructor.class, tc.load(1));
+                    ResultHandle farray = mv.newArray(Constructor.class, mv.load(1));
                     for (MethodInfo ctor : entry.getValue().ctorSet) {
-                        ResultHandle paramArray = tc.newArray(Class.class, tc.load(ctor.parameters().size()));
+                        ResultHandle paramArray = mv.newArray(Class.class, mv.load(ctor.parameters().size()));
                         for (int i = 0; i < ctor.parameters().size(); ++i) {
                             Type type = ctor.parameters().get(i);
-                            tc.writeArrayValue(paramArray, i, tc.loadClass(type.name().toString()));
+                            mv.writeArrayValue(paramArray, i, mv.loadClass(type.name().toString()));
                         }
-                        ResultHandle fhandle = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredConstructor", Constructor.class, Class[].class), clazz, paramArray);
-                        tc.writeArrayValue(farray, 0, fhandle);
-                        tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), farray);
+                        ResultHandle fhandle = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredConstructor", Constructor.class, Class[].class), clazz, paramArray);
+                        mv.writeArrayValue(farray, 0, fhandle);
+                        mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), farray);
                     }
                 }
                 if (entry.getValue().methods) {
-                    tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), methods);
+                    mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), methods);
                 } else if (!entry.getValue().methodSet.isEmpty()) {
-                    ResultHandle farray = tc.newArray(Method.class, tc.load(1));
+                    ResultHandle farray = mv.newArray(Method.class, mv.load(1));
                     for (MethodData method : entry.getValue().methodSet) {
-                        ResultHandle paramArray = tc.newArray(Class.class, tc.load(method.params.length));
+                        ResultHandle paramArray = mv.newArray(Class.class, mv.load(method.params.length));
                         for (int i = 0; i < method.params.length; ++i) {
                             String type = method.params[i];
-                            tc.writeArrayValue(paramArray, i, tc.loadClass(type));
+                            mv.writeArrayValue(paramArray, i, mv.loadClass(type));
                         }
-                        ResultHandle fhandle = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethod", Method.class, String.class, Class[].class), clazz, tc.load(method.name), paramArray);
-                        tc.writeArrayValue(farray, 0, fhandle);
-                        tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), farray);
+                        ResultHandle fhandle = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethod", Method.class, String.class, Class[].class), clazz, mv.load(method.name), paramArray);
+                        mv.writeArrayValue(farray, 0, fhandle);
+                        mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), farray);
                     }
                 }
                 if (entry.getValue().fields) {
-                    tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), fields);
+                    mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), fields);
                 } else if (!entry.getValue().fieldSet.isEmpty()) {
-                    ResultHandle farray = tc.newArray(Field.class, tc.load(1));
+                    ResultHandle farray = mv.newArray(Field.class, mv.load(1));
                     for (String field : entry.getValue().fieldSet) {
-                        ResultHandle fhandle = tc.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredField", Field.class, String.class), clazz, tc.load(field));
-                        tc.writeArrayValue(farray, 0, fhandle);
-                        tc.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), farray);
+                        ResultHandle fhandle = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredField", Field.class, String.class), clazz, mv.load(field));
+                        mv.writeArrayValue(farray, 0, fhandle);
+                        mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), farray);
                     }
                 }
-                CatchBlockCreator cc = tc.addCatch(Throwable.class);
+                CatchBlockCreator cc = exceptionTable.addCatchClause(Throwable.class);
                 //cc.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), cc.getCaughtException());
+                exceptionTable.complete();
                 mv.returnValue(null);
             }
-            CatchBlockCreator print = overallCatch.addCatch(Throwable.class);
+            CatchBlockCreator print = overallCatch.addCatchClause(Throwable.class);
             print.invokeVirtualMethod(ofMethod(Throwable.class, "printStackTrace", void.class), print.getCaughtException());
+            overallCatch.complete();
 
             beforeAn.returnValue(null);
 
@@ -677,4 +668,35 @@ public class BuildTimeGenerator {
         }
     }
 
+    static final class HierachyInfo {
+        boolean methods;
+        boolean fields;
+        final Type type;
+
+        HierachyInfo(Type type, boolean methods, boolean fields) {
+            this.type = type;
+            this.methods = methods;
+            this.fields = fields;
+        }
+
+        public boolean isMethods() {
+            return methods;
+        }
+
+        public void setMethods(boolean methods) {
+            this.methods = methods;
+        }
+
+        public boolean isFields() {
+            return fields;
+        }
+
+        public void setFields(boolean fields) {
+            this.fields = fields;
+        }
+
+        public Type getType() {
+            return type;
+        }
+    }
 }

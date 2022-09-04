@@ -172,11 +172,9 @@ public class BuildMojo extends AbstractMojo {
                             }
                         }
                     } else {
-                        final String fileName = a.getGroupId() + "." + artifactFile.getName();
-                        final Path targetPath = libDir.toPath().resolve(fileName);
-                        
+                        final Path targetPath = libDir.toPath().resolve(artifactFile.getName());
                         Files.copy(artifactFile.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-                        classPath.append(" lib/" + fileName);
+                        classPath.append(" lib/" + artifactFile.getName());
                     }
                 }
 

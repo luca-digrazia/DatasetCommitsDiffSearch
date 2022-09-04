@@ -37,10 +37,10 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
 
     private static final Logger log = Logger.getLogger(RuntimeClassLoader.class);
 
-    private final Map<String, byte[]> appClasses = new ConcurrentHashMap<>();
-    private final Set<String> frameworkClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Map<String, byte[]> appClasses = new HashMap<>();
+    private final Set<String> frameworkClasses = new HashSet<>();
 
-    private final Map<String, byte[]> resources = new ConcurrentHashMap<>();
+    private final Map<String, byte[]> resources = new HashMap<>();
 
     private volatile Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = null;
 
@@ -48,7 +48,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
     private final Path frameworkClassesPath;
     private final Path transformerCache;
 
-    private final ConcurrentHashMap<String, Future<Class<?>>> loadingClasses = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Future<Class<?>>> loadingClasses = new ConcurrentHashMap<>();
 
     static {
         registerAsParallelCapable();

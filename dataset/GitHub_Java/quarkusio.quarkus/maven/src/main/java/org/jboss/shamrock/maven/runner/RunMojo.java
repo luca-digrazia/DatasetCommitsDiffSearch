@@ -124,7 +124,6 @@ public class RunMojo extends AbstractMojo {
                     }
                 }
                 args.add("-javaagent:" + target.getAbsolutePath());
-                args.add("-Dshamrock.fakereplace=true");
             }
 
             //we also want to add the maven plugin jar to the class path

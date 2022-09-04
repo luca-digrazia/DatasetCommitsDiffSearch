@@ -141,12 +141,7 @@ final class Types {
             // Canonical ParameterizedType with unresolved type variables
             Type[] typeParams = new Type[typeParameters.size()];
             for (int i = 0; i < typeParameters.size(); i++) {
-                TypeVariable paramType = typeParameters.get(i);
-                Type resolvedType = resolvedTypeParameters.get(paramType);
-                if (resolvedType == null) {
-                    resolvedType = paramType.bounds().get(0);
-                }
-                typeParams[i] = resolvedType;
+                typeParams[i] = resolvedTypeParameters.get(typeParameters.get(i));
             }
             types.add(ParameterizedType.create(classInfo.name(), typeParams, null));
         } else {

@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.jpa.runtime;
 
 import java.util.Collections;
@@ -31,8 +15,8 @@ import org.hibernate.boot.archive.scan.spi.Scanner;
 import org.hibernate.boot.archive.spi.InputStreamAccess;
 
 /**
- * A hard coded scanner. This scanner is serialized to bytecode, and used to avoid scanning on Hibernate startup.
- * Technically the scanners are receiving all classes and categorize them as JPA useful or not.
+ * A hard coded scanner. This scanner is serialized to bytecode, and used to avoid scanning on hibernate startup.
+ * Technically the scanners are receiving all classes and categorizw them as JPA sueful or not.
  * In Shamrock's case, we detect the JPA friendly ones and not list the other ones.
  * Emmanuel thinks it's fine as AFAICS, Hibernate ORM filter out the non JPA specific ones.
  */
