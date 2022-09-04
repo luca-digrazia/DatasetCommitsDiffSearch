@@ -209,10 +209,6 @@ public final class BlazeDirectories {
     return BlazeDirectories.getRelativeOutputPath(productName);
   }
 
-  public String getProductName() {
-    return productName;
-  }
-
   /**
    * Returns the output directory name, relative to the execRoot.
    * TODO(bazel-team): (2011) make this private?
