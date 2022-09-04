@@ -32,19 +32,8 @@ public class Version {
 
     public static final Version vDEV = new Version(0, 20, 0, "dev");
     public static final Version v0_20_0_PREVIEW_1 = new Version(0, 20, 0, "preview.1");
-    public static final Version v0_20_0_PREVIEW_2 = new Version(0, 20, 0, "preview.2");
-    public static final Version v0_20_0_PREVIEW_3 = new Version(0, 20, 0, "preview.3");
-    public static final Version v0_20_0_PREVIEW_4 = new Version(0, 20, 0, "preview.4");
-    public static final Version v0_20_0_PREVIEW_5 = new Version(0, 20, 0, "preview.5");
-    public static final Version v0_20_0_PREVIEW_6 = new Version(0, 20, 0, "preview.6");
-    public static final Version v0_20_0_PREVIEW_7 = new Version(0, 20, 0, "preview.7");
-    public static final Version v0_20_0_PREVIEW_8 = new Version(0, 20, 0, "preview.8");
-    public static final Version v0_20_0_RC_1 = new Version(0, 20, 0, "rc.1");
-    public static final Version v0_20_0_RC_1_1 = new Version(0, 20, 0, "rc.1-1");
 
-    public static final Version v0_20_1_SNAPSHOT = new Version(0, 20, 1, "snapshot");
-
-    public static final Version VERSION = v0_20_1_SNAPSHOT;
+    public static final Version VERSION = vDEV;
 
     public final int major;
     public final int minor;
@@ -62,8 +51,7 @@ public class Version {
         this.additional = additional;
     }
 
-    @Override
-    public String toString() {
+    public String getName() {
         StringBuilder sb = new StringBuilder();
 
         sb.append(major).append(".").append(minor).append(".").append(patch);
@@ -86,7 +74,7 @@ public class Version {
 
         Version version = (Version) obj;
 
-        return toString().equals(version.toString());
+        return getName().equals(version.getName());
     }
 
 }
