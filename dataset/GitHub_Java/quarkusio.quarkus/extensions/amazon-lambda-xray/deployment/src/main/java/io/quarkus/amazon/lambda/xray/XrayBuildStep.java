@@ -19,6 +19,7 @@ public class XrayBuildStep {
         runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("com.amazonaws.xray.interceptors.TracingInterceptor"));
         runtimeInitialized.produce(
                 new RuntimeInitializedClassBuildItem("com.amazonaws.xray.strategy.sampling.LocalizedSamplingStrategy"));
+        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("com.amazonaws.xray.ThreadLocalStorage"));
         reflectiveClass.produce(new ReflectiveClassBuildItem(
                 true, true, true,
                 "com.amazonaws.xray.handlers.config.AWSServiceHandlerManifest",
@@ -34,6 +35,7 @@ public class XrayBuildStep {
                 "com.amazonaws.xray.handlers.config.AWSOperationHandler",
                 "com.amazonaws.xray.handlers.config.AWSOperationHandlerRequestDescriptor",
                 "com.amazonaws.xray.handlers.config.AWSOperationHandlerResponseDescriptor",
+                "com.amazonaws.xray.entities.ThrowableDescription",
                 "com.amazonaws.xray.entities.SubsegmentImpl",
                 "com.amazonaws.xray.entities.EntityImpl",
                 "com.amazonaws.xray.entities.TraceID",
@@ -46,7 +48,7 @@ public class XrayBuildStep {
                 "com/amazonaws/xray/strategy/sampling/DefaultSamplingRules.json",
                 "com/amazonaws/xray/sdk.properties"));
 
-        //Register Apache client 
+        //Register Apache client
         proxyDefinition.produce(
                 new NativeImageProxyDefinitionBuildItem("org.apache.http.conn.HttpClientConnectionManager",
                         "org.apache.http.pool.ConnPoolControl",
