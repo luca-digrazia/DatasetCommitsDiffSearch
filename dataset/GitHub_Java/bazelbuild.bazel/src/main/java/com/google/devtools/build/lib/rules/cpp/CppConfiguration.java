@@ -464,13 +464,16 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppToolchainInfo.getToolPathFragment(tool);
   }
 
-  /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
+  /**
+   * Returns the label of the <code>cc_compiler</code> rule for the C++ configuration.
+   */
   @SkylarkConfigurationField(
       name = "cc_toolchain",
       doc = "The label of the target describing the C++ toolchain",
       defaultLabel = "//tools/cpp:crosstool",
-      defaultInToolRepository = true)
-  public Label getRuleProvidingCcToolchainProvider() {
+      defaultInToolRepository = true
+  )
+  public Label getCcToolchainRuleLabel() {
     return ccToolchainLabel;
   }
 
@@ -1209,34 +1212,25 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
           null,
           "Information about the C++ toolchain API is not accessible "
               + "anymore through ctx.fragments.cpp "
-              + "(see --incompatible_disable_legacy_cpp_toolchain_skylark_api on "
-              + "http://docs.bazel.build/versions/master/skylark/backward-compatibility.html"
-              + "#disable-legacy-c-configuration-api for migration notes). "
+              + "(See --incompatible_disable_legacy_cpp_toolchain_skylark_api). "
               + "Use CcToolchainInfo instead.");
     }
   }
 
   public void checkForLegacyCompilationApiAvailability() throws EvalException {
-    if (cppOptions.disableLegacyCompilationApi || cppOptions.disableLegacyFlagsCcToolchainApi) {
+    if (cppOptions.disableLegacyCompilationApi) {
       throw new EvalException(
           null,
           "Skylark APIs accessing compilation flags has been removed. "
-              + "Use the new API on cc_common (see "
-              + "--incompatible_disable_legacy_flags_cc_toolchain_api on"
-              + "https://docs.bazel.build/versions/master/skylark/backward-compatibility.html"
-              + "#disable-legacy-c-toolchain-api for migration notes).");
+              + "Use the new API on cc_common.");
     }
   }
 
   public void checkForLegacyLinkingApiAvailability() throws EvalException {
-    if (cppOptions.disableLegacyLinkingApi || cppOptions.disableLegacyFlagsCcToolchainApi) {
+    if (cppOptions.disableLegacyLinkingApi) {
       throw new EvalException(
           null,
-          "Skylark APIs accessing linking flags has been removed. "
-              + "Use the new API on cc_common (see "
-              + "--incompatible_disable_legacy_flags_cc_toolchain_api on"
-              + "https://docs.bazel.build/versions/master/skylark/backward-compatibility.html"
-              + "#disable-legacy-c-toolchain-api for migration notes).");
+          "Skylark APIs accessing linking flags has been removed. Use the new API on cc_common.");
     }
   }
 

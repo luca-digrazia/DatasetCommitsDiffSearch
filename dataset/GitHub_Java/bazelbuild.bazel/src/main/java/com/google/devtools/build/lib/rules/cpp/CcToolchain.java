@@ -17,6 +17,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.LicensesProvider;
+import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
+import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.MiddlemanProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
@@ -24,7 +26,11 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
 
@@ -42,12 +48,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    CcToolchainAttributesProvider attributes =
-        new CcToolchainAttributesProvider(
-            ruleContext, isAppleToolchain(), getAdditionalBuildVariables(ruleContext));
-
     CcToolchainProvider ccToolchainProvider =
-        CcToolchainProviderHelper.getCcToolchainProvider(ruleContext, attributes);
+        CcToolchainProviderHelper.getCcToolchainProvider(
+            ruleContext, isAppleToolchain(), getAdditionalBuildVariables(ruleContext));
 
     if (ccToolchainProvider == null) {
       return null;
@@ -68,8 +71,22 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY))
             .addProvider(new MiddlemanProvider(ccToolchainProvider.getCrosstoolMiddleman()));
 
-    if (attributes.getLicensesProvider() != null) {
-      builder.add(LicensesProvider.class, attributes.getLicensesProvider());
+    // If output_license is specified on the cc_toolchain rule, override the transitive licenses
+    // with that one. This is necessary because cc_toolchain is used in the target configuration,
+    // but it is sort-of-kind-of a tool, but various parts of it are linked into the output...
+    // ...so we trust the judgment of the author of the cc_toolchain rule to figure out what
+    // licenses should be propagated to C++ targets.
+    // TODO(elenairina): Remove this and use Attribute.Builder.useOutputLicenses() on the
+    // :cc_toolchain attribute instead.
+    final License outputLicense =
+        ruleContext.getRule().getToolOutputLicense(ruleContext.attributes());
+    if (outputLicense != null && !outputLicense.equals(License.NO_LICENSE)) {
+      final NestedSet<TargetLicense> license = NestedSetBuilder.create(Order.STABLE_ORDER,
+          new TargetLicense(ruleContext.getLabel(), outputLicense));
+      LicensesProvider licensesProvider =
+          new LicensesProviderImpl(
+              license, new TargetLicense(ruleContext.getLabel(), outputLicense));
+      builder.add(LicensesProvider.class, licensesProvider);
     }
 
     return builder.build();
@@ -101,8 +118,8 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   /**
    * Add local build variables from subclasses into {@link CcToolchainVariables} returned from
-   * {@link CcToolchainProviderHelper#getBuildVariables(RuleContext, CcToolchainAttributesProvider,
-   * PathFragment, CcToolchainVariables)}.
+   * {@link CcToolchainProviderHelper#getBuildVariables(RuleContext, PathFragment,
+   * CcToolchainVariables)}.
    *
    * <p>This method is meant to be overridden by subclasses of CcToolchain.
    */
