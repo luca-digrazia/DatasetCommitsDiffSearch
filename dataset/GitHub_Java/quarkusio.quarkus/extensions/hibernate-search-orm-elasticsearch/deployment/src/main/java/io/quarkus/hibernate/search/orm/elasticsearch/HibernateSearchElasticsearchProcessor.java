@@ -106,7 +106,7 @@ class HibernateSearchElasticsearchProcessor {
         if (indexedAnnotationsForPU.isEmpty()) {
             // we don't have any indexed entity, we can disable Hibernate Search
             integrations.produce(new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
-                    persistenceUnitName).setInitListener(recorder.createDisabledListener()));
+                    persistenceUnitName, recorder.createDisabledListener()));
             return;
         }
 
@@ -133,7 +133,7 @@ class HibernateSearchElasticsearchProcessor {
         }
 
         integrations.produce(new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
-                persistenceUnitName).setInitListener(recorder.createStaticInitListener(puConfig)));
+                persistenceUnitName, recorder.createStaticInitListener(puConfig)));
 
         registerReflectionForConfig(puConfig, reflectiveClass);
     }
@@ -146,9 +146,8 @@ class HibernateSearchElasticsearchProcessor {
             BuildProducer<HibernateOrmIntegrationRuntimeConfiguredBuildItem> runtimeConfigured) {
         for (PersistenceUnitDescriptorBuildItem puDescriptor : persistenceUnitDescriptorBuildItems) {
             runtimeConfigured.produce(new HibernateOrmIntegrationRuntimeConfiguredBuildItem(HIBERNATE_SEARCH_ELASTICSEARCH,
-                    puDescriptor.getPersistenceUnitName())
-                            .setInitListener(
-                                    recorder.createRuntimeInitListener(runtimeConfig, puDescriptor.getPersistenceUnitName())));
+                    puDescriptor.getPersistenceUnitName(),
+                    recorder.createRuntimeInitListener(runtimeConfig, puDescriptor.getPersistenceUnitName())));
         }
     }
 
