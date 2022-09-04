@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
@@ -73,13 +72,14 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
   public static final class TestOptions extends OptionsBase {
     @Option(
-        name = "multi_cpu",
-        converter = Converters.CommaSeparatedOptionListConverter.class,
-        allowMultiple = true,
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.NO_OP},
-        defaultValue = "null",
-        help = "Additional target CPUs.")
+      name = "multi_cpu",
+      converter = Converters.CommaSeparatedOptionListConverter.class,
+      allowMultiple = true,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "",
+      help = "Additional target CPUs."
+    )
     public List<String> multiCpus;
   }
 
@@ -124,9 +124,6 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
         "  pass",
         "",
         "def http_file(**kwargs):",
-        "  pass",
-        "",
-        "def http_jar(**kwargs):",
         "  pass");
 
     analysisMock.setupMockClient(mockToolsConfig);
@@ -149,7 +146,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
             .setWorkspaceStatusActionFactory(workspaceStatusActionFactory)
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
             .build();
-    SkyframeExecutorTestHelper.process(skyframeExecutor);
+    TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(

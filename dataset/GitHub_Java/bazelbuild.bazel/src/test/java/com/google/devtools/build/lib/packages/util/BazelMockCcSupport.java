@@ -25,23 +25,42 @@ public final class BazelMockCcSupport extends MockCcSupport {
   public static final BazelMockCcSupport INSTANCE = new BazelMockCcSupport();
 
   /** Filter to remove implicit dependencies of C/C++ rules. */
-  private static final boolean isNotCcLabel(String label) {
-    return !label.startsWith("//tools/cpp");
-  }
+  private static final Predicate<String> CC_LABEL_NAME_FILTER =
+      new Predicate<String>() {
+        @Override
+        public boolean apply(String label) {
+          return !label.startsWith("//tools/cpp");
+        }
+      };
 
   private BazelMockCcSupport() {}
 
   private static final ImmutableList<String> CROSSTOOL_ARCHS =
       ImmutableList.of("piii", "k8", "armeabi-v7a", "ppc");
 
+  protected static void createBasePackage(MockToolsConfig config) throws IOException {
+    config.create(
+        "base/BUILD",
+        "package(default_visibility=['//visibility:public'])",
+        "cc_library(name = 'system_malloc', linkstatic = 1)",
+        "cc_library(name = 'base', srcs=['timestamp.h'])");
+    if (config.isRealFileSystem()) {
+      config.linkTool("base/timestamp.h");
+    } else {
+      config.create("base/timestamp.h", "");
+    }
+  }
+
   @Override
   protected String getRealFilesystemCrosstoolTopPath() {
-    throw new UnsupportedOperationException("TODO");
+    assert false;
+    return null;
   }
 
   @Override
   protected String[] getRealFilesystemTools(String crosstoolTop) {
-    throw new UnsupportedOperationException("TODO");
+    assert false;
+    return null;
   }
 
   @Override
@@ -68,6 +87,6 @@ public final class BazelMockCcSupport extends MockCcSupport {
 
   @Override
   public Predicate<String> labelNameFilter() {
-    return BazelMockCcSupport::isNotCcLabel;
+    return CC_LABEL_NAME_FILTER;
   }
 }

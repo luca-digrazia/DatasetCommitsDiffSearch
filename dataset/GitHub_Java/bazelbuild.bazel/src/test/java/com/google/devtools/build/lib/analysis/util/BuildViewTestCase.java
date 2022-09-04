@@ -903,9 +903,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     try {
       return view.getConfiguredTargetForTesting(
           reporter, BlazeTestUtils.convertLabel(label), config);
-    } catch (InvalidConfigurationException
-        | StarlarkTransition.TransitionException
-        | InterruptedException e) {
+    } catch (InvalidConfigurationException | StarlarkTransition.TransitionException e) {
       throw new AssertionError(e);
     }
   }
@@ -915,8 +913,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected ConfiguredTargetAndData getConfiguredTargetAndData(
       Label label, BuildConfiguration config)
-      throws StarlarkTransition.TransitionException, InvalidConfigurationException,
-          InterruptedException {
+      throws StarlarkTransition.TransitionException, InvalidConfigurationException {
     return view.getConfiguredTargetAndDataForTesting(reporter, label, config);
   }
 
@@ -927,7 +924,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   public ConfiguredTargetAndData getConfiguredTargetAndData(String label)
       throws LabelSyntaxException, StarlarkTransition.TransitionException,
-          InvalidConfigurationException, InterruptedException {
+          InvalidConfigurationException {
     return getConfiguredTargetAndData(Label.parseAbsolute(label, ImmutableMap.of()), targetConfig);
   }
 
@@ -1791,8 +1788,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       ctad = getConfiguredTargetAndData(ct.getLabel().toString());
     } catch (LabelSyntaxException
         | StarlarkTransition.TransitionException
-        | InvalidConfigurationException
-        | InterruptedException e) {
+        | InvalidConfigurationException e) {
       throw new RuntimeException(e);
     }
     return getMapperFromConfiguredTargetAndTarget(ctad);

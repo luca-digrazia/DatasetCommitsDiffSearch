@@ -127,13 +127,9 @@ public final class MockToolsConfig {
   }
 
   public void copyTool(String relativePath) throws IOException {
-    copyTool(relativePath, relativePath);
-  }
-
-  public void copyTool(String relativePath, String dest) throws IOException {
     Path runfiles = FileSystems.getNativeFileSystem().getPath(BlazeTestUtils.runfilesDir());
     Path source = runfiles.getRelative(TestConstants.WORKSPACE_NAME).getRelative(relativePath);
-    create(dest, FileSystemUtils.readContent(source, StandardCharsets.ISO_8859_1));
+    create(relativePath, FileSystemUtils.readContent(source, StandardCharsets.ISO_8859_1));
   }
 
   /**
