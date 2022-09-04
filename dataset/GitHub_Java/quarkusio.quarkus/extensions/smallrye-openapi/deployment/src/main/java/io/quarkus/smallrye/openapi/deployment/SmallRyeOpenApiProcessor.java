@@ -53,7 +53,6 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.resteasy.deployment.ResteasyJaxrsConfig;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -215,12 +214,6 @@ public class SmallRyeOpenApiProcessor {
         OpenAPI sm = generateStaticModel(archivesBuildItem);
         OpenAPI am = generateAnnotationModel(combinedIndexBuildItem.getIndex(), jaxrsConfig);
         return new BeanContainerListenerBuildItem(template.setupModel(sm, am));
-    }
-
-    @BuildStep
-    LogCleanupFilterBuildItem logCleanup() {
-        return new LogCleanupFilterBuildItem("io.smallrye.openapi.api.OpenApiDocument",
-                "OpenAPI document initialized:");
     }
 
     private OpenAPI generateStaticModel(ApplicationArchivesBuildItem archivesBuildItem) throws IOException {
