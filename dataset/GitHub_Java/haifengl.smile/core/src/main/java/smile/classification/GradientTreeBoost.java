@@ -380,11 +380,7 @@ public class GradientTreeBoost implements Classifier<double[]> {
      */
     private void train2(Attribute[] attributes, double[][] x, int[] y) {        
         int n = x.length;
-
-        int[] nc = new int[k];
-        for (int i = 0; i < n; i++) {
-            nc[y[i]]++;
-        }
+        int N = (int) Math.round(n * subsample);
 
         int[] y2 = new int[n];
         for (int i = 0; i < n; i++) {
@@ -394,11 +390,13 @@ public class GradientTreeBoost implements Classifier<double[]> {
                 y2[i] = -1;
             }
         }
+
+        y = y2;
         
         double[] h = new double[n]; // current F(x_i)
         double[] response = new double[n]; // response variable for regression tree.
 
-        double mu = Math.mean(y2);
+        double mu = Math.mean(y);
         b = 0.5 * Math.log((1 + mu) / (1 - mu));
 
         for (int i = 0; i < n; i++) {
@@ -417,21 +415,14 @@ public class GradientTreeBoost implements Classifier<double[]> {
 
         for (int m = 0; m < ntrees; m++) {
             Arrays.fill(samples, 0);
+
             Math.permutate(perm);
-            for (int l = 0; l < k; l++) {
-                int subj = (int) Math.round(nc[l] * subsample);
-                int count = 0;
-                for (int i = 0; i < n && count < subj; i++) {
-                    int xi = perm[i];
-                    if (y[xi] == l) {
-                        samples[xi] = 1;
-                        count++;
-                    }
-                }
+            for (int i = 0; i < N; i++) {
+                samples[perm[i]] = 1;
             }
 
             for (int i = 0; i < n; i++) {
-                response[i] = 2.0 * y2[i] / (1 + Math.exp(2 * y2[i] * h[i]));
+                response[i] = 2.0 * y[i] / (1 + Math.exp(2 * y[i] * h[i]));
             }
 
             trees[m] = new RegressionTree(attributes, x, response, maxNodes, 5, x[0].length, order, samples, output);
@@ -447,12 +438,8 @@ public class GradientTreeBoost implements Classifier<double[]> {
      */
     private void traink(Attribute[] attributes, double[][] x, int[] y) {        
         int n = x.length;
-
-        int[] nc = new int[k];
-        for (int i = 0; i < n; i++) {
-            nc[y[i]]++;
-        }
-
+        int N = (int) Math.round(n * subsample);
+        
         double[][] h = new double[k][n]; // boost tree output.
         double[][] p = new double[k][n]; // posteriori probabilities.
         double[][] response = new double[k][n]; // pseudo response.
@@ -503,16 +490,8 @@ public class GradientTreeBoost implements Classifier<double[]> {
 
                 Arrays.fill(samples, 0);
                 Math.permutate(perm);
-                for (int l = 0; l < k; l++) {
-                    int subj = (int) Math.round(nc[l] * subsample);
-                    int count = 0;
-                    for (int i = 0; i < n && count < subj; i++) {
-                        int xi = perm[i];
-                        if (y[xi] == l) {
-                            samples[xi] = 1;
-                            count++;
-                        }
-                    }
+                for (int i = 0; i < N; i++) {
+                    samples[perm[i]] = 1;
                 }
 
                 forest[j][m] = new RegressionTree(attributes, x, response[j], maxNodes, 5, x[0].length, order, samples, output[j]);
