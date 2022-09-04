@@ -47,7 +47,6 @@ import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.IOException;
 import java.util.Set;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -143,12 +142,11 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       try {
         besTransport = tryCreateBesTransport(env);
       } catch (Exception e) {
-        String message = "Failed to create BuildEventTransport: " + e;
-        logger.log(Level.WARNING, message, e);
         reportError(
             env.getReporter(),
             env.getBlazeModuleEnvironment(),
-            new AbruptExitException(message, ExitCode.PUBLISH_ERROR, e));
+            new AbruptExitException(
+                "Failed while creating BuildEventTransport", ExitCode.PUBLISH_ERROR));
         return null;
       }
 
