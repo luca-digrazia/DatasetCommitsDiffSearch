@@ -209,7 +209,7 @@ public final class CcCompilationHelper {
   private CoptsFilter coptsFilter = CoptsFilter.alwaysPasses();
   private final Set<String> defines = new LinkedHashSet<>();
   private final List<TransitiveInfoCollection> deps = new ArrayList<>();
-  private final List<CcCompilationInfo> ccCompilationInfos = new ArrayList<>();
+  private final List<CcCompilationContext> ccCompilationContexts = new ArrayList<>();
   private final List<PathFragment> looseIncludeDirs = new ArrayList<>();
   private final List<PathFragment> systemIncludeDirs = new ArrayList<>();
   private final List<PathFragment> includeDirs = new ArrayList<>();
@@ -573,9 +573,10 @@ public final class CcCompilationHelper {
     return this;
   }
 
-  /** For adding CC compilation infos that affect compilation, e.g: from dependencies. */
-  public CcCompilationHelper addCcCompilationInfos(Iterable<CcCompilationInfo> ccCompilationInfos) {
-    Iterables.addAll(this.ccCompilationInfos, Preconditions.checkNotNull(ccCompilationInfos));
+  /** For adding CC compilation contexts that affect compilation, e.g: from dependencies. */
+  public CcCompilationHelper addCcCompilationContexts(
+      List<CcCompilationContext> ccCompilationContexts) {
+    this.ccCompilationContexts.addAll(Preconditions.checkNotNull(ccCompilationContexts));
     return this;
   }
 
@@ -957,13 +958,9 @@ public final class CcCompilationHelper {
     if (useDeps) {
       ccCompilationContextBuilder.mergeDependentCcCompilationContexts(
           CcCompilationInfo.getCcCompilationContexts(deps));
-      ccCompilationContextBuilder.mergeDependentCcCompilationContexts(
-          ccCompilationInfos
-              .stream()
-              .map(CcCompilationInfo::getCcCompilationContext)
-              .collect(ImmutableList.toImmutableList()));
+      ccCompilationContextBuilder.mergeDependentCcCompilationContexts(ccCompilationContexts);
     }
-    mergeToolchainDependentCcCompilationContext(
+    CppHelper.mergeToolchainDependentCcCompilationContext(
         ruleContext, ccToolchain, ccCompilationContextBuilder);
 
     // But defines come after those inherited from deps.
@@ -1141,7 +1138,7 @@ public final class CcCompilationHelper {
     }
 
     if (ccToolchain != null) {
-      result.add(ccToolchain.getCcCompilationInfo().getCcCompilationContext().getCppModuleMap());
+      result.add(ccToolchain.getCcCompilationContext().getCppModuleMap());
     }
     for (CppModuleMap additionalCppModuleMap : additionalCppModuleMaps) {
       result.add(additionalCppModuleMap);
@@ -2124,33 +2121,5 @@ public final class CcCompilationHelper {
     ruleContext.registerAction(sdAction);
 
     return ImmutableList.of(dAction.getOutputFile(), sdAction.getOutputFile());
-  }
-
-  /**
-   * Merges the STL and toolchain contexts into context builder. The STL is automatically determined
-   * using the ":stl" attribute.
-   */
-  private static void mergeToolchainDependentCcCompilationContext(
-      RuleContext ruleContext,
-      CcToolchainProvider toolchain,
-      CcCompilationContext.Builder ccCompilationContextBuilder) {
-    if (ruleContext.getRule().getAttributeDefinition(":stl") != null) {
-      TransitiveInfoCollection stl = ruleContext.getPrerequisite(":stl", Mode.TARGET);
-      if (stl != null) {
-        CcCompilationInfo ccCompilationInfo = stl.get(CcCompilationInfo.PROVIDER);
-        CcCompilationContext ccCompilationContext =
-            ccCompilationInfo != null ? ccCompilationInfo.getCcCompilationContext() : null;
-        if (ccCompilationContext == null) {
-          ruleContext.ruleError(
-              "Unable to merge the STL '" + stl.getLabel() + "' and toolchain contexts");
-          return;
-        }
-        ccCompilationContextBuilder.mergeDependentCcCompilationContext(ccCompilationContext);
-      }
-    }
-    if (toolchain != null) {
-      ccCompilationContextBuilder.mergeDependentCcCompilationContext(
-          toolchain.getCcCompilationContext());
-    }
   }
 }
