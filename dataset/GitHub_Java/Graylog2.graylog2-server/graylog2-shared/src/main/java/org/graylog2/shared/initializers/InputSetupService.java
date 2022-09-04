@@ -51,10 +51,6 @@ public class InputSetupService extends AbstractExecutionThreadService {
     public InputSetupService(InputRegistry inputRegistry, EventBus eventBus) {
         this.inputRegistry = inputRegistry;
         this.eventBus = eventBus;
-    }
-
-    @Override
-    protected void startUp() throws Exception {
         eventBus.register(this);
     }
 
@@ -92,7 +88,6 @@ public class InputSetupService extends AbstractExecutionThreadService {
     @Override
     protected void shutDown() throws Exception {
         eventBus.unregister(this);
-
         for (InputState state : inputRegistry.getRunningInputs()) {
             MessageInput input = state.getMessageInput();
 
