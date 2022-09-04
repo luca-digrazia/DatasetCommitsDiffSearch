@@ -1420,7 +1420,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
         (thread, throwable) -> BugReport.handleCrash(throwable, args));
   }
 
-  @Override
   public String getProductName() {
     return productName;
   }

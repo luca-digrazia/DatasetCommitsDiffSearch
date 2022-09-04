@@ -42,12 +42,12 @@ import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor.ExecutionR
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
@@ -101,13 +101,13 @@ public final class StarlarkRepositoryContextTest {
     }
     ruleClassBuilder.setWorkspaceOnly();
     ruleClassBuilder.setConfiguredTargetFunction(
-        (StarlarkFunction) exec("def test(ctx): pass", "test"));
+        (StarlarkFunction) execAndEval("def test(ctx): pass", "test"));
     return ruleClassBuilder.build();
   }
 
-  private static Object exec(String... lines) {
+  private static Object execAndEval(String... lines) {
     try {
-      return Starlark.execFile(
+      return EvalUtils.exec(
           ParserInput.fromLines(lines), FileOptions.DEFAULT, Module.create(), thread);
     } catch (Exception ex) { // SyntaxError | EvalException | InterruptedException
       throw new AssertionError("exec failed", ex);

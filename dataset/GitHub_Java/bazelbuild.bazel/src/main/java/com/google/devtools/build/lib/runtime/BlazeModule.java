@@ -400,7 +400,6 @@ public abstract class BlazeModule {
    *
    * <p>Note that only one helper per Bazel/Blaze runtime is allowed.
    */
-  @Nullable
   public PackageSettings getPackageSettings() {
     return null;
   }

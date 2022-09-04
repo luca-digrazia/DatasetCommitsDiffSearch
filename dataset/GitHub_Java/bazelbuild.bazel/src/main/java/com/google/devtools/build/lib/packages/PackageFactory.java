@@ -431,7 +431,7 @@ public final class PackageFactory {
       PackageIdentifier packageId,
       RootedPath buildFile,
       StarlarkFile file,
-      ImmutableMap<String, Module> loadedModules,
+      Map<String, Module> loadedModules,
       ImmutableList<Label> starlarkFileDependencies,
       RuleVisibility defaultVisibility,
       StarlarkSemantics starlarkSemantics,
@@ -718,7 +718,7 @@ public final class PackageFactory {
       Globber globber,
       RuleVisibility defaultVisibility,
       StarlarkSemantics semantics,
-      ImmutableMap<String, Module> loadedModules,
+      Map<String, Module> loadedModules,
       ImmutableList<Label> starlarkFileDependencies,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws InterruptedException {
@@ -735,16 +735,10 @@ public final class PackageFactory {
             // Let's give the BUILD file a chance to set default_visibility once,
             // by resetting the PackageBuilder.defaultVisibilitySet flag.
             .setDefaultVisibilitySet(false)
-            // TODO(adonovan): opt: compute starlarkFileDependencies by visiting loadedModules DAG,
-            // and simplify callers of evaluateBuildFile up to BzlLoadValue.
             .setStarlarkFileDependencies(starlarkFileDependencies)
             .setWorkspaceName(workspaceName)
             .setThirdPartyLicenceExistencePolicy(
                 ruleClassProvider.getThirdPartyLicenseExistencePolicy());
-    if (packageSettings.recordLoadedModules()) {
-      pkgBuilder.setLoads(loadedModules);
-    }
-
     StoredEventHandler eventHandler = new StoredEventHandler();
     if (!buildPackage(
         pkgBuilder,
@@ -767,7 +761,7 @@ public final class PackageFactory {
       PackageIdentifier packageId,
       StarlarkFile file,
       StarlarkSemantics semantics,
-      ImmutableMap<String, Module> loadedModules,
+      Map<String, Module> loadedModules,
       PackageContext pkgContext)
       throws InterruptedException {
 

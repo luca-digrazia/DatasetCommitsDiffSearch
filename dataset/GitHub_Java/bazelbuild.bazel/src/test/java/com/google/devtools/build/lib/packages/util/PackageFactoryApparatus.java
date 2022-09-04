@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.packages.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
@@ -185,15 +186,18 @@ public class PackageFactoryApparatus {
             globber,
             ConstantRuleVisibility.PUBLIC,
             StarlarkSemantics.DEFAULT,
-            /*loadedModules=*/ ImmutableMap.<String, Module>of(),
+            ImmutableMap.<String, Module>of(),
+            ImmutableList.<Label>of(),
             /*repositoryMapping=*/ ImmutableMap.of());
     Package result;
     try {
       result = resultBuilder.build();
-    } finally {
+    } catch (NoSuchPackageException e) {
       // Make sure not to lose events if we fail to construct the package.
       Event.replayEventsOn(eventHandler, resultBuilder.getEvents());
+      throw e;
     }
+    Event.replayEventsOn(eventHandler, result.getEvents());
     return Pair.of(result, globCache);
   }
 

@@ -312,11 +312,12 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   @Override
   public Package loadPackage(PackageIdentifier pkgId)
       throws NoSuchPackageException, InterruptedException {
-    return loadPackages(ImmutableList.of(pkgId)).getLoadedPackages().get(pkgId).get();
+    return loadPackages(ImmutableList.of(pkgId)).get(pkgId).get();
   }
 
   @Override
-  public Result loadPackages(Iterable<PackageIdentifier> pkgIds) throws InterruptedException {
+  public ImmutableMap<PackageIdentifier, PackageLoader.PackageOrException> loadPackages(
+      Iterable<? extends PackageIdentifier> pkgIds) throws InterruptedException {
     ArrayList<SkyKey> keys = new ArrayList<>();
     for (PackageIdentifier pkgId : ImmutableSet.copyOf(pkgIds)) {
       keys.add(PackageValue.key(pkgId));
@@ -344,7 +345,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
               : new PackageOrException(packageValue.getPackage(), null));
     }
 
-    return new Result(result.build());
+    return result.build();
   }
 
   public ConfiguredRuleClassProvider getRuleClassProvider() {
