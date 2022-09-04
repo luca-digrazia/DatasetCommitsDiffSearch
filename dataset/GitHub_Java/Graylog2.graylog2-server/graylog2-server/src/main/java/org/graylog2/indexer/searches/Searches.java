@@ -18,6 +18,7 @@ package org.graylog2.indexer.searches;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
@@ -31,6 +32,7 @@ import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.QueryStringQueryBuilder;
+import org.elasticsearch.node.Node;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.bucket.filter.Filter;
@@ -148,8 +150,17 @@ public class Searches {
     public Searches(Configuration configuration,
                     Deflector deflector,
                     IndexRangeService indexRangeService,
-                    Client client,
+                    Node node,
                     MetricRegistry metricRegistry) {
+        this(configuration, deflector, indexRangeService, node.client(), metricRegistry);
+    }
+
+    @VisibleForTesting
+    Searches(Configuration configuration,
+             Deflector deflector,
+             IndexRangeService indexRangeService,
+             Client client,
+             MetricRegistry metricRegistry) {
         this.configuration = checkNotNull(configuration);
         this.deflector = checkNotNull(deflector);
         this.indexRangeService = checkNotNull(indexRangeService);
