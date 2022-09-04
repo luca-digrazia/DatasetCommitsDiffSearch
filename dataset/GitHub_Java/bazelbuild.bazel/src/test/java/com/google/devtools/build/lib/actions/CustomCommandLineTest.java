@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.actions;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.analysis.actions.CustomCommandLine.builder;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -35,6 +34,7 @@ import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -49,16 +49,18 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class CustomCommandLineTest {
+
+  private Scratch scratch;
   private ArtifactRoot rootDir;
   private Artifact artifact1;
   private Artifact artifact2;
 
   @Before
   public void createArtifacts() throws Exception  {
-    Scratch scratch = new Scratch();
-    rootDir = ArtifactRoot.asDerivedRoot(scratch.dir("/exec/root"), "dir");
-    artifact1 = ActionsTestUtil.createArtifact(rootDir, scratch.file("/exec/root/dir/file1.txt"));
-    artifact2 = ActionsTestUtil.createArtifact(rootDir, scratch.file("/exec/root/dir/file2.txt"));
+    scratch = new Scratch();
+    rootDir = ArtifactRoot.asSourceRoot(Root.fromPath(scratch.dir("/exec/root")));
+    artifact1 = new Artifact(scratch.file("/exec/root/dir/file1.txt"), rootDir);
+    artifact2 = new Artifact(scratch.file("/exec/root/dir/file2.txt"), rootDir);
   }
 
   @Test
@@ -899,12 +901,10 @@ public class CustomCommandLineTest {
             .addPlaceholderTreeArtifactExecPath("--argTwo", treeArtifactTwo)
             .build();
 
-    TreeFileArtifact treeFileArtifactOne =
-        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
-            treeArtifactOne, "children/child1");
-    TreeFileArtifact treeFileArtifactTwo =
-        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
-            treeArtifactTwo, "children/child2");
+    TreeFileArtifact treeFileArtifactOne = createTreeFileArtifact(
+        treeArtifactOne, "children/child1");
+    TreeFileArtifact treeFileArtifactTwo = createTreeFileArtifact(
+        treeArtifactTwo, "children/child2");
 
     CustomCommandLine commandLine = commandLineTemplate.evaluateTreeFileArtifacts(
         ImmutableList.of(treeFileArtifactOne, treeFileArtifactTwo));
@@ -912,9 +912,9 @@ public class CustomCommandLineTest {
     assertThat(commandLine.arguments())
         .containsExactly(
             "--argOne",
-            "dir/myArtifact/treeArtifact1/children/child1",
+            "myArtifact/treeArtifact1/children/child1",
             "--argTwo",
-            "dir/myArtifact/treeArtifact2/children/child2")
+            "myArtifact/treeArtifact2/children/child2")
         .inOrder();
   }
 
@@ -974,8 +974,15 @@ public class CustomCommandLineTest {
     return new SpecialArtifact(
         rootDir,
         rootDir.getExecPath().getRelative(relpath),
-        ActionsTestUtil.NULL_ACTION_LOOKUP_DATA.getActionLookupKey(),
+        ArtifactOwner.NullArtifactOwner.INSTANCE,
         SpecialArtifactType.TREE);
+  }
+
+  private TreeFileArtifact createTreeFileArtifact(
+      SpecialArtifact inputTreeArtifact, String parentRelativePath) {
+    return ActionInputHelper.treeFileArtifact(
+        inputTreeArtifact,
+        PathFragment.create(parentRelativePath));
   }
 
   private static <T> ImmutableList<T> list(T... objects) {

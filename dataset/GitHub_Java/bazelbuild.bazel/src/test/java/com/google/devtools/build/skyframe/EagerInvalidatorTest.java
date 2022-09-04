@@ -14,9 +14,9 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.skyframe.GraphTester.CONCATENATE;
 import static com.google.devtools.build.skyframe.GraphTester.NODE_TYPE;
-import static org.junit.Assert.assertThrows;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -344,9 +344,9 @@ public class EagerInvalidatorTest {
     SkyKey parent = GraphTester.skyKey("parent");
     tester.getOrCreate(parent).addDependency(family[numValues - 1]).setComputedValue(CONCATENATE);
     eval(/*keepGoing=*/false, parent);
-    Thread mainThread = Thread.currentThread();
-    AtomicReference<SkyKey> badKey = new AtomicReference<>();
-    DirtyTrackingProgressReceiver receiver =
+    final Thread mainThread = Thread.currentThread();
+    final AtomicReference<SkyKey> badKey = new AtomicReference<>();
+    final DirtyTrackingProgressReceiver receiver =
         new DirtyTrackingProgressReceiver(
             new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
               @Override
@@ -370,7 +370,6 @@ public class EagerInvalidatorTest {
                 } catch (InterruptedException e) {
                   // We may well have thrown here because by the time we try to await, the main
                   // thread is already interrupted.
-                  Thread.currentThread().interrupt();
                 }
               }
             });
