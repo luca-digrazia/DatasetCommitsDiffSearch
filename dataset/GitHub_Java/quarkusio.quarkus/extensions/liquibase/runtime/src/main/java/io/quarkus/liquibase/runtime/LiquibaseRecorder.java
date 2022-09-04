@@ -9,6 +9,7 @@ import javax.enterprise.inject.Default;
 import javax.enterprise.util.AnnotationLiteral;
 
 import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.arc.runtime.BeanContainerListener;
 import io.quarkus.liquibase.LiquibaseDataSource;
 import io.quarkus.liquibase.LiquibaseFactory;
 import io.quarkus.liquibase.runtime.graal.LiquibaseServiceLoader;
@@ -24,6 +25,29 @@ public class LiquibaseRecorder {
 
     public void setServicesImplementations(Map<String, List<String>> serviceLoader) {
         LiquibaseServiceLoader.setServicesImplementations(serviceLoader);
+    }
+
+    /**
+     * Sets the liquibase build configuration
+     * 
+     * @param liquibaseBuildConfig the liquibase build time configuration
+     * @return the bean container listener
+     */
+    public BeanContainerListener setLiquibaseBuildConfig(LiquibaseBuildTimeConfig liquibaseBuildConfig) {
+        return beanContainer -> {
+            LiquibaseProducer producer = beanContainer.instance(LiquibaseProducer.class);
+            producer.setLiquibaseBuildConfig(liquibaseBuildConfig);
+        };
+    }
+
+    /**
+     * Configure the liquibase runtime properties
+     * 
+     * @param liquibaseRuntimeConfig the liquibase runtime configuration
+     * @param container the bean container
+     */
+    public void configureLiquibaseProperties(LiquibaseRuntimeConfig liquibaseRuntimeConfig, BeanContainer container) {
+        container.instance(LiquibaseProducer.class).setLiquibaseRuntimeConfig(liquibaseRuntimeConfig);
     }
 
     /**

@@ -5,8 +5,6 @@ import java.util.List;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 
-import liquibase.servicelocator.ServiceLocator;
-
 /**
  * The liquibase service locator substitute replaces liquibase classpath scanner method
  * {@link liquibase.servicelocator.ServiceLocator#findClasses(Class)} with a custom implementation

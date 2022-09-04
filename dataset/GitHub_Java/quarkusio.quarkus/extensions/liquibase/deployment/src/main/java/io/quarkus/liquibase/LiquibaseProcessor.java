@@ -19,6 +19,7 @@ import io.quarkus.agroal.deployment.JdbcDataSourceBuildItem;
 import io.quarkus.agroal.deployment.JdbcDataSourceSchemaReadyBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
+import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
 import io.quarkus.deployment.Capabilities;
@@ -138,11 +139,14 @@ class LiquibaseProcessor {
         resourceBundle.produce(new NativeImageResourceBundleBuildItem("liquibase/i18n/liquibase-core"));
     }
 
+    @Record(STATIC_INIT)
     @BuildStep
     void build(
+            LiquibaseRecorder recorder,
             List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
             BuildProducer<AdditionalBeanBuildItem> additionalBean,
             BuildProducer<FeatureBuildItem> feature,
+            BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
             BuildProducer<GeneratedBeanBuildItem> generatedBean) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.LIQUIBASE));
@@ -154,6 +158,9 @@ class LiquibaseProcessor {
                 .map(i -> i.getName())
                 .collect(Collectors.toSet());
         new LiquibaseDatasourceBeanGenerator(dataSourceNames, generatedBean).createLiquibaseProducerBean();
+
+        beanContainerListener.produce(
+                new BeanContainerListenerBuildItem(recorder.setLiquibaseBuildConfig(liquibaseBuildConfig)));
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
@@ -163,6 +170,7 @@ class LiquibaseProcessor {
             BeanContainerBuildItem beanContainer,
             List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
             BuildProducer<JdbcDataSourceSchemaReadyBuildItem> jdbcDataSourceSchemaReady) {
+        recorder.configureLiquibaseProperties(liquibaseRuntimeConfig, beanContainer.getValue());
         recorder.doStartActions(liquibaseRuntimeConfig, beanContainer.getValue());
         // once we are done running the migrations, we produce a build item indicating that the
         // schema is "ready"
