@@ -19,16 +19,17 @@ import com.github.benmanes.caffeine.cache.CaffeineSpec;
 
 import java.io.IOException;
 
+/**
+ * @since 2.0
+ */
 public class CaffeineModule extends Module {
     private static class CaffeineSpecDeserializer extends JsonDeserializer<CaffeineSpec> {
         @Override
         public CaffeineSpec deserialize(JsonParser jp,
                                         DeserializationContext ctxt) throws IOException {
             final String text = jp.getText();
-            if ("off".equalsIgnoreCase(text) || "disabled".equalsIgnoreCase(text)) {
-                return CaffeineSpec.parse("initialCapacity=0,maximumSize=0");
-            }
-            return CaffeineSpec.parse(text);
+            final boolean disabled = "off".equalsIgnoreCase(text) || "disabled".equalsIgnoreCase(text);
+            return CaffeineSpec.parse(disabled ? "initialCapacity=0,maximumSize=0" : text);
         }
     }
 
