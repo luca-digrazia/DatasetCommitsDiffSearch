@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,43 +13,69 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.common.base.Joiner;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import java.util.List;
 
 /**
  * Information about the JDK used by the <code>java_*</code> rules.
  *
- * <p>This class contains the data of the {@code java_toolchain} rules, it is a separate object so
- * it can be shared with other tools.
+ * <p>This class contains the data of the {@code java_toolchain} rules.
  */
+// TODO(cushon): inline this into JavaToolchainProvider (it used to be shared with other tools).
 @Immutable
 public class JavaToolchainData {
-  private final ImmutableList<String> options;
 
-  public JavaToolchainData(String source, String target, String encoding,
-      ImmutableList<String> xlint, ImmutableList<String> misc) {
-    Builder<String> builder = ImmutableList.<String>builder();
-    if (!source.isEmpty()) {
-      builder.add("-source", source);
-    }
-    if (!target.isEmpty()) {
-      builder.add("-target", target);
-    }
-    if (!encoding.isEmpty()) {
-      builder.add("-encoding", encoding);
-    }
-    if (!xlint.isEmpty()) {
-      builder.add("-Xlint:" + Joiner.on(",").join(xlint));
-    }
-    this.options = builder.addAll(misc).build();
+  public enum SupportsWorkers {
+    NO,
+    YES
+  }
+
+  private final Iterable<String> bootclasspath;
+  private final Iterable<String> extclasspath;
+  private final ImmutableList<String> javacopts;
+  private final ImmutableList<String> jvmOpts;
+  private boolean javacSupportsWorkers;
+
+  public JavaToolchainData(
+      Iterable<String> bootclasspath,
+      Iterable<String> extclasspath,
+      ImmutableList<String> javacopts,
+      List<String> jvmOpts,
+      SupportsWorkers javacSupportsWorkers) {
+    this.bootclasspath = checkNotNull(bootclasspath, "bootclasspath must not be null");
+    this.extclasspath = checkNotNull(extclasspath, "extclasspath must not be null");
+    this.jvmOpts = ImmutableList.copyOf(jvmOpts);
+    this.javacSupportsWorkers = javacSupportsWorkers.equals(SupportsWorkers.YES);
+    this.javacopts = checkNotNull(javacopts, "javacopts must not be null");
   }
 
   /**
    * @return the list of options as given by the {@code java_toolchain} rule.
    */
   public ImmutableList<String> getJavacOptions() {
-    return options;
+    return javacopts;
+  }
+
+  /**
+   * @return the list of options to be given to the JVM when invoking the java compiler and
+   *     associated tools.
+   */
+  public ImmutableList<String> getJvmOptions() {
+    return jvmOpts;
+  }
+
+  public Iterable<String> getBootclasspath() {
+    return bootclasspath;
+  }
+
+  public Iterable<String> getExtclasspath() {
+    return extclasspath;
+  }
+
+  public boolean getJavacSupportsWorkers() {
+    return javacSupportsWorkers;
   }
 }

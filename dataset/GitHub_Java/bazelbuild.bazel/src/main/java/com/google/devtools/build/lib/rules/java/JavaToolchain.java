@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.rules.java.JavaToolchainData.SupportsWorkers;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.List;
 import java.util.Map;
@@ -44,13 +45,7 @@ import java.util.Map;
 /**
  * Implementation for the {@code java_toolchain} rule.
  */
-public class JavaToolchain implements RuleConfiguredTargetFactory {
-
-  private final JavaSemantics semantics;
-
-  protected JavaToolchain(JavaSemantics semantics) {
-    this.semantics = semantics;
-  }
+public final class JavaToolchain implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext) throws RuleErrorException {
@@ -81,24 +76,29 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> tools = PrerequisiteArtifacts.nestedSet(ruleContext, "tools", Mode.HOST);
 
     TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac", Mode.HOST);
-    ImmutableList<String> jvmOpts =
+    List<String> jvmOpts =
         getJvmOpts(
             ruleContext,
             ImmutableMap.<Label, ImmutableCollection<Artifact>>of(
                 AliasProvider.getDependencyLabel(javacDep), ImmutableList.of(javac)));
 
-    ImmutableList<JavaPackageConfigurationProvider> packageConfiguration =
+    ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration =
         ImmutableList.copyOf(
             ruleContext.getPrerequisites(
-                "package_configuration", Mode.HOST, JavaPackageConfigurationProvider.class));
+                "plugin_configuration", Mode.HOST, JavaPluginConfigurationProvider.class));
 
+    JavaToolchainData toolchainData =
+        new JavaToolchainData(
+            Artifact.toExecPaths(bootclasspath),
+            Artifact.toExecPaths(extclasspath),
+            javacopts,
+            jvmOpts,
+            javacSupportsWorkers ? SupportsWorkers.YES : SupportsWorkers.NO);
     JavaConfiguration configuration = ruleContext.getFragment(JavaConfiguration.class);
     JavaToolchainProvider provider =
         JavaToolchainProvider.create(
             ruleContext.getLabel(),
-            javacopts,
-            jvmOpts,
-            javacSupportsWorkers,
+            toolchainData,
             bootclasspath,
             extclasspath,
             configuration.getDefaultJavacFlags(),
@@ -115,8 +115,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             timezoneData,
             ijar,
             compatibleJavacOptions,
-            packageConfiguration,
-            semantics);
+            pluginConfiguration);
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
             .addSkylarkTransitiveInfo(

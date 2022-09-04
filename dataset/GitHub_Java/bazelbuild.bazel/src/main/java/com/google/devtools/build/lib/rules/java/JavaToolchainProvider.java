@@ -64,9 +64,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
 
   public static JavaToolchainProvider create(
       Label label,
-      ImmutableList<String> javacOptions,
-      ImmutableList<String> jvmOptions,
-      boolean javacSupportsWorkers,
+      JavaToolchainData data,
       NestedSet<Artifact> bootclasspath,
       NestedSet<Artifact> extclasspath,
       List<String> defaultJavacFlags,
@@ -83,8 +81,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
       @Nullable Artifact timezoneData,
       FilesToRunProvider ijar,
       ImmutableListMultimap<String, String> compatibleJavacOptions,
-      ImmutableList<JavaPackageConfigurationProvider> packageConfiguration,
-      JavaSemantics javaSemantics) {
+      ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration) {
     return new JavaToolchainProvider(
         label,
         bootclasspath,
@@ -104,11 +101,13 @@ public class JavaToolchainProvider extends ToolchainInfo {
         compatibleJavacOptions,
         // merges the defaultJavacFlags from
         // {@link JavaConfiguration} with the flags from the {@code java_toolchain} rule.
-        ImmutableList.<String>builder().addAll(javacOptions).addAll(defaultJavacFlags).build(),
-        jvmOptions,
-        javacSupportsWorkers,
-        packageConfiguration,
-        javaSemantics);
+        ImmutableList.<String>builder()
+            .addAll(data.getJavacOptions())
+            .addAll(defaultJavacFlags)
+            .build(),
+        data.getJvmOptions(),
+        data.getJavacSupportsWorkers(),
+        pluginConfiguration);
   }
 
   private final Label label;
@@ -130,8 +129,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
   private final ImmutableList<String> javacOptions;
   private final ImmutableList<String> jvmOptions;
   private final boolean javacSupportsWorkers;
-  private final ImmutableList<JavaPackageConfigurationProvider> packageConfiguration;
-  private final JavaSemantics javaSemantics;
+  private final ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration;
 
   private JavaToolchainProvider(
       Label label,
@@ -153,8 +151,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
       ImmutableList<String> javacOptions,
       ImmutableList<String> jvmOptions,
       boolean javacSupportsWorkers,
-      ImmutableList<JavaPackageConfigurationProvider> packageConfiguration,
-      JavaSemantics javaSemantics) {
+      ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration) {
     super(ImmutableMap.of(), Location.BUILTIN);
 
     this.label = label;
@@ -176,8 +173,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
     this.javacOptions = javacOptions;
     this.jvmOptions = jvmOptions;
     this.javacSupportsWorkers = javacSupportsWorkers;
-    this.packageConfiguration = packageConfiguration;
-    this.javaSemantics = javaSemantics;
+    this.pluginConfiguration = pluginConfiguration;
   }
 
   /** Returns the label for this {@code java_toolchain}. */
@@ -295,11 +291,7 @@ public class JavaToolchainProvider extends ToolchainInfo {
   }
 
   /** Returns the global {@code java_plugin_configuration} data. */
-  public ImmutableList<JavaPackageConfigurationProvider> packageConfiguration() {
-    return packageConfiguration;
-  }
-
-  public JavaSemantics getJavaSemantics() {
-    return javaSemantics;
+  public ImmutableList<JavaPluginConfigurationProvider> pluginConfiguration() {
+    return pluginConfiguration;
   }
 }
