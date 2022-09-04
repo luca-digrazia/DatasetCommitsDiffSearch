@@ -27,7 +27,6 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 
 import org.androidannotations.annotations.rest.Accept;
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.RestAnnotationHelper;
 import org.androidannotations.processing.DecoratingElementProcessor;
@@ -37,7 +36,6 @@ import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
@@ -48,7 +46,6 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 
 	protected final RestImplementationsHolder restImplementationsHolder;
 	protected final RestAnnotationHelper restAnnotationHelper;
-	protected final APTCodeModelHelper helper = new APTCodeModelHelper();
 
 	public MethodProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationsHolder) {
 		this.restImplementationsHolder = restImplementationsHolder;
@@ -164,7 +161,7 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 		return hashMapVar;
 	}
 
-	protected JExpression generateHttpEntityVar(MethodProcessorHolder methodHolder) {
+	protected JVar generateHttpEntityVar(MethodProcessorHolder methodHolder) {
 		ExecutableElement executableElement = (ExecutableElement) methodHolder.getElement();
 		EBeanHolder holder = methodHolder.getHolder();
 		JClass httpEntity = holder.refClass(CanonicalNameConstants.HTTP_ENTITY);
@@ -179,10 +176,6 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 		}
 
 		if (entitySentToServer != null) {
-			if (entityType.isPrimitive()) {
-				// Don't narrow primitive types...
-				entityType = entityType.boxify();
-			}
 			newHttpEntityVarCall = JExpr._new(httpEntity.narrow(entityType));
 		} else {
 			newHttpEntityVarCall = JExpr._new(httpEntity.narrow(Object.class));
@@ -218,12 +211,11 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 		JVar httpHeadersVar = null;
 
 		JClass httpHeadersClass = holder.refClass(CanonicalNameConstants.HTTP_HEADERS);
+		httpHeadersVar = body.decl(httpHeadersClass, "httpHeaders", JExpr._new(httpHeadersClass));
 
 		String mediaType = retrieveAcceptAnnotationValue(executableElement);
 		boolean hasMediaTypeDefined = mediaType != null;
 		if (hasMediaTypeDefined) {
-			httpHeadersVar = body.decl(httpHeadersClass, "httpHeaders", JExpr._new(httpHeadersClass));
-
 			JClass collectionsClass = holder.refClass(CanonicalNameConstants.COLLECTIONS);
 			JClass mediaTypeClass = holder.refClass(CanonicalNameConstants.MEDIA_TYPE);
 
@@ -253,16 +245,13 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 			String paramName = parameter.getSimpleName().toString();
 			String paramType = parameter.asType().toString();
 
-			JVar param = null;
-			if (parameter.asType().getKind().isPrimitive()) {
-				param = method.param(JType.parse(eBeanHolder.codeModel(), paramType), paramName);
-			} else {
-				JClass parameterClass = helper.typeMirrorToJClass(parameter.asType(), eBeanHolder);
-				param = method.param(parameterClass, paramName);
-			}
+			// TODO check in validator that params are not generic. Or create a
+			// helper to fix that case and generate the right code.
+			JVar param = method.param(eBeanHolder.refClass(paramType), paramName);
 			methodParams.put(paramName, param);
 		}
 
 		return methodParams;
 	}
+
 }
