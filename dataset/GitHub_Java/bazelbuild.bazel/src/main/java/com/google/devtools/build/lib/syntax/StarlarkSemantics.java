@@ -81,6 +81,7 @@ public abstract class StarlarkSemantics {
         "experimental_sibling_repository_layout";
     public static final String EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS =
         "experimental_enable_android_migration_apis";
+    public static final String EXPERIMENTAL_BUILD_SETTING_API = "experimental_build_setting_api";
     public static final String EXPERIMENTAL_GOOGLE_LEGACY_API = "experimental_google_legacy_api";
     public static final String EXPERIMENTAL_NINJA_ACTIONS = "experimental_ninja_actions";
     public static final String EXPERIMENTAL_PLATFORM_API = "experimental_platform_api";
@@ -123,6 +124,8 @@ public abstract class StarlarkSemantics {
         return experimentalSiblingRepositoryLayout();
       case FlagIdentifier.EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS:
         return experimentalEnableAndroidMigrationApis();
+      case FlagIdentifier.EXPERIMENTAL_BUILD_SETTING_API:
+        return experimentalBuildSettingApi();
       case FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API:
         return experimentalGoogleLegacyApi();
       case FlagIdentifier.EXPERIMENTAL_NINJA_ACTIONS:
@@ -199,6 +202,8 @@ public abstract class StarlarkSemantics {
   public abstract boolean experimentalActionArgs();
 
   public abstract boolean experimentalAllowIncrementalRepositoryUpdates();
+
+  public abstract boolean experimentalBuildSettingApi();
 
   public abstract ImmutableList<String> experimentalCcStarlarkApiEnabledPackages();
 
@@ -312,6 +317,7 @@ public abstract class StarlarkSemantics {
           .debugDepsetDepth(false)
           .experimentalActionArgs(true)
           .experimentalAllowTagsPropagation(false)
+          .experimentalBuildSettingApi(true)
           .experimentalCcStarlarkApiEnabledPackages(ImmutableList.of())
           .experimentalAllowIncrementalRepositoryUpdates(true)
           .experimentalEnableAndroidMigrationApis(false)
@@ -364,6 +370,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalAllowIncrementalRepositoryUpdates(boolean value);
 
     public abstract Builder experimentalAllowTagsPropagation(boolean value);
+
+    public abstract Builder experimentalBuildSettingApi(boolean value);
 
     public abstract Builder experimentalCcStarlarkApiEnabledPackages(List<String> value);
 
