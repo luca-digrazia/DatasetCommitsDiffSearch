@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -30,9 +31,6 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class RequiredProvidersTest {
-
-  private static final String NO_PROVIDERS_REQUIRED = "no providers required";
-
   private static final class P1 {}
   private static final class P2 {}
   private static final class P3 {}
@@ -62,8 +60,8 @@ public class RequiredProvidersTest {
     boolean result = requiredProviders.isSatisfiedBy(providers);
 
     assertThat(requiredProviders.isSatisfiedBy(
-        providers.getNativeProviders()::contains,
-        providers.getSkylarkProviders()::contains
+        Predicates.in(providers.getNativeProviders()),
+        Predicates.in(providers.getSkylarkProviders())
     )).isEqualTo(result);
     return result;
   }
@@ -110,11 +108,7 @@ public class RequiredProvidersTest {
         .addNative(P1.class)
         .addNative(P2.class)
         .build();
-    assertThat(
-        validateNative(
-            providerSet,
-            NO_PROVIDERS_REQUIRED,
-            ImmutableSet.of(P1.class, P2.class)))
+    assertThat(validateNative(providerSet, ImmutableSet.<Class<?>>of(P1.class, P2.class)))
         .isTrue();
   }
 
@@ -125,7 +119,6 @@ public class RequiredProvidersTest {
           AdvertisedProviderSet.builder()
               .addNative(P1.class)
               .build(),
-          NO_PROVIDERS_REQUIRED,
           ImmutableSet.<Class<?>>of(P1.class),
           ImmutableSet.<Class<?>>of(P2.class)
         )).isTrue();
@@ -138,7 +131,6 @@ public class RequiredProvidersTest {
             AdvertisedProviderSet.builder()
                 .addNative(P3.class)
                 .build(),
-            "P1 or P2",
             ImmutableSet.<Class<?>>of(P1.class),
             ImmutableSet.<Class<?>>of(P2.class)
         )).isFalse();
@@ -152,7 +144,6 @@ public class RequiredProvidersTest {
         .addSkylark(ID_SKYLARK)
         .build();
     assertThat(validateSkylark(providerSet,
-        NO_PROVIDERS_REQUIRED,
         ImmutableSet.of(
             ID_LEGACY, ID_SKYLARK, ID_NATIVE)))
         .isTrue();
@@ -165,7 +156,6 @@ public class RequiredProvidersTest {
             AdvertisedProviderSet.builder()
                 .addSkylark(ID_LEGACY)
                 .build(),
-            NO_PROVIDERS_REQUIRED,
             ImmutableSet.of(ID_LEGACY),
             ImmutableSet.of(ID_NATIVE)
         )).isTrue();
@@ -178,29 +168,13 @@ public class RequiredProvidersTest {
             AdvertisedProviderSet.builder()
                 .addSkylark(ID_SKYLARK)
                 .build(),
-            "'p_legacy' or 'p_native'",
             ImmutableSet.of(ID_LEGACY),
             ImmutableSet.of(ID_NATIVE)
         )).isFalse();
   }
 
-  @Test
-  public void checkDescriptions() {
-    assertThat(RequiredProviders.acceptAnyBuilder().build().getDescription())
-        .isEqualTo("no providers required");
-    assertThat(RequiredProviders.acceptNoneBuilder().build().getDescription())
-        .isEqualTo("no providers accepted");
-    assertThat(RequiredProviders.acceptAnyBuilder()
-        .addSkylarkSet(ImmutableSet.of(ID_LEGACY, ID_SKYLARK))
-        .addSkylarkSet(ImmutableSet.of(ID_SKYLARK))
-        .addNativeSet(ImmutableSet.of(P1.class, P2.class))
-        .build().getDescription())
-        .isEqualTo("[P1, P2] or ['p_legacy', 'p_skylark'] or 'p_skylark'");
-  }
-
   @SafeVarargs
   private static boolean validateNative(AdvertisedProviderSet providerSet,
-      String missing,
       ImmutableSet<Class<?>>... sets) {
     Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
     Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
@@ -208,20 +182,14 @@ public class RequiredProvidersTest {
       anyBuilder.addNativeSet(set);
       noneBuilder.addNativeSet(set);
     }
-    RequiredProviders rpStartingFromAny = anyBuilder.build();
-    boolean result = satisfies(providerSet, rpStartingFromAny);
-    assertThat(rpStartingFromAny.getMissing(providerSet).getDescription()).isEqualTo(missing);
-
-    RequiredProviders rpStaringFromNone = noneBuilder.build();
-    assertThat(satisfies(providerSet, rpStaringFromNone)).isEqualTo(result);
-    assertThat(rpStaringFromNone.getMissing(providerSet).getDescription()).isEqualTo(missing);
+    boolean result = satisfies(providerSet, anyBuilder.build());
+    assertThat(satisfies(providerSet, noneBuilder.build())).isEqualTo(result);
     return result;
   }
 
   @SafeVarargs
   private static boolean validateSkylark(
       AdvertisedProviderSet providerSet,
-      String missing,
       ImmutableSet<SkylarkProviderIdentifier>... sets) {
     Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
     Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
@@ -229,14 +197,8 @@ public class RequiredProvidersTest {
       anyBuilder.addSkylarkSet(set);
       noneBuilder.addSkylarkSet(set);
     }
-
-    RequiredProviders rpStartingFromAny = anyBuilder.build();
-    boolean result = satisfies(providerSet, rpStartingFromAny);
-    assertThat(rpStartingFromAny.getMissing(providerSet).getDescription()).isEqualTo(missing);
-
-    RequiredProviders rpStaringFromNone = noneBuilder.build();
-    assertThat(satisfies(providerSet, rpStaringFromNone)).isEqualTo(result);
-    assertThat(rpStaringFromNone.getMissing(providerSet).getDescription()).isEqualTo(missing);
+    boolean result = satisfies(providerSet, anyBuilder.build());
+    assertThat(satisfies(providerSet, noneBuilder.build())).isEqualTo(result);
     return result;
   }
 }

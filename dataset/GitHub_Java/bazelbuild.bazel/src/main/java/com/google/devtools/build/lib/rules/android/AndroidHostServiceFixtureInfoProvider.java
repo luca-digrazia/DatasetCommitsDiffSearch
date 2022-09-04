@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
@@ -26,7 +27,8 @@ import com.google.devtools.build.lib.packages.SkylarkClassObject;
  * android_instrumentation_test}.
  */
 @Immutable
-public class AndroidHostServiceFixtureInfoProvider extends SkylarkClassObject {
+public class AndroidHostServiceFixtureInfoProvider extends SkylarkClassObject
+    implements TransitiveInfoProvider {
 
   private static final String SKYLARK_NAME = "HostServiceFixtureInfo";
   static final NativeClassObjectConstructor<AndroidHostServiceFixtureInfoProvider>

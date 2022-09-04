@@ -16,10 +16,6 @@ package com.google.devtools.build.lib.rules.test;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
-import com.google.devtools.build.lib.analysis.test.TestEnvironmentInfo;
-import com.google.devtools.build.lib.analysis.test.TestProvider;
-import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -43,13 +39,13 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "    name = 'my_target',",
         ")");
 
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    ExecutionInfo provider = skylarkTarget.get(ExecutionInfo.PROVIDER);
+    ExecutionInfoProvider provider = skylarkTarget.get(ExecutionInfoProvider.SKYLARK_CONSTRUCTOR);
 
     assertThat(provider.getExecutionInfo().get("requires-darwin")).isEqualTo("1");
   }
@@ -68,14 +64,14 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule')",
+        "load('/examples/rule/apple_rules', 'my_rule')",
         "my_rule(",
         "    name = 'my_target',",
         ")");
 
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    TestEnvironmentInfo provider =
-        skylarkTarget.get(TestEnvironmentInfo.PROVIDER);
+    TestEnvironmentProvider provider =
+        skylarkTarget.get(TestEnvironmentProvider.SKYLARK_CONSTRUCTOR);
 
     assertThat(provider.getEnvironment().get("XCODE_VERSION_OVERRIDE")).isEqualTo("7.3.1");
   }
@@ -96,7 +92,7 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'my_rule_test')",
+        "load('/examples/rule/apple_rules', 'my_rule_test')",
         "my_rule_test(",
         "    name = 'my_target',",
         ")");
@@ -105,6 +101,6 @@ public class SkylarkTestingModuleTest extends BuildViewTestCase {
     TestRunnerAction testAction = (TestRunnerAction) getGeneratingAction(
         TestProvider.getTestStatusArtifacts(skylarkTarget).get(0));
 
-    assertThat(testAction.getTestProperties().isRemotable()).isFalse();
+    assertThat(testAction.getTestProperties().isLocal()).isTrue();
   }
 }

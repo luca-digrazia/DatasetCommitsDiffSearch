@@ -317,8 +317,9 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
    */
   private static ExecutionInfoProvider getExecutionInfoProvider(RuleContext ruleContext) {
     ExecutionInfoProvider executionInfoProvider =
+        (ExecutionInfoProvider)
             ruleContext.getPrerequisite(
-                "target_device", Mode.HOST, ExecutionInfoProvider.SKYLARK_CONSTRUCTOR);
+                "target_device", Mode.HOST, ExecutionInfoProvider.SKYLARK_CONSTRUCTOR.getKey());
     ImmutableMap<String, String> executionRequirements =
         (executionInfoProvider != null)
             ? executionInfoProvider.getExecutionInfo()

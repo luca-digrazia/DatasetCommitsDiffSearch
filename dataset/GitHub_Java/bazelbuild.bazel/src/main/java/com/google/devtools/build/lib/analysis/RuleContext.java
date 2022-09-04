@@ -1064,7 +1064,7 @@ public final class RuleContext extends TargetContext
         continue;
       }
       makeVariableProvidersBuilder.addAll(
-          getPrerequisites(attributeName, Mode.TARGET, MakeVariableProvider.SKYLARK_CONSTRUCTOR));
+          getPrerequisites(attributeName, Mode.TARGET, MakeVariableProvider.class));
     }
 
     for (MakeVariableProvider makeVariableProvider : makeVariableProvidersBuilder.build()) {

@@ -239,9 +239,9 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         extraLinkArgs.add("-Xlinker", "-rpath", "-Xlinker", "@loader_path/Frameworks");
         if (didProvideBundleLoader) {
           AppleExecutableBinaryProvider executableProvider =
-              ruleContext.getPrerequisite(
+              (AppleExecutableBinaryProvider) ruleContext.getPrerequisite(
                   BUNDLE_LOADER_ATTR_NAME, Mode.TARGET,
-                  AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
+                  AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR.getKey());
           extraLinkArgs.add(
               "-bundle_loader", executableProvider.getAppleExecutableBinary().getExecPathString());
         }
@@ -290,9 +290,9 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
   private static Iterable<Artifact> getExtraLinkInputs(RuleContext ruleContext) {
     AppleExecutableBinaryProvider executableProvider =
-        ruleContext.getPrerequisite(
+        (AppleExecutableBinaryProvider) ruleContext.getPrerequisite(
             BUNDLE_LOADER_ATTR_NAME, Mode.TARGET,
-            AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
+            AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR.getKey());
     if (executableProvider != null) {
       return ImmutableSet.<Artifact>of(executableProvider.getAppleExecutableBinary());
     }

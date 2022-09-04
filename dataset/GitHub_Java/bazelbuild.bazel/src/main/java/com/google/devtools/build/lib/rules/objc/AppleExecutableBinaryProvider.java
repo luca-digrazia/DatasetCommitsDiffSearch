@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 
@@ -29,7 +30,8 @@ import com.google.devtools.build.lib.packages.SkylarkClassObject;
  *     executable may avoid relinking symbols included in the loadable binary</li>
  * </ul> 
  */
-public final class AppleExecutableBinaryProvider extends SkylarkClassObject {
+public final class AppleExecutableBinaryProvider extends SkylarkClassObject
+    implements TransitiveInfoProvider {
 
   /** Skylark name for the AppleExecutableBinaryProvider. */
   public static final String SKYLARK_NAME = "AppleExecutableBinary";

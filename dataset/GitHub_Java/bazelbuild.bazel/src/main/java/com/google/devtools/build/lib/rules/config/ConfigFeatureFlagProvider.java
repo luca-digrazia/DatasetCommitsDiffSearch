@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.config;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
@@ -30,7 +31,8 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
   doc = "A provider used to access information about config_feature_flag rules."
 )
 @Immutable
-public class ConfigFeatureFlagProvider extends SkylarkClassObject {
+public class ConfigFeatureFlagProvider extends SkylarkClassObject
+    implements TransitiveInfoProvider {
 
   /** Name used in Skylark for accessing ConfigFeatureFlagProvider. */
   static final String SKYLARK_NAME = "FeatureFlagInfo";

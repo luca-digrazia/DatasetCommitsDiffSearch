@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -33,6 +32,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -86,9 +86,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext context)
       throws RuleErrorException, InterruptedException {
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(context);
-    LinkTargetType staticLinkType = getStaticLinkType(context);
+    LinkTargetType linkType = getStaticLinkType(context);
     boolean linkStatic = context.attributes().get("linkstatic", Type.BOOLEAN);
-    init(semantics, context, builder, staticLinkType,
+    init(semantics, context, builder, linkType,
         /*neverLink =*/ false,
         linkStatic,
         /*collectLinkstamp =*/ true,
@@ -100,7 +100,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       CppSemantics semantics,
       RuleContext ruleContext,
       RuleConfiguredTargetBuilder targetBuilder,
-      LinkTargetType staticLinkType,
+      LinkTargetType linkType,
       boolean neverLink,
       boolean linkStatic,
       boolean collectLinkstamp,
@@ -132,7 +132,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             // between Bazel and Blaze.
             .setGenerateLinkActionsIfEmpty(
                 ruleContext.getRule().getImplicitOutputsFunction() != ImplicitOutputsFunction.NONE)
-            .setLinkType(staticLinkType)
+            .setLinkType(linkType)
             .setNeverLink(neverLink)
             .addPrecompiledFiles(precompiledFiles);
 

@@ -18,6 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
@@ -26,7 +27,7 @@ import javax.annotation.Nullable;
 
 /** A tuple containing information about a version of xcode and its properties. */
 @Immutable
-public class XcodeVersionProperties extends SkylarkClassObject {
+public class XcodeVersionProperties extends SkylarkClassObject implements TransitiveInfoProvider {
 
   /** Skylark name for the XcodeVersionProperties provider. */
   public static final String SKYLARK_NAME = "XcodeProperties";
