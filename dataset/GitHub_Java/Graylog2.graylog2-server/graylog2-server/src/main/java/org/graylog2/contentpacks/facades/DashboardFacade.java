@@ -115,11 +115,9 @@ public class DashboardFacade implements EntityFacade<Dashboard> {
     private DashboardWidgetEntity encodeWidget(DashboardWidget widget, @Nullable WidgetPosition position,
                                                EntityDescriptorIds entityDescriptorIds) {
         final Map<String, Object> config = widget.getConfig();
-        final String streamId = (String) config.getOrDefault("stream_id", "");
+        final String streamId = (String) config.get("stream_id");
 
-        if (!streamId.isEmpty()) {
-            entityDescriptorIds.get(streamId, ModelTypes.STREAM_V1).ifPresent(e -> config.put("stream_id", e));
-        }
+        entityDescriptorIds.get(streamId, ModelTypes.STREAM_V1).ifPresent(e -> config.put("stream_id", e));
 
         return DashboardWidgetEntity.create(
                 ValueReference.of(widget.getId()),
