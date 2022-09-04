@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
@@ -127,11 +126,10 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
           ((RuleConfiguredTarget) configuredTarget).getConfigConditions();
       BuildOptions fromOptions = config.getOptions();
       try {
-        // Note: Being able to pull the $resolved_toolchain_internal attr unconditionally from the
-        // mapper relies on the fact that {@link PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR} exists
-        // in every rule. Also, we don't actually use fromOptions in our implementation of
-        // DependencyResolver but passing to avoid passing a null and since we have the information
-        // anyway.
+        // Note: Being able to pull the $toolchain attr unconditionally from the mapper relies on
+        // the fact that {@link PlatformSemantics.TOOLCHAIN_ATTRS} exists in every rule.
+        // Also, we don't actually use fromOptions in our implementation of DependencyResolver but
+        // passing to avoid passing a null and since we have the information anyway.
         deps =
             new FormatterDependencyResolver(configuredTarget, reporter)
                 .dependentNodeMap(
@@ -141,7 +139,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
                     configConditions,
                     ImmutableSet.copyOf(
                         ConfiguredAttributeMapper.of(target.getAssociatedRule(), configConditions)
-                            .get(PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR, BuildType.LABEL_LIST)),
+                            .get(PlatformSemantics.TOOLCHAINS_ATTR, BuildType.LABEL_LIST)),
                     fromOptions,
                     trimmingTransitionFactory);
       } catch (EvalException | InvalidConfigurationException | InconsistentAspectOrderException e) {
@@ -242,7 +240,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
     }
 
     @Override
-    protected Target getTarget(Target from, Label label, NestedSetBuilder<Cause> rootCauses)
+    protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses)
         throws InterruptedException {
       return partialResultMap.get(label);
     }
