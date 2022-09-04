@@ -18,34 +18,28 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkNativeModuleApi;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.NoneType;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkCallable;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.Runtime.NoneType;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import java.util.List;
-import java.util.Map;
 import javax.annotation.Nullable;
 
 /** Fake implementation of {@link SkylarkNativeModuleApi}. */
 public class FakeSkylarkNativeModuleApi implements SkylarkNativeModuleApi, ClassObject {
 
   @Override
-  public Sequence<?> glob(
-      Sequence<?> include,
-      Sequence<?> exclude,
+  public SkylarkList<?> glob(
+      SkylarkList<?> include,
+      SkylarkList<?> exclude,
       Integer excludeDirectories,
       Object allowEmpty,
       Location loc,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
-    return StarlarkList.of(thread.mutability());
+    return MutableList.of(thread);
   }
 
   @Override
@@ -55,21 +49,25 @@ public class FakeSkylarkNativeModuleApi implements SkylarkNativeModuleApi, Class
   }
 
   @Override
-  public Dict<String, Dict<String, Object>> existingRules(Location loc, StarlarkThread thread)
-      throws EvalException, InterruptedException {
-    return Dict.of(thread);
+  public SkylarkDict<String, SkylarkDict<String, Object>> existingRules(
+      Location loc, StarlarkThread thread) throws EvalException, InterruptedException {
+    return SkylarkDict.of(thread);
   }
 
   @Override
   public NoneType packageGroup(
-      String name, Sequence<?> packages, Sequence<?> includes, Location loc, StarlarkThread thread)
+      String name,
+      SkylarkList<?> packages,
+      SkylarkList<?> includes,
+      Location loc,
+      StarlarkThread thread)
       throws EvalException {
     return null;
   }
 
   @Override
   public NoneType exportsFiles(
-      Sequence<?> srcs, Object visibility, Object licenses, Location loc, StarlarkThread thread)
+      SkylarkList<?> srcs, Object visibility, Object licenses, Location loc, StarlarkThread thread)
       throws EvalException {
     return null;
   }
@@ -91,31 +89,7 @@ public class FakeSkylarkNativeModuleApi implements SkylarkNativeModuleApi, Class
     // as far as native rules are concerned. Returning None on all unsupported invocations of
     // native.[func_name]() is the safest "best effort" approach to implementing a fake for
     // "native".
-    return new StarlarkCallable() {
-      @Override
-      public Object call(
-          List<Object> args,
-          @Nullable Map<String, Object> kwargs,
-          @Nullable FuncallExpression call,
-          StarlarkThread thread) {
-        return Starlark.NONE;
-      }
-
-      @Override
-      public String getName() {
-        return name;
-      }
-
-      @Override
-      public Location getLocation() {
-        return Location.BUILTIN;
-      }
-
-      @Override
-      public void repr(SkylarkPrinter printer) {
-        printer.append("<faked no-op function " + name + ">");
-      }
-    };
+    return new FakeStarlarkCallable(name);
   }
 
   @Override
