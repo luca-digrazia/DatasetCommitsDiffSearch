@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.profiler;
 
 import static com.google.devtools.build.lib.profiler.ProfilerTask.TASK_COUNT;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -33,7 +32,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -474,9 +472,6 @@ public final class Profiler {
 
   private final StatRecorder[] tasksHistograms = new StatRecorder[ProfilerTask.values().length];
 
-  /** Thread that collects local cpu usage data (if enabled). */
-  private CollectLocalCpuUsage cpuUsageThread;
-
   private Profiler() {
     initHistograms();
     for (ProfilerTask task : ProfilerTask.values()) {
@@ -554,8 +549,7 @@ public final class Profiler {
       String comment,
       boolean recordAllDurations,
       Clock clock,
-      long execStartTimeNanos,
-      boolean enabledCpuUsageProfiling)
+      long execStartTimeNanos)
       throws IOException {
     Preconditions.checkState(!isActive(), "Profiler already active");
     initHistograms();
@@ -590,12 +584,6 @@ public final class Profiler {
 
     // activate profiler
     profileStartTime = execStartTimeNanos;
-
-    if (enabledCpuUsageProfiling) {
-      cpuUsageThread = new CollectLocalCpuUsage();
-      cpuUsageThread.setDaemon(true);
-      cpuUsageThread.start();
-    }
   }
 
   /**
@@ -624,18 +612,6 @@ public final class Profiler {
     if (!isActive()) {
       return;
     }
-
-    if (cpuUsageThread != null) {
-      cpuUsageThread.stopCollecting();
-      try {
-        cpuUsageThread.join();
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-      cpuUsageThread.logCollectedData();
-      cpuUsageThread = null;
-    }
-
     // Log a final event to update the duration of ProfilePhase.FINISH.
     logEvent(ProfilerTask.INFO, "Finishing");
     FileWriter writer = writerRef.getAndSet(null);
@@ -772,17 +748,11 @@ public final class Profiler {
     }
   }
 
-  /** Used to log "events" happening at a specific time - tasks with zero duration. */
-  public void logEventAtTime(long atTimeNanos, ProfilerTask type, String description) {
-    if (isActive() && isProfiling(type)) {
-      logTask(atTimeNanos, 0, type, description);
-    }
-  }
-
   /** Used to log "events" - tasks with zero duration. */
-  @VisibleForTesting
   void logEvent(ProfilerTask type, String description) {
-    logEventAtTime(clock.nanoTime(), type, description);
+    if (isActive() && isProfiling(type)) {
+      logTask(clock.nanoTime(), 0, type, description);
+    }
   }
 
   /**
@@ -976,7 +946,7 @@ public final class Profiler {
           ObjectDescriber describer = new ObjectDescriber();
           TaskData data;
           while ((data = queue.take()) != POISON_PILL) {
-            ((Buffer) sink).clear();
+            sink.clear();
 
             VarInt.putVarLong(data.threadId, sink);
             VarInt.putVarInt(data.id, sink);
@@ -1088,6 +1058,9 @@ public final class Profiler {
           writer.endObject();
 
           while ((data = queue.take()) != POISON_PILL) {
+            if (data.duration == 0 && data.type != ProfilerTask.THREAD_NAME) {
+              continue;
+            }
             if (data.type == ProfilerTask.THREAD_NAME) {
               writer.setIndent("  ");
               writer.beginObject();
@@ -1100,27 +1073,6 @@ public final class Profiler {
 
               writer.beginObject();
               writer.name("name").value(data.description);
-              writer.endObject();
-
-              writer.endObject();
-              continue;
-            }
-            if (data.type == ProfilerTask.LOCAL_CPU_USAGE) {
-              writer.setIndent("  ");
-              writer.beginObject();
-              writer.setIndent("");
-              writer.name("name").value(data.type.description);
-              writer.name("ph").value("C");
-              writer
-                  .name("ts")
-                  .value(
-                      TimeUnit.NANOSECONDS.toMicros(data.startTimeNanos - profileStartTimeNanos));
-              writer.name("pid").value(1);
-              writer.name("tid").value(data.threadId);
-              writer.name("args");
-
-              writer.beginObject();
-              writer.name("cpu").value(data.description);
               writer.endObject();
 
               writer.endObject();
