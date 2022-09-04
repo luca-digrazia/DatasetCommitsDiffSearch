@@ -33,8 +33,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
-import com.google.devtools.build.lib.packages.BuiltinProvider.WithLegacyStarlarkName;
 import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.NativeProvider.WithLegacyStarlarkName;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
@@ -1345,8 +1345,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     }
 
     @Override
-    public String getErrorMessageForUnknownField(String name) {
-      return String.format("ObjcProvider field '%s' could not be instantiated", name);
+    public String getErrorMessageFormatForUnknownField() {
+      return "ObjcProvider field '%s' could not be instantiated";
     }
   }
 }

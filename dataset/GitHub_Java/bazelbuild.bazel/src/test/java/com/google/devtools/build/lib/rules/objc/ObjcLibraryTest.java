@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
@@ -1459,9 +1458,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
                 .add("-iquote", ".")
                 .add(
                     "-iquote",
-                    getAppleCrosstoolConfiguration()
-                        .getGenfilesFragment(RepositoryName.MAIN)
-                        .getSafePathString())
+                    getAppleCrosstoolConfiguration().getGenfilesFragment().getSafePathString())
                 .add("-include", "objc/some.pch")
                 .add("-fobjc-arc")
                 .add("-c", "objc/a.m")
@@ -1689,10 +1686,8 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         .write();
     CommandAction compileAction = compileAction("//lib:lib", "a.o");
     BuildConfiguration config = getAppleCrosstoolConfiguration();
-    assertContainsSublist(
-        compileAction.getArguments(),
-        ImmutableList.of(
-            "-iquote", config.getGenfilesFragment(RepositoryName.MAIN).getSafePathString()));
+    assertContainsSublist(compileAction.getArguments(), ImmutableList.of(
+        "-iquote", config.getGenfilesFragment().getSafePathString()));
   }
 
   @Test
@@ -2211,7 +2206,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testSrcCompileActionMnemonic() throws Exception {
+  public void testCppCompileActionMnemonicOfSrc() throws Exception {
     MockObjcSupport.setupCcToolchainConfig(
         mockToolsConfig, MockObjcSupport.darwinX86_64().withFeatures(CppRuleClasses.PARSE_HEADERS));
     useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
@@ -2224,39 +2219,29 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testHeaderCompileActionMnemonic() throws Exception {
+  public void testCppCompileActionMnemonicOfPrivateHdr() throws Exception {
     MockObjcSupport.setupCcToolchainConfig(
         mockToolsConfig, MockObjcSupport.darwinX86_64().withFeatures(CppRuleClasses.PARSE_HEADERS));
     useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
 
     ConfiguredTarget x =
-        scratchConfiguredTarget(
-            "foo", "x", "objc_library(name = 'x', srcs = ['y.h'], hdrs = ['z.h'])");
+        scratchConfiguredTarget("foo", "x", "objc_library(name = 'x', srcs = ['y.h'])");
 
     assertThat(getGeneratingCompileAction("_objs/x/arc/y.h.processed", x).getMnemonic())
-        .isEqualTo("ObjcCompile");
-    assertThat(getGeneratingCompileAction("_objs/x/arc/z.h.processed", x).getMnemonic())
         .isEqualTo("ObjcCompile");
   }
 
   @Test
-  public void testIncompatibleUseCppCompileHeaderMnemonic() throws Exception {
+  public void testCppCompileActionMnemonicOfPublicHdr() throws Exception {
     MockObjcSupport.setupCcToolchainConfig(
         mockToolsConfig, MockObjcSupport.darwinX86_64().withFeatures(CppRuleClasses.PARSE_HEADERS));
-    useConfiguration(
-        "--incompatible_use_cpp_compile_header_mnemonic",
-        "--features=parse_headers",
-        "--process_headers_in_dependencies");
+    useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
 
     ConfiguredTarget x =
-        scratchConfiguredTarget(
-            "foo", "x", "objc_library(name = 'x', srcs = ['a.m', 'y.h'], hdrs = ['z.h'])");
+        scratchConfiguredTarget("foo", "x", "objc_library(name = 'x', hdrs = ['z.h'])");
 
-    assertThat(getGeneratingCompileAction("_objs/x/arc/a.o", x).getMnemonic())
-        .isEqualTo("ObjcCompile");
-    assertThat(getGeneratingCompileAction("_objs/x/arc/y.h.processed", x).getMnemonic())
-        .isEqualTo("ObjcCompileHeader");
     assertThat(getGeneratingCompileAction("_objs/x/arc/z.h.processed", x).getMnemonic())
-        .isEqualTo("ObjcCompileHeader");
+        .isEqualTo("ObjcCompile");
   }
+
 }

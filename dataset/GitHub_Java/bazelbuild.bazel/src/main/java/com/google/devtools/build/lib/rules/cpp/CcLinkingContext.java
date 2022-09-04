@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
@@ -119,8 +118,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
     Linkstamp(
         Artifact artifact,
         NestedSet<Artifact> declaredIncludeSrcs,
-        ActionKeyContext actionKeyContext)
-        throws CommandLineExpansionException, InterruptedException {
+        ActionKeyContext actionKeyContext) {
       this.artifact = Preconditions.checkNotNull(artifact);
       this.declaredIncludeSrcs = Preconditions.checkNotNull(declaredIncludeSrcs);
       Fingerprint fp = new Fingerprint();
@@ -164,8 +162,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   // TODO(bazel-team): choose less confusing names for this class and the package-level interface of
   // the same name.
   @Immutable
-  public static class LinkerInput
-      implements LinkerInputApi<LibraryToLink, LtoBackendArtifacts, Artifact> {
+  public static class LinkerInput implements LinkerInputApi<LibraryToLink, Artifact> {
 
     public static final Depset.ElementType TYPE = Depset.ElementType.of(LinkerInput.class);
 
