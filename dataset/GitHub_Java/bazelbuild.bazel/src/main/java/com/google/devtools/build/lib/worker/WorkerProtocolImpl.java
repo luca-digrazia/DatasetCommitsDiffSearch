@@ -15,35 +15,14 @@ package com.google.devtools.build.lib.worker;
 
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
+import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
-/** An implementation of a Bazel worker using Proto to communicate with the worker process. */
-final class ProtoWorkerProtocol implements WorkerProtocolImpl {
+/** Represents the communication between Bazel and a persistent worker. */
+interface WorkerProtocolImpl extends Closeable {
+  /** Writes the provided work request to the worker. */
+  void putRequest(WorkRequest request) throws IOException;
 
-  /** The worker process's stdin */
-  private final InputStream stdin;
-
-  /** The worker process's stdout. */
-  private final OutputStream stdout;
-
-  public ProtoWorkerProtocol(InputStream stdin, OutputStream stdout) {
-    this.stdin = stdin;
-    this.stdout = stdout;
-  }
-
-  @Override
-  public void putRequest(WorkRequest request) throws IOException {
-    request.writeDelimitedTo(stdout);
-    stdout.flush();
-  }
-
-  @Override
-  public WorkResponse getResponse() throws IOException {
-    return WorkResponse.parseDelimitedFrom(stdin);
-  }
-
-  @Override
-  public void close() {}
+  /** Reads a response from the worker. */
+  WorkResponse getResponse() throws IOException;
 }
