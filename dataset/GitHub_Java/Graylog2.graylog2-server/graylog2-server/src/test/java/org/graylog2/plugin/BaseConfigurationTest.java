@@ -21,7 +21,6 @@ import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
-import org.graylog2.Configuration;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -112,6 +111,18 @@ public class BaseConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         Assert.assertNotEquals(URI.create("http://0.0.0.0:12900"), configuration.getRestTransportUri());
+    }
+
+    @Test
+    public void testRestTransportUriWildcardKeepsPath() throws RepositoryException, ValidationException {
+        validProperties.put("rest_listen_uri", "http://0.0.0.0:12900/api/");
+        validProperties.put("rest_transport_uri", "http://0.0.0.0:12900/api/");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        Assert.assertNotEquals(URI.create("http://0.0.0.0:12900/api/"), configuration.getRestTransportUri());
+        Assert.assertEquals("/api/", configuration.getRestTransportUri().getPath());
     }
 
     @Test
@@ -375,11 +386,10 @@ public class BaseConfigurationTest {
     public void testWebEndpointUriIsRelativeURI() throws RepositoryException, ValidationException {
         validProperties.put("web_endpoint_uri", "/foo");
 
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("Parameter web_endpoint_uri should be an absolute URI (found /foo)");
-
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertEquals(URI.create("/foo"), configuration.getWebEndpointUri());
     }
 
     @Test
@@ -388,6 +398,8 @@ public class BaseConfigurationTest {
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertEquals(URI.create("http://www.example.com:12900/foo/"), configuration.getRestTransportUri());
     }
 
     @Test
@@ -396,6 +408,8 @@ public class BaseConfigurationTest {
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertEquals(URI.create("http://www.example.com:12900/foo"), configuration.getWebEndpointUri());
     }
 
     @Test
@@ -416,5 +430,37 @@ public class BaseConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         assertThat(configuration.getRestTransportUri()).hasPort(12900);
+    }
+
+    @Test
+    public void testRestTransportUriWithCustomScheme() throws RepositoryException, ValidationException {
+        validProperties.put("rest_transport_uri", "https://example.com:12900/");
+        validProperties.put("rest_enable_tls", "false");
+
+        org.graylog2.Configuration configuration = new org.graylog2.Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestTransportUri()).hasScheme("https");
+    }
+
+    @Test
+    public void testRestListenUriAndWebListenUriWithSameScheme() throws Exception {
+        final File privateKey = temporaryFolder.newFile("graylog.key");
+        final File certificate = temporaryFolder.newFile("graylog.crt");
+
+        validProperties.put("rest_listen_uri", "https://127.0.0.1:8000/api");
+        validProperties.put("rest_transport_uri", "https://127.0.0.1:8000/api");
+        validProperties.put("rest_enable_tls", "true");
+        validProperties.put("rest_tls_key_file", privateKey.getAbsolutePath());
+        validProperties.put("rest_tls_cert_file", certificate.getAbsolutePath());
+        validProperties.put("web_listen_uri", "https://127.0.0.1:8000/");
+        validProperties.put("web_enable_tls", "true");
+
+        org.graylog2.Configuration configuration = new org.graylog2.Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+
+        assertThat(configuration.getRestListenUri()).hasScheme("https");
+        assertThat(configuration.getRestTransportUri()).hasScheme("https");
+        assertThat(configuration.getWebListenUri()).hasScheme("https");
     }
 }

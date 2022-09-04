@@ -23,6 +23,7 @@ import com.github.joschi.jadconfig.util.Duration;
 import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
+import com.github.joschi.jadconfig.validators.URIAbsoluteValidator;
 import com.google.common.annotations.VisibleForTesting;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
@@ -34,19 +35,21 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 @SuppressWarnings("FieldMayBeFinal")
 public abstract class BaseConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(BaseConfiguration.class);
-    protected static final int GRAYLOG_DEFAULT_PORT = 12900;
+    protected static final int GRAYLOG_DEFAULT_PORT = 9000;
     protected static final int GRAYLOG_DEFAULT_WEB_PORT = 9000;
 
     @Parameter(value = "shutdown_timeout", validator = PositiveIntegerValidator.class)
     protected int shutdownTimeout = 30000;
 
-    @Parameter(value = "rest_transport_uri")
+    @Parameter(value = "rest_transport_uri", validator = URIAbsoluteValidator.class)
     private URI restTransportUri;
 
     @Parameter(value = "processbuffer_processors", required = true, validator = PositiveIntegerValidator.class)
@@ -68,7 +71,7 @@ public abstract class BaseConfiguration {
     private boolean restEnableCors = true;
 
     @Parameter(value = "rest_enable_gzip")
-    private boolean restEnableGzip = false;
+    private boolean restEnableGzip = true;
 
     @Parameter(value = "rest_max_initial_line_length", required = true, validator = PositiveIntegerValidator.class)
     private int restMaxInitialLineLength = 4096;
@@ -78,6 +81,9 @@ public abstract class BaseConfiguration {
 
     @Parameter(value = "rest_thread_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int restThreadPoolSize = 16;
+
+    @Parameter(value = "rest_selector_runners_count", required = true, validator = PositiveIntegerValidator.class)
+    private int restSelectorRunnersCount = 1;
 
     @Parameter(value = "rest_enable_tls")
     private boolean restEnableTls = false;
@@ -151,6 +157,9 @@ public abstract class BaseConfiguration {
     @Parameter(value = "web_thread_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int webThreadPoolSize = 16;
 
+    @Parameter(value = "web_selector_runners_count", required = true, validator = PositiveIntegerValidator.class)
+    private int webSelectorRunnersCount = 1;
+
     @Parameter(value = "web_tls_cert_file")
     private Path webTlsCertFile;
 
@@ -159,6 +168,9 @@ public abstract class BaseConfiguration {
 
     @Parameter(value = "web_tls_key_password")
     private String webTlsKeyPassword;
+
+    @Parameter(value = "proxied_requests_thread_pool_size", required = true, validator = PositiveIntegerValidator.class)
+    private int proxiedRequestsThreadPoolSize = 32;
 
     public String getRestUriScheme() {
         return getUriScheme(isRestEnableTls());
@@ -180,7 +192,7 @@ public abstract class BaseConfiguration {
             LOG.warn("\"{}\" is not a valid setting for \"rest_transport_uri\". Using default [{}].", restTransportUri, getDefaultRestTransportUri());
             return getDefaultRestTransportUri();
         } else {
-            return Tools.getUriWithPort(restTransportUri, GRAYLOG_DEFAULT_PORT);
+            return Tools.normalizeURI(restTransportUri, restTransportUri.getScheme(), GRAYLOG_DEFAULT_PORT, "/");
         }
     }
 
@@ -206,8 +218,19 @@ public abstract class BaseConfiguration {
                 throw new RuntimeException("No rest_transport_uri.", e);
             }
 
-            transportUri = Tools.getUriWithPort(
-                    URI.create("http://" + guessedAddress.getHostAddress() + ":" + listenUri.getPort()), GRAYLOG_DEFAULT_PORT);
+            try {
+                transportUri = new URI(
+                        listenUri.getScheme(),
+                        listenUri.getUserInfo(),
+                        guessedAddress.getHostAddress(),
+                        listenUri.getPort(),
+                        listenUri.getPath(),
+                        listenUri.getQuery(),
+                        listenUri.getFragment()
+                );
+            } catch (URISyntaxException e) {
+                throw new RuntimeException("Invalid rest_transport_uri.", e);
+            }
         } else {
             transportUri = listenUri;
         }
@@ -270,6 +293,10 @@ public abstract class BaseConfiguration {
 
     public int getRestThreadPoolSize() {
         return restThreadPoolSize;
+    }
+
+    public int getRestSelectorRunnersCount() {
+        return restSelectorRunnersCount;
     }
 
     public boolean isRestEnableTls() {
@@ -354,6 +381,18 @@ public abstract class BaseConfiguration {
         return webEnable;
     }
 
+    public boolean isRestAndWebOnSamePort() {
+        final URI restListenUri = getRestListenUri();
+        final URI webListenUri = getWebListenUri();
+        try {
+            final InetAddress restAddress = InetAddress.getByName(restListenUri.getHost());
+            final InetAddress webAddress = InetAddress.getByName(webListenUri.getHost());
+            return restListenUri.getPort() == webListenUri.getPort() && restAddress.equals(webAddress);
+        } catch (UnknownHostException e) {
+            throw new RuntimeException("Unable to resolve hostnames of rest/web listen uris: ", e);
+        }
+    }
+
     public boolean isWebEnableCors() {
         return webEnableCors;
     }
@@ -376,6 +415,10 @@ public abstract class BaseConfiguration {
 
     public int getWebThreadPoolSize() {
         return webThreadPoolSize;
+    }
+
+    public int getWebSelectorRunnersCount() {
+        return webSelectorRunnersCount;
     }
 
     public Path getWebTlsCertFile() {
@@ -403,6 +446,7 @@ public abstract class BaseConfiguration {
     }
 
     @ValidatorMethod
+    @SuppressWarnings("unused")
     public void validateRestTlsConfig() throws ValidationException {
         if(isRestEnableTls()) {
             if(!isRegularFileAndReadable(getRestTlsKeyFile())) {
@@ -416,8 +460,9 @@ public abstract class BaseConfiguration {
     }
 
     @ValidatorMethod
+    @SuppressWarnings("unused")
     public void validateWebTlsConfig() throws ValidationException {
-        if(isWebEnableTls()) {
+        if(isWebEnableTls() && !isRestAndWebOnSamePort()) {
             if(!isRegularFileAndReadable(getWebTlsKeyFile())) {
                 throw new ValidationException("Unreadable or missing web interface private key: " + getWebTlsKeyFile());
             }
@@ -425,6 +470,24 @@ public abstract class BaseConfiguration {
             if(!isRegularFileAndReadable(getWebTlsCertFile())) {
                 throw new ValidationException("Unreadable or missing web interface X.509 certificate: " + getWebTlsCertFile());
             }
+        }
+    }
+
+    @ValidatorMethod
+    @SuppressWarnings("unused")
+    public void validateRestAndWebListenConfigConflict() throws ValidationException {
+        if (isRestAndWebOnSamePort()) {
+            if (getRestListenUri().getPath().equals(getWebListenUri().getPath())) {
+                throw new ValidationException("If REST and Web interface are served on the same host/port, the path must be different!");
+            }
+        }
+    }
+
+    @ValidatorMethod
+    @SuppressWarnings("unused")
+    public void validateWebAndRestHaveSameProtocolIfOnSamePort() throws ValidationException {
+        if (isRestAndWebOnSamePort() && !getWebListenUri().getScheme().equals(getRestListenUri().getScheme())) {
+            throw new ValidationException("If REST and Web interface are served on the same host/port, the protocols must be identical!");
         }
     }
 
