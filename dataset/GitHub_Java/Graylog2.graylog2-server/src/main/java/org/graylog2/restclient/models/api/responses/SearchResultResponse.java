@@ -19,19 +19,22 @@
 package org.graylog2.restclient.models.api.responses;
 
 import com.google.gson.annotations.SerializedName;
+import org.graylog2.restclient.models.api.responses.system.indices.IndexRangeSummary;
+import org.graylog2.restclient.models.api.responses.system.indices.IndexSummaryResponse;
+import org.joda.time.DateTime;
 
 import java.util.List;
 
 public class SearchResultResponse {
-	
-	public int time;
-	public String query;
-	public long total_results;
-	public List<MessageSummaryResponse> messages;
-	public List<String> fields;
+
+    public int time;
+    public String query;
+    public long total_results;
+    public List<MessageSummaryResponse> messages;
+    public List<String> fields;
 
     @SerializedName("used_indices")
-    public List<String> usedIndices;
+    public List<IndexRangeSummary> usedIndices;
 
     @SerializedName("built_query")
     public String builtQuery;
@@ -41,6 +44,16 @@ public class SearchResultResponse {
     @SerializedName("generic_error")
     public GenericError genericError;
 
+    public String from;
+
+    public String to;
+
+    public DateTime getFromDataTime() {
+        return from != null ? DateTime.parse(from) : null;
+    }
+    public DateTime getToDataTime() {
+        return to != null ? DateTime.parse(to) : null;
+    }
 
     public abstract static class QueryError {}
 
