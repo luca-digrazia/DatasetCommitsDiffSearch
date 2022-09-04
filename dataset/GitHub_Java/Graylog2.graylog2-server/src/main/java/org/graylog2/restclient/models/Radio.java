@@ -30,14 +30,20 @@ import org.graylog2.restclient.lib.ExclusiveInputException;
 import org.graylog2.restclient.lib.metrics.Metric;
 import org.graylog2.restclient.models.api.requests.InputLaunchRequest;
 import org.graylog2.restclient.models.api.responses.BuffersResponse;
-import org.graylog2.restclient.models.api.responses.EmptyResponse;
 import org.graylog2.restclient.models.api.responses.SystemOverviewResponse;
 import org.graylog2.restclient.models.api.responses.cluster.RadioSummaryResponse;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
-import org.graylog2.restclient.models.api.responses.system.*;
-import org.joda.time.DateTime;
+import org.graylog2.restclient.models.api.responses.system.ClusterEntityJVMStatsResponse;
+import org.graylog2.restclient.models.api.responses.system.InputLaunchResponse;
+import org.graylog2.restclient.models.api.responses.system.InputStateSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputTypesResponse;
+import org.graylog2.restclient.models.api.responses.system.InputsResponse;
+import org.graylog2.restclient.models.api.responses.system.NodeThroughputResponse;
+import org.graylog2.restroutes.generated.routes;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.Logger;
 import play.mvc.Http;
 
 import java.io.IOException;
@@ -45,21 +51,18 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class Radio extends ClusterEntity {
 
     public interface Factory {
         Radio fromSummaryResponse(RadioSummaryResponse r);
     }
 
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(Radio.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Radio.class);
+
     private final ApiClient api;
-
     private final Input.Factory inputFactory;
-
     private final URI transportAddress;
+
     private String id;
     private String shortNodeId;
 
@@ -78,41 +81,41 @@ public class Radio extends ClusterEntity {
     }
 
     public synchronized void loadSystemInformation() {
+        if (systemInfo != null) {
+            return;
+        }
         try {
-            systemInfo = api.get(SystemOverviewResponse.class)
-                    .path("/system")
+            systemInfo = api.path(routes.radio().SystemResource().system(), SystemOverviewResponse.class)
                     .radio(this)
                     .execute();
-        } catch (APIException e) {
-            log.error("Unable to load system information for radio " + this, e);
-        } catch (IOException e) {
-            log.error("Unable to load system information for radio " + this, e);
+        } catch (APIException | IOException e) {
+            LOG.error("Unable to load system information for radio " + this, e);
         }
     }
 
     public synchronized void loadJVMInformation() {
+        if (jvmInfo != null) {
+            return;
+        }
         try {
-            jvmInfo = new NodeJVMStats(api.get(ClusterEntityJVMStatsResponse.class)
-                    .path("/system/jvm")
+            jvmInfo = new NodeJVMStats(api.path(routes.radio().SystemResource().jvm(), ClusterEntityJVMStatsResponse.class)
                     .radio(this)
                     .execute());
-        } catch (APIException e) {
-            log.error("Unable to load JVM information for radio " + this, e);
-        } catch (IOException e) {
-            log.error("Unable to load JVM information for radio " + this, e);
+        } catch (APIException | IOException e) {
+            LOG.error("Unable to load JVM information for radio " + this, e);
         }
     }
 
     public synchronized void loadBufferInformation() {
+        if (bufferInfo != null) {
+            return;
+        }
         try {
-            bufferInfo = new BufferInfo(api.get(BuffersResponse.class)
-                    .path("/system/buffers")
+            bufferInfo = new BufferInfo(api.path(routes.radio().BuffersResource().utilization(), BuffersResponse.class)
                     .radio(this)
                     .execute());
-        } catch (APIException e) {
-            log.error("Unable to load buffer information for radio " + this, e);
-        } catch (IOException e) {
-            log.error("Unable to load buffer information for radio " + this, e);
+        } catch (APIException | IOException e) {
+            LOG.error("Unable to load buffer information for radio " + this, e);
         }
     }
 
@@ -130,11 +133,13 @@ public class Radio extends ClusterEntity {
     }
 
     public NodeJVMStats jvm() {
-        if (jvmInfo == null) {
-            loadJVMInformation();
-        }
+        loadJVMInformation();
 
-        return jvmInfo;
+        if (jvmInfo == null) {
+            return NodeJVMStats.buildEmpty();
+        } else {
+            return jvmInfo;
+        }
     }
 
     public String getPid() {
@@ -146,24 +151,20 @@ public class Radio extends ClusterEntity {
     }
 
     public void overrideLbStatus(String override) throws APIException, IOException {
-        api.put()
-                .path("/system/lbstatus/override/{0}", override)
+        api.path(routes.radio().LoadBalancerStatusResource().override(override))
                 .radio(this)
                 .execute();
     }
 
     public boolean launchExistingInput(String inputId) {
         try {
-            api.get(InputLaunchResponse.class)
-                    .path("/system/inputs/{0}/launch", inputId)
+            api.path(routes.radio().InputsResource().launchExisting(inputId), InputLaunchResponse.class)
                     .radio(this)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException e) {
-            log.error("Could not launch input " + inputId, e);
-        } catch (IOException e) {
-            log.error("Could not launch input " + inputId, e);
+        } catch (APIException | IOException e) {
+            LOG.error("Could not launch input " + inputId, e);
         }
 
         return false;
@@ -172,18 +173,26 @@ public class Radio extends ClusterEntity {
     @Override
     public boolean terminateInput(String inputId) {
         try {
-            api.delete().path("/system/inputs/{0}", inputId)
+            api.path(routes.radio().InputsResource().terminate(inputId))
                     .radio(this)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
             return true;
-        } catch (APIException e) {
-            log.error("Could not terminate input " + inputId, e);
-        } catch (IOException e) {
-            log.error("Could not terminate input " + inputId, e);
+        } catch (APIException | IOException e) {
+            LOG.error("Could not terminate input " + inputId, e);
         }
 
         return false;
+    }
+
+    private SystemOverviewResponse systemInfo() {
+        loadSystemInformation();
+
+        if (systemInfo == null) {
+            return SystemOverviewResponse.buildEmpty();
+        } else {
+            return systemInfo;
+        }
     }
 
     @Override
@@ -197,35 +206,21 @@ public class Radio extends ClusterEntity {
 
     @Override
     public String getHostname() {
-        if (systemInfo == null) {
-            loadSystemInformation();
-        }
-
-        return systemInfo.hostname;
+        return systemInfo().hostname;
     }
 
     public String getVersion() {
-        if (systemInfo == null) {
-            loadSystemInformation();
-        }
-
-        return systemInfo.version;
+        return systemInfo().version;
     }
 
     public String getLifecycle() {
-        if (systemInfo == null) {
-            loadSystemInformation();
-        }
-
-        return this.systemInfo.lifecycle;
+        return this.systemInfo().lifecycle;
     }
 
     public boolean lbAlive() {
-        if (systemInfo == null) {
-            loadSystemInformation();
-        }
+        final SystemOverviewResponse info = systemInfo();
 
-        return this.systemInfo.lbStatus != null && this.systemInfo.lbStatus.equals("alive");
+        return info.lbStatus != null && info.lbStatus.equals("alive");
     }
 
     @Override
@@ -250,11 +245,11 @@ public class Radio extends ClusterEntity {
     }
 
     public Map<String, String> getInputTypes() throws IOException, APIException {
-        return api.get(InputTypesResponse.class).radio(this).path("/system/inputs/types").execute().types;
+        return api.path(routes.radio().InputsResource().types(), InputTypesResponse.class).radio(this).execute().types;
     }
 
     public InputTypeSummaryResponse getInputTypeInformation(String type) throws IOException, APIException {
-        return api.get(InputTypeSummaryResponse.class).radio(this).path("/system/inputs/types/{0}", type).execute();
+        return api.path(routes.radio().InputsResource().info(type), InputTypeSummaryResponse.class).radio(this).execute();
     }
 
     public List<Input> getInputs() {
@@ -268,7 +263,8 @@ public class Radio extends ClusterEntity {
     }
 
     public Input getInput(String inputId) throws IOException, APIException {
-        final InputSummaryResponse inputSummaryResponse = api.get(InputSummaryResponse.class).radio(this).path("/system/inputs/{0}", inputId).execute();
+        final InputSummaryResponse inputSummaryResponse = api
+                .path(routes.radio().InputsResource().single(inputId), InputSummaryResponse.class).radio(this).execute();
         return inputFactory.fromSummaryResponse(inputSummaryResponse, this);
     }
 
@@ -279,9 +275,9 @@ public class Radio extends ClusterEntity {
 
     private InputsResponse inputs() {
         try {
-            return api.get(InputsResponse.class).radio(this).path("/system/inputs").execute();
+            return api.path(routes.radio().InputsResource().list(), InputsResponse.class).radio(this).execute();
         } catch (Exception e) {
-            Logger.error("Could not get inputs.", e);
+            LOG.error("Could not get inputs.", e);
             throw new RuntimeException("Could not get inputs.", e);
         }
     }
@@ -301,55 +297,51 @@ public class Radio extends ClusterEntity {
         request.type = type;
         request.global = global;
         request.configuration = configuration;
-        request.creatorUserId = creator.getId();
+        request.creatorUserId = creator.getName();
 
         InputLaunchResponse ilr = null;
         try {
-            ilr = api.post(InputLaunchResponse.class)
-                    .path("/system/inputs")
+            ilr = api.path(routes.radio().InputsResource().launch(), InputLaunchResponse.class)
                     .radio(this)
                     .body(request)
                     .expect(Http.Status.ACCEPTED)
                     .execute();
 
-        } catch (APIException e) {
-            log.error("Could not launch input " + title, e);
-        } catch (IOException e) {
-            log.error("Could not launch input " + title, e);
+        } catch (APIException | IOException e) {
+            LOG.error("Could not launch input " + title, e);
         }
         return ilr;
     }
 
     public BufferInfo getBuffers() {
+        loadBufferInformation();
+
         if (bufferInfo == null) {
-            loadBufferInformation();
+            return BufferInfo.buildEmpty();
+        } else {
+            return bufferInfo;
         }
-        return bufferInfo;
     }
 
     public String getThreadDump() throws IOException, APIException {
-        return api.get(String.class)
+        return api.path(routes.radio().SystemResource().threaddump(), String.class)
                 .radio(this)
-                .path("/system/threaddump")
                 .accept(MediaType.ANY_TEXT_TYPE)
                 .execute();
     }
 
     public int getThroughput() {
         try {
-            return api.get(NodeThroughputResponse.class).radio(this).path("/system/throughput").execute().throughput;
-        } catch (APIException e) {
-            log.error("Could not load throughput for radio " + this, e);
-        } catch (IOException e) {
-            log.error("Could not load throughput for radio " + this, e);
+            return api.path(routes.radio().ThroughputResource().total(), NodeThroughputResponse.class).radio(this).execute().throughput;
+        } catch (APIException | IOException e) {
+            LOG.error("Could not load throughput for radio " + this, e);
         }
         return 0;
     }
 
     public Map<String, Metric> getMetrics(String namespace) throws APIException, IOException {
-        MetricsListResponse response = api.get(MetricsListResponse.class)
+        MetricsListResponse response = api.path(routes.radio().MetricsResource().byNamespace(namespace), MetricsListResponse.class)
                 .radio(this)
-                .path("/system/metrics/namespace/{0}", namespace)
                 .expect(200, 404)
                 .execute();
 
@@ -371,4 +363,27 @@ public class Radio extends ClusterEntity {
         return b.toString();
     }
 
+    @Override
+    public void stopInput(String inputId) throws IOException, APIException {
+        api.path(routes.radio().InputsResource().stop(inputId))
+                .radio(this)
+                .expect(Http.Status.ACCEPTED)
+                .execute();
+    }
+
+    @Override
+    public void startInput(String inputId) throws IOException, APIException {
+        api.path(routes.radio().InputsResource().launchExisting(inputId))
+                .radio(this)
+                .expect(Http.Status.ACCEPTED)
+                .execute();
+    }
+
+    @Override
+    public void restartInput(String inputId) throws IOException, APIException {
+        api.path(routes.InputsResource().restart(inputId))
+                .radio(this)
+                .expect(Http.Status.ACCEPTED)
+                .execute();
+    }
 }
