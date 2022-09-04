@@ -19,6 +19,9 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.docgen.starlark.StarlarkBuiltinDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkConstructorMethodDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkJavaMethodDoc;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.util.Classpath;
 import com.google.devtools.build.lib.util.Classpath.ClassPathException;
 import java.lang.reflect.Method;
@@ -30,9 +33,6 @@ import net.starlark.java.annot.StarlarkConstructor;
 import net.starlark.java.annot.StarlarkDocumentationCategory;
 import net.starlark.java.annot.StarlarkGlobalLibrary;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkValue;
 
 /** A helper class that collects Starlark module documentation. */
 final class StarlarkDocumentationCollector {
@@ -70,6 +70,15 @@ final class StarlarkDocumentationCollector {
    * a map from the name of each Starlark module to its documentation.
    */
   static ImmutableMap<String, StarlarkBuiltinDoc> collectModules(Iterable<Class<?>> classes) {
+    // Force class loading of com.google.devtools.build.lib.syntax.Starlark before we do any of our
+    // own processing. Otherwise, we're in trouble since com.google.devtools.build.lib.syntax.Dict
+    // happens to be the first class on our classpath that we proccess via #collectModuleMethods,
+    // but that entails a logical cycle in
+    // com.google.devtools.build.lib.syntax.CallUtils#getCacheValue.
+    // TODO(b/161479826): Address this in a less hacky manner.
+    @SuppressWarnings("unused")
+    Object forceClassLoading = Starlark.UNIVERSE;
+
     Map<String, StarlarkBuiltinDoc> modules = new TreeMap<>();
     // The top level module first.
     // (This is a special case of {@link StarlarkBuiltinDoc} as it has no object name).

@@ -134,6 +134,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   @Nullable private final Artifact grepIncludes;
   private final boolean shareable;
   private final boolean shouldScanIncludes;
+  private final boolean shouldPruneModules;
   private final boolean usePic;
   private final boolean useHeaderModules;
   private final boolean needsDotdInputPruning;
@@ -235,6 +236,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       CppConfiguration cppConfiguration,
       boolean shareable,
       boolean shouldScanIncludes,
+      boolean shouldPruneModules,
       boolean usePic,
       boolean useHeaderModules,
       NestedSet<Artifact> mandatoryInputs,
@@ -263,6 +265,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
             .build(),
         CollectionUtils.asSetWithoutNulls(outputFile, dotdFile, gcnoFile, dwoFile, ltoIndexingFile),
         env);
+    Preconditions.checkArgument(!shouldPruneModules || shouldScanIncludes);
     this.outputFile = Preconditions.checkNotNull(outputFile);
     this.sourceFile = sourceFile;
     this.shareable = shareable;
@@ -273,6 +276,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     this.inputsForInvalidation = inputsForInvalidation;
     this.additionalPrunableHeaders = additionalPrunableHeaders;
     this.shouldScanIncludes = shouldScanIncludes;
+    this.shouldPruneModules = shouldPruneModules;
     this.usePic = usePic;
     this.useHeaderModules = useHeaderModules;
     this.ccCompilationContext = ccCompilationContext;
@@ -332,7 +336,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   private boolean shouldScanDotdFiles() {
-    return !useHeaderModules || !shouldScanIncludes;
+    return !useHeaderModules || !shouldPruneModules;
   }
 
   public boolean useInMemoryDotdFiles() {
@@ -609,27 +613,22 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       // We get a collection view of the NestedSet in a way that can throw an InterruptedException
       // because a NestedSet may contain a future.
       Map.Entry<Artifact, NestedSet<? extends Artifact>> entry = iterator.next();
-      Artifact dep = entry.getKey();
       NestedSet<? extends Artifact> transitive = entry.getValue();
 
       List<? extends Artifact> modules;
       try {
         modules = actionExecutionContext.getNestedSetExpander().toListInterruptibly(transitive);
-      } catch (TimeoutException | MissingNestedSetException e) {
-        DetailedExitCode code =
-            e instanceof TimeoutException
-                ? createDetailedExitCode(
-                    "Timed out expanding modules for " + dep, Code.MODULE_EXPANSION_TIMEOUT)
-                : createDetailedExitCode(
-                    "Missing data while expanding modules for " + dep,
-                    Code.MODULE_EXPANSION_MISSING_DATA);
+      } catch (TimeoutException e) {
         if (actionExecutionContext.isRewindingEnabled()) {
-          // If rewinding is enabled, this error is recoverable.
-          throw lostInputsExceptionForFailedNestedSetExpansion(dep, iterator, e, code);
+          throw lostInputsExceptionForTimedOutNestedSetExpansion(entry.getKey(), iterator, e);
         }
         BugReport.sendBugReport(e);
-        throw new ActionExecutionException(
-            code.getFailureDetail().getMessage(), e, this, /*catastrophe=*/ false, code);
+        String message = "Timed out expanding modules";
+        DetailedExitCode code = createDetailedExitCode(message, Code.MODULE_EXPANSION_TIMEOUT);
+        throw new ActionExecutionException(message, this, /*catastrophe=*/ false, code);
+      } catch (MissingNestedSetException e) {
+        // TODO(b/168360382): Make this non-fatal by treating it like a timeout.
+        throw new IllegalStateException(e);
       }
 
       for (Artifact module : modules) {
@@ -656,16 +655,14 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   /**
-   * Handles a failure (timeout or missing data) during expansion of transitively used modules.
+   * Handles a timeout during expansion of transitively used modules.
    *
    * <p>A timeout may occur if a nested set of transitively used modules {@linkplain
-   * NestedSet#isFromStorage} but is not {@linkplain NestedSet#isReady ready}, while a {@link
-   * MissingNestedSetException} may occur if the data cannot be found.
+   * NestedSet#isFromStorage} but is not {@linkplain NestedSet#isReady ready}. The timeout is
+   * handled by throwing {@link LostInputsActionExecutionException} so that rewinding kicks in and
+   * rebuilds the nodes with the unavailable nested sets.
    *
-   * <p>Both cases are handled by throwing {@link LostInputsActionExecutionException} so that
-   * rewinding kicks in and rebuilds the nodes with the unavailable nested sets.
-   *
-   * <p>As soon as one failure is seen, any other nested sets of modules which are not ready are
+   * <p>As soon as one timeout is seen, any other nested sets of modules which are not ready are
    * also treated as lost inputs.
    *
    * <p>Although the output {@link Artifact} (.pcm file) of dependent modules is not technically
@@ -674,11 +671,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
    * we use the .pcm file's exec path since rewinding only uses the digest to detect multiple
    * rewinds of the same input.
    */
-  private LostInputsActionExecutionException lostInputsExceptionForFailedNestedSetExpansion(
+  private LostInputsActionExecutionException lostInputsExceptionForTimedOutNestedSetExpansion(
       Artifact timedOut,
       Iterator<Map.Entry<Artifact, NestedSet<? extends Artifact>>> remainingModules,
-      Exception e,
-      DetailedExitCode code) {
+      TimeoutException e) {
     ImmutableMap.Builder<String, ActionInput> lostInputsBuilder = ImmutableMap.builder();
     lostInputsBuilder.put(timedOut.getExecPathString(), timedOut);
     remainingModules.forEachRemaining(
@@ -689,9 +685,11 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           }
         });
     ImmutableMap<String, ActionInput> lostInputs = lostInputsBuilder.build();
-    ActionInputDepOwnerMap owners = new ActionInputDepOwnerMap(lostInputs.values());
-    return new LostInputsActionExecutionException(
-        code.getFailureDetail().getMessage(), lostInputs, owners, this, e, code);
+    String message = "Timed out expanding modules";
+    DetailedExitCode code = createDetailedExitCode(message, Code.MODULE_EXPANSION_TIMEOUT);
+    ActionInputDepOwnerMap owners =
+        new ActionInputDepOwnerMap(ImmutableList.copyOf(lostInputs.values()));
+    return new LostInputsActionExecutionException(message, lostInputs, owners, this, e, code);
   }
 
   @Override
@@ -1241,7 +1239,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       // Ideally the same thing would be done in both cases, but as is, we just overestimate modules
       // in the latter case using the inputs from the action cache.
       // Note that this breaks the invariant that Actions are immutable after the analysis phase.
-      if (shouldScanIncludes && topLevelModules != null) {
+      if (shouldPruneModules && topLevelModules != null) {
         return calculateModuleVariable(topLevelModules);
       } else {
         return calculateModuleVariable(getInputs());
@@ -1935,7 +1933,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     }
   }
 
-  private static DetailedExitCode createDetailedExitCode(String message, Code detailedCode) {
+  static DetailedExitCode createDetailedExitCode(String message, Code detailedCode) {
     return DetailedExitCode.of(createFailureDetail(message, detailedCode));
   }
 

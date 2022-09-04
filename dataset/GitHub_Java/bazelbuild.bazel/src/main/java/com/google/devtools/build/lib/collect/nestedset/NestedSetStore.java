@@ -27,7 +27,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.lib.bugreport.BugReporter;
+import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationConstants;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
@@ -79,13 +79,8 @@ public class NestedSetStore {
    * that does not exist in the store.
    */
   public static final class MissingNestedSetException extends Exception {
-
     public MissingNestedSetException(ByteString fingerprint) {
-      this(fingerprint, /*cause=*/ null);
-    }
-
-    public MissingNestedSetException(ByteString fingerprint, @Nullable Throwable cause) {
-      super("No NestedSet data for " + fingerprint, cause);
+      super("No NestedSet data for " + fingerprint);
     }
   }
 
@@ -132,16 +127,7 @@ public class NestedSetStore {
 
   /** An in-memory cache for fingerprint <-> NestedSet associations. */
   @VisibleForTesting
-  static class NestedSetCache {
-    private final BugReporter bugReporter;
-
-    NestedSetCache() {
-      this(BugReporter.defaultInstance());
-    }
-
-    private NestedSetCache(BugReporter bugReporter) {
-      this.bugReporter = bugReporter;
-    }
+  public static class NestedSetCache {
 
     /**
      * Fingerprint to array cache.
@@ -222,7 +208,7 @@ public class NestedSetStore {
               fingerprintToContents.put(fingerprint, contents);
               // There may already be an entry here, but it's better to put a fingerprint result
               // with an immediate future, since then later readers won't need to block
-              // unnecessarily. It would be nice to check the old value, but Cache#put
+              // unnecessarily. It would be nice to sanity check the old value, but Cache#put
               // doesn't provide it to us.
               contentsToFingerprint.put(
                   contents,
@@ -232,7 +218,9 @@ public class NestedSetStore {
               // Failure to fetch the NestedSet contents is unexpected, but the failed future can
               // be stored as the NestedSet children. This way the exception is only propagated if
               // the NestedSet is consumed (unrolled).
-              bugReporter.sendBugReport(e);
+              BugReport.sendBugReport(
+                  new IllegalStateException(
+                      "Expected write for " + fingerprint + " to be complete", e));
             }
           },
           MoreExecutors.directExecutor());
@@ -274,15 +262,12 @@ public class NestedSetStore {
    * Creates a NestedSetStore with the provided {@link NestedSetStorageEndpoint} and executor for
    * deserialization.
    */
-  public NestedSetStore(
-      NestedSetStorageEndpoint nestedSetStorageEndpoint,
-      Executor executor,
-      BugReporter bugReporter) {
-    this(nestedSetStorageEndpoint, new NestedSetCache(bugReporter), executor);
+  public NestedSetStore(NestedSetStorageEndpoint nestedSetStorageEndpoint, Executor executor) {
+    this(nestedSetStorageEndpoint, new NestedSetCache(), executor);
   }
 
   @VisibleForTesting
-  NestedSetStore(
+  public NestedSetStore(
       NestedSetStorageEndpoint nestedSetStorageEndpoint,
       NestedSetCache nestedSetCache,
       Executor executor) {
