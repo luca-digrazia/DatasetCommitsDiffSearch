@@ -1950,8 +1950,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   /**
    * A progress received to track analysis invalidation and update progress messages.
    */
-  protected class SkyframeProgressReceiver
-      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
+  protected class SkyframeProgressReceiver implements EvaluationProgressReceiver {
     /**
      * This flag is needed in order to avoid invalidating legacy data when we clear the
      * analysis cache because of --discard_analysis_cache flag. For that case we want to keep
@@ -1980,6 +1979,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         executionProgressReceiver.enqueueing(skyKey);
       }
     }
+
+    @Override
+    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
 
     @Override
     public void evaluated(SkyKey skyKey, Supplier<SkyValue> valueSupplier, EvaluationState state) {
