@@ -4,7 +4,6 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import io.netty.handler.ssl.SslProvider;
 import io.quarkus.runtime.annotations.ConfigGroup;
@@ -138,17 +137,7 @@ public class NettyHttpClientConfig {
          * <p>
          */
         @ConfigItem(defaultValueDocumentation = "1048576")
-        public OptionalInt initialWindowSize;
-
-        /**
-         * Sets the period that the Netty client will send {@code PING} frames to the remote endpoint to check the
-         * health of the connection. To disable this feature, set a duration of 0.
-         * <p>
-         * This setting is only respected when the HTTP/2 protocol is used.
-         * <p>
-         */
-        @ConfigItem(defaultValueDocumentation = "5")
-        public Optional<Duration> healthCheckPingPeriod;
+        public Optional<Integer> initialWindowSize;
     }
 
     @ConfigGroup
@@ -167,7 +156,7 @@ public class NettyHttpClientConfig {
          * `io.netty.eventLoopThreads` system property is set.
          */
         @ConfigItem
-        public OptionalInt numberOfThreads;
+        public Optional<Integer> numberOfThreads;
 
         /**
          * The thread name prefix for threads created by this thread factory used by event loop group.
