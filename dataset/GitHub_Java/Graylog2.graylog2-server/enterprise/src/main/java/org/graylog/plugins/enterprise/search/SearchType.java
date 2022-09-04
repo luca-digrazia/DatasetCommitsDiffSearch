@@ -7,12 +7,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import javax.annotation.Nullable;
 import java.util.Objects;
 
 /**
  * A search type represents parts of a query that generates a {@see Result result}.
- * <p>
+ *
  * Plain queries only select a set of data but by themselves do not return any specific parts from it.
  * Typical search types are aggregations across fields, a list of messages and other metadata.
  */
@@ -31,29 +30,9 @@ public interface SearchType {
     @JsonProperty("id")
     String id();
 
-    @Nullable
-    @JsonProperty("filter")
-    Filter filter();
-
     SearchType withId(String id);
 
     SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state);
-
-    /**
-     * Each search type should declare an implementation of its result conforming to this interface.
-     * <p>
-     * The frontend components then make use of the structured data to display it.
-     */
-    interface Result {
-        @JsonProperty("id")
-        String id();
-
-        /**
-         * The json type info property of the surrounding SearchType class. Must be set manually by subclasses.
-         */
-        @JsonProperty("type")
-        String type();
-    }
 
     @JsonAutoDetect
     class Fallback implements SearchType {
@@ -64,10 +43,6 @@ public interface SearchType {
         @JsonProperty
         private String id;
 
-        @Nullable
-        @JsonProperty
-        private Filter filter;
-
         @Override
         public String type() {
             return type;
@@ -76,11 +51,6 @@ public interface SearchType {
         @Override
         public String id() {
             return id;
-        }
-
-        @Override
-        public Filter filter() {
-            return filter;
         }
 
         @Override
@@ -116,5 +86,21 @@ public interface SearchType {
         public int hashCode() {
             return Objects.hash(type, id);
         }
+    }
+
+    /**
+     * Each search type should declare an implementation of its result conforming to this interface.
+     *
+     * The frontend components then make use of the structured data to display it.
+     */
+    interface Result {
+        @JsonProperty("id")
+        String id();
+
+        /**
+         * The json type info property of the surrounding SearchType class. Must be set manually by subclasses.
+         */
+        @JsonProperty("type")
+        String type();
     }
 }
