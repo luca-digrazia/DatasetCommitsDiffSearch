@@ -24,12 +24,12 @@ import static java.lang.Math.*;
  * is a special function of sigmoid shape which occurs in probability,
  * statistics, materials science, and partial differential equations.
  * It is defined as:
- * <pre>
- *     erf(x) = <i><big>&#8747;</big><sub><small>0</small></sub><sup><small>x</small></sup> e<sup>-t<sup>2</sup></sup>dt</i>
- * </pre>
+ * <p>
+ * erf(x) = <i><big>&#8747;</big><sub><small>0</small></sub><sup><small>x</small></sup> e<sup>-t<sup>2</sup></sup>dt</i>
+ * <p>
  * The complementary error function, denoted erfc, is defined as
- * <code>erfc(x) = 1 - erf(x)</code>. The error function and complementary
- * error function are special cases of the incomplete gamma function.
+ * erfc(x) = 1 - erf(x). The error function and complementary error
+ * function are special cases of the incomplete gamma function.
  * 
  * @author Haifeng Li
  */
