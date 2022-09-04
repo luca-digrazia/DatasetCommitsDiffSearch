@@ -15,14 +15,16 @@
  */
 package org.jboss.shamrock.scheduler.deployment;
 
-import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
 
+import java.text.ParseException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Singleton;
 
@@ -40,6 +42,7 @@ import org.jboss.protean.arc.InstanceHandle;
 import org.jboss.protean.arc.processor.AnnotationStore;
 import org.jboss.protean.arc.processor.AnnotationsTransformer;
 import org.jboss.protean.arc.processor.BeanDeploymentValidator;
+import org.jboss.protean.arc.processor.BeanDeploymentValidator.ValidationContext;
 import org.jboss.protean.arc.processor.BeanInfo;
 import org.jboss.protean.arc.processor.DotNames;
 import org.jboss.protean.arc.processor.ScopeInfo;
@@ -48,22 +51,27 @@ import org.jboss.protean.gizmo.ClassOutput;
 import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
-import org.jboss.shamrock.annotations.BuildProducer;
-import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.Record;
+import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
 import org.jboss.shamrock.arc.deployment.AnnotationsTransformerBuildItem;
+import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanDeploymentValidatorBuildItem;
-import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
-import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
+import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem;
+import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
+import org.jboss.shamrock.deployment.annotations.BuildProducer;
+import org.jboss.shamrock.deployment.annotations.BuildStep;
+import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.deployment.builditem.AnnotationProxyBuildItem;
+import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import org.jboss.shamrock.deployment.util.HashUtil;
 import org.jboss.shamrock.scheduler.api.Scheduled;
 import org.jboss.shamrock.scheduler.api.ScheduledExecution;
-import org.jboss.shamrock.scheduler.api.Scheduleds;
 import org.jboss.shamrock.scheduler.runtime.QuartzScheduler;
 import org.jboss.shamrock.scheduler.runtime.ScheduledInvoker;
 import org.jboss.shamrock.scheduler.runtime.SchedulerConfiguration;
 import org.jboss.shamrock.scheduler.runtime.SchedulerDeploymentTemplate;
+import org.quartz.CronExpression;
 import org.quartz.simpl.CascadingClassLoadHelper;
 import org.quartz.simpl.RAMJobStore;
 import org.quartz.simpl.SimpleThreadPool;
@@ -77,13 +85,11 @@ public class SchedulerProcessor {
     private static final Logger LOGGER = Logger.getLogger("org.jboss.shamrock.scheduler.deployment.processor");
 
     static final DotName SCHEDULED_NAME = DotName.createSimple(Scheduled.class.getName());
-    static final DotName SCHEDULEDS_NAME = DotName.createSimple(Scheduleds.class.getName());
+    static final DotName SCHEDULES_NAME = DotName.createSimple(Scheduled.Schedules.class.getName());
 
     static final Type SCHEDULED_EXECUTION_TYPE = Type.create(DotName.createSimple(ScheduledExecution.class.getName()), Kind.CLASS);
 
     static final String INVOKER_SUFFIX = "_ScheduledInvoker";
-
-    private static final AtomicInteger INVOKER_INDEX = new AtomicInteger();
 
     @BuildStep
     List<AdditionalBeanBuildItem> beans() {
@@ -106,8 +112,8 @@ public class SchedulerProcessor {
             public void transform(TransformationContext context) {
                 if (context.getAnnotations().isEmpty()) {
                     // Class with no annotations but with @Scheduled method
-                    if (context.getTarget().asClass().annotations().containsKey(SCHEDULED_NAME) || context.getTarget().asClass().annotations().containsKey(SCHEDULEDS_NAME)) {
-                        LOGGER.infof("Found scheduled business methods on a class %s with no annotations - adding @Singleton", context.getTarget());
+                    if (context.getTarget().asClass().annotations().containsKey(SCHEDULED_NAME) || context.getTarget().asClass().annotations().containsKey(SCHEDULES_NAME)) {
+                        LOGGER.debugf("Found scheduled business methods on a class %s with no annotations - adding @Singleton", context.getTarget());
                         context.transform().add(Singleton.class).done();
                     }
                 }
@@ -126,7 +132,7 @@ public class SchedulerProcessor {
 
     @BuildStep
     BeanDeploymentValidatorBuildItem beanDeploymentValidator(BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods) {
-        
+
         return new BeanDeploymentValidatorBuildItem(new BeanDeploymentValidator() {
 
             @Override
@@ -146,13 +152,12 @@ public class SchedulerProcessor {
                             if (scheduledAnnotation != null) {
                                 schedules = Collections.singletonList(scheduledAnnotation);
                             } else {
-                                AnnotationInstance scheduledsAnnotation = annotationStore.getAnnotation(method, SCHEDULEDS_NAME);
+                                AnnotationInstance scheduledsAnnotation = annotationStore.getAnnotation(method, SCHEDULES_NAME);
                                 if (scheduledsAnnotation != null) {
                                     schedules = new ArrayList<>();
                                     for (AnnotationInstance scheduledInstance : scheduledsAnnotation.value().asNestedArray()) {
                                         schedules.add(scheduledInstance);
                                     }
-
                                 } else {
                                     schedules = null;
                                 }
@@ -167,8 +172,11 @@ public class SchedulerProcessor {
                                 if (!method.returnType().kind().equals(Type.Kind.VOID)) {
                                     throw new IllegalStateException(String.format("Scheduled business method must return void [method: %s, bean:%s", method.returnType(), method, bean));
                                 }
+                                // Validate cron() and every() expressions
+                                for (AnnotationInstance scheduled : schedules) {
+                                    validateScheduled(validationContext, scheduled);
+                                }
                                 scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(bean, method, schedules));
-                                // TODO: validate cron and period expressions
                                 LOGGER.debugf("Found scheduled business method %s declared on %s", method, bean);
                             }
                         }
@@ -180,25 +188,34 @@ public class SchedulerProcessor {
     }
 
     @BuildStep
+    public List<UnremovableBeanBuildItem> unremovableBeans() {
+        return Arrays.asList(new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULED_NAME)),
+                new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULES_NAME)));
+    }
+
+    @BuildStep
     @Record(STATIC_INIT)
     public void build(SchedulerDeploymentTemplate template, BeanContainerBuildItem beanContainer, List<ScheduledBusinessMethodItem> scheduledBusinessMethods,
-            BuildProducer<GeneratedClassBuildItem> generatedResource, BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+            BuildProducer<GeneratedClassBuildItem> generatedClass, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<FeatureBuildItem> feature, AnnotationProxyBuildItem annotationProxy) {
 
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.SCHEDULER));
         List<Map<String, Object>> scheduleConfigurations = new ArrayList<>();
-        ProcessorClassOutput processorClassOutput = new ProcessorClassOutput(generatedResource);
+        ClassOutput classOutput = new ClassOutput() {
+            @Override
+            public void write(String name, byte[] data) {
+                generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
+            }
+        };
 
         for (ScheduledBusinessMethodItem businessMethod : scheduledBusinessMethods) {
             Map<String, Object> config = new HashMap<>();
-            String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), processorClassOutput);
+            String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, invokerClass));
             config.put(SchedulerDeploymentTemplate.INVOKER_KEY, invokerClass);
-            List<Map<String, Object>> schedules = new ArrayList<>();
+            List<Scheduled> schedules = new ArrayList<>();
             for (AnnotationInstance scheduled : businessMethod.getSchedules()) {
-                Map<String, Object> scheduledConfig = new HashMap<>();
-                for (AnnotationValue annotationValue : scheduled.values()) {
-                    scheduledConfig.put(annotationValue.name(), getValue(annotationValue));
-                }
-                schedules.add(scheduledConfig);
+                schedules.add(annotationProxy.from(scheduled, Scheduled.class));
             }
             config.put(SchedulerDeploymentTemplate.SCHEDULES_KEY, schedules);
             config.put(SchedulerDeploymentTemplate.DESC_KEY, businessMethod.getMethod().declaringClass() + "#" + businessMethod.getMethod().name());
@@ -207,7 +224,7 @@ public class SchedulerProcessor {
         template.registerSchedules(scheduleConfigurations, beanContainer.getValue());
     }
 
-    private String generateInvoker(BeanInfo bean, MethodInfo method, ProcessorClassOutput processorClassOutput) {
+    private String generateInvoker(BeanInfo bean, MethodInfo method, ClassOutput classOutput) {
 
         String baseName;
         if (bean.getImplClazz().enclosingClass() != null) {
@@ -215,10 +232,15 @@ public class SchedulerProcessor {
         } else {
             baseName = DotNames.simpleName(bean.getImplClazz().name());
         }
+        StringBuilder sigBuilder = new StringBuilder();
+        sigBuilder.append(method.name()).append("_").append(method.returnType().name().toString());
+        for (Type i : method.parameters()) {
+            sigBuilder.append(i.name().toString());
+        }
         String targetPackage = DotNames.packageName(bean.getImplClazz().name());
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + INVOKER_INDEX.incrementAndGet();
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + "_" + method.name() + "_" + HashUtil.sha1(sigBuilder.toString());
 
-        ClassCreator invokerCreator = ClassCreator.builder().classOutput(processorClassOutput).className(generatedName).interfaces(ScheduledInvoker.class)
+        ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(ScheduledInvoker.class)
                 .build();
 
         MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, ScheduledExecution.class);
@@ -247,31 +269,38 @@ public class SchedulerProcessor {
         return generatedName.replace('/', '.');
     }
 
-    private Object getValue(AnnotationValue annotationValue) {
-        switch (annotationValue.kind()) {
-            case STRING:
-                return annotationValue.asString();
-            case LONG:
-                return annotationValue.asLong();
-            case ENUM:
-                return annotationValue.asEnum();
-            default:
-                throw new IllegalArgumentException("Unsupported annotation value: " + annotationValue);
+    private void validateScheduled(ValidationContext validationContext, AnnotationInstance schedule) {
+        AnnotationValue cronValue = schedule.value("cron");
+        if (cronValue != null && !cronValue.asString().trim().isEmpty()) {
+            String cron = cronValue.asString().trim();
+            if (SchedulerConfiguration.isConfigValue(cron)) {
+                // Don't validate config property
+                return;
+            }
+            try {
+                new CronExpression(cron);
+            } catch (ParseException e) {
+                validationContext.addDeploymentProblem(new IllegalStateException("Invalid cron() expression on: " + schedule, e));
+            }
+        } else {
+            AnnotationValue everyValue = schedule.value("every");
+            if (everyValue != null && !everyValue.asString().trim().isEmpty()) {
+                String every = everyValue.asString().trim();
+                if (SchedulerConfiguration.isConfigValue(every)) {
+                    return;
+                }
+                if (Character.isDigit(every.charAt(0))) {
+                    every = "PT" + every;
+                }
+                try {
+                    Duration.parse(every);
+                } catch (Exception e) {
+                    validationContext.addDeploymentProblem(new IllegalStateException("Invalid every() expression on: " + schedule, e));
+                }
+            } else {
+                validationContext.addDeploymentProblem(new IllegalStateException("@Scheduled must declare either cron() or every(): " + schedule));
+            }
         }
-    }
-
-    static final class ProcessorClassOutput implements ClassOutput {
-        private final BuildProducer<GeneratedClassBuildItem> producer;
-
-        ProcessorClassOutput(BuildProducer<GeneratedClassBuildItem> producer) {
-            this.producer = producer;
-        }
-
-        @Override
-        public void write(final String name, final byte[] data) {
-            producer.produce(new GeneratedClassBuildItem(true, name, data));
-        }
-
     }
 
 }

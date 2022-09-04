@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.enterprise.inject.Any;
@@ -89,18 +90,24 @@ public class BeanProcessor {
 
     private final Predicate<DotName> applicationClassPredicate;
 
+    private final boolean removeUnusedBeans;
+    private final List<Predicate<BeanInfo>> unusedExclusions;
+
     private BeanProcessor(String name, IndexView index, Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations, ResourceOutput output,
-                          boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration, List<AnnotationsTransformer> annotationTransformers,
-                          Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
-                          List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate) {
+            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration, List<AnnotationsTransformer> annotationTransformers,
+            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
+            List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate, boolean unusedBeansRemovalEnabled,
+            List<Predicate<BeanInfo>> unusedExclusions) {
+
         this.reflectionRegistration = reflectionRegistration;
         this.applicationClassPredicate = applicationClassPredicate;
-        Objects.requireNonNull(output);
         this.name = name;
         this.additionalBeanDefiningAnnotations = additionalBeanDefiningAnnotations;
-        this.output = output;
+        this.output = Objects.requireNonNull(output);
         this.sharedAnnotationLiterals = sharedAnnotationLiterals;
         this.resourceAnnotations = resourceAnnotations;
+        this.removeUnusedBeans = unusedBeansRemovalEnabled;
+        this.unusedExclusions = unusedExclusions;
 
         // Initialize all build processors
         buildContext = new BuildContextImpl();
@@ -144,24 +151,25 @@ public class BeanProcessor {
         this.beanRegistrars = initAndSort(beanRegistrars, buildContext);
         this.beanDeploymentValidators = initAndSort(beanDeploymentValidators, buildContext);
     }
-
+    
     public BeanDeployment process() throws IOException {
 
         BeanDeployment beanDeployment = new BeanDeployment(new IndexWrapper(index), additionalBeanDefiningAnnotations, annotationTransformers,
-                resourceAnnotations, beanRegistrars, beanDeploymentValidators, buildContext);
+                resourceAnnotations, beanRegistrars, buildContext, removeUnusedBeans, unusedExclusions);
         beanDeployment.init();
-
-        AnnotationLiteralProcessor annotationLiterals = new AnnotationLiteralProcessor(name, sharedAnnotationLiterals);
-        BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals, applicationClassPredicate);
+        beanDeployment.validate(buildContext, beanDeploymentValidators);
+        
+        PrivateMembersCollector privateMembers = new PrivateMembersCollector();
+        AnnotationLiteralProcessor annotationLiterals = new AnnotationLiteralProcessor(sharedAnnotationLiterals, applicationClassPredicate);
+        BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals, applicationClassPredicate, privateMembers);
         ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator(applicationClassPredicate);
-        InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals, applicationClassPredicate);
+        InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals, applicationClassPredicate, privateMembers);
         SubclassGenerator subclassGenerator = new SubclassGenerator(annotationLiterals, applicationClassPredicate);
-        ObserverGenerator observerGenerator = new ObserverGenerator(annotationLiterals, applicationClassPredicate);
+        ObserverGenerator observerGenerator = new ObserverGenerator(annotationLiterals, applicationClassPredicate, privateMembers);
         AnnotationLiteralGenerator annotationLiteralsGenerator = new AnnotationLiteralGenerator();
 
         Map<BeanInfo, String> beanToGeneratedName = new HashMap<>();
         Map<ObserverInfo, String> observerToGeneratedName = new HashMap<>();
-        Map<InterceptorInfo, String> interceptorToGeneratedName = new HashMap<>();
 
         long start = System.currentTimeMillis();
         List<Resource> resources = new ArrayList<>();
@@ -171,7 +179,6 @@ public class BeanProcessor {
             for (Resource resource : interceptorGenerator.generate(interceptor, reflectionRegistration)) {
                 resources.add(resource);
                 if (SpecialType.INTERCEPTOR_BEAN.equals(resource.getSpecialType())) {
-                    interceptorToGeneratedName.put(interceptor, resource.getName());
                     beanToGeneratedName.put(interceptor, resource.getName());
                 }
             }
@@ -204,6 +211,8 @@ public class BeanProcessor {
             }
         }
 
+        privateMembers.log();
+
         // Generate _ComponentsProvider
         resources.addAll(new ComponentsProviderGenerator().generate(name, beanDeployment, beanToGeneratedName, observerToGeneratedName));
 
@@ -215,7 +224,7 @@ public class BeanProcessor {
         for (Resource resource : resources) {
             output.writeResource(resource);
         }
-        LOGGER.infof("Generated %s resources in %s ms", resources.size(), System.currentTimeMillis() - start);
+        LOGGER.debugf("Generated %s resources in %s ms", resources.size(), System.currentTimeMillis() - start);
         return beanDeployment;
     }
 
@@ -261,6 +270,10 @@ public class BeanProcessor {
         private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
         private final List<DeploymentEnhancer> deploymentEnhancers = new ArrayList<>();
         private final List<BeanDeploymentValidator> beanDeploymentValidators = new ArrayList<>();
+
+        private boolean removeUnusedBeans = false;
+        private final List<Predicate<BeanInfo>> removalExclusions = new ArrayList<>();
+
         private Predicate<DotName> applicationClassPredicate = new Predicate<DotName>() {
             @Override
             public boolean test(DotName dotName) {
@@ -329,21 +342,55 @@ public class BeanProcessor {
             return this;
         }
 
+        /**
+         * If set to true the container will attempt to remove all unused beans.
+         * <p>
+         * An unused bean:
+         * <ul>
+         * <li>is not a built-in bean or interceptor,</li>
+         * <li>is not eligible for injection to any injection point,</li>
+         * <li>is not excluded - see {@link #addRemovalExclusion(Predicate)},</li>
+         * <li>does not have a name,</li>
+         * <li>does not declare an observer,</li>
+         * <li>does not declare any producer which is eligible for injection to any injection point,</li>
+         * <li>is not directly eligible for injection into any {@link javax.enterprise.inject.Instance} injection point</li>
+         * </ul>
+         *
+         * @param removeUnusedBeans
+         * @return
+         */
+        public Builder setRemoveUnusedBeans(boolean removeUnusedBeans) {
+            this.removeUnusedBeans = removeUnusedBeans;
+            return this;
+        }
+
+        /**
+         *
+         * @param exclusion
+         * @return self
+         * @see #setRemoveUnusedBeans(boolean)
+         */
+        public Builder addRemovalExclusion(Predicate<BeanInfo> exclusion) {
+            this.removalExclusions.add(exclusion);
+            return this;
+        }
+
         public BeanProcessor build() {
             return new BeanProcessor(name, addBuiltinClasses(index), additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, deploymentEnhancers, beanDeploymentValidators, applicationClassPredicate);
+                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, deploymentEnhancers, beanDeploymentValidators,
+                    applicationClassPredicate, removeUnusedBeans, removalExclusions);
         }
 
     }
 
-    private static <E extends BuildExtension> List<E> initAndSort(List<E> extentions, BuildContext buildContext) {
-        for (Iterator<E> iterator = extentions.iterator(); iterator.hasNext();) {
+    private static <E extends BuildExtension> List<E> initAndSort(List<E> extensions, BuildContext buildContext) {
+        for (Iterator<E> iterator = extensions.iterator(); iterator.hasNext();) {
             if (!iterator.next().initialize(buildContext)) {
                 iterator.remove();
             }
         }
-        extentions.sort(BuildExtension::compare);
-        return extentions;
+        extensions.sort(BuildExtension::compare);
+        return extensions;
     }
 
     /**
@@ -517,6 +564,43 @@ public class BeanProcessor {
             return (V) data.put(key, value);
         }
 
+    }
+    
+    static class PrivateMembersCollector {
+        
+        private final List<String> appDescriptions;
+        private final List<String> fwkDescriptions;
+        
+        public PrivateMembersCollector() {
+            this.appDescriptions = new ArrayList<>();
+            this.fwkDescriptions = LOGGER.isDebugEnabled() ? new ArrayList<>() : null;
+        }
+
+        void add(boolean isApplicationClass, String description) {
+            if (isApplicationClass) {
+                appDescriptions.add(description);
+            } else if(fwkDescriptions != null) {
+                fwkDescriptions.add(description);
+            }
+        }
+        
+        private void log() {
+            // Log application problems
+            if (!appDescriptions.isEmpty()) {
+                int limit = LOGGER.isDebugEnabled() ? Integer.MAX_VALUE : 3;
+                String info = appDescriptions.stream().limit(limit).map(d -> "\t- " + d).collect(Collectors.joining(",\n"));
+                if (appDescriptions.size() > limit) {
+                    info += "\n\t- and " + (appDescriptions.size() - limit) + " more - please enable debug logging to see the full list";
+                }
+                LOGGER.infof("Found unrecommended usage of private members (use package-private instead) in application beans:%n%s", info);
+            }
+            // Log fwk problems
+            if (fwkDescriptions != null && !fwkDescriptions.isEmpty()) {
+                LOGGER.debugf("Found unrecommended usage of private members (use package-private instead) in framework beans:%n%s",
+                        fwkDescriptions.stream().map(d -> "\t- " + d).collect(Collectors.joining(",\n")));
+            }
+        }
+ 
     }
 
 }
