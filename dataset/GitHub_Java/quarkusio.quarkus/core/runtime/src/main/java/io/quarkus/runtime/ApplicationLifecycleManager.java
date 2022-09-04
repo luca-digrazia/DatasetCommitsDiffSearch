@@ -20,7 +20,6 @@ import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
 import org.wildfly.common.lock.Locks;
 
-import io.quarkus.bootstrap.runner.RunnerClassLoader;
 import io.quarkus.runtime.configuration.ProfileManager;
 import io.quarkus.runtime.graal.DiagnosticPrinter;
 import sun.misc.Signal;
@@ -130,7 +129,6 @@ public class ApplicationLifecycleManager {
                     }
                 }
             } else {
-                longLivedPostBootCleanup();
                 stateLock.lock();
                 try {
                     while (!shutdownRequested) {
@@ -181,18 +179,6 @@ public class ApplicationLifecycleManager {
             application.stop(); //this could have already been called
         }
         (exitCodeHandler == null ? defaultExitCodeHandler : exitCodeHandler).accept(getExitCode(), null); //this may not be called if shutdown was initiated by a signal
-    }
-
-    /**
-     * Run some background cleanup once after the application has booted.
-     * This will not be invoked for command mode, as it's not worth it for a short lived process.
-     */
-    private static void longLivedPostBootCleanup() {
-        final ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        if (cl instanceof RunnerClassLoader) {
-            RunnerClassLoader rcl = (RunnerClassLoader) cl;
-            rcl.resetInternalCaches();
-        }
     }
 
     private static void registerHooks(final BiConsumer<Integer, Throwable> exitCodeHandler) {
