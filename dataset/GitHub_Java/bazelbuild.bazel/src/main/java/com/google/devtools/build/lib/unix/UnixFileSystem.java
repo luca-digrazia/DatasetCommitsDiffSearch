@@ -14,19 +14,25 @@
 package com.google.devtools.build.lib.unix;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.unix.NativePosixFiles.Dirents;
 import com.google.devtools.build.lib.unix.NativePosixFiles.ReadTypes;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.AbstractFileSystemWithCustomStat;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileStatus;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -36,7 +42,11 @@ import java.util.List;
  */
 @ThreadSafe
 public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
-  public UnixFileSystem() {
+  protected final String hashAttributeName;
+
+  public UnixFileSystem(DigestHashFunction hashFunction, String hashAttributeName) {
+    super(hashFunction);
+    this.hashAttributeName = hashAttributeName;
   }
 
   /**
@@ -95,7 +105,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected Collection<Path> getDirectoryEntries(Path path) throws IOException {
+  protected Collection<String> getDirectoryEntries(PathFragment path) throws IOException {
     String name = path.getPathString();
     String[] entries;
     long startTime = Profiler.nanoTimeMaybe();
@@ -104,15 +114,15 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_DIR, name);
     }
-    Collection<Path> result = new ArrayList<>(entries.length);
+    Collection<String> result = new ArrayList<>(entries.length);
     for (String entry : entries) {
-      result.add(path.getChild(entry));
+      result.add(entry);
     }
     return result;
   }
 
   @Override
-  protected PathFragment resolveOneLink(Path path) throws IOException {
+  protected PathFragment resolveOneLink(PathFragment path) throws IOException {
     // Beware, this seemingly simple code belies the complex specification of
     // FileSystem.resolveOneLink().
     return stat(path, false).isSymbolicLink()
@@ -140,7 +150,8 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected Collection<Dirent> readdir(Path path, boolean followSymlinks) throws IOException {
+  protected Collection<Dirent> readdir(PathFragment path, boolean followSymlinks)
+      throws IOException {
     String name = path.getPathString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
@@ -159,12 +170,13 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected FileStatus stat(Path path, boolean followSymlinks) throws IOException {
+  protected FileStatus stat(PathFragment path, boolean followSymlinks) throws IOException {
     return statInternal(path, followSymlinks);
   }
 
   @VisibleForTesting
-  protected UnixFileStatus statInternal(Path path, boolean followSymlinks) throws IOException {
+  protected UnixFileStatus statInternal(PathFragment path, boolean followSymlinks)
+      throws IOException {
     String name = path.getPathString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
@@ -180,7 +192,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   // This is a performance optimization in the case where clients
   // catch and don't re-throw.
   @Override
-  protected FileStatus statNullable(Path path, boolean followSymlinks) {
+  protected FileStatus statNullable(PathFragment path, boolean followSymlinks) {
     String name = path.getPathString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
@@ -194,16 +206,16 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected boolean exists(Path path, boolean followSymlinks) {
+  protected boolean exists(PathFragment path, boolean followSymlinks) {
     return statNullable(path, followSymlinks) != null;
   }
 
   /**
-   * Return true iff the {@code stat} of {@code path} resulted in an {@code ENOENT}
-   * or {@code ENOTDIR} error.
+   * Return true iff the {@code stat} of {@code path} resulted in an {@code ENOENT} or {@code
+   * ENOTDIR} error.
    */
   @Override
-  protected FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+  protected FileStatus statIfFound(PathFragment path, boolean followSymlinks) throws IOException {
     String name = path.getPathString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
@@ -229,70 +241,66 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected boolean isReadable(Path path) throws IOException {
+  protected boolean isReadable(PathFragment path) throws IOException {
     return (statInternal(path, true).getPermissions() & 0400) != 0;
   }
 
   @Override
-  protected boolean isWritable(Path path) throws IOException {
+  protected boolean isWritable(PathFragment path) throws IOException {
     return (statInternal(path, true).getPermissions() & 0200) != 0;
   }
 
   @Override
-  protected boolean isExecutable(Path path) throws IOException {
+  protected boolean isExecutable(PathFragment path) throws IOException {
     return (statInternal(path, true).getPermissions() & 0100) != 0;
   }
 
   /**
-   * Adds or remove the bits specified in "permissionBits" to the permission
-   * mask of the file specified by {@code path}. If the argument {@code add} is
-   * true, the specified permissions are added, otherwise they are removed.
+   * Adds or remove the bits specified in "permissionBits" to the permission mask of the file
+   * specified by {@code path}. If the argument {@code add} is true, the specified permissions are
+   * added, otherwise they are removed.
    *
    * @throws IOException if there was an error writing the file's metadata
    */
-  private void modifyPermissionBits(Path path, int permissionBits, boolean add)
-    throws IOException {
-    synchronized (path) {
-      int oldMode = statInternal(path, true).getPermissions();
-      int newMode = add ? (oldMode | permissionBits) : (oldMode & ~permissionBits);
-      NativePosixFiles.chmod(path.toString(), newMode);
-    }
+  private void modifyPermissionBits(PathFragment path, int permissionBits, boolean add)
+      throws IOException {
+    int oldMode = statInternal(path, true).getPermissions();
+    int newMode = add ? (oldMode | permissionBits) : (oldMode & ~permissionBits);
+    NativePosixFiles.chmod(path.toString(), newMode);
   }
 
   @Override
-  protected void setReadable(Path path, boolean readable) throws IOException {
+  protected void setReadable(PathFragment path, boolean readable) throws IOException {
     modifyPermissionBits(path, 0400, readable);
   }
 
   @Override
-  protected void setWritable(Path path, boolean writable) throws IOException {
+  public void setWritable(PathFragment path, boolean writable) throws IOException {
     modifyPermissionBits(path, 0200, writable);
   }
 
   @Override
-  protected void setExecutable(Path path, boolean executable) throws IOException {
+  protected void setExecutable(PathFragment path, boolean executable) throws IOException {
     modifyPermissionBits(path, 0111, executable);
   }
 
   @Override
-  protected void chmod(Path path, int mode) throws IOException {
-    synchronized (path) {
-      NativePosixFiles.chmod(path.toString(), mode);
-    }
+  protected void chmod(PathFragment path, int mode) throws IOException {
+    NativePosixFiles.chmod(path.toString(), mode);
   }
 
   @Override
-  public boolean supportsModifications() {
+  public boolean supportsModifications(PathFragment path) {
     return true;
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively() {
+  public boolean supportsSymbolicLinksNatively(PathFragment path) {
     return true;
   }
 
   @Override
-  public boolean supportsHardLinksNatively() {
+  public boolean supportsHardLinksNatively(PathFragment path) {
     return true;
   }
 
@@ -302,96 +310,98 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected boolean createDirectory(Path path) throws IOException {
-    synchronized (path) {
-      // Note: UNIX mkdir(2), FilesystemUtils.mkdir() and createDirectory all
-      // have different ways of representing failure!
-      if (NativePosixFiles.mkdir(path.toString(), 0777)) {
-        return true; // successfully created
-      }
+  public boolean createDirectory(PathFragment path) throws IOException {
+    // Note: UNIX mkdir(2), FilesystemUtils.mkdir() and createDirectory all
+    // have different ways of representing failure!
+    if (NativePosixFiles.mkdir(path.toString(), 0777)) {
+      return true; // successfully created
+    }
 
-      // false => EEXIST: something is already in the way (file/dir/symlink)
-      if (isDirectory(path, false)) {
-        return false; // directory already existed
-      } else {
-        throw new IOException(path + " (File exists)");
-      }
+    // false => EEXIST: something is already in the way (file/dir/symlink)
+    if (isDirectory(path, false)) {
+      return false; // directory already existed
+    } else {
+      throw new IOException(path + " (File exists)");
     }
   }
 
   @Override
-  protected void createSymbolicLink(Path linkPath, PathFragment targetFragment)
+  protected boolean createWritableDirectory(PathFragment path) throws IOException {
+    return NativePosixFiles.mkdirWritable(path.toString());
+  }
+
+  @Override
+  public void createDirectoryAndParents(PathFragment path) throws IOException {
+    NativePosixFiles.mkdirs(path.toString(), 0777);
+  }
+
+  @Override
+  protected void createSymbolicLink(PathFragment linkPath, PathFragment targetFragment)
       throws IOException {
-    synchronized (linkPath) {
-      NativePosixFiles.symlink(targetFragment.toString(), linkPath.toString());
-    }
+    NativePosixFiles.symlink(targetFragment.getSafePathString(), linkPath.toString());
   }
 
   @Override
-  protected PathFragment readSymbolicLink(Path path) throws IOException {
+  protected PathFragment readSymbolicLink(PathFragment path) throws IOException {
     // Note that the default implementation of readSymbolicLinkUnchecked calls this method and thus
     // is optimal since we only make one system call in here.
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return new PathFragment(NativePosixFiles.readlink(name));
-    } catch (IOException e) {
-      // EINVAL => not a symbolic link.  Anything else is a real error.
-      throw e.getMessage().endsWith("(Invalid argument)") ? new NotASymlinkException(path) : e;
+      return PathFragment.create(NativePosixFiles.readlink(name));
+    } catch (InvalidArgumentIOException e) {
+      throw new NotASymlinkException(path, e);
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_READLINK, name);
     }
   }
 
   @Override
-  protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
-    synchronized (sourcePath) {
-      NativePosixFiles.rename(sourcePath.toString(), targetPath.toString());
-    }
+  public void renameTo(PathFragment sourcePath, PathFragment targetPath) throws IOException {
+    NativePosixFiles.rename(sourcePath.toString(), targetPath.toString());
   }
 
   @Override
-  protected long getFileSize(Path path, boolean followSymlinks) throws IOException {
+  protected long getFileSize(PathFragment path, boolean followSymlinks) throws IOException {
     return stat(path, followSymlinks).getSize();
   }
 
   @Override
-  protected boolean delete(Path path) throws IOException {
+  protected boolean delete(PathFragment path) throws IOException {
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
-    synchronized (path) {
-      try {
-        return NativePosixFiles.remove(name);
-      } finally {
-        profiler.logSimpleTask(startTime, ProfilerTask.VFS_DELETE, name);
-      }
+    try {
+      return NativePosixFiles.remove(name);
+    } finally {
+      profiler.logSimpleTask(startTime, ProfilerTask.VFS_DELETE, name);
     }
   }
 
   @Override
-  protected long getLastModifiedTime(Path path, boolean followSymlinks) throws IOException {
+  protected long getLastModifiedTime(PathFragment path, boolean followSymlinks) throws IOException {
     return stat(path, followSymlinks).getLastModifiedTime();
   }
 
   @Override
-  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
-    synchronized (path) {
-      if (newTime == -1L) { // "now"
-        NativePosixFiles.utime(path.toString(), true, 0);
-      } else {
-        // newTime > MAX_INT => -ve unixTime
-        int unixTime = (int) (newTime / 1000);
-        NativePosixFiles.utime(path.toString(), false, unixTime);
-      }
+  public void setLastModifiedTime(PathFragment path, long newTime) throws IOException {
+    if (newTime == -1L) { // "now"
+      NativePosixFiles.utime(path.toString(), true, 0);
+    } else {
+      // newTime > MAX_INT => -ve unixTime
+      int unixTime = (int) (newTime / 1000);
+      NativePosixFiles.utime(path.toString(), false, unixTime);
     }
   }
 
   @Override
-  protected byte[] getxattr(Path path, String name) throws IOException {
+  public byte[] getxattr(PathFragment path, String name, boolean followSymlinks)
+      throws IOException {
     String pathName = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return NativePosixFiles.getxattr(pathName, name);
+      return followSymlinks
+          ? NativePosixFiles.getxattr(pathName, name)
+          : NativePosixFiles.lgetxattr(pathName, name);
     } catch (UnsupportedOperationException e) {
       // getxattr() syscall is not supported by the underlying filesystem (it returned ENOTSUP).
       // Per method contract, treat this as ENODATA.
@@ -402,19 +412,148 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected byte[] getMD5Digest(Path path) throws IOException {
+  protected byte[] getFastDigest(PathFragment path) throws IOException {
+    // Attempt to obtain the digest from an extended attribute attached to the file. This is much
+    // faster than reading and digesting the file's contents on the fly, especially for large files.
+    return hashAttributeName.isEmpty() ? null : getxattr(path, hashAttributeName, true);
+  }
+
+  @Override
+  protected byte[] getDigest(PathFragment path) throws IOException {
     String name = path.toString();
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return NativePosixFiles.md5sum(name).asBytes();
+      return super.getDigest(path);
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_MD5, name);
     }
   }
 
   @Override
-  protected void createFSDependentHardLink(Path linkPath, Path originalPath)
+  protected void createFSDependentHardLink(PathFragment linkPath, PathFragment originalPath)
       throws IOException {
     NativePosixFiles.link(originalPath.toString(), linkPath.toString());
+  }
+
+  @Override
+  protected void deleteTreesBelow(PathFragment dir) throws IOException {
+    if (isDirectory(dir, /*followSymlinks=*/ false)) {
+      long startTime = Profiler.nanoTimeMaybe();
+      try {
+        NativePosixFiles.deleteTreesBelow(dir.toString());
+      } finally {
+        profiler.logSimpleTask(startTime, ProfilerTask.VFS_DELETE, dir.toString());
+      }
+    }
+  }
+
+  private static File createJavaIoFile(PathFragment path) {
+    final String pathStr = path.getPathString();
+    if (pathStr.chars().allMatch(c -> c < 128)) {
+      return new File(pathStr);
+    }
+
+    // Paths returned from NativePosixFiles are Strings containing raw bytes from the filesystem.
+    // Java's IO subsystem expects paths to be encoded per the `sun.jnu.encoding` setting. This
+    // is difficult to handle generically, but we can special-case the most common case (UTF-8).
+    if ("UTF-8".equals(System.getProperty("sun.jnu.encoding"))) {
+      final byte[] pathBytes = pathStr.getBytes(StandardCharsets.ISO_8859_1);
+      return new File(new String(pathBytes, StandardCharsets.UTF_8));
+    }
+
+    // This will probably fail but not much that can be done without migrating to `java.nio.Files`.
+    return new File(pathStr);
+  }
+
+  @Override
+  protected InputStream createFileInputStream(PathFragment path) throws IOException {
+    return new FileInputStream(createJavaIoFile(path));
+  }
+
+  protected OutputStream createFileOutputStream(PathFragment path, boolean append)
+      throws FileNotFoundException {
+    return createFileOutputStream(path, append, /* internal= */ false);
+  }
+
+  @Override
+  protected OutputStream createFileOutputStream(PathFragment path, boolean append, boolean internal)
+      throws FileNotFoundException {
+    final String name = path.toString();
+    if (!internal
+        && profiler.isActive()
+        && (profiler.isProfiling(ProfilerTask.VFS_WRITE)
+            || profiler.isProfiling(ProfilerTask.VFS_OPEN))) {
+      long startTime = Profiler.nanoTimeMaybe();
+      try {
+        return new ProfiledNativeFileOutputStream(NativePosixFiles.openWrite(name, append), name);
+      } finally {
+        profiler.logSimpleTask(startTime, ProfilerTask.VFS_OPEN, name);
+      }
+    } else {
+      return new NativeFileOutputStream(NativePosixFiles.openWrite(name, append));
+    }
+  }
+
+  private static class NativeFileOutputStream extends OutputStream {
+    private final int fd;
+    private boolean closed = false;
+
+    NativeFileOutputStream(int fd) {
+      this.fd = fd;
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+      close();
+      super.finalize();
+    }
+
+    @Override
+    public synchronized void close() throws IOException {
+      if (!closed) {
+        NativePosixFiles.close(fd, this);
+        closed = true;
+      }
+      super.close();
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      write(new byte[] {(byte) (b & 0xFF)});
+    }
+
+    @Override
+    public void write(byte[] b) throws IOException {
+      write(b, 0, b.length);
+    }
+
+    @Override
+    @SuppressWarnings(
+        "UnsafeFinalization") // Finalizer invokes close; close and write are synchronized.
+    public synchronized void write(byte[] b, int off, int len) throws IOException {
+      if (closed) {
+        throw new IOException("attempt to write to a closed Outputstream backed by a native file");
+      }
+      NativePosixFiles.write(fd, b, off, len);
+    }
+  }
+
+  private static final class ProfiledNativeFileOutputStream extends NativeFileOutputStream {
+    private final String name;
+
+    public ProfiledNativeFileOutputStream(int fd, String name) throws FileNotFoundException {
+      super(fd);
+      this.name = name;
+    }
+
+    @Override
+    public synchronized void write(byte[] b, int off, int len) throws IOException {
+      long startTime = Profiler.nanoTimeMaybe();
+      try {
+        super.write(b, off, len);
+      } finally {
+        profiler.logSimpleTask(startTime, ProfilerTask.VFS_WRITE, name);
+      }
+    }
   }
 }
