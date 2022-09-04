@@ -1,5 +1,6 @@
 package io.quarkus.hibernate.orm.panache.deployment;
 
+import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -30,7 +31,6 @@ import io.quarkus.panache.common.deployment.EntityField;
 import io.quarkus.panache.common.deployment.EntityModel;
 import io.quarkus.panache.common.deployment.MetamodelInfo;
 import io.quarkus.panache.common.deployment.PanacheFieldAccessEnhancer;
-import io.quarkus.panache.common.deployment.PanacheRepositoryEnhancer;
 
 public final class PanacheResourceProcessor {
 
@@ -83,12 +83,12 @@ public final class PanacheResourceProcessor {
             // Skip PanacheRepository
             if (classInfo.name().equals(DOTNAME_PANACHE_REPOSITORY))
                 continue;
-            if (PanacheRepositoryEnhancer.skipRepository(classInfo))
+            if (skipRepository(classInfo))
                 continue;
             daoClasses.add(classInfo.name().toString());
         }
         for (ClassInfo classInfo : index.getIndex().getAllKnownImplementors(DOTNAME_PANACHE_REPOSITORY)) {
-            if (PanacheRepositoryEnhancer.skipRepository(classInfo))
+            if (skipRepository(classInfo))
                 continue;
             daoClasses.add(classInfo.name().toString());
         }
@@ -127,4 +127,12 @@ public final class PanacheResourceProcessor {
             }
         }
     }
+
+    private boolean skipRepository(ClassInfo classInfo) {
+        // we don't want to add methods to abstract/generic entities/repositories: they get added to bottom types
+        // which can't be either
+        return Modifier.isAbstract(classInfo.flags())
+                || !classInfo.typeParameters().isEmpty();
+    }
+
 }
