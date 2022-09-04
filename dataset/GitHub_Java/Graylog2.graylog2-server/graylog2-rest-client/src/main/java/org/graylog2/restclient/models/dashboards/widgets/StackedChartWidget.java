@@ -15,22 +15,6 @@
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/**
- * This file is part of Graylog.
- *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
- */
 package org.graylog2.restclient.models.dashboards.widgets;
 
 import com.google.common.collect.Lists;
@@ -39,6 +23,7 @@ import org.graylog2.restclient.lib.timeranges.RelativeRange;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
 import org.graylog2.restclient.models.dashboards.Dashboard;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -46,7 +31,11 @@ public class StackedChartWidget extends ChartWidget {
 
     private final String renderer;
     private final String interpolation;
-    private final List<Series> chartSeries;
+    private List<Series> chartSeries;
+
+    public StackedChartWidget(Dashboard dashboard, TimeRange timerange, String description, String streamId, String renderer, String interpolation, String interval) {
+        this(dashboard, null, description, 0, timerange, streamId, renderer, interpolation, interval, null, null);
+    }
 
     public StackedChartWidget(Dashboard dashboard, TimeRange timerange, String description, String streamId, String renderer, String interpolation, String interval, List<Map<String, Object>> series) {
         this(dashboard, null, description, 0, timerange, streamId, renderer, interpolation, interval, series, null);
@@ -58,22 +47,29 @@ public class StackedChartWidget extends ChartWidget {
         this.renderer = renderer;
         this.interpolation = interpolation;
 
-        this.chartSeries = Lists.newArrayList();
-        for (Map<String, Object> aSeries : series) {
-            this.chartSeries.add(Series.fromMap(aSeries));
+        if (series != null) {
+            this.chartSeries = new ArrayList<>(series.size());
+            for (Map<String, Object> aSeries : series) {
+                this.chartSeries.add(Series.fromMap(aSeries));
+            }
+        } else {
+            this.chartSeries = Lists.newArrayList();
         }
+    }
+
+    public void addSeries(Map<String, Object> fields) {
+        this.chartSeries.add(Series.fromMap(fields));
     }
 
     @Override
     public Map<String, Object> getConfig() {
         Map<String, Object> config = Maps.newHashMap();
-        config.putAll(getTimerange().getQueryParams());
         config.putAll(super.getConfig());
-
+        config.putAll(getTimerange().getQueryParams());
         config.put("renderer", renderer);
         config.put("interpolation", interpolation);
 
-        List<Map<String, String>> series = Lists.newArrayList();
+        List<Map<String, String>> series = new ArrayList<>(chartSeries.size());
         for (Series aSeries : this.chartSeries) {
             series.add(aSeries.toMap());
         }
