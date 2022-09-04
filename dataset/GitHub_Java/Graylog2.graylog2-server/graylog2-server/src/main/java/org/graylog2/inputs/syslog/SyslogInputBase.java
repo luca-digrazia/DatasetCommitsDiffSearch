@@ -20,7 +20,6 @@
 package org.graylog2.inputs.syslog;
 
 import org.graylog2.Core;
-import org.graylog2.inputs.ThroughputCounter;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -48,15 +47,9 @@ public class SyslogInputBase extends MessageInput {
     protected Bootstrap bootstrap;
     protected Channel channel;
 
-    protected final ThroughputCounter throughputCounter;
-
     protected Core core;
     protected Configuration config;
     protected InetSocketAddress socketAddress;
-
-    public SyslogInputBase() {
-        this.throughputCounter = new ThroughputCounter();
-    }
 
     @Override
     public void stop() {
