@@ -24,7 +24,6 @@ import org.graylog2.indexer.searches.Searches;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.extractors.ExtractorFactory;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.inputs.InputLauncher;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.streams.OutputService;
@@ -48,7 +47,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
     private final MetricRegistry metricRegistry;
     private final Searches searches;
     private final MessageInputFactory messageInputFactory;
-    private final InputLauncher inputLauncher;
 
     @Inject
     public BundleImporterProvider(final InputService inputService,
@@ -62,8 +60,7 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
                                   final ServerStatus serverStatus,
                                   final MetricRegistry metricRegistry,
                                   final Searches searches,
-                                  final MessageInputFactory messageInputFactory,
-                                  final InputLauncher inputLauncher) {
+                                  final MessageInputFactory messageInputFactory) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
@@ -76,14 +73,12 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
         this.metricRegistry = metricRegistry;
         this.searches = searches;
         this.messageInputFactory = messageInputFactory;
-        this.inputLauncher = inputLauncher;
     }
 
     @Override
     public BundleImporter get() {
         return new BundleImporter(inputService, inputRegistry, extractorFactory,
                 streamService, streamRuleService, outputService, dashboardService,
-                dashboardRegistry, serverStatus, metricRegistry, searches, messageInputFactory,
-                inputLauncher);
+                dashboardRegistry, serverStatus, metricRegistry, searches, messageInputFactory);
     }
 }

@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
 import com.google.inject.TypeLiteral;
+import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.Multibinder;
 import com.google.inject.name.Names;
 import com.google.inject.util.Providers;
@@ -36,7 +37,7 @@ import org.graylog2.radio.inputs.PersistedInputsImpl;
 import org.graylog2.radio.system.activities.NullActivityWriter;
 import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
-import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
+import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.PersistedInputs;
 import org.graylog2.shared.system.activities.ActivityWriter;
 
@@ -60,7 +61,7 @@ public class RadioBindings extends AbstractModule {
         bindProviders();
         bindSingletons();
         bindTransport();
-        bind(ProcessBufferProcessor.class).to(RadioProcessBufferProcessor.class);
+        install(new FactoryModuleBuilder().build(RadioProcessBufferProcessor.Factory.class));
         SecurityContextFactory instance = null;
         bind(SecurityContextFactory.class).toProvider(Providers.of(instance));
         bindDynamicFeatures();

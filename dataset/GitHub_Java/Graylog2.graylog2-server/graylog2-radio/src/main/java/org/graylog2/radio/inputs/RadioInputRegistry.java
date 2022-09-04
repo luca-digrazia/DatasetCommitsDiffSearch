@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,175 +13,67 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.radio.inputs;
 
-import com.beust.jcommander.internal.Lists;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.Lists;
 import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.Response;
-import org.graylog2.plugin.InputHost;
+import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.inputs.InputState;
+import org.graylog2.plugin.IOState;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.radio.cluster.InputService;
 import org.graylog2.radio.inputs.api.InputSummaryResponse;
-import org.graylog2.radio.inputs.api.PersistedInputsResponse;
 import org.graylog2.radio.inputs.api.RegisterInputResponse;
 import org.graylog2.shared.inputs.InputRegistry;
+import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
-import org.graylog2.shared.rest.resources.system.inputs.requests.RegisterInputRequest;
+import org.graylog2.shared.inputs.PersistedInputs;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.UriBuilder;
+import javax.inject.Inject;
 import java.io.IOException;
 import java.net.URI;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class RadioInputRegistry extends InputRegistry {
-    protected final ObjectMapper mapper = new ObjectMapper();
+    private static final Logger LOG = LoggerFactory.getLogger(RadioInputRegistry.class);
+
     protected final AsyncHttpClient httpclient;
     protected final URI serverUrl;
+    private final InputService inputService;
 
-    public RadioInputRegistry(InputHost core, AsyncHttpClient httpclient, URI serverUrl) {
-        super(core);
+    @Inject
+    public RadioInputRegistry(IOState.Factory<MessageInput> inputStateFactory,
+                              InputBuffer inputBuffer,
+                              AsyncHttpClient httpclient,
+                              URI serverUrl,
+                              InputService inputService,
+                              MetricRegistry metricRegistry,
+                              PersistedInputs persistedInputs) {
+        super(inputStateFactory, inputBuffer, metricRegistry, persistedInputs);
         this.httpclient = httpclient;
         this.serverUrl = serverUrl;
-    }
-
-    protected MessageInput getMessageInput(InputSummaryResponse isr) {
-        MessageInput input = null;
-        try {
-            input = InputRegistry.factory(isr.type);
-
-            // Add all standard fields.
-            input.initialize(new Configuration(isr.configuration), core);
-            input.setTitle(isr.title);
-            input.setCreatorUserId(isr.creatorUserId);
-            input.setPersistId(isr.id);
-            input.setCreatedAt(new DateTime(isr.createdAt));
-            input.setGlobal(isr.global);
-
-            input.checkConfiguration();
-        } catch (NoSuchInputTypeException e) {
-            LOG.warn("Cannot launch persisted input. No such type [{}].", isr.type);
-            return null;
-        } catch (ConfigurationException e) {
-            LOG.error("Missing or invalid input input configuration.", e);
-            return null;
-        }
-        return input;
-    }
-
-    // TODO make this use a generic ApiClient class that knows the graylog2-server node address(es) or something.
-    public void registerInCluster(MessageInput input) throws ExecutionException, InterruptedException, IOException {
-        final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
-        uriBuilder.path("/system/radios/" + core.getNodeId() + "/inputs");
-
-        RegisterInputRequest rir = new RegisterInputRequest(input, core.getNodeId());
-
-        String json;
-        try {
-            json = mapper.writeValueAsString(rir);
-        } catch (IOException e) {
-            throw new RuntimeException("Could not create JSON for register input request.", e);
-        }
-
-        Future<Response> f = httpclient.preparePost(uriBuilder.build().toString())
-                .setBody(json)
-                .execute();
-
-        Response r = f.get();
-
-        RegisterInputResponse response = mapper.readValue(r.getResponseBody(), RegisterInputResponse.class);
-
-        // Set the ID that was generated in the server as persist ID of this input.
-        input.setPersistId(response.persistId);
-
-        if (r.getStatusCode() != 201) {
-            throw new RuntimeException("Expected HTTP response [201] for input registration but got [" + r.getStatusCode() + "].");
-        }
-    }
-
-    public void unregisterInCluster(MessageInput input) throws ExecutionException, InterruptedException, IOException {
-        final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
-        uriBuilder.path("/system/radios/" + core.getNodeId() + "/inputs/" + input.getPersistId());
-
-        Future<Response> f = httpclient.prepareDelete(uriBuilder.build().toString()).execute();
-
-        Response r = f.get();
-
-        if (r.getStatusCode() != 204) {
-            throw new RuntimeException("Expected HTTP response [204] for input unregistration but got [" + r.getStatusCode() + "].");
-        }
-    }
-
-    // TODO make this use a generic ApiClient class that knows the graylog2-server node address(es) or something.
-    public List<MessageInput> getAllPersisted() {
-        final List<MessageInput> result = Lists.newArrayList();
-        final UriBuilder uriBuilder = UriBuilder.fromUri(serverUrl);
-        uriBuilder.path("/system/radios/" + core.getNodeId() + "/inputs");
-
-        List<InputSummaryResponse> response = null;
-        try {
-            Future<Response> f = httpclient.prepareGet(uriBuilder.build().toString()).execute();
-
-            Response r = f.get();
-
-            if (r.getStatusCode() != 200) {
-                throw new RuntimeException("Expected HTTP response [200] for list of persisted input but got [" + r.getStatusCode() + "].");
-            }
-            response = mapper.readValue(r.getResponseBody(), PersistedInputsResponse.class).inputs;
-        } catch (IOException e) {
-            LOG.error("Unable to get persisted inputs: ", e);
-            return result;
-        } catch (InterruptedException e) {
-            LOG.error("Unable to get persisted inputs: ", e);
-            return result;
-        } catch (ExecutionException e) {
-            LOG.error("Unable to get persisted inputs: ", e);
-            return result;
-        }
-
-        for (InputSummaryResponse isr : response) {
-            result.add(getMessageInput(isr));
-        }
-
-        return result;
+        this.inputService = inputService;
     }
 
     @Override
-    protected void finishedLaunch(InputState state) {
-        MessageInput input = state.getMessageInput();
-        if (input.getPersistId() != null) {
+    public IOState<MessageInput> launch(MessageInput input, String id, boolean register) {
+        if (register) {
             try {
-                registerInCluster(input);
+                final RegisterInputResponse response = inputService.registerInCluster(input);
+                if (response != null)
+                    input.setPersistId(response.persistId);
             } catch (Exception e) {
-                LOG.error("Could not register input in Graylog2 cluster. It will be lost on next restart of this radio node.");
+                LOG.error("Could not register input in Graylog2 cluster. It will be lost on next restart of this radio node.", e);
+                return null;
             }
         }
-    }
-
-    @Override
-    public void cleanInput(MessageInput input) {
-    }
-
-    @Override
-    protected void finishedTermination(InputState state) {
-        MessageInput input = state.getMessageInput();
-        try {
-            unregisterInCluster(input);
-        } catch (Exception e) {
-            LOG.error("Could not unregister input [" + input.getName() + "] on server cluster.", e);
-            return;
-        }
-
-        LOG.info("Unregistered input [" + input.getName() + "] on server cluster.");
+        return super.launch(input, id, register);
     }
 }

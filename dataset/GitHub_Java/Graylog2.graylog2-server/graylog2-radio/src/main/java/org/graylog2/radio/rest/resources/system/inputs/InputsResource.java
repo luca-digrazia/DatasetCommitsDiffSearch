@@ -28,11 +28,9 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.radio.cluster.InputService;
 import org.graylog2.radio.rest.resources.RestResource;
 import org.graylog2.shared.inputs.InputDescription;
-import org.graylog2.shared.inputs.InputLauncher;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
-import org.graylog2.shared.inputs.PersistedInputs;
 import org.graylog2.shared.rest.resources.system.inputs.requests.InputLaunchRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,18 +62,11 @@ public class InputsResource extends RestResource {
 
     private final InputRegistry inputRegistry;
     private final MessageInputFactory messageInputFactory;
-    private final InputLauncher inputLauncher;
-    private final PersistedInputs persistedInputs;
 
     @Inject
-    public InputsResource(InputRegistry inputRegistry,
-                          MessageInputFactory messageInputFactory,
-                          InputLauncher inputLauncher,
-                          PersistedInputs persistedInputs) {
+    public InputsResource(InputRegistry inputRegistry, MessageInputFactory messageInputFactory) {
         this.inputRegistry = inputRegistry;
         this.messageInputFactory = messageInputFactory;
-        this.inputLauncher = inputLauncher;
-        this.persistedInputs = persistedInputs;
     }
 
     @GET
@@ -132,6 +123,7 @@ public class InputsResource extends RestResource {
             input.setCreatorUserId(lr.creatorUserId());
             input.setCreatedAt(Tools.iso8601());
             input.setGlobal(lr.global());
+            input.setConfiguration(inputConfig);
 
             input.checkConfiguration();
         } catch (NoSuchInputTypeException e) {
@@ -154,7 +146,7 @@ public class InputsResource extends RestResource {
         input.initialize();
 
         // Launch input. (this will run async and clean up itself in case of an error.)
-        inputLauncher.launch(input, inputId, true);
+        inputRegistry.launch(input, inputId, true);
 
         final Map<String, String> result = ImmutableMap.of(
                 "input_id", inputId,
@@ -176,7 +168,7 @@ public class InputsResource extends RestResource {
         }
 
         LOG.info("Attempting to terminate input [" + input.getName() + "]. Reason: REST request.");
-        inputRegistry.remove(input);
+        inputRegistry.terminate(input);
         LOG.info("Terminated input [" + input.getName() + "]. Reason: REST request.");
 
         return Response.accepted().build();
@@ -226,7 +218,7 @@ public class InputsResource extends RestResource {
 
         final MessageInput input;
         if (inputState == null) {
-            input = persistedInputs.get(inputId);
+            input = inputRegistry.getPersisted(inputId);
         } else {
             input = inputState.getStoppable();
         }
@@ -240,9 +232,9 @@ public class InputsResource extends RestResource {
         LOG.info("Launching existing input [" + input.getName() + "]. Reason: REST request.");
         input.initialize();
         if (inputState != null) {
-            inputLauncher.launch(inputState);
+            inputRegistry.launch(inputState);
         } else {
-            inputLauncher.launchPersisted(input);
+            inputRegistry.launchPersisted(input);
         }
         LOG.info("Launched existing input [" + input.getName() + "]. Reason: REST request.");
 
