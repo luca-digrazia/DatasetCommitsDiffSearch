@@ -40,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -630,13 +629,8 @@ public final class ParallelEvaluator implements Evaluator {
       Set<SkyKey> oldDeps,
       SkyFunctionEnvironment env)
       throws InterruptedException {
-    Iterator<SkyKey> it = env.getNewlyRequestedDeps().iterator();
-    if (!it.hasNext()) {
-      return;
-    }
     Set<SkyKey> unfinishedDeps = new HashSet<>();
-    while (it.hasNext()) {
-      SkyKey dep = it.next();
+    for (SkyKey dep : env.getNewlyRequestedDeps()) {
       if (!isDoneForBuild(newlyRequestedDepMap.get(dep))) {
         unfinishedDeps.add(dep);
       }

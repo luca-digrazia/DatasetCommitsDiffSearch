@@ -47,16 +47,16 @@ public class CompoundEvaluationProgressReceiver implements EvaluationProgressRec
   }
 
   @Override
-  public void stateStarting(SkyKey skyKey, NodeState state) {
+  public void computing(SkyKey skyKey) {
     for (EvaluationProgressReceiver receiver : receivers) {
-      receiver.stateStarting(skyKey, state);
+      receiver.computing(skyKey);
     }
   }
 
   @Override
-  public void stateEnding(SkyKey skyKey, NodeState state, long elapsedTimeNanos) {
+  public void computed(SkyKey skyKey, long elapsedTimeNanos) {
     for (EvaluationProgressReceiver receiver : receivers) {
-      receiver.stateEnding(skyKey, state, elapsedTimeNanos);
+      receiver.computed(skyKey, elapsedTimeNanos);
     }
   }
 

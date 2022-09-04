@@ -40,20 +40,6 @@ public interface EvaluationProgressReceiver {
   }
 
   /**
-   * Overall state of the node while it is being evaluated.
-   */
-  enum NodeState {
-    /** The node is undergoing a dirtiness check and may be re-validated. */
-    CHECK_DIRTY,
-    /** The node is prepping for evaluation. */
-    INITIALIZING_ENVIRONMENT,
-    /** The node is in compute(). */
-    COMPUTE,
-    /** The node is done evaluation and committing the result. */
-    COMMIT,
-  }
-
-  /**
    * Notifies that the node named by {@code key} has been invalidated.
    *
    * <p>{@code state} indicates the new state of the value.
@@ -73,24 +59,20 @@ public interface EvaluationProgressReceiver {
   void enqueueing(SkyKey skyKey);
 
   /**
-   * Notifies that a node corresponding to {@code skyKey} is about to enter the given
-   * {@code nodeState}.
+   * Notifies that {@code skyFunction.compute(skyKey, ...)} is about to be called, for some
+   * appropriate {@link SkyFunction} {@code skyFunction}.
    *
-   * <p>Notably, this includes {@link SkyFunction#compute} calls due to Skyframe restarts, but also
-   * dirtiness checking and node completion.
+   * <p>Notably, this includes {@link SkyFunction#compute} calls due to Skyframe restarts.
    */
-  void stateStarting(SkyKey skyKey, NodeState nodeState);
+  void computing(SkyKey skyKey);
 
   /**
-   * Notifies that a node corresponding to {@code skyKey} is about to complete the given
-   * {@code nodeState}.
+   * Notifies that {@code skyFunction.compute(skyKey, ...)} has just been called, for some
+   * appropriate {@link SkyFunction} {@code skyFunction}.
    *
-   * <p>Always called symmetrically with {@link #stateStarting(SkyKey, NodeState)}}.
-   *
-   * <p>{@code elapsedTimeNanos} is either the elapsed time in the {@code nodeState} or -1 if the
-   * timing was not recorded.
+   * <p>Notably, this includes {@link SkyFunction#compute} calls due to Skyframe restarts.
    */
-  void stateEnding(SkyKey skyKey, NodeState nodeState, long elapsedTimeNanos);
+  void computed(SkyKey skyKey, long elapsedTimeNanos);
 
   /**
    * Notifies that the node for {@code skyKey} has been evaluated.
@@ -113,11 +95,11 @@ public interface EvaluationProgressReceiver {
     }
 
     @Override
-    public void stateStarting(SkyKey skyKey, NodeState nodeState) {
+    public void computing(SkyKey skyKey) {
     }
 
     @Override
-    public void stateEnding(SkyKey skyKey, NodeState nodeState, long elapsedTimeNanos) {
+    public void computed(SkyKey skyKey, long elapsedTimeNanos) {
     }
 
     @Override
