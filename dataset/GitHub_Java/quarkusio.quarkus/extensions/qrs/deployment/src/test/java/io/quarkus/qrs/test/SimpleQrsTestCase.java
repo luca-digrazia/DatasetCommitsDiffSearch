@@ -118,9 +118,5 @@ public class SimpleQrsTestCase {
     public void testWriter() {
         RestAssured.get("/simple/writer")
                 .then().body(Matchers.equalTo("WRITER"));
-        RestAssured.get("/simple/fast-writer")
-                .then().body(Matchers.equalTo("OK"));
-        RestAssured.get("/simple/lookup-writer")
-                .then().body(Matchers.equalTo("OK"));
     }
 }

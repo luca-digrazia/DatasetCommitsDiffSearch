@@ -21,7 +21,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import io.quarkus.qrs.Blocking;
-import io.quarkus.qrs.runtime.core.RequestContext;
 import io.quarkus.runtime.BlockingOperationControl;
 
 @Path("/simple")
@@ -131,17 +130,5 @@ public class SimpleQrsResource {
     @Path("writer")
     public TestClass writer() {
         return new TestClass();
-    }
-
-    @GET
-    @Path("fast-writer")
-    public String fastWriter(@Context RequestContext context) {
-        return context.getTarget().getBuildTimeWriter() != null ? "OK" : "FAIL";
-    }
-
-    @GET
-    @Path("lookup-writer")
-    public Object slowWriter(@Context RequestContext context) {
-        return context.getTarget().getBuildTimeWriter() == null ? "OK" : "FAIL";
     }
 }
