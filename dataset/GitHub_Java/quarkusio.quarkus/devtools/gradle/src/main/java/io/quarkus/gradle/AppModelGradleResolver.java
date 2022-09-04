@@ -36,6 +36,7 @@ import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.jvm.tasks.Jar;
 
 import io.quarkus.bootstrap.BootstrapConstants;
@@ -139,18 +140,13 @@ public class AppModelGradleResolver implements AppModelResolver {
         Map<AppArtifactKey, AppDependency> versionMap = new HashMap<>();
         Map<ModuleIdentifier, ModuleVersionIdentifier> userModules = new HashMap<>();
 
-        final String classpathConfigName = launchMode == LaunchMode.TEST ? JavaPlugin.TEST_RUNTIME_CLASSPATH_CONFIGURATION_NAME
-                : JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME;
+        final String classpathConfigName = launchMode == LaunchMode.NORMAL ? JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME
+                : launchMode == LaunchMode.TEST ? JavaPlugin.TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME
+                        : JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME;
 
         collectDependencies(project.getConfigurations().getByName(classpathConfigName),
                 appBuilder, directExtensionDeps, userDeps,
                 versionMap, userModules);
-
-        if (launchMode == LaunchMode.DEVELOPMENT) {
-            collectDependencies(project.getConfigurations().getByName(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME),
-                    appBuilder, directExtensionDeps, userDeps,
-                    versionMap, userModules);
-        }
 
         final List<AppDependency> deploymentDeps = new ArrayList<>();
         final List<AppDependency> fullDeploymentDeps = new ArrayList<>(userDeps);
@@ -195,11 +191,11 @@ public class AppModelGradleResolver implements AppModelResolver {
                 JavaPluginConvention javaConvention = convention.findPlugin(JavaPluginConvention.class);
                 if (javaConvention != null) {
                     final SourceSet mainSourceSet = javaConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-                    PathsCollection.Builder paths = PathsCollection.builder();
+                    final List<Path> list = new ArrayList<>(1);
                     mainSourceSet.getOutput().filter(s -> s.exists()).forEach(f -> {
-                        paths.add(f.toPath());
+                        list.add(f.toPath());
                     });
-                    appArtifact.setPaths(paths.build());
+                    appArtifact.setPaths(PathsCollection.of(list.toArray(new Path[0])));
                 }
             }
         }
@@ -234,15 +230,10 @@ public class AppModelGradleResolver implements AppModelResolver {
                         .findProject(((ProjectComponentIdentifier) a.getId().getComponentIdentifier()).getProjectPath());
                 final JavaPluginConvention javaConvention = depProject.getConvention().findPlugin(JavaPluginConvention.class);
                 if (javaConvention != null) {
-                    SourceSet mainSourceSet = javaConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-                    final PathsCollection.Builder paths = PathsCollection.builder()
-                            .add(Paths.get(QuarkusGradleUtils.getClassesDir(mainSourceSet, depProject.getBuildDir(), false)));
-                    for (File resourcesDir : mainSourceSet.getResources().getSourceDirectories()) {
-                        if (resourcesDir.exists()) {
-                            paths.add(resourcesDir.toPath());
-                        }
-                    }
-                    dependency.getArtifact().setPaths(paths.build());
+                    SourceSetContainer sourceSets = javaConvention.getSourceSets();
+                    SourceSet mainSourceSet = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+                    dependency.getArtifact().setPath(
+                            Paths.get(QuarkusGradleUtils.getClassesDir(mainSourceSet, depProject.getBuildDir(), false)));
                 }
             }
 

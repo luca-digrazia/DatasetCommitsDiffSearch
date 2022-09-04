@@ -23,7 +23,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 import java.util.regex.Pattern;
 
@@ -123,11 +122,9 @@ public final class ConfigUtils {
     }
 
     static class EnvConfigSource implements ConfigSource, Serializable {
-        private static final String NULL_SENTINEL = new String(""); //must be a new string, used for == comparison
         private static final long serialVersionUID = 8786096039970882529L;
 
         static final Pattern REP_PATTERN = Pattern.compile("[^a-zA-Z0-9_]");
-        private final Map<String, String> cache = new ConcurrentHashMap<>(); //the regex match is expensive
 
         EnvConfigSource() {
         }
@@ -141,16 +138,7 @@ public final class ConfigUtils {
         }
 
         public String getValue(final String propertyName) {
-            String val = cache.get(propertyName);
-            if (val != null) {
-                if (val == NULL_SENTINEL) {
-                    return null;
-                }
-                return val;
-            }
-            val = getRawValue(REP_PATTERN.matcher(propertyName.toUpperCase(Locale.ROOT)).replaceAll("_"));
-            cache.put(propertyName, val == null ? NULL_SENTINEL : val);
-            return val;
+            return getRawValue(REP_PATTERN.matcher(propertyName.toUpperCase(Locale.ROOT)).replaceAll("_"));
         }
 
         String getRawValue(final String name) {

@@ -131,13 +131,12 @@ public class QuarkusAugmentor {
                 rootBuilder.setArchiveLocation(root);
             } else {
                 rootBuilder.setArchiveLocation(effectiveModel.getAppArtifact().getPaths().iterator().next());
-
-                effectiveModel.getAppArtifact().getPaths().forEach(p -> {
-                    if (!p.equals(root)) {
-                        rootBuilder.addArchiveRoot(p);
-                    }
-                });
             }
+            effectiveModel.getAppArtifact().getPaths().forEach(p -> {
+                if (!p.equals(root)) {
+                    rootBuilder.addArchiveRoot(p);
+                }
+            });
             rootBuilder.setExcludedFromIndexing(excludedFromIndexing);
 
             BuildChain chain = chainBuilder.build();

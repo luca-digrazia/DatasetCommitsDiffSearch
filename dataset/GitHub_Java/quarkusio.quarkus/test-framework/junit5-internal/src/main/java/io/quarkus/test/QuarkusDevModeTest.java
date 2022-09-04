@@ -120,7 +120,6 @@ public class QuarkusDevModeTest
         ExtensionContext.Store store = extensionContext.getRoot().getStore(ExtensionContext.Namespace.GLOBAL);
         if (store.get(TestResourceManager.class.getName()) == null) {
             TestResourceManager manager = new TestResourceManager(extensionContext.getRequiredTestClass());
-            manager.init();
             manager.start();
             store.put(TestResourceManager.class.getName(), new ExtensionContext.Store.CloseableResource() {
 
@@ -336,11 +335,8 @@ public class QuarkusDevModeTest
                             data = FileUtil.readFileContents(in);
 
                         }
-                        String oldContent = new String(data, StandardCharsets.UTF_8);
-                        String content = mutator.apply(oldContent);
-                        if (content.equals(oldContent)) {
-                            throw new RuntimeException("File was not modified, mutator function had no effect");
-                        }
+                        String content = new String(data, StandardCharsets.UTF_8);
+                        content = mutator.apply(content);
 
                         sleepForFileChanges(path);
                         Files.write(s, content.getBytes(StandardCharsets.UTF_8));

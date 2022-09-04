@@ -1,38 +1,33 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.deployment;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.nio.file.Path;
 
-import org.jboss.builder.item.MultiBuildItem;
 import org.jboss.jandex.IndexView;
 
-public final class ApplicationArchiveImpl extends MultiBuildItem implements ApplicationArchive, Closeable {
+import io.quarkus.bootstrap.model.PathsCollection;
+import io.quarkus.builder.item.MultiBuildItem;
+
+public final class ApplicationArchiveImpl extends MultiBuildItem implements ApplicationArchive {
 
     private final IndexView indexView;
-    private final Path archiveRoot;
-    private final Closeable closeable;
+    private final PathsCollection rootDirs;
+    private final boolean jar;
+    private final PathsCollection paths;
 
-    public ApplicationArchiveImpl(IndexView indexView, Path archiveRoot, Closeable closeable) {
+    public ApplicationArchiveImpl(IndexView indexView, Path archiveRoot, Closeable closeable, boolean jar,
+            Path archiveLocation) {
         this.indexView = indexView;
-        this.archiveRoot = archiveRoot;
-        this.closeable = closeable;
+        this.rootDirs = PathsCollection.of(archiveRoot);
+        this.jar = jar;
+        this.paths = PathsCollection.of(archiveLocation);
+    }
+
+    public ApplicationArchiveImpl(IndexView indexView, PathsCollection rootDirs, PathsCollection paths) {
+        this.indexView = indexView;
+        this.rootDirs = rootDirs;
+        this.paths = paths;
+        jar = false;
     }
 
     @Override
@@ -41,14 +36,30 @@ public final class ApplicationArchiveImpl extends MultiBuildItem implements Appl
     }
 
     @Override
+    @Deprecated
     public Path getArchiveRoot() {
-        return archiveRoot;
+        return rootDirs.iterator().next();
     }
 
     @Override
-    public void close() throws IOException {
-        if(closeable != null) {
-            closeable.close();
-        }
+    @Deprecated
+    public boolean isJarArchive() {
+        return jar;
+    }
+
+    @Override
+    @Deprecated
+    public Path getArchiveLocation() {
+        return paths.iterator().next();
+    }
+
+    @Override
+    public PathsCollection getRootDirs() {
+        return rootDirs;
+    }
+
+    @Override
+    public PathsCollection getPaths() {
+        return paths;
     }
 }

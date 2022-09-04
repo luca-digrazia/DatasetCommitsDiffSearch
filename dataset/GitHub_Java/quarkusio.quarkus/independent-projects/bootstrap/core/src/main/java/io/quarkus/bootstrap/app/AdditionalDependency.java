@@ -1,6 +1,5 @@
 package io.quarkus.bootstrap.app;
 
-import io.quarkus.bootstrap.model.PathsCollection;
 import java.io.Serializable;
 import java.nio.file.Path;
 
@@ -16,9 +15,19 @@ import java.nio.file.Path;
 public class AdditionalDependency implements Serializable {
 
     /**
+     * Creates additional test dependency
+     * 
+     * @param path additional test dependency location
+     * @return
+     */
+    public static AdditionalDependency test(Path path) {
+        return new AdditionalDependency(path, false, true, true);
+    }
+
+    /**
      * The path to the application archive
      */
-    private final PathsCollection archivePath;
+    private final Path archivePath;
 
     /**
      * If this archive is hot reloadable, only takes effect in dev mode.
@@ -31,17 +40,24 @@ public class AdditionalDependency implements Serializable {
      */
     private final boolean forceApplicationArchive;
 
+    /**
+     * If this dep is the test classes directory. If so then this will have precedence over the application
+     */
+    private final boolean testClassRoot;
+
     public AdditionalDependency(Path archivePath, boolean hotReloadable, boolean forceApplicationArchive) {
-        this(PathsCollection.of(archivePath), hotReloadable, forceApplicationArchive);
+        this(archivePath, hotReloadable, forceApplicationArchive, false);
     }
 
-    public AdditionalDependency(PathsCollection archivePath, boolean hotReloadable, boolean forceApplicationArchive) {
+    public AdditionalDependency(Path archivePath, boolean hotReloadable, boolean forceApplicationArchive,
+            boolean testClassRoot) {
         this.archivePath = archivePath;
         this.hotReloadable = hotReloadable;
         this.forceApplicationArchive = forceApplicationArchive;
+        this.testClassRoot = testClassRoot;
     }
 
-    public PathsCollection getArchivePath() {
+    public Path getArchivePath() {
         return archivePath;
     }
 
@@ -51,5 +67,9 @@ public class AdditionalDependency implements Serializable {
 
     public boolean isForceApplicationArchive() {
         return forceApplicationArchive;
+    }
+
+    public boolean isTestClassRoot() {
+        return testClassRoot;
     }
 }

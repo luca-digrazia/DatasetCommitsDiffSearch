@@ -13,7 +13,6 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -260,6 +259,14 @@ public class QuarkusDev extends QuarkusTask {
             wiringClassesDirectory.mkdirs();
             addToClassPaths(classPathManifest, context, wiringClassesDirectory);
 
+            StringBuilder resources = new StringBuilder();
+            for (File file : extension.resourcesDir()) {
+                if (resources.length() > 0) {
+                    resources.append(File.pathSeparator);
+                }
+                resources.append(file.getAbsolutePath());
+            }
+
             final Set<AppArtifactKey> projectDependencies = new HashSet<>();
             addSelfWithLocalDeps(project, context, new HashSet<>(), projectDependencies);
 
@@ -346,14 +353,13 @@ public class QuarkusDev extends QuarkusTask {
         if (!visited.add(project.getPath())) {
             return;
         }
-        final Configuration compileCp = project.getConfigurations().findByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME);
-        if (compileCp != null) {
-            compileCp.getIncoming().getDependencies().forEach(d -> {
-                if (d instanceof ProjectDependency) {
-                    addSelfWithLocalDeps(((ProjectDependency) d).getDependencyProject(), context, visited, addedDeps);
-                }
-            });
-        }
+        final Configuration compileCp = project.getConfigurations()
+                .getByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME);
+        compileCp.getIncoming().getDependencies().forEach(d -> {
+            if (d instanceof ProjectDependency) {
+                addSelfWithLocalDeps(((ProjectDependency) d).getDependencyProject(), context, visited, addedDeps);
+            }
+        });
 
         addLocalProject(project, context, addedDeps);
     }
@@ -383,18 +389,12 @@ public class QuarkusDev extends QuarkusTask {
         }
         String resourcePaths = mainSourceSet.getResources().getSourceDirectories().getSingleFile().getAbsolutePath(); //TODO: multiple resource directories
 
-        final String classesDir = QuarkusGradleUtils.getClassesDir(mainSourceSet, project.getBuildDir());
-        final String resourcesOutputPath = Files.exists(Paths.get(resourcePaths))
-                ? mainSourceSet.getOutput().getResourcesDir().getAbsolutePath()
-                : classesDir;
-
         DevModeContext.ModuleInfo wsModuleInfo = new DevModeContext.ModuleInfo(
                 project.getName(),
                 project.getProjectDir().getAbsolutePath(),
                 sourcePaths,
-                classesDir,
-                resourcePaths,
-                resourcesOutputPath);
+                QuarkusGradleUtils.getClassesDir(mainSourceSet, project.getBuildDir()),
+                resourcePaths);
 
         context.getModules().add(wsModuleInfo);
 

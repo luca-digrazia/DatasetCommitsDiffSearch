@@ -59,7 +59,7 @@ public class QuarkusBootstrap implements Serializable {
     private final Path targetDirectory;
 
     private final Mode mode;
-    private final Boolean offline;
+    private final boolean offline;
     private final boolean test;
     private final Boolean localProjectDiscovery;
 
@@ -172,6 +172,10 @@ public class QuarkusBootstrap implements Serializable {
         return mode;
     }
 
+    public boolean isOffline() {
+        return offline;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -207,7 +211,7 @@ public class QuarkusBootstrap implements Serializable {
         final List<Path> excludeFromClassPath = new ArrayList<>();
         Properties buildSystemProperties;
         Mode mode = Mode.PROD;
-        Boolean offline;
+        boolean offline;
         boolean test;
         Boolean localProjectDiscovery;
         Path targetDirectory;

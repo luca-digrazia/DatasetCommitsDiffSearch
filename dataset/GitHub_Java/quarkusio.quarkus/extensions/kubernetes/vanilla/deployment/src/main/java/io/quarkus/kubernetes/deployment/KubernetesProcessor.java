@@ -37,7 +37,6 @@ import org.jboss.logging.Logger;
 
 import io.dekorate.Session;
 import io.dekorate.SessionWriter;
-import io.dekorate.kubernetes.annotation.ImagePullPolicy;
 import io.dekorate.kubernetes.config.Annotation;
 import io.dekorate.kubernetes.config.EnvBuilder;
 import io.dekorate.kubernetes.config.Label;
@@ -80,7 +79,6 @@ import io.quarkus.container.image.deployment.util.ImageUtil;
 import io.quarkus.container.spi.BaseImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageLabelBuildItem;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -105,11 +103,6 @@ class KubernetesProcessor {
     private static final Logger log = Logger.getLogger(KubernetesDeployer.class);
 
     private static final String OUTPUT_ARTIFACT_FORMAT = "%s%s.jar";
-
-    @BuildStep
-    FeatureBuildItem produceFeature() {
-        return new FeatureBuildItem(FeatureBuildItem.KUBERNETES);
-    }
 
     @BuildStep
     public void checkKubernetes(BuildProducer<KubernetesDeploymentTargetBuildItem> deploymentTargets) {
@@ -181,7 +174,6 @@ class KubernetesProcessor {
             KubernetesConfig kubernetesConfig,
             OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
-            Capabilities capabilities,
             List<KubernetesAnnotationBuildItem> kubernetesAnnotations,
             List<KubernetesLabelBuildItem> kubernetesLabels,
             List<KubernetesEnvBuildItem> kubernetesEnvs,
@@ -227,20 +219,15 @@ class KubernetesProcessor {
 
         //Apply configuration
         applyGlobalConfig(session, kubernetesConfig);
-
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
-
-        boolean needToForceUpdateImagePullPolicy = needToForceUpdateImagePullPolicy(containerImage, capabilities);
-        applyConfig(session, project, KUBERNETES, getResourceName(kubernetesConfig, applicationInfo), kubernetesConfig,
-                now, determineImagePullPolicy(kubernetesConfig, needToForceUpdateImagePullPolicy));
-        applyConfig(session, project, OPENSHIFT, getResourceName(openshiftConfig, applicationInfo), openshiftConfig, now,
-                determineImagePullPolicy(openshiftConfig, needToForceUpdateImagePullPolicy));
-        applyConfig(session, project, KNATIVE, getResourceName(knativeConfig, applicationInfo), knativeConfig, now,
-                determineImagePullPolicy(knativeConfig, needToForceUpdateImagePullPolicy));
+        applyConfig(session, project, KUBERNETES, kubernetesConfig.name.orElse(applicationInfo.getName()), kubernetesConfig,
+                now);
+        applyConfig(session, project, OPENSHIFT, openshiftConfig.name.orElse(applicationInfo.getName()), openshiftConfig, now);
+        applyConfig(session, project, KNATIVE, knativeConfig.name.orElse(applicationInfo.getName()), knativeConfig, now);
 
         //apply build item configurations to the dekorate session.
         applyBuildItems(session,
-                applicationInfo,
+                applicationInfo.getName(),
                 kubernetesConfig,
                 openshiftConfig,
                 knativeConfig,
@@ -290,8 +277,9 @@ class KubernetesProcessor {
         }
     }
 
-    private String getResourceName(PlatformConfiguration platformConfiguration, ApplicationInfoBuildItem applicationInfo) {
-        return platformConfiguration.getName().orElse(applicationInfo.getName());
+    @BuildStep
+    FeatureBuildItem produceFeature() {
+        return new FeatureBuildItem(FeatureBuildItem.KUBERNETES);
     }
 
     /**
@@ -307,16 +295,15 @@ class KubernetesProcessor {
 
     /**
      * Apply changes to the target resource group
-     * 
+     *
      * @param session The session to apply the changes
      * @param target The deployment target (e.g. kubernetes, openshift, knative)
      * @param name The name of the resource to accept the configuration
      * @param config The {@link PlatformConfiguration} instance
-     * @param now ZonedDateTime indicating the current time
-     * @param imagePullPolicy Kubernetes ImagePullPolicy to be used
+     * @param now
      */
     private void applyConfig(Session session, Project project, String target, String name, PlatformConfiguration config,
-            ZonedDateTime now, ImagePullPolicy imagePullPolicy) {
+            ZonedDateTime now) {
         if (OPENSHIFT.equals(target)) {
             session.resources().decorate(OPENSHIFT, new AddLabelDecorator(new Label(OPENSHIFT_APP_RUNTIME, QUARKUS)));
         }
@@ -356,7 +343,7 @@ class KubernetesProcessor {
         });
 
         //Image Pull
-        session.resources().decorate(target, new ApplyImagePullPolicyDecorator(imagePullPolicy));
+        session.resources().decorate(target, new ApplyImagePullPolicyDecorator(config.getImagePullPolicy()));
         config.getImagePullSecrets().ifPresent(l -> {
             l.forEach(s -> session.resources().decorate(target, new AddImagePullSecretDecorator(name, s)));
         });
@@ -400,31 +387,8 @@ class KubernetesProcessor {
         });
     }
 
-    /**
-     * When there is no registry defined and s2i isn't being used, the only ImagePullPolicy that can work is 'IfNotPresent'.
-     * This case comes up when users want to deploy their application to a cluster like Minikube where no registry is used
-     * and instead they rely on the image being built directly into the docker daemon that the cluster uses.
-     */
-    private boolean needToForceUpdateImagePullPolicy(Optional<ContainerImageInfoBuildItem> containerImage,
-            Capabilities capabilities) {
-        boolean result = containerImage.isPresent()
-                && ContainerImageUtil.isRegistryMissingAndNotS2I(capabilities, containerImage.get());
-        if (result) {
-            log.warn("No registry was set for the container image, so 'ImagePullPolicy' is being force-set to 'IfNotPresent'");
-            return true;
-        }
-        return false;
-    }
-
-    private ImagePullPolicy determineImagePullPolicy(PlatformConfiguration config, boolean needToForceUpdateImagePullPolicy) {
-        if (needToForceUpdateImagePullPolicy) {
-            return ImagePullPolicy.IfNotPresent;
-        }
-        return config.getImagePullPolicy();
-    }
-
     private void applyBuildItems(Session session,
-            ApplicationInfoBuildItem applicationInfo,
+            String name,
             KubernetesConfig kubernetesConfig,
             OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
@@ -440,9 +404,9 @@ class KubernetesProcessor {
             Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPath,
             Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPath) {
 
-        String kubernetesName = getResourceName(kubernetesConfig, applicationInfo);
-        String openshiftName = getResourceName(openshiftConfig, applicationInfo);
-        String knativeName = getResourceName(knativeConfig, applicationInfo);
+        String kubernetesName = kubernetesConfig.name.orElse(name);
+        String openshiftName = openshiftConfig.name.orElse(name);
+        String knativeName = knativeConfig.name.orElse(name);
 
         Map<String, PlatformConfiguration> configMap = new HashMap<>();
         configMap.put(KUBERNETES, kubernetesConfig);
@@ -527,42 +491,48 @@ class KubernetesProcessor {
         }
 
         // only use the probe config
-        handleProbes(applicationInfo, kubernetesConfig, openshiftConfig, knativeConfig, ports, kubernetesHealthLivenessPath,
+        deploymentTargets.forEach(target -> {
+            kubernetesHealthLivenessPath.ifPresent(l -> {
+                session.resources().decorate(target, new AddLivenessProbeDecorator(name, ProbeConverter
+                        .builder(configMap.get(target).getLivenessProbe()).withHttpActionPath(l.getPath()).build()));
+            });
+            kubernetesHealthReadinessPath.ifPresent(l -> {
+                session.resources().decorate(target, new AddReadinessProbeDecorator(name, ProbeConverter
+                        .builder(configMap.get(target).getReadinessProbe()).withHttpActionPath(l.getPath()).build()));
+            });
+        });
+        handleProbes(name, kubernetesConfig, openshiftConfig, knativeConfig, ports, kubernetesHealthLivenessPath,
                 kubernetesHealthReadinessPath, session);
     }
 
-    private void handleProbes(ApplicationInfoBuildItem applicationInfo, KubernetesConfig kubernetesConfig,
-            OpenshiftConfig openshiftConfig,
+    private void handleProbes(String name, KubernetesConfig kubernetesConfig, OpenshiftConfig openshiftConfig,
             KnativeConfig knativeConfig,
             Map<String, Integer> ports,
             Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
             Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem,
             Session session) {
         if (kubernetesConfig.deploymentTarget.contains(KUBERNETES)) {
-            doHandleProbes(getResourceName(kubernetesConfig, applicationInfo), KUBERNETES, ports,
-                    kubernetesConfig.livenessProbe, kubernetesConfig.readinessProbe, kubernetesHealthLivenessPathBuildItem,
-                    kubernetesHealthReadinessPathBuildItem, session);
+            handleLivenessProbe(name, KUBERNETES, kubernetesConfig.livenessProbe, kubernetesHealthLivenessPathBuildItem,
+                    session);
+            handleReadinessProbe(name, KUBERNETES, kubernetesConfig.readinessProbe, kubernetesHealthReadinessPathBuildItem,
+                    session);
+            session.resources().decorate(KUBERNETES,
+                    new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
         }
         if (kubernetesConfig.deploymentTarget.contains(OPENSHIFT)) {
-            doHandleProbes(getResourceName(kubernetesConfig, applicationInfo), OPENSHIFT, ports, openshiftConfig.livenessProbe,
-                    openshiftConfig.readinessProbe, kubernetesHealthLivenessPathBuildItem,
-                    kubernetesHealthReadinessPathBuildItem, session);
+            handleLivenessProbe(name, OPENSHIFT, openshiftConfig.livenessProbe, kubernetesHealthLivenessPathBuildItem, session);
+            handleReadinessProbe(name, OPENSHIFT, openshiftConfig.readinessProbe, kubernetesHealthReadinessPathBuildItem,
+                    session);
+            session.resources().decorate(OPENSHIFT,
+                    new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
         }
         if (kubernetesConfig.deploymentTarget.contains(KNATIVE)) {
-            doHandleProbes(getResourceName(kubernetesConfig, applicationInfo), KNATIVE, ports, knativeConfig.livenessProbe,
-                    knativeConfig.readinessProbe, kubernetesHealthLivenessPathBuildItem, kubernetesHealthReadinessPathBuildItem,
+            handleLivenessProbe(name, KNATIVE, knativeConfig.livenessProbe, kubernetesHealthLivenessPathBuildItem, session);
+            handleReadinessProbe(name, KNATIVE, knativeConfig.readinessProbe, kubernetesHealthReadinessPathBuildItem,
                     session);
+            session.resources().decorate(KNATIVE,
+                    new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
         }
-    }
-
-    private void doHandleProbes(String name, String target, Map<String, Integer> ports, ProbeConfig livenessProbe,
-            ProbeConfig readinessProbe, Optional<KubernetesHealthLivenessPathBuildItem> kubernetesHealthLivenessPathBuildItem,
-            Optional<KubernetesHealthReadinessPathBuildItem> kubernetesHealthReadinessPathBuildItem, Session session) {
-        handleLivenessProbe(name, target, livenessProbe, kubernetesHealthLivenessPathBuildItem, session);
-        handleReadinessProbe(name, target, readinessProbe, kubernetesHealthReadinessPathBuildItem,
-                session);
-        session.resources().decorate(target,
-                new ApplyHttpGetActionPortDecorator(ports.getOrDefault(HTTP_PORT, DEFAULT_HTTP_PORT)));
     }
 
     private void handleLivenessProbe(String name, String target, ProbeConfig livenessProbe,

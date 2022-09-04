@@ -10,8 +10,8 @@ import java.util.Iterator;
 import java.util.Set;
 
 import org.gradle.api.Project;
-import org.gradle.api.Task;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.internal.AbstractTask;
 import org.gradle.api.plugins.Convention;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
@@ -24,7 +24,7 @@ public class QuarkusGradleUtils {
 
     private static final String ERROR_COLLECTING_PROJECT_CLASSES = "Failed to collect project's classes in a temporary dir";
 
-    public static Path serializeAppModel(final AppModel appModel, Task context) throws IOException {
+    public static Path serializeAppModel(final AppModel appModel, AbstractTask context) throws IOException {
         final Path serializedModel = context.getTemporaryDir().toPath().resolve("quarkus-app-model.dat");
         try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(serializedModel))) {
             out.writeObject(appModel);
@@ -32,17 +32,13 @@ public class QuarkusGradleUtils {
         return serializedModel;
     }
 
-    public static SourceSet getSourceSet(Project project, String sourceSetName) {
+    public static PathsCollection getOutputPaths(Project project) {
         final Convention convention = project.getConvention();
         JavaPluginConvention javaConvention = convention.findPlugin(JavaPluginConvention.class);
         if (javaConvention == null) {
             throw new IllegalArgumentException("The project does not include the Java plugin");
         }
-        return javaConvention.getSourceSets().getByName(sourceSetName);
-    }
-
-    public static PathsCollection getOutputPaths(Project project) {
-        final SourceSet mainSourceSet = getSourceSet(project, SourceSet.MAIN_SOURCE_SET_NAME);
+        final SourceSet mainSourceSet = javaConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         final PathsCollection.Builder builder = PathsCollection.builder();
         mainSourceSet.getOutput().getClassesDirs().filter(f -> f.exists()).forEach(f -> builder.add(f.toPath()));
         final File resourcesDir = mainSourceSet.getOutput().getResourcesDir();

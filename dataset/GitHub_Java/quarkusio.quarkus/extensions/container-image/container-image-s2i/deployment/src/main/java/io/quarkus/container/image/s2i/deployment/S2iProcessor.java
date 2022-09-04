@@ -181,7 +181,7 @@ public class S2iProcessor {
 
         Optional<GeneratedFileSystemResourceBuildItem> openshiftYml = generatedResources
                 .stream()
-                .filter(r -> r.getName().endsWith("kubernetes" + File.separator + "openshift.yml"))
+                .filter(r -> r.getName().endsWith("kubernetes/openshift.yml"))
                 .findFirst();
 
         if (!openshiftYml.isPresent()) {
@@ -193,6 +193,7 @@ public class S2iProcessor {
         String namespace = Optional.ofNullable(kubernetesClient.getClient().getNamespace()).orElse("default");
         LOG.info("Performing s2i binary build with jar on server: " + kubernetesClient.getClient().getMasterUrl()
                 + " in namespace:" + namespace + ".");
+        String image = containerImage.getImage();
 
         createContainerImage(kubernetesClient, openshiftYml.get(), s2iConfig, out.getOutputDirectory(), jar.getPath(),
                 out.getOutputDirectory().resolve("lib"));
@@ -218,6 +219,8 @@ public class S2iProcessor {
         String namespace = Optional.ofNullable(kubernetesClient.getClient().getNamespace()).orElse("default");
         LOG.info("Performing s2i binary build with native image on server: " + kubernetesClient.getClient().getMasterUrl()
                 + " in namespace:" + namespace + ".");
+
+        String image = containerImage.getImage();
 
         GeneratedFileSystemResourceBuildItem openshiftYml = generatedResources
                 .stream()
@@ -266,7 +269,7 @@ public class S2iProcessor {
      * Apply the s2i resources and wait until ImageStreamTags are created.
      *
      * @param client the client instance
-     * @param buildResources resources to apply
+     * @param the resources to apply
      */
     private static void applyS2iResources(OpenShiftClient client, List<HasMetadata> buildResources) {
         // Apply build resource requirements

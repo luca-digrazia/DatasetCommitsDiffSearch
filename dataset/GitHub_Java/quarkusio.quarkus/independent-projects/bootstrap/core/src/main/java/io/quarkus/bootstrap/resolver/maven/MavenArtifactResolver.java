@@ -119,14 +119,6 @@ public class MavenArtifactResolver {
         this.remoteRepoManager = mvnSettings.getRemoteRepositoryManager();
     }
 
-    public MavenArtifactResolver(BootstrapMavenContext mvnSettings) throws AppModelResolverException {
-        this.repoSystem = mvnSettings.getRepositorySystem();
-        this.repoSession = mvnSettings.getRepositorySystemSession();
-        localRepoManager = null;
-        this.remoteRepos = mvnSettings.getRemoteRepositories();
-        this.remoteRepoManager = mvnSettings.getRemoteRepositoryManager();
-    }
-
     public MavenLocalRepositoryManager getLocalRepositoryManager() {
         return localRepoManager;
     }

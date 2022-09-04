@@ -1,16 +1,16 @@
 package io.quarkus.undertow.deployment;
 
-import java.net.JarURLConnection;
-import java.net.URL;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
-import java.util.jar.JarEntry;
 
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -20,6 +20,7 @@ import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.runtime.LaunchMode;
+import io.quarkus.runtime.util.ClassPathUtils;
 
 /**
  * NOTE: Shared with Resteasy standalone!
@@ -43,7 +44,6 @@ public class UndertowStaticResourcesBuildStep {
     void scanStaticResources(ApplicationArchivesBuildItem applicationArchivesBuildItem,
             BuildProducer<GeneratedResourceBuildItem> generatedResources,
             BuildProducer<KnownPathsBuildItem> knownPathsBuilds,
-            BuildProducer<StaticResourceFilesBuildItem> staticResourceFiles,
             List<GeneratedWebResourceBuildItem> generatedWebResources,
             LaunchModeBuildItem launchModeBuildItem) throws Exception {
 
@@ -54,45 +54,14 @@ public class UndertowStaticResourcesBuildStep {
         for (ApplicationArchive i : applicationArchivesBuildItem.getAllApplicationArchives()) {
             Path resource = i.getChildPath(META_INF_RESOURCES);
             if (resource != null && Files.exists(resource)) {
-                Files.walk(resource).forEach(new Consumer<Path>() {
-                    @Override
-                    public void accept(Path path) {
-                        // Skip META-INF/resources entry
-                        if (resource.equals(path)) {
-                            return;
-                        }
-                        Path rel = resource.relativize(path);
-                        if (Files.isDirectory(path)) {
-                            knownDirectories.add(rel.toString());
-                        } else {
-                            knownFiles.add(rel.toString());
-                        }
-                    }
-                });
+                collectKnownPaths(resource, knownFiles, knownDirectories);
             }
         }
-        Enumeration<URL> resources = getClass().getClassLoader().getResources(META_INF_RESOURCES);
-        while (resources.hasMoreElements()) {
-            URL url = resources.nextElement();
-            if (url.getProtocol().equals("jar")) {
-                JarURLConnection jar = (JarURLConnection) url.openConnection();
-                Enumeration<JarEntry> entries = jar.getJarFile().entries();
-                while (entries.hasMoreElements()) {
-                    JarEntry entry = entries.nextElement();
-                    if (entry.getName().startsWith(META_INF_RESOURCES_SLASH)) {
-                        String sub = entry.getName().substring(META_INF_RESOURCES_SLASH.length());
-                        if (!sub.isEmpty()) {
-                            if (entry.getName().endsWith("/")) {
-                                String dir = sub.substring(0, sub.length() - 1);
-                                knownDirectories.add(dir);
-                            } else {
-                                knownFiles.add(sub);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+
+        ClassPathUtils.consumeAsPaths(META_INF_RESOURCES, resource -> {
+            collectKnownPaths(resource, knownFiles, knownDirectories);
+        });
+
         for (GeneratedWebResourceBuildItem genResource : generatedWebResources) {
             String sub = genResource.getName();
             if (sub.startsWith("/")) {
@@ -111,10 +80,30 @@ public class UndertowStaticResourcesBuildStep {
             //we don't need knownPaths in development mode
             //we serve directly from the project dir
             knownPathsBuilds.produce(new KnownPathsBuildItem(Collections.emptySet(), Collections.emptySet()));
-            //but we need files to display them in case of 404 in development mode
-            staticResourceFiles.produce(new StaticResourceFilesBuildItem(knownFiles));
         } else {
             knownPathsBuilds.produce(new KnownPathsBuildItem(knownFiles, knownDirectories));
+        }
+    }
+
+    private void collectKnownPaths(Path resource, Set<String> knownFiles, Set<String> knownDirectories) {
+        try {
+            Files.walkFileTree(resource, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                        throws IOException {
+                    knownFiles.add(resource.relativize(file).toString());
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult preVisitDirectory(Path file, BasicFileAttributes attrs)
+                        throws IOException {
+                    knownDirectories.add(resource.relativize(file).toString());
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

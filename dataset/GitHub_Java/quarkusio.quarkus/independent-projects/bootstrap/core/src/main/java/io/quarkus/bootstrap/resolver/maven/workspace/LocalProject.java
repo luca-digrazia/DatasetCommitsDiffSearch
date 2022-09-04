@@ -93,10 +93,10 @@ public class LocalProject {
      * If current project does not exist then the method will return null.
      *
      * @param ctx bootstrap maven context
-     * @return current project with the workspace or null in case the current project could not be resolved
+     * @return current workspace or null in case the current project could not be resolved
      * @throws BootstrapException in case of an error
      */
-    public static LocalProject loadWorkspace(BootstrapMavenContext ctx) throws BootstrapException {
+    public static LocalWorkspace loadWorkspace(BootstrapMavenContext ctx) throws BootstrapException {
         final Path currentProjectPom = ctx.getCurrentProjectPomOrNull();
         if (currentProjectPom == null) {
             return null;
@@ -105,7 +105,7 @@ public class LocalProject {
         final Model rootModel = rootProjectBaseDir == null || rootProjectBaseDir.equals(currentProjectPom.getParent())
                 ? loadRootModel(currentProjectPom)
                 : readModel(rootProjectBaseDir.resolve(POM_XML));
-        return loadWorkspace(currentProjectPom, rootModel);
+        return loadWorkspace(currentProjectPom, rootModel).getWorkspace();
     }
 
     private static LocalProject loadWorkspace(Path currentProjectPom, Model rootModel) throws BootstrapException {
@@ -302,11 +302,9 @@ public class LocalProject {
     }
 
     public AppArtifact getAppArtifact() {
-        return getAppArtifact(rawModel.getPackaging());
-    }
-
-    public AppArtifact getAppArtifact(String extension) {
-        return new AppArtifact(groupId, artifactId, BootstrapConstants.EMPTY, extension, version);
+        final AppArtifact appArtifact = new AppArtifact(groupId, artifactId, BootstrapConstants.EMPTY, rawModel.getPackaging(),
+                version);
+        return appArtifact;
     }
 
     public List<LocalProject> getSelfWithLocalDeps() {

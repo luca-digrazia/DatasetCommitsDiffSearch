@@ -72,6 +72,8 @@ public class QuarkusBuild extends QuarkusTask {
                 .setAppArtifact(appArtifact)
                 .setLocalProjectDiscovery(false)
                 .setIsolateDeployment(true)
+                //.setConfigDir(extension().outputConfigDirectory().toPath())
+                //.setTargetDirectory(extension().outputDirectory().toPath())
                 .build().bootstrap()) {
 
             appCreationContext.createAugmentor().createProductionApplication();

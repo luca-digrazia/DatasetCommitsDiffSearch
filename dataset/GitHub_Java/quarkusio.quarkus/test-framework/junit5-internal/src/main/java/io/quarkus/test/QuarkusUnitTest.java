@@ -462,9 +462,7 @@ public class QuarkusUnitTest
             if (afterUndeployListener != null) {
                 afterUndeployListener.run();
             }
-            if (curatedApplication != null) {
-                curatedApplication.close();
-            }
+            curatedApplication.close();
         } finally {
             System.clearProperty("test.url");
             Thread.currentThread().setContextClassLoader(originalClassLoader);
@@ -473,10 +471,9 @@ public class QuarkusUnitTest
             if (deploymentDir != null) {
                 FileUtil.deleteDirectory(deploymentDir);
             }
-
-            if (afterAllCustomizer != null) {
-                afterAllCustomizer.run();
-            }
+        }
+        if (afterAllCustomizer != null) {
+            afterAllCustomizer.run();
         }
     }
 

@@ -114,8 +114,7 @@ public class ElytronPropertiesFileRecorder {
      * @param config - the realm config
      * @throws Exception
      */
-    public Runnable loadRealm(RuntimeValue<SecurityRealm> realm, MPRealmConfig config, MPRealmRuntimeConfig runtimeConfig)
-            throws Exception {
+    public Runnable loadRealm(RuntimeValue<SecurityRealm> realm, MPRealmConfig config) throws Exception {
         return new Runnable() {
             @Override
             public void run() {
@@ -126,15 +125,15 @@ public class ElytronPropertiesFileRecorder {
                 }
                 SimpleMapBackedSecurityRealm memRealm = (SimpleMapBackedSecurityRealm) secRealm;
                 HashMap<String, SimpleRealmEntry> identityMap = new HashMap<>();
-                Map<String, String> userInfo = runtimeConfig.users;
+                Map<String, String> userInfo = config.getUsers();
                 log.debugf("UserInfoMap: %s%n", userInfo);
-                Map<String, String> roleInfo = runtimeConfig.roles;
+                Map<String, String> roleInfo = config.getRoles();
                 log.debugf("RoleInfoMap: %s%n", roleInfo);
                 for (Map.Entry<String, String> userPasswordEntry : userInfo.entrySet()) {
                     Password password;
                     String user = userPasswordEntry.getKey();
 
-                    if (runtimeConfig.plainText) {
+                    if (config.plainText) {
                         password = ClearPassword.createRaw(ClearPassword.ALGORITHM_CLEAR,
                                 userPasswordEntry.getValue().toCharArray());
                     } else {
