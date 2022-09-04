@@ -20,10 +20,10 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.bson.types.ObjectId;
 import org.graylog2.streams.Router;
 
 /**
@@ -45,7 +45,7 @@ public class GELFMessage {
     private int timestamp = 0;
     private String facility = null;
     private Map<String, String> additionalData = new HashMap<String, String>();
-    private List<ObjectId> streams = null;
+    private List<Integer> streams = null;
 
     private boolean filterOut = false;
 
@@ -252,16 +252,27 @@ public class GELFMessage {
     }
 
 
-    public void setStreams(List<ObjectId> streams) {
+    public void setStreams(List<Integer> streams) {
         this.streams = streams;
     }
 
-    public List<ObjectId> getStreams() {
+    public List<Integer> getStreams() {
         if (this.streams != null) {
             return this.streams;
         }
 
         return Router.route(this);
+    }
+
+    /**
+     * Converts message to a String consisting of the host and the short message
+     * separated by a dash. Gives syslog-ish format but hides inforamtion like
+     * PRIORITY.
+     *
+     * @return boolean
+     */
+    public String toOneLiner() {
+        return this.getHost() + " - " + this.getShortMessage();
     }
 
     /**

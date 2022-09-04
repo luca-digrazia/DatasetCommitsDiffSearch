@@ -20,7 +20,6 @@
 
 package org.graylog2.forwarders;
 
-import org.graylog2.forwarders.forwarders.MessageForwarderConfigurationException;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 /**
@@ -41,7 +40,7 @@ public interface MessageForwarderIF {
      * @return true in case of success, otherwise false
      * @throws MessageForwarderConfigurationException
      */
-    public boolean forward(GELFMessage message) throws MessageForwarderConfigurationException;
+    public boolean forward(String where, GELFMessage message) throws MessageForwarderConfigurationException;
 
     /**
      * Indicates if the last forward has succeeded.

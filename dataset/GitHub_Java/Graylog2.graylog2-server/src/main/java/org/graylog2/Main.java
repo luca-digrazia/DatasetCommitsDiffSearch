@@ -21,8 +21,6 @@
 package org.graylog2;
 
 import java.io.BufferedWriter;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.graylog2.messagehandlers.syslog.SyslogServerThread;
 import org.graylog2.messagehandlers.gelf.GELFMainThread;
 import org.graylog2.messagehandlers.gelf.GELF;
@@ -32,8 +30,6 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import org.graylog2.blacklists.Blacklist;
-import org.graylog2.blacklists.BlacklistRule;
 import org.graylog2.messagehandlers.amqp.AMQP;
 import org.graylog2.messagehandlers.amqp.AMQPBroker;
 import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
@@ -42,6 +38,7 @@ import org.graylog2.periodical.ChunkedGELFClientManagerThread;
 import org.graylog2.periodical.HostCounterCacheWriterThread;
 import org.graylog2.periodical.ServerValueWriterThread;
 import org.graylog2.periodical.ThroughputWriterThread;
+import org.graylog2.streams.ReIndexer;
 
 /**
  * Main class of Graylog2.
