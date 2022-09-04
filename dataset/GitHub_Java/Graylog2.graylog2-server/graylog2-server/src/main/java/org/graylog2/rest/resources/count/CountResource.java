@@ -19,16 +19,27 @@
  */
 package org.graylog2.rest.resources.count;
 
-import com.codahale.metrics.annotation.Timed;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
+import org.graylog2.Core;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.DateHistogramResult;
-import org.graylog2.rest.resources.RestResource;
+import org.graylog2.rest.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.*;
+import com.google.common.collect.Maps;
+import com.sun.jersey.api.core.ResourceConfig;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.Map;
 
 /**
@@ -39,18 +50,26 @@ public class CountResource extends RestResource {
 	
     private static final Logger LOG = LoggerFactory.getLogger(CountResource.class);
 
-    @GET @Path("/total") @Timed
+    private final ObjectMapper objectMapper = new ObjectMapper();
+	
+    @Context ResourceConfig rc;
+
+    @GET @Path("/total")
     @Produces(MediaType.APPLICATION_JSON)
-    public String total(@QueryParam("pretty") boolean prettyPrint) {
+    public String histogram(@QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         Map<String, Long> result = Maps.newHashMap();
         result.put("events", core.getIndexer().counts().total());
 
         return json(result, prettyPrint);
     }
 
-    @GET @Path("/histogram") @Timed
+    @GET @Path("/histogram")
     @Produces(MediaType.APPLICATION_JSON)
     public String histogram(@QueryParam("interval") String interval, @QueryParam("timerange") int timerange, @QueryParam("pretty") boolean prettyPrint) {
+        Core core = (Core) rc.getProperty("core");
+
         if (interval == null || interval.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);

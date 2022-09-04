@@ -21,13 +21,13 @@
 package org.graylog2.rest;
 
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Response;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -35,6 +35,8 @@ import com.google.gson.GsonBuilder;
 public class RestResource {
 	
 	private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
+
+    protected final ObjectMapper objectMapper = new ObjectMapper();
 
 	protected RestResource() { /* */ }
 	
@@ -46,19 +48,17 @@ public class RestResource {
         	throw new WebApplicationException(400);
 		}
 	}
-	
-	protected String json(Object x) {
-		return json(x, false);
-	}
-	
-	protected String json(Object x, boolean prettyPrint) {
-		Gson gson = new Gson();
-		
-        if (prettyPrint) {
-            gson = new GsonBuilder().setPrettyPrinting().create();
+
+    protected String json(Object x, boolean prettyPrint) {
+        try {
+            if (prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(x);
+            } else {
+                return objectMapper.writeValueAsString(x);
+            }
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
         }
-        
-        return gson.toJson(x);
-	}
-	
+    }
 }
