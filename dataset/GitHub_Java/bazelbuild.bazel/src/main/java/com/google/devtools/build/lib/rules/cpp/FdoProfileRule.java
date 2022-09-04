@@ -20,7 +20,7 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** {@code fdo_profile} rule class. */
@@ -28,20 +28,35 @@ public final class FdoProfileRule implements RuleDefinition {
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
+        .requiresConfigurationFragments(CppConfiguration.class)
         /* <!-- #BLAZE_RULE(fdo_profile).ATTRIBUTE(profile) -->
         Label of the FDO profile. The FDO file can have one of the following extensions:
-        .profraw for unindexed LLVM profile, .profdata fo indexed LLVM profile, .zip
-        that holds GCC gcda profile or LLVM profraw profile.
+        .profraw for unindexed LLVM profile, .profdata for indexed LLVM profile, .zip that holds an
+        LLVM profraw profile, .afdo for AutoFDO profile, .xfdo for XBinary profile.
+        The label can also point to an fdo_absolute_path_profile rule.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr("profile", LABEL)
-                .mandatory()
                 .allowedFileTypes(
                     FileTypeSet.of(
                         CppFileTypes.LLVM_PROFILE_RAW,
                         CppFileTypes.LLVM_PROFILE,
-                        FileType.of(".zip")))
+                        CppFileTypes.LLVM_PROFILE_ZIP,
+                        CppFileTypes.GCC_AUTO_PROFILE,
+                        CppFileTypes.XBINARY_PROFILE))
                 .singleArtifact())
+        /* <!-- #BLAZE_RULE(fdo_profile).ATTRIBUTE(absolute_path_profile) -->
+        Absolute path to the FDO profile. The FDO file can have one of the following extensions:
+        .profraw for unindexed LLVM profile, .profdata for indexed LLVM profile, .zip
+        that holds an LLVM profraw profile, or .afdo for AutoFDO profile.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("absolute_path_profile", Type.STRING))
+        /* <!-- #BLAZE_RULE(fdo_profile).ATTRIBUTE(proto_profile) -->
+        Label of the protobuf profile.
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        .add(attr("proto_profile", LABEL)
+            .allowedFileTypes(FileTypeSet.ANY_FILE)
+            .singleArtifact())
         .advertiseProvider(FdoProfileProvider.class)
         .build();
   }
@@ -50,20 +65,26 @@ public final class FdoProfileRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("fdo_profile")
-        .ancestors(BaseRuleClasses.BaseRule.class)
+        .ancestors(BaseRuleClasses.NativeBuildRule.class)
         .factoryClass(FdoProfile.class)
         .build();
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = fdo_profile, TYPE = LIBRARY, FAMILY = Cpp) -->
+/*<!-- #BLAZE_RULE (NAME = fdo_profile, TYPE = LIBRARY, FAMILY = C / C++) -->
 
-<p>Represents a checked-in FDO profile. Example:</p>
+<p>Represents an FDO profile that is either in the workspace or at a specified absolute path.
+Examples:</p>
 
 <pre class="code">
 fdo_profile(
     name = "fdo",
     profile = "//path/to/fdo:profile.zip",
+)
+
+fdo_profile(
+  name = "fdo_abs",
+  absolute_path_profile = "/absolute/path/profile.zip",
 )
 </pre>
 <!-- #END_BLAZE_RULE -->*/

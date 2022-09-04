@@ -14,32 +14,17 @@
 
 package com.google.devtools.build.lib.rules.cpp.proto;
 
-import static com.google.devtools.build.lib.packages.Aspect.INJECTING_RULE_KIND_PARAMETER_KEY;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
-import com.google.common.base.Function;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import javax.annotation.Nullable;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 
 /** Declaration part of cc_proto_library. */
 public class CcProtoLibraryRule implements RuleDefinition {
-
-  private static final Function<Rule, AspectParameters> ASPECT_PARAMETERS =
-      new Function<Rule, AspectParameters>() {
-        @Nullable
-        @Override
-        public AspectParameters apply(@Nullable Rule rule) {
-          return new AspectParameters.Builder()
-              .addAttribute(INJECTING_RULE_KIND_PARAMETER_KEY, "cc_proto_library")
-              .build();
-        }
-      };
 
   private final CcProtoAspect ccProtoAspect;
 
@@ -50,8 +35,7 @@ public class CcProtoLibraryRule implements RuleDefinition {
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        // This rule isn't ready for use yet.
-        .setUndocumented()
+        .requiresConfigurationFragments(CppConfiguration.class)
         /* <!-- #BLAZE_RULE(cc_proto_library).ATTRIBUTE(deps) -->
         The list of <a href="protocol-buffer.html#proto_library"><code>proto_library</code></a>
         rules to generate C++ code for.
@@ -60,7 +44,7 @@ public class CcProtoLibraryRule implements RuleDefinition {
             attr("deps", LABEL_LIST)
                 .allowedRuleClasses("proto_library")
                 .allowedFileTypes()
-                .aspect(ccProtoAspect, ASPECT_PARAMETERS))
+                .aspect(ccProtoAspect))
         .build();
   }
 
@@ -69,7 +53,7 @@ public class CcProtoLibraryRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("cc_proto_library")
         .factoryClass(CcProtoLibrary.class)
-        .ancestors(BaseRuleClasses.RuleBase.class)
+        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
         .build();
   }
 }

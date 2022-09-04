@@ -277,7 +277,7 @@ public final class RequiredConfigFragmentsTest extends BuildViewTestCase {
   }
 
   private void writeStarlarkTransitionsAndAllowList() throws Exception {
-    scratch.overwriteFile(
+    scratch.file(
         "tools/allowlists/function_transition_allowlist/BUILD",
         "package_group(",
         "    name = 'function_transition_allowlist',",

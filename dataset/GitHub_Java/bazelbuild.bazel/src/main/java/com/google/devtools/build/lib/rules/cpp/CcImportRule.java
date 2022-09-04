@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.RuleClass.ToolchainTransitionMode;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** Rule definition for the cc_import rule. */
@@ -100,7 +99,7 @@ public final class CcImportRule implements RuleDefinition {
         .add(attr("alwayslink", BOOLEAN))
         .add(attr("data", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE).dontCheckConstraints())
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
-        .useToolchainTransition(ToolchainTransitionMode.ENABLED)
+        .useToolchainTransition(true)
         .build();
   }
 

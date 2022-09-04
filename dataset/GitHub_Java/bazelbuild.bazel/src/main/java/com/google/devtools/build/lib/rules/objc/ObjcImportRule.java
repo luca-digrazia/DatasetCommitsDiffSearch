@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ToolchainTransitionMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
@@ -46,7 +45,7 @@ public class ObjcImportRule implements RuleDefinition {
         .add(
             attr("archives", LABEL_LIST).mandatory().nonEmpty().allowedFileTypes(FileType.of(".a")))
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(environment))
-        .useToolchainTransition(ToolchainTransitionMode.ENABLED)
+        .useToolchainTransition(true)
         .build();
   }
 

@@ -59,16 +59,16 @@ public class AvailableXcodesRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("available_xcodes")
-        .ancestors(BaseRuleClasses.BaseRule.class)
+        .ancestors(BaseRuleClasses.NativeBuildRule.class)
         .factoryClass(AvailableXcodes.class)
         .build();
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = available_xcodes, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
+/*<!-- #BLAZE_RULE (NAME = available_xcodes, TYPE = OTHER, FAMILY = Objective-C) -->
 
 <p>Two targets of this rule can be depended on by an <code>xcode_config</code> rule instance to
-indicate the remotely and locally avaialable xcode versions.
-This allows selection of an official xcode version from the collectively avaialble xcodes.</p>
+indicate the remotely and locally available xcode versions.
+This allows selection of an official xcode version from the collectively available xcodes.</p>
 
 <!-- #END_BLAZE_RULE -->*/

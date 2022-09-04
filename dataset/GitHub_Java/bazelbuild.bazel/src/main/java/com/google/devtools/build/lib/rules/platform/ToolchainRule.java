@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.platform.DeclaredToolchainInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ToolchainResolutionMode;
 import com.google.devtools.build.lib.packages.Type;
 
 /** Rule definition for {@link Toolchain}. */
@@ -49,7 +48,7 @@ public class ToolchainRule implements RuleDefinition {
         .removeAttribute("deps")
         .removeAttribute("data")
         .exemptFromConstraintChecking("this rule *defines* a constraint")
-        .useToolchainResolution(ToolchainResolutionMode.DISABLED)
+        .useToolchainResolution(false)
 
         /* <!-- #BLAZE_RULE(toolchain).ATTRIBUTE(toolchain_type) -->
         The label of a <code>toolchain_type</code> target that represents the role that this

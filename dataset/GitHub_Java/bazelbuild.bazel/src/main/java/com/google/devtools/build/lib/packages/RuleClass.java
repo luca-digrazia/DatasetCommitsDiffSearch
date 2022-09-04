@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.collect.Streams.stream;
 import static com.google.devtools.build.lib.packages.Attribute.ANY_RULE;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
@@ -185,7 +184,7 @@ public class RuleClass {
     public boolean apply(Rule input) {
       PathFragment path = input.getLabel().getPackageFragment();
       if (pathSegment == ANY_SEGMENT) {
-        return stream(path.segments()).anyMatch(values::contains);
+        return path.getFirstSegment(values) != PathFragment.INVALID_SEGMENT;
       } else {
         return path.segmentCount() >= pathSegment
             && values.contains(path.getSegment(pathSegment - 1));
@@ -2167,6 +2166,11 @@ public class RuleClass {
       if (attr.getName().equals("visibility")) {
         @SuppressWarnings("unchecked")
         List<Label> vis = (List<Label>) nativeAttributeValue;
+        if (!vis.isEmpty() && vis.get(0).equals(ConstantRuleVisibility.LEGACY_PUBLIC_LABEL)) {
+          rule.reportError(
+              rule.getLabel() + ": //visibility:legacy_public only allowed in package declaration",
+              eventHandler);
+        }
         try {
           rule.setVisibility(PackageUtils.getVisibility(rule.getLabel(), vis));
         } catch (EvalException e) {

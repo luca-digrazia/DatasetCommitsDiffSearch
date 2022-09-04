@@ -14,17 +14,19 @@
 
 package com.google.devtools.build.lib.bazel.rules.java.proto;
 
-import static com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaProtoAspect.SPEED_PROTO_RUNTIME_ATTR;
-import static com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaProtoAspect.SPEED_PROTO_RUNTIME_LABEL;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
+import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.rules.java.proto.JavaProtoLibrary;
+import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 
 /** Declaration of the {@code java_proto_library} rule. */
 public class BazelJavaProtoLibraryRule implements RuleDefinition {
@@ -38,8 +40,7 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        // This rule isn't ready for use yet.
-        .setUndocumented()
+        .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
         /* <!-- #BLAZE_RULE(java_proto_library).ATTRIBUTE(deps) -->
         The list of <a href="protocol-buffer.html#proto_library"><code>proto_library</code></a>
         rules to generate Java code for.
@@ -49,10 +50,8 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
                 .allowedRuleClasses("proto_library")
                 .allowedFileTypes()
                 .aspect(javaProtoAspect))
-        .add(
-            attr(SPEED_PROTO_RUNTIME_ATTR, LABEL)
-                .legacyAllowAnyFileType()
-                .value(Label.parseAbsoluteUnchecked(SPEED_PROTO_RUNTIME_LABEL)))
+        .add(attr("strict_deps", BOOLEAN).value(true).undocumented("for migration"))
+        .advertiseStarlarkProvider(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
         .build();
   }
 
@@ -60,8 +59,8 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("java_proto_library")
-        .factoryClass(BazelJavaProtoLibrary.class)
-        .ancestors(BaseRuleClasses.RuleBase.class)
+        .factoryClass(JavaProtoLibrary.class)
+        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
         .build();
   }
 }
@@ -84,16 +83,16 @@ Example:
 <pre class="code">
 java_library(
     name = "lib",
-    deps = [":foo"],
+    deps = [":foo_java_proto"],
 )
 
 java_proto_library(
-    name = "foo",
-    deps = [":bar"],
+    name = "foo_java_proto",
+    deps = [":foo_proto"],
 )
 
 proto_library(
-    name = "bar",
+    name = "foo_proto",
 )
 </pre>
 

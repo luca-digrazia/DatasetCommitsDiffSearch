@@ -26,14 +26,14 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import net.starlark.java.eval.Sequence;
+import net.starlark.java.eval.StarlarkThread;
 
 /**
  * The rule that parses the Ninja graph and symlinks inputs into output_root.
  *
- * <p>The rule exposes {@link NinjaGraphProvider} with maps of usual and phony {@link
+ * <p>The rule exposes {@link NinjaGraphProvider} with maps of both non-phony and phony {@link
  * com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget} for {@link NinjaBuildRule} to
  * use for action creation.
  *
@@ -41,7 +41,7 @@ import com.google.devtools.build.lib.util.FileTypeSet;
  * action graph changes.
  *
  * <p>Important aspect is relation to non-symlinked-under-execroot-directories: {@link
- * com.google.devtools.build.lib.skylarkbuildapi.WorkspaceGlobalsApi#dontSymlinkDirectoriesInExecroot(Sequence,
+ * com.google.devtools.build.lib.starlarkbuildapi.WorkspaceGlobalsApi#dontSymlinkDirectoriesInExecroot(Sequence,
  * StarlarkThread)} All the outputs of Ninja actions are expected to be under the directory,
  * specified in output_root of this rule. All the input files under output_root should be listed in
  * output_root_inputs attribute, this rule will create the SymlinkAction actions to symlink listed
@@ -66,7 +66,7 @@ public class NinjaGraphRule implements RuleDefinition {
                 .setDoc(
                     "<p>Directory under workspace, where all the intermediate and output artifacts"
                         + " will be created.</p><p>Must not be symlinked to the execroot. For"
-                        + " that, dont_symlink_directories_in_execroot function should be used in"
+                        + " that, toplevel_output_directories function should be used in"
                         + " WORKSPACE file.</p>"))
         .add(
             attr("output_root_inputs", STRING_LIST)
@@ -77,6 +77,15 @@ public class NinjaGraphRule implements RuleDefinition {
                         + " <execroot>/<output_root> will be created by this rule."
                         + " <execroot>/<output_root> will be a separate directory, not a"
                         + " symlink.</p>"))
+        .add(
+            attr("output_root_input_dirs", STRING_LIST)
+                .value(ImmutableList.of())
+                .setDoc(
+                    "<p>Directory paths under output_root that contain files (and subdirectories"
+                        + " of files) to be used as inputs to the Ninja file.</p><p>For each child"
+                        + " path of an input directory which is referenced in the ninja file, an"
+                        + " action to symlink under <execroot>/<output_root> will be created by"
+                        + " this rule.</p>"))
         .add(
             attr("working_directory", STRING)
                 .value("")
@@ -92,7 +101,7 @@ public class NinjaGraphRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("ninja_graph")
         .type(RuleClassType.NORMAL)
-        .ancestors(BaseRuleClasses.BaseRule.class)
+        .ancestors(BaseRuleClasses.NativeBuildRule.class)
         .factoryClass(NinjaGraph.class)
         .build();
   }

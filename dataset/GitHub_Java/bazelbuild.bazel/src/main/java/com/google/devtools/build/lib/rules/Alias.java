@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProviderImpl;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ToolchainResolutionMode;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
@@ -93,7 +92,7 @@ public class Alias implements RuleConfiguredTargetFactory {
           // Aliases themselves do not need toolchains or an execution platform, so this is fine.
           // The actual target will resolve platforms and toolchains with no issues regardless of
           // this setting.
-          .useToolchainResolution(ToolchainResolutionMode.DISABLED)
+          .useToolchainResolution(false)
           .build();
     }
 
