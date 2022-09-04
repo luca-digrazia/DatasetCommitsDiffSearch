@@ -440,7 +440,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
 
   private FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext,
       BuildConfiguration configuration) {
-    boolean isHost = ruleContext.getConfiguration().isHostConfiguration();
     ImmutableSet.Builder<String> activatedCrosstoolSelectables =
         ImmutableSet.<String>builder()
             .addAll(ACTIVATED_ACTIONS)
@@ -457,7 +456,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .add(CppRuleClasses.COMPILE_ACTION_FLAGS_IN_FLAG_SET)
             .add(CppRuleClasses.DEPENDENCY_FILE)
             .add(CppRuleClasses.INCLUDE_PATHS)
-            .add(isHost ? "host" : "nonhost")
             .add(configuration.getCompilationMode().toString());
 
     if (configuration.getFragment(ObjcConfiguration.class).moduleMapsEnabled()) {

@@ -312,10 +312,28 @@ public class LegacyCompilationSupport extends CompilationSupport {
 
     // Add input source file arguments
     commandLine.add("-c");
-    if (sourceFile.isTreeArtifact()) {
-      commandLine.addPlaceholderTreeArtifactExecPath(sourceFile);
+    if (!sourceFile.getExecPath().isAbsolute()
+        && objcConfiguration.getUseAbsolutePathsForActions()) {
+      String workspaceRoot = objcConfiguration.getXcodeWorkspaceRoot();
+
+      // If the source file is a tree artifact, it means the file is basically a directory that may
+      // contain multiple concrete source files at execution time. When constructing the command
+      // line, we insert the source tree artifact as a placeholder, which will be replaced with
+      // one of its contained source files of type {@link Artifact.TreeFileArtifact} at execution
+      // time.
+      //
+      // We also do something similar for the object file arguments below.
+      if (sourceFile.isTreeArtifact()) {
+        commandLine.addPlaceholderTreeArtifactFormattedExecPath(workspaceRoot + "/%s", sourceFile);
+      } else {
+        commandLine.addPaths(workspaceRoot + "/%s", sourceFile.getExecPath());
+      }
     } else {
-      commandLine.addPath(sourceFile.getExecPath());
+      if (sourceFile.isTreeArtifact()) {
+        commandLine.addPlaceholderTreeArtifactExecPath(sourceFile);
+      } else {
+        commandLine.addPath(sourceFile.getExecPath());
+      }
     }
 
     // Add output object file arguments.

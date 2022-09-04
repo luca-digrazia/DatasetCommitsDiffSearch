@@ -31,7 +31,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PRECOMPIL
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
-import static java.util.stream.Collectors.toCollection;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -86,13 +85,11 @@ import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /**
@@ -145,11 +142,16 @@ public abstract class CompilationSupport {
           "-fexceptions", "-fasm-blocks", "-fobjc-abi-version=2", "-fobjc-legacy-dispatch");
 
   private static final String FRAMEWORK_SUFFIX = ".framework";
-
+  
   /** Selects cc libraries that have alwayslink=1. */
   protected static final Predicate<Artifact> ALWAYS_LINKED_CC_LIBRARY =
-      input -> LINK_LIBRARY_FILETYPES.matches(input.getFilename());
-
+      new Predicate<Artifact>() {
+        @Override
+        public boolean apply(Artifact input) {
+          return LINK_LIBRARY_FILETYPES.matches(input.getFilename());
+        }
+      };
+  
   /**
    * Returns the location of the xcrunwrapper tool.
    */
@@ -676,7 +678,7 @@ public abstract class CompilationSupport {
    */
   CompilationSupport validateAttributes() throws RuleErrorException {
     for (PathFragment absoluteInclude :
-        Iterables.filter(attributes.includes(), PathFragment::isAbsolute)) {
+        Iterables.filter(attributes.includes(), PathFragment.IS_ABSOLUTE)) {
       ruleContext.attributeError(
           "includes", String.format(ABSOLUTE_INCLUDES_PATH_FORMAT, absoluteInclude));
     }
@@ -823,8 +825,7 @@ public abstract class CompilationSupport {
    */
   protected Iterable<String> getCompileRuleCopts() {
     List<String> copts =
-        Stream.concat(objcConfiguration.getCopts().stream(), attributes.copts().stream())
-            .collect(toCollection(ArrayList::new));
+        Lists.newArrayList(Iterables.concat(objcConfiguration.getCopts(), attributes.copts()));
 
     for (String copt : copts) {
       if (copt.contains("-fmodules-cache-path")) {
