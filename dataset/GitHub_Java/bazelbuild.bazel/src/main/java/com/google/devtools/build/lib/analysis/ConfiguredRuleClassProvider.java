@@ -225,8 +225,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private final Digraph<Class<? extends RuleDefinition>> dependencyGraph =
         new Digraph<>();
     private PatchTransition lipoDataTransition;
-    private List<Class<? extends BuildConfiguration.Fragment>> universalFragments =
-        new ArrayList<>();
+    private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap.Builder<String, Object> skylarkAccessibleTopLevels =
         ImmutableMap.builder();
@@ -341,9 +340,9 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder addUniversalConfigurationFragment(
+    public Builder setUniversalConfigurationFragment(
         Class<? extends BuildConfiguration.Fragment> fragment) {
-      this.universalFragments.add(fragment);
+      this.universalFragment = fragment;
       return this;
     }
 
@@ -457,7 +456,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           ImmutableList.copyOf(configurationOptions),
           ImmutableList.copyOf(configurationFragmentFactories),
           lipoDataTransition,
-          ImmutableList.copyOf(universalFragments),
+          universalFragment,
           prerequisiteValidator,
           skylarkAccessibleTopLevels.build(),
           skylarkModules.build(),
@@ -556,10 +555,10 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   private final PatchTransition lipoDataTransition;
 
   /**
-   * Configuration fragments that should be available to all rules even when they don't
+   * A configuration fragment that should be available to all rules even when they don't
    * explicitly require it.
    */
-  private final ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments;
+  private final Class<? extends BuildConfiguration.Fragment> universalFragment;
 
   private final ImmutableList<BuildInfoFactory> buildInfoFactories;
 
@@ -584,7 +583,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
       ImmutableList<ConfigurationFragmentFactory> configurationFragments,
       PatchTransition lipoDataTransition,
-      ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments,
+      Class<? extends BuildConfiguration.Fragment> universalFragment,
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
       ImmutableList<Class<?>> skylarkModules,
@@ -601,7 +600,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.configurationOptions = configurationOptions;
     this.configurationFragmentFactories = configurationFragments;
     this.lipoDataTransition = lipoDataTransition;
-    this.universalFragments = universalFragments;
+    this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses, skylarkModules);
     this.nativeProviders = nativeProviders;
@@ -686,8 +685,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * Returns the configuration fragment that should be available to all rules even when they
    * don't explicitly require it.
    */
-  public ImmutableList<Class<? extends BuildConfiguration.Fragment>> getUniversalFragments() {
-    return universalFragments;
+  public Class<? extends BuildConfiguration.Fragment> getUniversalFragment() {
+    return universalFragment;
   }
 
   /**
@@ -809,7 +808,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     for (ConfigurationFragmentFactory factory : getConfigurationFragments()) {
       fragmentsBuilder.add(factory.creates());
     }
-    fragmentsBuilder.addAll(getUniversalFragments());
+    fragmentsBuilder.add(getUniversalFragment());
     return fragmentsBuilder.build();
   }
 

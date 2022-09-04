@@ -24,7 +24,6 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.runfiles.Runfiles;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystems;
@@ -44,22 +43,12 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class DexFileSplitterTest {
 
-  private static final Path INPUT_JAR;
-  private static final Path INPUT_JAR2;
-  private static final Path MAIN_DEX_LIST_FILE;
+  private static final Path WORKING_DIR = Paths.get(System.getProperty("user.dir"));
+  private static final Path INPUT_JAR = WORKING_DIR.resolve(System.getProperty("testinputjar"));
+  private static final Path INPUT_JAR2 = WORKING_DIR.resolve(System.getProperty("testinputjar2"));
+  private static final Path MAIN_DEX_LIST_FILE =
+      WORKING_DIR.resolve(System.getProperty("testmaindexlist"));
   static final String DEX_PREFIX = "classes";
-
-  static {
-    try {
-      Runfiles runfiles = Runfiles.create();
-
-      INPUT_JAR = Paths.get(runfiles.rlocation(System.getProperty("testinputjar")));
-      INPUT_JAR2 = Paths.get(runfiles.rlocation(System.getProperty("testinputjar2")));
-      MAIN_DEX_LIST_FILE = Paths.get(runfiles.rlocation(System.getProperty("testmaindexlist")));
-    } catch (Exception e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
 
   @Test
   public void testSingleInputSingleOutput() throws Exception {
@@ -122,11 +111,11 @@ public class DexFileSplitterTest {
     for (Path outputArchive : outputArchives) {
       ImmutableList<ZipEntry> expectedEntries;
       try (ZipFile zip = new ZipFile(outputArchive.toFile())) {
-        expectedEntries = zip.stream().collect(ImmutableList.<ZipEntry>toImmutableList());
+        expectedEntries = zip.stream().collect(ImmutableList.toImmutableList());
       }
       ImmutableList<ZipEntry> actualEntries;
       try (ZipFile zip2 = new ZipFile(outputRoot2.resolve(outputArchive.getFileName()).toFile())) {
-        actualEntries = zip2.stream().collect(ImmutableList.<ZipEntry>toImmutableList());
+        actualEntries = zip2.stream().collect(ImmutableList.toImmutableList());
       }
       int len = expectedEntries.size();
       assertThat(actualEntries).hasSize(len);
@@ -155,7 +144,7 @@ public class DexFileSplitterTest {
     ImmutableSet<String> expectedEntries = dexEntries(dexArchive);
     assertThat(outputArchives.size()).isGreaterThan(1); // test sanity
     assertThat(dexEntries(outputArchives.get(0)))
-        .containsAtLeastElementsIn(expectedMainDexEntries());
+        .containsAllIn(expectedMainDexEntries());
     assertExpectedEntries(outputArchives, expectedEntries);
   }
 
@@ -259,10 +248,11 @@ public class DexFileSplitterTest {
   private ImmutableSet<String> dexEntries(Path dexArchive) throws IOException {
     try (ZipFile input = new ZipFile(dexArchive.toFile())) {
       ImmutableSet<String> result =
-          input.stream()
+          input
+              .stream()
               .map(ZipEntryName.INSTANCE)
               .filter(Predicates.containsPattern(".*\\.class.dex$"))
-              .collect(ImmutableSet.<String>toImmutableSet());
+              .collect(ImmutableSet.toImmutableSet());
       assertThat(result).isNotEmpty(); // test sanity
       return result;
     }

@@ -407,9 +407,10 @@ public class BuildConfiguration {
     @Option(
       name = "experimental_separate_genfiles_directory",
       defaultValue = "true",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
+      metadataTags = { OptionMetadataTag.EXPERIMENTAL },
       help = "Whether to have a separate genfiles directory or fold it into the bin directory"
     )
     public boolean separateGenfilesDirectory;
@@ -418,9 +419,10 @@ public class BuildConfiguration {
       name = "define",
       converter = Converters.AssignmentConverter.class,
       defaultValue = "",
+      category = "semantics",
       allowMultiple = true,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS },
       help = "Each --define option specifies an assignment for a build variable."
     )
     public List<Map.Entry<String, String>> commandLineBuildVariables;
@@ -428,9 +430,10 @@ public class BuildConfiguration {
     @Option(
       name = "cpu",
       defaultValue = "",
+      category = "semantics",
       converter = AutoCpuConverter.class,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS },
       help = "The target CPU."
     )
     public String cpu;
@@ -462,8 +465,9 @@ public class BuildConfiguration {
     @Option(
       name = "strict_filesets",
       defaultValue = "false",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.EAGERNESS_TO_EXIT},
+      effectTags = { OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.EAGERNESS_TO_EXIT },
       help =
           "If this option is enabled, filesets crossing package boundaries are reported "
               + "as errors. It does not work when check_fileset_dependencies_recursively is "
@@ -474,8 +478,9 @@ public class BuildConfiguration {
     @Option(
       name = "stamp",
       defaultValue = "false",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
       help = "Stamp binaries with the date, username, hostname, workspace information, etc."
     )
     public boolean stampBinaries;
@@ -486,8 +491,9 @@ public class BuildConfiguration {
       name = "instrumentation_filter",
       converter = RegexFilter.RegexFilterConverter.class,
       defaultValue = "-/javatests[/:],-/test/java[/:]",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
       help =
           "When coverage is enabled, only rules with names included by the "
               + "specified regex-based filter will be instrumented. Rules prefixed "
@@ -499,8 +505,9 @@ public class BuildConfiguration {
     @Option(
       name = "instrument_test_targets",
       defaultValue = "false",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
       help =
           "When coverage is enabled, specifies whether to consider instrumenting test rules. "
               + "When set, test rules included by --instrumentation_filter are instrumented. "
@@ -511,9 +518,10 @@ public class BuildConfiguration {
     @Option(
       name = "host_cpu",
       defaultValue = "",
+      category = "semantics",
       converter = AutoCpuConverter.class,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS },
       help = "The host CPU."
     )
     public String hostCpu;
@@ -523,6 +531,7 @@ public class BuildConfiguration {
       abbrev = 'c',
       converter = CompilationMode.Converter.class,
       defaultValue = "fastbuild",
+      category = "semantics", // Should this be "flags"?
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = { OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES },
       help = "Specify the mode the binary will be built in. Values: 'fastbuild', 'dbg', 'opt'."
@@ -533,6 +542,7 @@ public class BuildConfiguration {
         name = "host_compilation_mode",
         converter = CompilationMode.Converter.class,
         defaultValue = "opt",
+        category = "semantics", // Should this be "flags"?
         documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
         effectTags = { OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES },
         help = "Specify the mode the tools used during the build will be built in. Values: "
@@ -561,11 +571,12 @@ public class BuildConfiguration {
     @Option(
       name = "platform_suffix",
       defaultValue = "null",
+      category = "misc",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {
-        OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
+          OptionEffectTag.LOSES_INCREMENTAL_STATE,
+          OptionEffectTag.AFFECTS_OUTPUTS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
       },
       help = "Specifies a suffix to be added to the configuration directory."
     )
@@ -579,8 +590,9 @@ public class BuildConfiguration {
       converter = Converters.OptionalAssignmentConverter.class,
       allowMultiple = true,
       defaultValue = "",
+      category = "testing",
       documentationCategory = OptionDocumentationCategory.TESTING,
-      effectTags = {OptionEffectTag.TEST_RUNNER},
+      effectTags = { OptionEffectTag.TEST_RUNNER },
       help =
           "Specifies additional environment variables to be injected into the test runner "
               + "environment. Variables can be either specified by name, in which case its value "
@@ -598,8 +610,9 @@ public class BuildConfiguration {
       converter = Converters.OptionalAssignmentConverter.class,
       allowMultiple = true,
       defaultValue = "",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+      effectTags = { OptionEffectTag.ACTION_COMMAND_LINES},
       help =
           "Specifies the set of environment variables available to actions. "
               + "Variables can be either specified by name, in which case the value will be "
@@ -613,8 +626,9 @@ public class BuildConfiguration {
     @Option(
       name = "collect_code_coverage",
       defaultValue = "false",
+      category = "testing",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
       help =
           "If specified, Bazel will instrument code (using offline instrumentation where "
               + "possible) and will collect coverage information during tests. Only targets that "
@@ -624,11 +638,12 @@ public class BuildConfiguration {
     public boolean collectCodeCoverage;
 
     @Option(
-      name = "experimental_java_coverage",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "If true Bazel will use a new way of computing code coverage for java targets."
+        name = "experimental_java_coverage",
+        defaultValue = "false",
+        category = "testing",
+        documentationCategory  = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+        effectTags =  { OptionEffectTag.AFFECTS_OUTPUTS },
+        help = "If true Bazel will use a new way of computing code coverage for java targets."
     )
     public boolean experimentalJavaCoverage;
 
@@ -636,11 +651,12 @@ public class BuildConfiguration {
       name = "coverage_support",
       converter = LabelConverter.class,
       defaultValue = "@bazel_tools//tools/test:coverage_support",
+      category = "testing",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
-        OptionEffectTag.CHANGES_INPUTS,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
+          OptionEffectTag.CHANGES_INPUTS,
+          OptionEffectTag.AFFECTS_OUTPUTS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
       },
       help =
           "Location of support files that are required on the inputs of every test action "
@@ -652,11 +668,12 @@ public class BuildConfiguration {
       name = "coverage_report_generator",
       converter = LabelConverter.class,
       defaultValue = "@bazel_tools//tools/test:coverage_report_generator",
+      category = "testing",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {
-        OptionEffectTag.CHANGES_INPUTS,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
+          OptionEffectTag.CHANGES_INPUTS,
+          OptionEffectTag.AFFECTS_OUTPUTS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
       },
       help =
           "Location of the binary that is used to generate coverage reports. This must "
@@ -668,17 +685,21 @@ public class BuildConfiguration {
     @Option(
       name = "build_runfile_manifests",
       defaultValue = "true",
+      category = "strategy",
       documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "If true, write runfiles manifests for all targets.  " + "If false, omit them."
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
+      help =
+          "If true, write runfiles manifests for all targets.  "
+              + "If false, omit them."
     )
     public boolean buildRunfilesManifests;
 
     @Option(
       name = "build_runfile_links",
       defaultValue = "true",
+      category = "strategy",
       documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
       help =
           "If true, build runfiles symlink forests for all targets.  "
               + "If false, write only manifests when possible."
@@ -688,8 +709,9 @@ public class BuildConfiguration {
     @Option(
       name = "legacy_external_runfiles",
       defaultValue = "true",
+      category = "strategy",
       documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
       help =
           "If true, build runfiles symlink forests for external repositories under "
               + ".runfiles/wsname/external/repo (in addition to .runfiles/repo)."
@@ -699,11 +721,11 @@ public class BuildConfiguration {
     @Option(
       name = "check_fileset_dependencies_recursively",
       defaultValue = "true",
+      category = "semantics",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      deprecationWarning =
-          "This flag is a no-op and fileset dependencies are always checked "
-              + "to ensure correctness of builds.",
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS}
+      deprecationWarning = "This flag is a no-op and fileset dependencies are always checked "
+        + "to ensure correctness of builds.",
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS }
     )
     public boolean checkFilesetDependenciesRecursively;
 
@@ -719,10 +741,11 @@ public class BuildConfiguration {
 
     @Option(
       name = "run_under",
+      category = "run",
       defaultValue = "null",
       converter = RunUnderConverter.class,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+      effectTags = { OptionEffectTag.ACTION_COMMAND_LINES},
       help =
           "Prefix to insert in front of command before running. "
               + "Examples:\n"
@@ -738,11 +761,12 @@ public class BuildConfiguration {
     @Option(
       name = "distinct_host_configuration",
       defaultValue = "true",
+      category = "strategy",
       documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
       effectTags = {
-        OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.LOADING_AND_ANALYSIS,
+          OptionEffectTag.LOSES_INCREMENTAL_STATE,
+          OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
+          OptionEffectTag.LOADING_AND_ANALYSIS,
       },
       help =
           "Build all the tools used during the build for a distinct configuration from that used "
@@ -762,8 +786,9 @@ public class BuildConfiguration {
     @Option(
       name = "check_visibility",
       defaultValue = "true",
+      category = "checking",
       documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      effectTags = { OptionEffectTag.BUILD_FILE_SEMANTICS },
       help = "If disabled, visibility errors are demoted to warnings."
     )
     public boolean checkVisibility;
@@ -774,8 +799,9 @@ public class BuildConfiguration {
     @Option(
       name = "check_licenses",
       defaultValue = "false",
+      category = "checking",
       documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      effectTags = { OptionEffectTag.BUILD_FILE_SEMANTICS },
       help =
           "Check that licensing constraints imposed by dependent packages "
               + "do not conflict with distribution modes of the targets being built. "
@@ -799,10 +825,11 @@ public class BuildConfiguration {
       name = "experimental_action_listener",
       allowMultiple = true,
       defaultValue = "",
+      category = "experimental",
       converter = LabelListConverter.class,
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.EXECUTION},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      effectTags = { OptionEffectTag.EXECUTION },
+      metadataTags = { OptionMetadataTag.EXPERIMENTAL },
       help = "Use action_listener to attach an extra_action to existing build actions."
     )
     public List<Label> actionListeners;
@@ -836,8 +863,9 @@ public class BuildConfiguration {
       name = "features",
       allowMultiple = true,
       defaultValue = "",
+      category = "flags",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
+      effectTags = { OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS },
       help =
           "The given features will be enabled or disabled by default for all packages. "
               + "Specifying -<feature> will disable the feature globally. "
@@ -852,8 +880,9 @@ public class BuildConfiguration {
       converter = LabelListConverter.class,
       allowMultiple = true,
       defaultValue = "",
+      category = "flags",
       documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS},
+      effectTags = { OptionEffectTag.CHANGES_INPUTS },
       help =
           "Declares this build's target environment. Must be a label reference to an "
               + "\"environment\" rule. If specified, all top-level targets must be "
@@ -865,6 +894,7 @@ public class BuildConfiguration {
       name = "auto_cpu_environment_group",
       converter = EmptyToNullLabelConverter.class,
       defaultValue = "",
+      category = "flags",
       documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
       effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
@@ -1360,7 +1390,7 @@ public class BuildConfiguration {
     globalMakeEnvBuilder.put("GENDIR", getGenfilesDirectory().getExecPath().getPathString());
     globalMakeEnv = globalMakeEnvBuilder.build();
 
-    checksum = computeChecksum(buildOptions);
+    checksum = Fingerprint.md5Digest(buildOptions.computeCacheKey());
     hashCode = computeHashCode();
 
     ImmutableSet.Builder<String> reservedActionMnemonics = ImmutableSet.builder();
@@ -1369,10 +1399,6 @@ public class BuildConfiguration {
     }
     this.reservedActionMnemonics = reservedActionMnemonics.build();
     this.buildEventSupplier = Suppliers.memoize(this::createBuildEvent);
-  }
-
-  public static String computeChecksum(BuildOptions buildOptions) {
-    return Fingerprint.md5Digest(buildOptions.computeCacheKey());
   }
 
   /**
