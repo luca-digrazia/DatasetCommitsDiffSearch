@@ -9,6 +9,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.TimeZone;
 
+import org.bson.types.ObjectId;
+
 final class CommonQueryBinder {
 
     private static final String ISO_DATE_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
@@ -23,6 +25,9 @@ final class CommonQueryBinder {
     }
 
     static String escape(Object value) {
+        if (value == null) {
+            return "null";
+        }
         if (Number.class.isAssignableFrom(value.getClass()) || value instanceof Boolean) {
             return value.toString();
         }
@@ -43,6 +48,10 @@ final class CommonQueryBinder {
         if (value instanceof Instant) {
             Instant dateValue = (Instant) value;
             return "ISODate('" + ISO_DATE_FORMATTER.format(dateValue.atZone(ZoneOffset.UTC)) + "')";
+        }
+        if (value instanceof ObjectId) {
+            ObjectId objectId = (ObjectId) value;
+            return "ObjectId('" + objectId.toHexString() + "')";
         }
         return "'" + value.toString().replace("\\", "\\\\").replace("'", "\\'") + "'";
     }
