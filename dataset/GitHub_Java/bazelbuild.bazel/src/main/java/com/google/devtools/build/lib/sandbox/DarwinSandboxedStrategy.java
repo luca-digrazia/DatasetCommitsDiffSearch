@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.rules.test.TestRunnerAction;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
@@ -72,21 +71,22 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
   private final SpawnHelpers spawnHelpers;
 
   private DarwinSandboxedStrategy(
-      CommandEnvironment cmdEnv,
       BuildRequest buildRequest,
+      Map<String, String> clientEnv,
+      BlazeDirectories blazeDirs,
       Path sandboxBase,
       boolean verboseFailures,
       String productName,
       ImmutableList<Path> confPaths,
       SpawnHelpers spawnHelpers) {
     super(
-        cmdEnv,
         buildRequest,
+        blazeDirs,
         sandboxBase,
         verboseFailures,
         buildRequest.getOptions(SandboxOptions.class));
-    this.clientEnv = ImmutableMap.copyOf(cmdEnv.getClientEnv());
-    this.blazeDirs = cmdEnv.getDirectories();
+    this.clientEnv = ImmutableMap.copyOf(clientEnv);
+    this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
     this.sandboxDebug = buildRequest.getOptions(SandboxOptions.class).sandboxDebug;
     this.verboseFailures = verboseFailures;
@@ -96,8 +96,9 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
   }
 
   public static DarwinSandboxedStrategy create(
-      CommandEnvironment cmdEnv,
       BuildRequest buildRequest,
+      Map<String, String> clientEnv,
+      BlazeDirectories blazeDirs,
       Path sandboxBase,
       boolean verboseFailures,
       String productName)
@@ -107,20 +108,21 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     List<String> confVars = ImmutableList.of("DARWIN_USER_TEMP_DIR", "DARWIN_USER_CACHE_DIR");
     ImmutableList.Builder<Path> writablePaths = ImmutableList.builder();
     for (String confVar : confVars) {
-      Path path = cmdEnv.getDirectories().getFileSystem().getPath(getConfStr(confVar));
+      Path path = blazeDirs.getFileSystem().getPath(getConfStr(confVar));
       if (path.exists()) {
         writablePaths.add(path);
       }
     }
 
     return new DarwinSandboxedStrategy(
-        cmdEnv,
         buildRequest,
+        clientEnv,
+        blazeDirs,
         sandboxBase,
         verboseFailures,
         productName,
         writablePaths.build(),
-        new SpawnHelpers(cmdEnv.getExecRoot()));
+        new SpawnHelpers(blazeDirs.getExecRoot()));
   }
 
   /**
