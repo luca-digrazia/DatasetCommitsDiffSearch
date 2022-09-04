@@ -162,8 +162,9 @@ public class AarImport implements RuleConfiguredTargetFactory {
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .addNativeDeclaredProvider(resourceApk.toResourceInfo(ruleContext.getLabel()))
-        .addNativeDeclaredProvider(
-            new NativeLibsZipsInfo(
+        .addProvider(
+            NativeLibsZipsProvider.class,
+            new NativeLibsZipsProvider(
                 AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).add(nativeLibs).build()))
         .addProvider(
             JavaRuntimeJarProvider.class, new JavaRuntimeJarProvider(ImmutableList.of(mergedJar)))

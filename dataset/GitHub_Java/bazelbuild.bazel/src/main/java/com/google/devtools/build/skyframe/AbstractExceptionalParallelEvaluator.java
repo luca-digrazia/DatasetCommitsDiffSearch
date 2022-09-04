@@ -76,6 +76,8 @@ import javax.annotation.Nullable;
 public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
     extends AbstractParallelEvaluator {
 
+  private final CycleDetector cycleDetector;
+
   AbstractExceptionalParallelEvaluator(
       ProcessableGraph graph,
       Version graphVersion,
@@ -97,8 +99,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         errorInfoManager,
         keepGoing,
         threadCount,
-        progressReceiver,
-        new SimpleCycleDetector());
+        progressReceiver);
+    cycleDetector = new SimpleCycleDetector();
   }
 
   AbstractExceptionalParallelEvaluator(
@@ -123,8 +125,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         errorInfoManager,
         keepGoing,
         progressReceiver,
-        forkJoinPool,
-        cycleDetector);
+        forkJoinPool);
+    this.cycleDetector = cycleDetector;
   }
 
   private void informProgressReceiverThatValueIsDone(SkyKey key, NodeEntry entry)

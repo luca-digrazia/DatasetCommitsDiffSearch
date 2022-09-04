@@ -54,7 +54,6 @@ public abstract class AbstractParallelEvaluator {
 
   final ProcessableGraph graph;
   final ParallelEvaluatorContext evaluatorContext;
-  protected final CycleDetector cycleDetector;
 
   AbstractParallelEvaluator(
       ProcessableGraph graph,
@@ -66,10 +65,8 @@ public abstract class AbstractParallelEvaluator {
       ErrorInfoManager errorInfoManager,
       boolean keepGoing,
       int threadCount,
-      DirtyTrackingProgressReceiver progressReceiver,
-      CycleDetector cycleDetector) {
+      DirtyTrackingProgressReceiver progressReceiver) {
     this.graph = graph;
-    this.cycleDetector = cycleDetector;
     evaluatorContext =
         new ParallelEvaluatorContext(
             graph,
@@ -95,10 +92,8 @@ public abstract class AbstractParallelEvaluator {
       ErrorInfoManager errorInfoManager,
       boolean keepGoing,
       DirtyTrackingProgressReceiver progressReceiver,
-      ForkJoinPool forkJoinPool,
-      CycleDetector cycleDetector) {
+      ForkJoinPool forkJoinPool) {
     this.graph = graph;
-    this.cycleDetector = cycleDetector;
     evaluatorContext =
         new ParallelEvaluatorContext(
             graph,

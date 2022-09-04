@@ -58,7 +58,6 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
@@ -741,7 +740,6 @@ public class AndroidCommon {
         .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .addProvider(JavaPluginInfoProvider.class, JavaCommon.getTransitivePlugins(ruleContext))
         .setNeverlink(isNeverlink)
         .build();
 

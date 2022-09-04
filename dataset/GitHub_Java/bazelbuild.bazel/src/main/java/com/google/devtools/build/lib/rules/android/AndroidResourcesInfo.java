@@ -37,8 +37,8 @@ public class AndroidResourcesInfo extends NativeInfo {
       new NativeProvider<AndroidResourcesInfo>(AndroidResourcesInfo.class, SKYLARK_NAME) {};
 
   private final Label label;
-  private final NestedSet<ValidatedAndroidData> transitiveAndroidResources;
-  private final NestedSet<ValidatedAndroidData> directAndroidResources;
+  private final NestedSet<ResourceContainer> transitiveAndroidResources;
+  private final NestedSet<ResourceContainer> directAndroidResources;
   private final NestedSet<Artifact> transitiveResources;
   private final NestedSet<Artifact> transitiveAssets;
   private final NestedSet<Artifact> transitiveManifests;
@@ -50,8 +50,8 @@ public class AndroidResourcesInfo extends NativeInfo {
 
   AndroidResourcesInfo(
       Label label,
-      NestedSet<ValidatedAndroidData> transitiveAndroidResources,
-      NestedSet<ValidatedAndroidData> directAndroidResources,
+      NestedSet<ResourceContainer> transitiveAndroidResources,
+      NestedSet<ResourceContainer> directAndroidResources,
       NestedSet<Artifact> transitiveResources,
       NestedSet<Artifact> transitiveAssets,
       NestedSet<Artifact> transitiveManifests,
@@ -86,7 +86,7 @@ public class AndroidResourcesInfo extends NativeInfo {
     doc = "Returns the transitive android resources for the label.",
     structField = true
   )
-  public NestedSet<ValidatedAndroidData> getTransitiveAndroidResources() {
+  public NestedSet<ResourceContainer> getTransitiveAndroidResources() {
     return transitiveAndroidResources;
   }
 
@@ -96,7 +96,7 @@ public class AndroidResourcesInfo extends NativeInfo {
     doc = "Returns the immediate android resources for the label.",
     structField = true
   )
-  public NestedSet<ValidatedAndroidData> getDirectAndroidResources() {
+  public NestedSet<ResourceContainer> getDirectAndroidResources() {
     return directAndroidResources;
   }
 
@@ -104,8 +104,6 @@ public class AndroidResourcesInfo extends NativeInfo {
     return transitiveResources;
   }
 
-  /** @deprecated Assets are being decoupled from resources */
-  @Deprecated
   public NestedSet<Artifact> getTransitiveAssets() {
     return transitiveAssets;
   }
