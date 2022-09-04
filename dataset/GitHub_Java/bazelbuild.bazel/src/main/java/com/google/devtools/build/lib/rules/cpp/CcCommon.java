@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
-import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -77,6 +76,15 @@ public final class CcCommon {
   /** Name of the build variable for the path to the input file being processed. */
   public static final String INPUT_FILE_VARIABLE_NAME = "input_file";
 
+  /**
+   * Name of the build variable for includes that compiler needs to include into sources to be
+   * compiled.
+   */
+  public static final String INCLUDES_VARIABLE_NAME = "includes";
+
+  /** Name of the build variable for stripopts for the strip action. */
+  public static final String STRIPOPTS_VARIABLE_NAME = "stripopts";
+
   private static final String NO_COPTS_ATTRIBUTE = "nocopts";
 
   /**
@@ -97,8 +105,11 @@ public final class CcCommon {
     }
   };
 
-  public static final ImmutableSet<String> ALL_COMPILE_ACTIONS =
+  /** Action configs we request to enable. */
+  private static final ImmutableSet<String> DEFAULT_ACTION_CONFIGS =
       ImmutableSet.of(
+          CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME,
+          CppCompileAction.STRIP_ACTION_NAME,
           CppCompileAction.C_COMPILE,
           CppCompileAction.CPP_COMPILE,
           CppCompileAction.CPP_HEADER_PARSING,
@@ -109,29 +120,16 @@ public final class CcCommon {
           CppCompileAction.PREPROCESS_ASSEMBLE,
           CppCompileAction.CLIF_MATCH,
           CppCompileAction.LINKSTAMP_COMPILE,
-          CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME);
-
-  public static final ImmutableSet<String> ALL_LINK_ACTIONS =
-      ImmutableSet.of(
+          Link.LinkTargetType.STATIC_LIBRARY.getActionName(),
+          // We need to create pic-specific actions for link actions, as they will produce
+          // differently named outputs.
+          Link.LinkTargetType.PIC_STATIC_LIBRARY.getActionName(),
           Link.LinkTargetType.INTERFACE_DYNAMIC_LIBRARY.getActionName(),
-          Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
           Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName(),
-          LinkTargetType.EXECUTABLE.getActionName());
-
-  public static final ImmutableSet<String> ALL_ARCHIVE_ACTIONS =
-      ImmutableSet.of(Link.LinkTargetType.STATIC_LIBRARY.getActionName());
-
-  public static final ImmutableSet<String> ALL_OTHER_ACTIONS =
-      ImmutableSet.of(CppCompileAction.STRIP_ACTION_NAME);
-
-  /** Action configs we request to enable. */
-  public static final ImmutableSet<String> DEFAULT_ACTION_CONFIGS =
-      ImmutableSet.<String>builder()
-          .addAll(ALL_COMPILE_ACTIONS)
-          .addAll(ALL_LINK_ACTIONS)
-          .addAll(ALL_ARCHIVE_ACTIONS)
-          .addAll(ALL_OTHER_ACTIONS)
-          .build();
+          Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
+          Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY.getActionName(),
+          Link.LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY.getActionName(),
+          Link.LinkTargetType.EXECUTABLE.getActionName());
 
   /** Features we request to enable unless a rule explicitly doesn't support them. */
   private static final ImmutableSet<String> DEFAULT_FEATURES =
@@ -144,7 +142,6 @@ public final class CcCommon {
           CppRuleClasses.INCLUDE_PATHS,
           CppRuleClasses.PIC,
           CppRuleClasses.PREPROCESSOR_DEFINES);
-
   public static final String CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME = ":cc_toolchain";
 
   /** C++ configuration */
