@@ -18,11 +18,6 @@ public class CustomAdvice {
 
     }
 
-    @ExceptionHandler(UnannotatedException.class)
-    public void unannotatedException() {
-
-    }
-
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Error> handleIllegalStateException(IllegalStateException e,
             HttpServletRequest request, HttpServletResponse response) {
