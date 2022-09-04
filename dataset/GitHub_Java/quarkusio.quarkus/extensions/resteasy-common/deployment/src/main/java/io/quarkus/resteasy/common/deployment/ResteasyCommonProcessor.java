@@ -22,11 +22,11 @@ import javax.ws.rs.ext.Providers;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.AnnotationValue.Kind;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
+import org.jboss.resteasy.annotations.SseElementType;
 import org.jboss.resteasy.core.MediaTypeMap;
 import org.jboss.resteasy.plugins.interceptors.AcceptEncodingGZIPFilter;
 import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
@@ -43,7 +43,7 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ProxyUnwrapperBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.resteasy.common.runtime.ResteasyInjectorFactoryRecorder;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
@@ -55,6 +55,8 @@ import io.quarkus.runtime.configuration.MemorySize;
 
 public class ResteasyCommonProcessor {
     private static final Logger LOGGER = Logger.getLogger(ResteasyCommonProcessor.class.getName());
+
+    private static final DotName SSE_ELEMENT_TYPE = DotName.createSimple(SseElementType.class.getName());
 
     private static final ProviderDiscoverer[] PROVIDER_DISCOVERERS = {
             new ProviderDiscoverer(ResteasyDotNames.GET, false, true),
@@ -150,12 +152,11 @@ public class ResteasyCommonProcessor {
         if (!capabilities.isCapabilityPresent(Capabilities.RESTEASY_JSON_EXTENSION)) {
 
             boolean needJsonSupport = restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.CONSUMES)
-                    || restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.PRODUCES)
-                    || restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.RESTEASY_SSE_ELEMENT_TYPE);
+                    || restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.PRODUCES);
             if (needJsonSupport) {
                 LOGGER.warn(
                         "Quarkus detected the need of REST JSON support but you have not provided the necessary JSON " +
-                                "extension for this. You can visit https://quarkus.io/guides/rest-json for more " +
+                                "extension for this. You can visit https://quarkus.io/guides/rest-json-guide for more " +
                                 "information on how to set one.");
             }
         }
@@ -194,12 +195,7 @@ public class ResteasyCommonProcessor {
                 continue;
             }
 
-            List<String> mediaTypes = Collections.emptyList();
-            if (annotationValue.kind() == Kind.ARRAY) {
-                mediaTypes = Arrays.asList(annotationValue.asStringArray());
-            } else if (annotationValue.kind() == Kind.STRING) {
-                mediaTypes = Collections.singletonList(annotationValue.asString());
-            }
+            final List<String> mediaTypes = Arrays.asList(annotationValue.asStringArray());
             return mediaTypes.contains(MediaType.APPLICATION_JSON)
                     || mediaTypes.contains(MediaType.APPLICATION_JSON_PATCH_JSON);
         }
@@ -348,8 +344,7 @@ public class ResteasyCommonProcessor {
         if (matches(MediaType.SERVER_SENT_EVENTS_TYPE, mediaType)) {
             final Set<String> additionalProvidersToRegister = new HashSet<>();
             // first check for @SseElementType
-            final AnnotationInstance sseElementTypeAnnInst = targetMethod
-                    .annotation(ResteasyDotNames.RESTEASY_SSE_ELEMENT_TYPE);
+            final AnnotationInstance sseElementTypeAnnInst = targetMethod.annotation(SSE_ELEMENT_TYPE);
             String elementType = null;
             if (sseElementTypeAnnInst != null) {
                 elementType = sseElementTypeAnnInst.value().asString();
