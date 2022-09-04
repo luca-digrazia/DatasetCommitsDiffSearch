@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -101,7 +101,7 @@ public class KNNTest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<KNN<double[]>> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
+        ClassificationValidations<KNN> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
                 (x, y) -> KNN.fit(x, y, 3));
 
         System.out.println(result);
@@ -113,7 +113,7 @@ public class KNNTest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<KNN<double[]>> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
+        ClassificationValidations<KNN> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
                 (x, y) -> KNN.fit(x, y, 3));
 
         System.out.println(result);
@@ -126,7 +126,7 @@ public class KNNTest {
 
         KNN<double[]> model = KNN.fit(Segment.x, Segment.y, 1);
 
-        int[] prediction = model.predict(Segment.testx);
+        int[] prediction = Validation.test(model, Segment.testx);
         int error = Error.of(Segment.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -139,7 +139,7 @@ public class KNNTest {
 
         KNN<double[]> model = KNN.fit(USPS.x, USPS.y);
 
-        int[] prediction = model.predict(USPS.testx);
+        int[] prediction = Validation.test(model, USPS.testx);
         int error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error = " + error);

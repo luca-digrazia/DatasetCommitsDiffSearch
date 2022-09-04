@@ -110,13 +110,11 @@ public class AdaBoostTest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-
         ClassificationValidations<AdaBoost> result = CrossValidation.classification(10, BreastCancer.formula, BreastCancer.data,
-                (f, x) -> AdaBoost.fit(f, x, 100, 20, 4, 1));
+                (f, x) -> AdaBoost.fit(f, x, 200, 20, 4, 1));
 
         System.out.println(result);
-        int error = result.rounds.stream().mapToInt(round -> round.metrics.error).sum();
-        assertEquals(15, error);
+        assertEquals(19, result.avg.accuracy, 1E-4);
     }
 
     @Test
@@ -131,7 +129,9 @@ public class AdaBoostTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int error = Error.of(Segment.testy, model.predict(Segment.test));
+        int[] prediction = Validation.test(model, Segment.test);
+        int error = Error.of(Segment.testy, prediction);
+
         System.out.println("Error = " + error);
         assertEquals(30, error);
 
@@ -154,7 +154,9 @@ public class AdaBoostTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int error = Error.of(USPS.testy, model.predict(USPS.test));
+        int[] prediction = Validation.test(model, USPS.test);
+        int error = Error.of(USPS.testy, prediction);
+
         System.out.println("Error = " + error);
         assertEquals(152, error);
 

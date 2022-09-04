@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -33,6 +33,7 @@ import smile.math.MathEx;
 import smile.math.TimeFunction;
 import smile.validation.ClassificationValidations;
 import smile.validation.CrossValidation;
+import smile.validation.Validation;
 import smile.validation.metric.Error;
 
 import static org.junit.Assert.*;
@@ -157,7 +158,7 @@ public class MLPTest {
                 model.update(x[i], Segment.y[i]);
             }
 
-            int[] prediction = model.predict(testx);
+            int[] prediction = Validation.test(model, testx);
             error = Error.of(Segment.testy, prediction);
             System.out.println("Test Error = " + error);
         }
@@ -191,7 +192,7 @@ public class MLPTest {
                 model.update(x[permutation[i]], Segment.y[permutation[i]]);
             }
 
-            int[] prediction = model.predict(testx);
+            int[] prediction = Validation.test(model, testx);
             error = Error.of(Segment.testy, prediction);
             System.out.println("Test Error = " + error);
         }
@@ -228,7 +229,7 @@ public class MLPTest {
                 model.update(x[i], USPS.y[i]);
             }
 
-            int[] prediction = model.predict(testx);
+            int[] prediction = Validation.test(model, testx);
             error = Error.of(USPS.testy, prediction);
             System.out.println("Test Error = " + error);
         }
@@ -281,7 +282,7 @@ public class MLPTest {
                 model.update(x[permutation[i]], USPS.y[permutation[i]]);
             }
 
-            int[] prediction = model.predict(testx);
+            int[] prediction = Validation.test(model, testx);
             error = Error.of(USPS.testy, prediction);
             System.out.println("Test Error = " + error);
         }

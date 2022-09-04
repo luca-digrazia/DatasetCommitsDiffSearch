@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -167,7 +167,7 @@ public class RandomForestTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(Segment.test);
+        int[] prediction = Validation.test(model, Segment.test);
         int error = Error.of(Segment.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -191,7 +191,7 @@ public class RandomForestTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(USPS.test);
+        int[] prediction = Validation.test(model, USPS.test);
         int error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -205,56 +205,8 @@ public class RandomForestTest {
     }
 
     @Test
-    public void testTrim() {
-        System.out.println("trim");
-
-        RandomForest model = RandomForest.fit(Segment.formula, Segment.train, 200, 16, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds));
-        System.out.println(model.metrics());
-        assertEquals(200, model.size());
-
-        int[] prediction = model.predict(Segment.test);
-        int error = Error.of(Segment.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(34, error);
-
-        RandomForest trimmed = model.trim(100);
-        assertEquals(200, model.size());
-        assertEquals(100, trimmed.size());
-
-        double weight1 = Arrays.stream(model.models()).mapToDouble(m -> m.weight).min().getAsDouble();
-        double weight2 = Arrays.stream(trimmed.models()).mapToDouble(m -> m.weight).min().getAsDouble();
-        assertTrue(weight2 > weight1);
-
-        prediction = trimmed.predict(Segment.test);
-        error = Error.of(Segment.testy, prediction);
-
-        System.out.println("Error after trim = " + error);
-        assertEquals(32, error);
-    }
-
-    @Test
-    public void testMerge() throws Exception {
-        System.out.println("merge");
-
-        RandomForest forest1 = RandomForest.fit(Segment.formula, Segment.train, 100, 16, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds));
-        RandomForest forest2 = RandomForest.fit(Segment.formula, Segment.train, 100, 16, SplitRule.GINI, 20, 100, 5, 1.0, null, Arrays.stream(seeds));
-        RandomForest forest = forest1.merge(forest2);
-
-        int error1 = Error.of(Segment.testy, forest1.predict(Segment.test));
-        int error2 = Error.of(Segment.testy, forest2.predict(Segment.test));
-        int error  = Error.of(Segment.testy, forest.predict(Segment.test));
-        System.out.format("Forest 1 Error = %d%n", error1);
-        System.out.format("Forest 2 Error = %d%n", error2);
-        System.out.format("Merged   Error = %d%n", error);
-        assertEquals(34, error1);
-        assertEquals(34, error2);
-        assertEquals(34, error);
-    }
-
-    @Test
     public void testPrune() {
-        System.out.println("prune");
+        System.out.println("USPS");
 
         // Overfitting with very large maxNodes and small nodeSize
         RandomForest model = RandomForest.fit(USPS.formula, USPS.train, 200, 16, SplitRule.GINI, 20, 2000, 1, 1.0, null, Arrays.stream(seeds));
@@ -264,7 +216,7 @@ public class RandomForestTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(USPS.test);
+        int[] prediction = Validation.test(model, USPS.test);
         int error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -278,13 +230,13 @@ public class RandomForestTest {
         }
 
         // The old model should not be modified.
-        prediction = model.predict(USPS.test);
+        prediction = Validation.test(model, USPS.test);
         error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error of old model after pruning = " + error);
         assertEquals(118, error);
 
-        prediction = lean.predict(USPS.test);
+        prediction = Validation.test(lean, USPS.test);
         error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error of pruned model after pruning = " + error);

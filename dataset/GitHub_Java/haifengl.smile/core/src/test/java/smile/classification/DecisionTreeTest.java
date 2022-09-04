@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -130,7 +130,7 @@ public class DecisionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(Segment.test);
+        int[] prediction = Validation.test(model, Segment.test);
         int error = Error.of(Segment.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -149,7 +149,7 @@ public class DecisionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(USPS.test);
+        int[] prediction = Validation.test(model, USPS.test);
         int error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -169,7 +169,7 @@ public class DecisionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(USPS.test);
+        int[] prediction = Validation.test(model, USPS.test);
         int error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -185,14 +185,14 @@ public class DecisionTreeTest {
         }
 
         // The old model should not be modified.
-        prediction = model.predict(USPS.test);
+        prediction = Validation.test(model, USPS.test);
         error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error of old model after pruning = " + error);
         assertEquals(897, model.size());
         assertEquals(324, error);
 
-        prediction = lean.predict(USPS.test);
+        prediction = Validation.test(lean, USPS.test);
         error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error of pruned model after pruning = " + error);

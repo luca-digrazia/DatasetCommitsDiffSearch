@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -125,13 +125,13 @@ public class RBFNetworkTest {
         MathEx.standardize(testx);
 
         RBFNetwork<double[]> model = RBFNetwork.fit(x, Segment.y, RBF.fit(x, 30));
-        int[] prediction = model.predict(testx);
+        int[] prediction = Validation.test(model, testx);
         int error = Error.of(Segment.testy, prediction);
         System.out.println("RBF Network Error = " + error);
         assertEquals(123, error);
 
         model = RBFNetwork.fit(x, Segment.y, RBF.fit(x, 30), true);
-        prediction = model.predict(testx);
+        prediction = Validation.test(model, testx);
         error = Error.of(Segment.testy, prediction);
         System.out.println("Normalized RBF Network Error = " + error);
         assertEquals(110, error);
@@ -148,13 +148,13 @@ public class RBFNetworkTest {
         RBF<double[]>[] neurons = RBF.of(kmeans.centroids, new GaussianRadialBasis(8.0), distance);
 
         RBFNetwork<double[]> model = RBFNetwork.fit(USPS.x, USPS.y, neurons);
-        int[] prediction = model.predict(USPS.testx);
+        int[] prediction = Validation.test(model, USPS.testx);
         int error = Error.of(USPS.testy, prediction);
         System.out.println("RBF Network Error = " + error);
         assertEquals(142, error);
 
         model = RBFNetwork.fit(USPS.x, USPS.y, neurons, true);
-        prediction = model.predict(USPS.testx);
+        prediction = Validation.test(model, USPS.testx);
         error = Error.of(USPS.testy, prediction);
         System.out.println("Normalized RBF Network Error = " + error);
         assertEquals(143, error);

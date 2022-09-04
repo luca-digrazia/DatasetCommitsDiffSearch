@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
@@ -133,7 +133,7 @@ public class GradientTreeBoostTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(Segment.test);
+        int[] prediction = Validation.test(model, Segment.test);
         int error = Error.of(Segment.testy, prediction);
 
         System.out.println("Error = " + error);
@@ -158,7 +158,7 @@ public class GradientTreeBoostTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        int[] prediction = model.predict(USPS.test);
+        int[] prediction = Validation.test(model, USPS.test);
         int error = Error.of(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
