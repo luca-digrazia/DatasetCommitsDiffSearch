@@ -44,7 +44,7 @@ public class SimpleQuarkusRestTestCase {
                                     ParameterWithFromString.class, BeanParamSubClass.class, FieldInjectedSubClassResource.class,
                                     BeanParamSuperClass.class, IllegalClassExceptionMapper.class,
                                     MyParameterProvider.class, MyParameterConverter.class, MyParameter.class,
-                                    NewParamsRestResource.class, InterfaceResource.class, InterfaceResourceImpl.class);
+                                    NewParamsRestResource.class);
                 }
             });
 
@@ -412,11 +412,5 @@ public class SimpleQuarkusRestTestCase {
     public void bigDecimal() {
         RestAssured.get("/simple/bigDecimal/1.0")
                 .then().statusCode(200).body(Matchers.equalTo("1.0"));
-    }
-
-    @Test
-    public void testInterfaceResource() {
-        RestAssured.get("/iface")
-                .then().statusCode(200).body(Matchers.equalTo("Hello"));
     }
 }

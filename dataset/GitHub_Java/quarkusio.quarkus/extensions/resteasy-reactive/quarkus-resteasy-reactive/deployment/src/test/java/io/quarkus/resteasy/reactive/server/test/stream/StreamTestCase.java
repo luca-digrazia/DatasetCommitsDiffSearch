@@ -46,10 +46,6 @@ public class StreamTestCase {
                 .then()
                 .statusCode(200)
                 .body(Matchers.equalTo("foobar"));
-        RestAssured.get("/stream/text/stream/publisher")
-                .then()
-                .statusCode(200)
-                .body(Matchers.equalTo("foobar"));
         RestAssured.get("/stream/text/collect")
                 .then()
                 .statusCode(200)
@@ -65,10 +61,6 @@ public class StreamTestCase {
                 .body(Matchers.equalTo("foobar"));
 
         RestAssured.get("/stream/char-arrays/stream")
-                .then()
-                .statusCode(200)
-                .body(Matchers.equalTo("foobar"));
-        RestAssured.get("/stream/char-arrays/stream/publisher")
                 .then()
                 .statusCode(200)
                 .body(Matchers.equalTo("foobar"));
