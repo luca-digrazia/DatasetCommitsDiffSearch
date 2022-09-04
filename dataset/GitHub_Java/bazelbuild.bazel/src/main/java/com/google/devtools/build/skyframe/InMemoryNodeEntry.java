@@ -18,6 +18,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.KeyToConsolidate.Op;
@@ -219,7 +220,7 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   @Override
   public synchronized Iterable<SkyKey> getDirectDeps() {
-    return getGroupedDirectDeps().getAllElementsAsIterable();
+    return getGroupedDirectDeps().toSet();
   }
 
   /**
@@ -519,7 +520,7 @@ public class InMemoryNodeEntry implements NodeEntry {
       throws InterruptedException {
     Preconditions.checkState(!isDone(), this);
     if (!isDirty()) {
-      return getTemporaryDirectDeps().getAllElementsAsIterable();
+      return Iterables.concat(getTemporaryDirectDeps());
     } else {
       // There may be duplicates here. Make sure everything is unique.
       ImmutableSet.Builder<SkyKey> result = ImmutableSet.builder();
