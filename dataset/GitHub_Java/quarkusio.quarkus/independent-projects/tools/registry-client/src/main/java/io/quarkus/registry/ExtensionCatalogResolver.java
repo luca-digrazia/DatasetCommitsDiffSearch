@@ -27,7 +27,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -327,12 +326,8 @@ public class ExtensionCatalogResolver {
                 recommendedReleases.add(release);
                 String commonQuarkusVersion = quarkusCoreVersion = release.getQuarkusCoreVersion();
                 int i = 1;
-                Iterator<Platform> platformsIterator = platformCatalog.getPlatforms().iterator();
-                if (platformsIterator.hasNext()) {
-                    platformsIterator.next(); // Skip index 0
-                }
-                while (platformsIterator.hasNext() && commonQuarkusVersion != null) {
-                    final Platform p = platformsIterator.next();
+                while (i < platformCatalog.getPlatforms().size() && commonQuarkusVersion != null) {
+                    final Platform p = platformCatalog.getPlatforms().get(i++);
                     for (PlatformStream s : p.getStreams()) {
                         for (PlatformRelease r : s.getReleases()) {
                             if (!r.getQuarkusCoreVersion().equals(commonQuarkusVersion)) {
@@ -483,7 +478,7 @@ public class ExtensionCatalogResolver {
             if (platformCatalog == null) {
                 continue;
             }
-            final Collection<Platform> platforms = platformCatalog.getPlatforms();
+            final List<Platform> platforms = platformCatalog.getPlatforms();
             if (platforms.isEmpty()) {
                 continue;
             }
