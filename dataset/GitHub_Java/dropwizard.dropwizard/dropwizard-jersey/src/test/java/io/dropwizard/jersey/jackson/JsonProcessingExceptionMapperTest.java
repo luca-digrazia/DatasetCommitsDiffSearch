@@ -34,8 +34,9 @@ public class JsonProcessingExceptionMapperTest extends JerseyTest {
 
     @Override
     protected void configureClient(ClientConfig config) {
+        final Validator validator = Validators.newValidator();
         final ObjectMapper mapper = new ObjectMapper();
-        final JacksonMessageBodyProvider provider = new JacksonMessageBodyProvider(mapper);
+        final JacksonMessageBodyProvider provider = new JacksonMessageBodyProvider(mapper, validator);
         config.register(provider);
     }
 
