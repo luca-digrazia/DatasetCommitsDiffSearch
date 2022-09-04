@@ -8,11 +8,11 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 
 import io.quarkus.it.arc.UnusedBean;
+import io.quarkus.test.junit.QuarkusDynamicTest;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
@@ -27,12 +27,12 @@ public class DynamicTestsTestCase {
     }
 
     @TestFactory
-    public List<DynamicTest> dynamicTests() {
+    public List<?> dynamicTests() {
         return Arrays.asList(
-                DynamicTest.dynamicTest("test 1", () -> {
+                QuarkusDynamicTest.dynamicTest("test 1", () -> {
                     assertNotNull(bean);
                 }),
-                DynamicTest.dynamicTest("test 2", () -> {
+                QuarkusDynamicTest.dynamicTest("test 2", () -> {
                     assertEquals(1, 1);
                 }));
     }
