@@ -27,7 +27,6 @@ public class SkiaImageDecoder implements ImageDecoder {
     public Bitmap decode(Context context, Uri uri) throws Exception {
         String uriString = uri.toString();
         BitmapFactory.Options options = new BitmapFactory.Options();
-        Bitmap bitmap;
         options.inPreferredConfig = Bitmap.Config.RGB_565;
         if (uriString.startsWith(RESOURCE_PREFIX)) {
             Resources res;
@@ -52,19 +51,15 @@ public class SkiaImageDecoder implements ImageDecoder {
                 }
             }
 
-            bitmap = BitmapFactory.decodeResource(context.getResources(), id, options);
+            return BitmapFactory.decodeResource(context.getResources(), id, options);
         } else if (uriString.startsWith(ASSET_PREFIX)) {
             String assetName = uriString.substring(ASSET_PREFIX.length());
-            bitmap = BitmapFactory.decodeStream(context.getAssets().open(assetName), null, options);
+            return BitmapFactory.decodeStream(context.getAssets().open(assetName), null, options);
         } else if (uriString.startsWith(FILE_PREFIX)) {
-            bitmap = BitmapFactory.decodeFile(uriString.substring(FILE_PREFIX.length()), options);
+            return BitmapFactory.decodeFile(uriString.substring(FILE_PREFIX.length()), options);
         } else {
             ContentResolver contentResolver = context.getContentResolver();
-            bitmap = BitmapFactory.decodeStream(contentResolver.openInputStream(uri), null, options);
+            return BitmapFactory.decodeStream(contentResolver.openInputStream(uri), null, options);
         }
-        if (bitmap == null) {
-            throw new RuntimeException("Skia image region decoder returned null bitmap - image format may not be supported");
-        }
-        return bitmap;
     }
 }
