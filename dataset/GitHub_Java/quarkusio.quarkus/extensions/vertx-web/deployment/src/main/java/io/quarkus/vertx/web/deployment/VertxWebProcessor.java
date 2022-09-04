@@ -97,7 +97,6 @@ import io.quarkus.vertx.http.deployment.devmode.RouteDescriptionBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
 import io.quarkus.vertx.web.Param;
 import io.quarkus.vertx.web.Route;
-import io.quarkus.vertx.web.Route.HttpMethod;
 import io.quarkus.vertx.web.RouteFilter;
 import io.quarkus.vertx.web.runtime.RouteHandler;
 import io.quarkus.vertx.web.runtime.RouteMatcher;
@@ -108,6 +107,7 @@ import io.quarkus.vertx.web.runtime.devmode.ResourceNotFoundRecorder;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.vertx.core.Handler;
+import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.Router;
@@ -243,7 +243,7 @@ class VertxWebProcessor {
                         return true;
                     }
                 }
-                return GeneratedClassGizmoAdaptor.isApplicationClass(className);
+                return false;
             }
         };
         ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, appClassPredicate);
@@ -295,10 +295,9 @@ class VertxWebProcessor {
                 AnnotationValue typeValue = route.value(VALUE_TYPE);
                 Route.HandlerType routeHandlerType = typeValue == null ? Route.HandlerType.NORMAL
                         : Route.HandlerType.from(typeValue.asEnum());
-                String[] methods = Arrays.stream(methodsValue.asStringArray())
-                        .map(String::toUpperCase)
-                        .toArray(String[]::new);
-                int order = orderValue.asInt();
+                HttpMethod[] methods = Arrays.stream(methodsValue.asEnumArray()).map(HttpMethod::valueOf)
+                        .toArray(HttpMethod[]::new);
+                Integer order = orderValue.asInt();
 
                 if (regexValue == null) {
                     if (pathPrefix != null) {
@@ -345,7 +344,7 @@ class VertxWebProcessor {
                 }
 
                 HandlerType handlerType = HandlerType.NORMAL;
-                if (routeHandlerType != null) {
+                if (typeValue != null) {
                     switch (routeHandlerType) {
                         case NORMAL:
                             handlerType = HandlerType.NORMAL;
@@ -388,24 +387,18 @@ class VertxWebProcessor {
                 Function<Router, io.vertx.ext.web.Route> routeFunction = recorder.createRouteFunction(matcher,
                         bodyHandler.getHandler());
 
-                RouteBuildItem.Builder builder = RouteBuildItem.builder()
-                        .routeFunction(routeFunction)
-                        .handlerType(handlerType)
-                        .handler(routeHandler);
-                routeProducer.produce(builder.build());
+                routeProducer.produce(new RouteBuildItem(routeFunction, routeHandler, handlerType));
 
                 if (launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)) {
                     if (methods.length == 0) {
                         // No explicit method declared - match all methods
-                        methods = Arrays.stream(HttpMethod.values())
-                                .map(Enum::name)
-                                .toArray(String[]::new);
+                        methods = HttpMethod.values();
                     }
                     descriptions.produce(new RouteDescriptionBuildItem(
                             businessMethod.getMethod().declaringClass().name().withoutPackagePrefix() + "#"
                                     + businessMethod.getMethod().name() + "()",
                             regex != null ? regex : path,
-                            Arrays.stream(methods).collect(Collectors.joining(", ")), produces,
+                            Arrays.stream(methods).map(Object::toString).collect(Collectors.joining(", ")), produces,
                             consumes));
                 }
             }
@@ -554,7 +547,13 @@ class VertxWebProcessor {
                     "A route requires validation, but the Hibernate Validator extension is not present");
         }
 
-        String baseName = io.quarkus.arc.processor.DotNames.simpleName(bean.getImplClazz().name());
+        String baseName;
+        if (bean.getImplClazz().enclosingClass() != null) {
+            baseName = io.quarkus.arc.processor.DotNames.simpleName(bean.getImplClazz().enclosingClass()) + "_"
+                    + io.quarkus.arc.processor.DotNames.simpleName(bean.getImplClazz().name());
+        } else {
+            baseName = io.quarkus.arc.processor.DotNames.simpleName(bean.getImplClazz().name());
+        }
         String targetPackage = io.quarkus.arc.processor.DotNames
                 .internalPackageNameWithTrailingSlash(bean.getImplClazz().name());
 
@@ -744,11 +743,9 @@ class VertxWebProcessor {
                 block.assign(res, value);
             }
             CatchBlockCreator caught = block.addCatch(Methods.VALIDATION_CONSTRAINT_VIOLATION_EXCEPTION);
-            boolean forceJsonEncoding = !descriptor.isContentTypeString() && !descriptor.isContentTypeBuffer()
-                    && !descriptor.isContentTypeMutinyBuffer();
             caught.invokeStaticMethod(
                     Methods.VALIDATION_HANDLE_VIOLATION_EXCEPTION,
-                    caught.getCaughtException(), invoke.getMethodParam(0), invoke.load(forceJsonEncoding));
+                    caught.getCaughtException(), invoke.getMethodParam(0));
             caught.returnValue(caught.loadNull());
         }
 
@@ -1030,7 +1027,7 @@ class VertxWebProcessor {
         // Encode to Json
         Methods.setContentTypeToJson(response, writer);
         // Validate res if needed
-        if (descriptor.isProducedResponseValidated() && (descriptor.isReturningUni() || descriptor.isReturningMulti())) {
+        if (descriptor.isProducedResponseValidated()) {
             return Methods.validateProducedItem(response, writer, res, validatorField, owner);
         } else {
             return writer.invokeStaticMethod(Methods.JSON_ENCODE, res);
