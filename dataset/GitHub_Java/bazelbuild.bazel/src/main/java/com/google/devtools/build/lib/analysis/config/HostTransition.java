@@ -22,11 +22,6 @@ public final class HostTransition implements PatchTransition {
   private HostTransition() {}
 
   @Override
-  public boolean isHostTransition() {
-    return true;
-  }
-
-  @Override
   public BuildOptions apply(BuildOptions options) {
     if (options.get(BuildConfiguration.Options.class).isHost) {
       // If the input already comes from the host configuration, just return the existing values.

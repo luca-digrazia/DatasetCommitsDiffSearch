@@ -15,13 +15,11 @@
 package com.google.devtools.build.lib.rules.cpp.transitions;
 
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LipoConfigurationState;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.Objects;
 
 /**
@@ -29,7 +27,6 @@ import java.util.Objects;
  * disabled.
  */
 @Immutable
-@AutoCodec
 public class EnableLipoTransition implements PatchTransition {
   private final Label ruleLabel;
   private final int hashCode;
@@ -39,14 +36,8 @@ public class EnableLipoTransition implements PatchTransition {
    * restricting this transition to the LIPO context binary.
    */
   public EnableLipoTransition(Label ruleLabel) {
-    this(ruleLabel, Objects.hashCode(ruleLabel));
-  }
-
-  @VisibleForSerialization
-  @AutoCodec.Instantiator
-  EnableLipoTransition(Label ruleLabel, int hashCode) {
     this.ruleLabel = ruleLabel;
-    this.hashCode = hashCode;
+    this.hashCode = Objects.hashCode(ruleLabel);
   }
 
   @Override

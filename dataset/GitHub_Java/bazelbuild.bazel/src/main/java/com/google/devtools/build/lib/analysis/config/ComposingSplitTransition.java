@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
+import com.google.devtools.build.lib.packages.Attribute.Transition;
 import java.util.List;
 
 /**
@@ -35,7 +35,7 @@ import java.util.List;
  * combination thereof. We implement this class as a {@link SplitTransition} since that abstraction
  * captures all possible combinations.
  */
-public class ComposingSplitTransition implements SplitTransition {
+public class ComposingSplitTransition implements SplitTransition<BuildOptions> {
   private Transition transition1;
   private Transition transition2;
 
@@ -63,7 +63,7 @@ public class ComposingSplitTransition implements SplitTransition {
    */
   private Transition verifySupported(Transition transition) {
     Preconditions.checkArgument(transition instanceof PatchTransition
-        || transition instanceof SplitTransition);
+        || transition instanceof SplitTransition<?>);
     return transition;
   }
 
@@ -77,7 +77,7 @@ public class ComposingSplitTransition implements SplitTransition {
     } else if (transition instanceof PatchTransition) {
       return ImmutableList.<BuildOptions>of(((PatchTransition) transition).apply(fromOptions));
     } else if (transition instanceof SplitTransition) {
-      SplitTransition split = (SplitTransition) transition;
+      SplitTransition split = (SplitTransition<BuildOptions>) transition;
       List<BuildOptions> splitOptions = split.split(fromOptions);
       if (splitOptions.isEmpty()) {
         return ImmutableList.<BuildOptions>of(fromOptions);
@@ -91,3 +91,4 @@ public class ComposingSplitTransition implements SplitTransition {
     }
   }
 }
+

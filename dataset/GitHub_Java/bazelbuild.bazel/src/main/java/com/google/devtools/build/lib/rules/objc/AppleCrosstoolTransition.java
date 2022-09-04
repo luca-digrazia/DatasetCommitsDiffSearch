@@ -18,12 +18,12 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 
 /**
  * Transition that produces a configuration that causes c++ toolchain selection to use the
@@ -31,8 +31,9 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
  */
 public class AppleCrosstoolTransition implements PatchTransition {
 
-  /** A singleton instance of AppleCrosstoolTransition. */
-  @AutoCodec
+  /**
+   * A singleton instance of AppleCrosstoolTransition.
+   */
   public static final PatchTransition APPLE_CROSSTOOL_TRANSITION = new AppleCrosstoolTransition();
 
   @Override
@@ -87,7 +88,8 @@ public class AppleCrosstoolTransition implements PatchTransition {
    * Returns true if the given options imply use of AppleCrosstoolTransition for all apple targets.
    */
   public static boolean appleCrosstoolTransitionIsAppliedForAllObjc(BuildOptions options) {
-    return options.get(AppleCommandLineOptions.class).enableAppleCrosstoolTransition;
+    return (options.get(AppleCommandLineOptions.class).enableAppleCrosstoolTransition
+        || options.get(ObjcCommandLineOptions.class).objcCrosstoolMode != ObjcCrosstoolMode.OFF);
   }
 
   /**

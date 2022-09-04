@@ -32,6 +32,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BuildInfo;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
@@ -43,13 +44,17 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
+import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
@@ -385,7 +390,7 @@ public final class ReleaseBundlingSupport {
             .setMnemonic("EnvironmentPlist")
             .setExecutable(attributes.environmentPlist())
             .addOutput(getGeneratedEnvironmentPlist())
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("--platform", platformWithVersion)
                     .addExecPath("--output", getGeneratedEnvironmentPlist())
@@ -604,7 +609,7 @@ public final class ReleaseBundlingSupport {
             .addTransitiveInputs(entitlements)
             .addOutput(intermediateArtifacts.entitlements())
             .addInput(plMergeControlArtifact)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .addExecPath("--control", plMergeControlArtifact)
                     .build())
@@ -856,7 +861,7 @@ public final class ReleaseBundlingSupport {
             .addInput(bundleMergeControlArtifact)
             .addTransitiveInputs(bundling.getBundleContentArtifacts())
             .addOutput(intermediateArtifacts.unprocessedIpa())
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder().addExecPath(bundleMergeControlArtifact).build())
             .build(ruleContext));
   }
@@ -1043,7 +1048,7 @@ public final class ReleaseBundlingSupport {
         ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
             .setMnemonic("SwiftStdlibCopy")
             .setExecutable(attributes.swiftStdlibToolWrapper())
-            .addCommandLine(commandLine.build())
+            .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
             .addInput(combinedArchBinary)
             .build(ruleContext));
@@ -1075,7 +1080,7 @@ public final class ReleaseBundlingSupport {
         ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
             .setMnemonic("SwiftCopySwiftSupport")
             .setExecutable(attributes.swiftStdlibToolWrapper())
-            .addCommandLine(commandLine.build())
+            .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftSupportZip())
             .addInput(combinedArchBinary)
             .build(ruleContext));
@@ -1284,6 +1289,72 @@ public final class ReleaseBundlingSupport {
         }
       }
       return results.build();
+    }
+  }
+
+  /**
+   * Transition that results in one configured target per architecture set in {@code
+   * --ios_multi_cpus}.
+   */
+  protected static class SplitArchTransition implements SplitTransition<BuildOptions> {
+
+    @Override
+    public final List<BuildOptions> split(BuildOptions buildOptions) {
+      List<String> iosMultiCpus = buildOptions.get(AppleCommandLineOptions.class).iosMultiCpus;
+      if (iosMultiCpus.isEmpty()) {
+        return defaultOptions(buildOptions);
+      }
+
+      ImmutableList.Builder<BuildOptions> splitBuildOptions = ImmutableList.builder();
+      for (String iosCpu : iosMultiCpus) {
+        BuildOptions splitOptions = buildOptions.clone();
+        setIosArchitectureOptions(splitOptions, buildOptions, iosCpu);
+        setAdditionalOptions(splitOptions, buildOptions);
+        splitOptions.get(AppleCommandLineOptions.class).configurationDistinguisher =
+            getConfigurationDistinguisher();
+        splitBuildOptions.add(splitOptions);
+      }
+      return splitBuildOptions.build();
+    }
+
+    /**
+     * Returns the default options to use if no split architectures are specified.
+     *
+     * @param originalOptions original options before this transition
+     */
+    protected ImmutableList<BuildOptions> defaultOptions(BuildOptions originalOptions) {
+      return ImmutableList.of();
+    }
+
+    /**
+     * Sets or overwrites flags on the given split options.
+     *
+     * <p>Invoked once for each configuration produced by this transition.
+     *
+     * @param splitOptions options to use after this transition
+     * @param originalOptions original options before this transition
+     */
+    protected void setAdditionalOptions(BuildOptions splitOptions, BuildOptions originalOptions) {}
+
+    private static void setIosArchitectureOptions(
+        BuildOptions splitOptions, BuildOptions originalOptions, String iosCpu) {
+      splitOptions.get(AppleCommandLineOptions.class).applePlatformType = PlatformType.IOS;
+      splitOptions.get(AppleCommandLineOptions.class).appleSplitCpu = iosCpu;
+      splitOptions.get(Options.class).cpu = AppleConfiguration.IOS_CPU_PREFIX + iosCpu;
+      splitOptions.get(AppleCommandLineOptions.class).iosCpu = iosCpu;
+     if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
+        // Only set the (CC-compilation) CPU for dependencies if explicitly required by the user.
+        // This helps users of the iOS rules who do not depend on CC rules as these CPU values
+        // require additional flags to work (e.g. a custom crosstool) which now only need to be set
+        // if this feature is explicitly requested.
+        AppleCrosstoolTransition.setAppleCrosstoolTransitionConfiguration(originalOptions,
+            splitOptions, "ios_" + iosCpu);
+     }
+    }
+
+    /** Returns the configuration distinguisher for this transition instance. */
+    protected ConfigurationDistinguisher getConfigurationDistinguisher() {
+      return ConfigurationDistinguisher.IOS_APPLICATION;
     }
   }
 }
