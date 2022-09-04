@@ -9,7 +9,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.concurrent.CompletionStage;
 import java.util.function.Predicate;
 
 import javax.annotation.Priority;
@@ -54,8 +53,6 @@ import org.jboss.jandex.DotName;
 
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.rest.Blocking;
-import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.Uni;
 
 public final class QuarkusRestDotNames {
 
@@ -114,10 +111,6 @@ public final class QuarkusRestDotNames {
     public static final DotName MULTI_VALUED_MAP = DotName.createSimple(MultivaluedMap.class.getName());
     public static final DotName PATH_SEGMENT = DotName.createSimple(PathSegment.class.getName());
 
-    public static final DotName UNI = DotName.createSimple(Uni.class.getName());
-    public static final DotName MULTI = DotName.createSimple(Multi.class.getName());
-    public static final DotName COMPLETION_STAGE = DotName.createSimple(CompletionStage.class.getName());
-
     public static final DotName INTEGER = DotName.createSimple(Integer.class.getName());
     public static final DotName LONG = DotName.createSimple(Long.class.getName());
     public static final DotName FLOAT = DotName.createSimple(Float.class.getName());
@@ -146,8 +139,9 @@ public final class QuarkusRestDotNames {
     public static final DotName JSONP_JSON_VALUE = DotName.createSimple(javax.json.JsonValue.class.getName());
     public static final DotName JSONP_JSON_STRING = DotName.createSimple(javax.json.JsonString.class.getName());
 
+    // TODO: add Path, Cookie and Matrix param handling
     public static final Set<DotName> RESOURCE_CTOR_PARAMS_THAT_NEED_HANDLING = new HashSet<>(
-            Arrays.asList(QUERY_PARAM, HEADER_PARAM, PATH_PARAM, MATRIX_PARAM, COOKIE_PARAM));
+            Arrays.asList(QUERY_PARAM, HEADER_PARAM));
 
     public static final IgnoreForReflectionPredicate IGNORE_FOR_REFLECTION_PREDICATE = new IgnoreForReflectionPredicate();
     public static final DotName ENCODED = DotName.createSimple(Encoded.class.getName());
