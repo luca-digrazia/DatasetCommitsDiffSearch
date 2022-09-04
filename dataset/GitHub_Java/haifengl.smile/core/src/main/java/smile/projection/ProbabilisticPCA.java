@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.projection;
 
@@ -26,7 +26,6 @@ import smile.math.matrix.Matrix;
  * Probabilistic principal component analysis. Probabilistic PCA is
  * a simplified factor analysis that employs a latent variable model
  * with linear relationship:
- * <p>
  * <pre>
  *     y &sim; W * x + &mu; + &epsilon;
  * </pre>
@@ -53,23 +52,23 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
     /**
      * The sample mean.
      */
-    private double[] mu;
+    private final double[] mu;
     /**
      * The projected sample mean.
      */
-    private double[] pmu;
+    private final double[] pmu;
     /**
      * The variance of noise part.
      */
-    private double noise;
+    private final double noise;
     /**
      * The loading matrix.
      */
-    private Matrix loading;
+    private final Matrix loading;
     /**
      * The projection matrix.
      */
-    private Matrix projection;
+    private final Matrix projection;
 
     /**
      * Constructor.
@@ -84,29 +83,32 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
         this.loading = loading;
         this.projection = projection;
 
-        pmu = new double[projection.nrows()];
+        pmu = new double[projection.nrow()];
         projection.mv(mu, pmu);
     }
 
     /**
      * Returns the variable loading matrix, ordered from largest to smallest
      * by corresponding eigenvalues.
+     * @return the variable loading matrix.
      */
-    public Matrix getLoadings() {
+    public Matrix loadings() {
         return loading;
     }
 
     /**
      * Returns the center of data.
+     * @return the center of data.
      */
-    public double[] getCenter() {
+    public double[] center() {
         return mu;
     }
 
     /**
      * Returns the variance of noise.
+     * @return the variance of noise.
      */
-    public double getNoiseVariance() {
+    public double variance() {
         return noise;
     }
 
@@ -115,7 +117,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
      * latent model.
      */
     @Override
-    public Matrix getProjection() {
+    public Matrix projection() {
         return projection;
     }
 
@@ -125,7 +127,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, mu.length));
         }
 
-        double[] y = new double[projection.nrows()];
+        double[] y = new double[projection.nrow()];
         projection.mv(x, y);
         MathEx.sub(y, pmu);
         return y;
@@ -137,7 +139,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x[0].length, mu.length));
         }
 
-        double[][] y = new double[x.length][projection.nrows()];
+        double[][] y = new double[x.length][projection.nrow()];
         for (int i = 0; i < x.length; i++) {
             projection.mv(x[i], y[i]);
             MathEx.sub(y[i], pmu);
@@ -149,6 +151,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
      * Fits probabilistic principal component analysis.
      * @param data training data of which each row is a sample.
      * @param k the number of principal component to learn.
+     * @return the model.
      */
     public static ProbabilisticPCA fit(double[][] data, int k) {
         int m = data.length;
@@ -156,10 +159,10 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
 
         double[] mu = MathEx.colMeans(data);
         Matrix cov = new Matrix(n, n);
-        for (int l = 0; l < m; l++) {
+        for (double[] datum : data) {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j <= i; j++) {
-                    cov.add(i, j, (data[l][i] - mu[i]) * (data[l][j] - mu[j]));
+                    cov.add(i, j, (datum[i] - mu[i]) * (datum[j] - mu[j]));
                 }
             }
         }
@@ -173,26 +176,24 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
 
         cov.uplo(UPLO.LOWER);
         Matrix.EVD eigen = cov.eigen(false, true, true).sort();
-        double[] evalues = eigen.wr;
-        Matrix evectors = eigen.Vr;
+        double[] eigvalues = eigen.wr;
+        Matrix eigvectors = eigen.Vr;
 
         double noise = 0.0;
         for (int i = k; i < n; i++) {
-            noise += evalues[i];
+            noise += eigvalues[i];
         }
         noise /= (n - k);
 
         Matrix loading = new Matrix(n, k);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < k; j++) {
-                loading.set(i, j, evectors.get(i, j) * Math.sqrt(evalues[j] - noise));
+                loading.set(i, j, eigvectors.get(i, j) * Math.sqrt(eigvalues[j] - noise));
             }
         }
 
         Matrix M = loading.ata();
-        for (int i = 0; i < k; i++) {
-            M.add(i, i, noise);
-        }
+        M.addDiag(noise);
 
         Matrix.Cholesky chol = M.cholesky(true);
         Matrix Mi = chol.inverse();
