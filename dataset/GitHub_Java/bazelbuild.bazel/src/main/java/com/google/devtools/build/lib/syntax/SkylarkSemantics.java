@@ -37,7 +37,6 @@ public abstract class SkylarkSemantics {
   public enum FlagIdentifier {
     EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS(
         SkylarkSemantics::experimentalAnalysisTestingImprovements),
-    EXPERIMENTAL_PLATFORM_API(SkylarkSemantics::experimentalPlatformsApi),
     INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
         SkylarkSemantics::incompatibleDisableObjcProviderResources),
     INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(
@@ -102,8 +101,6 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean experimentalRemapMainRepo();
 
-  public abstract boolean experimentalPlatformsApi();
-
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
   public abstract boolean incompatibleDepsetIsNotIterable();
@@ -133,8 +130,6 @@ public abstract class SkylarkSemantics {
   public abstract boolean incompatibleGenerateJavaCommonSourceJar();
 
   public abstract boolean incompatibleNewActionsApi();
-
-  public abstract boolean incompatibleNoOutputAttrDefault();
 
   public abstract boolean incompatibleNoSupportToolsInActionInputs();
 
@@ -178,7 +173,6 @@ public abstract class SkylarkSemantics {
           .experimentalEnableAndroidMigrationApis(false)
           .experimentalEnableRepoMapping(false)
           .experimentalRemapMainRepo(false)
-          .experimentalPlatformsApi(false)
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
@@ -194,7 +188,6 @@ public abstract class SkylarkSemantics {
           .incompatibleExpandDirectories(false)
           .incompatibleGenerateJavaCommonSourceJar(false)
           .incompatibleNewActionsApi(false)
-          .incompatibleNoOutputAttrDefault(false)
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(false)
@@ -222,8 +215,6 @@ public abstract class SkylarkSemantics {
     public abstract Builder experimentalEnableRepoMapping(boolean value);
 
     public abstract Builder experimentalRemapMainRepo(boolean value);
-
-    public abstract Builder experimentalPlatformsApi(boolean value);
 
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
@@ -254,8 +245,6 @@ public abstract class SkylarkSemantics {
     public abstract Builder incompatibleGenerateJavaCommonSourceJar(boolean value);
 
     public abstract Builder incompatibleNewActionsApi(boolean value);
-
-    public abstract Builder incompatibleNoOutputAttrDefault(boolean value);
 
     public abstract Builder incompatibleNoSupportToolsInActionInputs(boolean value);
 

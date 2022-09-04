@@ -126,7 +126,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--experimental_enable_android_migration_apis=" + rand.nextBoolean(),
         "--experimental_enable_repo_mapping=" + rand.nextBoolean(),
         "--experimental_remap_main_repo=" + rand.nextBoolean(),
-        "--experimental_platforms_api=" + rand.nextBoolean(),
         "--incompatible_bzl_disallow_load_after_statement=" + rand.nextBoolean(),
         "--incompatible_depset_is_not_iterable=" + rand.nextBoolean(),
         "--incompatible_depset_union=" + rand.nextBoolean(),
@@ -142,7 +141,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_expand_directories=" + rand.nextBoolean(),
         "--incompatible_generate_javacommon_source_jar=" + rand.nextBoolean(),
         "--incompatible_new_actions_api=" + rand.nextBoolean(),
-        "--incompatible_no_output_attr_default=" + rand.nextBoolean(),
         "--incompatible_no_support_tools_in_action_inputs=" + rand.nextBoolean(),
         "--incompatible_no_target_output_group=" + rand.nextBoolean(),
         "--incompatible_no_transitive_loads=" + rand.nextBoolean(),
@@ -169,7 +167,6 @@ public class SkylarkSemanticsConsistencyTest {
         .experimentalEnableAndroidMigrationApis(rand.nextBoolean())
         .experimentalEnableRepoMapping(rand.nextBoolean())
         .experimentalRemapMainRepo(rand.nextBoolean())
-        .experimentalPlatformsApi(rand.nextBoolean())
         .incompatibleBzlDisallowLoadAfterStatement(rand.nextBoolean())
         .incompatibleDepsetIsNotIterable(rand.nextBoolean())
         .incompatibleDepsetUnion(rand.nextBoolean())
@@ -185,7 +182,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleExpandDirectories(rand.nextBoolean())
         .incompatibleGenerateJavaCommonSourceJar(rand.nextBoolean())
         .incompatibleNewActionsApi(rand.nextBoolean())
-        .incompatibleNoOutputAttrDefault(rand.nextBoolean())
         .incompatibleNoSupportToolsInActionInputs(rand.nextBoolean())
         .incompatibleNoTargetOutputGroup(rand.nextBoolean())
         .incompatibleNoTransitiveLoads(rand.nextBoolean())

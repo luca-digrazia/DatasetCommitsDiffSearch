@@ -114,16 +114,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean experimentalRemapMainRepo;
 
   @Option(
-      name = "experimental_platforms_api",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "If set to true, enables a number of platform-related Starlark APIs useful for "
-          + "debugging.")
-  public boolean experimentalPlatformsApi;
-
-  @Option(
     name = "incompatible_bzl_disallow_load_after_statement",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -336,19 +326,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleNewActionsApi;
 
   @Option(
-      name = "incompatible_no_output_attr_default",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, disables the `default` parameter of the `attr.output` and "
-          + "`attr.output_list` attribute definition functions.")
-  public boolean incompatibleNoOutputAttrDefault;
-
-  @Option(
       name = "incompatible_no_support_tools_in_action_inputs",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -509,7 +486,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
         .experimentalEnableRepoMapping(experimentalEnableRepoMapping)
         .experimentalRemapMainRepo(experimentalRemapMainRepo)
-        .experimentalPlatformsApi(experimentalPlatformsApi)
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -525,7 +501,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleExpandDirectories(incompatibleExpandDirectories)
         .incompatibleGenerateJavaCommonSourceJar(incompatibleGenerateJavaCommonSourceJar)
         .incompatibleNewActionsApi(incompatibleNewActionsApi)
-        .incompatibleNoOutputAttrDefault(incompatibleNoOutputAttrDefault)
         .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
         .incompatibleNoTransitiveLoads(incompatibleNoTransitiveLoads)
