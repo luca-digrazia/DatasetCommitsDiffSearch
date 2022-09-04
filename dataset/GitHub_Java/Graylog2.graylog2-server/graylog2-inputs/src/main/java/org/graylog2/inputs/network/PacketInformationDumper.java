@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -25,23 +27,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class PacketInformationDumper extends SimpleChannelUpstreamHandler {
-    private static final Logger LOG = LoggerFactory.getLogger(PacketInformationDumper.class);
-    private final Logger sourceInputLog;
+    private static final Logger classLogger = LoggerFactory.getLogger(PacketInformationDumper.class);
+    private final Logger log;
     private final MessageInput sourceInput;
 
     public PacketInformationDumper(MessageInput sourceInput) {
         this.sourceInput = sourceInput;
-        sourceInputLog = LoggerFactory.getLogger(PacketInformationDumper.class.getCanonicalName() + "." + sourceInput.getId());
-        LOG.debug("Set {} to TRACE for network packet metadata dumps of input {}", sourceInputLog.getName(), sourceInput.getUniqueReadableId());
+        log = LoggerFactory.getLogger(PacketInformationDumper.class.getCanonicalName() + "." + sourceInput.getId());
+        classLogger.debug("Set {} to TRACE for network packet metadata dumps of input {}", log.getName(), sourceInput.getUniqueReadableId());
     }
 
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
         try {
-            if (sourceInputLog.isTraceEnabled()) {
+            if (log.isTraceEnabled()) {
                 final ChannelBuffer message = (ChannelBuffer) e.getMessage();
-                sourceInputLog.trace("Recv network data: {} bytes via input '{}' <{}> from remote address {}",
-                          message.readableBytes(), sourceInput.getName(), sourceInput.getId(), e.getRemoteAddress());
+                log.trace("Recv network data: {} bytes via input '{}' <{}> from remote address {}",
+                          new Object[] {message.readableBytes(), sourceInput.getName(), sourceInput.getId(), e.getRemoteAddress() });
             }
         } finally {
             super.messageReceived(ctx, e);

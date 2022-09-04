@@ -1,4 +1,6 @@
 /**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,14 +15,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.inputs.raw.tcp;
 
-
-import com.codahale.metrics.MetricRegistry;
 import org.graylog2.inputs.network.PacketInformationDumper;
 import org.graylog2.inputs.raw.RawDispatcher;
-import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.util.ConnectionCounter;
@@ -37,21 +38,14 @@ import org.jboss.netty.handler.codec.frame.Delimiters;
  */
 public class RawTCPPipelineFactory implements ChannelPipelineFactory {
 
-    private final MetricRegistry metricRegistry;
-    private final Buffer processBuffer;
+    private final InputHost server;
     private final Configuration config;
     private final MessageInput sourceInput;
     private final ThroughputCounter throughputCounter;
     private final ConnectionCounter connectionCounter;
 
-    public RawTCPPipelineFactory(MetricRegistry metricRegistry,
-                                 Buffer processBuffer,
-                                 Configuration config,
-                                 MessageInput sourceInput,
-                                 ThroughputCounter throughputCounter,
-                                 ConnectionCounter connectionCounter) {
-        this.metricRegistry = metricRegistry;
-        this.processBuffer = processBuffer;
+    public RawTCPPipelineFactory(InputHost server, Configuration config, MessageInput sourceInput, ThroughputCounter throughputCounter, ConnectionCounter connectionCounter) {
+        this.server = server;
         this.config = config;
         this.sourceInput = sourceInput;
         this.throughputCounter = throughputCounter;
@@ -73,7 +67,7 @@ public class RawTCPPipelineFactory implements ChannelPipelineFactory {
         p.addLast("connection-counter", connectionCounter);
         p.addLast("traffic-counter", throughputCounter);
         p.addLast("framer", new DelimiterBasedFrameDecoder(2 * 1024 * 1024, delimiter));
-        p.addLast("handler", new RawDispatcher(metricRegistry, processBuffer, config, sourceInput));
+        p.addLast("handler", new RawDispatcher(server, config, sourceInput));
 
         return p;
     }

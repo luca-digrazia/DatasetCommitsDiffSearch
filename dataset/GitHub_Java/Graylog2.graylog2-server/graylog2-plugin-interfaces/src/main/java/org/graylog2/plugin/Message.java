@@ -1,20 +1,23 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright (c) 2012 Lennart Koopmann <lennart@torch.sh>
  *
- * This file is part of Graylog2.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is furnished to do
+ * so, subject to the following conditions:
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 package org.graylog2.plugin;
@@ -29,8 +32,6 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -92,8 +93,6 @@ public class Message {
     );
 
     public static final Function<Message, String> ID_FUNCTION = new MessageIdFunction();
-
-    private InetAddress inetAddress;
 
     public Message(String message, String source, DateTime timestamp) {
     	// Adding the fields directly because they would not be accepted as a reserved fields.
@@ -170,25 +169,18 @@ public class Message {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("source: ").append(getField("source")).append(" | ");
+        sb.append("message: ").append(getField("message"));
+        
+        // Replace all newlines and tabs.
+        String ret = sb.toString().replaceAll("\\n", "").replaceAll("\\t", "");
 
-        String message = getField("message").toString().replaceAll("\\n", "").replaceAll("\\t", "");
-        sb.append("message: ");
-
-        if (message.length() > 225) {
-            message = message.substring(0, 225);
-            sb.append(message).append(" (...)");
-        } else {
-            sb.append(message);
+        // Cut to 225 chars if the message is too long.
+        if (ret.length() > 225) {
+            ret = ret.substring(0, 225);
+            ret += " (...)";
         }
 
-        Map<String, Object> filteredFields = Maps.newHashMap(fields);
-        filteredFields.remove("source");
-        filteredFields.remove("message");
-
-        for (Map.Entry<String, Object> entry : filteredFields.entrySet())
-            sb.append(" | ").append(entry.getKey()).append(": ").append(entry.getValue());
-
-        return sb.toString();
+        return ret;
     }
     
     public String getMessage() {
@@ -323,15 +315,6 @@ public class Message {
 
     public void setSourceInput(MessageInput input) {
         this.sourceInput = input;
-    }
-
-    // drools seems to need the "get" prefix
-    public boolean getIsSourceInetAddress() {
-        return inetAddress != null;
-    }
-
-    public InetAddress getInetAddress() {
-        return inetAddress;
     }
 
     public static class MessageIdFunction implements Function<Message, String> {

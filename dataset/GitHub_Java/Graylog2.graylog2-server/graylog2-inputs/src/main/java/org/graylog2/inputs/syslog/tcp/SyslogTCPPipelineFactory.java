@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,14 +15,14 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
+
 package org.graylog2.inputs.syslog.tcp;
 
-
-import com.codahale.metrics.MetricRegistry;
 import org.graylog2.inputs.network.PacketInformationDumper;
 import org.graylog2.inputs.syslog.SyslogDispatcher;
-import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.util.ConnectionCounter;
@@ -36,22 +38,15 @@ import org.jboss.netty.handler.codec.frame.Delimiters;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
-
-    private final MetricRegistry metricRegistry;
-    private final Buffer processBuffer;
+    
+    private final InputHost server;
     private final Configuration config;
     private final MessageInput sourceInput;
     private final ThroughputCounter throughputCounter;
     private final ConnectionCounter connectionCounter;
 
-    public SyslogTCPPipelineFactory(MetricRegistry metricRegistry,
-                                    Buffer processBuffer,
-                                    Configuration config,
-                                    MessageInput sourceInput,
-                                    ThroughputCounter throughputCounter,
-                                    ConnectionCounter connectionCounter) {
-        this.metricRegistry = metricRegistry;
-        this.processBuffer = processBuffer;
+    public SyslogTCPPipelineFactory(InputHost server, Configuration config, MessageInput sourceInput, ThroughputCounter throughputCounter, ConnectionCounter connectionCounter) {
+        this.server = server;
         this.config = config;
         this.sourceInput = sourceInput;
         this.throughputCounter = throughputCounter;
@@ -73,7 +68,7 @@ public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
         p.addLast("connection-counter", connectionCounter);
         p.addLast("framer", new DelimiterBasedFrameDecoder(2 * 1024 * 1024, delimiter));
         p.addLast("traffic-counter", throughputCounter);
-        p.addLast("handler", new SyslogDispatcher(metricRegistry, processBuffer, config, sourceInput));
+        p.addLast("handler", new SyslogDispatcher(server, config, sourceInput));
         return p;
     }
     
