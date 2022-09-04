@@ -209,11 +209,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	protected void setFindSupportFragmentById() {
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT) == null) {
-			findSupportFragmentById = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentById");
-		} else {
-			findSupportFragmentById = getGeneratedClass().method(PRIVATE, getClasses().ANDROIDX_FRAGMENT, "findSupportFragmentById");
-		}
+		findSupportFragmentById = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentById");
 		JVar idParam = findSupportFragmentById.param(getCodeModel().INT, "id");
 
 		JBlock body = findSupportFragmentById.body();
@@ -263,11 +259,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	protected void setFindSupportFragmentByTag() {
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT) == null) {
-			findSupportFragmentByTag = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
-		} else {
-			findSupportFragmentByTag = getGeneratedClass().method(PRIVATE, getClasses().ANDROIDX_FRAGMENT, "findSupportFragmentByTag");
-		}
+		findSupportFragmentByTag = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
 		JVar tagParam = findSupportFragmentByTag.param(getClasses().STRING, "tag");
 
 		JBlock body = findSupportFragmentByTag.body();
