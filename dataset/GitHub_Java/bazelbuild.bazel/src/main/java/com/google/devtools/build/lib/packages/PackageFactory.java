@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.syntax.CallExpression;
 import com.google.devtools.build.lib.syntax.DefStatement;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.ForStatement;
@@ -60,7 +61,7 @@ import com.google.devtools.build.lib.syntax.NodeVisitor;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Program;
+import com.google.devtools.build.lib.syntax.Resolver;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
@@ -68,7 +69,6 @@ import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StringLiteral;
-import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -502,7 +502,7 @@ public final class PackageFactory {
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       PackageIdentifier packageId,
       RootedPath buildFile,
-      StarlarkFile file, // becomes resolved as a side effect
+      StarlarkFile file,
       @Nullable Module preludeModule,
       ImmutableMap<String, Module> loadedModules,
       RuleVisibility defaultVisibility,
@@ -883,7 +883,7 @@ public final class PackageFactory {
   public Package.Builder evaluateBuildFile(
       String workspaceName,
       PackageIdentifier packageId,
-      StarlarkFile file, // becomes resolved as a side effect
+      StarlarkFile file,
       RootedPath buildFilePath,
       Globber globber,
       RuleVisibility defaultVisibility,
@@ -953,7 +953,7 @@ public final class PackageFactory {
   private boolean buildPackage(
       Package.Builder pkgBuilder,
       PackageIdentifier packageId,
-      StarlarkFile file, // becomes resolved as a side effect
+      StarlarkFile file,
       StarlarkSemantics semantics,
       @Nullable Module preludeModule,
       ImmutableMap<String, Module> loadedModules,
@@ -987,13 +987,10 @@ public final class PackageFactory {
     }
     Module module = Module.withPredeclared(semantics, predeclaredWithPrelude);
 
-    // resolve & compile
-    // TODO(adonovan): this mutates the StarlarkFile, which may be shared in the fileSyntaxCache.
-    Program prog;
-    try {
-      prog = Program.compileFile(file, module);
-    } catch (SyntaxError.Exception ex) {
-      Event.replayEventsOn(pkgContext.eventHandler, ex.errors());
+    // Validate.
+    Resolver.resolveFile(file, module);
+    if (!file.ok()) {
+      Event.replayEventsOn(pkgContext.eventHandler, file.errors());
       return false;
     }
 
@@ -1051,7 +1048,7 @@ public final class PackageFactory {
 
       // Execute.
       try {
-        Starlark.execFileProgram(prog, module, thread);
+        EvalUtils.exec(file, module, thread);
       } catch (EvalException ex) {
         pkgContext.eventHandler.handle(Event.error(null, ex.getMessageWithStack()));
         return false;

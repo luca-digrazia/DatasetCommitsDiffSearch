@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -63,8 +64,10 @@ public class ASTFileLookupFunction implements SkyFunction {
     try {
       return computeInline(
           (ASTFileLookupValue.Key) skyKey.argument(), env, packageFactory, digestHashFunction);
-    } catch (ASTLookupFailedException e) {
-      throw new ASTLookupFunctionException(e);
+    } catch (ErrorReadingStarlarkExtensionException e) {
+      throw new ASTLookupFunctionException(e, e.getTransience());
+    } catch (InconsistentFilesystemException e) {
+      throw new ASTLookupFunctionException(e, Transience.PERSISTENT);
     }
   }
 
@@ -73,7 +76,8 @@ public class ASTFileLookupFunction implements SkyFunction {
       Environment env,
       PackageFactory packageFactory,
       DigestHashFunction digestHashFunction)
-      throws ASTLookupFailedException, InterruptedException {
+      throws ErrorReadingStarlarkExtensionException, InconsistentFilesystemException,
+          InterruptedException {
     byte[] bytes;
     byte[] digest;
     String inputName;
@@ -92,7 +96,7 @@ public class ASTFileLookupFunction implements SkyFunction {
       try {
         fileValue = (FileValue) env.getValueOrThrow(fileSkyKey, IOException.class);
       } catch (IOException e) {
-        throw new ASTLookupFailedException(e, Transience.PERSISTENT);
+        throw new ErrorReadingStarlarkExtensionException(e, Transience.PERSISTENT);
       }
       if (fileValue == null) {
         return null;
@@ -114,7 +118,7 @@ public class ASTFileLookupFunction implements SkyFunction {
                   ? FileSystemUtils.readContent(path)
                   : FileSystemUtils.readWithKnownFileSize(path, fileValue.getSize());
         } catch (IOException e) {
-          throw new ASTLookupFailedException(e, Transience.TRANSIENT);
+          throw new ErrorReadingStarlarkExtensionException(e, Transience.TRANSIENT);
         }
         digest = fileValue.getDigest(); // may be null
         inputName = path.toString();
@@ -145,14 +149,10 @@ public class ASTFileLookupFunction implements SkyFunction {
       predeclared = packageFactory.getBuiltinsBzlEnv();
     } else {
       // Use the predeclared environment for BUILD-loaded bzl files, ignoring injection. It is not
-      // the right env for the actual evaluation of BUILD-loaded bzl files because it doesn't
-      // map to the injected symbols. But the names of the symbols are the same, and the names are
+      // the right env for the actual evaluation of either BUILD-loaded bzl files or
+      // WORKSPACE-loaded bzl files. But the names of the symbols are the same, and the names are
       // all we need to do symbol resolution (modulo FlagGuardedValues -- see TODO in
       // PackageFactory.createBuildBzlEnvUsingInjection()).
-      //
-      // For WORKSPACE-loaded bzl files, the env isn't quite right not because of injection but
-      // because the "native" object is different. But A) that will be fixed with #11954, and B) we
-      // don't care for the same reason as above.
       predeclared = packageFactory.getUninjectedBuildBzlEnv();
     }
 
@@ -177,22 +177,14 @@ public class ASTFileLookupFunction implements SkyFunction {
     return null;
   }
 
-  static final class ASTLookupFailedException extends Exception {
-    private final Transience transience;
-
-    private ASTLookupFailedException(Exception cause, Transience transience) {
-      super(cause.getMessage(), cause);
-      this.transience = transience;
-    }
-
-    Transience getTransience() {
-      return transience;
-    }
-  }
-
   private static final class ASTLookupFunctionException extends SkyFunctionException {
-    private ASTLookupFunctionException(ASTLookupFailedException cause) {
-      super(cause, cause.transience);
+    private ASTLookupFunctionException(
+        ErrorReadingStarlarkExtensionException e, Transience transience) {
+      super(e, transience);
+    }
+
+    private ASTLookupFunctionException(InconsistentFilesystemException e, Transience transience) {
+      super(e, transience);
     }
   }
 }

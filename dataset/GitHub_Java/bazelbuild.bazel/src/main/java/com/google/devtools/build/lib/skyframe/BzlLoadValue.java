@@ -20,13 +20,13 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Objects;
-import net.starlark.java.eval.Module;
 
 /**
  * A value that represents the .bzl module loaded by a Starlark {@code load()} statement.
@@ -66,9 +66,9 @@ public class BzlLoadValue implements SkyValue {
     /**
      * Returns the label of the .bzl file to be loaded.
      *
-     * <p>For {@link KeyForBuiltins}, it must begin with {@code @_builtins//:}. (It is legal for
-     * other keys to use {@code @_builtins}, but since no real repo by that name may be defined,
-     * they won't evaluate to a successful result.)
+     * <p>For {@link KeyForBuiltins}, it usually begins with {@code @builtins//:}. Other values are
+     * possible but indicate a bug in the {@code @builtins} .bzl files and will fail during
+     * evaluation.
      */
     abstract Label getLabel();
 
@@ -88,10 +88,10 @@ public class BzlLoadValue implements SkyValue {
     abstract Key getKeyForLoad(Label loadLabel);
 
     /**
-     * Constructs an BzlCompileValue key suitable for retrieving the Starlark code for this .bzl,
+     * Constructs an ASTFileLookupValue key suitable for retrieving the Starlark code for this .bzl,
      * given the Root in which to find its file.
      */
-    abstract BzlCompileValue.Key getCompileKey(Root root);
+    abstract ASTFileLookupValue.Key getASTKey(Root root);
 
     @Override
     public SkyFunctionName functionName() {
@@ -138,11 +138,11 @@ public class BzlLoadValue implements SkyValue {
     }
 
     @Override
-    BzlCompileValue.Key getCompileKey(Root root) {
+    ASTFileLookupValue.Key getASTKey(Root root) {
       if (isBuildPrelude) {
-        return BzlCompileValue.keyForBuildPrelude(root, label);
+        return ASTFileLookupValue.keyForPrelude(root, label);
       } else {
-        return BzlCompileValue.key(root, label);
+        return ASTFileLookupValue.key(root, label);
       }
     }
 
@@ -214,8 +214,8 @@ public class BzlLoadValue implements SkyValue {
     }
 
     @Override
-    BzlCompileValue.Key getCompileKey(Root root) {
-      return BzlCompileValue.key(root, label);
+    ASTFileLookupValue.Key getASTKey(Root root) {
+      return ASTFileLookupValue.key(root, label);
     }
 
     @Override
@@ -244,12 +244,13 @@ public class BzlLoadValue implements SkyValue {
   }
 
   /**
-   * A key for loading a .bzl during {@code @_builtins} evaluation.
+   * A key for loading a .bzl during {@code @builtins} evaluation.
    *
    * <p>This kind of key is only requested by {@link StarlarkBuiltinsFunction} and its transitively
    * loaded {@link BzlLoadFunction} calls.
    *
-   * <p>The label begins with {@code @_builtins//:}, but there is no actual repo by that name.
+   * <p>The label begins with {@code @builtins//:}, but it is distinct from any .bzl in an external
+   * repository named {@code "@builtins"}.
    */
   @Immutable
   @AutoCodec.VisibleForSerialization
@@ -272,8 +273,8 @@ public class BzlLoadValue implements SkyValue {
     }
 
     @Override
-    BzlCompileValue.Key getCompileKey(Root root) {
-      return BzlCompileValue.keyForBuiltins(root, label);
+    ASTFileLookupValue.Key getASTKey(Root root) {
+      return ASTFileLookupValue.keyForBuiltins(root, label);
     }
 
     @Override
@@ -315,7 +316,7 @@ public class BzlLoadValue implements SkyValue {
     return keyInterner.intern(new KeyForWorkspace(label, workspaceChunk, workspacePath));
   }
 
-  /** Constructs a key for loading a .bzl file within the {@code @_builtins} pseudo-repository. */
+  /** Constructs a key for loading a .bzl file within the {@code @builtins} pseudo-repository. */
   static Key keyForBuiltins(Label label) {
     return keyInterner.intern(new KeyForBuiltins(label));
   }
