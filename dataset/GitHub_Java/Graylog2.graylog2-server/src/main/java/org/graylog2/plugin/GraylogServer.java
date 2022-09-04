@@ -21,8 +21,10 @@
 */
 package org.graylog2.plugin;
 
+import java.util.Map;
 import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.database.HostCounterCache;
+import org.graylog2.plugin.indexer.MessageGateway;
+import org.graylog2.plugin.streams.Stream;
 
 /**
  *
@@ -38,10 +40,10 @@ public interface GraylogServer extends Runnable {
     
     public String getServerId();
     
-    public RulesEngine getRulesEngine();
- 
-    public MessageCounterManager getMessageCounterManager();
+    public MessageGateway getMessageGateway();
     
-    public HostCounterCache getHostCounterCache();
+    public Map<String, Stream> getEnabledStreams();
+    
+    public MessageCounterManager getMessageCounterManager();
     
 }
