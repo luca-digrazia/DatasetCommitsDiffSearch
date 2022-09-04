@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.sandbox;
 
-import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -78,7 +78,7 @@ public class SymlinkedSandboxedSpawn implements SandboxedSpawn {
   public void createFileSystem() throws IOException {
     Set<Path> createdDirs = new HashSet<>();
     cleanFileSystem(inputs.keySet());
-    createDirectoryAndParentsWithCache(createdDirs, sandboxExecRoot);
+    FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, sandboxExecRoot);
     createParentDirectoriesForInputs(createdDirs, inputs.keySet());
     createInputs(inputs);
     createWritableDirectories(createdDirs, writableDirs);
@@ -126,7 +126,7 @@ public class SymlinkedSandboxedSpawn implements SandboxedSpawn {
       Path dir = sandboxExecRoot.getRelative(inputPath).getParentDirectory();
       Preconditions.checkArgument(
           dir.startsWith(sandboxExecRoot), "Bad relative path: '%s'", inputPath);
-      createDirectoryAndParentsWithCache(createdDirs, dir);
+      FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, dir);
     }
   }
 
@@ -156,7 +156,7 @@ public class SymlinkedSandboxedSpawn implements SandboxedSpawn {
       throws IOException {
     for (Path writablePath : writableDirs) {
       if (writablePath.startsWith(sandboxExecRoot)) {
-        createDirectoryAndParentsWithCache(createdDirs, writablePath);
+        FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, writablePath);
       }
     }
   }
@@ -165,7 +165,7 @@ public class SymlinkedSandboxedSpawn implements SandboxedSpawn {
   private void createDirectoriesForOutputs(Set<Path> createdDirs, Collection<PathFragment> outputs)
       throws IOException {
     for (PathFragment output : outputs) {
-      createDirectoryAndParentsWithCache(
+      FileSystemUtils.createDirectoryAndParentsWithCache(
           createdDirs, sandboxExecRoot.getRelative(output.getParentDirectory()));
     }
   }
@@ -206,13 +206,6 @@ public class SymlinkedSandboxedSpawn implements SandboxedSpawn {
       // but on other OS this might not always work. The SandboxModule will try to delete them
       // again when the build is all done, at which point it hopefully works, so let's just go
       // on here.
-    }
-  }
-
-  private static void createDirectoryAndParentsWithCache(Set<Path> cache, Path dir)
-      throws IOException {
-    if (cache.add(dir)) {
-      FileSystemUtils.createDirectoryAndParents(dir);
     }
   }
 }
