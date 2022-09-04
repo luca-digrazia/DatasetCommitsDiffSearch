@@ -15,9 +15,6 @@
  */
 package com.googlecode.androidannotations.processing;
 
-import static com.googlecode.androidannotations.helper.CanonicalNameConstants.BUNDLE;
-import static com.googlecode.androidannotations.helper.CanonicalNameConstants.CHAR_SEQUENCE;
-import static com.googlecode.androidannotations.helper.CanonicalNameConstants.STRING;
 import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr.ref;
 import static com.sun.codemodel.JMod.PRIVATE;
@@ -48,7 +45,7 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
 
-public class InstanceStateProcessor implements ElementProcessor {
+public class InstanceStateProcessor extends AnnotationHelper implements ElementProcessor {
 
 	private static final String BUNDLE_PARAM_NAME = "bundle";
 
@@ -56,7 +53,7 @@ public class InstanceStateProcessor implements ElementProcessor {
 
 	static {
 
-		methodSuffixNameByTypeName.put(BUNDLE, "Bundle");
+		methodSuffixNameByTypeName.put("android.os.Bundle", "Bundle");
 
 		methodSuffixNameByTypeName.put("boolean", "Boolean");
 		methodSuffixNameByTypeName.put("boolean[]", "BooleanArray");
@@ -67,7 +64,7 @@ public class InstanceStateProcessor implements ElementProcessor {
 		methodSuffixNameByTypeName.put("char", "Char");
 		methodSuffixNameByTypeName.put("char[]", "CharArray");
 
-		methodSuffixNameByTypeName.put(CHAR_SEQUENCE, "CharSequence");
+		methodSuffixNameByTypeName.put("java.lang.CharSequence", "CharSequence");
 
 		methodSuffixNameByTypeName.put("double", "Double");
 		methodSuffixNameByTypeName.put("double[]", "DoubleArray");
@@ -85,17 +82,15 @@ public class InstanceStateProcessor implements ElementProcessor {
 		methodSuffixNameByTypeName.put("short", "Short");
 		methodSuffixNameByTypeName.put("short[]", "ShortArray");
 
-		methodSuffixNameByTypeName.put(STRING, "String");
+		methodSuffixNameByTypeName.put("java.lang.String", "String");
 		methodSuffixNameByTypeName.put("java.lang.String[]", "StringArray");
 		methodSuffixNameByTypeName.put("java.util.ArrayList<java.lang.String>", "StringArrayList");
 	}
 
 	private final APTCodeModelHelper helper = new APTCodeModelHelper();
 
-	private AnnotationHelper annotationHelper;
-
 	public InstanceStateProcessor(ProcessingEnvironment processingEnv) {
-		annotationHelper = new AnnotationHelper(processingEnv);
+		super(processingEnv);
 	}
 
 	@Override
@@ -112,7 +107,7 @@ public class InstanceStateProcessor implements ElementProcessor {
 		JBlock restoreStateBody = getRestoreStateBody(codeModel, holder);
 
 		String typeString = element.asType().toString();
-		TypeElement elementType = annotationHelper.typeElementFromQualifiedName(typeString);
+		TypeElement elementType = typeElementFromQualifiedName(typeString);
 
 		String methodNameToSave;
 		String methodNameToRestore;
@@ -138,7 +133,7 @@ public class InstanceStateProcessor implements ElementProcessor {
 				typeString = arrayType.getComponentType().toString();
 			}
 
-			elementType = annotationHelper.typeElementFromQualifiedName(typeString);
+			elementType = typeElementFromQualifiedName(typeString);
 
 			if (isTypeParcelable(elementType)) {
 				methodNameToSave = "put" + "ParcelableArray";
@@ -160,7 +155,7 @@ public class InstanceStateProcessor implements ElementProcessor {
 			if (elementAsType instanceof DeclaredType) {
 				DeclaredType declaredType = (DeclaredType) elementAsType;
 				typeString = declaredType.asElement().toString();
-				elementType = annotationHelper.typeElementFromQualifiedName(typeString);
+				elementType = typeElementFromQualifiedName(typeString);
 				hasTypeArguments = declaredType.getTypeArguments().size() > 0;
 			}
 
@@ -205,7 +200,8 @@ public class InstanceStateProcessor implements ElementProcessor {
 
 			holder.restoreSavedInstanceStateMethod = holder.eBean.method(PRIVATE, codeModel.VOID, "restoreSavedInstanceState_");
 
-			JVar savedInstanceState = holder.restoreSavedInstanceStateMethod.param(holder.classes().BUNDLE, "savedInstanceState");
+			JClass bundleClass = holder.refClass("android.os.Bundle");
+			JVar savedInstanceState = holder.restoreSavedInstanceStateMethod.param(bundleClass, "savedInstanceState");
 
 			holder.initIfActivityBody.invoke(holder.restoreSavedInstanceStateMethod).arg(savedInstanceState);
 
@@ -223,7 +219,8 @@ public class InstanceStateProcessor implements ElementProcessor {
 		if (holder.saveInstanceStateBlock == null) {
 			JMethod method = holder.eBean.method(PUBLIC, codeModel.VOID, "onSaveInstanceState");
 			method.annotate(Override.class);
-			method.param(holder.classes().BUNDLE, BUNDLE_PARAM_NAME);
+			JClass bundleClass = holder.refClass("android.os.Bundle");
+			method.param(bundleClass, BUNDLE_PARAM_NAME);
 
 			holder.saveInstanceStateBlock = method.body();
 
@@ -235,9 +232,9 @@ public class InstanceStateProcessor implements ElementProcessor {
 
 	private boolean isTypeParcelable(TypeElement elementType) {
 
-		TypeElement parcelableType = annotationHelper.typeElementFromQualifiedName("android.os.Parcelable");
+		TypeElement parcelableType = typeElementFromQualifiedName("android.os.Parcelable");
 
-		return elementType != null && annotationHelper.isSubtype(elementType, parcelableType);
+		return elementType != null && isSubtype(elementType, parcelableType);
 	}
 
 }
