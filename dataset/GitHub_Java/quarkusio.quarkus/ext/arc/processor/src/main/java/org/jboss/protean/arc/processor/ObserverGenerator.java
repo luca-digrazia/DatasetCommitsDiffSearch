@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -16,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 import javax.enterprise.inject.spi.EventContext;
 import javax.enterprise.inject.spi.ObserverMethod;
@@ -24,6 +41,7 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.logging.Logger;
+import org.jboss.logging.Logger.Level;
 import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.CurrentInjectionPointProvider;
 import org.jboss.protean.arc.InjectableBean;
@@ -51,13 +69,25 @@ public class ObserverGenerator extends AbstractGenerator {
 
     private static final AtomicInteger OBSERVER_INDEX = new AtomicInteger();
 
+    private final AnnotationLiteralProcessor annotationLiterals;
+
+    private final Predicate<DotName> applicationClassPredicate;
+    /**
+     *
+     * @param annotationLiterals
+     * @param applicationClassPredicate
+     */
+    public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate) {
+        this.annotationLiterals = annotationLiterals;
+        this.applicationClassPredicate = applicationClassPredicate;
+    }
+
     /**
      *
      * @param observer
-     * @param annotationLiterals
      * @return a collection of resources
      */
-    Collection<Resource> generate(ObserverInfo observer, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generate(ObserverInfo observer, ReflectionRegistration reflectionRegistration) {
 
         ClassInfo declaringClass = observer.getObserverMethod().declaringClass();
         String declaringClassBase;
@@ -68,9 +98,10 @@ public class ObserverGenerator extends AbstractGenerator {
         }
 
         String baseName = declaringClassBase + OBSERVER_SUFFIX + OBSERVER_INDEX.incrementAndGet();
-        String generatedName = DotNames.packageName(declaringClass.name()).replace(".", "/") + "/" + baseName;
+        String generatedName = DotNames.packageName(declaringClass.name()).replace('.', '/') + "/" + baseName;
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.OBSERVER : null);
+        boolean isApplicationClass = applicationClassPredicate.test(observer.getObserverMethod().declaringClass().name());
+        ResourceClassOutput classOutput = new ResourceClassOutput(isApplicationClass, name -> name.equals(generatedName) ? SpecialType.OBSERVER : null);
 
         // Foo_Observer1 implements ObserverMethod<T>
         ClassCreator observerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableObserverMethod.class)
@@ -87,16 +118,19 @@ public class ObserverGenerator extends AbstractGenerator {
         initMaps(observer, injectionPointToProviderField);
 
         createProviderFields(observerCreator, observer, injectionPointToProviderField);
-
         createConstructor(classOutput, observerCreator, observer, baseName, injectionPointToProviderField, annotationLiterals);
-        createGetObservedType(observerCreator, observedType.getFieldDescriptor());
+
+        implementGetObservedType(observerCreator, observedType.getFieldDescriptor());
         if (observedQualifiers != null) {
-            createGetObservedQualifiers(observerCreator, observedQualifiers.getFieldDescriptor());
+            implementGetObservedQualifiers(observerCreator, observedQualifiers.getFieldDescriptor());
         }
-        createGetBeanClass(observerCreator, observer.getDeclaringBean().getTarget().asClass().name());
-        createNotify(observer, observerCreator, injectionPointToProviderField, reflectionRegistration);
+        implementGetBeanClass(observerCreator, observer.getDeclaringBean().getTarget().get().asClass().name());
+        implementNotify(observer, observerCreator, injectionPointToProviderField, reflectionRegistration, isApplicationClass);
         if (observer.getPriority() != ObserverMethod.DEFAULT_PRIORITY) {
-            createGetPriority(observerCreator, observer);
+            implementGetPriority(observerCreator, observer);
+        }
+        if (observer.isAsync()) {
+            implementIsAsync(observerCreator);
         }
 
         observerCreator.close();
@@ -106,33 +140,38 @@ public class ObserverGenerator extends AbstractGenerator {
     protected void initMaps(ObserverInfo observer, Map<InjectionPointInfo, String> injectionPointToProvider) {
         int providerIdx = 1;
         for (InjectionPointInfo injectionPoint : observer.getInjection().injectionPoints) {
-            String name = providerName(DotNames.simpleName(injectionPoint.requiredType.name())) + "Provider" + providerIdx++;
+            String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
             injectionPointToProvider.put(injectionPoint, name);
         }
     }
 
-    protected void createGetObservedType(ClassCreator observerCreator, FieldDescriptor observedTypeField) {
+    protected void implementGetObservedType(ClassCreator observerCreator, FieldDescriptor observedTypeField) {
         MethodCreator getObservedType = observerCreator.getMethodCreator("getObservedType", Type.class).setModifiers(ACC_PUBLIC);
         getObservedType.returnValue(getObservedType.readInstanceField(observedTypeField, getObservedType.getThis()));
     }
 
-    protected void createGetObservedQualifiers(ClassCreator observerCreator, FieldDescriptor observedQualifiersField) {
+    protected void implementGetObservedQualifiers(ClassCreator observerCreator, FieldDescriptor observedQualifiersField) {
         MethodCreator getObservedQualifiers = observerCreator.getMethodCreator("getObservedQualifiers", Set.class).setModifiers(ACC_PUBLIC);
         getObservedQualifiers.returnValue(getObservedQualifiers.readInstanceField(observedQualifiersField, getObservedQualifiers.getThis()));
     }
 
-    protected void createGetBeanClass(ClassCreator observerCreator, DotName beanClass) {
+    protected void implementGetBeanClass(ClassCreator observerCreator, DotName beanClass) {
         MethodCreator getBeanClass = observerCreator.getMethodCreator("getBeanClass", Class.class).setModifiers(ACC_PUBLIC);
         getBeanClass.returnValue(getBeanClass.loadClass(beanClass.toString()));
     }
 
-    protected void createGetPriority(ClassCreator observerCreator, ObserverInfo observer) {
+    protected void implementGetPriority(ClassCreator observerCreator, ObserverInfo observer) {
         MethodCreator getPriority = observerCreator.getMethodCreator("getPriority", int.class).setModifiers(ACC_PUBLIC);
         getPriority.returnValue(getPriority.load(observer.getPriority()));
     }
 
-    protected void createNotify(ObserverInfo observer, ClassCreator observerCreator, Map<InjectionPointInfo, String> injectionPointToProviderField,
-            ReflectionRegistration reflectionRegistration) {
+    protected void implementIsAsync(ClassCreator observerCreator) {
+        MethodCreator isAsync = observerCreator.getMethodCreator("isAsync", boolean.class).setModifiers(ACC_PUBLIC);
+        isAsync.returnValue(isAsync.load(true));
+    }
+
+    protected void implementNotify(ObserverInfo observer, ClassCreator observerCreator, Map<InjectionPointInfo, String> injectionPointToProviderField,
+            ReflectionRegistration reflectionRegistration, boolean isApplicationClass) {
         MethodCreator notify = observerCreator.getMethodCreator("notify", void.class, EventContext.class).setModifiers(ACC_PUBLIC);
 
         ResultHandle declaringProviderHandle = notify
@@ -165,13 +204,14 @@ public class ObserverGenerator extends AbstractGenerator {
         }
 
         if (Modifier.isPrivate(observer.getObserverMethod().flags())) {
-            LOGGER.infof("Observer %s#%s is private - Arc users are encouraged to avoid using private observers",
-                    observer.getObserverMethod().declaringClass().name(), observer.getObserverMethod().name());
+            Level level = isApplicationClass ? Level.INFO : Level.DEBUG;
+            LOGGER.logf(level, "Observer %s#%s is private - users are encouraged to avoid using private observers", observer.getObserverMethod().declaringClass().name(),
+                    observer.getObserverMethod().name());
             ResultHandle paramTypesArray = notify.newArray(Class.class, notify.load(referenceHandles.length));
             ResultHandle argsArray = notify.newArray(Object.class, notify.load(referenceHandles.length));
             for (int i = 0; i < referenceHandles.length; i++) {
-                notify.writeArrayValue(paramTypesArray, notify.load(i), notify.loadClass(observer.getObserverMethod().parameters().get(i).name().toString()));
-                notify.writeArrayValue(argsArray, notify.load(i), referenceHandles[i]);
+                notify.writeArrayValue(paramTypesArray, i, notify.loadClass(observer.getObserverMethod().parameters().get(i).name().toString()));
+                notify.writeArrayValue(argsArray, i, referenceHandles[i]);
             }
             reflectionRegistration.registerMethod(observer.getObserverMethod());
             notify.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
@@ -232,11 +272,11 @@ public class ObserverGenerator extends AbstractGenerator {
                         injectionPointToProviderField.get(injectionPoint), annotationLiterals);
             } else {
                 if (injectionPoint.getResolvedBean().getAllInjectionPoints().stream()
-                        .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.requiredType.name()))) {
+                        .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.getRequiredType().name()))) {
                     // IMPL NOTE: Injection point resolves to a dependent bean that injects InjectionPoint metadata and so we need to wrap the injectable
                     // reference provider
                     ResultHandle requiredQualifiersHandle = constructor.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
-                    for (AnnotationInstance qualifierAnnotation : injectionPoint.requiredQualifiers) {
+                    for (AnnotationInstance qualifierAnnotation : injectionPoint.getRequiredQualifiers()) {
                         BuiltinQualifier qualifier = BuiltinQualifier.of(qualifierAnnotation);
                         if (qualifier != null) {
                             constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle, qualifier.getLiteralInstance(constructor));
@@ -252,7 +292,7 @@ public class ObserverGenerator extends AbstractGenerator {
                     ResultHandle wrapHandle = constructor.newInstance(
                             MethodDescriptor.ofConstructor(CurrentInjectionPointProvider.class, InjectableReferenceProvider.class, java.lang.reflect.Type.class,
                                     Set.class),
-                            constructor.getMethodParam(paramIdx++), Types.getTypeHandle(constructor, injectionPoint.requiredType), requiredQualifiersHandle);
+                            constructor.getMethodParam(paramIdx++), Types.getTypeHandle(constructor, injectionPoint.getRequiredType()), requiredQualifiersHandle);
                     constructor.writeInstanceField(FieldDescriptor.of(observerCreator.getClassName(), injectionPointToProviderField.get(injectionPoint),
                             InjectableReferenceProvider.class.getName()), constructor.getThis(), wrapHandle);
                 } else {

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.shamrock.example.datasource;
 
 import java.sql.Connection;
@@ -12,21 +28,22 @@ import javax.transaction.Transactional;
 import javax.transaction.UserTransaction;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
 
 @Path("/datasource")
 public class DatasourceResource {
 
     @Inject
-    private DataSource dataSource;
+    DataSource dataSource;
 
     @Inject
-    private UserTransaction userTransaction;
+    UserTransaction userTransaction;
 
     @Inject
-    private DatasourceSetup datasourceSetup;
+    DatasourceSetup datasourceSetup;
 
     @PostConstruct
-    public void postConstruct() throws Exception {
+    void postConstruct() throws Exception {
         datasourceSetup.doInit();
     }
 
@@ -105,7 +122,7 @@ public class DatasourceResource {
     @GET
     @Path("/txninterceptor2")
     @Transactional(value = Transactional.TxType.REQUIRED)
-    public String transactionInterceptorTest2() throws Exception {
+    public String transactionInterceptorTest2(@QueryParam("val") long val) throws Exception {
         try (Connection con = dataSource.getConnection()) {
             try (Statement statement = con.createStatement()) {
                 try (ResultSet rs = statement.executeQuery("select b from tx where b=787")) {

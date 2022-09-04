@@ -60,6 +60,7 @@ public class JPATestBootstrapEndpoint extends HttpServlet {
         resp.getWriter().write("OK");
     }
 
+
     public void testStoreLoadOnJPA() throws Exception {
         doStuffWithHibernate( entityManagerFactory );
         System.out.println( "Hibernate EntityManagerFactory: shut down" );
@@ -112,6 +113,10 @@ public class JPATestBootstrapEndpoint extends HttpServlet {
 
     private static String randomName() {
         return UUID.randomUUID().toString();
+    }
+
+    private void reportException(final Exception e, final HttpServletResponse resp) throws IOException {
+        reportException(null, e, resp);
     }
 
     private void reportException(String errorMessage, final Exception e, final HttpServletResponse resp) throws IOException {
