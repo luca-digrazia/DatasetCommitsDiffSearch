@@ -243,7 +243,9 @@ public class BuildMojo extends AbstractMojo {
                                     runner.putNextEntry(new ZipEntry(p));
                                 }
                             } else if (pathName.startsWith("META-INF/services/") && pathName.length() > 18) {
-                                services.computeIfAbsent(pathName, (u) -> new ArrayList<>()).add(CopyUtils.readFileContent(path));
+                                try (FileInputStream in = new FileInputStream(path.toFile())) {
+                                    services.computeIfAbsent(pathName, (u) -> new ArrayList<>()).add(read(in));
+                                }
                             } else {
                                 seen.add(pathName);
                                 runner.putNextEntry(new ZipEntry(pathName));
@@ -275,7 +277,7 @@ public class BuildMojo extends AbstractMojo {
                         @Override
                         public void accept(Path path) {
                             try {
-                                final String pathName = appJar.relativize(path).toString();
+                                String pathName = appJar.relativize(path).toString();
                                 if (Files.isDirectory(path)) {
 //                                if (!pathName.isEmpty()) {
 //                                    out.putNextEntry(new ZipEntry(pathName + "/"));
@@ -295,11 +297,19 @@ public class BuildMojo extends AbstractMojo {
                                             doCopy(runner, in);
                                         }
                                     } else {
+                                        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+                                        try (InputStream in = new FileInputStream(path.toFile())) {
+                                            int r;
+                                            byte[] bytes = new byte[2048];
+                                            while ((r = in.read(bytes)) > 0) {
+                                                out.write(bytes, 0, r);
+                                            }
+                                        }
                                         transformed.add(executorPool.submit(new Callable<FutureEntry>() {
                                             @Override
                                             public FutureEntry call() throws Exception {
-                                                final byte[] fileContent = CopyUtils.readFileContent(path);
-                                                ClassReader cr = new ClassReader(fileContent);
+                                                ClassReader cr = new ClassReader(new ByteArrayInputStream(out.toByteArray()));
                                                 ClassWriter writer = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
                                                 ClassVisitor visitor = writer;
                                                 for (Function<ClassVisitor, ClassVisitor> i : visitors) {
