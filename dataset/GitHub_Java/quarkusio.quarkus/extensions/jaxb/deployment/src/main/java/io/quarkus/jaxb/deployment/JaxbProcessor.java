@@ -7,10 +7,10 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import javax.inject.Inject;
-import javax.xml.bind.JAXBContext;
 import javax.xml.bind.annotation.XmlAccessOrder;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAnyAttribute;
@@ -53,7 +53,6 @@ import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
-import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBundleBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
@@ -113,7 +112,6 @@ class JaxbProcessor {
 
     @BuildStep
     void process(BuildProducer<SubstrateSystemPropertyBuildItem> substrateProps,
-            BuildProducer<ServiceProviderBuildItem> providerItem,
             CombinedIndexBuildItem combinedIndexBuildItem,
             List<JaxbFileRootBuildItem> fileRoots,
             List<JaxbEnabledBuildItem> enabled) {
@@ -157,8 +155,6 @@ class JaxbProcessor {
                     .filter(p -> p.getFileName().toString().equals("jaxb.index"))
                     .forEach(this::handleJaxbFile);
         }
-
-        providerItem.produce(new ServiceProviderBuildItem(JAXBContext.class.getName(), "com.sun.xml.bind.v2.ContextFactory"));
     }
 
     private void handleJaxbFile(Path p) {
