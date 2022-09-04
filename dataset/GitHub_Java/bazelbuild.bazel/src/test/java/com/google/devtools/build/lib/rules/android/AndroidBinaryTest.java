@@ -4617,6 +4617,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         resourceProcessingArgs.get(resourceProcessingArgs.indexOf("--directData") + 1);
     assertThat(directData).contains("symbols.zip");
     assertThat(directData).doesNotContain("merged.bin");
+    assertThat(resourceProcessingArgs).contains("--useCompiledResourcesForMerge");
 
     List<String> resourceMergingArgs =
         getGeneratingSpawnActionArgs(getValidatedResources(b).getJavaClassJar());

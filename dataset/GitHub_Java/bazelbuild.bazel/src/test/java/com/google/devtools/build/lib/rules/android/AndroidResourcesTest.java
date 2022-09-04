@@ -487,6 +487,8 @@ public class AndroidResourcesTest extends ResourceTestBase {
                 ResourceFilterFactory.empty(),
                 ImmutableList.of(),
                 false,
+                null,
+                null,
                 DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()))
             .generateRClass(dataContext, AndroidAaptVersion.AUTO);
 
