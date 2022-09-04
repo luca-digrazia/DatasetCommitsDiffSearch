@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.security.entities;
 
@@ -22,12 +22,10 @@ import org.graylog.grn.GRN;
 import org.graylog.grn.GRNDescriptorService;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNType;
-import org.graylog.grn.GRNTypes;
 import org.graylog.security.DBGrantService;
 import org.graylog2.contentpacks.ContentPackService;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelType;
-import org.graylog2.contentpacks.model.ModelTypes;
 import org.graylog2.contentpacks.model.entities.EntityExcerpt;
 
 import javax.annotation.Nullable;
@@ -44,11 +42,6 @@ public class EntityDependencyResolver {
     private final GRNRegistry grnRegistry;
     private final GRNDescriptorService descriptorService;
     private final DBGrantService grantService;
-    // Some dependencies can be ignored.
-    // E.g. To view a stream with a custom output, a user does not need output permissions
-    private static final Map<GRNType, Set<ModelType>> IGNORED_DEPENDENCIES = ImmutableMap.<GRNType, Set<ModelType>>builder()
-            .put(GRNTypes.STREAM, ImmutableSet.of(ModelTypes.OUTPUT_V1))
-            .build();
 
     @Inject
     public EntityDependencyResolver(ContentPackService contentPackService,
@@ -74,12 +67,6 @@ public class EntityDependencyResolver {
                 .build()));
 
         final ImmutableSet<GRN> dependencies = descriptors.stream()
-                .filter(dep -> {
-                    // Filter dependencies that aren't needed for grants sharing
-                    // TODO This is another reason why we shouldn't be using the content pack resolver ¯\_(ツ)_/¯
-                    final Set<ModelType> ignoredDeps = IGNORED_DEPENDENCIES.getOrDefault(entity.grnType(), ImmutableSet.of());
-                    return !ignoredDeps.contains(dep.type());
-                })
                 .map(descriptor -> grnRegistry.newGRN(descriptor.type().name(), descriptor.id().id()))
                 .filter(dependency -> !entity.equals(dependency)) // Don't include the given entity in dependencies
                 .collect(ImmutableSet.toImmutableSet());
@@ -87,17 +74,11 @@ public class EntityDependencyResolver {
         final Map<GRN, Set<GRN>> targetOwners = grantService.getOwnersForTargets(dependencies);
 
         return dependencies.stream()
-                .map(dependency -> {
-                    String title = entityExcerpts.get(dependency);
-                    if (title == null) {
-                        title = "unknown dependency: <" + dependency + ">";
-                    }
-                    return EntityDescriptor.create(
-                            dependency,
-                            title,
-                            getOwners(targetOwners.get(dependency))
-                    );
-                })
+                .map(dependency -> EntityDescriptor.create(
+                        dependency,
+                        entityExcerpts.get(dependency),
+                        getOwners(targetOwners.get(dependency))
+                ))
                 .collect(ImmutableSet.toImmutableSet());
     }
 
