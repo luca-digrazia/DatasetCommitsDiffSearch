@@ -27,17 +27,16 @@ import com.google.devtools.build.lib.packages.BazelLibrary;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
+import com.google.devtools.build.lib.syntax.BuildFileAST;
+import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Environment.FailFastException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkThread.FailFastException;
 import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestMode;
@@ -53,81 +52,91 @@ public class EvaluationTestCase {
   private EventCollectionApparatus eventCollectionApparatus =
       new EventCollectionApparatus(EventKind.ALL_EVENTS);
   private TestMode testMode = TestMode.SKYLARK;
-  protected StarlarkThread thread;
+  protected Environment env;
   protected Mutability mutability = Mutability.create("test");
 
   @Before
   public final void initialize() throws Exception {
-    thread = newStarlarkThread();
+    env = newEnvironment();
   }
 
   /**
-   * Creates a standard StarlarkThread for tests in the BUILD language. No PythonPreprocessing,
-   * mostly empty mutable StarlarkThread.
+   * Creates a standard Environment for tests in the BUILD language.
+   * No PythonPreprocessing, mostly empty mutable Environment.
    */
-  public StarlarkThread newBuildStarlarkThread() {
-    StarlarkThread thread =
-        StarlarkThread.builder(mutability)
-            .useDefaultSemantics()
-            .setGlobals(BazelLibrary.GLOBALS)
-            .setEventHandler(getEventHandler())
-            .build();
-
-    SkylarkUtils.setPhase(thread, Phase.LOADING);
-
-    new BazelStarlarkContext(
+  public Environment newBuildEnvironment() {
+    BazelStarlarkContext context =
+        new BazelStarlarkContext(
             TestConstants.TOOLS_REPOSITORY,
             /* fragmentNameToClass= */ null,
             /* repoMapping= */ ImmutableMap.of(),
             new SymbolGenerator<>(new Object()),
-            /* analysisRuleLabel= */ null)
-        .storeInThread(thread);
-
-    return thread;
+            /* analysisRuleLabel= */ null);
+    Environment env =
+        Environment.builder(mutability)
+            .useDefaultSemantics()
+            .setGlobals(BazelLibrary.GLOBALS)
+            .setEventHandler(getEventHandler())
+            .setStarlarkContext(context)
+            .build();
+    SkylarkUtils.setPhase(env, Phase.LOADING);
+    return env;
   }
 
   /**
-   * Creates a new StarlarkThread suitable for the test case. Subclasses may override it to fit
-   * their purpose and e.g. call newBuildStarlarkThread or newStarlarkThread; or they may play with
-   * the testMode to run tests in either or both kinds of StarlarkThread. Note that all
-   * StarlarkThread-s may share the same Mutability, so don't close it.
-   *
-   * @return a fresh StarlarkThread.
+   * Creates an Environment for Skylark with a mostly empty initial environment.
+   * For internal initialization or tests.
    */
-  public StarlarkThread newStarlarkThread() throws Exception {
-    return newStarlarkThreadWithSkylarkOptions();
+  public Environment newSkylarkEnvironment() {
+    return Environment.builder(mutability)
+        .useDefaultSemantics()
+        .setGlobals(BazelLibrary.GLOBALS)
+        .setEventHandler(getEventHandler())
+        .build();
   }
 
-  protected StarlarkThread newStarlarkThreadWithSkylarkOptions(String... skylarkOptions)
+  /**
+   * Creates a new Environment suitable for the test case. Subclasses may override it to fit their
+   * purpose and e.g. call newBuildEnvironment or newSkylarkEnvironment; or they may play with the
+   * testMode to run tests in either or both kinds of Environment. Note that all Environment-s may
+   * share the same Mutability, so don't close it.
+   *
+   * @return a fresh Environment.
+   */
+  public Environment newEnvironment() throws Exception {
+    return newEnvironmentWithSkylarkOptions();
+  }
+
+  protected Environment newEnvironmentWithSkylarkOptions(String... skylarkOptions)
       throws Exception {
-    return newStarlarkThreadWithBuiltinsAndSkylarkOptions(ImmutableMap.of(), skylarkOptions);
+    return newEnvironmentWithBuiltinsAndSkylarkOptions(ImmutableMap.of(), skylarkOptions);
   }
 
-  protected StarlarkThread newStarlarkThreadWithBuiltinsAndSkylarkOptions(
-      Map<String, Object> builtins, String... skylarkOptions) throws Exception {
+  protected Environment newEnvironmentWithBuiltinsAndSkylarkOptions(Map<String, Object> builtins,
+      String... skylarkOptions) throws Exception {
     if (testMode == null) {
       throw new IllegalArgumentException(
           "TestMode is null. Please set a Testmode via setMode() or set the "
-              + "StarlarkThread manually by overriding newStarlarkThread()");
+              + "Environment manually by overriding newEnvironment()");
     }
-    return testMode.createStarlarkThread(getEventHandler(), builtins, skylarkOptions);
+    return testMode.createEnvironment(getEventHandler(), builtins, skylarkOptions);
   }
 
   /**
-   * Sets the specified {@code TestMode} and tries to create the appropriate {@code StarlarkThread}
+   * Sets the specified {@code TestMode} and tries to create the appropriate {@code Environment}
    *
    * @param testMode
    * @throws Exception
    */
   protected void setMode(TestMode testMode, String... skylarkOptions) throws Exception {
     this.testMode = testMode;
-    thread = newStarlarkThreadWithSkylarkOptions(skylarkOptions);
+    env = newEnvironmentWithSkylarkOptions(skylarkOptions);
   }
 
   protected void setMode(TestMode testMode, Map<String, Object> builtins,
       String... skylarkOptions) throws Exception {
     this.testMode = testMode;
-    thread = newStarlarkThreadWithBuiltinsAndSkylarkOptions(builtins, skylarkOptions);
+    env = newEnvironmentWithBuiltinsAndSkylarkOptions(builtins, skylarkOptions);
   }
 
   protected void enableSkylarkMode(Map<String, Object> builtins,
@@ -147,23 +156,18 @@ public class EvaluationTestCase {
     return eventCollectionApparatus.reporter();
   }
 
-  public StarlarkThread getStarlarkThread() {
-    return thread;
+  public Environment getEnvironment() {
+    return env;
   }
 
-  protected final StarlarkFile parseStarlarkFileWithoutValidation(String... lines) {
+  protected final BuildFileAST parseBuildFileASTWithoutValidation(String... lines) {
     ParserInput input = ParserInput.fromLines(lines);
-    StarlarkFile file = StarlarkFile.parse(input);
-    Event.replayEventsOn(getEventHandler(), file.errors());
-    return file;
+    return BuildFileAST.parse(input, getEventHandler());
   }
 
-  private StarlarkFile parseStarlarkFile(String... lines) {
-    ParserInput input = ParserInput.fromLines(lines);
-    StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(file, thread, /*isBuildFile=*/ false);
-    Event.replayEventsOn(getEventHandler(), file.errors());
-    return file;
+  private BuildFileAST parseBuildFileAST(String... lines) {
+    BuildFileAST ast = parseBuildFileASTWithoutValidation(lines);
+    return ast.validate(env, /*isBuildFile=*/ false, getEventHandler());
   }
 
   /** Parses and validates a file and returns its statements. */
@@ -171,56 +175,48 @@ public class EvaluationTestCase {
   // Separate all the tests clearly into tests of the scanner, parser, resolver,
   // and evaluation.
   protected List<Statement> parseFile(String... lines) {
-    return parseStarlarkFile(lines).getStatements();
+    return parseBuildFileAST(lines).getStatements();
   }
 
   /** Parses a statement, without validation. */
   protected final Statement parseStatement(String... lines) {
-    return parseStarlarkFileWithoutValidation(lines).getStatements().get(0);
+    return parseBuildFileASTWithoutValidation(lines).getStatements().get(0);
   }
 
   /** Parses an expression. */
-  protected final Expression parseExpression(String... lines) throws SyntaxError {
-    return Expression.parse(ParserInput.fromLines(lines));
+  protected final Expression parseExpression(String... lines) {
+    return Expression.parse(ParserInput.fromLines(lines), getEventHandler());
   }
 
   public EvaluationTestCase update(String varname, Object value) throws Exception {
-    thread.update(varname, value);
+    env.update(varname, value);
     return this;
   }
 
   public Object lookup(String varname) throws Exception {
-    return thread.moduleLookup(varname);
+    return env.moduleLookup(varname);
   }
 
-  // TODO(adonovan): this function does far too much:
-  // - two modes, BUILD vs Skylark
-  // - parse + validate + BUILD dialect checks + execute.
-  // Break the tests down into tests of just the scanner, parser, validator, build dialect checks,
-  // or execution, and assert that all passes except the one of interest succeed.
-  // All BUILD-dialect stuff belongs in bazel proper (lib.packages), not here.
   public Object eval(String... lines) throws Exception {
     ParserInput input = ParserInput.fromLines(lines);
-    StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(file, thread, testMode == TestMode.BUILD);
-    if (testMode == TestMode.SKYLARK) { // .bzl and other dialects
-      if (!file.ok()) {
-        throw new SyntaxError(file.errors());
-      }
+    if (testMode == TestMode.SKYLARK) {
+      // TODO(adonovan): inline this call and factor with 'else' case.
+      return BuildFileAST.eval(input, env);
     } else {
-      // For BUILD mode, validation events are reported but don't (yet)
-      // prevent execution. We also apply BUILD dialect syntax checks.
-      Event.replayEventsOn(getEventHandler(), file.errors());
-      PackageFactory.checkBuildSyntax(file, getEventHandler());
+      BuildFileAST file = BuildFileAST.parse(input, env.getEventHandler());
+      if (ValidationEnvironment.validateFile(
+          file, env, /*isBuildFile=*/ true, env.getEventHandler())) {
+        PackageFactory.checkBuildSyntax(file, env.getEventHandler());
+      }
+      return file.eval(env);
     }
-    return file.eval(thread);
   }
 
   public void checkEvalError(String msg, String... input) throws Exception {
     try {
       eval(input);
       fail("Expected error '" + msg + "' but got no error");
-    } catch (SyntaxError | EvalException | FailFastException e) {
+    } catch (EvalException | FailFastException e) {
       assertThat(e).hasMessageThat().isEqualTo(msg);
     }
   }
@@ -229,7 +225,7 @@ public class EvaluationTestCase {
     try {
       eval(input);
       fail("Expected error containing '" + msg + "' but got no error");
-    } catch (SyntaxError | EvalException | FailFastException e) {
+    } catch (EvalException | FailFastException e) {
       assertThat(e).hasMessageThat().contains(msg);
     }
   }
@@ -237,7 +233,7 @@ public class EvaluationTestCase {
   public void checkEvalErrorDoesNotContain(String msg, String... input) throws Exception {
     try {
       eval(input);
-    } catch (SyntaxError | EvalException | FailFastException e) {
+    } catch (EvalException | FailFastException e) {
       assertThat(e).hasMessageThat().doesNotContain(msg);
     }
   }

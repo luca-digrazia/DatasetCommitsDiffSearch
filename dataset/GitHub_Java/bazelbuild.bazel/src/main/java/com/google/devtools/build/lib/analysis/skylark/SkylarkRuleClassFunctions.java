@@ -358,7 +358,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
             hostFragments.getContents(String.class, "host_fragments"));
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
-        (Label) funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
+        funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
 
     ImmutableMap<RepositoryName, RepositoryName> repoMapping = ImmutableMap.of();
     if (context instanceof BazelStarlarkContext) {
@@ -859,7 +859,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     } else {
       // This is the label of the BUILD/.bzl file on the top of the current call stack.
       // (Function enter/exit changes getGlobals.)
-      parentLabel = (Label) env.getGlobals().getLabel();
+      parentLabel = env.getGlobals().getLabel();
     }
 
     try {

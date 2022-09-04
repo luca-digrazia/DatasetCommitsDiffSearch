@@ -881,34 +881,53 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     return mapBuilder.build();
   }
 
+  private Environment createSkylarkRuleClassEnvironment(
+      Mutability mutability,
+      GlobalFrame globals,
+      StarlarkSemantics starlarkSemantics,
+      EventHandler eventHandler,
+      String astFileContentHashCode,
+      Map<String, Extension> importMap,
+      ImmutableMap<RepositoryName, RepositoryName> repoMapping,
+      Label callerLabel) {
+    BazelStarlarkContext context =
+        new BazelStarlarkContext(
+            toolsRepository,
+            configurationFragmentMap,
+            repoMapping,
+            new SymbolGenerator<>(callerLabel),
+            /* analysisRuleLabel= */ null);
+    Environment env =
+        Environment.builder(mutability)
+            .setGlobals(globals)
+            .setSemantics(starlarkSemantics)
+            .setEventHandler(eventHandler)
+            .setFileContentHashCode(astFileContentHashCode)
+            .setStarlarkContext(context)
+            .setImportedExtensions(importMap)
+            .build();
+    SkylarkUtils.setPhase(env, Phase.LOADING);
+    return env;
+  }
+
   @Override
   public Environment createSkylarkRuleClassEnvironment(
-      Label fileLabel,
+      Label extensionLabel,
       Mutability mutability,
       StarlarkSemantics starlarkSemantics,
       EventHandler eventHandler,
       String astFileContentHashCode,
       Map<String, Extension> importMap,
       ImmutableMap<RepositoryName, RepositoryName> repoMapping) {
-    Environment env =
-        Environment.builder(mutability)
-            .setGlobals(globals.withLabel(fileLabel))
-            .setSemantics(starlarkSemantics)
-            .setEventHandler(eventHandler)
-            .setFileContentHashCode(astFileContentHashCode)
-            .setImportedExtensions(importMap)
-            .build();
-
-    new BazelStarlarkContext(
-            toolsRepository,
-            configurationFragmentMap,
-            repoMapping,
-            new SymbolGenerator<>(fileLabel),
-            /* analysisRuleLabel= */ null)
-        .storeInThread(env);
-
-    SkylarkUtils.setPhase(env, Phase.LOADING);
-    return env;
+    return createSkylarkRuleClassEnvironment(
+        mutability,
+        globals.withLabel(extensionLabel),
+        starlarkSemantics,
+        eventHandler,
+        astFileContentHashCode,
+        importMap,
+        repoMapping,
+        extensionLabel);
   }
 
   @Override

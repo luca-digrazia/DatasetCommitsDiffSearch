@@ -1354,6 +1354,7 @@ public final class PackageFactory {
             packageId,
             input,
             preludeStatements,
+            /* repositoryMapping= */ ImmutableMap.of(),
             localReporterForParsing);
     AstParseResult astParseResult =
         new AstParseResult(buildFileAST, localReporterForParsing);
@@ -1374,11 +1375,12 @@ public final class PackageFactory {
       PackageIdentifier packageId,
       ParserInput input,
       List<Statement> preludeStatements,
+      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       ExtendedEventHandler eventHandler) {
     // Logged messages are used as a testability hook tracing the parsing progress
     logger.fine("Starting to parse " + packageId);
     BuildFileAST buildFileAST =
-        BuildFileAST.parseWithPrelude(input, preludeStatements, eventHandler);
+        BuildFileAST.parseWithPrelude(input, preludeStatements, repositoryMapping, eventHandler);
     logger.fine("Finished parsing of " + packageId);
     return buildFileAST;
   }
@@ -1665,8 +1667,6 @@ public final class PackageFactory {
       extension.update(pkgEnv);
     }
 
-    // TODO(adonovan): save this as a field in LOADING-phase BazelSkylarkContext.
-    // It needn't be a separate thread-local.
     pkgEnv.setThreadLocal(PackageContext.class, context);
   }
 
@@ -1714,22 +1714,22 @@ public final class PackageFactory {
     StoredEventHandler eventHandler = new StoredEventHandler();
 
     try (Mutability mutability = Mutability.create("package %s", packageId)) {
+      BazelStarlarkContext starlarkContext =
+          new BazelStarlarkContext(
+              ruleClassProvider.getToolsRepository(),
+              /*fragmentNameToClass=*/ null,
+              repositoryMapping,
+              new SymbolGenerator<>(packageId),
+              /*analysisRuleLabel=*/ null);
       Environment pkgEnv =
           Environment.builder(mutability)
               .setGlobals(BazelLibrary.GLOBALS)
               .setSemantics(starlarkSemantics)
               .setEventHandler(eventHandler)
               .setImportedExtensions(imports)
+              .setStarlarkContext(starlarkContext)
               .build();
       SkylarkUtils.setPhase(pkgEnv, Phase.LOADING);
-
-      new BazelStarlarkContext(
-              ruleClassProvider.getToolsRepository(),
-              /*fragmentNameToClass=*/ null,
-              repositoryMapping,
-              new SymbolGenerator<>(packageId),
-              /*analysisRuleLabel=*/ null)
-          .storeInThread(pkgEnv);
 
       pkgBuilder.setFilename(buildFilePath)
           .setDefaultVisibility(defaultVisibility)
