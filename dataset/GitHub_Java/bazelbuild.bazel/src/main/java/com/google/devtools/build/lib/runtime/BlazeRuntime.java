@@ -548,7 +548,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     // commands might also need to notify the SkyframeExecutor. It's called in #stopRequest so that
     // timing metrics for builds can be more accurate (since this call can be slow).
     try {
-      workspace.getSkyframeExecutor().notifyCommandComplete(env.getReporter());
+      workspace.getSkyframeExecutor().notifyCommandComplete();
     } catch (InterruptedException e) {
       afterCommandResult = BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
       Thread.currentThread().interrupt();
@@ -1046,10 +1046,9 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     return OS.getCurrent() == OS.WINDOWS ? new WindowsFileSystem() : new UnixFileSystem();
   }
 
-  private static SubprocessFactory subprocessFactoryImplementation(
-      BlazeServerStartupOptions startupOptions) {
+  private static SubprocessFactory subprocessFactoryImplementation() {
     if (!"0".equals(System.getProperty("io.bazel.EnableJni")) && OS.getCurrent() == OS.WINDOWS) {
-      return new WindowsSubprocessFactory(startupOptions.windowsStyleArgEscaping);
+      return new WindowsSubprocessFactory(false);
     } else {
       return JavaSubprocessFactory.INSTANCE;
     }
@@ -1156,7 +1155,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
           "No module set the default hash function.", ExitCode.BLAZE_INTERNAL_ERROR, e);
     }
     Path.setFileSystemForSerialization(fs);
-    SubprocessBuilder.setDefaultSubprocessFactory(subprocessFactoryImplementation(startupOptions));
+    SubprocessBuilder.setDefaultSubprocessFactory(subprocessFactoryImplementation());
 
     Path outputUserRootPath = fs.getPath(outputUserRoot);
     Path installBasePath = fs.getPath(installBase);
