@@ -21,6 +21,9 @@ import javax.annotation.Nullable;
  */
 public abstract class DownloadingAsyncPrettyPrinterFactory implements AsyncPrettyPrinterFactory {
 
+  private final static ExecutorService sExecutorService =
+      AsyncPrettyPrinterExecutorHolder.sExecutorService;
+
   @Override
   public AsyncPrettyPrinter getInstance(final String headerName, final String headerValue) {
 
@@ -33,12 +36,7 @@ public abstract class DownloadingAsyncPrettyPrinterFactory implements AsyncPrett
     if (schemaURL == null) {
       return getErrorAsyncPrettyPrinter(headerName, headerValue);
     } else {
-      ExecutorService  executorService = AsyncPrettyPrinterExecutorHolder.getExecutorService();
-      if (executorService == null) {
-        //last peer is unregistered...
-        return null;
-      }
-      final Future<String> response = executorService.submit(new Request(schemaURL));
+      final Future<String> response = sExecutorService.submit(new Request(schemaURL));
       return new AsyncPrettyPrinter() {
         public void printTo(PrintWriter output, InputStream payload)
             throws IOException {

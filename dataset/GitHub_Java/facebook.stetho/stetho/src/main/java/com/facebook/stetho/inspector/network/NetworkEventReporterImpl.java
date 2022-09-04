@@ -158,7 +158,7 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
   }
 
   @Nullable
-  private static AsyncPrettyPrinter initAsyncPrettyPrinterForResponse(
+   static AsyncPrettyPrinter initAsyncPrettyPrinterForResponse(
       InspectorResponse response,
       NetworkPeerManager peerManager) {
     AsyncPrettyPrinterRegistry registry = peerManager.getAsyncPrettyPrinterRegistry();
@@ -184,20 +184,17 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
     }
   }
 
-  //@VisibleForTesting
   @Nullable
-  static AsyncPrettyPrinter createPrettyPrinterForResponse(
+  private static AsyncPrettyPrinter createPrettyPrinterForResponse(
       InspectorResponse response,
-      @Nullable AsyncPrettyPrinterRegistry registry) {
-    if (registry != null) {
-      for (int i = 0, count = response.headerCount(); i < count; i++) {
-        AsyncPrettyPrinterFactory factory = registry.lookup(response.headerName(i));
-        if (factory != null) {
-          AsyncPrettyPrinter asyncPrettyPrinter = factory.getInstance(
-              response.headerName(i),
-              response.headerValue(i));
-          return asyncPrettyPrinter;
-        }
+      AsyncPrettyPrinterRegistry registry) {
+    for (int i = 0, count = response.headerCount(); i < count; i++) {
+      AsyncPrettyPrinterFactory factory = registry.lookup(response.headerName(i));
+      if (factory != null) {
+        AsyncPrettyPrinter asyncPrettyPrinter = factory.getInstance(
+            response.headerName(i),
+            response.headerValue(i));
+        return asyncPrettyPrinter;
       }
     }
     return null;
