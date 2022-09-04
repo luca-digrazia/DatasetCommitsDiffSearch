@@ -45,7 +45,6 @@ import io.quarkus.rest.runtime.core.LazyMethod;
 import io.quarkus.rest.runtime.core.ParamConverterProviders;
 import io.quarkus.rest.runtime.core.QuarkusRestDeployment;
 import io.quarkus.rest.runtime.core.Serialisers;
-import io.quarkus.rest.runtime.core.SingletonBeanFactory;
 import io.quarkus.rest.runtime.core.parameters.AsyncResponseExtractor;
 import io.quarkus.rest.runtime.core.parameters.BeanParamExtractor;
 import io.quarkus.rest.runtime.core.parameters.BodyParamExtractor;
@@ -67,7 +66,6 @@ import io.quarkus.rest.runtime.handlers.AbortChainHandler;
 import io.quarkus.rest.runtime.handlers.BlockingHandler;
 import io.quarkus.rest.runtime.handlers.ClassRoutingHandler;
 import io.quarkus.rest.runtime.handlers.CompletionStageResponseHandler;
-import io.quarkus.rest.runtime.handlers.ExceptionHandler;
 import io.quarkus.rest.runtime.handlers.InputHandler;
 import io.quarkus.rest.runtime.handlers.InstanceHandler;
 import io.quarkus.rest.runtime.handlers.InterceptorHandler;
@@ -190,17 +188,7 @@ public class QuarkusRestRecorder {
             String applicationPath, Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations,
             GenericTypeMapping genericTypeMapping,
             ParamConverterProviders paramConverterProviders, BeanFactory<QuarkusRestInitialiser> initClassFactory,
-            Class<? extends Application> applicationClass) {
-
-        Application application = null;
-        try {
-            application = applicationClass.newInstance();
-            for (Object i : application.getSingletons()) {
-                SingletonBeanFactory.setInstance(i.getClass().getName(), i);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            Application application) {
         DynamicEntityWriter dynamicEntityWriter = new DynamicEntityWriter(serialisers);
 
         QuarkusRestConfiguration quarkusRestConfiguration = configureFeatures(features, interceptors, exceptionMapping,
@@ -383,7 +371,6 @@ public class QuarkusRestRecorder {
         if (globalInterceptorHandler != null) {
             abortHandlingChain.add(globalInterceptorHandler);
         }
-        abortHandlingChain.add(new ExceptionHandler());
         if (!interceptors.getGlobalResponseInterceptors().isEmpty()) {
             abortHandlingChain.add(globalResourceResponseInterceptorHandler);
         }
@@ -785,7 +772,7 @@ public class QuarkusRestRecorder {
                             //only a single handler that can handle the response
                             //this is a very common case
                             handlers.add(new FixedProducesHandler(mediaType, new FixedEntityWriter(
-                                    buildTimeWriters.get(0).getInstance(), serialisers)));
+                                    buildTimeWriters.get(0).getInstance(), mediaType)));
                         } else {
                             //multiple writers, we try them in the proper order which had already been created
                             List<MessageBodyWriter<?>> list = new ArrayList<>();
@@ -793,7 +780,7 @@ public class QuarkusRestRecorder {
                                 list.add(i.getInstance());
                             }
                             handlers.add(new FixedProducesHandler(mediaType,
-                                    new FixedEntityWriterArray(list.toArray(new MessageBodyWriter[0]), serialisers)));
+                                    new FixedEntityWriterArray(list.toArray(new MessageBodyWriter[0]))));
                         }
                     }
                 } else {
@@ -810,6 +797,7 @@ public class QuarkusRestRecorder {
         List<RestHandler> responseFilterHandlers = new ArrayList<>();
         if (method.isSse()) {
             handlers.add(new SseResponseWriterHandler());
+            abortHandlingChain.add(new ResponseHandler());
         } else {
             handlers.add(new ResponseHandler());
 
@@ -818,7 +806,6 @@ public class QuarkusRestRecorder {
             handlers.addAll(responseFilterHandlers);
             handlers.add(new ResponseWriterHandler(dynamicEntityWriter));
         }
-        abortHandlingChain.add(new ExceptionHandler());
         abortHandlingChain.add(new ResponseHandler());
         abortHandlingChain.addAll(responseFilterHandlers);
 

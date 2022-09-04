@@ -53,18 +53,19 @@ public class RequestDeserializeHandler implements RestHandler {
         InputStream in = requestContext.getInputStream();
         Annotation[] annotations = requestContext.getTarget().getLazyMethod().getParameterAnnotations(parameterIndex);
         for (MessageBodyReader<?> reader : readers) {
+            //TODO: proper params
             if (reader.isReadable(type, type, annotations, requestType)) {
                 Object result;
                 ReaderInterceptor[] interceptors = requestContext.getReaderInterceptors();
                 try {
                     try {
                         if (interceptors == null) {
-                            result = reader.readFrom((Class) type, type, annotations, requestType,
+                            result = reader.readFrom((Class) type, type, null, requestType,
                                     requestContext.getHttpHeaders().getRequestHeaders(), in);
                         } else {
                             result = new QuarkusRestReaderInterceptorContext(requestContext,
                                     annotations,
-                                    type, type, requestType, reader, in, interceptors, serialisers).proceed();
+                                    type, type, requestType, reader, in, interceptors).proceed();
                         }
                     } catch (NoContentException e) {
                         throw new BadRequestException(e);
