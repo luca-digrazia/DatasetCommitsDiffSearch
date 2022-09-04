@@ -269,13 +269,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     }
 
     @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        cancelProgressTimer();
-        cancelDismissControlViewTimer();
-    }
-
-    @Override
     public void onAutoCompletion() {
         super.onAutoCompletion();
         if (mLockCurScreen) {
@@ -803,11 +796,9 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     protected void cancelProgressTimer() {
         if (updateProcessTimer != null) {
             updateProcessTimer.cancel();
-            updateProcessTimer = null;
         }
         if (mProgressTimerTask != null) {
             mProgressTimerTask.cancel();
-            mProgressTimerTask = null;
         }
 
     }

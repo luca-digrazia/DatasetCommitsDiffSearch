@@ -1,19 +1,15 @@
 package com.shuyu.gsyvideoplayer.utils;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
-
-import androidx.appcompat.app.ActionBar;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.view.ContextThemeWrapper;
-import androidx.appcompat.widget.TintContextWrapper;
-import androidx.fragment.app.FragmentActivity;
-
+import android.support.v4.app.FragmentActivity;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.internal.view.ContextThemeWrapper;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Surface;
@@ -68,8 +64,6 @@ public class CommonUtil {
 
         if (context instanceof Activity) {
             return (Activity) context;
-        } else if (context instanceof TintContextWrapper) {
-            return scanForActivity(((TintContextWrapper) context).getBaseContext());
         } else if (context instanceof ContextWrapper) {
             return scanForActivity(((ContextWrapper) context).getBaseContext());
         }
@@ -108,7 +102,6 @@ public class CommonUtil {
     }
 
 
-    @SuppressLint("RestrictedApi")
     public static void hideSupportActionBar(Context context, boolean actionBar, boolean statusBar) {
         if (actionBar) {
             AppCompatActivity appCompatActivity = CommonUtil.getAppCompActivity(context);
@@ -125,10 +118,6 @@ public class CommonUtil {
                 FragmentActivity fragmentActivity = (FragmentActivity) context;
                 fragmentActivity.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                         WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            } else if (context instanceof Activity) {
-                Activity activity = (Activity) context;
-                activity.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN);
             } else {
                 CommonUtil.getAppCompActivity(context).getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                         WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -136,7 +125,6 @@ public class CommonUtil {
         }
     }
 
-    @SuppressLint("RestrictedApi")
     public static void showSupportActionBar(Context context, boolean actionBar, boolean statusBar) {
         if (actionBar) {
             AppCompatActivity appCompatActivity = CommonUtil.getAppCompActivity(context);
@@ -153,9 +141,6 @@ public class CommonUtil {
             if (context instanceof FragmentActivity) {
                 FragmentActivity fragmentActivity = (FragmentActivity) context;
                 fragmentActivity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            } else if (context instanceof Activity) {
-                Activity activity = (Activity) context;
-                activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             } else {
                 CommonUtil.getAppCompActivity(context).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
             }
@@ -163,15 +148,7 @@ public class CommonUtil {
     }
 
     public static void hideNavKey(Context context) {
-        if (Build.VERSION.SDK_INT >= 29) {
-            //       设置屏幕始终在前面，不然点击鼠标，重新出现虚拟按键
-            ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav
-                            // bar
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE);
-
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             //       设置屏幕始终在前面，不然点击鼠标，重新出现虚拟按键
             ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -285,8 +262,6 @@ public class CommonUtil {
             return null;
         else if (context instanceof Activity)
             return (Activity) context;
-        else if (context instanceof TintContextWrapper)
-            return scanForActivity(((TintContextWrapper) context).getBaseContext());
         else if (context instanceof ContextWrapper)
             return scanForActivity(((ContextWrapper) context).getBaseContext());
 
