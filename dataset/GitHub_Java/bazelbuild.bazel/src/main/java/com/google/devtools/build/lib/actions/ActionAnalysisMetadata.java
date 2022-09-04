@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -105,11 +104,11 @@ public interface ActionAnalysisMetadata {
    * <p>This may be used by spawn strategies to determine whether an external tool has not changed
    * since the last time it was used and could thus be reused, or whether it has to be restarted.
    *
-   * <p>See {@link AbstractAction#getTools()} for an explanation of why it's important that this set
-   * contains exactly the right set of artifacts in order for the build to stay correct and the
+   * <p>See {@link AbstractAction#getTools()} for an explanation of why it's important that this
+   * set contains exactly the right set of artifacts in order for the build to stay correct and the
    * worker strategy to work.
    */
-  NestedSet<Artifact> getTools();
+  Iterable<Artifact> getTools();
 
   /**
    * Returns the input Artifacts that this Action depends upon. May be empty.
@@ -122,7 +121,7 @@ public interface ActionAnalysisMetadata {
    * AbstractAction, since AbstractAction's implementation of getInputs() returns an immutable
    * iterable.
    */
-  NestedSet<Artifact> getInputs();
+  Iterable<Artifact> getInputs();
 
   /**
    * Returns the environment variables from the client environment that this action depends on. May

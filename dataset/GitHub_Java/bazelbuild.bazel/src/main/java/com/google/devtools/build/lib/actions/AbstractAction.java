@@ -22,7 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -82,13 +82,14 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
    * <p>If the "tools" set does not contain exactly the right set of artifacts, the following can
    * happen: If an artifact that should be included is missing, the tool might not be restarted when
    * it should, and builds can become incorrect (example: The compiler binary is not part of this
-   * set, then the compiler gets upgraded, but the worker strategy still reuses the old version). If
-   * an artifact that should *not* be included is accidentally part of this set, the worker process
-   * will be restarted more often that is necessary - e.g. if a file that is unique to each unit of
-   * work, e.g. the source code that a compiler should compile for a compile action, is part of this
-   * set, then the worker will never be reused and will be restarted for each unit of work.
+   * set, then the compiler gets upgraded, but the worker strategy still reuses the old version).
+   * If an artifact that should *not* be included is accidentally part of this set, the worker
+   * process will be restarted more often that is necessary - e.g. if a file that is unique to each
+   * unit of work, e.g. the source code that a compiler should compile for a compile action, is
+   * part of this set, then the worker will never be reused and will be restarted for each unit of
+   * work.
    */
-  private final NestedSet<Artifact> tools;
+  private final Iterable<Artifact> tools;
 
   @GuardedBy("this")
   private boolean inputsDiscovered = false;  // Only used when discoversInputs() returns true
@@ -96,18 +97,22 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   // The variable inputs is non-final only so that actions that discover their inputs can modify it.
   @GuardedBy("this")
   @VisibleForSerialization
-  protected NestedSet<Artifact> inputs;
+  protected Iterable<Artifact> inputs;
 
   protected final ActionEnvironment env;
   private final RunfilesSupplier runfilesSupplier;
   @VisibleForSerialization protected final ImmutableSet<Artifact> outputs;
 
-  /** Construct an abstract action with the specified inputs and outputs; */
+  /**
+   * Construct an abstract action with the specified inputs and outputs;
+   */
   protected AbstractAction(
-      ActionOwner owner, NestedSet<Artifact> inputs, Iterable<Artifact> outputs) {
+      ActionOwner owner,
+      Iterable<Artifact> inputs,
+      Iterable<Artifact> outputs) {
     this(
         owner,
-        /*tools = */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        /*tools = */ImmutableList.of(),
         inputs,
         EmptyRunfilesSupplier.INSTANCE,
         outputs,
@@ -116,12 +121,12 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
 
   protected AbstractAction(
       ActionOwner owner,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> inputs,
       Iterable<Artifact> outputs,
       ActionEnvironment env) {
     this(
         owner,
-        /*tools = */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        /*tools = */ImmutableList.of(),
         inputs,
         EmptyRunfilesSupplier.INSTANCE,
         outputs,
@@ -130,15 +135,15 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
 
   protected AbstractAction(
       ActionOwner owner,
-      NestedSet<Artifact> tools,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> tools,
+      Iterable<Artifact> inputs,
       RunfilesSupplier runfilesSupplier,
       Iterable<? extends Artifact> outputs,
       ActionEnvironment env) {
     Preconditions.checkNotNull(owner);
     this.owner = owner;
-    this.tools = tools;
-    this.inputs = inputs;
+    this.tools = CollectionUtils.makeImmutable(tools);
+    this.inputs = CollectionUtils.makeImmutable(inputs);
     this.env = Preconditions.checkNotNull(env);
     this.outputs = ImmutableSet.copyOf(outputs);
     this.runfilesSupplier = Preconditions.checkNotNull(runfilesSupplier);
@@ -171,12 +176,12 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   /**
    * Run input discovery on the action.
    *
-   * <p>Called by Blaze if {@link #discoversInputs()} returns true. It must return the set of input
-   * artifacts that were not known at analysis time. May also call {@link
-   * #updateInputs(NestedSet<Artifact>)}; if it doesn't, the action itself must arrange for the
-   * newly discovered artifacts to be available during action execution, probably by keeping state
-   * in the action instance and using a custom action execution context and for {@code
-   * #updateInputs()} to be called during the execution of the action.
+   * <p>Called by Blaze if {@link #discoversInputs()} returns true. It must return the set of
+   * input artifacts that were not known at analysis time. May also call
+   * {@link #updateInputs(Iterable<Artifact>)}; if it doesn't, the action itself must arrange for
+   * the newly discovered artifacts to be available during action execution, probably by keeping
+   * state in the action instance and using a custom action execution context and for
+   * {@code #updateInputs()} to be called during the execution of the action.
    *
    * <p>Since keeping state within an action bad, don't do that unless there is a very good reason
    * to do so.
@@ -205,21 +210,23 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
    * itself when an action is loaded from the on-disk action cache.
    */
   @Override
-  public synchronized void updateInputs(NestedSet<Artifact> inputs) {
+  public synchronized void updateInputs(Iterable<Artifact> inputs) {
     Preconditions.checkState(
         discoversInputs(), "Can't update inputs unless discovering: %s %s", this, inputs);
-    this.inputs = inputs;
+    this.inputs = CollectionUtils.makeImmutable(inputs);
     inputsDiscovered = true;
   }
 
   @Override
-  public NestedSet<Artifact> getTools() {
+  public Iterable<Artifact> getTools() {
     return tools;
   }
 
-  /** Should not be overridden (it's non-final only for tests) */
+  /**
+   * Should not be overridden (it's non-final only for tests)
+   */
   @Override
-  public synchronized NestedSet<Artifact> getInputs() {
+  public synchronized Iterable<Artifact> getInputs() {
     return inputs;
   }
 
@@ -257,21 +264,15 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public NestedSet<Artifact> getMandatoryInputs() {
+  public Iterable<Artifact> getMandatoryInputs() {
     return getInputs();
   }
 
   @Override
   public String toString() {
-    return prettyPrint()
-        + " ("
-        + getMnemonic()
-        + "["
-        + getInputs().toList()
+    return prettyPrint() + " (" + getMnemonic() + "[" + ImmutableList.copyOf(getInputs())
         + (inputsDiscovered() ? " -> " : ", unknown inputs -> ")
-        + getOutputs()
-        + "]"
-        + ")";
+        + getOutputs() + "]" + ")";
   }
 
   @Override
