@@ -563,14 +563,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         updateStartImage();
     }
 
-    @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        dismissVolumeDialog();
-        dismissBrightnessDialog();
-
-    }
-
     /**
      * 触摸进度dialog的layoutId
      * 继承后重写可返回自定义
