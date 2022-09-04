@@ -235,13 +235,6 @@ class InterfaceDesugaring extends ClassVisitor {
     }
 
     @Override
-    public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-      AnnotationVisitor dest = super.visitAnnotation(desc, visible);
-      AnnotationVisitor annoDest = annotationOnlyDest.visitAnnotation(desc, visible);
-      return new MultiplexAnnotationVisitor(dest, annoDest);
-    }
-
-    @Override
     public AnnotationVisitor visitTypeAnnotation(
         int typeRef, TypePath typePath, String desc, boolean visible) {
       AnnotationVisitor dest = super.visitTypeAnnotation(typeRef, typePath, desc, visible);
