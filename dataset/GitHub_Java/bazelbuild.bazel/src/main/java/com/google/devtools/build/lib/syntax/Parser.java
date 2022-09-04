@@ -500,7 +500,7 @@ public class Parser {
     expect(TokenKind.DOT);
     if (token.kind == TokenKind.IDENTIFIER) {
       Identifier ident = parseIdent();
-      return setLocation(new DotExpression(receiver, ident), start, ident);
+      return setLocation(new DotExpression(receiver, ident), start, token.right);
     } else {
       syntaxError(token, "expected identifier after dot");
       int end = syncTo(EXPR_TERMINATOR_SET);
@@ -677,18 +677,15 @@ public class Parser {
     }
     // This is an index/key access
     if (token.kind == TokenKind.RBRACKET) {
-      Expression expr = setLocation(new IndexExpression(receiver, startExpr), start, token.right);
       expect(TokenKind.RBRACKET);
-      return expr;
+      return setLocation(new IndexExpression(receiver, startExpr), start, token.right);
     }
     // This is a slice (or substring)
     Expression endExpr = parseSliceArgument(new Identifier("None"));
     Expression stepExpr = parseSliceArgument(new IntegerLiteral(1));
-    Expression expr =
-        setLocation(
-            new SliceExpression(receiver, startExpr, endExpr, stepExpr), start, token.right);
     expect(TokenKind.RBRACKET);
-    return expr;
+    return setLocation(new SliceExpression(receiver, startExpr, endExpr, stepExpr),
+        start, token.right);
   }
 
   /**
@@ -738,16 +735,14 @@ public class Parser {
       }
       tuple.add(parsePrimaryWithSuffix());
     }
-    return setLocation(ListLiteral.makeTuple(tuple), start, Iterables.getLast(tuple));
+    return setLocation(ListLiteral.makeTuple(tuple), start, token.right);
   }
 
   // comprehension_suffix ::= 'FOR' loop_variables 'IN' expr comprehension_suffix
   //                        | 'IF' expr comprehension_suffix
   //                        | ']'
   private Expression parseComprehensionSuffix(
-      AbstractComprehension.AbstractBuilder comprehensionBuilder,
-      TokenKind closingBracket,
-      int comprehensionStartOffset) {
+      AbstractComprehension.AbstractBuilder comprehensionBuilder, TokenKind closingBracket) {
     while (true) {
       if (token.kind == TokenKind.FOR) {
         nextToken();
@@ -763,14 +758,12 @@ public class Parser {
         // [x for x in li if (1, 2)]  # ok
         comprehensionBuilder.addIf(parseNonTupleExpression(0));
       } else if (token.kind == closingBracket) {
-        Expression expr = comprehensionBuilder.build();
-        setLocation(expr, comprehensionStartOffset, token.right);
         nextToken();
-        return expr;
+        return comprehensionBuilder.build();
       } else {
         syntaxError(token, "expected '" + closingBracket.getPrettyName() + "', 'for' or 'if'");
         syncPast(LIST_TERMINATOR_SET);
-        return makeErrorExpression(comprehensionStartOffset, token.right);
+        return makeErrorExpression(token.left, token.right);
       }
     }
   }
@@ -801,10 +794,11 @@ public class Parser {
         }
       case FOR:
         { // list comprehension
-          return parseComprehensionSuffix(
-              new ListComprehension.Builder().setOutputExpression(expression),
-              TokenKind.RBRACKET,
-              start);
+          Expression result =
+              parseComprehensionSuffix(
+                  new ListComprehension.Builder().setOutputExpression(expression),
+                  TokenKind.RBRACKET);
+          return setLocation(result, start, token.right);
         }
       case COMMA:
         {
@@ -849,12 +843,12 @@ public class Parser {
     DictionaryEntryLiteral entry = parseDictEntry();
     if (token.kind == TokenKind.FOR) {
       // Dict comprehension
-      return parseComprehensionSuffix(
+      Expression result = parseComprehensionSuffix(
           new DictComprehension.Builder()
               .setKeyExpression(entry.getKey())
               .setValueExpression(entry.getValue()),
-          TokenKind.RBRACE,
-          start);
+          TokenKind.RBRACE);
+      return setLocation(result, start, token.right);
     }
     List<DictionaryEntryLiteral> entries = new ArrayList<>();
     entries.add(entry);
@@ -965,7 +959,7 @@ public class Parser {
     // It's a tuple
     List<Expression> tuple = parseExprList(insideParens);
     tuple.add(0, expression);  // add the first expression to the front of the tuple
-    return setLocation(ListLiteral.makeTuple(tuple), start, Iterables.getLast(tuple));
+    return setLocation(ListLiteral.makeTuple(tuple), start, token.right);
   }
 
   // Equivalent to 'test' rule in Python grammar.
@@ -1006,7 +1000,7 @@ public class Parser {
     Expression expression = parseNonTupleExpression(prec + 1);
     UnaryOperatorExpression notExpression =
         new UnaryOperatorExpression(UnaryOperator.NOT, expression);
-    return setLocation(notExpression, start, expression);
+    return setLocation(notExpression, start, token.right);
   }
 
   // file_input ::= ('\n' | stmt)* EOF
@@ -1193,7 +1187,6 @@ public class Parser {
     } else {
       elseBlock = ImmutableList.of();
     }
-    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
     return setLocation(new IfStatement(thenBlocks, elseBlock), start, token.right);
   }
 
@@ -1205,7 +1198,6 @@ public class Parser {
     expect(TokenKind.COLON);
     List<Statement> thenBlock = parseSuite();
     ConditionalStatements stmt = new ConditionalStatements(expr, thenBlock);
-    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
     return setLocation(stmt, start, token.right);
   }
 
@@ -1219,7 +1211,6 @@ public class Parser {
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
     Statement stmt = new ForStatement(new LValue(loopVar), collection, block);
-    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
     list.add(setLocation(stmt, start, token.right));
   }
 
@@ -1236,7 +1227,6 @@ public class Parser {
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
     FunctionDefStatement stmt = new FunctionDefStatement(ident, params, signature, block);
-    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
     list.add(setLocation(stmt, start, token.right));
   }
 

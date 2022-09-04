@@ -14,10 +14,10 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -56,7 +56,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     }
   }
 
-  private final SkylarkSemantics semantics;
+  private final SkylarkSemanticsOptions semantics;
   private Block block;
   private int loopCount;
 
@@ -68,12 +68,6 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     block.variables.addAll(builtinVariables);
     block.readOnlyVariables.addAll(builtinVariables);
     semantics = env.getSemantics();
-
-    // If the flag is set to false, it should be allowed to have `set`
-    // in non-executable parts of the code.
-    if (!env.getSemantics().incompatibleDisallowUncalledSetConstructor()) {
-      block.variables.add("set");
-    }
   }
 
   @Override
@@ -143,7 +137,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   @Override
   public void visit(AbstractComprehension node) {
-    if (semantics.incompatibleComprehensionVariablesDoNotLeak()) {
+    if (semantics.incompatibleComprehensionVariablesDoNotLeak) {
       openBlock();
       super.visit(node);
       closeBlock();
@@ -171,7 +165,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
 
   @Override
   public void visit(IfStatement node) {
-    if (semantics.incompatibleDisallowToplevelIfStatement() && isTopLevel()) {
+    if (semantics.incompatibleDisallowToplevelIfStatement && isTopLevel()) {
       throw new ValidationException(
           node.getLocation(),
           "if statements are not allowed at the top level. You may move it inside a function "
@@ -263,7 +257,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   /** Validates the AST and runs static checks. */
   private void validateAst(List<Statement> statements) {
     // Check that load() statements are on top.
-    if (semantics.incompatibleBzlDisallowLoadAfterStatement()) {
+    if (semantics.incompatibleBzlDisallowLoadAfterStatement) {
       checkLoadAfterStatement(statements);
     }
 
@@ -327,53 +321,31 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     // TODO(laurentlb): Merge with the visitor above when possible (i.e. when BUILD files use it).
     SyntaxTreeVisitor checker =
         new SyntaxTreeVisitor() {
-
-          private void error(ASTNode node, String message) {
-            eventHandler.handle(Event.error(node.getLocation(), message));
-            success[0] = false;
-          }
-
-          @Override
-          public void visit(FunctionDefStatement node) {
-            error(
-                node,
-                "function definitions are not allowed in BUILD files. You may move the function to "
-                    + "a .bzl file and load it.");
-          }
-
-          @Override
-          public void visit(ForStatement node) {
-            error(
-                node,
-                "for statements are not allowed in BUILD files. You may inline the loop, move it "
-                    + "to a function definition (in a .bzl file), or as a last resort use a list "
-                    + "comprehension.");
-          }
-
-          @Override
-          public void visit(IfStatement node) {
-            error(
-                node,
-                "if statements are not allowed in BUILD files. You may move conditional logic to a "
-                    + "function definition (in a .bzl file), or for simple cases use an if "
-                    + "expression.");
-          }
-
           @Override
           public void visit(FuncallExpression node) {
             for (Argument.Passed arg : node.getArguments()) {
               if (arg.isStarStar()) {
-                error(
-                    node,
-                    "**kwargs arguments are not allowed in BUILD files. Pass the arguments in "
-                        + "explicitly.");
+                eventHandler.handle(
+                    Event.error(
+                        node.getLocation(), "**kwargs arguments are not allowed in BUILD files"));
+                success[0] = false;
               } else if (arg.isStar()) {
-                error(
-                    node,
-                    "*args arguments are not allowed in BUILD files. Pass the arguments in "
-                        + "explicitly.");
+                eventHandler.handle(
+                    Event.error(
+                        node.getLocation(), "*args arguments are not allowed in BUILD files"));
+                success[0] = false;
               }
             }
+          }
+
+          @Override
+          public void visit(FunctionDefStatement node) {
+            eventHandler.handle(
+                Event.error(
+                    node.getLocation(),
+                    "syntax error at 'def': This is not supported in BUILD files. "
+                        + "Move the block to a .bzl file and load it"));
+            success[0] = false;
           }
         };
     checker.visitAll(statements);
