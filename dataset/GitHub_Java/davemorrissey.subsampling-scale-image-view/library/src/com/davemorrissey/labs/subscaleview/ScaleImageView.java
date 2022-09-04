@@ -16,13 +16,12 @@ limitations under the License.
 
 package com.davemorrissey.labs.subscaleview;
 
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.*;
+import android.graphics.Bitmap.Config;
 import android.graphics.Paint.Style;
 import android.media.ExifInterface;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Message;
@@ -34,8 +33,6 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import com.davemorrissey.labs.subscaleview.R.styleable;
-import com.davemorrissey.labs.subscaleview.decoder.ImageDecoder;
-import com.davemorrissey.labs.subscaleview.decoder.SkiaImageDecoder;
 
 import java.lang.ref.WeakReference;
 import java.util.*;
@@ -54,9 +51,6 @@ import java.util.*;
 public class ScaleImageView extends View {
 
     private static final String TAG = ScaleImageView.class.getSimpleName();
-
-    private static final String FILE_SCHEME = "file:///";
-    private static final String ASSET_SCHEME = "file:///android_asset/";
 
     /** Attempt to use EXIF information on the image to rotate it. Works for external files only. */
     public static final int ORIENTATION_USE_EXIF = -1;
@@ -162,9 +156,6 @@ public class ScaleImageView extends View {
     // Fling detector
     private GestureDetector detector;
 
-    // Image decoder class
-    private Class<? extends ImageDecoder> decoderClass = SkiaImageDecoder.class;
-
     // Debug values
     private PointF vCenterStart;
     private float vDistStart;
@@ -249,24 +240,27 @@ public class ScaleImageView extends View {
 
     /**
      * Display an image from a file in internal or external storage.
-     * @param fileUri URI of the file to displayy e.g. '/sdcard/DCIM1000.PNG' or 'file:///scard/DCIM1000.PNG' (these are equivalent).
+     * @param extFile URI of the file to display.
      */
-    @Deprecated
-    public final void setImageFile(String fileUri) {
-        setImageUri(fileUri);
+    public final void setImageFile(String extFile) {
+        reset(true);
+        BitmapInitTask task = new BitmapInitTask(this, getContext(), extFile, false);
+        task.execute();
+        invalidate();
     }
 
     /**
      * Display an image from a file in internal or external storage, starting with a given orientation setting, scale
-     * and center. This is the best method to use when you want scale and center to be restored after screen orientation
-     * change; it avoids any redundant loading of tiles in the wrong orientation.
-     * @param fileUri URI of the file to display e.g. '/sdcard/DCIM1000.PNG' or 'file:///scard/DCIM1000.PNG' (these are equivalent).
+     * and center.
+     * @param extFile URI of the file to display.
      * @param state State to be restored. Nullable.
-     * @deprecated Method name is outdated, other URIs are now accepted so use {@link #setImageUri(android.net.Uri, ImageViewState)} or {@link #setImageUri(String, ImageViewState)}.
      */
-    @Deprecated
-    public final void setImageFile(String fileUri, ImageViewState state) {
-        setImageUri(fileUri, state);
+    public final void setImageFile(String extFile, ImageViewState state) {
+        reset(true);
+        restoreState(state);
+        BitmapInitTask task = new BitmapInitTask(this, getContext(), extFile, false);
+        task.execute();
+        invalidate();
     }
 
     /**
@@ -302,13 +296,15 @@ public class ScaleImageView extends View {
 
     /**
      * Display an image from resources, starting with a given orientation setting, scale and center.
-     * This is the best method to use when you want scale and center to be restored after screen orientation
-     * change; it avoids any redundant loading of tiles in the wrong orientation.
      * @param resId Resource ID.
      * @param state State to be restored. Nullable.
      */
     public final void setImageResource(int resId, ImageViewState state) {
-        setImageUri(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getContext().getPackageName() + "/" + resId);
+        reset(true);
+        restoreState(state);
+        BitmapInitTask task = new BitmapInitTask(this, getContext(), resId);
+        task.execute();
+        invalidate();
     }
 
     /**
@@ -320,75 +316,14 @@ public class ScaleImageView extends View {
     }
 
     /**
-     * Display an image from a file in assets, starting with a given orientation setting, scale andcenter. This is the
-     * best method to use when you want scale and center to be restored after screen orientation change; it avoids any
-     * redundant loading of tiles in the wrong orientation.
+     * Display an image from a file in assets, starting with a given orientation setting, scale and center.
      * @param assetName asset name.
      * @param state State to be restored. Nullable.
      */
     public final void setImageAsset(String assetName, ImageViewState state) {
-        setImageUri(ASSET_SCHEME + assetName);
-
-    }
-
-    /**
-     * Display an image from a URI. The URI can be in one of the following formats:
-     * File: file:///scard/picture.jpg or /sdcard/picture.jpg
-     * Asset: file:///android_asset/picture.png
-     * Resource: android.resource://com.example.app/drawable/picture
-     * @param uri image URI.
-     */
-    public final void setImageUri(String uri) {
-        setImageUri(uri, null);
-    }
-
-    /**
-     * Display an image from a URI, starting with a given orientation setting, scale andcenter. This
-     * is the best method to use when you want scale and center to be restored after screen orientation
-     * change; it avoids any redundant loading of tiles in the wrong orientation. The URI can be in
-     * one of the following formats:
-     * File: file:///scard/picture.jpg or /sdcard/picture.jpg
-     * Asset: file:///android_asset/picture.png
-     * Resource: android.resource://com.example.app/drawable/picture
-     * @param uri image URI.
-     * @param state State to be restored. Nullable.
-     */
-    public final void setImageUri(String uri, ImageViewState state) {
-        if (!uri.contains("://")) {
-            if (uri.startsWith("/")) {
-                uri = uri.substring(1);
-            }
-            uri = FILE_SCHEME + uri;
-        }
-        setImageUri(Uri.parse(uri), state);
-    }
-
-    /**
-     * Display an image from a URI. The URI can be in one of the following formats:
-     * File: file:///scard/picture.jpg or /sdcard/picture.jpg
-     * Asset: file:///android_asset/picture.png
-     * Resource: android.resource://com.example.app/drawable/picture
-     * @param uri image URI.
-     */
-    public final void setImageUri(Uri uri) {
-        setImageUri(uri, null);
-    }
-
-    /**
-     * Display an image from a URI, starting with a given orientation setting, scale andcenter. This
-     * is the best method to use when you want scale and center to be restored after screen orientation
-     * change; it avoids any redundant loading of tiles in the wrong orientation. The URI can be in
-     * one of the following formats:
-     * File: file:///scard/picture.jpg
-     * Asset: file:///android_asset/picture.png
-     * Resource: android.resource://com.example.app/drawable/picture
-     * @param uri image URI.
-     * @param state State to be restored. Nullable.
-     */
-    public final void setImageUri(Uri uri, ImageViewState state) {
         reset(true);
-        if (state != null) { restoreState(state); }
-        BitmapInitTask task = new BitmapInitTask(this, getContext(), decoderClass, uri);
+        restoreState(state);
+        BitmapInitTask task = new BitmapInitTask(this, getContext(), assetName, true);
         task.execute();
         invalidate();
     }
@@ -891,46 +826,65 @@ public class ScaleImageView extends View {
     private static class BitmapInitTask extends AsyncTask<Void, Void, int[]> {
         private final WeakReference<ScaleImageView> viewRef;
         private final WeakReference<Context> contextRef;
-        private final WeakReference<Class<? extends ImageDecoder>> decoderClassRef;
-        private final Uri source;
+        private final String source;
+        private final Integer resourceId;
+        private final boolean sourceIsAsset;
         private Bitmap bitmap;
 
-        public BitmapInitTask(ScaleImageView view, Context context, Class<? extends ImageDecoder> decoderClass, Uri source) {
+        public BitmapInitTask(ScaleImageView view, Context context, String source, boolean sourceIsAsset) {
             this.viewRef = new WeakReference<ScaleImageView>(view);
             this.contextRef = new WeakReference<Context>(context);
-            this.decoderClassRef = new WeakReference<Class<? extends ImageDecoder>>(decoderClass);
             this.source = source;
+            this.resourceId = null;
+            this.sourceIsAsset = sourceIsAsset;
+        }
+
+        public BitmapInitTask(ScaleImageView view, Context context, int resourceId) {
+            this.viewRef = new WeakReference<ScaleImageView>(view);
+            this.contextRef = new WeakReference<Context>(context);
+            this.source = null;
+            this.resourceId = resourceId;
+            this.sourceIsAsset = false;
         }
 
         @Override
         protected int[] doInBackground(Void... params) {
             try {
-                String sourceUri = source.toString();
-                Context context = contextRef.get();
-                Class<? extends ImageDecoder> decoderClass = decoderClassRef.get();
-                if (context != null && decoderClass != null) {
-                    int exifOrientation = ORIENTATION_0;
-                    bitmap = decoderClass.newInstance().decode(context, source);
-                    if (sourceUri.startsWith(FILE_SCHEME) && !sourceUri.startsWith(ASSET_SCHEME)) {
-                        try {
-                            ExifInterface exifInterface = new ExifInterface(sourceUri.substring(FILE_SCHEME.length() - 1));
-                            int orientationAttr = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-                            if (orientationAttr == ExifInterface.ORIENTATION_NORMAL || orientationAttr == ExifInterface.ORIENTATION_UNDEFINED) {
-                                exifOrientation = ORIENTATION_0;
-                            } else if (orientationAttr == ExifInterface.ORIENTATION_ROTATE_90) {
-                                exifOrientation = ORIENTATION_90;
-                            } else if (orientationAttr == ExifInterface.ORIENTATION_ROTATE_180) {
-                                exifOrientation = ORIENTATION_180;
-                            } else if (orientationAttr == ExifInterface.ORIENTATION_ROTATE_270) {
-                                exifOrientation = ORIENTATION_270;
-                            } else {
-                                Log.w(TAG, "Unsupported EXIF orientation: " + orientationAttr);
+                if (viewRef != null && contextRef != null) {
+                    Context context = contextRef.get();
+                    ScaleImageView view = viewRef.get();
+                    if (context != null && view != null) {
+                        int exifOrientation = ORIENTATION_0;
+                        BitmapFactory.Options options = new BitmapFactory.Options();
+                        options.inPreferredConfig = Config.RGB_565;
+                        options.inDither = true;
+                        if (resourceId != null) {
+                            bitmap = BitmapFactory.decodeResource(context.getResources(), resourceId);
+                        } else if (sourceIsAsset) {
+                            bitmap = BitmapFactory.decodeStream(context.getAssets().open(source), null, options);
+                        } else {
+                            bitmap = BitmapFactory.decodeFile(source, options);
+                            try {
+                                ExifInterface exifInterface = new ExifInterface(source);
+                                int orientationAttr = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                                if (orientationAttr == ExifInterface.ORIENTATION_NORMAL) {
+                                    exifOrientation = ORIENTATION_0;
+                                } else if (orientationAttr == ExifInterface.ORIENTATION_ROTATE_90) {
+                                    exifOrientation = ORIENTATION_90;
+                                } else if (orientationAttr == ExifInterface.ORIENTATION_ROTATE_180) {
+                                    exifOrientation = ORIENTATION_180;
+                                } else if (orientationAttr == ExifInterface.ORIENTATION_ROTATE_270) {
+                                    exifOrientation = ORIENTATION_270;
+                                } else {
+                                    Log.w(TAG, "Unsupported EXIF orientation: " + orientationAttr);
+                                }
+                            } catch (Exception e) {
+                                Log.w(TAG, "Could not get EXIF orientation of image");
                             }
-                        } catch (Exception e) {
-                            Log.w(TAG, "Could not get EXIF orientation of image");
+
                         }
+                        return new int[] { bitmap.getWidth(), bitmap.getHeight(), exifOrientation };
                     }
-                    return new int[] { bitmap.getWidth(), bitmap.getHeight(), exifOrientation };
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Failed to initialise bitmap decoder", e);
@@ -1181,19 +1135,6 @@ public class ScaleImageView extends View {
             timeF--;
             return (-change/2f) * (timeF * (timeF - 2) - 1) + from;
         }
-    }
-
-    /**
-     * Swap the default decoder implementation for one of your own. You must do this before setting the image file or
-     * asset, and you cannot use a custom decoder when using layout XML to set an asset name. Your class must have a
-     * public default constructor.
-     * @param decoderClass The {@link ImageDecoder} implementation to use.
-     */
-    public final void setDecoderClass(Class<? extends ImageDecoder> decoderClass) {
-        if (decoderClass == null) {
-            throw new IllegalArgumentException("Decoder class cannot be set to null");
-        }
-        this.decoderClass = decoderClass;
     }
 
     /**
