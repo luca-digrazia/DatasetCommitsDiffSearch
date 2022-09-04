@@ -15,7 +15,6 @@ import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
-import com.example.gsyvideoplayer.effect.BitmapIconEffect;
 import com.example.gsyvideoplayer.effect.GSYVideoGLViewCustomRender;
 import com.example.gsyvideoplayer.effect.PixelationEffect;
 import com.example.gsyvideoplayer.utils.CommonUtil;
@@ -111,8 +110,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
 
     private int percentageType = 1;
 
-    private BitmapIconEffect mCustomBitmapIconEffect;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -139,13 +136,9 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
         });
 
 
-        //自定义render需要在播放器开始播放之前，播放过程中不允许切换render
-        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
-        GSYVideoGLViewCustomRender gsyVideoGLViewCustomRender = new GSYVideoGLViewCustomRender();
-        mCustomBitmapIconEffect = new BitmapIconEffect(bitmap, dp2px(50), dp2px(50), 0.6f);
-        gsyVideoGLViewCustomRender.setBitmapEffect(mCustomBitmapIconEffect);
-        detailPlayer.setCustomGLRenderer(gsyVideoGLViewCustomRender);
-
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.unlock);
+        //自定义render需要在播放器设置
+        detailPlayer.setCustomGLRenderer(new GSYVideoGLViewCustomRender(bitmap, dp2px(32), dp2px(43), 0.6f));
 
         changeFilter.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -376,19 +369,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
             mTimerTask = null;
         }
     }
-
-
-    /**
-     *
-     */
-    private class TaskLocal2 extends TimerTask {
-        @Override
-        public void run() {
-
-        }
-    }
-
-
 
     /**
      * 设置GLRender的VertexShader的transformMatrix
