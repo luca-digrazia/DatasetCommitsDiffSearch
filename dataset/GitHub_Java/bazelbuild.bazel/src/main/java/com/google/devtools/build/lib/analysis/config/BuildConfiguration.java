@@ -957,32 +957,33 @@ public final class BuildConfiguration implements BuildEvent {
     /**
      * Values for --experimental_dynamic_configs.
      */
-    public enum ConfigsMode {
-      /** Only include the configuration fragments each rule needs. */
+    public enum DynamicConfigsMode {
+      /** Use dynamic configurations, including only the fragments each rule needs. */
       ON,
-      /** Always including all fragments known to Blaze. */
+      /** Use dynamic configurations, always including all fragments known to Blaze. */
       NOTRIM,
     }
 
     /**
      * Converter for --experimental_dynamic_configs.
      */
-    public static class ConfigsModeConverter extends EnumConverter<ConfigsMode> {
-      public ConfigsModeConverter() {
-        super(ConfigsMode.class, "configurations mode");
+    public static class DynamicConfigsConverter extends EnumConverter<DynamicConfigsMode> {
+      public DynamicConfigsConverter() {
+        super(DynamicConfigsMode.class, "dynamic configurations mode");
       }
     }
 
     @Option(
       name = "experimental_dynamic_configs",
       defaultValue = "notrim",
-      converter = ConfigsModeConverter.class,
+      converter = DynamicConfigsConverter.class,
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "Instantiates build configurations with the specified properties"
+          "Dynamically instantiates build configurations instead of using the default "
+              + "static globally defined ones"
     )
-    public ConfigsMode configsMode;
+    public DynamicConfigsMode useDynamicConfigurations;
 
     @Option(
       name = "experimental_enable_runfiles",
@@ -1020,7 +1021,7 @@ public final class BuildConfiguration implements BuildEvent {
       host.outputDirectoryName = "host";
       host.compilationMode = CompilationMode.OPT;
       host.isHost = true;
-      host.configsMode = configsMode;
+      host.useDynamicConfigurations = useDynamicConfigurations;
       host.enableRunfiles = enableRunfiles;
       host.buildPythonZip = buildPythonZip;
       host.windowsExeLauncher = windowsExeLauncher;
@@ -1208,9 +1209,9 @@ public final class BuildConfiguration implements BuildEvent {
    * Returns true if this configuration is semantically equal to the other, with
    * the possible exception that the other has fewer fragments.
    *
-   * <p>This is useful for trimming: as the same configuration gets "trimmed" while going down a
-   * dependency chain, it's still the same configuration but loses some of its fragments. So we need
-   * a more nuanced concept of "equality" than simple reference equality.
+   * <p>This is useful for dynamic configurations - as the same configuration gets "trimmed" while
+   * going down a dependency chain, it's still the same configuration but loses some of its
+   * fragments. So we need a more nuanced concept of "equality" than simple reference equality.
    */
   public boolean equalsOrIsSupersetOf(BuildConfiguration other) {
     return this.equals(other)
@@ -1353,6 +1354,9 @@ public final class BuildConfiguration implements BuildEvent {
 
   /**
    * Constructs a new BuildConfiguration instance.
+   *
+   * <p>Callers that pass null for {@code dynamicTransitionMapper} should not use dynamic
+   * configurations.
    */
   public BuildConfiguration(BlazeDirectories directories,
       Map<Class<? extends Fragment>, Fragment> fragmentsMap,
@@ -1971,11 +1975,11 @@ public final class BuildConfiguration implements BuildEvent {
   }
 
   /**
-   * Returns whether we should trim configurations to only include the fragments needed to correctly
-   * analyze a rule.
+   * Returns whether we should trim dynamic configurations to only include the fragments needed
+   * to correctly analyze a rule.
    */
   public boolean trimConfigurations() {
-    return options.configsMode == Options.ConfigsMode.ON;
+    return options.useDynamicConfigurations == Options.DynamicConfigsMode.ON;
   }
 
   /**
@@ -2002,9 +2006,9 @@ public final class BuildConfiguration implements BuildEvent {
    * <p><b>Be very careful using this method.</b> Options classes are mutable - no caller
    * should ever call this method if there's any change the reference might be written to.
    * This method only exists because {@link #cloneOptions} can be expensive when applied to
-   * every edge in a dependency graph.
+   * every edge in a dependency graph, which becomes possible with dynamic configurations.
    *
-   * <p>Do not use this method without careful review with other Bazel developers.
+   * <p>Do not use this method without careful review with other Bazel developers..
    */
   public BuildOptions getOptions() {
     return buildOptions;

@@ -1234,9 +1234,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public ImmutableList<ConfiguredTarget> getConfiguredTargets(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
-      Iterable<Dependency> keys) {
+      Iterable<Dependency> keys,
+      boolean useOriginalConfig) {
     return getConfiguredTargetMap(
-        eventHandler, originalConfig, keys).values().asList();
+        eventHandler, originalConfig, keys, useOriginalConfig).values().asList();
   }
 
   /**
@@ -1252,12 +1253,28 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public ImmutableMultimap<Dependency, ConfiguredTarget> getConfiguredTargetMap(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
-      Iterable<Dependency> keys) {
+      Iterable<Dependency> keys,
+      boolean useOriginalConfig) {
     checkActive();
 
     Multimap<Dependency, BuildConfiguration> configs;
     if (originalConfig != null) {
-     configs = getConfigurations(eventHandler, originalConfig.getOptions(), keys);
+
+      if (useOriginalConfig) {
+        // This flag is used because of some unfortunate complexity in the configuration machinery:
+        // Most callers of this method pass a <Label, Configuration> pair to directly create a
+        // ConfiguredTarget from, but happen to use the Dependency data structure to pass that
+        // info (even though the data has nothing to do with dependencies). If this configuration
+        // includes a split transition, a dynamic configuration created from it will *not*
+        // include that transition (because dynamic configurations don't embed transitions to
+        // other configurations. In that case, we need to preserve the original configuration.
+        // TODO(bazel-team); make this unnecessary once split transition logic is properly ported
+        // out of configurations.
+        configs = ArrayListMultimap.<Dependency, BuildConfiguration>create();
+        configs.put(Iterables.getOnlyElement(keys), originalConfig);
+      } else {
+        configs = getConfigurations(eventHandler, originalConfig.getOptions(), keys);
+      }
     } else {
       configs = ArrayListMultimap.<Dependency, BuildConfiguration>create();
       for (Dependency key : keys) {
@@ -1578,7 +1595,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             configuration,
             ImmutableList.of(configuration == null
                 ? Dependency.withNullConfiguration(label)
-                : Dependency.withTransitionAndAspects(label, transition, AspectCollection.EMPTY))),
+                : Dependency.withTransitionAndAspects(label, transition, AspectCollection.EMPTY)),
+            false),
         null);
   }
 
