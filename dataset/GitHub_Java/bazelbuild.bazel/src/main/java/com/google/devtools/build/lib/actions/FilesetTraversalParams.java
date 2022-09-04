@@ -169,7 +169,6 @@ public interface FilesetTraversalParams {
    * <p>See {@link DirectTraversal#getRoot()} for more details.
    */
   @AutoValue
-  @AutoCodec
   abstract class DirectTraversal {
 
     /** Returns the root of the traversal; see {@link DirectTraversalRoot}. */
@@ -240,8 +239,8 @@ public interface FilesetTraversalParams {
     static DirectTraversal getDirectTraversal(
         DirectTraversalRoot root,
         boolean isPackage,
-        boolean followingSymlinks,
-        PackageBoundaryMode packageBoundaryMode,
+        boolean followSymlinks,
+        PackageBoundaryMode pkgBoundaryMode,
         boolean isRecursive,
         boolean isGenerated) {
       return new AutoValue_FilesetTraversalParams_DirectTraversal(
@@ -249,8 +248,8 @@ public interface FilesetTraversalParams {
           isPackage,
           isRecursive,
           isGenerated,
-          followingSymlinks,
-          packageBoundaryMode);
+          followSymlinks,
+          pkgBoundaryMode);
     }
   }
 
