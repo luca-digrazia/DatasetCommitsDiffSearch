@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidDataContext;
 import com.google.devtools.build.lib.rules.android.AndroidResources;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfo;
+import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -74,17 +74,18 @@ final class DataBindingV1Context implements DataBindingContext {
 
   @Override
   public void supplyAnnotationProcessor(
-      RuleContext ruleContext, BiConsumer<JavaPluginInfo, Iterable<Artifact>> consumer) {
+      RuleContext ruleContext,
+      BiConsumer<JavaPluginInfoProvider, Iterable<Artifact>> consumer) {
 
-    JavaPluginInfo javaPluginInfo =
-        JavaInfo.getJavaInfo(
-                ruleContext.getPrerequisite(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR))
-            .getJavaPluginInfo();
+    JavaPluginInfoProvider javaPluginInfoProvider =
+        JavaInfo.getProvider(
+            JavaPluginInfoProvider.class,
+            ruleContext.getPrerequisite(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR));
 
     ImmutableList<Artifact> annotationProcessorOutputs =
         DataBinding.getMetadataOutputs(ruleContext, useUpdatedArgs, metadataOutputSuffixes);
 
-    consumer.accept(javaPluginInfo, annotationProcessorOutputs);
+    consumer.accept(javaPluginInfoProvider, annotationProcessorOutputs);
   }
 
   @Override
@@ -105,7 +106,7 @@ final class DataBindingV1Context implements DataBindingContext {
 
   @Override
   public ImmutableList<Artifact> getAnnotationSourceFiles(RuleContext ruleContext) {
-    return DataBinding.getAnnotationFile(ruleContext, /* useAndroidX= */ false);
+    return DataBinding.getAnnotationFile(ruleContext);
   }
 
   @Override
@@ -133,11 +134,5 @@ final class DataBindingV1Context implements DataBindingContext {
   public AndroidResources processResources(
       AndroidDataContext dataContext, AndroidResources resources, String appId) {
     return resources;
-  }
-
-  @Override
-  public boolean usesAndroidX() {
-    // AndroidX dependencies are only supported with databinding v2.
-    return false;
   }
 }

@@ -13,21 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 
-/**
- * Builder for creating a zip filter action.
- */
+/** Builder for creating a zip filter action. */
 public class ZipFilterBuilder {
-  /**
-   * Type of compression to apply to output archive.
-   */
+  /** Type of compression to apply to output archive. */
   public enum Compression {
     /** Output should be compressed. */
     COMPRESSED,
@@ -37,6 +33,13 @@ public class ZipFilterBuilder {
     DONT_CHANGE;
   }
 
+  /** Modes of performing content hash checking during zip filtering. */
+  public enum CheckHashMismatchMode {
+    NONE,
+    WARN,
+    ERROR;
+  }
+
   private final RuleContext ruleContext;
   private Artifact inputZip;
   private Artifact outputZip;
@@ -44,6 +47,7 @@ public class ZipFilterBuilder {
   private final ImmutableSet.Builder<String> filterFileTypesBuilder;
   private final ImmutableSet.Builder<String> explicitFilterBuilder;
   private Compression outputMode = Compression.DONT_CHANGE;
+  private CheckHashMismatchMode checkHashMismatch = CheckHashMismatchMode.WARN;
 
   /** Creates a builder using the configuration of the rule as the action configuration. */
   public ZipFilterBuilder(RuleContext ruleContext) {
@@ -89,6 +93,12 @@ public class ZipFilterBuilder {
     return this;
   }
 
+  /** Enable checking of hash mismatches for files with the same name. */
+  public ZipFilterBuilder setCheckHashMismatchMode(CheckHashMismatchMode mode) {
+    this.checkHashMismatch = mode;
+    return this;
+  }
+
   /** Builds the action as configured. */
   public void build() {
     ImmutableSet<Artifact> filterZips = filterZipsBuilder.build();
@@ -106,6 +116,17 @@ public class ZipFilterBuilder {
     }
     if (!explicitFilters.isEmpty()) {
       args.addAll("--explicitFilters", VectorArg.join(",").each(explicitFilters));
+    }
+    switch (checkHashMismatch) {
+      case WARN:
+        args.add("--checkHashMismatch").add("WARN");
+        break;
+      case ERROR:
+        args.add("--checkHashMismatch").add("ERROR");
+        break;
+      case NONE:
+        args.add("--checkHashMismatch").add("IGNORE");
+        break;
     }
     args.add("--outputMode");
     switch (outputMode) {
@@ -126,7 +147,7 @@ public class ZipFilterBuilder {
             .addInput(inputZip)
             .addInputs(filterZips)
             .addOutput(outputZip)
-            .setExecutable(ruleContext.getExecutablePrerequisite("$zip_filter", Mode.HOST))
+            .setExecutable(ruleContext.getExecutablePrerequisite("$zip_filter"))
             .addCommandLine(args.build())
             .setProgressMessage("Filtering Zip %s", inputZip.prettyPrint())
             .setMnemonic("ZipFilter")

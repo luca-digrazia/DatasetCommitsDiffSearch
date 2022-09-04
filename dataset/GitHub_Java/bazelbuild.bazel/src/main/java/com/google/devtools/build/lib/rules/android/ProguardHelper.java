@@ -347,12 +347,8 @@ public final class ProguardHelper {
       libraryJars = NestedSetBuilder.create(Order.STABLE_ORDER, filteredLibraryJar);
     }
 
-    JavaConfiguration javaConfiguration =
-        ruleContext.getConfiguration().getFragment(JavaConfiguration.class);
-    JavaConfiguration.NamedLabel optimizer = javaConfiguration.getBytecodeOptimizer();
-    String mnemonic = optimizer.name();
     if (optimizationPasses == null) {
-      // Run the optimizer as a single step.
+      // Run proguard as a single step.
       SpawnAction.Builder proguardAction = new SpawnAction.Builder();
       CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
       defaultAction(
@@ -371,13 +367,17 @@ public final class ProguardHelper {
           output.getUsage(),
           output.getConstantStringObfuscatedMapping(),
           output.getConfig(),
-          mnemonic);
+          "Proguard");
       proguardAction
-          .setProgressMessage("Trimming binary with %s: %s", mnemonic, ruleContext.getLabel())
+          .setProgressMessage("Trimming binary with Proguard: %s", ruleContext.getLabel())
           .addOutput(proguardOutputJar);
       proguardAction.addCommandLine(commandLine.build());
       ruleContext.registerAction(proguardAction.build(ruleContext));
     } else {
+      JavaConfiguration javaConfiguration =
+          ruleContext.getConfiguration().getFragment(JavaConfiguration.class);
+      JavaConfiguration.NamedLabel optimizer = javaConfiguration.getBytecodeOptimizer();
+      String mnemonic = optimizer.name();
       Optional<Label> optimizerTarget = optimizer.label();
       FilesToRunProvider executable = null;
       if (optimizerTarget.isPresent()) {

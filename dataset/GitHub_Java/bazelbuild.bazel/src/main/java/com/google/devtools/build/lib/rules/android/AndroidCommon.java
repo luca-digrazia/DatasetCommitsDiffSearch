@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -64,6 +65,7 @@ import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
+import com.google.devtools.build.lib.rules.java.JavaStarlarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
@@ -81,7 +83,7 @@ public class AndroidCommon {
 
   public static final InstrumentationSpec ANDROID_COLLECTION_SPEC =
       JavaCommon.JAVA_COLLECTION_SPEC.withDependencyAttributes(
-          "deps", "data", "exports", "instruments", "runtime_deps", "binary_under_test");
+          "deps", "data", "exports", "runtime_deps", "binary_under_test");
 
   private static final ImmutableSet<String> TRANSITIVE_ATTRIBUTES =
       ImmutableSet.of("deps", "exports");
@@ -92,11 +94,17 @@ public class AndroidCommon {
 
   public static final <T extends Info> Iterable<T> getTransitivePrerequisites(
       RuleContext ruleContext, BuiltinProvider<T> key) {
+    return getTransitivePrerequisites(ruleContext, TransitionMode.DONT_CHECK, key);
+  }
+
+  // TODO(b/165916637): Update callers to not pass TransitionMode.
+  public static final <T extends Info> Iterable<T> getTransitivePrerequisites(
+      RuleContext ruleContext, TransitionMode mode, BuiltinProvider<T> key) {
     IterablesChain.Builder<T> builder = IterablesChain.builder();
     AttributeMap attributes = ruleContext.attributes();
     for (String attr : TRANSITIVE_ATTRIBUTES) {
       if (attributes.has(attr, BuildType.LABEL_LIST)) {
-        builder.add(ruleContext.getPrerequisites(attr, key));
+        builder.add(ruleContext.getPrerequisites(attr, mode, key));
       }
     }
     return builder.build();
@@ -684,7 +692,7 @@ public class AndroidCommon {
             .setNeverlink(isNeverlink)
             .build();
 
-    // Do not convert the ResourceApk into builtin providers when it is created from
+    // Do not convert the ResourceApk into native providers when it is created from
     // Starlark via AndroidApplicationResourceInfo, because native dependency providers are not
     // created in the Starlark pipeline.
     if (resourceApk.isFromAndroidApplicationResourceInfo()
@@ -703,6 +711,8 @@ public class AndroidCommon {
 
     return builder
         .setFilesToBuild(filesToBuild)
+        .addStarlarkTransitiveInfo(
+            JavaStarlarkApiProvider.NAME, JavaStarlarkApiProvider.fromRuleContext())
         .addNativeDeclaredProvider(javaInfo)
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(getRunfiles()))
         .addNativeDeclaredProvider(

@@ -43,7 +43,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
+import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.IterablesChain;
@@ -147,7 +147,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
             // Parse labels since we don't have RuleDefinitionEnvironment.getLabel like in a rule
             .add(
                 attr(ASPECT_DESUGAR_PREREQ, LABEL)
-                    .cfg(ExecutionTransitionFactory.create())
+                    .cfg(HostTransition.createFactory())
                     .exec()
                     .value(
                         Label.parseAbsoluteUnchecked(
@@ -163,12 +163,12 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
             .requiresConfigurationFragments(AndroidConfiguration.class)
             .requireAspectsWithProviders(
                 ImmutableList.of(ImmutableSet.of(forKey(JavaInfo.PROVIDER.getKey()))))
-            .requireAspectsWithBuiltinProviders(JavaProtoLibraryAspectProvider.class);
+            .requireAspectsWithNativeProviders(JavaProtoLibraryAspectProvider.class);
     if (TriState.valueOf(params.getOnlyValueOfAttribute("incremental_dexing")) != TriState.NO) {
       // Marginally improves "query2" precision for targets that disable incremental dexing
       result.add(
           attr(ASPECT_DEXBUILDER_PREREQ, LABEL)
-              .cfg(ExecutionTransitionFactory.create())
+              .cfg(HostTransition.createFactory())
               .exec()
               .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/android:dexbuilder")));
     }
@@ -273,11 +273,6 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
         jars.add(rJar);
       }
 
-      Artifact buildStampJar = getAndroidBuildStampJar(base);
-      if (buildStampJar != null) {
-        jars.add(buildStampJar);
-      }
-
       // For android_* targets we need to honor their bootclasspath (nicer in general to do so)
       NestedSet<Artifact> bootclasspath = getBootclasspath(base, ruleContext);
 
@@ -326,11 +321,6 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
           jars.add(rJar);
       }
 
-      Artifact buildStampJar = getAndroidBuildStampJar(base);
-      if (buildStampJar != null) {
-        jars.add(buildStampJar);
-      }
-
       return jars.build();
     }
     return null;
@@ -355,15 +345,6 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
         (AndroidIdeInfoProvider) base.get(AndroidIdeInfoProvider.PROVIDER.getKey());
     if (provider != null && provider.getResourceJar() != null) {
       return provider.getResourceJar().getClassJar();
-    }
-    return null;
-  }
-
-  private static Artifact getAndroidBuildStampJar(ConfiguredTarget base) {
-    AndroidApplicationResourceInfo provider =
-        (AndroidApplicationResourceInfo) base.get(AndroidApplicationResourceInfo.PROVIDER.getKey());
-    if (provider != null && provider.getBuildStampJar() != null) {
-      return provider.getBuildStampJar();
     }
     return null;
   }

@@ -81,7 +81,6 @@ import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
-import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -90,7 +89,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkInt;
 
 /** An implementation for the "android_binary" rule. */
 public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
@@ -808,12 +806,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   @Nullable
   private static Integer getProguardOptimizationPasses(RuleContext ruleContext) {
     if (ruleContext.attributes().has("proguard_optimization_passes", Type.INTEGER)) {
-      StarlarkInt i = ruleContext.attributes().get("proguard_optimization_passes", Type.INTEGER);
-      if (i != null) {
-        return i.toIntUnchecked();
-      }
+      return ruleContext.attributes().get("proguard_optimization_passes", Type.INTEGER);
+    } else {
+      return null;
     }
-    return null;
   }
 
   private static ProguardOutput createEmptyProguardAction(
@@ -837,8 +833,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         new FailAction(
             ruleContext.getActionOwner(),
             failures.build().toSet(),
-            "Can't run Proguard without proguard_specs",
-            Code.PROGUARD_SPECS_MISSING));
+            String.format("Can't run Proguard without proguard_specs")));
     return new ProguardOutput(deployJarArtifact, null, null, null, null, null, null);
   }
 
@@ -1042,7 +1037,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               + "\" not supported by this version of the Android SDK");
     }
 
-    int dexShards = ruleContext.attributes().get("dex_shards", Type.INTEGER).toIntUnchecked();
+    int dexShards = ruleContext.attributes().get("dex_shards", Type.INTEGER);
     if (dexShards > 1) {
       if (multidexMode == MultidexMode.OFF) {
         ruleContext.throwWithRuleError(".dex sharding is only available in multidex mode");
@@ -1460,10 +1455,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     // Must use params file as otherwise expanding the input tree artifact doesn't work
     Artifact paramFile =
         ruleContext.getDerivedArtifact(
-            ParameterFile.derivePath(
-                outputZip.getOutputDirRelativePath(
-                    ruleContext.getConfiguration().isSiblingRepositoryLayout())),
-            outputZip.getRoot());
+            ParameterFile.derivePath(outputZip.getRootRelativePath()), outputZip.getRoot());
     ruleContext.registerAction(
         new ParameterFileWriteAction(
             ruleContext.getActionOwner(),
@@ -1535,8 +1527,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       // because for "legacy" ResourceApks, AndroidCommon produces Jars per resource dependency that
       // can theoretically have duplicate basenames, so they go into special directories, and we
       // piggyback on that naming scheme here by placing dex archives into the same directories.
-      PathFragment jarPath =
-          jar.getOutputDirRelativePath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+      PathFragment jarPath = jar.getRootRelativePath();
       Artifact desugared =
           DexArchiveAspect.desugar(
               ruleContext,
@@ -1584,8 +1575,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       // because for "legacy" ResourceApks, AndroidCommon produces Jars per resource dependency that
       // can theoretically have duplicate basenames, so they go into special directories, and we
       // piggyback on that naming scheme here by placing dex archives into the same directories.
-      PathFragment jarPath =
-          jar.getOutputDirRelativePath(ruleContext.getConfiguration().isSiblingRepositoryLayout());
+      PathFragment jarPath = jar.getRootRelativePath();
       Artifact dexArchive =
           DexArchiveAspect.createDexArchiveAction(
               ruleContext,

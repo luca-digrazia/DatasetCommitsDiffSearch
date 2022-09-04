@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -23,12 +22,10 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.java.BootClassPathInfo;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 
 /** Implementation of the {@code android_sdk} rule. */
@@ -72,36 +69,32 @@ public class AndroidSdkBase implements RuleConfiguredTargetFactory {
     Artifact sourceProperties = ruleContext.getHostPrerequisiteArtifact("source_properties");
     Artifact shrinkedAndroidJar = ruleContext.getPrerequisiteArtifact("shrinked_android_jar");
     Artifact mainDexClasses = ruleContext.getPrerequisiteArtifact("main_dex_classes");
-    BootClassPathInfo system = ruleContext.getPrerequisite("system", BootClassPathInfo.PROVIDER);
 
     if (ruleContext.hasErrors()) {
       return null;
     }
 
-    AndroidSdkProvider sdk =
-        new AndroidSdkProvider(
-            buildToolsVersion,
-            frameworkAidl,
-            aidlLib,
-            androidJar,
-            sourceProperties,
-            shrinkedAndroidJar,
-            mainDexClasses,
-            adb,
-            dx,
-            mainDexListCreator,
-            aidl,
-            aapt,
-            aapt2,
-            apkBuilder,
-            apkSigner,
-            proguard,
-            zipalign,
-            system);
-
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addNativeDeclaredProvider(sdk)
-        .addNativeDeclaredProvider(new ToolchainInfo(ImmutableMap.of("android_sdk_info", sdk)))
+        .addNativeDeclaredProvider(
+            new AndroidSdkProvider(
+                buildToolsVersion,
+                frameworkAidl,
+                aidlLib,
+                androidJar,
+                sourceProperties,
+                shrinkedAndroidJar,
+                mainDexClasses,
+                adb,
+                dx,
+                mainDexListCreator,
+                aidl,
+                aapt,
+                aapt2,
+                apkBuilder,
+                apkSigner,
+                proguard,
+                zipalign,
+                /* system= */ null))
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .setFilesToBuild(NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER))
         .build();
