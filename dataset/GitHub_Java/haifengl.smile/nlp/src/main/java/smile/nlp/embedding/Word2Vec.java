@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.nlp.embedding;
 
@@ -42,7 +42,7 @@ import smile.data.vector.FloatVector;
  * corpus being assigned a corresponding vector in the space. Word vectors
  * are positioned in the vector space such that words that share common
  * contexts in the corpus are located close to one another in the space.
- * <p>
+ *
  * Word2vec can utilize either of two model architectures to produce
  * a distributed representation of words: continuous bag-of-words (CBOW)
  * or continuous skip-gram. In the continuous bag-of-words architecture,
