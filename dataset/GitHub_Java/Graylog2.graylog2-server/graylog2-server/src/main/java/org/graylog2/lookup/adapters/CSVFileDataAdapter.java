@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.lookup.adapters;
 
@@ -30,7 +30,6 @@ import com.google.common.collect.Multimap;
 import com.google.common.primitives.Ints;
 import com.google.inject.assistedinject.Assisted;
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog2.lookup.AllowedAuxiliaryPathChecker;
 import org.graylog2.plugin.lookup.LookupCachePurge;
 import org.graylog2.plugin.lookup.LookupDataAdapter;
 import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
@@ -62,10 +61,8 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
     private static final Logger LOG = LoggerFactory.getLogger(CSVFileDataAdapter.class);
 
     public static final String NAME = "csvfile";
-    public static final String ALLOWED_PATH_ERROR = "The specified CSV file is not in an allowed path.";
 
     private final Config config;
-    private final AllowedAuxiliaryPathChecker pathChecker;
     private final AtomicReference<Map<String, String>> lookupRef = new AtomicReference<>(ImmutableMap.of());
 
     private FileInfo fileInfo = FileInfo.empty();
@@ -74,11 +71,9 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
     public CSVFileDataAdapter(@Assisted("id") String id,
                               @Assisted("name") String name,
                               @Assisted LookupDataAdapterConfiguration config,
-                              MetricRegistry metricRegistry,
-                              AllowedAuxiliaryPathChecker pathChecker) {
+                              MetricRegistry metricRegistry) {
         super(id, name, config, metricRegistry);
         this.config = (Config) config;
-        this.pathChecker = pathChecker;
     }
 
     @Override
@@ -86,9 +81,6 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         LOG.debug("Starting CSV data adapter for file: {}", config.path());
         if (isNullOrEmpty(config.path())) {
             throw new IllegalStateException("File path needs to be set");
-        }
-        if (!pathChecker.fileIsInAllowedPath(Paths.get(config.path()))) {
-            throw new IllegalStateException(ALLOWED_PATH_ERROR);
         }
         if (config.checkInterval() < 1) {
             throw new IllegalStateException("Check interval setting cannot be smaller than 1");
@@ -106,12 +98,6 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
 
     @Override
     protected void doRefresh(LookupCachePurge cachePurge) throws Exception {
-        if (!pathChecker.fileIsInAllowedPath(Paths.get(config.path()))) {
-            LOG.error(ALLOWED_PATH_ERROR);
-            setError(new IllegalStateException(ALLOWED_PATH_ERROR));
-            return;
-        }
-
         try {
             final FileInfo.Change fileChanged = fileInfo.checkForChange();
             if (!fileChanged.isChanged() && !getError().isPresent()) {
@@ -193,7 +179,7 @@ public class CSVFileDataAdapter extends LookupDataAdapter {
         final String value = lookupRef.get().get(stringKey);
 
         if (value == null) {
-            return getEmptyResult();
+            return LookupResult.empty();
         }
 
         return LookupResult.single(value);
