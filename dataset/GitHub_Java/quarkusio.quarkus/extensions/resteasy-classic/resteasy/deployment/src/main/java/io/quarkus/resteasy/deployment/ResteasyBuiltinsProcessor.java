@@ -51,7 +51,7 @@ public class ResteasyBuiltinsProcessor {
             JaxRsSecurityConfig config,
             ResteasyDeploymentBuildItem resteasyDeployment,
             BuildProducer<AdditionalSecuredClassesBuildItem> additionalSecuredClasses) {
-        if ((config.denyJaxRs) && (resteasyDeployment != null)) {
+        if (config.denyJaxRs) {
             final List<ClassInfo> classes = new ArrayList<>();
 
             List<String> resourceClasses = resteasyDeployment.getDeployment().getScannedResourceClasses();
