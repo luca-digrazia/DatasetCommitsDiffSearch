@@ -19,11 +19,10 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.quarkus.deployment.builditem.ManagedExecutorInitializedBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationProvider;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationRecorder;
-import io.smallrye.context.SmallRyeManagedExecutor;
 
 /**
  * The deployment processor for MP-CP applications
@@ -68,21 +67,23 @@ class SmallRyeContextPropagationProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     void build(SmallRyeContextPropagationRecorder recorder,
             ExecutorBuildItem executorBuildItem,
-            ShutdownContextBuildItem shutdownContextBuildItem,
             BuildProducer<FeatureBuildItem> feature,
+            BuildProducer<ManagedExecutorInitializedBuildItem> managedExecutorInitialized,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
         feature.produce(new FeatureBuildItem(Feature.SMALLRYE_CONTEXT_PROPAGATION));
 
-        recorder.configureRuntime(executorBuildItem.getExecutorProxy(), shutdownContextBuildItem);
+        recorder.configureRuntime(executorBuildItem.getExecutorProxy());
 
         // Synthetic bean for ManagedExecutor
         syntheticBeans.produce(
-                SyntheticBeanBuildItem.configure(SmallRyeManagedExecutor.class)
+                SyntheticBeanBuildItem.configure(ManagedExecutor.class)
                         .scope(ApplicationScoped.class)
-                        .addType(ManagedExecutor.class)
                         .defaultBean()
                         .unremovable()
                         .supplier(recorder.initializeManagedExecutor(executorBuildItem.getExecutorProxy()))
                         .setRuntimeInit().done());
+
+        // This should be removed at some point after Quarkus 1.7
+        managedExecutorInitialized.produce(new ManagedExecutorInitializedBuildItem());
     }
 }
