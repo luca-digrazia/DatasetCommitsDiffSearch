@@ -192,9 +192,10 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
      * @param to
      */
     protected void cloneParams(GSYBaseVideoPlayer from, GSYBaseVideoPlayer to) {
+        to.setLooping(from.isLooping());
+        to.setSpeed(from.getSpeed(), from.mSoundTouch);
+        to.setIsTouchWigetFull(from.mIsTouchWigetFull);
         to.mHadPlay = from.mHadPlay;
-        to.mPlayTag = from.mPlayTag;
-        to.mPlayPosition = from.mPlayPosition;
         to.mEffectFilter = from.mEffectFilter;
         to.mCacheFile = from.mCacheFile;
         to.mFullPauseBitmap = from.mFullPauseBitmap;
@@ -223,9 +224,6 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         } else {
             to.setUp(from.mOriginUrl, from.mCache, from.mCachePath, from.mMapHeadData, from.mTitle);
         }
-        to.setLooping(from.isLooping());
-        to.setIsTouchWigetFull(from.mIsTouchWigetFull);
-        to.setSpeed(from.getSpeed(), from.mSoundTouch);
         to.setStateAndUi(from.mCurrentState);
     }
 
