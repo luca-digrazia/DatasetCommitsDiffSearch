@@ -78,7 +78,6 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.util.MockJ2ObjcSupport;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
@@ -189,10 +188,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected String configurationGenfiles(
       String arch, ConfigurationDistinguisher configurationDistinguisher,
       DottedVersion minOsVersion) {
-    return configurationDir(arch, configurationDistinguisher, minOsVersion)
-        + getTargetConfiguration().getGenfilesDirectory(RepositoryName.MAIN)
-            .getExecPath().getBaseName();
-
+    return configurationDir(arch, configurationDistinguisher, minOsVersion) + "genfiles";
   }
 
   private String configurationDir(
