@@ -1,20 +1,24 @@
-/*
- * Tencent is pleased to support the open source community by making Angel available.
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
- * compliance with the License. You may obtain a copy of the License at
- *
- * https://opensource.org/licenses/Apache-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
+/**
+ * Add writeStorage and copy methods for Angel.
+ */
 
 package com.tencent.angel.utils;
 
@@ -22,6 +26,7 @@ import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.ml.predict.PredictResult;
 import com.tencent.angel.worker.storage.DataBlock;
 import com.tencent.angel.worker.task.TaskContext;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -50,8 +55,7 @@ public class HdfsUtil {
   public static final String PATHFILTER_CLASS = "mapreduce.input.pathFilter.class";
   public static final String NUM_INPUT_FILES = "mapreduce.input.fileinputformat.numinputfiles";
   public static final String INPUT_DIR_RECURSIVE =
-    "mapreduce.input.fileinputformat.input.dir.recursive";
-
+      "mapreduce.input.fileinputformat.input.dir.recursive";
 
   private static class MultiPathFilter implements PathFilter {
     private List<PathFilter> filters;
@@ -69,7 +73,6 @@ public class HdfsUtil {
       return true;
     }
   }
-
 
   private static final PathFilter hiddenFileFilter = new PathFilter() {
     public boolean accept(Path p) {
@@ -100,9 +103,8 @@ public class HdfsUtil {
   public static PathFilter getInputPathFilter(JobContext context) {
     Configuration conf = context.getConfiguration();
     Class<?> filterClass = conf.getClass(PATHFILTER_CLASS, null, PathFilter.class);
-    return (filterClass != null) ?
-      (PathFilter) ReflectionUtils.newInstance(filterClass, conf) :
-      null;
+    return (filterClass != null) ? (PathFilter) ReflectionUtils.newInstance(filterClass, conf)
+        : null;
   }
 
   /**
@@ -176,7 +178,7 @@ public class HdfsUtil {
   }
 
   protected static void addInputPathRecursively(List<FileStatus> result, FileSystem fs, Path path,
-    PathFilter inputFilter) throws IOException {
+      PathFilter inputFilter) throws IOException {
     RemoteIterator<LocatedFileStatus> iter = fs.listLocatedStatus(path);
     while (iter.hasNext()) {
       LocatedFileStatus stat = iter.next();
@@ -220,9 +222,8 @@ public class HdfsUtil {
   public static PathFilter getInputPathFilter(JobConf context) {
     Configuration conf = context;
     Class<?> filterClass = conf.getClass(PATHFILTER_CLASS, null, PathFilter.class);
-    return (filterClass != null) ?
-      (PathFilter) ReflectionUtils.newInstance(filterClass, conf) :
-      null;
+    return (filterClass != null) ? (PathFilter) ReflectionUtils.newInstance(filterClass, conf)
+        : null;
   }
 
   /**
@@ -335,8 +336,8 @@ public class HdfsUtil {
     return name.startsWith(tmpPrefix);
   }
 
-  @SuppressWarnings("deprecation") private static void copyDir(Path srcf, Path destf, FileSystem fs)
-    throws IOException {
+  @SuppressWarnings("deprecation")
+  private static void copyDir(Path srcf, Path destf, FileSystem fs) throws IOException {
     FileStatus[] items = fs.listStatus(srcf);
     for (int i = 0; i < items.length; i++) {
       if (items[i].isDir()) {
@@ -351,9 +352,8 @@ public class HdfsUtil {
           continue;
         }
         if (!fs.rename(items[i].getPath(), new Path(destf, items[i].getPath().getName()))) {
-          throw new IOException(
-            "rename from " + items[i].getPath() + " to " + destf + "/" + items[i].getPath()
-              .getName() + " failed");
+          throw new IOException("rename from " + items[i].getPath() + " to " + destf + "/"
+              + items[i].getPath().getName() + " failed");
         }
       }
     }
@@ -364,18 +364,10 @@ public class HdfsUtil {
   }
 
   public static void rename(Path tmpCombinePath, Path outputPath, FileSystem fs)
-    throws IOException {
-    // If out path exist , just remove it first
+      throws IOException {
     if (fs.exists(outputPath)) {
-      fs.delete(outputPath, true);
+      fs.delete(outputPath, false);
     }
-
-    // Create parent directory if not exist
-    if(!fs.exists(outputPath.getParent())) {
-      fs.mkdirs(outputPath.getParent());
-    }
-
-    // Rename
     if (!fs.rename(tmpCombinePath, outputPath)) {
       throw new IOException("rename from " + tmpCombinePath + " to " + outputPath + " failed");
     }
@@ -383,10 +375,9 @@ public class HdfsUtil {
 
   public static Path generateTmpDirectory(Configuration conf, String appId, Path outputPath) {
     URI uri = outputPath.toUri();
-    String path =
-      (uri.getScheme() != null ? uri.getScheme() : "hdfs") + "://" + (uri.getHost() != null ?
-        uri.getHost() :
-        "") + (uri.getPort() > 0 ? (":" + uri.getPort()) : "");
+    String path = (uri.getScheme() != null ? uri.getScheme() : "hdfs") + "://"
+             + (uri.getHost() != null ? uri.getHost() : "")
+             + (uri.getPort() > 0 ? (":" + uri.getPort()) : "");
     String user = conf.get(AngelConf.USER_NAME, "");
     String tmpDir = conf.get(AngelConf.ANGEL_JOB_TMP_OUTPUT_PATH_PREFIX, "/tmp/" + user);
     String finalTmpDirForApp = path + tmpDir + "/" + appId + "_" + UUID.randomUUID().toString();
@@ -395,7 +386,7 @@ public class HdfsUtil {
   }
 
   public static void writeStorage(DataBlock<PredictResult> dataBlock, TaskContext taskContext)
-    throws IOException {
+      throws IOException {
     String outDir = taskContext.getConf().get(AngelConf.ANGEL_JOB_TMP_OUTPUT_PATH);
     Path outPath = new Path(outDir, "predict");
     FileSystem fs = outPath.getFileSystem(taskContext.getConf());
@@ -419,7 +410,12 @@ public class HdfsUtil {
         break;
       }
 
-      output.writeBytes(resultItem.getText() + "\n");
+      if (isFirstRow) {
+        isFirstRow = false;
+      } else {
+        output.writeBytes("\n");
+      }
+      output.writeBytes(resultItem.getText());
     }
 
     output.close();

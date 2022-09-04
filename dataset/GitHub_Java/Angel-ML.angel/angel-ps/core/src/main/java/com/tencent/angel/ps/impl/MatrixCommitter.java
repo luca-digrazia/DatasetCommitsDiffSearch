@@ -16,15 +16,27 @@
 
 package com.tencent.angel.ps.impl;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.tencent.angel.PartitionKey;
 import com.tencent.angel.conf.AngelConf;
-import com.tencent.angel.model.output.format.ModelFilesConstent;
+import com.tencent.angel.ps.impl.matrix.ServerMatrix;
+import com.tencent.angel.ps.impl.matrix.ServerPartition;
+import com.tencent.angel.utils.HdfsUtil;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.util.Time;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -32,55 +44,235 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class MatrixCommitter {
   private static final Log LOG = LogFactory.getLog(MatrixCommitter.class);
-  private final AtomicBoolean canCommit = new AtomicBoolean(true);
-  private final PSContext context;
-  private volatile Thread commitRunner;
+  private final ParameterServer ps;
+  private final Configuration conf;
+  private ExecutorService commitTaskPool;
+  private Path baseDir;
+  private FileSystem fs;
+  private static String resultDir = "result";
+  private AtomicBoolean isCommitting = new AtomicBoolean(false);
+
+  /**
+   * The task commit matrix partition on according file.
+   */
+  public class CommitTask implements Runnable {
+
+    private final ServerPartition partition;
+    private final ServerMatrix matrix;
+    private AtomicBoolean isSuccess = new AtomicBoolean(false);
+    private AtomicBoolean finishFlag = new AtomicBoolean(false);
+    private String errorLog;
+    private final String matrixName;
+    private final int matrixId;
+
+    /**
+     * Create a new Commit task.
+     *
+     * @param matrix     the matrix
+     * @param partition  the partition
+     * @param matrixName the matrix name
+     * @param matrixId   the matrix id
+     */
+    public CommitTask(ServerMatrix matrix, ServerPartition partition, String matrixName,
+        int matrixId) {
+      this.matrix = matrix;
+      this.partition = partition;
+      this.matrixId = matrixId;
+      if (matrixName == null || matrixName.isEmpty()) {
+        this.matrixName = String.valueOf(matrixId);
+      } else {
+        this.matrixName = matrixName;
+      }
+    }
+
+    @Override
+    public void run() {
+      long startTime = Time.monotonicNow();
+      FSDataOutputStream out = null;
+      try {
+        assert matrixName != null;
+        Path destMatrixPath = new Path(baseDir, matrixName);
+
+        // mkdir does not throw exception if path exits
+        fs.mkdirs(destMatrixPath);
+        Path destFile =
+            new Path(destMatrixPath, String.valueOf(partition.getPartitionKey().getPartitionId()));
+        Path tmpDestFile = HdfsUtil.toTmpPath(destFile);
+
+        out = fs.create(tmpDestFile, (short) 1);
+        matrix.writeHeader(out);
+        partition.commit(out);
+        out.flush();
+        out.close();
+        out = null;
+
+        HdfsUtil.rename(tmpDestFile, destFile, fs);
+        isSuccess.set(true);
+        finishFlag.set(true);
+      } catch (Exception x) {
+        errorLog =
+            "commit partition " + partition.getPartitionKey().getMatrixId() + "/"
+                + partition.getPartitionKey().getPartitionId() + " error";
+        LOG.error(errorLog, x);
+        isSuccess.set(false);
+      } finally {
+        if (out != null) {
+          try {
+            out.close();
+          } catch (Exception e) {
+            LOG.warn("Warning!", e);
+          }
+        }
+        LOG.info("commit matrix " + matrix.getName() + " cost time: "
+            + (Time.monotonicNow() - startTime) + "ms!");
+        finishFlag.set(true);
+      }
+    }
+
+    /**
+     * Is success.
+     *
+     * @return true if success, else false
+     */
+    public boolean isSuccess() {
+      return isSuccess.get();
+    }
+
+    /**
+     * Gets error log
+     *
+     * @return the error log if exists
+     */
+    public String getErrorLog() {
+      return errorLog;
+    }
+
+    /**
+     * Gets matrix id for committing.
+     *
+     * @return the matrix id
+     */
+    public int getMatrixId() {
+      return matrixId;
+    }
+  }
 
   /**
    * Create a new Matrix committer according to parameter server
    *
-   * @param context the ps context
+   * @param ps the ps
    */
-  public MatrixCommitter(PSContext context) {
-    this.context = context;
+  public MatrixCommitter(ParameterServer ps) {
+    this.ps = ps;
+    this.conf = ps.getConf();
   }
 
   /**
    * For committing Parameter Server's matrices.
-   * @param matrixPartitions matrix id -> need save matrices map
+   * @param matrixIds 
    */
-  public void commit(Map<Integer, List<Integer>> matrixPartitions) {
-    if(!canCommit.getAndSet(false)) {
-      LOG.debug("Model is saved, just return");
+  public void commit(final List<Integer> matrixIds) {
+    if (isCommitting.get()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("ps is commiting......");
+      }
       return;
     }
-
     LOG.info("to start commit tasks!");
-    commitRunner = new Thread(new Runnable() {
+    isCommitting.set(true);
+    Thread commitDispacher = new Thread(new Runnable() {
       @Override
       public void run() {
+        long startTime = Time.monotonicNow();
         try {
-          long startTime = System.currentTimeMillis();
-          Configuration conf = context.getConf();
           String outputPath = conf.get(AngelConf.ANGEL_JOB_TMP_OUTPUT_PATH);
-          Path baseDir = new Path(new Path(outputPath, ModelFilesConstent.resultDirName), context.getPs().getServerId().toString());
-          context.getMatrixStorageManager().save(matrixPartitions, baseDir);
-          LOG.info("commit matrices use time " + (System.currentTimeMillis() - startTime)  + " ms ");
-          context.getPs().done();
-        } catch (Throwable x) {
+          LOG.info("outputPath=" + outputPath);
+          if (outputPath == null) {
+            throw new IOException("can not find output path setting");
+          }
+
+          baseDir = new Path(new Path(outputPath, resultDir), ps.getServerId().toString());
+          fs = baseDir.getFileSystem(conf);
+          if (fs.exists(baseDir)) {
+            LOG.warn("ps temp output directory is already existed " + baseDir.toString());
+            fs.delete(baseDir, true);
+          }
+          fs.mkdirs(baseDir);
+
+          int commitThreadCount =
+              conf.getInt(AngelConf.ANGEL_PS_COMMIT_TASK_NUM,
+                  AngelConf.DEFAULT_ANGEL_PS_COMMIT_TASK_NUM);
+          ThreadFactory commitThreadFacotry =
+              new ThreadFactoryBuilder().setNameFormat("CommitTask").build();
+          commitTaskPool = Executors.newFixedThreadPool(commitThreadCount, commitThreadFacotry);
+
+          List<CommitTask> allCommitTasks = new ArrayList<CommitTask>();
+          int size = matrixIds.size();
+          for(int i = 0; i < size; i++) {
+            ServerMatrix matrix = ps.getMatrixPartitionManager().getMatrix(matrixIds.get(i));
+            if(matrix == null) {
+              continue;
+            }
+
+            List<PartitionKey> partitionKeys = matrix.getTotalPartitionKeys();
+            if(partitionKeys == null || partitionKeys.isEmpty()) {
+              continue;
+            }
+
+            for (PartitionKey key : partitionKeys) {
+              ServerPartition partition = matrix.getPartition(key);
+              CommitTask task = new CommitTask(matrix, partition, matrix.getName(), matrix.getId());
+              allCommitTasks.add(task);
+              commitTaskPool.execute(task);
+            }
+          }
+
+          boolean commitSuccess = true;
+          String errorLog = null;
+          for (CommitTask task : allCommitTasks) {
+            while (!task.finishFlag.get()) {
+              Thread.sleep(1000);
+            }
+            if (!task.isSuccess()) {
+              commitSuccess = false;
+              errorLog = task.getErrorLog();
+            }
+          }
+          LOG.info("ps commit cost time: " + (Time.monotonicNow() - startTime) + "ms");
+          // commitTaskPool.shutdown();
+          commitTaskPool.shutdownNow();
+          if (commitSuccess) {
+            ps.done();
+          } else {
+            LOG.error("ps failed for " + errorLog);
+            ps.failed(errorLog);
+          }
+        } catch (Exception x) {
           LOG.fatal("ps commit error ", x);
-          context.getPs().failed("commit failed." + x.getMessage());
+          ps.failed("commit failed." + x.getMessage());
         }
       }
     });
 
-    commitRunner.setName("commit runner");
-    commitRunner.start();
+    commitDispacher.setName("commit dispacher");
+    commitDispacher.start();
   }
 
-  public void stop() {
-    if(commitRunner != null) {
-      commitRunner.interrupt();
-    }
+  /**
+   * Gets according parameter server.
+   *
+   * @return the parameter server
+   */
+  public ParameterServer getPs() {
+    return ps;
+  }
+
+  /**
+   * Gets conf.
+   *
+   * @return the conf
+   */
+  public Configuration getConf() {
+    return conf;
   }
 }
