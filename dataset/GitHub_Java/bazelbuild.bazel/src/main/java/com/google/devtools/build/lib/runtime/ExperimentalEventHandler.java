@@ -705,18 +705,21 @@ public class ExperimentalEventHandler implements EventHandler {
         final ExperimentalEventHandler eventHandler = this;
         updateThread =
             new Thread(
-                () -> {
-                  try {
-                    while (true) {
-                      Thread.sleep(minimalUpdateInterval);
-                      if (lastRefreshMillis < mustRefreshAfterMillis
-                          && mustRefreshAfterMillis < clock.currentTimeMillis()) {
-                        progressBarNeedsRefresh = true;
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    try {
+                      while (true) {
+                        Thread.sleep(minimalUpdateInterval);
+                        if (lastRefreshMillis < mustRefreshAfterMillis
+                            && mustRefreshAfterMillis < clock.currentTimeMillis()) {
+                          progressBarNeedsRefresh = true;
+                        }
+                        eventHandler.doRefresh(/* fromUpdateThread= */ true);
                       }
-                      eventHandler.doRefresh(/* fromUpdateThread= */ true);
+                    } catch (InterruptedException e) {
+                      // Ignore
                     }
-                  } catch (InterruptedException e) {
-                    // Ignore
                   }
                 });
         threadToStart = updateThread;
