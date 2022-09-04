@@ -18,7 +18,7 @@ package org.graylog2.periodical;
 
 import com.google.inject.Inject;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
-import org.graylog2.indexer.cluster.Cluster;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.periodical.Periodical;
@@ -26,17 +26,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class IndexerClusterCheckerThread extends Periodical {
+
     private static final Logger LOG = LoggerFactory.getLogger(IndexerClusterCheckerThread.class);
     private static final int MINIMUM_OPEN_FILES_LIMIT = 64000;
 
+    private final Indexer indexer;
     private final NotificationService notificationService;
-    private final Cluster cluster;
 
     @Inject
-    public IndexerClusterCheckerThread(NotificationService notificationService,
-                                       Cluster cluster) {
+    public IndexerClusterCheckerThread(final NotificationService notificationService,
+                                       final Indexer indexer) {
         this.notificationService = notificationService;
-        this.cluster = cluster;
+        this.indexer = indexer;
     }
 
     @Override
@@ -45,15 +46,13 @@ public class IndexerClusterCheckerThread extends Periodical {
             return;
         }
 
-        try {
-            cluster.getHealth();
-        } catch (Exception e) {
+        if (null == indexer.cluster()) {
             LOG.info("Indexer not fully initialized yet. Skipping periodic cluster check.");
             return;
         }
 
         boolean allHigher = true;
-        for (NodeInfo node : cluster.getDataNodes()) {
+        for (NodeInfo node : indexer.cluster().getDataNodes()) {
             // Check number of maximum open files.
             final String osName = node.getJvm().getSystemProperties().get("os.name");
             if (null != osName && osName.startsWith("Windows")) {
@@ -62,8 +61,7 @@ public class IndexerClusterCheckerThread extends Periodical {
                 // Write notification.
                 final Notification notification = notificationService.buildNow()
                         .addType(Notification.Type.ES_OPEN_FILES)
-                        .addSeverity(Notification.Severity.URGENT)
-                        .addDetail("max_file_descriptors", node.getProcess().getMaxFileDescriptors());
+                        .addSeverity(Notification.Severity.URGENT);
 
                 if (notificationService.publishIfFirst(notification)) {
                     LOG.warn("Indexer node <{}> open file limit is too low: [{}]. Set it to at least {}.",
