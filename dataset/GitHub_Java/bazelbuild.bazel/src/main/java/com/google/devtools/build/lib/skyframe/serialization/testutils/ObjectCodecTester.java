@@ -37,7 +37,7 @@ public class ObjectCodecTester<T> {
      *
      * @throws Exception on verification failure
      */
-    void verifyDeserialized(T original, T deserialized) throws Exception;
+    void verifyDeserialized(T original, Object deserialized) throws Exception;
   }
 
   /**
@@ -77,7 +77,7 @@ public class ObjectCodecTester<T> {
   void testSerializeDeserialize() throws Exception {
     for (T subject : subjects) {
       byte[] serialized = toBytes(subject);
-      T deserialized = fromBytes(serialized);
+      Object deserialized = fromBytes(serialized);
       verificationFunction.verifyDeserialized(subject, deserialized);
     }
   }
@@ -123,13 +123,12 @@ public class ObjectCodecTester<T> {
     }
 
     /** Add subjects to be tested for serialization/deserialization. */
-    @SafeVarargs
-    public final Builder<T> addSubjects(@SuppressWarnings("unchecked") T... subjects) {
+    public Builder<T> addSubjects(@SuppressWarnings("unchecked") T... subjects) {
       return addSubjects(ImmutableList.copyOf(subjects));
     }
 
     /** Add subjects to be tested for serialization/deserialization. */
-    public Builder<T> addSubjects(ImmutableList<T> subjects) {
+    Builder<T> addSubjects(ImmutableList<T> subjects) {
       subjectsBuilder.addAll(subjects);
       return this;
     }
