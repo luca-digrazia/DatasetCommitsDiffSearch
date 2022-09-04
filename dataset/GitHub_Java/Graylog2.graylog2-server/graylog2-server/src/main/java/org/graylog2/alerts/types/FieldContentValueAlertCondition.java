@@ -27,15 +27,12 @@ import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.Sorting;
+import org.graylog2.plugin.alarms.AlertCondition;
+import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.TextField;
-import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
-import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -64,36 +61,6 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
                                                @Assisted("userid") String creatorUserId,
                                                Map<String, Object> parameters,
                                                @Assisted("title") @Nullable String title);
-
-        Config config();
-        Descriptor descriptor();
-    }
-
-    public static class Config implements AlertCondition.Config {
-        public Config() {
-        }
-
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest configurationRequest = ConfigurationRequest.createWithFields(
-                    new TextField("field", "Field", "", "Field name that should be checked", ConfigurationField.Optional.NOT_OPTIONAL),
-                    new TextField("value", "Value", "", "Value that the field should be checked against", ConfigurationField.Optional.NOT_OPTIONAL)
-            );
-            configurationRequest.addFields(AbstractAlertCondition.getDefaultConfigurationFields());
-
-            return configurationRequest;
-        }
-    }
-
-    public static class Descriptor extends AlertCondition.Descriptor {
-        public Descriptor() {
-            super(
-                "Field Content Value Alert Condition",
-                "https://www.graylog.org/",
-                "This condition is triggered when the aggregated value of a field is higher/lower than a defined "
-                + "threshold for a given time range."
-            );
-        }
     }
 
     @AssistedInject
@@ -159,7 +126,7 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
                 return new CheckResult(true, this, resultDescription, Tools.nowUTC(), summaries);
             } else {
                 LOG.debug("Alert check <{}> returned no results.", id);
-                return new NegativeCheckResult();
+                return new NegativeCheckResult(this);
             }
         } catch (InvalidRangeParametersException e) {
             // cannot happen lol

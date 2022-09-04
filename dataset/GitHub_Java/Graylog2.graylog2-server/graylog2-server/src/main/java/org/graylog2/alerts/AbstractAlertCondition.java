@@ -23,8 +23,6 @@ import com.google.common.collect.Lists;
 import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
@@ -33,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 public abstract class AbstractAlertCondition implements EmbeddedPersistable, AlertCondition {
@@ -56,7 +55,6 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
     protected final DateTime createdAt;
     protected final String creatorUserId;
     protected final int grace;
-    protected final int backlog;
     protected final String title;
 
     private final Map<String, Object> parameters;
@@ -73,10 +71,9 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
         this.type = type;
         this.createdAt = createdAt;
         this.creatorUserId = creatorUserId;
-        this.parameters = ImmutableMap.copyOf(parameters);
+        this.parameters = parameters;
 
-        this.grace = Tools.getNumber(this.parameters.get("grace"), 0).intValue();
-        this.backlog = Tools.getNumber(getParameters().get("backlog"), 0).intValue();
+        this.grace = getNumber(this.parameters.get("grace")).orElse(0).intValue();
     }
 
     @Override
@@ -86,6 +83,11 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
 
     public String getType() {
         return type;
+    }
+
+    @Override
+    public String getTypeString() {
+        return type.toString();
     }
 
     @Override
@@ -116,7 +118,7 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
 
     @Override
     public Integer getBacklog() {
-        return backlog;
+        return getNumber(getParameters().get("backlog")).orElse(0).intValue();
     }
 
     @Override
@@ -129,7 +131,7 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
     public Map<String, Object> getPersistedFields() {
         return ImmutableMap.<String, Object>builder()
                 .put("id", id)
-                .put("type", type)
+                .put("type", type.toString().toLowerCase(Locale.ENGLISH))
                 .put("creator_user_id", creatorUserId)
                 .put("created_at", Tools.getISO8601String(createdAt))
                 .put("parameters", parameters)
@@ -191,15 +193,20 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
     }
 
     public static class NegativeCheckResult extends CheckResult {
-        public NegativeCheckResult() {
-            super(false, null, null, null, null);
+        public NegativeCheckResult(AlertCondition alertCondition) {
+            super(false, alertCondition, null, null, null);
         }
     }
 
-    public static List<ConfigurationField> getDefaultConfigurationFields() {
-        return Lists.newArrayList(
-            new NumberField("grace", "Grace Period", 0, "Number of minutes to wait after an alert is resolved, to trigger another alert", ConfigurationField.Optional.NOT_OPTIONAL),
-            new NumberField("backlog", "Message Backlog", 0, "The number of messages to be included in alert notifications", ConfigurationField.Optional.NOT_OPTIONAL)
-        );
+    protected Optional<Number> getNumber(Object o) {
+        if (o instanceof Number) {
+            return Optional.of((Number)o);
+        }
+
+        try {
+            return Optional.of(Double.valueOf(String.valueOf(o)));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
     }
 }
