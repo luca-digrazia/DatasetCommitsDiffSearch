@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -61,6 +60,7 @@ public class AndroidResourcesProcessorBuilder {
   private Artifact mergedResourcesOut;
   private boolean isLibrary;
   private boolean crunchPng = true;
+  private AndroidAaptVersion aaptVersion;
   private boolean throwOnResourceConflict;
   private String packageUnderTest;
   private boolean isTestWithResources = false;
@@ -160,7 +160,7 @@ public class AndroidResourcesProcessorBuilder {
   }
 
   public AndroidResourcesProcessorBuilder targetAaptVersion(AndroidAaptVersion aaptVersion) {
-    Preconditions.checkArgument(aaptVersion == AndroidAaptVersion.AAPT2);
+    this.aaptVersion = aaptVersion;
     return this;
   }
 
@@ -212,8 +212,19 @@ public class AndroidResourcesProcessorBuilder {
     AndroidResources databindingProcessedResources = dataBindingContext.processResources(
         dataContext, primaryResources, processedManifest.getPackage());
 
-    createAapt2ApkAction(
-        dataContext, databindingProcessedResources, primaryAssets, primaryManifest);
+    if (aaptVersion == AndroidAaptVersion.AAPT2) {
+      createAapt2ApkAction(
+          dataContext,
+          databindingProcessedResources,
+          primaryAssets,
+          primaryManifest);
+    } else {
+      createAaptAction(
+          dataContext,
+          databindingProcessedResources,
+          primaryAssets,
+          primaryManifest);
+    }
 
     // Wrap the parsed resources
     ParsedAndroidResources parsedResources =

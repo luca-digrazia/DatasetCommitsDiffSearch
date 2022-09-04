@@ -206,11 +206,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             androidSemantics.getNativeDepsFileName(),
             cppSemantics);
 
+    boolean shrinkResources = shouldShrinkResources(ruleContext);
+
     // Retrieve and compile the resources defined on the android_binary rule.
     AndroidResources.validateRuleContext(ruleContext);
 
     final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
-    boolean shrinkResources = dataContext.useResourceShrinking();
     Map<String, String> manifestValues = StampedAndroidManifest.getManifestValues(ruleContext);
 
     StampedAndroidManifest manifest =
@@ -360,8 +361,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     boolean optimizeResources =
         AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2
-            && (dataContext.useResourcePathShortening()
-                || dataContext.useResourceNameObfuscation());
+            && dataContext.useResourcePathShortening();
 
     return createAndroidBinary(
         ruleContext,
@@ -874,6 +874,18 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
   /** Returns {@code true} if resource shrinking should be performed. */
+  private static boolean shouldShrinkResources(RuleContext ruleContext) {
+    TriState state = ruleContext.attributes().get("shrink_resources", BuildType.TRISTATE);
+    if (state == TriState.AUTO) {
+      boolean globalShrinkResources =
+          ruleContext.getFragment(AndroidConfiguration.class).useAndroidResourceShrinking();
+      state = (globalShrinkResources) ? TriState.YES : TriState.NO;
+    }
+
+    return (state == TriState.YES);
+  }
+
+  /** Returns {@code true} if resource shrinking should be performed. */
   static boolean shouldShrinkResourceCycles(
       AndroidConfiguration androidConfig, RuleErrorConsumer errorConsumer, boolean shrinkResources)
       throws RuleErrorException {
@@ -931,7 +943,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       return Optional.empty();
     }
 
-    ResourceShrinkerActionBuilder resourceShrinkerActionBuilder =
+    return Optional.of(
         new ResourceShrinkerActionBuilder()
             .setResourceApkOut(
                 dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_SHRUNK_APK))
@@ -947,13 +959,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             .withDependencies(resourceDeps)
             .setTargetAaptVersion(aaptVersion)
             .setResourceFilterFactory(resourceFilterFactory)
-            .setUncompressedExtensions(noCompressExtensions);
-
-    if (aaptVersion == AndroidAaptVersion.AAPT2) {
-      resourceShrinkerActionBuilder.setKeptResourcesOut(
-          dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_KEPT));
-    }
-    return Optional.of(resourceShrinkerActionBuilder.build(dataContext));
+            .setUncompressedExtensions(noCompressExtensions)
+            .build(dataContext));
   }
 
   private static ResourceApk optimizeResources(
@@ -969,10 +976,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       builder.setResourcePathShorteningMapOut(
           dataContext.createOutputArtifact(
               AndroidRuleClasses.ANDROID_RESOURCE_PATH_SHORTENING_MAP));
-    }
-    if (dataContext.useResourceNameObfuscation()) {
-      builder.setResourceNameObfuscationExemptionList(
-          dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_KEPT));
     }
     builder.build().registerAction(dataContext);
 
