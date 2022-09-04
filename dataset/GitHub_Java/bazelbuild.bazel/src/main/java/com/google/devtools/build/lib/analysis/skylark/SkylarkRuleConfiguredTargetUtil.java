@@ -117,11 +117,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
         return null;
       }
       if (ruleClass.hasFunctionTransitionWhitelist()
-          && !Whitelist.isAvailableBasedOnRuleLocation(
-              ruleContext, FunctionSplitTransitionWhitelist.WHITELIST_NAME)) {
-        if (!Whitelist.isAvailable(ruleContext, FunctionSplitTransitionWhitelist.WHITELIST_NAME)) {
-          ruleContext.ruleError("Non-whitelisted use of Starlark transition");
-        }
+          && !Whitelist.isAvailable(ruleContext, FunctionSplitTransitionWhitelist.WHITELIST_NAME)) {
+        ruleContext.ruleError("Non-whitelisted use of Starlark transition");
       }
 
       Object target =

@@ -719,8 +719,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                                 + depValue
                                 + ", "
                                 + packageResult
-                                + ", "
-                                + ctgValue
                                 + ")"));
                     missedValues = true;
                     continue;

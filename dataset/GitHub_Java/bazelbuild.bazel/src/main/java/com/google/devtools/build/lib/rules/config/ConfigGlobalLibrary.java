@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.analysis.skylark.FunctionTransitionU
 
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.Settings;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigGlobalLibraryApi;
@@ -51,9 +50,9 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
       throws EvalException {
     StarlarkSemantics semantics = env.getSemantics();
     validateBuildSettingKeys(
-        inputs, Settings.INPUTS, location, semantics.experimentalStarlarkConfigTransitions());
+        inputs, "input", location, semantics.experimentalStarlarkConfigTransitions());
     validateBuildSettingKeys(
-        outputs, Settings.OUTPUTS, location, semantics.experimentalStarlarkConfigTransitions());
+        outputs, "output", location, semantics.experimentalStarlarkConfigTransitions());
     return StarlarkDefinedConfigTransition.newRegularTransition(
         implementation, inputs, outputs, semantics, context);
   }
@@ -64,19 +63,18 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
       throws EvalException {
     Map<String, Object> changedSettingsMap =
         changedSettings.getContents(String.class, Object.class, "changed_settings dict");
-    validateBuildSettingKeys(changedSettingsMap.keySet(), Settings.OUTPUTS, location, true);
+    validateBuildSettingKeys(changedSettingsMap.keySet(), "output", location, true);
     return StarlarkDefinedConfigTransition.newAnalysisTestTransition(changedSettingsMap, location);
   }
 
   private void validateBuildSettingKeys(
       Iterable<String> optionKeys,
-      Settings keyErrorDescriptor,
+      String keyErrorDescriptor,
       Location location,
       boolean starlarkTransitionsEnabled)
       throws EvalException {
 
     HashSet<String> processedOptions = Sets.newHashSet();
-    String singularErrorDescriptor = keyErrorDescriptor == Settings.INPUTS ? "input" : "output";
 
     for (String optionKey : optionKeys) {
       if (!optionKey.startsWith(COMMAND_LINE_OPTION_PREFIX)) {
@@ -96,7 +94,7 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
               String.format(
                   "invalid transition %s '%s'. If this is intended as a native option, "
                       + "it must begin with //command_line_option:",
-                  singularErrorDescriptor, optionKey),
+                  keyErrorDescriptor, optionKey),
               e);
         }
       } else {
@@ -107,13 +105,12 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
               String.format(
                   "Invalid transition %s '%s'. Cannot transition on --experimental_* or "
                       + "--incompatible_* options",
-                  singularErrorDescriptor, optionKey));
+                  keyErrorDescriptor, optionKey));
         }
       }
       if (!processedOptions.add(optionKey)) {
-        throw new EvalException(
-            location,
-            String.format("duplicate transition %s '%s'", singularErrorDescriptor, optionKey));
+        throw new EvalException(location,
+            String.format("duplicate transition %s '%s'", keyErrorDescriptor, optionKey));
       }
     }
   }
