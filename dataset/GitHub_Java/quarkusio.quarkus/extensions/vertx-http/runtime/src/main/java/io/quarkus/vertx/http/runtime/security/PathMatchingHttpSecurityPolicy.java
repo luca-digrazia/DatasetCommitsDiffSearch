@@ -84,14 +84,12 @@ public class PathMatchingHttpSecurityPolicy implements HttpSecurityPolicy {
                 throw new RuntimeException("Unable to find HTTP security policy " + entry.getValue().policy);
             }
 
-            for (String path : entry.getValue().paths.orElse(Collections.emptyList())) {
+            for (String path : entry.getValue().paths) {
                 if (tempMap.containsKey(path)) {
-                    HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods.orElse(Collections.emptyList())),
-                            checker);
+                    HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods), checker);
                     tempMap.get(path).add(m);
                 } else {
-                    HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods.orElse(Collections.emptyList())),
-                            checker);
+                    HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods), checker);
                     List<HttpMatcher> perms = new ArrayList<>();
                     tempMap.put(path, perms);
                     perms.add(m);
