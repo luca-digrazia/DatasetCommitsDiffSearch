@@ -69,8 +69,8 @@ public class MergeConflict {
     return String.format(
         CONFLICT_MESSAGE,
         dataKey.toPrettyString(),
-        primary.asConflictString(),
-        overwritten.asConflictString());
+        primary.source().getPath(),
+        overwritten.source().getPath());
   }
 
   public DataKey dataKey() {

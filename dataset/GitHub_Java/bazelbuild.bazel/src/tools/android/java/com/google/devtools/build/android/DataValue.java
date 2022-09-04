@@ -35,7 +35,4 @@ public interface DataValue {
       DataKey key, DataSourceTable sourceTable, OutputStream output) throws IOException;
   
   DataValue update(DataSource source);
-
-  /** Provides a representation of the value suitable for a conflict message. */
-  String asConflictString();
 }
