@@ -64,41 +64,11 @@ public class ARPACK {
      * {@code nev * n} double array, so use the {@code copy()} method to free it
      * up if only a subset is required.
      *
-     * @param k Number of eigenvalues of OP to be computed. 0 < k < N.
-     * @param ritz Specify which of the Ritz values to compute.
+     * @param k the number of eigen values/vectors to compute.
+     * @param ritz preference for solutions
      */
     public static EVD eigen(Matrix A, int k, Ritz ritz) {
-        return eigen(A, k, ritz, 1E-6, 1000);
-    }
-
-    /**
-     * Solve the eigensystem for the number of eigenvalues requested.
-     * <p>
-     * NOTE: The references to the eigenvectors will keep alive a reference to a
-     * {@code nev * n} double array, so use the {@code copy()} method to free it
-     * up if only a subset is required.
-     *
-     * @param k Number of eigenvalues of OP to be computed. 0 < k < N.
-     * @param which Specify which of the Ritz values to compute.
-     */
-    public static EVD eigen(Matrix A, int k, String which) {
-        return eigen(A, k, which, 1E-6, 1000);
-    }
-
-    /**
-     * Solve the eigensystem for the number of eigenvalues requested.
-     * <p>
-     * NOTE: The references to the eigenvectors will keep alive a reference to a
-     * {@code nev * n} double array, so use the {@code copy()} method to free it
-     * up if only a subset is required.
-     *
-     * @param k Number of eigenvalues of OP to be computed. 0 < k < N.
-     * @param ritz Specify which of the Ritz values to compute.
-     * @param kappa Relative accuracy of ritz values acceptable as eigenvalues.
-     * @param maxIter Maximum number of iterations.
-     */
-    public static EVD eigen(Matrix A, int k, Ritz ritz, double kappa, int maxIter) {
-        return eigen(A, k, ritz.name(), kappa, maxIter);
+        return eigen(A, k, ritz, 1E-6);
     }
 
     /**
@@ -109,17 +79,12 @@ public class ARPACK {
      * up if only a subset is required.
      *
      * @param k Number of eigenvalues of OP to be computed. 0 < NEV < N.
-     * @param which Specify which of the Ritz values to compute.
+     * @param ritz Specify which of the Ritz values of OP to compute.
      * @param kappa Relative accuracy of ritz values acceptable as eigenvalues.
-     * @param maxIter Maximum number of iterations.
      */
-    public static EVD eigen(Matrix A, int k, String which, double kappa, int maxIter) {
+    public static EVD eigen(Matrix A, int k, Ritz ritz, double kappa) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException("Matrix is not symmetric");
-        }
-
-        if (!A.isSymmetric()) {
-            throw new UnsupportedOperationException("This implementation supports only symmetric matrix yet.");
         }
 
         int n = A.nrows();
@@ -132,7 +97,8 @@ public class ARPACK {
 
         int ncv = Math.min(2 * k, n);
 
-        String bmat = "I"; // standard eigenvalue problem
+        String bmat = "I";
+        String which = ritz.name();
         doubleW tol = new doubleW(kappa);
         intW info = new intW(0);
         int[] iparam = new int[11];
@@ -153,7 +119,8 @@ public class ARPACK {
         int[] ipntr = new int[11];
 
         int iter = 0;
-        for (; iter < maxIter; iter++) {
+        while (true) {
+            iter++;
             arpack.dsaupd(ido, bmat, n, which, nev.val, tol, resid, ncv, v, n, iparam, ipntr, workd, workl, workl.length, info);
 
             if (ido.val == 99) {
