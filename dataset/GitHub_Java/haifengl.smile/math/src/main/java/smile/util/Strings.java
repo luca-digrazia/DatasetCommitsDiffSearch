@@ -1,25 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.util;
 
-import java.text.DecimalFormat;
 import java.util.Arrays;
-import java.util.stream.Collectors;
 
 /**
  * String utility functions.
@@ -27,26 +23,9 @@ import java.util.stream.Collectors;
  * @author Haifeng Li
  */
 public interface Strings {
-
-    /** Decimal format for floating numbers. */
-    DecimalFormat decimalFormat = new DecimalFormat("#.######");
-
     /** Returns true if the string is null or empty. */
     static boolean isNullOrEmpty(String str) {
         return str == null || str.isEmpty();
-    }
-
-    /** Returns the string representation of ordinal number with suffix. */
-    static String ordinal(int i) {
-        final String[] suffixes = {"th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th"};
-        switch (i % 100) {
-            case 11:
-            case 12:
-            case 13:
-                return i + "th";
-            default:
-                return i + suffixes[i % 10];
-        }
     }
 
     /** Left pad a String with a specified character.
@@ -92,42 +71,5 @@ public interface Strings {
         char[] chars = new char[len];
         Arrays.fill(chars, ch);
         return new String(chars);
-    }
-
-    /** Returns the decimal string representation of a floating number. */
-    static String decimal(double x) {
-        return decimalFormat.format(x);
-    }
-
-    /** Returns the string representation of array in format '[1, 2, 3]'." */
-    static String toString(int[] a) {
-        return Arrays.stream(a).mapToObj(String::valueOf).collect(Collectors.joining(", ", "[", "]"));
-    }
-
-    /** Returns the string representation of array in format '[1.0, 2.0, 3.0]'." */
-    static String toString(double[] a) {
-        return Arrays.stream(a).mapToObj(String::valueOf).collect(Collectors.joining(", ", "[", "]"));
-    }
-
-    /**
-     * Parses a double array in format '[1.0, 2.0, 3.0]'.
-     * Returns null if s is null or empty.
-     */
-    static int[] parseIntArray(String s) {
-        if (isNullOrEmpty(s)) return null;
-
-        String[] tokens = s.trim().substring(1, s.length() - 1).split(",");
-        return Arrays.stream(tokens).map(String::trim).mapToInt(Integer::parseInt).toArray();
-    }
-
-    /**
-     * Parses a double array in format '[1.0, 2.0, 3.0]'.
-     * Returns null if s is null or empty.
-     */
-    static double[] parseDoubleArray(String s) {
-        if (isNullOrEmpty(s)) return null;
-
-        String[] tokens = s.trim().substring(1, s.length() - 1).split(",");
-        return Arrays.stream(tokens).map(String::trim).mapToDouble(Double::parseDouble).toArray();
     }
 }

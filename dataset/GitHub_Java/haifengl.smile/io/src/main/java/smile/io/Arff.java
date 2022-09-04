@@ -1,34 +1,33 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.io;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StreamTokenizer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.type.*;
 
@@ -92,6 +91,8 @@ public class Arff implements AutoCloseable {
     private String name;
     /** The schema of ARFF relation. */
     private StructType schema;
+    /** The map of field name to its scale of measure. */
+    private Map<String, NominalScale> measure;
     /** The lambda to parse fields. */
     private List<Function<String, Object>> parser;
     /** Attribute name path in case of sub-relations. */
@@ -115,6 +116,7 @@ public class Arff implements AutoCloseable {
         tokenizer.ordinaryChar('}');
         tokenizer.eolIsSignificant(true);
 
+        measure = new HashMap<>();
         readHeader();
     }
 
@@ -232,6 +234,7 @@ public class Arff implements AutoCloseable {
         }
         
         schema = DataTypes.struct(fields);
+        schema.measure().putAll(measure);
         parser = schema.parser();
     }
 
@@ -239,7 +242,7 @@ public class Arff implements AutoCloseable {
      * Reads the attribute declaration.
      *
      * @return an attributes in this relation
-     * @throws IOException if the information is not read successfully
+     * @throws IOException 	if the information is not read successfully
      */
     private StructField nextAttribute() throws IOException, ParseException {
         StructField attribute = null;
@@ -313,7 +316,8 @@ public class Arff implements AutoCloseable {
             }
 
             NominalScale scale = new NominalScale(attributeValues);
-            attribute = new StructField(name, scale.type(), Optional.of(scale));
+            measure.put(name, scale);
+            attribute = new StructField(name, scale.type());
         }
 
         getLastToken(false);
@@ -373,8 +377,8 @@ public class Arff implements AutoCloseable {
             rows.add(Tuple.of(row, schema));
         }
 
-        schema = schema.boxed(rows);
-        return DataFrame.of(rows, schema);
+        schema.boxed(rows);
+        return DataFrame.of(rows);
     }
 
     /**
@@ -449,50 +453,5 @@ public class Arff implements AutoCloseable {
         }
 
         return x;
-    }
-
-    /**
-     * Writes the data frame to an ARFF file.
-     * @param df the data frame.
-     * @param path the file path.
-     * @param relation the relation name of ARFF.
-     */
-    public static void write(DataFrame df, Path path, String relation) throws IOException {
-        try (PrintWriter writer = new PrintWriter(Files.newOutputStream(path))) {
-
-            writer.print("@RELATION ");
-            writer.println(relation);
-
-            for (StructField field : df.schema().fields()) {
-                writeField(writer, field);
-            }
-
-            writer.println("@DATA");
-
-            int p = df.ncols();
-            df.stream().forEach(t -> {
-                String line = IntStream.range(0, p).mapToObj(i -> t.toString()).collect(Collectors.joining(","));
-                writer.println(line);
-            });
-        }
-    }
-
-    /** Write the meta of field to ARFF file. */
-    private static void writeField(PrintWriter writer, StructField field) throws IOException {
-        writer.print("@ATTRIBUTE ");
-        writer.print(field.name);
-        if (field.type.isFloating()) writer.println(" REAL");
-        else if (field.type.isString()) writer.println(" STRING");
-        else if (field.type.id() == DataType.ID.DateTime) writer.println(" DATE \"yyyy-MM-dd HH:mm:ss\"");
-        else if (field.type.isIntegral()) {
-            Optional<Measure> measure = field.measure;
-            if (measure.isPresent() && measure.get() instanceof NominalScale) {
-                NominalScale scale = (NominalScale) measure.get();
-                String levels = Arrays.stream(scale.levels()).collect(Collectors.joining(",", " {", "}"));
-                writer.println(levels);
-            } else {
-                writer.println(" REAL");
-            }
-        }
     }
 }

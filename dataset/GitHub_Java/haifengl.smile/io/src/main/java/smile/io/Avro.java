@@ -1,37 +1,37 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.io;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
-import org.apache.avro.file.DataFileStream;
+import org.apache.avro.file.DataFileReader;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.util.Utf8;
 import smile.data.DataFrame;
 import smile.data.Tuple;
+import smile.data.measure.DiscreteMeasure;
+import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
@@ -71,7 +71,7 @@ public class Avro {
      * @param schemaFile Avro schema file path.
      */
     public Avro(Path schemaFile) throws IOException {
-        schema = new Schema.Parser().parse(Files.newInputStream(schemaFile));
+        schema = new Schema.Parser().parse(schemaFile.toFile());
         if (schema.getType() != Schema.Type.RECORD) {
             throw new IllegalArgumentException("The type of schema is not Record");
         }
@@ -93,12 +93,16 @@ public class Avro {
      * @param limit reads a limited number of records.
      */
     public DataFrame read(Path path, int limit) throws IOException {
-        DatumReader<GenericRecord> datumReader = new GenericDatumReader<>(schema);
-        try (DataFileStream<GenericRecord> dataFileReader = new DataFileStream<>(Files.newInputStream(path), datumReader)) {
+        DatumReader<GenericRecord> datumReader = new GenericDatumReader<GenericRecord>(schema);
+        try (DataFileReader<GenericRecord> dataFileReader = new DataFileReader<GenericRecord>(path.toFile(), datumReader)) {
+            GenericRecord record = null;
             StructType struct = toSmileSchema(schema);
+            DiscreteMeasure[] scale = new DiscreteMeasure[struct.length()];
+            for (Map.Entry<String, Measure> e : struct.measure().entrySet()) {
+                scale[struct.fieldIndex(e.getKey())] = (DiscreteMeasure) e.getValue();
+            }
 
             List<Tuple> rows = new ArrayList<>();
-            GenericRecord record = null;
             while (dataFileReader.hasNext() && rows.size() < limit) {
                 // Reuse the record to save memory
                 record = dataFileReader.next(record);
@@ -107,7 +111,11 @@ public class Avro {
                     row[i] = record.get(struct.field(i).name);
                     if (row[i] instanceof Utf8) {
                         String str = row[i].toString();
-                        row[i] = struct.field(i).measure.map(m -> (Object) m.valueOf(str)).orElse(str);
+                        if (scale[i] != null) {
+                            row[i] = scale[i].valueOf(str);
+                        } else {
+                            row[i] = str;
+                        }
                     }
                 }
                 rows.add(Tuple.of(row, struct));
@@ -120,15 +128,17 @@ public class Avro {
     private StructType toSmileSchema(Schema schema) {
         List<StructField> fields = new ArrayList<>();
         for (Schema.Field field : schema.getFields()) {
-            NominalScale scale = null;
-            if (field.schema().getType() == Schema.Type.ENUM) {
-                scale = new NominalScale(field.schema().getEnumSymbols());
-            }
-
-            fields.add(new StructField(field.name(), typeOf(field.schema()), Optional.ofNullable(scale)));
+            fields.add(new StructField(field.name(), typeOf(field.schema())));
         }
 
-        return DataTypes.struct(fields);
+        StructType struct = DataTypes.struct(fields);
+        for (Schema.Field field : schema.getFields()) {
+            if (field.schema().getType() == Schema.Type.ENUM) {
+                NominalScale scale = new NominalScale(field.schema().getEnumSymbols());
+                struct.measure().put(field.name(), scale);
+            }
+        }
+        return struct;
     }
 
     /** Converts an avro type to smile type. */

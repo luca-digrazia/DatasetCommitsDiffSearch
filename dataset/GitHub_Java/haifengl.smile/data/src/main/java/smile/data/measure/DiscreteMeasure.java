@@ -72,6 +72,11 @@ public abstract class DiscreteMeasure implements Measure {
         this(values.toArray(new String[values.size()]));
     }
 
+    /** Returns the string value of a level. */
+    public String toString(int level) {
+        return levels[level];
+    }
+
     /** Returns the number of levels. */
     public int size() {
         return levels.length;
@@ -93,21 +98,6 @@ public abstract class DiscreteMeasure implements Measure {
         }
     }
 
-    /** Returns the string value of a level. */
-    public String toString(int level) {
-        return levels[level];
-    }
-
-    @Override
-    public String toString(Object o) {
-        return levels[((Number) o).intValue()];
-    }
-
-    @Override
-    public Number valueOf(String s) {
-        return map.get(s);
-    }
-
     @Override
     public boolean equals(Object o) {
         if (o instanceof DiscreteMeasure) {
@@ -116,5 +106,10 @@ public abstract class DiscreteMeasure implements Measure {
         }
 
         return false;
+    }
+
+    /** Returns a measurement value object represented by the argument string s. */
+    public Number valueOf(String s) {
+        return map.get(s);
     }
 }

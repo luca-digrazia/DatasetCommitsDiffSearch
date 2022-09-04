@@ -1,25 +1,23 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.io;
 
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.Reader;
-import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -51,8 +49,6 @@ public class CSV {
     private StructType schema;
     /** The CSV file format. */
     private CSVFormat format;
-    /** Charset of file. */
-    private Charset charset = StandardCharsets.UTF_8;
 
     /**
      * Constructor.
@@ -75,42 +71,10 @@ public class CSV {
      * Sets the schema.
      * @param schema the schema of file.
      */
-    public CSV schema(StructType schema) {
+    public CSV withSchema(StructType schema) {
         this.schema = schema;
         return this;
     }
-
-    /**
-     * Sets the charset.
-     * @param charset the charset of file.
-     */
-    public CSV charset(Charset charset) {
-        this.charset = charset;
-        return this;
-    }
-
-    /**
-     * Reads a CSV file.
-     * @param path a CSV file path or URI.
-     */
-    public DataFrame read(String path) throws IOException, URISyntaxException {
-        return read(path, Integer.MAX_VALUE);
-    }
-
-    /**
-     * Reads a limited number of records from a CSV file.
-     * @param path a CSV file path or URI.
-     * @param limit reads a limited number of records.
-     */
-    public DataFrame read(String path, int limit) throws IOException, URISyntaxException {
-        if (schema == null) {
-            // infer the schema from top 1000 rows.
-            schema = inferSchema(Input.reader(path, charset), Math.min(1000, limit));
-        }
-
-        return read(Input.reader(path, charset), limit);
-    }
-
     /**
      * Reads a CSV file.
      * @param path a CSV file path.
@@ -126,25 +90,16 @@ public class CSV {
      */
     public DataFrame read(Path path, int limit) throws IOException {
         if (schema == null) {
-            // infer the schema from top 1000 rows.
-            schema = inferSchema(Files.newBufferedReader(path, charset), Math.min(1000, limit));
-        }
-
-        return read(Files.newBufferedReader(path, charset), limit);
-    }
-
-    private DataFrame read(Reader reader, int limit) throws IOException {
-        if (schema == null) {
-            // infer the schema from top 1000 rows.
-            throw new IllegalStateException("The schema is not set or inferred.");
+            // infer the schema from top 100 rows.
+            schema = inferSchema(path, Math.min(100, limit));
         }
 
         StructField[] fields = schema.fields();
         List<Function<String, Object>> parser = schema.parser();
 
-        try (CSVParser csv = CSVParser.parse(reader, format)) {
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
             List<Tuple> rows = new ArrayList<>();
-            for (CSVRecord record : csv) {
+            for (CSVRecord record : format.parse(reader)) {
                 Object[] row = new Object[fields.length];
                 for (int i = 0; i < fields.length; i++) {
                     String s = record.get(i).trim();
@@ -156,8 +111,8 @@ public class CSV {
                 if (rows.size() >= limit) break;
             }
 
-            schema = schema.boxed(rows);
-            return DataFrame.of(rows, schema);
+            schema.boxed(rows);
+            return DataFrame.of(rows);
         }
     }
 
@@ -167,11 +122,12 @@ public class CSV {
      *  - Merge row types to find common type
      *  - String type by default.
      */
-    public StructType inferSchema(Reader reader, int limit) throws IOException {
-        try (CSVParser parser = CSVParser.parse(reader, format)) {
+    private StructType inferSchema(Path path, int nrows) throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
             String[] names;
             DataType[] types;
 
+            CSVParser parser = format.parse(reader);
             Map<String, Integer> header = parser.getHeaderMap();
             if (header != null) {
                 names = new String[header.size()];
@@ -200,7 +156,7 @@ public class CSV {
                     types[i] = DataType.coerce(types[i], DataType.infer(record.get(i).trim()));
                 }
 
-                if (++k >= limit) break;
+                if (++k >= nrows) break;
             }
 
             StructField[] fields = new StructField[names.length];
@@ -213,6 +169,11 @@ public class CSV {
 
     /** Writes a data frame to a file with UTF-8. */
     public void write(DataFrame df, Path path) throws IOException {
+        write(df, path, StandardCharsets.UTF_8);
+    }
+
+    /** Writes a data frame to a file with given charset. */
+    public void write(DataFrame df, Path path, Charset charset) throws IOException {
         int p = df.schema().length();
         String[] header = new String[p];
         for (int i = 0; i < p; i++) {

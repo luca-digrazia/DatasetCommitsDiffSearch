@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.data.type;
 
 import smile.util.Strings;
@@ -107,21 +105,6 @@ public interface DataType extends Serializable {
         }
     }
 
-    /** Returns true if the type is float or double. */
-    default boolean isFloating() {
-        return isFloat() || isDouble();
-    }
-
-    /** Returns true if the type is int, long, short or byte. */
-    default boolean isIntegral() {
-        return isInt() || isLong() || isShort() || isByte();
-    }
-
-    /** Returns true if the type is numeric (integral or floating). */
-    default boolean isNumeric() {
-        return isFloating() || isIntegral();
-    }
-
     /** Returns true if the type is boolean or Boolean. */
     default boolean isBoolean() {
         return false;
@@ -162,9 +145,6 @@ public interface DataType extends Serializable {
         return false;
     }
 
-    /** Returns true if the type is String. */
-    default boolean isString() { return false; }
-
     /** Returns true if the type is ObjectType. */
     default boolean isObject() {
         return false;
@@ -188,35 +168,16 @@ public interface DataType extends Serializable {
         }
     }
 
-    /**
-     * Returns the unboxed data type if this is a boxed primitive type.
-     * Otherwise, return this type.
-     */
-    default DataType unboxed() {
-        if (isObject()) {
-            if (isBoolean()) return DataTypes.BooleanType;
-            if (isChar()) return DataTypes.CharType;
-            if (isByte()) return DataTypes.ByteType;
-            if (isShort()) return DataTypes.ShortType;
-            if (isInt()) return DataTypes.IntegerType;
-            if (isLong()) return DataTypes.LongType;
-            if (isFloat()) return DataTypes.FloatType;
-            if (isDouble()) return DataTypes.DoubleType;
-        }
-
-        return this;
-    }
-
     /** Infers the type of a string. */
-    static DataType infer(String s) {
-        if (Strings.isNullOrEmpty(s)) return null;
-        if (DateTimePattern.matcher(s).matches()) return DataTypes.DateTimeType;
-        if (DatePattern.matcher(s).matches()) return DataTypes.DateType;
-        if (TimePattern.matcher(s).matches()) return DataTypes.TimeType;
-        if (IntPattern.matcher(s).matches()) return DataTypes.IntegerType;
-        if (LongPattern.matcher(s).matches()) return DataTypes.LongType;
-        if (DoublePattern.matcher(s).matches()) return DataTypes.DoubleType;
-        if (BooleanPattern.matcher(s).matches()) return DataTypes.BooleanType;
+    static DataType infer(String str) {
+        if (Strings.isNullOrEmpty(str)) return null;
+        if (DateTimePattern.matcher(str).matches()) return DataTypes.DateTimeType;
+        if (DatePattern.matcher(str).matches()) return DataTypes.DateType;
+        if (TimePattern.matcher(str).matches()) return DataTypes.TimeType;
+        if (IntPattern.matcher(str).matches()) return DataTypes.IntegerType;
+        if (LongPattern.matcher(str).matches()) return DataTypes.LongType;
+        if (DoublePattern.matcher(str).matches()) return DataTypes.DoubleType;
+        if (BooleanPattern.matcher(str).matches()) return DataTypes.BooleanType;
         return DataTypes.StringType;
     }
 
@@ -318,6 +279,15 @@ public interface DataType extends Serializable {
         }
         else
             return DataTypes.object(clazz);
+    }
+
+    /**
+     * Returns the DataType of a JDBC type.
+     * @param type a JDBCType
+     * @param nullable true if the column value may be null
+     */
+    static DataType of(java.sql.JDBCType type, boolean nullable) {
+        return of(type, nullable, null);
     }
 
     /**
