@@ -1,7 +1,5 @@
 package io.quarkus.runtime;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.function.BiConsumer;
 
 import org.jboss.logging.Logger;
@@ -25,8 +23,6 @@ public class Quarkus {
 
     //WARNING: this is too early to inject a logger
     //private static final Logger log = Logger.getLogger(Quarkus.class);
-
-    private static Closeable LAUNCHED_FROM_IDE;
 
     /**
      * Runs a quarkus application, that will run until the provided {@link QuarkusApplication} has completed.
@@ -93,18 +89,7 @@ public class Quarkus {
             pos++;
         }
         String callingClass = stackTrace[pos].getClassName();
-        LAUNCHED_FROM_IDE = QuarkusLauncher.launch(callingClass,
-                quarkusApplication == null ? null : quarkusApplication.getName(), args);
-    }
-
-    private static void terminateForIDE() {
-        if (LAUNCHED_FROM_IDE != null) {
-            try {
-                LAUNCHED_FROM_IDE.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        QuarkusLauncher.launch(callingClass, quarkusApplication == null ? null : quarkusApplication.getName(), args);
     }
 
     /**
@@ -135,7 +120,6 @@ public class Quarkus {
      * @param code The exit code. This may be overridden if an exception occurs on shutdown
      */
     public static void asyncExit(int code) {
-        terminateForIDE();
         ApplicationLifecycleManager.exit(code);
     }
 
@@ -152,7 +136,6 @@ public class Quarkus {
      *
      */
     public static void asyncExit() {
-        terminateForIDE();
         ApplicationLifecycleManager.exit(-1);
     }
 
