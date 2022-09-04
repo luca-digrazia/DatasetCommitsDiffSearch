@@ -90,7 +90,7 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.OptionsClassProvider;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -284,10 +284,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       SkylarkSemanticsOptions skylarkSemanticsOptions,
       Path outputBase,
       Path workingDirectory,
+      String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm,
-      OptionsProvider options)
+      OptionsClassProvider options)
       throws InterruptedException, AbruptExitException {
     if (evaluatorNeedsReset) {
       // Recreate MemoizingEvaluator so that graph is recreated with correct edge-clearing status,
@@ -295,16 +296,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       resetEvaluator();
       evaluatorNeedsReset = false;
     }
-    super.sync(
-        eventHandler,
-        packageCacheOptions,
-        skylarkSemanticsOptions,
-        outputBase,
-        workingDirectory,
-        commandId,
-        clientEnv,
-        tsgm,
-        options);
+    super.sync(eventHandler, packageCacheOptions, skylarkSemanticsOptions, outputBase,
+        workingDirectory, defaultsPackageContents, commandId, clientEnv, tsgm, options);
     handleDiffs(eventHandler, packageCacheOptions.checkOutputFiles, options);
   }
 
@@ -362,11 +355,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   /** Uses diff awareness on all the package paths to invalidate changed files. */
   @VisibleForTesting
   public void handleDiffs(ExtendedEventHandler eventHandler) throws InterruptedException {
-    handleDiffs(eventHandler, /*checkOutputFiles=*/false, OptionsProvider.EMPTY);
+    handleDiffs(eventHandler, /*checkOutputFiles=*/false, OptionsClassProvider.EMPTY);
   }
 
   private void handleDiffs(
-      ExtendedEventHandler eventHandler, boolean checkOutputFiles, OptionsProvider options)
+      ExtendedEventHandler eventHandler, boolean checkOutputFiles, OptionsClassProvider options)
       throws InterruptedException {
     if (lastAnalysisDiscarded) {
       // Values were cleared last build, but they couldn't be deleted because they were needed for
