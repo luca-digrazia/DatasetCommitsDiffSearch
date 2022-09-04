@@ -153,8 +153,6 @@ public class UniversalSearch {
                 response.fields,
                 response.usedIndices,
                 response.error != null ? response.error : response.genericError,
-                response.getFromDataTime(),
-                response.getToDataTime(),
                 fieldMapper
         );
 
