@@ -117,7 +117,7 @@ public class InputsResource extends RestResource {
         DateTime createdAt = new DateTime(DateTimeZone.UTC);
         MessageInput input;
         try {
-            input = inputRegistry.create(lr.type, inputConfig);
+            input = inputRegistry.create(lr.type);
             input.setTitle(lr.title);
             input.setCreatorUserId(lr.creatorUserId);
             input.setCreatedAt(createdAt);
@@ -125,7 +125,7 @@ public class InputsResource extends RestResource {
 
             input.setConfiguration(inputConfig);
 
-            input.checkConfiguration();
+            input.checkConfiguration(inputConfig);
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
             throw new BadRequestException(e);
@@ -143,7 +143,7 @@ public class InputsResource extends RestResource {
             throw new BadRequestException();
         }
 
-        input.initialize();
+        input.initialize(inputConfig);
 
         // Launch input. (this will run async and clean up itself in case of an error.)
         inputRegistry.launch(input, inputId, true);
@@ -188,7 +188,7 @@ public class InputsResource extends RestResource {
 
         MessageInput input;
         try {
-            input = inputRegistry.create(inputType, new Configuration(Maps.<String, Object>newHashMap()));
+            input = inputRegistry.create(inputType);
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
             throw new NotFoundException(e);
@@ -224,7 +224,7 @@ public class InputsResource extends RestResource {
         }
 
         LOG.info("Launching existing input [" + input.getName() + "]. Reason: REST request.");
-        input.initialize();
+        input.initialize(input.getConfiguration());
         if (inputState != null) {
             inputRegistry.launch(inputState);
         } else {

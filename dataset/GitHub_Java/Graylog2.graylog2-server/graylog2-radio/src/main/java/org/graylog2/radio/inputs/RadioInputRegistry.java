@@ -61,9 +61,9 @@ public class RadioInputRegistry extends InputRegistry {
     private MessageInput getMessageInput(InputSummaryResponse isr) {
         MessageInput input;
         try {
-            Configuration inputConfig = new Configuration(isr.configuration);
-            input = this.create(isr.type, inputConfig);
+            input = this.create(isr.type);
 
+            Configuration inputConfig = new Configuration(isr.configuration);
             // Add all standard fields.
             input.setTitle(isr.title);
             input.setCreatorUserId(isr.creatorUserId);
@@ -72,7 +72,7 @@ public class RadioInputRegistry extends InputRegistry {
             input.setGlobal(isr.global);
             input.setConfiguration(inputConfig);
 
-            input.checkConfiguration();
+            input.checkConfiguration(inputConfig);
         } catch (NoSuchInputTypeException e) {
             LOG.warn("Cannot launch persisted input. No such type [{}]. Error: {}", isr.type, e);
             return null;
