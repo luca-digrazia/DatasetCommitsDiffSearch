@@ -30,8 +30,8 @@ import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigInstantiator;
+import io.quarkus.vertx.core.runtime.VertxConfiguration;
 import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
-import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.DeploymentOptions;
@@ -133,15 +133,18 @@ public class VertxHttpRecorder {
 
     public void finalizeRouter(BeanContainer container, Handler<HttpServerRequest> defaultRouteHandler,
             List<Handler<RoutingContext>> filters, LaunchMode launchMode, ShutdownContext shutdown) {
-
-        for (Handler<RoutingContext> filter : filters) {
-            if (filter != null) {
-                router.route().order(-1).handler(filter);
-            }
-        }
-
+        // install the default route at the end
         if (defaultRouteHandler != null) {
-            router.route().handler(new Handler<RoutingContext>() {
+            //TODO: can we skip the router if no other routes?
+            Route defaultRoute = router.route();
+
+            for (Handler<RoutingContext> filter : filters) {
+                if (filter != null) {
+                    defaultRoute.handler(filter);
+                }
+            }
+
+            defaultRoute.handler(new Handler<RoutingContext>() {
                 @Override
                 public void handle(RoutingContext event) {
                     defaultRouteHandler.handle(event.request());
@@ -177,8 +180,7 @@ public class VertxHttpRecorder {
             @Override
             public Verticle get() {
                 return new WebDeploymentVerticle(httpConfiguration.determinePort(launchMode),
-                        httpConfiguration.determineSslPort(launchMode), httpConfiguration.host, httpServerOptions,
-                        sslConfig,
+                        httpConfiguration.determineSslPort(launchMode), httpConfiguration.host, httpServerOptions, sslConfig,
                         router);
             }
         }, new DeploymentOptions().setInstances(ioThreads), new Handler<AsyncResult<String>>() {
@@ -233,6 +235,7 @@ public class VertxHttpRecorder {
 
     /**
      * Get an {@code HttpServerOptions} for this server configuration, or null if SSL should not be enabled
+     *
      */
     private static HttpServerOptions createSslOptions(HttpConfiguration httpConfiguration, LaunchMode launchMode)
             throws IOException {
@@ -246,7 +249,10 @@ public class VertxHttpRecorder {
         serverOptions.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
 
         if (certFile.isPresent() && keyFile.isPresent()) {
-            createPemKeyCertOptions(certFile.get(), keyFile.get(), serverOptions);
+            PemKeyCertOptions pemKeyCertOptions = new PemKeyCertOptions()
+                    .setCertPath(certFile.get().toAbsolutePath().toString())
+                    .setKeyPath(keyFile.get().toAbsolutePath().toString());
+            serverOptions.setPemKeyCertOptions(pemKeyCertOptions);
         } else if (keyStoreFile.isPresent()) {
             final Path keyStorePath = keyStoreFile.get();
             final Optional<String> keyStoreFileType = sslConfig.certificate.keyStoreFileType;
@@ -263,7 +269,21 @@ public class VertxHttpRecorder {
                 }
             }
 
-            byte[] data = getFileContent(keyStorePath);
+            //load the data
+            byte[] data;
+            final InputStream keystoreAsResource = Thread.currentThread().getContextClassLoader()
+                    .getResourceAsStream(keyStorePath.toString());
+
+            if (keystoreAsResource != null) {
+                try (InputStream is = keystoreAsResource) {
+                    data = doRead(is);
+                }
+            } else {
+                try (InputStream is = Files.newInputStream(keyStorePath)) {
+                    data = doRead(is);
+                }
+            }
+
             switch (type) {
                 case "pkcs12": {
                     PfxOptions options = new PfxOptions()
@@ -280,54 +300,28 @@ public class VertxHttpRecorder {
                     break;
                 }
                 default:
-                    throw new IllegalArgumentException(
-                            "Unknown keystore type: " + type + " valid types are jks or pkcs12");
+                    throw new IllegalArgumentException("Unknown keystore type: " + type + " valid types are jks or pkcs12");
             }
 
         } else {
             return null;
         }
 
-        for (String cipher : sslConfig.cipherSuites) {
-            if (!cipher.isEmpty()) {
-                serverOptions.addEnabledCipherSuite(cipher);
+        for (String i : sslConfig.cipherSuites) {
+            if (!i.isEmpty()) {
+                serverOptions.addEnabledCipherSuite(i);
             }
         }
 
-        for (String protocol : sslConfig.protocols) {
-            if (!protocol.isEmpty()) {
-                serverOptions.addEnabledSecureTransportProtocol(protocol);
+        for (String i : sslConfig.protocols) {
+            if (!i.isEmpty()) {
+                serverOptions.addEnabledSecureTransportProtocol(i);
             }
         }
         serverOptions.setSsl(true);
         serverOptions.setHost(httpConfiguration.host);
         serverOptions.setPort(httpConfiguration.determineSslPort(launchMode));
         return serverOptions;
-    }
-
-    private static byte[] getFileContent(Path path) throws IOException {
-        byte[] data;
-        final InputStream resource = Thread.currentThread().getContextClassLoader().getResourceAsStream(path.toString());
-        if (resource != null) {
-            try (InputStream is = resource) {
-                data = doRead(is);
-            }
-        } else {
-            try (InputStream is = Files.newInputStream(path)) {
-                data = doRead(is);
-            }
-        }
-        return data;
-    }
-
-    private static void createPemKeyCertOptions(Path certFile, Path keyFile,
-            HttpServerOptions serverOptions) throws IOException {
-        final byte[] cert = getFileContent(certFile);
-        final byte[] key = getFileContent(keyFile);
-        PemKeyCertOptions pemKeyCertOptions = new PemKeyCertOptions()
-                .setCertValue(Buffer.buffer(cert))
-                .setKeyValue(Buffer.buffer(key));
-        serverOptions.setPemKeyCertOptions(pemKeyCertOptions);
     }
 
     private static byte[] doRead(InputStream is) throws IOException {
@@ -340,8 +334,7 @@ public class VertxHttpRecorder {
         return out.toByteArray();
     }
 
-    private static HttpServerOptions createHttpServerOptions(HttpConfiguration httpConfiguration,
-            LaunchMode launchMode) {
+    private static HttpServerOptions createHttpServerOptions(HttpConfiguration httpConfiguration, LaunchMode launchMode) {
         // TODO other config properties
         HttpServerOptions options = new HttpServerOptions();
         options.setHost(httpConfiguration.host);
@@ -380,39 +373,31 @@ public class VertxHttpRecorder {
         }
 
         @Override
-        public void start(Future<Void> startFuture) {
+        public void start(Future<Void> startFuture) throws Exception {
             final AtomicInteger remainingCount = new AtomicInteger(httpsOptions != null ? 2 : 1);
             httpServer = vertx.createHttpServer(httpOptions);
             httpServer.requestHandler(router);
             httpServer.listen(port, host, event -> {
-                if (event.cause() != null) {
-                    startFuture.fail(event.cause());
-                } else {
-                    // Port may be random, so set the actual port
-                    httpOptions.setPort(event.result().actualPort());
-                    if (remainingCount.decrementAndGet() == 0) {
-                        startFuture.complete(null);
-                    }
+                // Port may be random, so set the actual port
+                httpOptions.setPort(event.result().actualPort());
+                if (remainingCount.decrementAndGet() == 0) {
+                    startFuture.complete();
                 }
             });
             if (httpsOptions != null) {
                 httpsServer = vertx.createHttpServer(httpsOptions);
                 httpsServer.requestHandler(router);
                 httpsServer.listen(httpsPort, host, event -> {
-                    if (event.cause() != null) {
-                        startFuture.fail(event.cause());
-                    } else {
-                        httpsOptions.setPort(event.result().actualPort());
-                        if (remainingCount.decrementAndGet() == 0) {
-                            startFuture.complete();
-                        }
+                    httpsOptions.setPort(event.result().actualPort());
+                    if (remainingCount.decrementAndGet() == 0) {
+                        startFuture.complete();
                     }
                 });
             }
         }
 
         @Override
-        public void stop(Future<Void> stopFuture) {
+        public void stop(Future<Void> stopFuture) throws Exception {
             httpServer.close(new Handler<AsyncResult<Void>>() {
                 @Override
                 public void handle(AsyncResult<Void> event) {
@@ -435,9 +420,8 @@ public class VertxHttpRecorder {
     public static VirtualAddress VIRTUAL_HTTP = new VirtualAddress("netty-virtual-http");
 
     private static void initializeVirtual(Vertx vertxRuntime) {
-        if (virtualBootstrap != null) {
+        if (virtualBootstrap != null)
             return;
-        }
         VertxInternal vertx = (VertxInternal) vertxRuntime;
         virtualBootstrap = new ServerBootstrap();
 
@@ -452,9 +436,8 @@ public class VertxHttpRecorder {
                 .childHandler(new ChannelInitializer<VirtualChannel>() {
                     @Override
                     public void initChannel(VirtualChannel ch) throws Exception {
-                        ContextInternal context = (ContextInternal) vertx
-                                .createEventLoopContext(null, null, new JsonObject(),
-                                        Thread.currentThread().getContextClassLoader());
+                        ContextInternal context = (ContextInternal) vertx.createEventLoopContext(null, null, new JsonObject(),
+                                Thread.currentThread().getContextClassLoader());
                         VertxHandler<Http1xServerConnection> handler = VertxHandler.create(context, chctx -> {
                             Http1xServerConnection conn = new Http1xServerConnection(
                                     context.owner(),
@@ -484,5 +467,4 @@ public class VertxHttpRecorder {
     public static Router getRouter() {
         return router;
     }
-
 }
