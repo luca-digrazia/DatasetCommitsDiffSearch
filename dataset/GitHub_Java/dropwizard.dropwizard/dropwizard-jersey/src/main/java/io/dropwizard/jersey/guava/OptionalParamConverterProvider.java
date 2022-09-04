@@ -42,7 +42,7 @@ public class OptionalParamConverterProvider implements ParamConverterProvider {
                     }
 
                     @Override
-                    public String toString(final T value) {
+                    public String toString(final T value) throws IllegalArgumentException {
                         return value.toString();
                     }
                 };
@@ -65,7 +65,7 @@ public class OptionalParamConverterProvider implements ParamConverterProvider {
                         }
 
                         @Override
-                        public String toString(final T value) {
+                        public String toString(final T value) throws IllegalArgumentException {
                             return value.toString();
                         }
                     };
