@@ -413,8 +413,8 @@ public class AndroidCommon {
 
   private void compileResources(
       JavaSemantics javaSemantics,
-      Artifact resourceJavaClassJar,
-      Artifact resourceJavaSrcJar,
+      ResourceApk resourceApk,
+      Artifact resourcesJar,
       JavaCompilationArtifacts.Builder artifactsBuilder,
       JavaTargetAttributes.Builder attributes,
       NestedSetBuilder<Artifact> filesBuilder)
@@ -422,32 +422,36 @@ public class AndroidCommon {
 
     // The resource class JAR should already have been generated.
     Preconditions.checkArgument(
-        resourceJavaClassJar.equals(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR)));
+        resourceApk
+            .getResourceJavaClassJar()
+            .equals(
+                ruleContext.getImplicitOutputArtifact(
+                    AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR)));
 
-    packResourceSourceJar(javaSemantics, resourceJavaSrcJar);
+    packResourceSourceJar(javaSemantics, resourcesJar);
 
     // Add the compiled resource jar to the classpath of the main compilation.
-    attributes.addDirectJars(NestedSetBuilder.create(Order.STABLE_ORDER, resourceJavaClassJar));
+    attributes.addDirectJars(
+        NestedSetBuilder.create(Order.STABLE_ORDER, resourceApk.getResourceJavaClassJar()));
     // Add the compiled resource jar to the classpath of consuming targets.
     // We don't actually use the ijar. That is almost the same as the resource class jar
     // except for <clinit>, but it takes time to build and waiting for that to build would
     // just delay building the rest of the library.
-    artifactsBuilder.addCompileTimeJarAsFullJar(resourceJavaClassJar);
+    artifactsBuilder.addCompileTimeJarAsFullJar(resourceApk.getResourceJavaClassJar());
 
     // Add the compiled resource jar as a declared output of the rule.
     filesBuilder.add(resourceSourceJar);
-    filesBuilder.add(resourceJavaClassJar);
+    filesBuilder.add(resourceApk.getResourceJavaClassJar());
   }
 
-  private void packResourceSourceJar(JavaSemantics javaSemantics, Artifact resourcesJavaSrcJar)
+  private void packResourceSourceJar(JavaSemantics javaSemantics, Artifact resourcesJar)
       throws InterruptedException {
 
     resourceSourceJar =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_SOURCE_JAR);
 
     JavaTargetAttributes.Builder javacAttributes =
-        new JavaTargetAttributes.Builder(javaSemantics).addSourceJar(resourcesJavaSrcJar);
+        new JavaTargetAttributes.Builder(javaSemantics).addSourceJar(resourcesJar);
     JavaCompilationHelper javacHelper =
         new JavaCompilationHelper(ruleContext, javaSemantics, getJavacOpts(), javacAttributes);
     javacHelper.createSourceJarAction(resourceSourceJar, null);
@@ -510,19 +514,11 @@ public class AndroidCommon {
     NestedSetBuilder<Artifact> jarsProducedForRuntime = NestedSetBuilder.<Artifact>stableOrder();
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.<Artifact>stableOrder();
 
-    Artifact resourceJavaSrcJar = resourceApk.getResourceJavaSrcJar();
-    if (resourceJavaSrcJar != null) {
-      filesBuilder.add(resourceJavaSrcJar);
-
-      if (resourceApk.addResourcesClassJarToCompilationClasspath()) {
-        compileResources(
-            javaSemantics,
-            resourceApk.getResourceJavaClassJar(),
-            resourceJavaSrcJar,
-            artifactsBuilder,
-            attributes,
-            filesBuilder);
-      }
+    Artifact resourcesJar = resourceApk.getResourceJavaSrcJar();
+    if (resourcesJar != null) {
+      filesBuilder.add(resourcesJar);
+      compileResources(
+          javaSemantics, resourceApk, resourcesJar, artifactsBuilder, attributes, filesBuilder);
 
       // Combined resource constants needs to come even before our own classes that may contain
       // local resource constants.
