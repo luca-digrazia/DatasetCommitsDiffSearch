@@ -57,7 +57,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -78,11 +77,6 @@ public class BundleReceipe {
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
     private final Indexer indexer;
-
-    private final Map<String, MessageInput> createdInputs = new HashMap<>();
-    private final Map<String, org.graylog2.plugin.streams.Output> createdOutputs = new HashMap<>();
-    private final Map<String, org.graylog2.plugin.streams.Stream> createdStreams = new HashMap<>();
-    private final Map<String, org.graylog2.dashboards.Dashboard> createdDashboards = new HashMap<>();
 
     @Inject
     public BundleReceipe(final InputService inputService,
@@ -112,62 +106,30 @@ public class BundleReceipe {
     public void cook(final ConfigurationBundle bundle, final String userName) {
         try {
             createInputs(bundle.getInputs(), userName);
-            createOutputs(bundle.getOutputs(), userName);
-            createStreams(bundle.getStreams(), userName);
-            createDashboards(bundle.getDashboards(), userName);
-        } catch (NoSuchInputTypeException | Exception e) {
-            rollback();
-            LOG.error("Error while creating dashboards but no error handling or rollback yet. Sorry.", e);
+        } catch (Exception | NoSuchInputTypeException e) {
+            LOG.error("Error while creating inputs but no error handling or rollback yet. Sorry.", e);
             Throwables.propagate(e);
         }
-    }
 
-    private boolean rollback() {
         try {
-            deleteCreatedDashboards();
-            deleteCreatedStreams();
-            deleteCreatedOutputs();
-            deleteCreatedInputs();
+            createOutputs(bundle.getOutputs(), userName);
         } catch (Exception e) {
-            return false;
+            LOG.error("Error while creating outputs but no error handling or rollback yet. Sorry.", e);
+            Throwables.propagate(e);
         }
 
-        return true;
-    }
-
-    private void deleteCreatedInputs() throws NotFoundException {
-        for (Map.Entry<String, MessageInput> entry : createdInputs.entrySet()) {
-            final String inputId = entry.getKey();
-            final MessageInput messageInput = entry.getValue();
-
-            LOG.debug("Terminating message input {}", inputId);
-            inputRegistry.terminate(messageInput);
-            inputRegistry.cleanInput(messageInput);
+        try {
+            createStreams(bundle.getStreams(), userName);
+        } catch (Exception e) {
+            LOG.error("Error while creating streams but no error handling or rollback yet. Sorry.", e);
+            Throwables.propagate(e);
         }
-    }
 
-    private void deleteCreatedOutputs() throws NotFoundException {
-        for (Map.Entry<String, org.graylog2.plugin.streams.Output> entry : createdOutputs.entrySet()) {
-            LOG.debug("Deleting output {} from database", entry.getKey());
-            outputService.destroy(entry.getValue());
-        }
-    }
-
-    private void deleteCreatedStreams() throws NotFoundException {
-        for (Map.Entry<String, org.graylog2.plugin.streams.Stream> entry : createdStreams.entrySet()) {
-            LOG.debug("Deleting stream {} from database", entry.getKey());
-            streamService.destroy(entry.getValue());
-        }
-    }
-
-    private void deleteCreatedDashboards() {
-        for (Map.Entry<String, org.graylog2.dashboards.Dashboard> entry : createdDashboards.entrySet()) {
-            final String dashboardId = entry.getKey();
-            LOG.debug("Removing dashboard {} from registry", dashboardId);
-            dashboardRegistry.remove(dashboardId);
-
-            LOG.debug("Deleting dashboard {} from database", dashboardId);
-            dashboardService.destroy(entry.getValue());
+        try {
+            createDashboards(bundle.getDashboards(), userName);
+        } catch (Exception e) {
+            LOG.error("Error while creating dashboards but no error handling or rollback yet. Sorry.", e);
+            Throwables.propagate(e);
         }
     }
 
@@ -175,7 +137,6 @@ public class BundleReceipe {
             throws org.graylog2.plugin.inputs.Extractor.ReservedFieldException, org.graylog2.ConfigurationException, NoSuchInputTypeException, ValidationException, ExtractorFactory.NoSuchExtractorException, NotFoundException, ConfigurationException {
         for (final Input input : inputs) {
             final MessageInput messageInput = createMessageInput(input, userName);
-            createdInputs.put(messageInput.getId(), messageInput);
 
             // Launch input. (this will run async and clean up itself in case of an error.)
             inputRegistry.launch(messageInput, messageInput.getId());
@@ -224,6 +185,7 @@ public class BundleReceipe {
         for (Extractor extractor : extractors) {
             addExtractor(messageInput, extractor, userName);
         }
+
     }
 
     private void addExtractor(
@@ -332,15 +294,14 @@ public class BundleReceipe {
 
     private void createOutputs(final List<Output> outputs, final String userName)
             throws ValidationException {
-        for (final Output outputDescription : outputs) {
-            final OutputImpl output = createOutput(outputDescription, userName);
-            createdOutputs.put(output.getId(), output);
+        for (final Output output : outputs) {
+            createOutput(output, userName);
         }
     }
 
-    private OutputImpl createOutput(final Output outputDescription, final String userName)
+    private org.graylog2.plugin.streams.Output createOutput(final Output outputDescription, final String userName)
             throws ValidationException {
-        return (OutputImpl) outputService.create(new OutputImpl(
+        return outputService.create(new OutputImpl(
                 outputDescription.getTitle(),
                 outputDescription.getType(),
                 outputDescription.getConfiguration(),
@@ -350,13 +311,12 @@ public class BundleReceipe {
 
     private void createStreams(final List<Stream> streams, final String userName)
             throws ValidationException {
-        for (final Stream streamDescription : streams) {
-            final org.graylog2.plugin.streams.Stream stream = createStream(streamDescription, userName);
-            createdStreams.put(stream.getId(), stream);
+        for (final Stream stream : streams) {
+            createStream(stream, userName);
         }
     }
 
-    private org.graylog2.plugin.streams.Stream createStream(final Stream streamDescription, final String userName)
+    private void createStream(final Stream streamDescription, final String userName)
             throws ValidationException {
         final Map<String, Object> streamData = ImmutableMap.<String, Object>of(
                 "title", streamDescription.getTitle(),
@@ -383,19 +343,16 @@ public class BundleReceipe {
         }
 
         // TODO Add Outputs to Streams
-
-        return stream;
     }
 
     private void createDashboards(final List<Dashboard> dashboards, final String userName)
             throws org.graylog2.dashboards.widgets.DashboardWidget.NoSuchWidgetTypeException, InvalidWidgetConfigurationException, InvalidRangeParametersException, ValidationException {
         for (final Dashboard dashboard : dashboards) {
-            org.graylog2.dashboards.Dashboard createdDashboard = createDashboard(dashboard, userName);
-            createdDashboards.put(createdDashboard.getId(), createdDashboard);
+            createDashboard(dashboard, userName);
         }
     }
 
-    private org.graylog2.dashboards.Dashboard createDashboard(final Dashboard dashboardDescription, final String userName)
+    private void createDashboard(final Dashboard dashboardDescription, final String userName)
             throws ValidationException, org.graylog2.dashboards.widgets.DashboardWidget.NoSuchWidgetTypeException, InvalidRangeParametersException, InvalidWidgetConfigurationException {
         // Create dashboard.
         Map<String, Object> dashboardData = ImmutableMap.<String, Object>of(
@@ -422,8 +379,6 @@ public class BundleReceipe {
 
         dashboardService.updateWidgetPositions(dashboard, widgetPositions.build());
         dashboardRegistry.add(dashboard);
-
-        return dashboard;
     }
 
     @SuppressWarnings("unchecked")
