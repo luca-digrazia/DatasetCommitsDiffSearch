@@ -16,12 +16,14 @@
  */
 package org.graylog2.bindings.providers;
 
+import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import io.searchbox.client.JestClient;
 import io.searchbox.client.JestClientFactory;
 import io.searchbox.client.config.HttpClientConfig;
+import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
@@ -33,9 +35,10 @@ import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 import java.net.URI;
-import java.time.Duration;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -54,9 +57,11 @@ public class JestClientProvider implements Provider<JestClient> {
                               @Named("elasticsearch_discovery_enabled") boolean discoveryEnabled,
                               @Named("elasticsearch_discovery_filter") @Nullable String discoveryFilter,
                               @Named("elasticsearch_discovery_frequency") Duration discoveryFrequency,
+                              @Named("elasticsearch_compression_enabled") boolean compressionEnabled,
                               Gson gson) {
         this.factory = new JestClientFactory();
         this.credentialsProvider = new BasicCredentialsProvider();
+        final Set<HttpHost> preemptiveAuthHosts = new HashSet<>();
         final List<String> hosts = elasticsearchHosts.stream()
             .map(hostUri -> {
                 if (!Strings.isNullOrEmpty(hostUri.getUserInfo())) {
@@ -70,6 +75,10 @@ public class JestClientProvider implements Provider<JestClient> {
                             new AuthScope(hostUri.getHost(), hostUri.getPort(), AuthScope.ANY_REALM, hostUri.getScheme()),
                             new UsernamePasswordCredentials(username, password)
                         );
+
+                        if (!Strings.isNullOrEmpty(username) || !Strings.isNullOrEmpty(password)) {
+                            preemptiveAuthHosts.add(new HttpHost(hostUri.getHost(), hostUri.getPort(), hostUri.getScheme()));
+                        }
                     }
                 }
                 return hostUri.toString();
@@ -79,15 +88,17 @@ public class JestClientProvider implements Provider<JestClient> {
         final HttpClientConfig.Builder httpClientConfigBuilder = new HttpClientConfig
                 .Builder(hosts)
                 .credentialsProvider(credentialsProvider)
-                .connTimeout(Math.toIntExact(elasticsearchConnectTimeout.toMillis()))
-                .readTimeout(Math.toIntExact(elasticsearchSocketTimeout.toMillis()))
-                .maxConnectionIdleTime(elasticsearchIdleTimeout.getSeconds(), TimeUnit.SECONDS)
+                .connTimeout(Math.toIntExact(elasticsearchConnectTimeout.toMilliseconds()))
+                .readTimeout(Math.toIntExact(elasticsearchSocketTimeout.toMilliseconds()))
+                .maxConnectionIdleTime(elasticsearchIdleTimeout.toSeconds(), TimeUnit.SECONDS)
                 .maxTotalConnection(elasticsearchMaxTotalConnections)
                 .defaultMaxTotalConnectionPerRoute(elasticsearchMaxTotalConnectionsPerRoute)
                 .multiThreaded(true)
                 .discoveryEnabled(discoveryEnabled)
                 .discoveryFilter(discoveryFilter)
-                .discoveryFrequency(discoveryFrequency.getSeconds(), TimeUnit.SECONDS)
+                .discoveryFrequency(discoveryFrequency.toSeconds(), TimeUnit.SECONDS)
+                .preemptiveAuthTargetHosts(preemptiveAuthHosts)
+                .requestCompressionEnabled(compressionEnabled)
                 .gson(gson);
 
         factory.setHttpClientConfig(httpClientConfigBuilder.build());
