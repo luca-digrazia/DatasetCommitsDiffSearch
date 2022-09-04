@@ -1,5 +1,6 @@
 package org.jboss.shamrock.deployment;
 
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Set;
 
@@ -7,16 +8,10 @@ import org.jboss.jandex.IndexView;
 import org.jboss.shamrock.deployment.buildconfig.BuildConfig;
 
 /**
- * Represents the input to the shamrock build process.
+ *
  */
 public interface ArchiveContext {
 
-    /**
-     * Returns an {@link ApplicationArchive} that represents the classes and resources that are part of the current
-     * project
-     *
-     * @return The root archive
-     */
     ApplicationArchive getRootArchive();
 
     /**
@@ -39,4 +34,8 @@ public interface ArchiveContext {
      */
     BuildConfig getBuildConfig();
 
+    /**
+     * @return The complete set of deployment descriptors
+     */
+    Set<Path> getDescriptors(String descriptor);
 }

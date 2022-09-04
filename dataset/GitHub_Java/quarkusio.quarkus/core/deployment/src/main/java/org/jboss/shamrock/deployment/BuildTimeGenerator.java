@@ -1,15 +1,24 @@
 package org.jboss.shamrock.deployment;
 
-import static org.jboss.protean.gizmo.MethodDescriptor.ofConstructor;
-import static org.jboss.protean.gizmo.MethodDescriptor.ofMethod;
+import static org.objectweb.asm.Opcodes.AASTORE;
+import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
+import static org.objectweb.asm.Opcodes.ACC_STATIC;
+import static org.objectweb.asm.Opcodes.ACC_SUPER;
+import static org.objectweb.asm.Opcodes.ALOAD;
+import static org.objectweb.asm.Opcodes.ANEWARRAY;
+import static org.objectweb.asm.Opcodes.DUP;
+import static org.objectweb.asm.Opcodes.GETSTATIC;
+import static org.objectweb.asm.Opcodes.INVOKEINTERFACE;
+import static org.objectweb.asm.Opcodes.INVOKESPECIAL;
+import static org.objectweb.asm.Opcodes.INVOKESTATIC;
+import static org.objectweb.asm.Opcodes.INVOKEVIRTUAL;
+import static org.objectweb.asm.Opcodes.NEW;
+import static org.objectweb.asm.Opcodes.PUTSTATIC;
+import static org.objectweb.asm.Opcodes.RETURN;
+import static org.objectweb.asm.Opcodes.SWAP;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Executable;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
@@ -30,14 +39,10 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.Index;
+import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
-import org.jboss.protean.gizmo.ClassCreator;
-import org.jboss.protean.gizmo.ExceptionTable;
-import org.jboss.protean.gizmo.FieldCreator;
-import org.jboss.protean.gizmo.MethodCreator;
-import org.jboss.protean.gizmo.MethodDescriptor;
-import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.shamrock.deployment.buildconfig.BuildConfig;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorderImpl;
@@ -46,7 +51,13 @@ import org.jboss.shamrock.runtime.ResourceHelper;
 import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
 import org.jboss.shamrock.runtime.Timing;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 
 /**
  * Class that does the build time processing
@@ -67,21 +78,19 @@ public class BuildTimeGenerator {
     private final ClassLoader classLoader;
     private final boolean useStaticInit;
     private final List<Function<String, Function<ClassVisitor, ClassVisitor>>> bytecodeTransformers = new ArrayList<>();
-    private final Set<String> applicationArchiveMarkers;
 
     public BuildTimeGenerator(ClassOutput classOutput, ClassLoader cl, boolean useStaticInit) {
         this.useStaticInit = useStaticInit;
-        Iterator<ShamrockSetup> loader = ServiceLoader.load(ShamrockSetup.class, cl).iterator();
-        SetupContextImpl setupContext = new SetupContextImpl();
+        Iterator<ResourceProcessor> loader = ServiceLoader.load(ResourceProcessor.class, cl).iterator();
+        List<ResourceProcessor> processors = new ArrayList<>();
         while (loader.hasNext()) {
-            loader.next().setup(setupContext);
+            processors.add(loader.next());
         }
-        setupContext.resourceProcessors.sort(Comparator.comparingInt(ResourceProcessor::getPriority));
-        this.processors = Collections.unmodifiableList(setupContext.resourceProcessors);
+        processors.sort(Comparator.comparingInt(ResourceProcessor::getPriority));
+        this.processors = Collections.unmodifiableList(processors);
         this.output = classOutput;
-        this.injection = new DeploymentProcessorInjection(setupContext.injectionProviders);
+        this.injection = new DeploymentProcessorInjection(cl);
         this.classLoader = cl;
-        this.applicationArchiveMarkers = new HashSet<>(setupContext.applicationArchiveMarkers);
     }
 
     public List<Function<String, Function<ClassVisitor, ClassVisitor>>> getBytecodeTransformers() {
@@ -121,7 +130,7 @@ public class BuildTimeGenerator {
                 }
             });
             Index appIndex = indexer.complete();
-            List<ApplicationArchive> applicationArchives = ApplicationArchiveLoader.scanForOtherIndexes(classLoader, config, applicationArchiveMarkers, root);
+            List<ApplicationArchive> applicationArchives = ApplicationArchiveLoader.scanForOtherIndexes(classLoader, config);
 
 
             ArchiveContext context = new ArchiveContextImpl(new ApplicationArchiveImpl(appIndex, root, null), applicationArchives, config);
@@ -138,7 +147,7 @@ public class BuildTimeGenerator {
                 processorContext.writeMainClass();
                 processorContext.writeReflectionAutoFeature();
             } finally {
-                for (ApplicationArchive archive : context.getAllApplicationArchives()) {
+                for(ApplicationArchive archive : context.getAllApplicationArchives()) {
                     try {
                         archive.close();
                     } catch (Exception e) {
@@ -213,78 +222,148 @@ public class BuildTimeGenerator {
                 Collections.sort(staticInitTasks);
             }
 
-            ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(output, true), MAIN_CLASS, null, Object.class.getName());
+            ClassWriter file = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+            file.visit(Opcodes.V1_8, ACC_PUBLIC | ACC_SUPER, MAIN_CLASS_INTERNAL, null, Type.getInternalName(Object.class), null);
 
-            FieldCreator scField = file.getFieldCreator(STARTUP_CONTEXT, StartupContext.class);
-            scField.setModifiers(Modifier.STATIC);
+            // constructor
+            MethodVisitor mv = file.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+            mv.visitVarInsn(ALOAD, 0); // push `this` to the operand stack
+            mv.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Object.class), "<init>", "()V", false); // call the constructor of super class
+            mv.visitInsn(RETURN);
+            mv.visitMaxs(0, 1);
+            mv.visitEnd();
 
-            MethodCreator mv = file.getMethodCreator("<clinit>", void.class);
-            mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
-            mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class));
-            ResultHandle startupContext = mv.newInstance(ofConstructor(StartupContext.class));
-            mv.writeStaticField(scField.getFieldDescriptor(), startupContext);
+            file.visitField(ACC_PUBLIC | ACC_STATIC, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";", null, null);
+
+            mv = file.visitMethod(ACC_PUBLIC | ACC_STATIC, "<clinit>", "()V", null, null);
+            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Timing.class), "staticInitStarted", "()V", false);
+            mv.visitTypeInsn(NEW, Type.getInternalName(StartupContext.class));
+            mv.visitInsn(DUP);
+            mv.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(StartupContext.class), "<init>", "()V", false);
+            mv.visitInsn(DUP);
+            mv.visitFieldInsn(PUTSTATIC, MAIN_CLASS_INTERNAL, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
             for (DeploymentTaskHolder holder : staticInitTasks) {
-                ResultHandle dup = mv.newInstance(ofConstructor(holder.className));
-                mv.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
+                mv.visitInsn(DUP);
+                String className = holder.className.replace(".", "/");
+                mv.visitTypeInsn(NEW, className);
+                mv.visitInsn(DUP);
+                mv.visitMethodInsn(INVOKESPECIAL, className, "<init>", "()V", false);
+                mv.visitInsn(SWAP);
+                mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(StartupTask.class), "deploy", "(L" + StartupContext.class.getName().replace(".", "/") + ";)V", true);
             }
-            mv.returnValue(null);
 
-            mv = file.getMethodCreator("main", void.class, String[].class);
-            mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
-            mv.invokeStaticMethod(ofMethod(Timing.class, "mainStarted", void.class));
-            startupContext = mv.readStaticField(scField.getFieldDescriptor());
+            mv.visitInsn(RETURN);
+            mv.visitMaxs(0, 4);
+            mv.visitEnd();
 
+            mv = file.visitMethod(ACC_PUBLIC | ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
+            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Timing.class), "mainStarted", "()V", false);
+            mv.visitFieldInsn(GETSTATIC, MAIN_CLASS_INTERNAL, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
             for (DeploymentTaskHolder holder : tasks) {
-                ResultHandle dup = mv.newInstance(ofConstructor(holder.className));
-                mv.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
+                mv.visitInsn(DUP);
+                String className = holder.className.replace(".", "/");
+                mv.visitTypeInsn(NEW, className);
+                mv.visitInsn(DUP);
+                mv.visitMethodInsn(INVOKESPECIAL, className, "<init>", "()V", false);
+                mv.visitInsn(SWAP);
+                mv.visitMethodInsn(INVOKEINTERFACE, Type.getInternalName(StartupTask.class), "deploy", "(L" + StartupContext.class.getName().replace(".", "/") + ";)V", true);
             }
-            mv.returnValue(null);
 
-            mv = file.getMethodCreator("close", void.class);
-            mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
-            startupContext = mv.readStaticField(scField.getFieldDescriptor());
-            mv.invokeVirtualMethod(ofMethod(StartupContext.class, "close", void.class), startupContext);
-            mv.returnValue(null);
-            file.close();
+            //time since main start
+            mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(Timing.class), "printStartupTime", "()V", false);
+            mv.visitInsn(RETURN);
+            mv.visitMaxs(0, 4);
+            mv.visitEnd();
+
+
+            mv = file.visitMethod(ACC_PUBLIC | ACC_STATIC, "close", "()V", null, null);
+            mv.visitFieldInsn(GETSTATIC, MAIN_CLASS_INTERNAL, STARTUP_CONTEXT, "L" + Type.getInternalName(StartupContext.class) + ";");
+            mv.visitMethodInsn(INVOKEVIRTUAL, Type.getInternalName(StartupContext.class), "close", "()V");
+            mv.visitInsn(RETURN);
+            mv.visitMaxs(0, 4);
+            mv.visitEnd();
+
+            file.visitEnd();
+
+            output.writeClass(true, MAIN_CLASS_INTERNAL, file.toByteArray());
         }
 
         void writeReflectionAutoFeature() throws IOException {
 
-            ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(output, true), GRAAL_AUTOFEATURE, null, Object.class.getName(), "org/graalvm/nativeimage/Feature");
-            file.addAnnotation("com/oracle/svm/core/annotate/AutomaticFeature");
+            ClassWriter file = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+            file.visit(Opcodes.V1_8, ACC_PUBLIC | ACC_SUPER, GRAAL_AUTOFEATURE, null, Type.getInternalName(Object.class), new String[]{"org/graalvm/nativeimage/Feature"});
+            AnnotationVisitor annotation = file.visitAnnotation("Lcom/oracle/svm/core/annotate/AutomaticFeature;", true);
+            annotation.visitEnd();
+            // constructor
+            MethodVisitor mv = file.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
+            mv.visitVarInsn(ALOAD, 0); // push `this` to the operand stack
+            mv.visitMethodInsn(INVOKESPECIAL, Type.getInternalName(Object.class), "<init>", "()V", false); // call the constructor of super class
+            mv.visitInsn(RETURN);
+            mv.visitMaxs(0, 1);
+            mv.visitEnd();
 
 
-            MethodCreator mv = file.getMethodCreator("beforeAnalysis", "V", "org/graalvm/nativeimage/Feature$BeforeAnalysisAccess");
+            mv = file.visitMethod(ACC_PUBLIC, "beforeAnalysis", "(Lorg/graalvm/nativeimage/Feature$BeforeAnalysisAccess;)V", null, null);
 
             //TODO: at some point we are going to need to break this up, as if it get too big it will hit the method size limit
 
-            for (String i : resources) {
-                mv.invokeStaticMethod(ofMethod(ResourceHelper.class, "registerResources", void.class, String.class), mv.load(i));
+            for(String i : resources) {
+                mv.visitLdcInsn(i);
+                mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(ResourceHelper.class), "registerResources", "(Ljava/lang/String;)V", false);
             }
 
             for (Map.Entry<String, ReflectionInfo> entry : reflectiveClasses.entrySet()) {
-                ExceptionTable exceptionTable = mv.addTryCatch();
-                ResultHandle carray = mv.newArray(Class.class, mv.load(1));
-                ResultHandle clazz = mv.invokeStaticMethod(ofMethod(Class.class, "forName", Class.class, String.class), mv.load(entry.getKey()));
-                mv.writeArrayValue(carray, mv.load(0), clazz);
-                mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Class[].class), carray);
-                //now load constructors
-                ResultHandle res = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredConstructors", Constructor[].class), clazz);
-                mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), res);
+                Label lTryBlockStart = new Label();
+                Label lTryBlockEnd = new Label();
+                Label lCatchBlockStart = new Label();
+                Label lCatchBlockEnd = new Label();
+
+                // set up try-catch block for RuntimeException
+                mv.visitTryCatchBlock(lTryBlockStart, lTryBlockEnd,
+                        lCatchBlockStart, "java/lang/Exception");
+
+                // started the try block
+                mv.visitLabel(lTryBlockStart);
+                mv.visitLdcInsn(1);
+                mv.visitTypeInsn(ANEWARRAY, "java/lang/Class");
+                mv.visitInsn(DUP);
+                mv.visitLdcInsn(0);
+                mv.visitLdcInsn(entry.getKey());
+                mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
+                mv.visitInsn(AASTORE);
+                mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/Class;)V", false);
+
+
                 //now load everything else
+                mv.visitLdcInsn(entry.getKey());
+                mv.visitMethodInsn(INVOKESTATIC, "java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;", false);
                 if (entry.getValue().methods) {
-                    res = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredMethods", Method[].class), clazz);
-                    mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Executable[].class), res);
+                    mv.visitInsn(DUP);
                 }
                 if (entry.getValue().fields) {
-                    res = mv.invokeVirtualMethod(ofMethod(Class.class, "getDeclaredFields", Field[].class), clazz);
-                    mv.invokeStaticMethod(ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class, Field[].class), res);
+                    mv.visitInsn(DUP);
                 }
-                exceptionTable.addCatchClause(Throwable.class);
-                exceptionTable.complete();
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;", false);
+                mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
+                //now load everything else
+                if (entry.getValue().methods) {
+                    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredMethods", "()[Ljava/lang/reflect/Method;", false);
+                    mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Executable;)V", false);
+                }
+                if (entry.getValue().fields) {
+                    mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Class", "getDeclaredFields", "()[Ljava/lang/reflect/Field;", false);
+                    mv.visitMethodInsn(INVOKESTATIC, "org/graalvm/nativeimage/RuntimeReflection", "register", "([Ljava/lang/reflect/Field;)V", false);
+                }
+                mv.visitLabel(lTryBlockEnd);
+                mv.visitLabel(lCatchBlockStart);
+                mv.visitLabel(lCatchBlockEnd);
             }
-            mv.returnValue(null);
-            file.close();
+            mv.visitInsn(RETURN);
+            mv.visitMaxs(0, 2);
+            mv.visitEnd();
+            file.visitEnd();
+
+            output.writeClass(true, GRAAL_AUTOFEATURE, file.toByteArray());
         }
 
     }

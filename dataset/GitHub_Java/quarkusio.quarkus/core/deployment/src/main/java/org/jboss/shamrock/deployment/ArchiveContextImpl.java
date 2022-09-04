@@ -57,4 +57,9 @@ class ArchiveContextImpl implements ArchiveContext {
     public BuildConfig getBuildConfig() {
         return buildConfig;
     }
+
+    @Override
+    public Set<Path> getDescriptors(String descriptor) {
+        throw new RuntimeException("NYI: todo");
+    }
 }
