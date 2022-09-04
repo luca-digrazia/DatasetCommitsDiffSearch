@@ -69,17 +69,9 @@ public final class CcToolchainRule implements RuleDefinition {
       LabelLateBoundDefault.fromTargetConfiguration(
           CppConfiguration.class,
           null,
-          (rule, attributes, cppConfig) -> {
-            // Is the libcTop directly set via a flag?
-            Label cppOptionLibcTop = cppConfig.getLibcTopLabel();
-            if (cppOptionLibcTop != null) {
-              return cppOptionLibcTop;
-            }
-
-            // Look up the value from the attribute.
-            // This avoids analyzing the label from the CROSSTOOL if the attribute is set.
-            return getLabel(attributes, "libc_top", /* defaultValue= */ null);
-          });
+          (rule, attributes, cppConfig) ->
+              // This avoids analyzing the label from the CROSSTOOL if the attribute is set.
+              getLabel(attributes, "libc_top", cppConfig.getSysrootLabel()));
 
   private static final LabelLateBoundDefault<?> FDO_OPTIMIZE_VALUE =
       LabelLateBoundDefault.fromTargetConfiguration(
