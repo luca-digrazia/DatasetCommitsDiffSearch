@@ -18,7 +18,6 @@ package com.davemorrissey.labs.subscaleview;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-import android.content.res.TypedArray;
 import android.graphics.*;
 import android.graphics.Bitmap.Config;
 import android.media.ExifInterface;
@@ -32,10 +31,12 @@ import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
-import com.davemorrissey.labs.subscaleview.R.styleable;
 
 import java.lang.ref.WeakReference;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Displays an image subsampled as necessary to avoid loading too much image data into memory. After a pinch to zoom in,
@@ -61,17 +62,11 @@ public class SubsamplingScaleImageView extends View {
     public static final int ORIENTATION_180 = 180;
     public static final int ORIENTATION_270 = 270;
 
-    private static final List<Integer> VALID_ORIENTATIONS = Arrays.asList(ORIENTATION_0, ORIENTATION_90, ORIENTATION_180, ORIENTATION_270, ORIENTATION_USE_EXIF);
-
     // Image orientation setting
     private int orientation = ORIENTATION_0;
 
     // Max scale allowed (prevent infinite zoom)
     private float maxScale = 2F;
-
-    // Gesture detection settings
-    private boolean panEnabled = true;
-    private boolean zoomEnabled = true;
 
     // Current scale and scale at start of zoom
     private float scale;
@@ -84,7 +79,6 @@ public class SubsamplingScaleImageView extends View {
     // Source coordinate to center on, used when new position is set externally before view is ready
     private Float pendingScale;
     private PointF sPendingCenter;
-    private PointF sRequestedCenter;
 
     // Source image dimensions and orientation - dimensions relate to the unrotated image
     private int sWidth;
@@ -95,8 +89,8 @@ public class SubsamplingScaleImageView extends View {
     private boolean isZooming;
     // Is one-finger panning in progress
     private boolean isPanning;
-    // Max touches used in current gesture
-    private int maxTouchCount;
+    // Is an press in progress
+    private boolean isPressed;
 
     // Fling detector
     private GestureDetector detector;
@@ -135,7 +129,7 @@ public class SubsamplingScaleImageView extends View {
         this.handler = new Handler(new Handler.Callback() {
             public boolean handleMessage(Message message) {
                 if (message.what == MESSAGE_LONG_CLICK && onLongClickListener != null) {
-                    maxTouchCount = 0;
+                    isPressed = false;
                     SubsamplingScaleImageView.super.setOnLongClickListener(onLongClickListener);
                     performLongClick();
                     SubsamplingScaleImageView.super.setOnLongClickListener(null);
@@ -146,7 +140,7 @@ public class SubsamplingScaleImageView extends View {
         this.detector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (panEnabled && readySent && vTranslate != null && (Math.abs(e1.getX() - e2.getX()) > 50 || Math.abs(e1.getY() - e2.getY()) > 50) && (Math.abs(velocityX) > 500 || Math.abs(velocityY) > 500) && !isZooming) {
+                if (readySent && vTranslate != null && (Math.abs(e1.getX() - e2.getX()) > 50 || Math.abs(e1.getY() - e2.getY()) > 50) && (Math.abs(velocityX) > 500 || Math.abs(velocityY) > 500) && !isZooming) {
                     flingMomentum = new PointF(velocityX * 0.5f, velocityY * 0.5f);
                     flingFrom = new PointF(vTranslate.x, vTranslate.y);
                     flingStart = System.currentTimeMillis();
@@ -156,22 +150,6 @@ public class SubsamplingScaleImageView extends View {
                 return super.onFling(e1, e2, velocityX, velocityY);
             }
         });
-        // Handle XML attribute asset name.
-        if (attr != null) {
-            TypedArray typedAttr = getContext().obtainStyledAttributes(attr, styleable.SubsamplingScaleImageView);
-            if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_assetName)) {
-                String assetName = typedAttr.getString(styleable.SubsamplingScaleImageView_assetName);
-                if (assetName != null && assetName.length() > 0) {
-                    setImageAsset(assetName);
-                }
-            }
-            if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_panEnabled)) {
-                setPanEnabled(typedAttr.getBoolean(styleable.SubsamplingScaleImageView_panEnabled, true));
-            }
-            if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_zoomEnabled)) {
-                setZoomEnabled(typedAttr.getBoolean(styleable.SubsamplingScaleImageView_zoomEnabled, true));
-            }
-        }
     }
 
     public SubsamplingScaleImageView(Context context) {
@@ -183,7 +161,11 @@ public class SubsamplingScaleImageView extends View {
      * loading of tiles. However, this can be freely called at any time.
      */
     public void setOrientation(int orientation) {
-        if (!VALID_ORIENTATIONS.contains(orientation)) {
+        if (orientation != ORIENTATION_0 &&
+                orientation != ORIENTATION_90 &&
+                orientation != ORIENTATION_180 &&
+                orientation != ORIENTATION_270 &&
+                orientation != ORIENTATION_USE_EXIF) {
             throw new IllegalArgumentException("Invalid orientation: " + orientation);
         }
         this.orientation = orientation;
@@ -193,26 +175,11 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Display an image from a file in internal or external storage.
-     * @param extFile URI of the file to display.
+     * Display an image from a file in internal or external storage
+     * @param extFile URI of the file to display
      */
     public void setImageFile(String extFile) {
         reset(true);
-        BitmapInitTask task = new BitmapInitTask(this, getContext(), extFile, false);
-        task.execute();
-        invalidate();
-    }
-
-    /**
-     * Display an image from a file in internal or external storage, starting with a given orientation setting, scale
-     * and center. This is the best method to use when you want scale and center to be restored after screen orientation
-     * change; it avoids any redundant loading of tiles in the wrong orientation.
-     * @param extFile URI of the file to display.
-     * @param state State to be restored. Nullable.
-     */
-    public void setImageFile(String extFile, ImageViewState state) {
-        reset(true);
-        restoreState(state);
         BitmapInitTask task = new BitmapInitTask(this, getContext(), extFile, false);
         task.execute();
         invalidate();
@@ -223,19 +190,7 @@ public class SubsamplingScaleImageView extends View {
      * @param assetName asset name.
      */
     public void setImageAsset(String assetName) {
-        setImageAsset(assetName, null);
-    }
-
-    /**
-     * Display an image from a file in assets, starting with a given orientation setting, scale and center. This is the
-     * best method to use when you want scale and center to be restored after screen orientation change; it avoids any
-     * redundant loading of tiles in the wrong orientation.
-     * @param assetName asset name.
-     * @param state State to be restored. Nullable.
-     */
-    public void setImageAsset(String assetName, ImageViewState state) {
         reset(true);
-        restoreState(state);
         BitmapInitTask task = new BitmapInitTask(this, getContext(), assetName, true);
         task.execute();
         invalidate();
@@ -251,10 +206,9 @@ public class SubsamplingScaleImageView extends View {
         vTranslateStart = null;
         pendingScale = 0f;
         sPendingCenter = null;
-        sRequestedCenter = null;
         isZooming = false;
         isPanning = false;
-        maxTouchCount = 0;
+        isPressed = false;
         fullImageSampleSize = 0;
         vCenterStart = null;
         vDistStart = 0;
@@ -355,19 +309,15 @@ public class SubsamplingScaleImageView extends View {
             case MotionEvent.ACTION_POINTER_1_DOWN:
             case MotionEvent.ACTION_POINTER_2_DOWN:
                 getParent().requestDisallowInterceptTouchEvent(true);
-                maxTouchCount = Math.max(maxTouchCount, touchCount);
+                isPressed = true;
                 if (touchCount >= 2) {
-                    if (zoomEnabled) {
-                        // Start pinch to zoom. Calculate distance between touch points and center point of the pinch.
-                        float distance = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1));
-                        scaleStart = scale;
-                        vDistStart = distance;
-                        vTranslateStart = new PointF(vTranslate.x, vTranslate.y);
-                        vCenterStart = new PointF((event.getX(0) + event.getX(1))/2, (event.getY(0) + event.getY(1))/2);
-                    } else {
-                        // Abort all gestures on second touch
-                        maxTouchCount = 0;
-                    }
+                    // Start pinch to zoom. Calculate distance between touch points and center point of the pinch.
+                    float distance = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1));
+                    scaleStart = scale;
+                    vDistStart = distance;
+                    vTranslateStart = new PointF(vTranslate.x, vTranslate.y);
+                    vCenterStart = new PointF((event.getX(0) + event.getX(1))/2, (event.getY(0) + event.getY(1))/2);
+
                     // Cancel long click timer
                     handler.removeMessages(MESSAGE_LONG_CLICK);
                 } else {
@@ -381,44 +331,33 @@ public class SubsamplingScaleImageView extends View {
                 return true;
             case MotionEvent.ACTION_MOVE:
                 boolean consumed = false;
-                if (maxTouchCount > 0) {
+                if (isPressed) {
                     if (touchCount >= 2) {
                         // Calculate new distance between touch points, to scale and pan relative to start values.
                         vDistEnd = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1));
                         vCenterEnd = new PointF((event.getX(0) + event.getX(1))/2, (event.getY(0) + event.getY(1))/2);
 
-                        if (zoomEnabled && (distance(vCenterStart.x, vCenterEnd.x, vCenterStart.y, vCenterEnd.y) > 5 || Math.abs(vDistEnd - vDistStart) > 5 || isPanning)) {
+                        if (distance(vCenterStart.x, vCenterEnd.x, vCenterStart.y, vCenterEnd.y) > 5 || Math.abs(vDistEnd - vDistStart) > 5 || isPanning) {
                             isZooming = true;
                             isPanning = true;
                             consumed = true;
 
                             scale = Math.min(maxScale, (vDistEnd / vDistStart) * scaleStart);
 
-                            if (panEnabled) {
-                                // Translate to place the source image coordinate that was at the center of the pinch at the start
-                                // at the center of the pinch now, to give simultaneous pan + zoom.
-                                float vLeftStart = vCenterStart.x - vTranslateStart.x;
-                                float vTopStart = vCenterStart.y - vTranslateStart.y;
-                                float vLeftNow = vLeftStart * (scale/scaleStart);
-                                float vTopNow = vTopStart * (scale/scaleStart);
-                                vTranslate.x = vCenterEnd.x - vLeftNow;
-                                vTranslate.y = vCenterEnd.y - vTopNow;
-                            } else if (sRequestedCenter != null) {
-                                // With a center specified from code, zoom around that point.
-                                vTranslate.x = (getWidth()/2) - (scale * sRequestedCenter.x);
-                                vTranslate.y = (getHeight()/2) - (scale * sRequestedCenter.y);
-                            } else {
-                                // With no requested center, scale around the image center.
-                                vTranslate.x = (getWidth()/2) - (scale * (sWidth()/2));
-                                vTranslate.y = (getHeight()/2) - (scale * (sHeight()/2));
-                            }
+                            // Translate to place the source image coordinate that was at the center of the pinch at the start
+                            // at the center of the pinch now, to give simultaneous pan + zoom.
+                            float vLeftStart = vCenterStart.x - vTranslateStart.x;
+                            float vTopStart = vCenterStart.y - vTranslateStart.y;
+                            float vLeftNow = vLeftStart * (scale/scaleStart);
+                            float vTopNow = vTopStart * (scale/scaleStart);
+                            vTranslate.x = vCenterEnd.x - vLeftNow;
+                            vTranslate.y = vCenterEnd.y - vTopNow;
 
                             fitToBounds();
                             refreshRequiredTiles(false);
                         }
                     } else if (!isZooming) {
-                        // One finger pan - translate the image. We do this calculation even with pan disabled so click
-                        // and long click behaviour is preserved.
+                        // One finger pan - translate the image
                         float dx = Math.abs(event.getX() - vCenterStart.x);
                         float dy = Math.abs(event.getY() - vCenterStart.y);
                         if (dx > 5 || dy > 5 || isPanning) {
@@ -433,14 +372,8 @@ public class SubsamplingScaleImageView extends View {
                                 isPanning = true;
                             } else if (dx > 5) {
                                 // Haven't panned the image, and we're at the left or right edge. Switch to page swipe.
-                                maxTouchCount = 0;
+                                isPressed = false;
                                 handler.removeMessages(MESSAGE_LONG_CLICK);
-                                getParent().requestDisallowInterceptTouchEvent(false);
-                            }
-
-                            if (!panEnabled) {
-                                vTranslate.x = vTranslateStart.x;
-                                vTranslate.y = vTranslateStart.y;
                                 getParent().requestDisallowInterceptTouchEvent(false);
                             }
 
@@ -458,7 +391,7 @@ public class SubsamplingScaleImageView extends View {
             case MotionEvent.ACTION_POINTER_UP:
             case MotionEvent.ACTION_POINTER_2_UP:
                 handler.removeMessages(MESSAGE_LONG_CLICK);
-                if (maxTouchCount > 0 && (isZooming || isPanning)) {
+                if (isPressed && (isZooming || isPanning)) {
                     if (isZooming && touchCount == 2) {
                         // Convert from zoom to pan with remaining touch
                         isPanning = true;
@@ -476,18 +409,16 @@ public class SubsamplingScaleImageView extends View {
                     if (touchCount < 2) {
                         // End panning when no touch points
                         isPanning = false;
-                        maxTouchCount = 0;
                     }
                     // Trigger load of tiles now required
                     refreshRequiredTiles(true);
                     return true;
-                } else if (maxTouchCount == 1) {
+                } else if (isPressed) {
                     performClick();
                 }
                 if (touchCount == 1) {
                     isZooming = false;
                     isPanning = false;
-                    maxTouchCount = 0;
                 }
                 return true;
         }
@@ -919,18 +850,6 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Set scale, center and orientation from saved state.
-     */
-    private void restoreState(ImageViewState state) {
-        if (state != null && state.getCenter() != null && VALID_ORIENTATIONS.contains(state.getOrientation())) {
-            this.orientation = state.getOrientation();
-            this.pendingScale = state.getScale();
-            this.sPendingCenter = state.getCenter();
-            invalidate();
-        }
-    }
-
-    /**
      * In SDK 14 and above, use canvas max bitmap width and height instead of the default 2048, to avoid redundant tiling.
      */
     private Point getMaxBitmapDimensions(Canvas canvas) {
@@ -1036,9 +955,6 @@ public class SubsamplingScaleImageView extends View {
      * Convert source coordinate to screen coordinate.
      */
     public PointF sourceToViewCoord(float sx, float sy) {
-        if (vTranslate == null) {
-            return null;
-        }
         float vx = (sx * scale) + vTranslate.x;
         float vy = (sy * scale) + vTranslate.y;
         return new PointF(vx, vy);
@@ -1121,7 +1037,6 @@ public class SubsamplingScaleImageView extends View {
     public void setScaleAndCenter(float scale, PointF sCenter) {
         this.pendingScale = scale;
         this.sPendingCenter = sCenter;
-        this.sRequestedCenter = sCenter;
         invalidate();
     }
 
@@ -1157,63 +1072,11 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Returns the orientation setting. This can return {@link #ORIENTATION_USE_EXIF}, in which case it doesn't tell you
-     * the applied orientation of the image. For that, use {@link #getAppliedOrientation()}.
-     */
-    public int getOrientation() {
-        return orientation;
-    }
-
-    /**
      * Returns the actual orientation of the image relative to the source file. This will be based on the source file's
      * EXIF orientation if you're using ORIENTATION_USE_EXIF. Values are 0, 90, 180, 270.
      */
-    public int getAppliedOrientation() {
+    public int getOrientation() {
         return getRequiredRotation();
     }
 
-    /**
-     * Get the current state of the view (scale, center, orientation) for restoration after rotate. Will return null if
-     * the view is not ready.
-     */
-    public ImageViewState getState() {
-        if (vTranslate != null && sWidth > 0 && sHeight > 0) {
-            return new ImageViewState(getScale(), getCenter(), getOrientation());
-        }
-        return null;
-    }
-
-    /**
-     * Returns true if zoom gesture detection is enabled.
-     */
-    public boolean isZoomEnabled() {
-        return zoomEnabled;
-    }
-
-    /**
-     * Enable or disable zoom gesture detection. Disabling zoom locks the the current scale.
-     */
-    public void setZoomEnabled(boolean zoomEnabled) {
-        this.zoomEnabled = zoomEnabled;
-    }
-
-    /**
-     * Returns true if pan gesture detection is enabled.
-     */
-    public boolean isPanEnabled() {
-        return panEnabled;
-    }
-
-    /**
-     * Enable or disable pan gesture detection. Disabling pan causes the image to be centered.
-     */
-    public void setPanEnabled(boolean panEnabled) {
-        this.panEnabled = panEnabled;
-        if (!panEnabled && vTranslate != null) {
-            vTranslate.x = (getWidth()/2) - (scale * (sWidth()/2));
-            vTranslate.y = (getHeight()/2) - (scale * (sHeight()/2));
-            refreshRequiredTiles(true);
-            invalidate();
-        }
-    }
 }
