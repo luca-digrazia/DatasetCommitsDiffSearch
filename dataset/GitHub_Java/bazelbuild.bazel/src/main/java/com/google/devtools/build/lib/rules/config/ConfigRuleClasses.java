@@ -201,6 +201,7 @@ public class ConfigRuleClasses {
                   .mandatoryProviders(
                       ImmutableList.of(ConfigFeatureFlagProvider.id()))
                   .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
+          .add(ConfigFeatureFlag.getWhitelistAttribute(env))
           .setIsConfigMatcherForConfigSettingOnly()
           .setOptionReferenceFunctionForConfigSettingOnly(
               rule ->
