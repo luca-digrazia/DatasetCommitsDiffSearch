@@ -416,7 +416,7 @@ public class Node extends ClusterEntity {
     public Map<String, Metric> getMetrics(String namespace) throws APIException, IOException {
         MetricsListResponse response = api.path(routes.MetricsResource().byNamespace(namespace), MetricsListResponse.class)
                 .node(this)
-                .expect(200)
+                .expect(200, 404)
                 .execute();
         if (response == null) {
             return Maps.newHashMap();
