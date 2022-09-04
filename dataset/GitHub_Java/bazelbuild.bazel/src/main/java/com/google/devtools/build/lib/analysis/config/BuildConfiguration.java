@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
+import com.google.devtools.build.lib.analysis.config.transitions.ComposingPatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
@@ -1978,8 +1979,7 @@ public class BuildConfiguration {
       } else if (currentTransition == null) {
         currentTransition = fragmentTransition;
       } else {
-        currentTransition =
-            TransitionResolver.composePatchTransitions(currentTransition, fragmentTransition);
+        currentTransition = new ComposingPatchTransition(currentTransition, fragmentTransition);
       }
     }
     return currentTransition;
