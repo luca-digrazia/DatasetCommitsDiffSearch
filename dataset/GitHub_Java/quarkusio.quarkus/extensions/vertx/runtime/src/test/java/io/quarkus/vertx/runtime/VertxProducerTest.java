@@ -14,24 +14,21 @@ import org.junit.Test;
 
 public class VertxProducerTest {
 
-    private VertxRecorder recorder;
     private VertxProducer producer;
 
     @Before
     public void setUp() throws Exception {
         producer = new VertxProducer();
-        recorder = new VertxRecorder();
     }
 
     @After
     public void tearDown() throws Exception {
-        recorder.destroy();
+        producer.destroy();
     }
 
     @Test
     public void shouldNotFailWithoutConfig() {
-        recorder.initialize(null);
-        producer.initialize(VertxRecorder.vertx);
+        producer.configure(null);
         verifyProducer();
     }
 
@@ -55,8 +52,7 @@ public class VertxProducerTest {
         configuration.workerPoolSize = 10;
         configuration.warningExceptionTime = Duration.ofSeconds(1);
         configuration.internalBlockingPoolSize = 5;
-        recorder.initialize(configuration);
-        producer.initialize(VertxRecorder.vertx);
+        producer.configure(configuration);
         verifyProducer();
     }
 
@@ -75,8 +71,9 @@ public class VertxProducerTest {
         configuration.eventbus.acceptBacklog = OptionalInt.empty();
         configuration.cluster = cc;
 
+        producer.configure(configuration);
         try {
-            recorder.initialize(configuration);
+            producer.vertx();
             fail("It should not have a cluster manager on the classpath, and so fail the creation");
         } catch (IllegalStateException e) {
             assertTrue(e.getMessage().contains("No ClusterManagerFactory"));
