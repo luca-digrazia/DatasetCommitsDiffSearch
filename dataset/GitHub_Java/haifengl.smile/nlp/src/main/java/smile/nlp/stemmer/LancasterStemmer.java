@@ -44,21 +44,23 @@ public class LancasterStemmer implements Stemmer {
     /**
      * Array of rules
      */
-    private final ArrayList<String> rules = new ArrayList<>();
+    private ArrayList<String> rules = new ArrayList<>();
     /**
      * ruleIndex is set up to provide faster access to relevant rules.
      */
-    private final int[] index = new int[26];
+    private int[] index = new int[26];
     /**
      * Strip prefix if true.
      */
-    private final boolean stripPrefix;
+    private boolean stripPrefix;
 
     /** Loads the rules. */
     private void readRules(InputStream is) throws IOException {
-        // Load rules from Lancaster_rules.txt
+        /**
+         * Load rules from Lancaster_rules.txt
+         */
         try (BufferedReader input = new BufferedReader(new InputStreamReader(is))) {
-            input.lines().map(String::trim).filter(line -> !line.isEmpty()).forEach(rule -> {
+            input.lines().map(line -> line.trim()).filter(line -> !line.isEmpty()).forEach(rule -> {
                 int j = rule.indexOf(' ');
                 if (j != -1) {
                     rule = rule.substring(0, j);
@@ -130,23 +132,26 @@ public class LancasterStemmer implements Stemmer {
         if ((i < last) && (!(vowel(word.charAt(i), 'a')))) {
             i++;
         }
-
         if (i != 0) {
             while ((i < last) && (!(vowel(word.charAt(i), word.charAt(i - 1))))) {
                 i++;
             }
         }
-
-        return Math.min(i, last);
+        if (i < last) {
+            return i;
+        }
+        return last;
     }
 
     /**
      * Strips suffix off word
      */
     private String stripSuffixes(String word) {
-        // 1 is positive, 0 undecided, -1 negative equivalent of pun vars positive undecided negative
-        int ruleok;
+        //integer variables 1 is positive, 0 undecided, -1 negative equiverlent of pun vars positive undecided negative
+        int ruleok = 0;
         int Continue = 0;
+
+        //integer varables
 
         int pll = 0; //position of last letter
         int xl;  //counter for nuber of chars to be replaced and length of stemmed word if rule was aplied
@@ -159,13 +164,20 @@ public class LancasterStemmer implements Stemmer {
 
         char ll; // last letter
 
-        String rule; //variable holding the current rule
-        String stem; // string holding the word as it is being stemmed this is returned as a stemmed word.
+        //String variables eqiverlent of tenchar variables
+
+        String rule = ""; //varlable holding the current rule
+        String stem = ""; // string holding the word as it is being stemmed this is returned as a stemmed word.
+
+        //boolean varable
 
         boolean intact = true; //intact if the word has not yet been stemmed to determin a requirement of some stemming rules
 
         //set stem = to word
         stem = cleanup(word.toLowerCase());
+
+        // set the position of pll to the last letter in the string
+        pll = 0;
 
         //move through the word to find the position of the last letter before a non letter char
         while ((pll + 1 < stem.length()) && ((stem.charAt(pll + 1) >= 'a') && (stem.charAt(pll + 1) <= 'z'))) {
@@ -260,7 +272,7 @@ public class LancasterStemmer implements Stemmer {
                                 // ...minimal stem is 2 letters
                                 ruleok = -1;
                             } else {
-                                //ruleok=1; as ruleok must already be positive to reach this stage
+                                //ruleok=1; as ruleok must alread be positive to reach this stage
                             }
                         } //if word start swith consonant...
                         else if ((xl < 2) | (xl < pfv)) {
@@ -268,7 +280,7 @@ public class LancasterStemmer implements Stemmer {
                             // ...minimal stem is 3 letters...
                             // ...including one or more vowel
                         } else {
-                            //ruleok=1; as ruleok must already be positive to reach this stage
+                            //ruleok=1; as ruleok must alread be positive to reach this stage
                         }
                     }
                     // if using the rule passes the assertion tests
@@ -279,14 +291,13 @@ public class LancasterStemmer implements Stemmer {
                         // ... given by the numeral.
                         pll = pll + 48 - ((int) (rule.charAt(ir)));
                         ir++;
-                        StringBuilder sb = new StringBuilder(stem.substring(0, (pll + 1)));
+                        stem = stem.substring(0, (pll + 1));
                         // append any letters following numeral to the word
                         while ((ir < rule.length()) && (('a' <= rule.charAt(ir)) && (rule.charAt(ir) <= 'z'))) {
-                            sb.append(rule.charAt(ir));
+                            stem += rule.charAt(ir);
                             ir++;
                             pll++;
                         }
-                        stem = sb.toString();
                         //if rule ends with '.' then terminate
                         if ((rule.charAt(ir)) == '.') {
                             Continue = -1;
@@ -358,9 +369,10 @@ public class LancasterStemmer implements Stemmer {
         String[] prefixes = {"kilo", "micro", "milli", "intra", "ultra", "mega",
             "nano", "pico", "pseudo"};
 
-        for (String prefix : prefixes) {
-            if ((word.startsWith(prefix)) && (word.length() > prefix.length())) {
-                word = word.substring(prefix.length());
+        int last = prefixes.length;
+        for (int i = 0; i < last; i++) {
+            if ((word.startsWith(prefixes[i])) && (word.length() > prefixes[i].length())) {
+                word = word.substring(prefixes[i].length());
                 return word;
             }
         }
@@ -373,13 +385,13 @@ public class LancasterStemmer implements Stemmer {
      */
     private String cleanup(String word) {
         int last = word.length();
-        StringBuilder sb = new StringBuilder();
+        String temp = "";
         for (int i = 0; i < last; i++) {
             if ((word.charAt(i) >= 'a') & (word.charAt(i) <= 'z')) {
-                sb.append(word.charAt(i));
+                temp += word.charAt(i);
             }
         }
-        return sb.toString();
+        return temp;
     }
 
     @Override

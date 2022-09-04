@@ -58,7 +58,7 @@ public class LDATest {
     public void testIris() {
         System.out.println("Iris");
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.x, Iris.y, LDA::fit);
+        ClassificationMetrics metrics = LOOCV.classification(Iris.x, Iris.y, (x, y) -> LDA.fit(x, y));
 
         System.out.println(metrics);
         assertEquals(0.8533, metrics.accuracy, 1E-4);
@@ -69,7 +69,8 @@ public class LDATest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<LDA> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y, LDA::fit);
+        ClassificationValidations<LDA> result = CrossValidation.classification(10, PenDigits.x, PenDigits.y,
+                (x, y) -> LDA.fit(x, y));
 
         System.out.println(result);
         assertEquals(0.8820, result.avg.accuracy, 1E-4);
@@ -80,13 +81,14 @@ public class LDATest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<LDA> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y, LDA::fit);
+        ClassificationValidations<LDA> result = CrossValidation.classification(10, BreastCancer.x, BreastCancer.y,
+                (x, y) -> LDA.fit(x, y));
 
         System.out.println(result);
         assertEquals(0.9272, result.avg.accuracy, 1E-4);
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
 

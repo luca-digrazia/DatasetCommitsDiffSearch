@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.data;
 
@@ -41,7 +41,7 @@ public class Movie {
     public static final int[] y = new int[doc.length];
 
     static {
-        try(BufferedReader input = smile.util.Paths.getTestDataReader("text/movie.txt")) {
+        try (BufferedReader input = smile.util.Paths.getTestDataReader("text/movie.txt")) {
             for (int i = 0; i < x.length; i++) {
                 String[] words = input.readLine().trim().split("\\s+");
 

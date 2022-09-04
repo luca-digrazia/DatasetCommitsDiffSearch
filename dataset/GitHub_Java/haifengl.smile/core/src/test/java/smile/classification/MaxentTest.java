@@ -17,6 +17,7 @@
 
 package smile.classification;
 
+import java.io.IOException;
 import smile.data.Hyphen;
 import smile.data.Protein;
 import smile.validation.metric.Error;
@@ -53,7 +54,7 @@ public class MaxentTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testProtein() throws Exception {
         System.out.println("protein");
 
@@ -69,8 +70,8 @@ public class MaxentTest {
         smile.data.Serialize.read(temp);
     }
 
-    @Test
-    public void testHyphen() {
+    @Test(expected = Test.None.class)
+    public void testHyphen() throws IOException {
         System.out.println("hyphen");
 
         Maxent model = Maxent.fit(Hyphen.p, Hyphen.x, Hyphen.y);

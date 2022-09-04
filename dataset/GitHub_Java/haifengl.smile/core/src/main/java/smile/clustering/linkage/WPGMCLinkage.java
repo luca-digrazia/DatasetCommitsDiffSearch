@@ -29,8 +29,8 @@ import smile.math.distance.Distance;
 public class WPGMCLinkage extends Linkage {
     /**
      * Constructor.
-     * @param proximity the proximity matrix. Only the lower half will
-     *                  be referred.
+     * @param proximity  the proximity matrix to store the distance measure of
+     * dissimilarity. To save space, we only need the lower half of matrix.
      */
     public WPGMCLinkage(double[][] proximity) {
         super(proximity);
@@ -40,7 +40,7 @@ public class WPGMCLinkage extends Linkage {
     /**
      * Constructor. Initialize the linkage with the lower triangular proximity matrix.
      * @param size the data size.
-     * @param proximity the column-wise linearized proximity matrix that stores
+     * @param proximity column-wise linearized proximity matrix that stores
      *                  only the lower half. The length of proximity should be
      *                  size * (size+1) / 2.
      *                  To save space, Linkage will use this argument directly
@@ -51,31 +51,19 @@ public class WPGMCLinkage extends Linkage {
         init();
     }
 
-    /** Initialize proximity. */
+    /** Intialize proximity. */
     private void init() {
         for (int i = 0; i < proximity.length; i++) {
             proximity[i] *= proximity[i];
         }
     }
 
-    /**
-     * Computes the proximity and the linkage.
-     *
-     * @param data the data points.
-     * @return the linkage.
-     */
+    /** Given a set of data, computes the proximity and then the linkage. */
     public static WPGMCLinkage of(double[][] data) {
         return new WPGMCLinkage(data.length, proximity(data));
     }
 
-    /**
-     * Computes the proximity and the linkage.
-     *
-     * @param data the data points.
-     * @param distance the distance function.
-     * @param <T> the data type of points.
-     * @return the linkage.
-     */
+    /** Given a set of data, computes the proximity and then the linkage. */
     public static <T> WPGMCLinkage of(T[] data, Distance<T> distance) {
         return new WPGMCLinkage(data.length, proximity(data, distance));
     }

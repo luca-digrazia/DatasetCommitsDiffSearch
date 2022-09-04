@@ -46,7 +46,7 @@ public class SVDImputation implements MissingValueImputation {
     /**
      * The number of eigenvectors used for imputation.
      */
-    private final int k;
+    private int k;
 
     /**
      * Constructor.

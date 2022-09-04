@@ -30,11 +30,11 @@ import smile.data.type.StructField;
  */
 class FloatVectorImpl implements FloatVector {
     /** The name of vector. */
-    private final String name;
+    private String name;
     /** Optional measure. */
-    private final Measure measure;
+    private Measure measure;
     /** The vector data. */
-    private final float[] vector;
+    private float[] vector;
 
     /** Constructor. */
     public FloatVectorImpl(String name, float[] vector) {

@@ -35,11 +35,11 @@ public class LinearKernelMachine implements Serializable {
     /**
      * The weight vector.
      */
-    private final double[] w;
+    private double[] w;
     /**
      * The intercept.
      */
-    private final double b;
+    private double b = 0.0;
 
     /**
      * Constructor.

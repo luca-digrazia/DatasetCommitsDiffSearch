@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -40,14 +40,14 @@ public class Isoline extends Shape {
     /**
      * Show the value of isoline.
      */
-    private boolean showValue;
+    private boolean isLevelVisible;
 
     /**
      * Constructor.
      */
-    public Isoline(double level, boolean showValue) {
+    public Isoline(double level, boolean isLevelVisible) {
         this.level = level;
-        this.showValue = showValue;
+        this.isLevelVisible = isLevelVisible;
     }
 
     /**
@@ -113,7 +113,7 @@ public class Isoline extends Shape {
             horizontalReference = 0.0;
         }
 
-        if (showValue && label == null) {
+        if (isLevelVisible && label == null) {
             double[] lb = g.getLowerBound();
             double[] ub = g.getUpperBound();
             double xrange = ub[0] - lb[0];

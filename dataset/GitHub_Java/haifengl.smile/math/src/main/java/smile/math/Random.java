@@ -29,8 +29,8 @@ import smile.math.random.UniversalGenerator;
  */
 public class Random {
 
-    private final UniversalGenerator real;
-    private final MersenneTwister twister;
+    private UniversalGenerator real;
+    private MersenneTwister twister;
 
     /**
      * Initialize with default random number generator engine.

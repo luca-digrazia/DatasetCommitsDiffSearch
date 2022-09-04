@@ -54,11 +54,12 @@ public interface Input {
             return Files.newInputStream(Paths.get(path));
         }
 
-        if ("file".equalsIgnoreCase(uri.getScheme())) {
-            return Files.newInputStream(Paths.get(uri.getPath()));
-        }
+        switch (uri.getScheme().toLowerCase()) {
+            case "file":
+                return Files.newInputStream(Paths.get(uri.getPath()));
 
-        // http, ftp, ...
-        return uri.toURL().openStream();
+            default: // http, ftp, ...
+                return uri.toURL().openStream();
+        }
     }
 }

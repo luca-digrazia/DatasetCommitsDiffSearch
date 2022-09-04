@@ -21,8 +21,10 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import smile.data.type.*;
 import smile.data.vector.*;
+import smile.math.matrix.Matrix;
 
 /**
  * A data frame with a new index instead of the default [0, n) row index.
@@ -31,9 +33,9 @@ import smile.data.vector.*;
  */
 public class IndexDataFrame implements DataFrame {
     /** The underlying data frame. */
-    private final DataFrame df;
+    private DataFrame df;
     /** The row index. */
-    private final int[] index;
+    private int[] index;
 
     /**
      * Constructor.
@@ -82,7 +84,7 @@ public class IndexDataFrame implements DataFrame {
 
     @Override
     public Stream<Tuple> stream() {
-        return Arrays.stream(index).mapToObj(df::get);
+        return Arrays.stream(index).mapToObj(i -> df.get(i));
     }
 
     @Override

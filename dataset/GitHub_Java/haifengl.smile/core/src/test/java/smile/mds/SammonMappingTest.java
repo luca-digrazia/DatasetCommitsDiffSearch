@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.mds;
 
 import org.junit.After;
@@ -20,6 +22,8 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import smile.math.MathEx;
+
 import static org.junit.Assert.*;
 
 /**
@@ -154,20 +158,13 @@ public class SammonMappingTest {
             {7.93068432504942, 33.5679481082113}
         };
 
-        SammonMapping sammon = new SammonMapping(swiss);
-        assertEquals(0.00383, sammon.getStress(), 1E-5);
+        SammonMapping sammon = SammonMapping.of(swiss);
+        assertEquals(0.00383, sammon.stress, 1E-5);
 
-        double[][] coords = sammon.getCoordinates();
-        for (int j = 0; j < coords[0].length; j++) {
-            double sign = coords[0][j] * points[0][j];
-            if (sign >= 0) {
-                sign = 1;
-            } else {
-                sign = -1;
-            }
-
-            for (int i = 0; i < coords.length; i++) {
-                assertEquals(points[i][j], sign*coords[i][j], 1E-6);
+        double[][] coords = sammon.coordinates;
+        for (int i = 0; i < points.length; i++) {
+            for (int j = 0; j < points[0].length; j++) {
+                assertEquals(Math.abs(points[i][j]), Math.abs(coords[i][j]), 1E-2);
             }
         }
     }

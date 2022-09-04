@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.timeseries;
 
@@ -54,25 +54,25 @@ public class BoxTestTest {
     public void testPierce() {
         System.out.println("Box-Pierce test");
 
-        double[] x = BitcoinPrice.timeseries;
+        double[] x = BitcoinPrice.logReturn;
         BoxTest box = BoxTest.pierce(x, 5);
         System.out.println(box);
         assertEquals( BoxTest.Type.Box_Pierce, box.type);
-        assertEquals( 5, box.df);
-        assertEquals(77.19066, box.q, 1E-5);
-        assertEquals(3.219647e-15, box.pvalue, 1E-16);
+        assertEquals(5, box.df);
+        assertEquals(9.0098, box.q, 1E-4);
+        assertEquals(0.1087, box.pvalue, 1E-4);
     }
 
     @Test
     public void testLjung() {
         System.out.println("Ljung-Box test");
 
-        double[] x = BitcoinPrice.timeseries;
+        double[] x = BitcoinPrice.logReturn;
         BoxTest box = BoxTest.ljung(x, 5);
         System.out.println(box);
         assertEquals( BoxTest.Type.Ljung_Box, box.type);
-        assertEquals( 5, box.df);
-        assertEquals(77.44808, box.q, 1E-5);
-        assertEquals(2.88658e-15, box.pvalue, 1E-16);
+        assertEquals(5, box.df);
+        assertEquals(9.0415, box.q, 1E-4);
+        assertEquals(0.1074, box.pvalue, 1E-4);
     }
 }

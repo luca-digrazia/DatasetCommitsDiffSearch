@@ -209,9 +209,9 @@ public abstract class MultilayerPerceptron implements Serializable {
      */
     protected void propagate(double[] x) {
         double[] input = x;
-        for (Layer layer : net) {
-            layer.propagate(input);
-            input = layer.output();
+        for (int i = 0; i < net.length; i++) {
+            net[i].propagate(input);
+            input = net[i].output();
         }
         output.propagate(input);
     }

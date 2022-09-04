@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.data;
 
@@ -37,13 +37,13 @@ public class Abalone {
     public static Formula formula = Formula.lhs("rings");
 
     public static double[][] x;
-    public static int[] y;
+    public static double[] y;
     public static double[][] testx;
-    public static int[] testy;
+    public static double[] testy;
 
     static {
         StructType schema = DataTypes.struct(
-                new StructField("sex", DataTypes.ByteType, new NominalScale("F", "M")),
+                new StructField("sex", DataTypes.ByteType, new NominalScale("F", "M", "I")),
                 new StructField("length", DataTypes.DoubleType),
                 new StructField("diameter", DataTypes.DoubleType),
                 new StructField("height", DataTypes.DoubleType),
@@ -58,15 +58,16 @@ public class Abalone {
         csv.schema(schema);
 
         try {
-            train = csv.read(Paths.getTestData("regression/abalone-train.csv"));
-            test = csv.read(Paths.getTestData("regression/abalone-test.csv"));
+            train = csv.read(Paths.getTestData("regression/abalone-train.data"));
+            test = csv.read(Paths.getTestData("regression/abalone-test.data"));
 
-            x = formula.frame(train).toArray();
-            y = formula.response(train).toIntArray();
-            testx = formula.frame(test).toArray();
-            testy = formula.response(test).toIntArray();
+            x = formula.x(train).toArray(false, CategoricalEncoder.DUMMY);
+            y = formula.y(train).toDoubleArray();
+            testx = formula.x(test).toArray(false, CategoricalEncoder.DUMMY);
+            testy = formula.y(test).toDoubleArray();
         } catch (Exception ex) {
             System.err.println("Failed to load 'abalone': " + ex);
+            ex.printStackTrace();
             System.exit(-1);
         }
     }

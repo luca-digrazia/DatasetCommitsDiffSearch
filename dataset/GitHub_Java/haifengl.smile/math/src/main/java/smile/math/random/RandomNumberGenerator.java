@@ -25,21 +25,17 @@ package smile.math.random;
 public interface RandomNumberGenerator {
     /**
      * Initialize the random generator with a seed.
-     * @param seed the seed of random numbers.
      */
     void setSeed(long seed);
 
     /**
      * Returns up to 32 random bits.
-     * @param numbits the number of random bits to generate.
-     * @return random bits.
      */
     int next(int numbits);
 
     /**
      * Returns the next pseudorandom, uniformly distributed int value
      * from this random number generator's sequence.
-     * @return random number.
      */
     int nextInt();
 
@@ -47,29 +43,24 @@ public interface RandomNumberGenerator {
      * Returns a pseudorandom, uniformly distributed int value
      * between 0 (inclusive) and the specified value (exclusive),
      * drawn from this random number generator's sequence.
-     * @param n the upper bound of random number (exclusive).
-     * @return random number.
      */
     int nextInt(int n);
 
     /**
      * Returns the next pseudorandom, uniformly distributed long value
      * from this random number generator's sequence.
-     * @return random number.
      */
     long nextLong();
 
     /**
      * Returns the next pseudorandom, uniformly distributed double value
      * between 0.0 and 1.0 from this random number generator's sequence.
-     * @return random number.
      */
     double nextDouble();
 
     /**
      * Returns a vector of pseudorandom, uniformly distributed double values
      * between 0.0 and 1.0 from this random number generator's sequence.
-     * @param d the output random numbers.
      */
     void nextDoubles(double[] d);
 }

@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.plot;
 
@@ -22,7 +22,7 @@ import java.awt.GridLayout;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-import smile.plot.swing.PlotCanvas;
+import smile.plot.swing.Canvas;
 import smile.plot.swing.StaircasePlot;
 
 /**
@@ -40,9 +40,9 @@ public class StaircasePlotDemo extends JPanel {
             data[j][1] = Math.random();
         }
 
-        PlotCanvas canvas = StaircasePlot.plot("Staircase Plot", data);
+        Canvas canvas = StaircasePlot.of(data).canvas();
         canvas.setTitle("Staircase Plot");
-        add(canvas);
+        add(canvas.panel());
     }
     
     @Override

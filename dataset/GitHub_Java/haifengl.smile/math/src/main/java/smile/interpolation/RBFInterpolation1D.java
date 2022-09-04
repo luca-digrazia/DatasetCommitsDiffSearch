@@ -70,19 +70,19 @@ public class RBFInterpolation1D implements Interpolation {
     /**
      * The control points.
      */
-    private final double[] x;
+    private double[] x;
     /**
      * The linear weights.
      */
-    private final double[] w;
+    private double[] w;
     /**
      * The radial basis function.
      */
-    private final RadialBasisFunction rbf;
+    private RadialBasisFunction rbf;
     /**
      * True to fit a normalized rbf interpolation.
      */
-    private final boolean normalized;
+    private boolean normalized;
 
     /**
      * Constructor. By default, it is a regular rbf interpolation without

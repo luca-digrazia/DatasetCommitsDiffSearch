@@ -36,9 +36,9 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
     // Entry as an object has too much overhead and not CPU cache friendly.
     // Use two continuous array lists for index and value correspondingly.
     /** The index of nonzero entries. */
-    private final IntArrayList index;
+    private IntArrayList index;
     /** The value of nonzero entries. */
-    private final DoubleArrayList value;
+    private DoubleArrayList value;
 
     /**
      * The entry in a sparse array of double values.
@@ -137,7 +137,10 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
         return index.isEmpty();
     }
     
-    @Override
+    /**
+     * Returns an iterator of nonzero entries.
+     * @return an iterator of nonzero entries
+     */
     public Iterator<Entry> iterator() {
         return new Iterator<Entry>() {
             int i = 0;
@@ -155,7 +158,7 @@ public class SparseArray implements Iterable<SparseArray.Entry>, Serializable {
 
     /** Returns the stream of nonzero entries. */
     public Stream<Entry> stream() {
-        return IntStream.range(0, size()).mapToObj(Entry::new);
+        return IntStream.range(0, size()).mapToObj(i -> new Entry(i));
     }
 
     /** Sorts the array elements such that the indices are in ascending order. */

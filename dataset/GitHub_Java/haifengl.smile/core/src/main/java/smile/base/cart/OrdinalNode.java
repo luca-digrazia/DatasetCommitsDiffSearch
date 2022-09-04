@@ -34,15 +34,7 @@ public class OrdinalNode extends InternalNode {
      */
     double value;
 
-    /**
-     * Constructor.
-     * @param feature the index of feature column.
-     * @param value the split value.
-     * @param score the split score.
-     * @param deviance the deviance.
-     * @param trueChild the true branch child.
-     * @param falseChild the false branch child.
-     */
+    /** Constructor. */
     public OrdinalNode(int feature, double value, double score, double deviance, Node trueChild, Node falseChild) {
         super(feature, score, deviance, trueChild, falseChild);
         this.value = value;

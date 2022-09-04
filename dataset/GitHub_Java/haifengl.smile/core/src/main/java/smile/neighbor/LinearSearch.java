@@ -55,11 +55,11 @@ public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,
     /**
      * The dataset of search space.
      */
-    private final T[] data;
+    private T[] data;
     /**
      * The distance function used to determine nearest neighbors.
      */
-    private final Distance<T> distance;
+    private Distance<T> distance;
 
     /**
      * Constructor. By default, query object self will be excluded from search.

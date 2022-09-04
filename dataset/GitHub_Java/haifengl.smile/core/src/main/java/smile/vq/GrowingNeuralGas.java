@@ -89,11 +89,11 @@ public class GrowingNeuralGas implements VectorQuantizer {
     /**
      * Neurons in the neural network.
      */
-    private final ArrayList<Neuron> neurons = new ArrayList<>();
+    private ArrayList<Neuron> neurons = new ArrayList<>();
     /**
      * The workspace to find nearest neighbors.
      */
-    private final Neuron[] top2 = new Neuron[2];
+    private Neuron[] top2 = new Neuron[2];
 
     /**
      * Constructor.
@@ -241,7 +241,7 @@ public class GrowingNeuralGas implements VectorQuantizer {
      * @return the neurons in the network.
      */
     public Neuron[] neurons() {
-        return neurons.toArray(new Neuron[0]);
+        return neurons.toArray(new Neuron[neurons.size()]);
     }
 
     @Override

@@ -49,13 +49,13 @@ public class OneVersusOne<T> implements SoftClassifier<T> {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OneVersusOne.class);
 
     /** The number of classes. */
-    private final int k;
+    private int k;
     /** The binary classifier. */
-    private final Classifier<T>[][] classifiers;
+    private Classifier<T>[][] classifiers;
     /** The binary classifier. */
-    private final PlattScaling[][] platt;
+    private PlattScaling[][] platts;
     /** The class label encoder. */
-    private final IntSet labels;
+    private IntSet labels;
 
     /**
      * Constructor.
@@ -72,9 +72,9 @@ public class OneVersusOne<T> implements SoftClassifier<T> {
      *                    Only the lower half is needed.
      * @param labels the class labels.
      */
-    public OneVersusOne(Classifier<T>[][] classifiers, PlattScaling[][] platt, IntSet labels) {
+    public OneVersusOne(Classifier<T>[][] classifiers, PlattScaling[][] platts, IntSet labels) {
         this.classifiers = classifiers;
-        this.platt = platt;
+        this.platts = platts;
         this.k = classifiers.length;
         this.labels = labels;
     }
@@ -216,7 +216,7 @@ public class OneVersusOne<T> implements SoftClassifier<T> {
      */
     @Override
     public int predict(T x, double[] posteriori) {
-        if (platt == null) {
+        if (platts == null) {
             throw new UnsupportedOperationException("Platt scaling is not available");
         }
 
@@ -224,7 +224,7 @@ public class OneVersusOne<T> implements SoftClassifier<T> {
 
         for (int i = 1; i < k; i++) {
             for (int j = 0; j < i; j++) {
-                r[i][j] = platt[i][j].scale(classifiers[i][j].score(x));
+                r[i][j] = platts[i][j].scale(classifiers[i][j].score(x));
                 r[j][i] = 1.0 - r[i][j];
             }
         }

@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.projection;
 
 import org.junit.After;
@@ -21,7 +23,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import smile.math.Math;
+import smile.math.MathEx;
 
 /**
  *
@@ -102,9 +104,6 @@ public class PCATest {
     public void tearDown() {
     }
 
-    /**
-     * Test of learn method, of class PCA.
-     */
     @Test
     public void testPCA() {
         System.out.println("learn");
@@ -168,17 +167,25 @@ public class PCATest {
             {118.176327855097, 5.50757920474225, 2.71132076743689, -0.204972398473778},
             {10.4345393883043, -5.92445292066816, 3.79444682032120, 0.517867427500318}
         };
-        PCA pca = new PCA(Math.clone(USArrests));
+        PCA pca = PCA.fit(USArrests);
         pca.setProjection(4);
-        assertTrue(Math.equals(prop, pca.getVarianceProportion(), 1E-7));
-        assertTrue(Math.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
-        assertTrue(Math.equals(loadings, pca.getLoadings(), 1E-7));
-        assertTrue(Math.equals(points, pca.project(USArrests), 1E-7));
+        assertTrue(MathEx.equals(prop, pca.getVarianceProportion(), 1E-7));
+        assertTrue(MathEx.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
+
+        for (int i = 0; i < loadings.length; i++) {
+            for (int j = 0; j < loadings[i].length; j++) {
+                assertEquals(Math.abs(loadings[i][j]), Math.abs(pca.getLoadings().get(i, j)), 1E-5);
+            }
+        }
+
+        double[][] p = pca.project(USArrests);
+        for (int i = 0; i < points.length; i++) {
+            for (int j = 0; j < points[i].length; j++) {
+                assertEquals(Math.abs(points[i][j]), Math.abs(p[i][j]), 1E-5);
+            }
+        }
     }
 
-    /**
-     * Test of learn method, of class PCA.
-     */
     @Test
     public void testPCACor() {
         System.out.println("learn");
@@ -243,11 +250,23 @@ public class PCATest {
             {-0.629426663525205, -0.321012967465219, 0.240659233693745, 0.166651800709434}
         };
 
-        PCA pca = new PCA(Math.clone(USArrests), true);
+        PCA pca = PCA.cor(USArrests);
         pca.setProjection(4);
-        assertTrue(Math.equals(prop, pca.getVarianceProportion(), 1E-7));
-        assertTrue(Math.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
-        assertTrue(Math.equals(loadings, pca.getLoadings(), 1E-7));
-        assertTrue(Math.equals(points, pca.project(USArrests), 1E-7));
+        System.out.println(java.util.Arrays.toString(pca.getVarianceProportion()));
+        assertTrue(MathEx.equals(prop, pca.getVarianceProportion(), 1E-7));
+        assertTrue(MathEx.equals(cumprop, pca.getCumulativeVarianceProportion(), 1E-7));
+
+        for (int i = 0; i < loadings.length; i++) {
+            for (int j = 0; j < loadings[i].length; j++) {
+                assertEquals(Math.abs(loadings[i][j]), Math.abs(pca.getLoadings().get(i, j)), 1E-5);
+            }
+        }
+
+        double[][] p = pca.project(USArrests);
+        for (int i = 0; i < points.length; i++) {
+            for (int j = 0; j < points[i].length; j++) {
+                assertEquals(Math.abs(points[i][j]), Math.abs(p[i][j]), 1E-5);
+            }
+        }
     }
 }

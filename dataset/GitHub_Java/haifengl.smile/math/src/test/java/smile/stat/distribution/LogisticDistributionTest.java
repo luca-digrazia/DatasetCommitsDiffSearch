@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.stat.distribution;
 
@@ -50,14 +50,14 @@ public class LogisticDistributionTest {
     }
 
     /**
-     * Test of npara method, of class LogisticDistribution.
+     * Test of length method, of class LogisticDistribution.
      */
     @Test
-    public void testNpara() {
+    public void testLength() {
         System.out.println("npara");
         LogisticDistribution instance = new LogisticDistribution(2.0, 1.0);
         instance.rand();
-        assertEquals(2, instance.npara());
+        assertEquals(2, instance.length());
     }
 
     /**
@@ -72,14 +72,14 @@ public class LogisticDistributionTest {
     }
 
     /**
-     * Test of var method, of class LogisticDistribution.
+     * Test of variance method, of class LogisticDistribution.
      */
     @Test
-    public void testVar() {
-        System.out.println("var");
+    public void testVariance() {
+        System.out.println("variance");
         LogisticDistribution instance = new LogisticDistribution(2.0, 1.0);
         instance.rand();
-        assertEquals(Math.PI*Math.PI/3, instance.var(), 1E-7);
+        assertEquals(Math.PI*Math.PI/3, instance.variance(), 1E-7);
     }
 
     /**

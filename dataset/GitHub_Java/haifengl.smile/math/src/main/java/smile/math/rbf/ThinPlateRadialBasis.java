@@ -38,10 +38,10 @@ package smile.math.rbf;
 public class ThinPlateRadialBasis implements RadialBasisFunction {
     private static final long serialVersionUID = 1L;
 
-    private final double r0;
+    private double r0;
 
     /**
-     * Constructor. The default scale is 1.0.
+     * Constructor.
      */
     public ThinPlateRadialBasis() {
         this(1.0);
@@ -49,7 +49,6 @@ public class ThinPlateRadialBasis implements RadialBasisFunction {
 
     /**
      * Constructor.
-     * @param scale the scale parameter.
      */
     public ThinPlateRadialBasis(double scale) {
         r0 = scale;

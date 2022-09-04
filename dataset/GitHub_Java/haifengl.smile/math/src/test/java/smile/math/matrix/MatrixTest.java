@@ -17,7 +17,6 @@
 
 package smile.math.matrix;
 
-import java.util.Arrays;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -30,7 +29,7 @@ import static smile.math.blas.Transpose.*;
 import static org.junit.Assert.*;
 
 /**
- * Test Matrix.
+ * Test Matrix with MKL.
  *
  * @author Haifeng Li
  */
@@ -68,14 +67,14 @@ public class MatrixTest {
 
     @Test
     public void testNrows() {
-        System.out.println("nrow");
-        assertEquals(3, matrix.nrow());
+        System.out.println("nrows");
+        assertEquals(3, matrix.nrows());
     }
 
     @Test
     public void testNcols() {
-        System.out.println("ncol");
-        assertEquals(3, matrix.ncol());
+        System.out.println("ncols");
+        assertEquals(3, matrix.ncols());
     }
 
     @Test
@@ -126,9 +125,9 @@ public class MatrixTest {
         Matrix t = matrix.transpose();
         assertEquals(Layout.COL_MAJOR, matrix.layout());
         assertEquals(Layout.ROW_MAJOR, t.layout());
-        assertFalse(t.isSubmatrix());
-        assertEquals(3, t.nrow());
-        assertEquals(3, t.ncol());
+        assertEquals(false, t.isSubmatrix());
+        assertEquals(3, t.nrows());
+        assertEquals(3, t.ncols());
 
         assertEquals(0.9, matrix.get(0, 0), 1E-7f);
         assertEquals(0.8, matrix.get(2, 2), 1E-7f);
@@ -141,17 +140,17 @@ public class MatrixTest {
     @Test
     public void testSubmatrix() {
         Matrix sub = matrix.submatrix(0, 1, 2, 2);
-        assertFalse(matrix.isSubmatrix());
-        assertTrue(sub.isSubmatrix());
-        assertEquals(3, sub.nrow());
-        assertEquals(2, sub.ncol());
+        assertEquals(false, matrix.isSubmatrix());
+        assertEquals(true, sub.isSubmatrix());
+        assertEquals(3, sub.nrows());
+        assertEquals(2, sub.ncols());
         assertEquals(0.4, sub.get(0,0), 1E-7f);
         assertEquals(0.8, sub.get(2,1), 1E-7f);
 
         Matrix sub2 = sub.submatrix(0, 0, 1, 1);
-        assertTrue(sub2.isSubmatrix());
-        assertEquals(2, sub2.nrow());
-        assertEquals(2, sub2.ncol());
+        assertEquals(true, sub2.isSubmatrix());
+        assertEquals(2, sub2.nrows());
+        assertEquals(2, sub2.ncols());
         assertEquals(0.4, sub.get(0,0), 1E-7f);
         assertEquals(0.3, sub.get(1,1), 1E-7f);
     }
@@ -159,7 +158,7 @@ public class MatrixTest {
     @Test
     public void testMvOffset() {
         System.out.println("mv offfset ");
-        double[] d = new double[matrix.ncol() + matrix.nrow()];
+        double[] d = new double[matrix.ncols() + matrix.nrows()];
         System.arraycopy(b, 0, d, 0, b.length);
         matrix.mv(d, 0, b.length);
         assertEquals(0.65, d[3], 1E-7f);
@@ -179,7 +178,7 @@ public class MatrixTest {
     @Test
     public void testAx() {
         System.out.println("ax");
-        double[] d = new double[matrix.nrow()];
+        double[] d = new double[matrix.nrows()];
         matrix.mv(b, d);
         assertEquals(0.65, d[0], 1E-7f);
         assertEquals(0.60, d[1], 1E-7f);
@@ -189,8 +188,8 @@ public class MatrixTest {
     @Test
     public void testAxpy() {
         System.out.println("axpy");
-        double[] d = new double[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(NO_TRANSPOSE, 1.0, b, 1.0, d);
         assertEquals(1.65, d[0], 1E-7f);
         assertEquals(1.60, d[1], 1E-7f);
@@ -200,8 +199,8 @@ public class MatrixTest {
     @Test
     public void testAxpy2() {
         System.out.println("axpy b = 2");
-        double[] d = new double[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(NO_TRANSPOSE, 1.0, b, 2.0, d);
         assertEquals(2.65, d[0], 1E-7f);
         assertEquals(2.60, d[1], 1E-7f);
@@ -211,7 +210,7 @@ public class MatrixTest {
     @Test
     public void testAtx() {
         System.out.println("atx");
-        double[] d = new double[matrix.nrow()];
+        double[] d = new double[matrix.nrows()];
         matrix.tv(b, d);
         assertEquals(0.65, d[0], 1E-7f);
         assertEquals(0.60, d[1], 1E-7f);
@@ -221,8 +220,8 @@ public class MatrixTest {
     @Test
     public void testAtxpy() {
         System.out.println("atxpy");
-        double[] d = new double[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(TRANSPOSE, 1.0, b, 1.0, d);
         assertEquals(1.65, d[0], 1E-7f);
         assertEquals(1.60, d[1], 1E-7f);
@@ -232,8 +231,8 @@ public class MatrixTest {
     @Test
     public void testAtxpy2() {
         System.out.println("atxpy b = 2");
-        double[] d = new double[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        double[] d = new double[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(TRANSPOSE, 1.0, b, 2.0, d);
         assertEquals(2.65, d[0], 1E-7f);
         assertEquals(2.60, d[1], 1E-7f);
@@ -244,8 +243,8 @@ public class MatrixTest {
     public void testAAT() {
         System.out.println("AAT");
         Matrix c = matrix.aat();
-        assertEquals(c.nrow(), 3);
-        assertEquals(c.ncol(), 3);
+        assertEquals(c.nrows(), 3);
+        assertEquals(c.ncols(), 3);
         for (int i = 0; i < C.length; i++) {
             for (int j = 0; j < C[i].length; j++) {
                 assertEquals(C[i][j], c.get(i, j), 1E-7f);
@@ -373,8 +372,8 @@ public class MatrixTest {
 
         Matrix X2 = new Matrix(B);
         lu.solve(X2);
-        assertEquals(X.length, X2.nrow());
-        assertEquals(X[0].length, X2.ncol());
+        assertEquals(X.length, X2.nrows());
+        assertEquals(X[0].length, X2.ncols());
         for (int i = 0; i < X.length; i++) {
             for (int j = 0; j < X[i].length; j++) {
                 assertEquals(X[i][j], X2.get(i, j), 1E-7f);
@@ -438,7 +437,7 @@ public class MatrixTest {
         Matrix a = new Matrix(A);
         a.uplo(UPLO.LOWER);
         Matrix.Cholesky cholesky = a.cholesky();
-        for (int i = 0; i < a.nrow(); i++) {
+        for (int i = 0; i < a.nrows(); i++) {
             for (int j = 0; j <= i; j++) {
                 assertEquals(Math.abs(L[i][j]), Math.abs(cholesky.lu.get(i, j)), 1E-7f);
             }
@@ -466,8 +465,8 @@ public class MatrixTest {
 
         Matrix X2 = new Matrix(B);
         cholesky.solve(X2);
-        assertEquals(X.length, X2.nrow());
-        assertEquals(X[0].length, X2.ncol());
+        assertEquals(X.length, X2.nrows());
+        assertEquals(X[0].length, X2.ncols());
         for (int i = 0; i < X.length; i++) {
             for (int j = 0; j < X[i].length; j++) {
                 assertEquals(X[i][j], X2.get(i, j), 1E-6f);
@@ -493,12 +492,10 @@ public class MatrixTest {
         Matrix a = new Matrix(A);
         a.uplo(UPLO.LOWER);
         Matrix.EVD eig = a.eigen().sort();
-        for (int i = 0; i < eigenValues.length; i++) {
-            assertEquals(eigenValues[i], eig.wr[i], 1E-7f);
-        }
+        assertTrue(MathEx.equals(eigenValues, eig.wr, 1E-7f));
 
-        assertEquals(eigenVectors.length, eig.Vr.nrow());
-        assertEquals(eigenVectors[0].length, eig.Vr.ncol());
+        assertEquals(eigenVectors.length, eig.Vr.nrows());
+        assertEquals(eigenVectors[0].length, eig.Vr.ncols());
         for (int i = 0; i < eigenVectors.length; i++) {
             for (int j = 0; j < eigenVectors[i].length; j++) {
                 assertEquals(Math.abs(eigenVectors[i][j]), Math.abs(eig.Vr.get(i, j)), 1E-7f);
@@ -509,9 +506,9 @@ public class MatrixTest {
         for (int i = 0; i < eigenValues.length; i++) {
             assertEquals(eigenValues[i], eig.wr[i], 1E-7f);
         }
-        assertNull(eig.wi);
-        assertNull(eig.Vl);
-        assertNull(eig.Vr);
+        assertEquals(null, eig.wi);
+        assertEquals(null, eig.Vl);
+        assertEquals(null, eig.Vr);
     }
 
     @Test
@@ -532,12 +529,10 @@ public class MatrixTest {
 
         Matrix a = new Matrix(A);
         Matrix.EVD eig = a.eigen().sort();
-        for (int i = 0; i < eigenValues.length; i++) {
-            assertEquals(eigenValues[i], eig.wr[i], 1E-7f);
-        }
+        assertTrue(MathEx.equals(eigenValues, eig.wr, 1E-7f));
 
-        assertEquals(eigenVectors.length,    eig.Vr.nrow());
-        assertEquals(eigenVectors[0].length, eig.Vr.ncol());
+        assertEquals(eigenVectors.length,    eig.Vr.nrows());
+        assertEquals(eigenVectors[0].length, eig.Vr.ncols());
         for (int i = 0; i < eigenVectors.length; i++) {
             for (int j = 0; j < eigenVectors[i].length; j++) {
                 assertEquals(Math.abs(eigenVectors[i][j]), Math.abs(eig.Vr.get(i, j)), 1E-7f);
@@ -552,8 +547,8 @@ public class MatrixTest {
             assertEquals(0.0, eig.wi[i], 1E-7f);
         }
 
-        assertNull(eig.Vl);
-        assertNull(eig.Vr);
+        assertEquals(null, eig.Vl);
+        assertEquals(null, eig.Vr);
     }
 
     @Test
@@ -582,18 +577,18 @@ public class MatrixTest {
         Matrix matrix = new Matrix(A);
         matrix.uplo(UPLO.LOWER);
         Matrix.SVD svd = matrix.svd();
-        assertArrayEquals(s, svd.s, 1E-7);
+        assertTrue(MathEx.equals(s, svd.s, 1E-7f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-7f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-7f);
@@ -637,18 +632,18 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-7);
+        assertTrue(MathEx.equals(s, svd.s, 1E-7f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-7f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-7f);
@@ -691,18 +686,18 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-7);
+        assertTrue(MathEx.equals(s, svd.s, 1E-7f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-7f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-7f);
@@ -744,18 +739,18 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-7);
+        assertTrue(MathEx.equals(s, svd.s, 1E-7f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-7f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-7f);
@@ -796,18 +791,18 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-7);
+        assertTrue(MathEx.equals(s, svd.s, 1E-7f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-7f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-7f);
@@ -849,16 +844,16 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
+        assertEquals(U.length, svd.U.nrows());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
+        assertEquals(V.length, svd.V.nrows());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -898,16 +893,16 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
+        assertEquals(U.length, svd.U.nrows());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
+        assertEquals(V.length, svd.V.nrows());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -945,16 +940,16 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
+        assertEquals(U.length, svd.U.nrows());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
+        assertEquals(V.length, svd.V.nrows());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -1007,18 +1002,18 @@ public class MatrixTest {
         };
 
         Matrix.SVD svd = new Matrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-5);
+        assertTrue(MathEx.equals(s, svd.s, 1E-5f));
 
-        assertEquals(Ut[0].length, svd.U.nrow());
-        assertEquals(Ut.length, svd.U.ncol());
+        assertEquals(Ut[0].length, svd.U.nrows());
+        assertEquals(Ut.length, svd.U.ncols());
         for (int i = 0; i < Ut.length; i++) {
             for (int j = 0; j < Ut[i].length; j++) {
                 assertEquals(Math.abs(Ut[i][j]), Math.abs(svd.U.get(j, i)), 1E-6f);
             }
         }
 
-        assertEquals(Vt[0].length, svd.V.nrow());
-        assertEquals(Vt.length, svd.V.ncol());
+        assertEquals(Vt[0].length, svd.V.nrows());
+        assertEquals(Vt.length, svd.V.ncols());
         for (int i = 0; i < Vt.length; i++) {
             for (int j = 0; j < Vt[i].length; j++) {
                 assertEquals(Math.abs(Vt[i][j]), Math.abs(svd.V.get(j, i)), 1E-6f);

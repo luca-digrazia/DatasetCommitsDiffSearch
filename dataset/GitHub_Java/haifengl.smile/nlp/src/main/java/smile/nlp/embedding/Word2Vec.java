@@ -22,10 +22,14 @@ import java.io.IOException;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import smile.data.DataFrame;
 import smile.data.vector.FloatVector;
 
@@ -59,7 +63,7 @@ public class Word2Vec {
     /** The vector space. */
     public final DataFrame vectors;
     /** The word-to-index map. */
-    private final HashMap<String, Integer> map;
+    private HashMap<String, Integer> map;
 
     /**
      * Constructor.

@@ -19,7 +19,7 @@ package smile.util;
 
 import org.junit.*;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 /**
  *
@@ -45,11 +45,14 @@ public class SparseArrayTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of all methods, of class SparseArrayTest.
+     */
     @Test
-    public void test() {
+    public void testAll() {
         System.out.println("SparseArray");
         SparseArray a = new SparseArray();
-        assertTrue(a.isEmpty());
+        assertEquals(true, a.isEmpty());
 
         a.set(1, 0.5);
         a.set(2, 1.0);
@@ -57,20 +60,20 @@ public class SparseArrayTest {
         assertEquals(0.0, a.get(0), 1E-15);
         assertEquals(0.5, a.get(1), 1E-15);
         assertEquals(1.0, a.get(2), 1E-15);
-        assertFalse(a.isEmpty());
+        assertEquals(false, a.isEmpty());
 
         a.remove(1);
         assertEquals(1, a.size());
         assertEquals(0.0, a.get(1), 1E-15);
         assertEquals(1.0, a.get(2), 1E-15);
-        assertFalse(a.isEmpty());
+        assertEquals(false, a.isEmpty());
 
 
         a.remove(1);
         assertEquals(1, a.size());
         assertEquals(0.0, a.get(1), 1E-15);
         assertEquals(1.0, a.get(2), 1E-15);
-        assertFalse(a.isEmpty());
+        assertEquals(false, a.isEmpty());
 
         SparseArray.Entry e = a.stream().findFirst().get();
         assertEquals(1, a.stream().count());

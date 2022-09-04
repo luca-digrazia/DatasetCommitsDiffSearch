@@ -42,14 +42,14 @@ public class EmpiricalDistribution extends DiscreteDistribution {
     /**
      * The possible values of random variable.
      */
-    private final IntSet x;
+    private IntSet x;
     /**
      * CDF at each x.
      */
-    private final double[] cdf;
+    private double[] cdf;
     private double mean;
-    private final double variance;
-    private final double sd;
+    private double variance;
+    private double sd;
     private double entropy;
     // Walker's alias method to generate random samples.
     private int[] a;
@@ -109,7 +109,6 @@ public class EmpiricalDistribution extends DiscreteDistribution {
     /**
      * Estimates the distribution.
      * @param data the training data.
-     * @return the distribution.
      */
     public static EmpiricalDistribution fit(int[] data) {
         return fit(data, IntSet.of(data));
@@ -121,7 +120,6 @@ public class EmpiricalDistribution extends DiscreteDistribution {
      * provide the value set.
      * @param data the training data.
      * @param x the value set.
-     * @return the distribution.
      */
     public static EmpiricalDistribution fit(int[] data, IntSet x) {
         if (data.length == 0) {

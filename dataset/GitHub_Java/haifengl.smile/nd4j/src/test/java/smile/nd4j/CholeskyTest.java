@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.nd4j;
 
@@ -72,9 +72,6 @@ public class CholeskyTest {
     public void tearDown() {
     }
 
-    /**
-     * Test of decompose method, of class CholeskyDecomposition.
-     */
     @Test
     public void testDecompose() {
         System.out.println("decompose");
@@ -87,10 +84,7 @@ public class CholeskyTest {
         }
     }
 
-    /**
-     * Test of solve method, of class CholeskyDecomposition.
-     */
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testSolve() {
         System.out.println("solve");
         NDMatrix a = new NDMatrix(A);
@@ -101,10 +95,7 @@ public class CholeskyTest {
         }
     }
 
-    /**
-     * Test of solve method, of class CholeskyDecomposition.
-     */
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testSolveMatrix() {
         System.out.println("solve");
         NDMatrix a = new NDMatrix(A);

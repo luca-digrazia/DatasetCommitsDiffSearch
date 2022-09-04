@@ -34,7 +34,7 @@ import static org.junit.Assert.assertEquals;
  * @since 03/31/15
  */
 public class SNLSHTest {
-    private final String[] texts = {
+    private String[] texts = {
             "This is a test case",
             "This is another test case",
             "This is another test case too",
@@ -50,7 +50,7 @@ public class SNLSHTest {
 
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void test() throws IOException {
         System.out.println("SNLSH");
 

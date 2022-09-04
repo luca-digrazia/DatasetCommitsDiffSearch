@@ -35,28 +35,28 @@ public class KernelDensity implements Distribution {
     /**
      * The samples to estimate the density function.
      */
-    private final double[] x;
+    private double[] x;
     /**
      * The kernel -- a symmetric but not necessarily positive function that
-     * integrates to one. Here we just use Gaussian density function.
+     * integrates to one. Here we just Gaussian density function.
      */
-    private final GaussianDistribution gaussian;
-    /**
+    private GaussianDistribution gaussian;
+    /*
      * h > 0 is a smoothing parameter called the bandwidth.
      */
-    private final double h;
+    private double h;
     /**
      * The mean value.
      */
-    private final double mean;
+    private double mean;
     /**
      * The standard deviation.
      */
-    private final double sd;
+    private double sd;
     /**
      * The variance.
      */
-    private final double variance;
+    private double variance;
 
     /**
      * Constructor. The bandwidth of kernel will be estimated by the rule of thumb.

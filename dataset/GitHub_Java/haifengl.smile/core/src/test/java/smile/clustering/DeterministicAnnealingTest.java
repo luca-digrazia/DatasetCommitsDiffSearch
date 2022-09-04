@@ -52,7 +52,10 @@ public class DeterministicAnnealingTest {
     public void tearDown() {
     }
 
-    @Test
+    /**
+     * Test of learn method, of class DeterministicAnnealing.
+     */
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
         MathEx.setSeed(19650218); // to get repeatable results.

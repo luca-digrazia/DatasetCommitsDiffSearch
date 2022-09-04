@@ -1,23 +1,24 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data.measure;
 
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.stream.Collectors;
+import java.util.List;
 
 /**
  * The ordinal type allows for rank order (1st, 2nd, 3rd, etc.) by which
@@ -26,7 +27,7 @@ import java.util.stream.Collectors;
  * measurement of opinions, usually operates on ordinal scales.
  * For example, 'completely agree', 'mostly agree', 'mostly disagree',
  * 'completely disagree' when measuring opinion.
- *
+ * <p>
  * The median, i.e. middle-ranked, item is allowed as the measure of
  * central tendency. But means and standard deviations have no validity.
  * In particular, IQ scores reflect an ordinal scale,
@@ -36,13 +37,31 @@ import java.util.stream.Collectors;
  *
  * @author Haifeng Li
  */
-public class OrdinalScale extends DiscreteMeasure {
+public class OrdinalScale extends CategoricalMeasure {
     /**
      * Constructor.
-     * @param values the levels of ordinal values.
+     * @param levels the levels of ordinal values.
      */
-    public OrdinalScale(String... values) {
-        super(values);
+    public OrdinalScale(String... levels) {
+        super(levels);
+    }
+
+    /**
+     * Constructor.
+     * @param values the valid values.
+     * @param levels the levels of discrete values.
+     */
+    public OrdinalScale(int[] values, String[] levels) {
+        super(values, levels);
+        Arrays.sort(values);
+    }
+
+    /**
+     * Constructor.
+     * @param levels the levels of discrete values.
+     */
+    public OrdinalScale(List<String> levels) {
+        super(levels);
     }
 
     /**
@@ -50,11 +69,8 @@ public class OrdinalScale extends DiscreteMeasure {
      *
      * @param clazz an Enum class.
      */
-    public OrdinalScale(Class<Enum<?>> clazz) {
-        super(Arrays.stream(clazz.getEnumConstants())
-                .map(Object::toString)
-                .toArray(String[]::new)
-        );
+    public OrdinalScale(Class<? extends Enum> clazz) {
+        super(values(clazz), levels(clazz));
     }
 
     @Override

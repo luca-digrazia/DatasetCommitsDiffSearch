@@ -73,7 +73,7 @@ public class DeterministicAnnealingDemo extends ClusteringDemo {
         return "Deterministic Annealing";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClusteringDemo demo = new DeterministicAnnealingDemo();
         JFrame f = new JFrame("Deterministic Annealing");
         f.setSize(new Dimension(1000, 1000));

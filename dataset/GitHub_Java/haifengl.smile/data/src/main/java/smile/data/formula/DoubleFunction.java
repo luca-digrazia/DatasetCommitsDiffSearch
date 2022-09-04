@@ -32,7 +32,7 @@ import smile.data.type.StructType;
  */
 public class DoubleFunction extends AbstractFunction {
     /** The function on a double. */
-    private final smile.math.Function lambda;
+    private smile.math.Function lambda;
 
     /**
      * Constructor.
@@ -58,7 +58,7 @@ public class DoubleFunction extends AbstractFunction {
             }
 
             features.add(new Feature() {
-                final StructField field = new StructField(
+                StructField field = new StructField(
                         String.format("%s(%s)", name, xfield.name),
                         type.id() == DataType.ID.Object ? DataTypes.DoubleObjectType : DataTypes.DoubleType,
                         xfield.measure);

@@ -15,9 +15,8 @@
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package smile.math.matrix;
+package smile.math.blas.mkl;
 
-import java.util.Arrays;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -26,6 +25,7 @@ import org.junit.Test;
 import smile.math.MathEx;
 import smile.math.blas.Layout;
 import smile.math.blas.UPLO;
+import smile.math.matrix.FloatMatrix;
 import static smile.math.blas.Transpose.*;
 import static org.junit.Assert.*;
 
@@ -68,14 +68,14 @@ public class FloatMatrixTest {
 
     @Test
     public void testNrows() {
-        System.out.println("nrow");
-        assertEquals(3, matrix.nrow());
+        System.out.println("nrows");
+        assertEquals(3, matrix.nrows());
     }
 
     @Test
     public void testNcols() {
-        System.out.println("ncol");
-        assertEquals(3, matrix.ncol());
+        System.out.println("ncols");
+        assertEquals(3, matrix.ncols());
     }
 
     @Test
@@ -126,9 +126,9 @@ public class FloatMatrixTest {
         FloatMatrix t = matrix.transpose();
         assertEquals(Layout.COL_MAJOR, matrix.layout());
         assertEquals(Layout.ROW_MAJOR, t.layout());
-        assertFalse(t.isSubmatrix());
-        assertEquals(3, t.nrow());
-        assertEquals(3, t.ncol());
+        assertEquals(false, t.isSubmatrix());
+        assertEquals(3, t.nrows());
+        assertEquals(3, t.ncols());
 
         assertEquals(0.9f, matrix.get(0, 0), 1E-6f);
         assertEquals(0.8f, matrix.get(2, 2), 1E-6f);
@@ -141,17 +141,17 @@ public class FloatMatrixTest {
     @Test
     public void testSubmatrix() {
         FloatMatrix sub = matrix.submatrix(0, 1, 2, 2);
-        assertFalse(matrix.isSubmatrix());
-        assertTrue(sub.isSubmatrix());
-        assertEquals(3, sub.nrow());
-        assertEquals(2, sub.ncol());
+        assertEquals(false, matrix.isSubmatrix());
+        assertEquals(true, sub.isSubmatrix());
+        assertEquals(3, sub.nrows());
+        assertEquals(2, sub.ncols());
         assertEquals(0.4f, sub.get(0,0), 1E-6f);
         assertEquals(0.8f, sub.get(2,1), 1E-6f);
 
         FloatMatrix sub2 = sub.submatrix(0, 0, 1, 1);
-        assertTrue(sub2.isSubmatrix());
-        assertEquals(2, sub2.nrow());
-        assertEquals(2, sub2.ncol());
+        assertEquals(true, sub2.isSubmatrix());
+        assertEquals(2, sub2.nrows());
+        assertEquals(2, sub2.ncols());
         assertEquals(0.4f, sub.get(0,0), 1E-6f);
         assertEquals(0.3f, sub.get(1,1), 1E-6f);
     }
@@ -159,7 +159,7 @@ public class FloatMatrixTest {
     @Test
     public void testMvOffset() {
         System.out.println("mv offfset ");
-        float[] d = new float[matrix.ncol() + matrix.nrow()];
+        float[] d = new float[matrix.ncols() + matrix.nrows()];
         System.arraycopy(b, 0, d, 0, b.length);
         matrix.mv(d, 0, b.length);
         assertEquals(0.65f, d[3], 1E-6f);
@@ -179,7 +179,7 @@ public class FloatMatrixTest {
     @Test
     public void testAx() {
         System.out.println("ax");
-        float[] d = new float[matrix.nrow()];
+        float[] d = new float[matrix.nrows()];
         matrix.mv(b, d);
         assertEquals(0.65f, d[0], 1E-6f);
         assertEquals(0.60f, d[1], 1E-6f);
@@ -189,8 +189,8 @@ public class FloatMatrixTest {
     @Test
     public void testAxpy() {
         System.out.println("axpy");
-        float[] d = new float[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        float[] d = new float[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(NO_TRANSPOSE, 1.0f, b, 1.0f, d);
         assertEquals(1.65f, d[0], 1E-6f);
         assertEquals(1.60f, d[1], 1E-6f);
@@ -200,8 +200,8 @@ public class FloatMatrixTest {
     @Test
     public void testAxpy2() {
         System.out.println("axpy b = 2");
-        float[] d = new float[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        float[] d = new float[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(NO_TRANSPOSE, 1.0f, b, 2.0f, d);
         assertEquals(2.65f, d[0], 1E-6f);
         assertEquals(2.60f, d[1], 1E-6f);
@@ -211,7 +211,7 @@ public class FloatMatrixTest {
     @Test
     public void testAtx() {
         System.out.println("atx");
-        float[] d = new float[matrix.nrow()];
+        float[] d = new float[matrix.nrows()];
         matrix.tv(b, d);
         assertEquals(0.65f, d[0], 1E-6f);
         assertEquals(0.60f, d[1], 1E-6f);
@@ -221,8 +221,8 @@ public class FloatMatrixTest {
     @Test
     public void testAtxpy() {
         System.out.println("atxpy");
-        float[] d = new float[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        float[] d = new float[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(TRANSPOSE, 1.0f, b, 1.0f, d);
         assertEquals(1.65f, d[0], 1E-6f);
         assertEquals(1.60f, d[1], 1E-6f);
@@ -232,8 +232,8 @@ public class FloatMatrixTest {
     @Test
     public void testAtxpy2() {
         System.out.println("atxpy b = 2");
-        float[] d = new float[matrix.nrow()];
-        Arrays.fill(d, 1.0f);
+        float[] d = new float[matrix.nrows()];
+        for (int i = 0; i < d.length; i++) d[i] = 1.0f;
         matrix.mv(TRANSPOSE, 1.0f, b, 2.0f, d);
         assertEquals(2.65f, d[0], 1E-6f);
         assertEquals(2.60f, d[1], 1E-6f);
@@ -244,8 +244,8 @@ public class FloatMatrixTest {
     public void testAAT() {
         System.out.println("AAT");
         FloatMatrix c = matrix.aat();
-        assertEquals(c.nrow(), 3);
-        assertEquals(c.ncol(), 3);
+        assertEquals(c.nrows(), 3);
+        assertEquals(c.ncols(), 3);
         for (int i = 0; i < C.length; i++) {
             for (int j = 0; j < C[i].length; j++) {
                 assertEquals(C[i][j], c.get(i, j), 1E-6f);
@@ -373,8 +373,8 @@ public class FloatMatrixTest {
 
         FloatMatrix X2 = new FloatMatrix(B);
         lu.solve(X2);
-        assertEquals(X.length, X2.nrow());
-        assertEquals(X[0].length, X2.ncol());
+        assertEquals(X.length, X2.nrows());
+        assertEquals(X[0].length, X2.ncols());
         for (int i = 0; i < X.length; i++) {
             for (int j = 0; j < X[i].length; j++) {
                 assertEquals(X[i][j], X2.get(i, j), 1E-6f);
@@ -438,7 +438,7 @@ public class FloatMatrixTest {
         FloatMatrix a = new FloatMatrix(A);
         a.uplo(UPLO.LOWER);
         FloatMatrix.Cholesky cholesky = a.cholesky();
-        for (int i = 0; i < a.nrow(); i++) {
+        for (int i = 0; i < a.nrows(); i++) {
             for (int j = 0; j <= i; j++) {
                 assertEquals(Math.abs(L[i][j]), Math.abs(cholesky.lu.get(i, j)), 1E-6f);
             }
@@ -466,8 +466,8 @@ public class FloatMatrixTest {
 
         FloatMatrix X2 = new FloatMatrix(B);
         cholesky.solve(X2);
-        assertEquals(X.length, X2.nrow());
-        assertEquals(X[0].length, X2.ncol());
+        assertEquals(X.length, X2.nrows());
+        assertEquals(X[0].length, X2.ncols());
         for (int i = 0; i < X.length; i++) {
             for (int j = 0; j < X[i].length; j++) {
                 assertEquals(X[i][j], X2.get(i, j), 1E-6f);
@@ -493,10 +493,10 @@ public class FloatMatrixTest {
         FloatMatrix a = new FloatMatrix(A);
         a.uplo(UPLO.LOWER);
         FloatMatrix.EVD eig = a.eigen().sort();
-        assertArrayEquals(eigenValues, eig.wr, 1E-6f);
+        assertTrue(MathEx.equals(eigenValues, eig.wr, 1E-6f));
 
-        assertEquals(eigenVectors.length, eig.Vr.nrow());
-        assertEquals(eigenVectors[0].length, eig.Vr.ncol());
+        assertEquals(eigenVectors.length, eig.Vr.nrows());
+        assertEquals(eigenVectors[0].length, eig.Vr.ncols());
         for (int i = 0; i < eigenVectors.length; i++) {
             for (int j = 0; j < eigenVectors[i].length; j++) {
                 assertEquals(Math.abs(eigenVectors[i][j]), Math.abs(eig.Vr.get(i, j)), 1E-6f);
@@ -507,9 +507,9 @@ public class FloatMatrixTest {
         for (int i = 0; i < eigenValues.length; i++) {
             assertEquals(eigenValues[i], eig.wr[i], 1E-6f);
         }
-        assertNull(eig.wi);
-        assertNull(eig.Vl);
-        assertNull(eig.Vr);
+        assertEquals(null, eig.wi);
+        assertEquals(null, eig.Vl);
+        assertEquals(null, eig.Vr);
     }
 
     @Test
@@ -530,10 +530,10 @@ public class FloatMatrixTest {
 
         FloatMatrix a = new FloatMatrix(A);
         FloatMatrix.EVD eig = a.eigen().sort();
-        assertArrayEquals(eigenValues, eig.wr, 1E-6f);
+        assertTrue(MathEx.equals(eigenValues, eig.wr, 1E-6f));
 
-        assertEquals(eigenVectors.length,    eig.Vr.nrow());
-        assertEquals(eigenVectors[0].length, eig.Vr.ncol());
+        assertEquals(eigenVectors.length,    eig.Vr.nrows());
+        assertEquals(eigenVectors[0].length, eig.Vr.ncols());
         for (int i = 0; i < eigenVectors.length; i++) {
             for (int j = 0; j < eigenVectors[i].length; j++) {
                 assertEquals(Math.abs(eigenVectors[i][j]), Math.abs(eig.Vr.get(i, j)), 1E-6f);
@@ -548,10 +548,10 @@ public class FloatMatrixTest {
             assertEquals(0.0f, eig.wi[i], 1E-6f);
         }
 
-        assertNull(eig.Vl);
-        assertNull(eig.Vr);
+        assertEquals(null, eig.Vl);
+        assertEquals(null, eig.Vr);
     }
-    
+
     @Test
     public void testSVD1() {
         System.out.println("SVD symm");
@@ -578,18 +578,18 @@ public class FloatMatrixTest {
         FloatMatrix matrix = new FloatMatrix(A);
         matrix.uplo(UPLO.LOWER);
         FloatMatrix.SVD svd = matrix.svd();
-        assertArrayEquals(s, svd.s, 1E-6f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -633,18 +633,18 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-4f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-4f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-4f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-4f);
@@ -687,18 +687,18 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -740,18 +740,18 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-4f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-4f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-4f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-4f);
@@ -792,18 +792,18 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-5f));
 
-        assertEquals(U.length, svd.U.nrow());
-        assertEquals(U[0].length, svd.U.ncol());
+        assertEquals(U.length, svd.U.nrows());
+        assertEquals(U[0].length, svd.U.ncols());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
-        assertEquals(V[0].length, svd.V.ncol());
+        assertEquals(V.length, svd.V.nrows());
+        assertEquals(V[0].length, svd.V.ncols());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -845,16 +845,16 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
+        assertEquals(U.length, svd.U.nrows());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-4f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
+        assertEquals(V.length, svd.V.nrows());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-4f);
@@ -894,16 +894,16 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
+        assertEquals(U.length, svd.U.nrows());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
+        assertEquals(V.length, svd.V.nrows());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -941,16 +941,16 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-6f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-6f));
 
-        assertEquals(U.length, svd.U.nrow());
+        assertEquals(U.length, svd.U.nrows());
         for (int i = 0; i < U.length; i++) {
             for (int j = 0; j < U[i].length; j++) {
                 assertEquals(Math.abs(U[i][j]), Math.abs(svd.U.get(i, j)), 1E-6f);
             }
         }
 
-        assertEquals(V.length, svd.V.nrow());
+        assertEquals(V.length, svd.V.nrows());
         for (int i = 0; i < V.length; i++) {
             for (int j = 0; j < V[i].length; j++) {
                 assertEquals(Math.abs(V[i][j]), Math.abs(svd.V.get(i, j)), 1E-6f);
@@ -1003,18 +1003,18 @@ public class FloatMatrixTest {
         };
 
         FloatMatrix.SVD svd = new FloatMatrix(A).svd();
-        assertArrayEquals(s, svd.s, 1E-5f);
+        assertTrue(MathEx.equals(s, svd.s, 1E-5f));
 
-        assertEquals(Ut[0].length, svd.U.nrow());
-        assertEquals(Ut.length, svd.U.ncol());
+        assertEquals(Ut[0].length, svd.U.nrows());
+        assertEquals(Ut.length, svd.U.ncols());
         for (int i = 0; i < Ut.length; i++) {
             for (int j = 0; j < Ut[i].length; j++) {
                 assertEquals(Math.abs(Ut[i][j]), Math.abs(svd.U.get(j, i)), 1E-5f);
             }
         }
 
-        assertEquals(Vt[0].length, svd.V.nrow());
-        assertEquals(Vt.length, svd.V.ncol());
+        assertEquals(Vt[0].length, svd.V.nrows());
+        assertEquals(Vt.length, svd.V.ncols());
         for (int i = 0; i < Vt.length; i++) {
             for (int j = 0; j < Vt[i].length; j++) {
                 assertEquals(Math.abs(Vt[i][j]), Math.abs(svd.V.get(j, i)), 1E-5f);
@@ -1054,9 +1054,9 @@ public class FloatMatrixTest {
     public void testSVDSolve() {
         System.out.println("SVD solve");
         float[][] A = {
-            {0.9000f, 0.4000f, 0.7000f},
-            {0.4000f, 0.5000f, 0.3000f},
-            {0.7000f, 0.3000f, 0.8000f}
+                {0.9000f, 0.4000f, 0.7000f},
+                {0.4000f, 0.5000f, 0.3000f},
+                {0.7000f, 0.3000f, 0.8000f}
         };
         float[] b = {0.5f, 0.5f, 0.5f};
         float[] x = {-0.2027027f, 0.8783784f, 0.4729730f};

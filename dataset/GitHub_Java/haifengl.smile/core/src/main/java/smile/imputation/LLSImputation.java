@@ -32,7 +32,7 @@ public class LLSImputation implements MissingValueImputation {
     /**
      * The number of nearest neighbors used for imputation.
      */
-    private final int k;
+    private int k;
 
     /**
      * Constructor.
@@ -79,8 +79,8 @@ public class LLSImputation implements MissingValueImputation {
         for (int i = 0; i < data.length; i++) {
             double[] x = data[i];
             int missing = 0;
-            for (double v : x) {
-                if (Double.isNaN(v)) {
+            for (int j = 0; j < x.length; j++) {
+                if (Double.isNaN(x[j])) {
                     missing++;
                 }
             }
@@ -107,7 +107,9 @@ public class LLSImputation implements MissingValueImputation {
             }
 
             double[][] dat = new double[data.length][];
-            System.arraycopy(data, 0, dat, 0, data.length);
+            for (int j = 0; j < data.length; j++) {
+                dat[j] = data[j];
+            }
 
             QuickSort.sort(dist, dat);
 
@@ -115,10 +117,9 @@ public class LLSImputation implements MissingValueImputation {
             double[] b = new double[d - missing];
 
             for (int j = 0, m = 0; j < d; j++) {
-                if (!Double.isNaN(x[j])) {
-                    for (int l = 0; l < k; l++) {
+                if (!Double.isNaN(data[i][j])) {
+                    for (int l = 0; l < k; l++)
                         A.set(m, l, dat[l][j]);
-                    }
                     b[m++] = dat[i][j];
                 }
             }
@@ -132,15 +133,13 @@ public class LLSImputation implements MissingValueImputation {
                     }
                 }
 
-                if (!sufficient) {
+                if (!sufficient)
                     break;
-                }
             }
 
             // this row has no sufficent nearest neighbors with no missing values.
-            if (!sufficient) {
+            if (!sufficient)
                 continue;
-            }
 
             Matrix.LU lu = A.lu(true);
             lu.solve(b);

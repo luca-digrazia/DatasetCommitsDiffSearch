@@ -18,6 +18,7 @@
 package smile.glm.model;
 
 import java.io.Serializable;
+import java.util.stream.IntStream;
 
 /**
  * The GLM model specification. The GLM consists of three elements:

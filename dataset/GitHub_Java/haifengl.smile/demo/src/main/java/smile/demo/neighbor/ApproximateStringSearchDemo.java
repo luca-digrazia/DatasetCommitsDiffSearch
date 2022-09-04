@@ -190,7 +190,7 @@ public class ApproximateStringSearchDemo extends JPanel implements Runnable, Act
         return "Approximate String Search";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ApproximateStringSearchDemo demo = new ApproximateStringSearchDemo();
         JFrame f = new JFrame("Approximate String Search");
         f.setSize(new Dimension(1000, 1000));

@@ -54,13 +54,13 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OneVersusRest.class);
 
     /** The number of classes. */
-    private final int k;
+    private int k;
     /** The binary classifier. */
-    private final Classifier<T>[] classifiers;
+    private Classifier<T>[] classifiers;
     /** The probability estimation by Platt scaling. */
-    private final PlattScaling[] platt;
+    private PlattScaling[] platts;
     /** The class label encoder. */
-    private final IntSet labels;
+    private IntSet labels;
 
     /**
      * Constructor.
@@ -75,9 +75,9 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
      * @param classifiers the binary classifier for each one-vs-rest case.
      * @param labels the class labels.
      */
-    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platt, IntSet labels) {
+    public OneVersusRest(Classifier<T>[] classifiers, PlattScaling[] platts, IntSet labels) {
         this.classifiers = classifiers;
-        this.platt = platt;
+        this.platts = platts;
         this. k = classifiers.length;
         this.labels = labels;
     }
@@ -182,7 +182,7 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
         int y = 0;
         double maxf = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < k; i++) {
-            double f = platt[i].scale(classifiers[i].score(x));
+            double f = platts[i].scale(classifiers[i].score(x));
             if (f > maxf) {
                 y = i;
                 maxf = f;
@@ -194,12 +194,12 @@ public class OneVersusRest<T> implements SoftClassifier<T> {
 
     @Override
     public int predict(T x, double[] posteriori) {
-        if (platt == null) {
+        if (platts == null) {
             throw new UnsupportedOperationException("Platt scaling is not available");
         }
 
         for (int i = 0; i < k; i++) {
-            posteriori[i] = platt[i].scale(classifiers[i].score(x));
+            posteriori[i] = platts[i].scale(classifiers[i].score(x));
         }
 
         MathEx.unitize1(posteriori);

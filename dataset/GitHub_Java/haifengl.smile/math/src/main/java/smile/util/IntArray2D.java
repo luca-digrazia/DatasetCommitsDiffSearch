@@ -18,7 +18,6 @@
 package smile.util;
 
 import java.util.Arrays;
-import smile.math.MathEx;
 
 /**
  * 2-dimensional array of integers. Java doesn't have real multidimensional
@@ -37,15 +36,15 @@ public class IntArray2D {
     /**
      * The array storage.
      */
-    private final int[] A;
+    private int[] A;
     /**
      * The number of rows.
      */
-    private final int nrows;
+    private int nrows;
     /**
      * The number of columns.
      */
-    private final int ncols;
+    private int ncols;
 
     /**
      * Constructor.
@@ -207,7 +206,12 @@ public class IntArray2D {
     }
 
     public long sum() {
-        return MathEx.sum(A);
+        long s = 0;
+        for (int i = 0; i < A.length; i++) {
+            s += A[i];
+        }
+
+        return s;
     }
 
     @Override

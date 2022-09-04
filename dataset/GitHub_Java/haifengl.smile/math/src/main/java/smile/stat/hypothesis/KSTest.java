@@ -55,27 +55,21 @@ import smile.stat.distribution.Distribution;
  */
 public class KSTest {
     /**
-     * The type of test.
+     * A character string indicating what type of test was performed.
      */
     public final String method;
 
     /**
-     * Kolmogorov-Smirnov statistic.
+     * Kolmogorov-Smirnov statistic
      */
     public final double d;
 
     /**
-     * P-value.
+     * P-value
      */
     public final double pvalue;
 
-    /**
-     * Constructor.
-     * @param method the type of test.
-     * @param d the Kolmogorov-Smirnov statistic.
-     * @param pvalue the p-value.
-     */
-    public KSTest(String method, double d, double pvalue) {
+    private KSTest(String method, double d, double pvalue) {
         this.method = method;
         this.d = d;
         this.pvalue = pvalue;

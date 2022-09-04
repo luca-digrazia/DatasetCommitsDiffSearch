@@ -27,9 +27,9 @@ import smile.data.type.StructField;
  */
 class CharVectorImpl implements CharVector {
     /** The name of vector. */
-    private final String name;
+    private String name;
     /** The vector data. */
-    private final char[] vector;
+    private char[] vector;
 
     /** Constructor. */
     public CharVectorImpl(String name, char[] vector) {

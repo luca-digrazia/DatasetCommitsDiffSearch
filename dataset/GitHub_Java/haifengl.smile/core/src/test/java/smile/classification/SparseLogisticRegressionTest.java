@@ -68,7 +68,7 @@ public class SparseLogisticRegressionTest {
         );
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
 

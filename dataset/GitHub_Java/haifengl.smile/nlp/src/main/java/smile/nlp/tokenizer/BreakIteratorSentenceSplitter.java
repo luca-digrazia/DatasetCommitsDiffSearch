@@ -32,7 +32,7 @@ public class BreakIteratorSentenceSplitter implements SentenceSplitter {
     /**
      * The working horse for splitting sentences.
      */
-    private final BreakIterator boundary;
+    private BreakIterator boundary;
 
     /**
      * Constructor for the default locale.

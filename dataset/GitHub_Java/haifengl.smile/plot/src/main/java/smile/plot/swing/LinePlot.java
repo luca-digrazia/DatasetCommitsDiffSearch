@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -44,11 +44,6 @@ public class LinePlot extends Plot {
         legends = Optional.empty();
     }
 
-    @Override
-    public Optional<Legend[]> legends() {
-        return legends;
-    }
-
     /**
      * Constructor.
      */
@@ -58,9 +53,13 @@ public class LinePlot extends Plot {
     }
 
     @Override
+    public Optional<Legend[]> legends() {
+        return legends;
+    }
+
+    @Override
     public Canvas canvas() {
-        Canvas canvas = new Canvas(getLowerBound(), getUpperBound(), false);
-        canvas.base.extendBound(1);
+        Canvas canvas = new Canvas(getLowerBound(), getUpperBound());
         canvas.add(this);
         return canvas;
     }

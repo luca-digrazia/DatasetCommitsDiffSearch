@@ -20,9 +20,10 @@ package smile.math.kernel;
 /**
  * The Thin Plate Spline kernel.
  * <p>
+ * <pre>
  *     k(u, v) = (||u-v|| / &sigma;)<sup>2</sup> log (||u-v|| / &sigma;)
- * <p>
- * where {@code &sigma; > 0} is the scale parameter of the kernel.
+ * </pre>
+ * where <code>&sigma; &gt; 0</code> is the scale parameter of the kernel.
  *
  * @author Haifeng Li
  */

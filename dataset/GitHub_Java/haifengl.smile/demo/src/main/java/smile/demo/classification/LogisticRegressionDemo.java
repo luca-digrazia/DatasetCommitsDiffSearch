@@ -85,7 +85,7 @@ public class LogisticRegressionDemo extends ClassificationDemo {
         return "Logistic Regression";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClassificationDemo demo = new LogisticRegressionDemo();
         JFrame f = new JFrame("Logistic Regression");
         f.setSize(new Dimension(1000, 1000));

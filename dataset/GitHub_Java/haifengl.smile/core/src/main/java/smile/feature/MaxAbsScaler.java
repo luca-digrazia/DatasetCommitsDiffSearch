@@ -43,11 +43,11 @@ public class MaxAbsScaler implements FeatureTransform {
     /**
      * The schema of data.
      */
-    protected final StructType schema;
+    protected StructType schema;
     /**
      * Scaling factor.
      */
-    private final double[] scale;
+    private double[] scale;
 
     /**
      * Constructor.

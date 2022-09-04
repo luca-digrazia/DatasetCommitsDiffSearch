@@ -49,21 +49,19 @@ package smile.math.distance;
 public class DynamicTimeWarping<T> implements Distance<T[]> {
     private static final long serialVersionUID = 1L;
 
-    private final Distance<T> distance;
-    private final double width;
+    private Distance<T> distance;
+    private double width = 1;
 
     /**
      * Constructor. Dynamic time warping without path constraints.
-     * @param distance the distance function.
      */
     public DynamicTimeWarping(Distance<T> distance) {
-        this(distance, 1.0);
+        this.distance = distance;
     }
 
     /**
      * Dynamic time warping with Sakoe-Chiba band, which primarily to prevent
      * unreasonable warping and also improve computational cost.
-     * @param distance the distance function.
      * @param radius the window width of Sakoe-Chiba band in terms of percentage of sequence length.
      */
     public DynamicTimeWarping(Distance<T> distance, double radius) {
@@ -134,9 +132,6 @@ public class DynamicTimeWarping<T> implements Distance<T[]> {
 
     /**
      * Dynamic time warping without path constraints.
-     * @param x1 a vector.
-     * @param x2 a vector.
-     * @return the distance.
      */
     public static double d(int[] x1, int[] x2) {
         int n1 = x1.length;
@@ -179,10 +174,7 @@ public class DynamicTimeWarping<T> implements Distance<T[]> {
     /**
      * Dynamic time warping with Sakoe-Chiba band, which primarily to prevent
      * unreasonable warping and also improve computational cost.
-     * @param x1 a vector.
-     * @param x2 a vector.
      * @param radius the window width of Sakoe-Chiba band.
-     * @return the distance.
      */
     public static double d(int[] x1, int[] x2, int radius) {
         int n1 = x1.length;
@@ -228,9 +220,6 @@ public class DynamicTimeWarping<T> implements Distance<T[]> {
 
     /**
      * Dynamic time warping without path constraints.
-     * @param x1 a vector.
-     * @param x2 a vector.
-     * @return the distance.
      */
     public static double d(float[] x1, float[] x2) {
         int n1 = x1.length;
@@ -273,10 +262,7 @@ public class DynamicTimeWarping<T> implements Distance<T[]> {
     /**
      * Dynamic time warping with Sakoe-Chiba band, which primarily to prevent
      * unreasonable warping and also improve computational cost.
-     * @param x1 a vector.
-     * @param x2 a vector.
      * @param radius the window width of Sakoe-Chiba band.
-     * @return the distance.
      */
     public static double d(float[] x1, float[] x2, int radius) {
         int n1 = x1.length;
@@ -322,9 +308,6 @@ public class DynamicTimeWarping<T> implements Distance<T[]> {
 
     /**
      * Dynamic time warping without path constraints.
-     * @param x1 a vector.
-     * @param x2 a vector.
-     * @return the distance.
      */
     public static double d(double[] x1, double[] x2) {
         int n1 = x1.length;
@@ -367,10 +350,7 @@ public class DynamicTimeWarping<T> implements Distance<T[]> {
     /**
      * Dynamic time warping with Sakoe-Chiba band, which primarily to prevent
      * unreasonable warping and also improve computational cost.
-     * @param x1 a vector.
-     * @param x2 a vector.
      * @param radius the window width of Sakoe-Chiba band.
-     * @return the distance.
      */
     public static double d(double[] x1, double[] x2, int radius) {
         int n1 = x1.length;

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.vq.hebb;
 
@@ -21,6 +21,8 @@ import java.io.Serializable;
 
 /**
  * The connection between neurons.
+ *
+ * @author Haifeng Li
  */
 public class Edge implements Serializable {
     private static final long serialVersionUID = 2L;

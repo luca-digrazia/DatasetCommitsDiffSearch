@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.feature;
 
@@ -77,11 +77,11 @@ public class SparseOneHotEncoderTest {
 
         DataFrame data = WeatherNominal.formula.x(WeatherNominal.data);
         SparseOneHotEncoder n2sb = new SparseOneHotEncoder(data.schema());
+        int[][] onehot = n2sb.apply(data);
+
         for (int i = 0; i < data.size(); i++) {
-            int[] y = n2sb.apply(data.get(i));
-            assertEquals(result[i].length, y.length);
-            for (int j = 0; j < y.length; j++) {
-                assertEquals(result[i][j], y[j]);
+            for (int j = 0; j < result[i].length; j++) {
+                assertEquals(result[i][j], onehot[i][j]);
             }
         }
     }

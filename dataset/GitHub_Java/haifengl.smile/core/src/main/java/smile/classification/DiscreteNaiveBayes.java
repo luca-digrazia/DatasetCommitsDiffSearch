@@ -152,19 +152,19 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
     /**
      * The generation model of naive Bayes.
      */
-    private final Model model;
+    private Model model;
     /**
      * The number of classes.
      */
-    private final int k;
+    private int k;
     /**
      * The number of independent variables.
      */
-    private final int p;
+    private int p;
     /**
      * The priori probability of each class.
      */
-    private final double[] priori;
+    private double[] priori;
     /**
      * Amount of add-k smoothing of evidence. By default, we use add-one or
      * Laplace smoothing, which simply adds one to each count to eliminate zeros.
@@ -172,11 +172,11 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
      * once for each class) that is then updated as evidence from the training
      * data comes in.
      */
-    private final double sigma;
+    private double sigma;
     /**
      * If true, don't update the priori during learning.
      */
-    private final boolean fixedPriori;
+    private boolean fixedPriori;
     /**
      * The total number of documents.
      */
@@ -184,23 +184,23 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
     /**
      * The number of documents in each class.
      */
-    private final int[] nc;
+    private int[] nc;
     /**
      * The number of terms per class.
      */
-    private final int[] nt;
+    private int[] nt;
     /**
      * The number of each term per class.
      */
-    private final int[][] ntc;
+    private int[][] ntc;
     /**
      * The log conditional probabilities for document classification.
      */
-    private final double[][] logcondprob;
+    private double[][] logcondprob;
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private IntSet labels;
 
     /**
      * Constructor of naive Bayes classifier for document classification.
@@ -354,6 +354,7 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             case MULTINOMIAL:
             case CNB:
             case WCNB:
+            case TWCNB:
                 for (int i = 0; i < p; i++) {
                     ntc[y][i] += x[i];
                     nt[y] += x[i];
@@ -409,6 +410,7 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             case MULTINOMIAL:
             case CNB:
             case WCNB:
+            case TWCNB:
                 for (SparseArray.Entry e : x) {
                     ntc[y][e.i] += e.x;
                     nt[y] += e.x;

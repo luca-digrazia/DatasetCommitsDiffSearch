@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.stat.distribution;
 
@@ -57,7 +57,7 @@ public class BinomialDistributionTest {
         System.out.println("npara");
         BinomialDistribution instance = new BinomialDistribution(100, 0.3);
         instance.rand();
-        assertEquals(2, instance.npara());
+        assertEquals(2, instance.length());
     }
 
     /**
@@ -72,14 +72,14 @@ public class BinomialDistributionTest {
     }
 
     /**
-     * Test of var method, of class BinomialDistribution.
+     * Test of variance method, of class BinomialDistribution.
      */
     @Test
-    public void testVar() {
-        System.out.println("var");
+    public void testVariance() {
+        System.out.println("variance");
         BinomialDistribution instance = new BinomialDistribution(100, 0.3);
         instance.rand();
-        assertEquals(21.0, instance.var(), 1E-7);
+        assertEquals(21.0, instance.variance(), 1E-7);
     }
 
     /**

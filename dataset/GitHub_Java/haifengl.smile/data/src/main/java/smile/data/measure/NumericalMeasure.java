@@ -29,7 +29,7 @@ import java.text.ParseException;
  */
 public abstract class NumericalMeasure implements Measure {
     /** For formatting and parsing numbers. */
-    private final NumberFormat format;
+    private NumberFormat format;
 
     /** Constructor. */
     public NumericalMeasure(NumberFormat format) {

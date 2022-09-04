@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,19 +13,19 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.stat.distribution;
 
 import java.awt.Color;
 import java.awt.GridLayout;
-
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
-import smile.plot.Histogram;
-import smile.plot.PlotCanvas;
-import smile.plot.StaircasePlot;
+import smile.plot.swing.Histogram;
+import smile.plot.swing.Canvas;
+import smile.plot.swing.LinePlot;
+import smile.plot.swing.StaircasePlot;
 import smile.stat.distribution.EmpiricalDistribution;
 
 /**
@@ -47,9 +47,9 @@ public class EmpiricalDistributionDemo extends JPanel {
             data[i] = emp.rand();
         }
 
-        PlotCanvas canvas = Histogram.plot(data, 10);
+        Canvas canvas = Histogram.of(data, 10, true).canvas();
         canvas.setTitle("Equal Probabilities");
-        add(canvas);
+        add(canvas.panel());
 
         double[][] p = new double[10][2];
         for (int i = 0; i < p.length; i++) {
@@ -57,17 +57,17 @@ public class EmpiricalDistributionDemo extends JPanel {
             p[i][1] = emp.p(p[i][0]);
         }
 
-        canvas.line(p, Color.RED);
+        canvas.add(LinePlot.of(p, Color.RED));
 
         p = new double[11][2];
         for (int i = 0; i < p.length; i++) {
             p[i][0] = i;
-            p[i][1] = emp.cdf(p[i][0]);
+            p[i][1] = emp.cdf(i);
         }
 
-        canvas = StaircasePlot.plot(p);
+        canvas = StaircasePlot.of(p).canvas();
         canvas.setTitle("CDF");
-        add(canvas);
+        add(canvas.panel());
 
         prob = new double[10];
         for (int i = 0; i < prob.length; i++)
@@ -83,9 +83,9 @@ public class EmpiricalDistributionDemo extends JPanel {
             data[i] = emp.rand();
         }
 
-        canvas = Histogram.plot(data, 10);
+        canvas = Histogram.of(data, 10, true).canvas();
         canvas.setTitle("Non-Equal Probabilities");
-        add(canvas);
+        add(canvas.panel());
 
         p = new double[10][2];
         for (int i = 0; i < p.length; i++) {
@@ -93,7 +93,7 @@ public class EmpiricalDistributionDemo extends JPanel {
             p[i][1] = emp.p(p[i][0]);
         }
 
-        canvas.line(p, Color.RED);
+        canvas.add(LinePlot.of(p, Color.RED));
 
         p = new double[11][2];
         for (int i = 0; i < p.length; i++) {
@@ -101,9 +101,9 @@ public class EmpiricalDistributionDemo extends JPanel {
             p[i][1] = emp.cdf(p[i][0]);
         }
 
-        canvas = StaircasePlot.plot(p);
+        canvas = StaircasePlot.of(p).canvas();
         canvas.setTitle("CDF");
-        add(canvas);
+        add(canvas.panel());
     }
     
     @Override

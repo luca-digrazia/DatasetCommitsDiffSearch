@@ -86,9 +86,9 @@ public class Arff implements AutoCloseable {
     private static final String PREMATURE_END_OF_FILE = "premature end of file";
 
     /** Buffered file reader. */
-    private final Reader reader;
+    private Reader reader;
     /** The tokenizer to parse the file. */
-    private final StreamTokenizer tokenizer;
+    private StreamTokenizer tokenizer;
     /** The name of ARFF relation. */
     private String name;
     /** The schema of ARFF relation. */
@@ -170,8 +170,9 @@ public class Arff implements AutoCloseable {
      * @throws IOException if reading the next token fails
      */
     private void getFirstToken() throws IOException {
-        // empty lines
-        while (tokenizer.nextToken() == StreamTokenizer.TT_EOL);
+        while (tokenizer.nextToken() == StreamTokenizer.TT_EOL) {
+            // empty lines
+        }
 
         if ((tokenizer.ttype == '\'') || (tokenizer.ttype == '"')) {
             tokenizer.ttype = StreamTokenizer.TT_WORD;
@@ -183,10 +184,11 @@ public class Arff implements AutoCloseable {
     /**
      * Gets token and checks if it's end of line.
      *
+     * @param endOfFileOk true if EOF is OK
      * @throws IllegalStateException if it doesn't find an end of line
      */
-    private void getLastToken() throws IOException, ParseException {
-        if ((tokenizer.nextToken() != StreamTokenizer.TT_EOL) && ((tokenizer.ttype != StreamTokenizer.TT_EOF))) {
+    private void getLastToken(boolean endOfFileOk) throws IOException, ParseException {
+        if ((tokenizer.nextToken() != StreamTokenizer.TT_EOL) && ((tokenizer.ttype != StreamTokenizer.TT_EOF) || !endOfFileOk)) {
             throw new ParseException("end of line expected", tokenizer.lineno());
         }
     }
@@ -213,6 +215,7 @@ public class Arff implements AutoCloseable {
     /**
      * Reads and stores header of an ARFF file.
      *
+     * @return the schema of relation.
      * @throws IllegalStateException if the information is not read successfully
      */
     private void readHeader() throws IOException, ParseException {
@@ -227,7 +230,7 @@ public class Arff implements AutoCloseable {
             getNextToken();
             name = tokenizer.sval;
             logger.info("Read ARFF relation {}", name);
-            getLastToken();
+            getLastToken(false);
         } else {
             throw new ParseException("keyword " + ARFF_RELATION + " expected", tokenizer.lineno());
         }
@@ -342,7 +345,7 @@ public class Arff implements AutoCloseable {
             attribute = new StructField(name, scale.type(), scale);
         }
 
-        getLastToken();
+        getLastToken(false);
         getFirstToken();
         if (tokenizer.ttype == StreamTokenizer.TT_EOF) {
             throw new ParseException(PREMATURE_END_OF_FILE, tokenizer.lineno());
@@ -362,8 +365,9 @@ public class Arff implements AutoCloseable {
      * @throws IOException in case something goes wrong
      */
     private void readTillEOL() throws IOException {
-        // skip all the tokens before EOL
-        while (tokenizer.nextToken() != StreamTokenizer.TT_EOL);
+        while (tokenizer.nextToken() != StreamTokenizer.TT_EOL) {
+            // skip all the tokens before EOL
+        }
 
         // push back the EOL token
         tokenizer.pushBack();
@@ -503,7 +507,7 @@ public class Arff implements AutoCloseable {
     }
 
     /** Write the meta of field to ARFF file. */
-    private static void writeField(PrintWriter writer, StructField field) {
+    private static void writeField(PrintWriter writer, StructField field) throws IOException {
         writer.print("@ATTRIBUTE ");
         writer.print(field.name);
         if (field.type.isFloating()) writer.println(" REAL");

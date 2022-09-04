@@ -33,12 +33,11 @@ import smile.math.matrix.Matrix;
 public class MahalanobisDistance implements Metric<double[]> {
     private static final long serialVersionUID = 1L;
 
-    private final Matrix sigma;
-    private final Matrix sigmaInv;
+    private Matrix sigma;
+    private Matrix sigmaInv;
 
     /**
-     * Constructor.
-     * @param cov the covariance matrix.
+     * Constructor with given covariance matrix.
      */
     public MahalanobisDistance(double[][] cov) {
         sigma = new Matrix(cov);

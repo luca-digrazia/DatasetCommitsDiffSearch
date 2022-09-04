@@ -124,7 +124,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * @param to the final index of the range to be copied, exclusive.
      */
     default DataFrame slice(int from, int to) {
-        return IntStream.range(from, to).mapToObj(this::get).collect(collect());
+        return IntStream.range(from, to).mapToObj(i -> get(i)).collect(collect());
     }
 
     /** Checks whether the value at position (i, j) is null. */
@@ -630,7 +630,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /** Selects a new DataFrame with given column names. */
     default DataFrame select(String... cols) {
-        int[] indices = Arrays.stream(cols).mapToInt(this::columnIndex).toArray();
+        int[] indices = Arrays.asList(cols).stream().mapToInt(this::columnIndex).toArray();
         return select(indices);
     }
 
@@ -659,7 +659,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /** Returns a new DataFrame without given column names. */
     default DataFrame drop(String... cols) {
-        int[] indices = Arrays.stream(cols).mapToInt(this::columnIndex).toArray();
+        int[] indices = Arrays.asList(cols).stream().mapToInt(this::columnIndex).toArray();
         return drop(indices);
     }
 
@@ -685,7 +685,9 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
                 int j = columnIndex(col);
                 List<String> levels = IntStream.range(0, n)
                         .mapToObj(i -> getString(i, j))
-                        .distinct().sorted().collect(Collectors.toList());
+                        .distinct()
+                        .collect(Collectors.toList());
+                Collections.sort(levels);
                 NominalScale scale =  new NominalScale(levels);
 
                 int[] data = new int[n];
@@ -842,7 +844,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         }
 
         Matrix matrix = new Matrix(nrows, colNames.size());
-        matrix.colNames(colNames.toArray(new String[0]));
+        matrix.colNames(colNames.toArray(new String[colNames.size()]));
         if (rowNames != null) {
             int j = schema.fieldIndex(rowNames);
             String[] rows = new String[nrows];
@@ -994,7 +996,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         boolean hasMoreData = size() > numRows;
         String[] names = names();
         int numCols = names.length;
-        int maxColWidth;
+        int maxColWidth = 20;
         switch (numCols) {
             case 1: maxColWidth = 78; break;
             case 2: maxColWidth = 38; break;
@@ -1092,7 +1094,20 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     default String[][] toStrings(final int numRows, final boolean truncate) {
         String[] names = names();
         int numCols = names.length;
-        int maxColWidth = numCols == 1 ? 78 : (numCols == 2 ? 38 : 20);
+        int maxColWidth = 20;
+        switch (numCols) {
+            case 1: maxColWidth = 78; break;
+            case 2: maxColWidth = 38; break;
+            default: maxColWidth = 20;
+        }
+        // To be used in lambda.
+        final int maxColumnWidth = maxColWidth;
+
+        // Initialize the width of each column to a minimum value of '3'
+        int[] colWidths = new int[numCols];
+        for (int i = 0; i < numCols; i++) {
+            colWidths[i] = Math.max(names[i].length(), 3);
+        }
 
         // For array values, replace Seq and Array with square brackets
         // For cells that are beyond maxColumnWidth characters, truncate it with "..."
@@ -1100,7 +1115,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
             String[] cells = new String[numCols];
             for (int i = 0; i < numCols; i++) {
                 String str = row.toString(i);
-                cells[i] = (truncate && str.length() > maxColWidth) ? str.substring(0, maxColWidth - 3) + "..." : str;
+                cells[i] = (truncate && str.length() > maxColumnWidth) ? str.substring(0, maxColumnWidth - 3) + "..." : str;
             }
             return cells;
         }).toArray(String[][]::new);
@@ -1260,9 +1275,9 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     static <T> Collector<T, List<T>, DataFrame> collect(Class<T> clazz) {
         return Collector.of(
                 // supplier
-                ArrayList::new,
+                () -> new ArrayList<T>(),
                 // accumulator
-                List::add,
+                (container, t) -> container.add(t),
                 // combiner
                 (c1, c2) -> { c1.addAll(c2); return c1; },
                 // finisher
@@ -1276,13 +1291,13 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     static Collector<Tuple, List<Tuple>, DataFrame> collect() {
         return Collector.of(
                 // supplier
-                ArrayList::new,
+                () -> new ArrayList<Tuple>(),
                 // accumulator
-                List::add,
+                (container, t) -> container.add(t),
                 // combiner
                 (c1, c2) -> { c1.addAll(c2); return c1; },
                 // finisher
-                DataFrame::of
+                (container) -> DataFrame.of(container)
         );
     }
 
@@ -1292,9 +1307,9 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     static Collector<Tuple, List<Tuple>, Matrix> matrix() {
         return Collector.of(
                 // supplier
-                ArrayList::new,
+                () -> new ArrayList<Tuple>(),
                 // accumulator
-                List::add,
+                (container, t) -> container.add(t),
                 // combiner
                 (c1, c2) -> { c1.addAll(c2); return c1; },
                 // finisher

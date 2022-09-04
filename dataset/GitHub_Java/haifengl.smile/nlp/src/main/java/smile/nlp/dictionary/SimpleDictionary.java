@@ -35,7 +35,7 @@ public class SimpleDictionary implements Dictionary {
     /**
      * A list of abbreviations.
      */
-    private final HashSet<String> dict;
+    private HashSet<String> dict;
 
     /**
      * Constructor.
@@ -50,7 +50,7 @@ public class SimpleDictionary implements Dictionary {
              new BufferedReader(new FileReader(resource)) :
              new BufferedReader(new InputStreamReader(this.getClass().getResourceAsStream(resource)))) {
             
-            String line;
+            String line = null;
             while ((line = input.readLine()) != null) {
                 line = line.trim();
                 // Remove blank line or single capital characters from dictionary.

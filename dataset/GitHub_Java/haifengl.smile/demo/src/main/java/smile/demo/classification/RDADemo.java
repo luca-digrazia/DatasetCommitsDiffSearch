@@ -86,7 +86,7 @@ public class RDADemo extends ClassificationDemo {
         return "Regularized Disiminant Analysis";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClassificationDemo demo = new RDADemo();
         JFrame f = new JFrame("Regularized Disiminant Analysis");
         f.setSize(new Dimension(1000, 1000));

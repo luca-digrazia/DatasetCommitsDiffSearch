@@ -47,7 +47,7 @@ public interface LAPACK {
         try {
             Class<?> clazz = Class.forName("smile.math.blas.mkl.MKL");
             logger.info("smile-mkl module is available.");
-            return (LAPACK) clazz.getDeclaredConstructor().newInstance();
+            return (LAPACK) clazz.newInstance();
         } catch (Exception e) {
             logger.debug("Failed to create MKL instance: ", e);
         }

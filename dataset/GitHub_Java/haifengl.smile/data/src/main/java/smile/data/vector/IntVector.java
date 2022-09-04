@@ -67,8 +67,7 @@ public interface IntVector extends BaseVector<Integer, Integer, IntStream> {
 
     /**
      * Returns the string representation of vector.
-     * @param n the number of elements to show.
-     * @return the string representation of vector.
+     * @param n Number of elements to show
      */
     default String toString(int n) {
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
@@ -79,7 +78,6 @@ public interface IntVector extends BaseVector<Integer, Integer, IntStream> {
      *
      * @param name the name of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static IntVector of(String name, int[] vector) {
         return new IntVectorImpl(name, vector);
@@ -89,7 +87,6 @@ public interface IntVector extends BaseVector<Integer, Integer, IntStream> {
      *
      * @param name the name of vector.
      * @param stream the data stream of vector.
-     * @return the vector.
      */
     static IntVector of(String name, IntStream stream) {
         return new IntVectorImpl(name, stream.toArray());
@@ -99,7 +96,6 @@ public interface IntVector extends BaseVector<Integer, Integer, IntStream> {
      *
      * @param field the struct field of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static IntVector of(StructField field, int[] vector) {
         return new IntVectorImpl(field, vector);
@@ -109,7 +105,6 @@ public interface IntVector extends BaseVector<Integer, Integer, IntStream> {
      *
      * @param field the struct field of vector.
      * @param stream the data stream of vector.
-     * @return the vector.
      */
     static IntVector of(StructField field, IntStream stream) {
         return new IntVectorImpl(field, stream.toArray());

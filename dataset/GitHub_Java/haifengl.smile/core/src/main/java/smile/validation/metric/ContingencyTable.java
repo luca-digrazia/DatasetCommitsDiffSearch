@@ -23,13 +23,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * The contingency table. A contingency table (aka a cross tabulation) is
- * a type of table in a matrix format that displays the (multivariate)
- * frequency distribution of the variables.
+ * The contingency table of two clusterings.
  *
  * @author owlmsj
  */
-public class ContingencyTable {
+class ContingencyTable {
 
     /** The number of observations. */
     public final int n;
@@ -44,11 +42,7 @@ public class ContingencyTable {
     /** The contingency table. */
     public final int[][] table;
 
-    /**
-     * Constructor.
-     * @param y1 the first random variable.
-     * @param y2 the second random variable.
-     */
+    /** Constructor. */
     public ContingencyTable(int[] y1, int[] y2) {
         if (y1.length != y2.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", y1.length, y2.length));

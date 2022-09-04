@@ -129,7 +129,7 @@ public class SIBDemo extends JPanel implements Runnable, ActionListener {
                 dataset[datasetIndex] = SparseDataset.from(smile.util.Paths.getTestData(datasource[datasetIndex]), arrayIndexOrigin);
                 dataset[datasetIndex] = SparseDataset.of(
                         dataset[datasetIndex].stream().filter(a -> !a.isEmpty()).collect(Collectors.toList()),
-                        dataset[datasetIndex].ncol()
+                        dataset[datasetIndex].ncols()
                 );
                 dataset[datasetIndex].unitize1();
             } catch (Exception ex) {
@@ -138,13 +138,13 @@ public class SIBDemo extends JPanel implements Runnable, ActionListener {
             }
         }
 
-        System.out.println("The dataset " + datasetName[datasetIndex] + " has " + dataset[datasetIndex].size() + " documents and " + dataset[datasetIndex].ncol() + " words.");
+        System.out.println("The dataset " + datasetName[datasetIndex] + " has " + dataset[datasetIndex].size() + " documents and " + dataset[datasetIndex].ncols() + " words.");
 
         long clock = System.currentTimeMillis();
         SparseArray[] data = dataset[datasetIndex].stream().toArray(SparseArray[]::new);
         SIB sib = SIB.fit(data, clusterNumber, 20);
         outputArea.setText("");
-        for (int j = 0; j < dataset[datasetIndex].ncol(); j++) {
+        for (int j = 0; j < dataset[datasetIndex].ncols(); j++) {
             for (int i = 0; i < clusterNumber; i++) {
                 outputArea.append(String.format("%.5f\t", sib.centroids[i][j]));
             }
@@ -159,7 +159,7 @@ public class SIBDemo extends JPanel implements Runnable, ActionListener {
         return "Sequential Information Bottleneck";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         SIBDemo demo = new SIBDemo();
         JFrame f = new JFrame("SIB");
         f.setSize(new Dimension(1000, 1000));

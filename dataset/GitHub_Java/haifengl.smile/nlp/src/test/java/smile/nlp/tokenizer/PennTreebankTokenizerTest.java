@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.nlp.tokenizer;
 
 import org.junit.After;
@@ -220,6 +222,85 @@ public class PennTreebankTokenizerTest {
             "\"", "(", "as", "in", "\"", "twice", "a", "third", "\"", ")", "."};
 
         PennTreebankTokenizer instance = PennTreebankTokenizer.getInstance();
+        String[] result = instance.split(text);
+
+        assertEquals(expResult.length, result.length);
+        for (int i = 0; i < result.length; i++) {
+            assertEquals(expResult[i], result[i]);
+        }
+    }
+
+    /**
+     * Test of split method, of class TreebankWordTokenizer.
+     */
+    @Test
+    public void testTokenizeMixedAlphanumWords() {
+        System.out.println("tokenize words with mixed numbers, letters, and punctuation");
+        String text = "3M, L-3, BB&T, AutoZone, O'Reilly, Harley-Davidson, CH2M, A-Mark, "
+            + "Quad/Graphics, Bloomin' Brands, B/E Aerospace, J.Crew, E*Trade.";
+
+        // Note: would be very hard to get "Bloomin'" and "E*Trade" correct
+        String[] expResult = {"3M", ",", "L-3", ",", "BB&T", ",", "AutoZone", ",", "O'Reilly",
+            ",", "Harley-Davidson", ",", "CH2M", ",", "A-Mark", ",", "Quad/Graphics", ",", "Bloomin",
+            "'", "Brands", ",", "B/E", "Aerospace", ",", "J.Crew", ",", "E", "*", "Trade", "."};
+
+        SimpleTokenizer instance = new SimpleTokenizer();
+        String[] result = instance.split(text);
+
+        assertEquals(expResult.length, result.length);
+        for (int i = 0; i < result.length; i++) {
+            assertEquals(expResult[i], result[i]);
+        }
+    }
+
+    /**
+     * Test of split method, of class TreebankWordTokenizer.
+     */
+    @Test
+    public void testTokenizeDiacritizedWords() {
+        System.out.println("tokenize words with diacritized chars (both composite and combining)");
+        String text = "The naïve résumé of Raúl Ibáñez; re\u0301sume\u0301.";
+        String[] expResult = {"The", "naïve", "résumé", "of", "Raúl", "Ibáñez", ";", "re\u0301sume\u0301", "."};
+
+        SimpleTokenizer instance = new SimpleTokenizer();
+        String[] result = instance.split(text);
+
+        assertEquals(expResult.length, result.length);
+        for (int i = 0; i < result.length; i++) {
+            assertEquals(expResult[i], result[i]);
+        }
+    }
+
+    /**
+     * Test of split method, of class TreebankWordTokenizer.
+     */
+    @Test
+    public void testTokenizeNonLatinChars() {
+        System.out.println("tokenize words containing non-Latin chars");
+        // See https://en.wikipedia.org/wiki/Zero-width_non-joiner
+        String text = "می‌خواهم   עֲו‌ֹנֹת   Auf‌lage";
+        String[] expResult = {"می‌خواهم", "עֲו‌ֹנֹת", "Auf‌lage"};
+
+        SimpleTokenizer instance = new SimpleTokenizer();
+        String[] result = instance.split(text);
+
+        assertEquals(expResult.length, result.length);
+        for (int i = 0; i < result.length; i++) {
+            assertEquals(expResult[i], result[i]);
+        }
+    }
+
+    /**
+     * Test of split method, of class TreebankWordTokenizer.
+     */
+    @Test
+    public void testTokenizeVariousSpaces() {
+        System.out.println("tokenize words separated by various kinds of space");
+        // No-break space and em-space
+        String text = "the\u00A0cat\u2003the_cat";
+        String[] expResult = {"the", "cat", "the_cat"};
+
+        SimpleTokenizer instance = new SimpleTokenizer();
         String[] result = instance.split(text);
 
         assertEquals(expResult.length, result.length);

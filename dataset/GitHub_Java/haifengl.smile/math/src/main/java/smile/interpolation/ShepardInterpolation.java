@@ -37,9 +37,9 @@ import smile.math.MathEx;
  */
 public class ShepardInterpolation {
 
-    private final double[][] x;
-    private final double[] y;
-    private final double p;
+    private double[][] x;
+    private double[] y;
+    private double p;
 
     /**
      * Constructor. By default p = 2.

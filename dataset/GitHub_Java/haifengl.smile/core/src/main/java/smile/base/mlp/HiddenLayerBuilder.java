@@ -25,7 +25,7 @@ package smile.base.mlp;
 public class HiddenLayerBuilder extends LayerBuilder {
 
     /** The activation function. */
-    private final ActivationFunction f;
+    private ActivationFunction f;
 
     /**
      * Constructor.

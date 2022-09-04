@@ -70,7 +70,7 @@ public class MECDemo extends ClusteringDemo {
         return "Minimum Entropy Clustering";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClusteringDemo demo = new MECDemo();
         JFrame f = new JFrame("MEC");
         f.setSize(new Dimension(1000, 1000));

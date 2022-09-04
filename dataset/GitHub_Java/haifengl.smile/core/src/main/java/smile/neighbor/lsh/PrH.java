@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.neighbor.lsh;
 
@@ -21,6 +21,8 @@ import java.io.Serializable;
 
 /**
  * Probability for given query object and hash function.
+ *
+ * @author Haifeng Li
  */
 public class PrH implements Comparable<PrH>, Serializable {
     private static final long serialVersionUID = 2L;
@@ -43,7 +45,7 @@ public class PrH implements Comparable<PrH>, Serializable {
     @Override
     public int compareTo(PrH o) {
         // to sort PrH in decreasing order.
-        return (int) Math.signum(o.pr - pr);
+        return Double.compare(o.pr, pr);
     }
 }
 

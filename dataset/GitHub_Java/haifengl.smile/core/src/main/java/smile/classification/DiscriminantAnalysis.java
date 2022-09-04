@@ -142,7 +142,8 @@ class DiscriminantAnalysis {
         Matrix St = new Matrix(p, p);
         St.uplo(UPLO.LOWER);
 
-        for (double[] xi : x) {
+        for (int i = 0; i < n; i++) {
+            double[] xi = x[i];
             for (int j = 0; j < p; j++) {
                 for (int l = 0; l <= j; l++) {
                     St.add(j, l, (xi[j] - mean[j]) * (xi[l] - mean[l]));

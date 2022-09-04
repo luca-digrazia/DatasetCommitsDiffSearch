@@ -35,10 +35,7 @@ public abstract class LayerBuilder {
         this.n = n;
     }
 
-    /**
-     * Returns the number of neurons.
-     * @return the number of neurons.
-     */
+    /** Returns the number of neurons. */
     public int neurons() {
         return n;
     }
@@ -47,7 +44,6 @@ public abstract class LayerBuilder {
      * Creates a hidden layer.
      *
      * @param p the number of input variables (not including bias value).
-     * @return a hidden layer.
      */
     public abstract Layer build(int p);
 }

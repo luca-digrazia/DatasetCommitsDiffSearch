@@ -67,8 +67,7 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
 
     /**
      * Returns the string representation of vector.
-     * @param n the number of elements to show.
-     * @return the string representation of vector.
+     * @param n Number of elements to show
      */
     default String toString(int n) {
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
@@ -78,7 +77,6 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
     /** Creates a named long vector.
      *
      * @param name the name of vector.
-     * @return the vector.
      * @param vector the data of vector.
      */
     static LongVector of(String name, long[] vector) {
@@ -89,7 +87,6 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
      *
      * @param name the name of vector.
      * @param stream the data stream of vector.
-     * @return the vector.
      */
     static LongVector of(String name, LongStream stream) {
         return new LongVectorImpl(name, stream.toArray());
@@ -99,7 +96,6 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
      *
      * @param field the struct field of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static LongVector of(StructField field, long[] vector) {
         return new LongVectorImpl(field, vector);
@@ -109,7 +105,6 @@ public interface LongVector extends BaseVector<Long, Long, LongStream> {
      *
      * @param field the struct field of vector.
      * @param stream the data stream of vector.
-     * @return the vector.
      */
     static LongVector of(StructField field, LongStream stream) {
         return new LongVectorImpl(field, stream.toArray());

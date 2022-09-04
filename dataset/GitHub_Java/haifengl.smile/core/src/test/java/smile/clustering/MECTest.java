@@ -53,7 +53,10 @@ public class MECTest {
     public void tearDown() {
     }
 
-    @Test
+    /**
+     * Test of learn method, of class MEC.
+     */
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
         MathEx.setSeed(19650218); // to get repeatable results.

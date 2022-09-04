@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.nd4j;
 
 import org.junit.After;
@@ -20,7 +22,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.math.Math;
+import smile.math.MathEx;
 
 import static org.junit.Assert.*;
 
@@ -61,7 +63,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of nrows method, of class ColumnMajorMatrix.
+     * Test of nrows method, of class NDMatrix.
      */
     @Test
     public void testNrows() {
@@ -70,7 +72,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of ncols method, of class ColumnMajorMatrix.
+     * Test of ncols method, of class NDMatrix.
      */
     @Test
     public void testNcols() {
@@ -79,7 +81,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of get method, of class ColumnMajorMatrix.
+     * Test of get method, of class NDMatrix.
      */
     @Test
     public void testGet() {
@@ -93,7 +95,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of ax method, of class ColumnMajorMatrix.
+     * Test of ax method, of class NDMatrix.
      */
     @Test
     public void testAx() {
@@ -106,7 +108,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of atx method, of class ColumnMajorMatrix.
+     * Test of atx method, of class NDMatrix.
      */
     @Test
     public void testAtx() {
@@ -119,7 +121,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of AAT method, of class ColumnMajorMatrix.
+     * Test of AAT method, of class NDMatrix.
      */
     @Test
     public void testAAT() {
@@ -135,7 +137,7 @@ public class NDMatrixTest {
     }
 
     /**
-     * Test of mm method, of class ColumnMajorMatrix.
+     * Test of mm method, of class NDMatrix.
      */
     @Test
     public void testMm() {
@@ -155,13 +157,24 @@ public class NDMatrixTest {
                 {-0.2808735, -0.9403636, -0.19190231},
                 {0.1159052, 0.1652528, -0.97941688}
         };
+        double[][] D = {
+                { 0.9887140,  0.1482942, -0.0212965},
+                { 0.1482942, -0.9889421, -0.0015881},
+                {-0.0212965, -0.0015881, -0.9997719 }
+        };
+        double[][] E = {
+                {0.0000,  0.0000, 1.0000},
+                {0.0000, -1.0000, 0.0000},
+                {1.0000,  0.0000, 0.0000}
+        };
 
         NDMatrix a = new NDMatrix(A);
         NDMatrix b = new NDMatrix(B);
-        assertTrue(Math.equals(a.abmm(b).array(), C, 1E-7));
-        Math.abtmm(A, B, C);
-        assertTrue(Math.equals(a.abtmm(b).array(), C, 1E-7));
-        Math.atbmm(A, B, C);
-        assertTrue(Math.equals(a.atbmm(b).array(), C, 1E-7));
+        double[][] F = b.abmm(a).transpose().toArray();
+
+        assertTrue(MathEx.equals(a.abmm(b).toArray(), C, 1E-7));
+        assertTrue(MathEx.equals(a.abtmm(b).toArray(), D, 1E-7));
+        assertTrue(MathEx.equals(a.atbmm(b).toArray(), E, 1E-7));
+        assertTrue(MathEx.equals(a.atbtmm(b).toArray(), F, 1E-7));
     }
 }

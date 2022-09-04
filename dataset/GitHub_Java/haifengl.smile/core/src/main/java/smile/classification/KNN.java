@@ -75,19 +75,19 @@ public class KNN<T> implements SoftClassifier<T> {
     /**
      * The data structure for nearest neighbor search.
      */
-    private final KNNSearch<T, T> knn;
+    private KNNSearch<T, T> knn;
     /**
      * The labels of training samples.
      */
-    private final int[] y;
+    private int[] y;
     /**
      * The number of neighbors for decision.
      */
-    private final int k;
+    private int k;
     /**
      * The class labels.
      */
-    private final IntSet labels;
+    private IntSet labels;
     /**
      * Constructor.
      * @param knn k-nearest neighbor search data structure of training instances.

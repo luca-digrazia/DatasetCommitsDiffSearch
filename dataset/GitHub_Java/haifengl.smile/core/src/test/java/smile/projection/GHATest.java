@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.projection;
 
 import org.junit.After;
@@ -22,7 +24,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
-import smile.math.Math;
+import smile.math.MathEx;
+import smile.math.matrix.Matrix;
 
 /**
  *
@@ -111,18 +114,15 @@ public class GHATest {
     public void tearDown() {
     }
 
-    /**
-     * Test of learn method, of class GHA.
-     */
     @Test
-    public void testLearn() {
-        System.out.println("learn");
+    public void test() {
+        System.out.println("GHA");
 
         int k = 3;
-        double[] mu = Math.colMean(USArrests);
-        double[][] cov = Math.cov(USArrests);
+        double[] mu = MathEx.colMeans(USArrests);
+        Matrix cov = new Matrix(MathEx.cov(USArrests));
         for (int i = 0; i < USArrests.length; i++) {
-           Math.minus(USArrests[i], mu);
+           MathEx.sub(USArrests[i], mu);
         }
 
         double r = 0.00001;
@@ -130,30 +130,24 @@ public class GHATest {
         for (int iter = 1, t = 0; iter <= 1000; iter++) {
             double error = 0.0;
             for (int i = 0; i < USArrests.length; i++, t++) {
-                error += gha.learn(USArrests[i]);
+                error += gha.update(USArrests[i]);
             }
             error /= USArrests.length;
 
             if (iter % 100 == 0) {
-                System.out.format("Iter %3d, Error = %.5g\n", iter, error);
+                System.out.format("Iter %3d, Error = %.5g%n", iter, error);
             }
         }
 
-        double[][] p = gha.getProjection();
-        double[][] t = Math.atamm(p);
+        Matrix p = gha.getProjection();
+        Matrix t = p.ata();
+        System.out.println(t);
 
-        for (int i = 0; i < t.length; i++) {
-            for (int j = 0; j < t[i].length; j++) {
-                System.out.format("% .4f ", t[i][j]);
-            }
-            System.out.println();
-        }
-
-        double[][] s = Math.abtmm(Math.abmm(p, cov), p);
+        Matrix s = p.mm(cov).mt(p);
         double[] ev = new double[k];
         System.out.println("Relative error of eigenvalues:");
         for (int i = 0; i < k; i++) {
-            ev[i] = Math.abs(eigenvalues[i] - s[i][i]) / eigenvalues[i];
+            ev[i] = Math.abs(eigenvalues[i] - s.get(i, i)) / eigenvalues[i];
             System.out.format("%.4f ", ev[i]);
         }
         System.out.println();
@@ -162,17 +156,18 @@ public class GHATest {
             assertTrue(ev[i] < 0.1);
         }
 
-        double[][] lt = Math.transpose(loadings);
+        double[][] lt = MathEx.transpose(loadings);
         double[] evdot = new double[k];
+        double[][] pa = p.toArray();
         System.out.println("Dot products of learned eigenvectors to true eigenvectors:");
         for (int i = 0; i < k; i++) {
-            evdot[i] = Math.dot(lt[i], p[i]);
+            evdot[i] = MathEx.dot(lt[i], pa[i]);
             System.out.format("%.4f ", evdot[i]);
         }
         System.out.println();
 
         for (int i = 0; i < k; i++) {
-            assertTrue(Math.abs(1.0-Math.abs(evdot[i])) < 0.1);
+            assertTrue(Math.abs(1.0- Math.abs(evdot[i])) < 0.1);
         }
     }
 }

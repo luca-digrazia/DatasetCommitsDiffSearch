@@ -27,8 +27,6 @@ package smile.nlp.stemmer;
 public interface Stemmer {
     /**
      * Transforms a word into its root form.
-     * @param word the word.
-     * @return the stem.
      */
     String stem(String word);
 }

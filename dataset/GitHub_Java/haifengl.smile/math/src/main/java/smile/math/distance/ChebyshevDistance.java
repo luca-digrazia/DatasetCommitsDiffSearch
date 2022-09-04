@@ -40,9 +40,6 @@ public class ChebyshevDistance implements Metric<double[]> {
 
     /**
      * Chebyshev distance between the two arrays of type integer.
-     * @param x a vector.
-     * @param y a vector.
-     * @return the distance.
      */
     public static double d(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -63,9 +60,6 @@ public class ChebyshevDistance implements Metric<double[]> {
      * Chebyshev distance between the two arrays of type float.
      * NaN will be treated as missing values and will be excluded from the
      * calculation.
-     * @param x a vector.
-     * @param y a vector.
-     * @return the distance.
      */
     public static double d(float[] x, float[] y) {
         if (x.length != y.length)
@@ -87,9 +81,6 @@ public class ChebyshevDistance implements Metric<double[]> {
      * Chebyshev distance between the two arrays of type double.
      * NaN will be treated as missing values and will be excluded from the
      * calculation.
-     * @param x a vector.
-     * @param y a vector.
-     * @return the distance.
      */
     @Override
     public double d(double[] x, double[] y) {

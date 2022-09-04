@@ -71,7 +71,7 @@ public class SpectralClusteringDemo extends ClusteringDemo {
         return "Spectral Clustering";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClusteringDemo demo = new SpectralClusteringDemo();
         JFrame f = new JFrame("Spectral Clustering");
         f.setSize(new Dimension(1000, 1000));

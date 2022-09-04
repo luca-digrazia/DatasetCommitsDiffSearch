@@ -19,6 +19,7 @@ package smile.data.formula;
 
 import java.util.HashSet;
 import java.util.Set;
+import smile.data.type.StructType;
 
 /**
  * This class provides a skeletal implementation of the bi-function term.

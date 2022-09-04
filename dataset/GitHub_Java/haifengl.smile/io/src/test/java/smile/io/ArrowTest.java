@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.io;
 
 import org.junit.After;
@@ -23,8 +25,7 @@ import org.junit.Test;
 import smile.data.DataFrame;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.SparseMatrix;
+import smile.math.matrix.Matrix;
 import smile.util.Paths;
 
 import java.io.File;
@@ -131,19 +132,19 @@ public class ArrowTest {
         System.out.println("get");
         System.out.println(df.get(0));
         System.out.println(df.get(1));
-        assertEquals("Jane", df.get(0).getString(0));
-        assertEquals("Peacock", df.get(0).getString(1));
-        assertEquals("Luís", df.get(0).getString(2));
-        assertEquals("Gonçalves", df.get(0).getString(3));
-        assertEquals("Brazil", df.get(0).getString(4));
-        assertEquals(3.98, df.get(0).getDouble(5), 1E-10);
+        assertEquals("Jane", df.getString(0, 0));
+        assertEquals("Peacock", df.getString(0, 1));
+        assertEquals("Luís", df.getString(0, 2));
+        assertEquals("Gonçalves", df.getString(0, 3));
+        assertEquals("Brazil", df.getString(0, 4));
+        assertEquals(3.98, df.getDouble(0, 5), 1E-10);
 
-        assertEquals("Steve", df.get(7).getString(0));
-        assertEquals("Johnson", df.get(7).getString(1));
-        assertEquals("Leonie", df.get(7).getString(2));
-        assertEquals("Köhler", df.get(7).getString(3));
-        assertEquals("Germany", df.get(7).getString(4));
-        assertEquals(1.98, df.get(7).getDouble(5), 1E-10);
+        assertEquals("Steve", df.getString(7, 0));
+        assertEquals("Johnson", df.getString(7, 1));
+        assertEquals("Leonie", df.getString(7, 2));
+        assertEquals("Köhler", df.getString(7, 3));
+        assertEquals("Germany", df.getString(7, 4));
+        assertEquals(1.98, df.getDouble(7, 5), 1E-10);
     }
 
     /**
@@ -170,7 +171,7 @@ public class ArrowTest {
     @Test
     public void testDataFrameToMatrix() {
         System.out.println("toMatrix");
-        DenseMatrix output = df.select("Total").toMatrix();
+        Matrix output = df.select("Total").toMatrix();
         System.out.println(output);
         assertEquals(412, output.nrows());
         assertEquals(1, output.ncols());

@@ -51,7 +51,7 @@ public class DBSCANTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testGaussianMixture() throws Exception {
         System.out.println("Gaussian Mixture");
 

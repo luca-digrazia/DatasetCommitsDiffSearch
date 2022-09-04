@@ -27,9 +27,8 @@ import java.io.Serializable;
 public interface ClusteringMetric extends Serializable {
     /**
      * Returns a score to measure the quality of clustering.
-     * @param truth the ground truth (or simply a clustering labels).
-     * @param cluster the alternative cluster labels.
-     * @return the metric.
+     * @param y1 the cluster labels.
+     * @param y2 the alternative cluster labels.
      */
-    double score(int[] truth, int[] cluster);
+    double score(int[] y1, int[] y2);
 }

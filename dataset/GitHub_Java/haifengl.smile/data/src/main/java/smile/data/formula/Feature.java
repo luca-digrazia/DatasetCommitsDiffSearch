@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data.formula;
 
@@ -77,11 +77,6 @@ public interface Feature {
 
     /** Returns true if the term represents a plain variable/column in the data frame. */
     default boolean isVariable() {
-        return false;
-    }
-
-    /** Returns true if the term represents a constant value. */
-    default boolean isConstant() {
         return false;
     }
 

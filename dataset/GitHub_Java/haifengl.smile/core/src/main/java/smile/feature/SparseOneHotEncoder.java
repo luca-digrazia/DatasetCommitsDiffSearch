@@ -36,11 +36,11 @@ public class SparseOneHotEncoder {
     /**
      * The variable attributes.
      */
-    private final StructType schema;
+    private StructType schema;
     /**
      * Starting index for each nominal attribute.
      */
-    private final int[] base;
+    private int[] base;
 
     /**
      * Constructor.
@@ -52,7 +52,7 @@ public class SparseOneHotEncoder {
         base = new int[schema.length()];
         for (int i = 0; i < base.length; i++) {
             StructField field = schema.field(i);
-            if (!(field.measure instanceof NominalScale)) {
+            if (field.measure == null || !(field.measure instanceof NominalScale)) {
                 throw new IllegalArgumentException("Non-nominal attribute: " + field);
             }
 

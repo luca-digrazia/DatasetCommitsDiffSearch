@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.nlp.normalizer;
 
@@ -32,7 +32,7 @@ public class SimpleNormalizerTest {
     @Test
     public void testSplit() {
         System.out.println("normalize text");
-        String text = "\tTHE BIG RIPOFF\n\n"
+        String text = "\t\u00A0THE BIG RIPOFF\n\n"
                 + "Mr. John B. Smith bought cheapsite.com for 1.5 million dollars,\n\r"
                 + "i.e. he paid far too much for it.\n\n"
                 + "Did he mind?\n\r"

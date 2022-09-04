@@ -25,6 +25,7 @@ import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.formula.Formula;
+import smile.data.type.StructType;
 import smile.glm.model.Model;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
@@ -286,8 +287,8 @@ public class GLM implements Serializable {
      * @param data the data frame of the explanatory and response variables.
      */
     public static GLM fit(Formula formula, DataFrame data, Model model, Properties prop) {
-        double tol = Double.parseDouble(prop.getProperty("smile.glm.tolerance", "1E-5"));
-        int maxIter = Integer.parseInt(prop.getProperty("smile.glm.max.iterations", "50"));
+        double tol = Double.valueOf(prop.getProperty("smile.glm.tolerance", "1E-5"));
+        int maxIter = Integer.valueOf(prop.getProperty("smile.glm.max.iterations", "50"));
         return fit(formula, data, model, tol, maxIter);
     }
 

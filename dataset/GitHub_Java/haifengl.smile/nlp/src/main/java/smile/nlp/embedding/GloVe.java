@@ -49,7 +49,8 @@ import java.util.stream.Stream;
  */
 public class GloVe {
     /**
-     * Loads a GloVe model.
+     * Loads a <a href="https://nlp.stanford.edu/projects/glove/>pre-trained</a>
+     * GloVe model.
      */
     public static Word2Vec of(Path file) throws IOException {
         try (Stream<String> stream = Files.lines(file)) {

@@ -22,6 +22,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import java.util.Optional;
 import smile.data.DataFrame;
 import smile.data.Date;
 import smile.data.formula.Formula;
@@ -82,7 +83,7 @@ public class DateFeatureTest {
             if (i == 1 || i == 3) {
                 assertTrue(schema.field(i).measure instanceof NominalScale);
             } else {
-                assertNull(schema.field(i).measure);
+                assertEquals(null, schema.field(i).measure);
             }
         }
 

@@ -156,6 +156,7 @@ public abstract class SMatrix extends IMatrix<float[]> {
      *
      * @param path the input file path.
      * @return a dense or sparse matrix.
+     * @author Haifeng Li
      */
     public static SMatrix market(Path path) throws IOException, ParseException {
         try (LineNumberReader reader = new LineNumberReader(Files.newBufferedReader(path));

@@ -29,6 +29,7 @@ import smile.data.formula.Formula;
 import smile.data.vector.DoubleVector;
 import smile.math.MathEx;
 import smile.validation.*;
+import smile.validation.metric.RMSE;
 
 import static org.junit.Assert.*;
 
@@ -82,7 +83,7 @@ public class LASSOTest {
         }
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testLongley() throws Exception {
         System.out.println("longley");
 

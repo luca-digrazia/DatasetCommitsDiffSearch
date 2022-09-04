@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.projection.ica;
 
@@ -22,6 +22,8 @@ import smile.math.DifferentiableFunction;
 /**
  * The kurtosis of the probability density function of a signal.
  * Note that kurtosis is very sensitive to outliers.
+ *
+ * @author Haifeng Li
  */
 public class Kurtosis implements DifferentiableFunction {
 

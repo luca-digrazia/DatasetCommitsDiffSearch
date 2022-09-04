@@ -89,7 +89,7 @@ public class RandomForestTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testLongley() throws Exception {
         System.out.println("longley");
 
@@ -181,7 +181,7 @@ public class RandomForestTest {
     }
 
     @Test
-    public void testMerge() {
+    public void testMerge() throws Exception {
         System.out.println("merge");
 
         RandomForest forest1 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Arrays.stream(seeds));

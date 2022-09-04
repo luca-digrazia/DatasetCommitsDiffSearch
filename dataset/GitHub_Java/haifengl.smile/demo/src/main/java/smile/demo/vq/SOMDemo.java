@@ -139,7 +139,7 @@ public class SOMDemo  extends VQDemo {
         return "SOM";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         VQDemo demo = new SOMDemo();
         JFrame f = new JFrame("SOM");
         f.setSize(new Dimension(1000, 1000));

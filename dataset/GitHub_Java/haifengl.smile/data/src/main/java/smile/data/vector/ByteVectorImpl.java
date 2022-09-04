@@ -29,11 +29,11 @@ import smile.data.type.StructField;
  */
 class ByteVectorImpl implements ByteVector {
     /** The name of vector. */
-    private final String name;
+    private String name;
     /** Optional measure. */
-    private final Measure measure;
+    private Measure measure;
     /** The vector data. */
-    private final byte[] vector;
+    private byte[] vector;
 
     /** Constructor. */
     public ByteVectorImpl(String name, byte[] vector) {

@@ -92,7 +92,7 @@ public class DBSCANDemo extends ClusteringDemo {
         return "DBSCAN";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClusteringDemo demo = new DBSCANDemo();
         JFrame f = new JFrame("DBSCAN");
         f.setSize(new Dimension(1000, 1000));

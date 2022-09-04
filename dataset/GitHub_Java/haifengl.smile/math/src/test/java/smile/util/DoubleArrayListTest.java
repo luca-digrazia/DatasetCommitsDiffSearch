@@ -19,7 +19,8 @@ package smile.util;
 
 import org.junit.*;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 
 /**
  *
@@ -45,33 +46,36 @@ public class DoubleArrayListTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of all methods, of class DoubleArrayListTest.
+     */
     @Test
-    public void test() {
+    public void testAll() {
         System.out.println("DoubleArrayList");
         DoubleArrayList a = new DoubleArrayList();
-        assertTrue(a.isEmpty());
+        assertEquals(true, a.isEmpty());
 
         a.add(1);
         a.add(2);
         assertEquals(2, a.size());
         assertEquals(1, a.get(0), 1E-15);
         assertEquals(2, a.get(1), 1E-15);
-        assertFalse(a.isEmpty());
+        assertEquals(false, a.isEmpty());
 
         a.remove(0);
         assertEquals(1, a.size());
         assertEquals(2, a.get(0), 1E-15);
-        assertFalse(a.isEmpty());
+        assertEquals(false, a.isEmpty());
 
 
         a.remove(0);
         assertEquals(0, a.size());
-        assertTrue(a.isEmpty());
+        assertEquals(true, a.isEmpty());
 
         a.add(new double[]{1, 2, 3, 4});
         assertEquals(4, a.size());
         assertEquals(3, a.get(2), 1E-15);
-        assertFalse(a.isEmpty());
+        assertEquals(false, a.isEmpty());
         assertEquals(4, a.stream().count());
 
         a.set(2, 4);

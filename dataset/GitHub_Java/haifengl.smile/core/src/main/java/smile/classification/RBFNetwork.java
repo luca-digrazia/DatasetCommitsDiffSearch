@@ -93,23 +93,23 @@ public class RBFNetwork<T> implements Classifier<T> {
     /**
      * The number of classes.
      */
-    private final int k;
+    private int k;
     /**
      * The linear weights.
      */
-    private final Matrix w;
+    private Matrix w;
     /**
      * The radial basis function.
      */
-    private final RBF<T>[] rbf;
+    private RBF<T>[] rbf;
     /**
      * True to fit a normalized RBF network.
      */
-    private final boolean normalized;
+    private boolean normalized;
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private IntSet labels;
 
     /**
      * Constructor.

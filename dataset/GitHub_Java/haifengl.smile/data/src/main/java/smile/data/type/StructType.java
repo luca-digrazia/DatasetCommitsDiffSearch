@@ -42,7 +42,7 @@ public class StructType implements DataType {
      * Constructor.
      */
     public StructType(List<StructField> fields) {
-        this(fields.toArray(new StructField[0]));
+        this(fields.toArray(new StructField[fields.size()]));
     }
 
     /**
@@ -106,7 +106,7 @@ public class StructType implements DataType {
             StructField field = fields[i];
             if (field.type.isPrimitive()) {
                 final int idx = i;
-                boolean missing = rows.stream().anyMatch(t -> t.isNullAt(idx));
+                boolean missing = rows.stream().filter(t -> t.isNullAt(idx)).findAny().isPresent();
                 if (missing) {
                     field = new StructField(field.name, field.type.boxed(), field.measure);
                 }

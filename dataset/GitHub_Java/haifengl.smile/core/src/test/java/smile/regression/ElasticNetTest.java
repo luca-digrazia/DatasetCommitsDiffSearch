@@ -28,6 +28,10 @@ import smile.data.formula.Formula;
 import smile.data.vector.DoubleVector;
 import smile.math.MathEx;
 import smile.validation.*;
+import smile.validation.metric.RMSE;
+
+import java.util.Arrays;
+import java.util.stream.DoubleStream;
 
 import static org.junit.Assert.assertEquals;
 
@@ -81,7 +85,7 @@ public class ElasticNetTest {
         }
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testLongley() throws Exception {
         System.out.println("longley");
 

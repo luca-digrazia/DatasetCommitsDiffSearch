@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -248,11 +248,9 @@ public class LaplaceInterpolation {
      * Compute squared root of L2 norms for a vector.
      */
     private static double snorm(double[] sx) {
-        int n = sx.length;
-
         double ans = 0.0;
-        for (int i = 0; i < n; i++) {
-            ans += sx[i] * sx[i];
+        for (double v : sx) {
+            ans += v * v;
         }
         return Math.sqrt(ans);
     }

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.classification;
 
@@ -33,8 +33,24 @@ public interface SoftClassifier<T> extends Classifier<T> {
      * probabilities.
      *
      * @param x an instance to be classified.
-     * @param posteriori the array to store a posteriori probabilities on output.
+     * @param posteriori a posteriori probabilities on output.
      * @return the predicted class label
      */
     int predict(T x, double[] posteriori);
+
+    /**
+     * Predicts the class labels of an array of instances.
+     *
+     * @param x the instances to be classified.
+     * @param posteriori a posteriori probabilities on output.
+     * @return the predicted class labels.
+     */
+    default int[] predict(T[] x, double[][] posteriori) {
+        int n = x.length;
+        int[] y = new int[n];
+        for (int i = 0; i < n; i++) {
+            y[i] = predict(x[i], posteriori[i]);
+        }
+        return y;
+    }
 }

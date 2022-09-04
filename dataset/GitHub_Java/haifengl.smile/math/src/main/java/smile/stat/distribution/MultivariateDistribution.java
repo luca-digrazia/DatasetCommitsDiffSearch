@@ -1,20 +1,24 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.stat.distribution;
+
+import java.io.Serializable;
+import smile.math.matrix.Matrix;
 
 /**
  * Probability distribution of multivariate random variable.
@@ -23,54 +27,65 @@ package smile.stat.distribution;
  *
  * @author Haifeng Li
  */
-public interface MultivariateDistribution {
+public interface MultivariateDistribution extends Serializable {
     /**
      * The number of parameters of the distribution.
+     * The "length" is in the sense of the minimum description
+     * length principle.
      */
-    public int npara();
+    int length();
 
     /**
      * Shannon entropy of the distribution.
      */
-    public double entropy();
+    double entropy();
 
     /**
      * The mean vector of distribution.
      */
-    public double[] mean();
+    double[] mean();
 
     /**
      * The covariance matrix of distribution.
      */
-    public double[][] cov();
+    Matrix cov();
     
     /**
      * The probability density function for continuous distribution
      * or probability mass function for discrete distribution at x.
      */
-    public double p(double[] x);
+    double p(double[] x);
 
     /**
      * The density at x in log scale, which may prevents the underflow problem.
      */
-    public double logp(double[] x);
+    double logp(double[] x);
 
     /**
      * Cumulative distribution function. That is the probability to the left of x.
      */
-    public double cdf(double[] x);
+    double cdf(double[] x);
 
     /**
      * The likelihood of the sample set following this distribution.
      *
      * @param x sample set. Each row is a sample.
      */
-    public double likelihood(double[][] x);
+    default double likelihood(double[][] x) {
+        return Math.exp(logLikelihood(x));
+    }
 
     /**
      * The log likelihood of the sample set following this distribution.
      *
      * @param x sample set. Each row is a sample.
      */
-    public double logLikelihood(double[][] x);
+    default double logLikelihood(double[][] x) {
+        double L = 0.0;
+
+        for (double[] xi : x)
+            L += logp(xi);
+
+        return L;
+    }
 }

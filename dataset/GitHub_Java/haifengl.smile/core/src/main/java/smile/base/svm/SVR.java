@@ -54,19 +54,19 @@ public class SVR<T> {
     /**
      * The kernel function.
      */
-    private final MercerKernel<T> kernel;
+    private MercerKernel<T> kernel;
     /**
      * The loss function error threshold.
      */
-    private final double eps;
+    private double eps = 0.1;
     /**
      * The soft margin penalty parameter.
      */
-    private final double C;
+    private double C = 1.0;
     /**
      * The tolerance of convergence test.
      */
-    private final double tol;
+    private double tol = 1E-3;
     /**
      * Support vectors.
      */

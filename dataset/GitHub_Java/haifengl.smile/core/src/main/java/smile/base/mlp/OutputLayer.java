@@ -26,9 +26,9 @@ public class OutputLayer extends Layer {
     private static final long serialVersionUID = 2L;
 
     /** The cost function. */
-    private final Cost cost;
+    private Cost cost;
     /** The output function. */
-    private final OutputFunction f;
+    private OutputFunction f;
 
     /**
      * Constructor.
@@ -42,14 +42,16 @@ public class OutputLayer extends Layer {
 
         switch (cost) {
             case MEAN_SQUARED_ERROR:
-                if (f == OutputFunction.SOFTMAX) {
-                    throw new IllegalArgumentException("Softmax output function is not allowed with mean squared error cost function");
+                switch(f) {
+                    case SOFTMAX:
+                        throw new IllegalArgumentException("Softmax output function is not allowed with mean squared error cost function");
                 }
                 break;
 
             case LIKELIHOOD:
-                if (f == OutputFunction.LINEAR) {
-                    throw new IllegalArgumentException("Linear output function is not allowed with likelihood cost function");
+                switch(f) {
+                    case LINEAR:
+                        throw new IllegalArgumentException("Linear output function is not allowed with likelihood cost function");
                 }
                 break;
         }

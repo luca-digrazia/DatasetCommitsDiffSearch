@@ -94,11 +94,7 @@ public class Mixture extends AbstractDistribution {
         this.components = components;
     }
 
-    /**
-     * Returns the posteriori probabilities.
-     * @param x a real value.
-     * @return the posteriori probabilities.
-     */
+    /** Returns the posteriori probabilities. */
     public double[] posteriori(double x) {
         int k = components.length;
         double[] prob = new double[k];
@@ -114,11 +110,7 @@ public class Mixture extends AbstractDistribution {
         return prob;
     }
 
-    /**
-     * Returns the index of component with maximum a posteriori probability.
-     * @param x an integer value.
-     * @return the index of component with maximum a posteriori probability.
-     */
+    /** Returns the index of component with maximum a posteriori probability. */
     public int map(double x) {
         int k = components.length;
         double[] prob = new double[k];
@@ -238,15 +230,13 @@ public class Mixture extends AbstractDistribution {
 
     /**
      * Returns the number of components in the mixture.
-     * @return the number of components in the mixture.
      */
     public int size() {
         return components.length;
     }
 
     /**
-     * Return the BIC score of the mixture for given data.
-     * @return the BIC score of the mixture for given data.
+     * The BIC score of the mixture for given data.
      */
     public double bic(double[] data) {
         int n = data.length;

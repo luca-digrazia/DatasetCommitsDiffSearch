@@ -15,7 +15,7 @@
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package smile.math.matrix;
+package smile.math.blas.mkl;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -23,6 +23,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import smile.math.blas.UPLO;
+import smile.math.matrix.BandMatrix;
+import smile.math.matrix.FloatBandMatrix;
+import smile.math.matrix.FloatMatrix;
+import smile.math.matrix.Matrix;
 import static org.junit.Assert.*;
 
 /**
@@ -60,7 +64,7 @@ public class BandMatrixTest {
         };
         float[] b = {0.5f, 0.5f, 0.5f};
 
-        FloatMatrix a = FloatMatrix.of(A);
+        FloatMatrix a = new FloatMatrix(A);
         FloatMatrix.LU lu = a.lu();
         float[] x = lu.solve(b);
 
@@ -133,7 +137,7 @@ public class BandMatrixTest {
         };
         double[] b = {0.5, 0.5, 0.5};
 
-        Matrix a = Matrix.of(A);
+        Matrix a = new Matrix(A);
         Matrix.LU lu = a.lu();
         double[] x = lu.solve(b);
 

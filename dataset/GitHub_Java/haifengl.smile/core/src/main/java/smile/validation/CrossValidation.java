@@ -106,7 +106,6 @@ public interface CrossValidation {
      *
      * @param category the strata labels.
      * @param k the number of folds.
-     * @return k-fold data splits.
      */
     static Bag[] of(int[] category, int k) {
         if (k < 0) {
@@ -203,7 +202,6 @@ public interface CrossValidation {
      *
      * @param group the group labels of the samples.
      * @param k the number of folds.
-     * @return k-fold data splits.
      */
     static Bag[] nonoverlap(int[] group, int k) {
         if (k < 0) {
@@ -272,8 +270,6 @@ public interface CrossValidation {
      * @param x the samples.
      * @param y the sample labels.
      * @param trainer the lambda to train a model.
-     * @param <T> the data type of samples.
-     * @param <M> the model type.
      * @return the validation results.
      */
     static <T, M extends Classifier<T>> ClassificationValidations<M> classification(int k, T[] x, int[] y, BiFunction<T[], int[], M> trainer) {
@@ -286,7 +282,6 @@ public interface CrossValidation {
      * @param formula the model specification.
      * @param data the training/validation data.
      * @param trainer the lambda to train a model.
-     * @param <M> the model type.
      * @return the validation results.
      */
     static <M extends DataFrameClassifier> ClassificationValidations<M> classification(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
@@ -299,8 +294,6 @@ public interface CrossValidation {
      * @param x the samples.
      * @param y the response variable.
      * @param trainer the lambda to train a model.
-     * @param <T> the data type of samples.
-     * @param <M> the model type.
      * @return the validation results.
      */
     static <T, M extends Regression<T>> RegressionValidations<M> regression(int k, T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
@@ -313,7 +306,6 @@ public interface CrossValidation {
      * @param formula the model specification.
      * @param data the training/validation data.
      * @param trainer the lambda to train a model.
-     * @param <M> the model type.
      * @return the validation results.
      */
     static <M extends DataFrameRegression> RegressionValidations<M> regression(int k, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {

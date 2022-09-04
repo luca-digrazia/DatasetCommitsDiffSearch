@@ -122,7 +122,7 @@ public class BKTree<E> implements RNNSearch<E, E>, Serializable {
      * e.g. edit distance, Hamming distance, Lee distance, Jaccard distance,
      * and taxonomic distance, etc.
      */
-    private final Metric<E> distance;
+    private Metric<E> distance;
     /**
      * The number of nodes in the tree.
      */

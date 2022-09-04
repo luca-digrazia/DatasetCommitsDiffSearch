@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data;
 
@@ -32,7 +32,7 @@ public class SwissRoll {
     static {
         try {
             CSV csv = new CSV(CSVFormat.DEFAULT.withDelimiter('\t'));
-            data = csv.read(Paths.getTestData("manifold/swissroll.txt")).toArray();
+            data = csv.read(Paths.getTestData("manifold/swissroll.txt")).toArray(false, CategoricalEncoder.DUMMY);
         } catch (Exception ex) {
             System.err.println("Failed to load 'index.noun': " + ex);
             System.exit(-1);

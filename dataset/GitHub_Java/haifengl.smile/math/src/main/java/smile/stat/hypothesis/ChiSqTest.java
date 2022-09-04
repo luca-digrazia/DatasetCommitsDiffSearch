@@ -85,9 +85,8 @@ public class ChiSqTest {
         int df = nbins - constraints;
 
         int n = 0;
-        for (int bin : bins) {
-            n += bin;
-        }
+        for (int i = 0; i < nbins; i++)
+            n+= bins[i];
 
         double chisq = 0.0;
         for (int j = 0; j < nbins; j++) {
@@ -185,8 +184,8 @@ public class ChiSqTest {
         int nnj = nj;
         double[] sumj = new double[nj];
         for (int j = 0; j < nj; j++) {
-            for (int[] row : table) {
-                sumj[j] += row[j];
+            for (int i = 0; i < ni; i++) {
+                sumj[j] += table[i][j];
             }
             if (sumj[j] == 0.0) {
                 --nnj;

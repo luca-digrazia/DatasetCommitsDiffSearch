@@ -30,7 +30,7 @@ import smile.data.type.StructType;
  *
  * @author Haifeng Li
  */
-public class FactorCrossing implements Term {
+class FactorCrossing implements Term {
     /** The order of interactions. */
     private int order;
     /** The children factors. */

@@ -46,31 +46,31 @@ public class NeuralMap implements VectorQuantizer {
     /**
      * The distance radius to activate a neuron for a given signal.
      */
-    private final double r;
+    private double r;
     /**
      * The maximum age of edges.
      */
-    private final int edgeLifetime;
+    private int edgeLifetime = 50;
     /**
      * The learning rate to update nearest neuron.
      */
-    private final double epsBest;
+    private double epsBest = 0.2;
     /**
      * The learning to update neighbors of nearest neuron.
      */
-    private final double epsNeighbor;
+    private double epsNeighbor = 0.006;
     /**
      * Decrease the freshness of all neurons by multiply them with beta.
      */
-    private final double beta;
+    private double beta = 0.995;
     /**
      * Neurons in the neural network.
      */
-    private final ArrayList<Neuron> neurons = new ArrayList<>();
+    private ArrayList<Neuron> neurons = new ArrayList<>();
     /**
      * The workspace to find nearest neighbors.
      */
-    private final Neuron[] top2 = new Neuron[2];
+    private Neuron[] top2 = new Neuron[2];
 
     /**
      * Constructor.
@@ -177,7 +177,7 @@ public class NeuralMap implements VectorQuantizer {
      * Returns the set of neurons.
      */
     public Neuron[] neurons() {
-        return neurons.toArray(new Neuron[0]);
+        return neurons.toArray(new Neuron[neurons.size()]);
     }
     
     /**

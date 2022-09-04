@@ -142,8 +142,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * @param data the data frame of the explanatory and response variables.
      */
     public static FLD fit(Formula formula, DataFrame data, Properties prop) {
-        int L = Integer.parseInt(prop.getProperty("smile.fld.dimension", "-1"));
-        double tol = Double.parseDouble(prop.getProperty("smile.fld.tolerance", "1E-4"));
+        int L = Integer.valueOf(prop.getProperty("smile.fld.dimension", "-1"));
+        double tol = Double.valueOf(prop.getProperty("smile.fld.tolerance", "1E-4"));
         double[][] x = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
         int[] y = formula.y(data).toIntArray();
         return fit(x, y, L, tol);
@@ -206,7 +206,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
         // Total scatter
         Matrix St = DiscriminantAnalysis.St(x, mean, k, tol);
 
-        for (double[] mui : mu) {
+        for (int i = 0; i < k; i++) {
+            double[] mui = mu[i];
             for (int j = 0; j < p; j++) {
                 mui[j] -= mean[j];
             }
@@ -214,7 +215,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
 
         // Between class scatter
         Matrix Sb = new Matrix(p, p);
-        for (double[] mui : mu) {
+        for (int c = 0; c < k; c++) {
+            double[] mui = mu[c];
             for (int j = 0; j < p; j++) {
                 for (int i = 0; i <= j; i++) {
                     Sb.add(i, j, mui[i] * mui[j]);
@@ -267,7 +269,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        for (double[] mui : mu) {
+        for (int i = 0; i < k; i++) {
+            double[] mui = mu[i];
             for (int j = 0; j < p; j++) {
                 mui[j] -= mean[j];
             }
@@ -315,7 +318,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        return U.mm(U2);
+        Matrix scaling = U.mm(U2);
+        return scaling;
     }
 
     @Override

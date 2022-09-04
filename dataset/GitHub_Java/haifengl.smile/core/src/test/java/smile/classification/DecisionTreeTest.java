@@ -55,7 +55,7 @@ public class DecisionTreeTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testWeather() throws Exception {
         System.out.println("Weather");
 
@@ -88,7 +88,7 @@ public class DecisionTreeTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.formula, Iris.data, DecisionTree::fit);
+        ClassificationMetrics metrics = LOOCV.classification(Iris.formula, Iris.data, (f, x) -> DecisionTree.fit(f, x));
 
         System.out.println(metrics);
         assertEquals(0.94, metrics.accuracy, 1E-4);

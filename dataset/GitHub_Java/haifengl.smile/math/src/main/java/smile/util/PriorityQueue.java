@@ -33,20 +33,20 @@ public class PriorityQueue {
      * structure whose non-leaf nodes have d children, instead of 2. Thus,
      * a binary heap is a 2-heap.
      */
-    private final int d;
+    private int d;
     /**
      * External array of priority.
      */
-    private final double[] a;
+    private double[] a;
     /**
      * The array of item indices.
      */
-    private final int[] pq;
+    private int[] pq;
     /**
      * The inverse array qp allows the priority-queue to treat the array indices
      * as handles.
      */
-    private final int[] qp;
+    private int[] qp;
 
     /**
      * Priority comparison of item i and j.

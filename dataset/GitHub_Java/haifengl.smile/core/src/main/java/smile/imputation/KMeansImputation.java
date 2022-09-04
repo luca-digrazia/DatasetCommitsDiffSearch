@@ -32,11 +32,11 @@ public class KMeansImputation implements MissingValueImputation {
     /**
      * The number of clusters in KMeans clustering.
      */
-    private final int k;
+    private int k;
     /**
      * The number of runs of K-Means algorithm.
      */
-    private final int runs;
+    private int runs;
 
     /**
      * Constructor.

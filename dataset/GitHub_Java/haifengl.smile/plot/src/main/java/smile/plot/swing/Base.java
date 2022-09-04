@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -34,7 +34,7 @@ public class Base {
     /**
      * The dimensionality of base. Should be 2 or 3.
      */
-    int dimension;
+    final int dimension;
     /**
      * Coordinates of base.
      */
@@ -179,7 +179,7 @@ public class Base {
     }
 
     /**
-     * Round the bounds for axis i.
+     * Rounds the bounds for axis i.
      */
     public void extendBound(int i) {
         if (i < 0 || i >= dimension) {
@@ -189,6 +189,24 @@ public class Base {
         extendBound[i] = true;
         lowerBound[i] = precisionUnit[i] * (Math.floor(originalLowerBound[i] / precisionUnit[i]));
         upperBound[i] = precisionUnit[i] * (Math.ceil(originalUpperBound[i] / precisionUnit[i]));
+    }
+
+    /**
+     * Sets the axis bounds without applying the extending heuristic.
+     * @param lowerBound the lower bound.
+     * @param upperBound the upper bound
+     */
+    public void setBound(double[] lowerBound, double[] upperBound) {
+        System.arraycopy(lowerBound, 0, this.originalLowerBound, 0, this.originalLowerBound.length);
+        System.arraycopy(upperBound, 0, this.originalUpperBound, 0, this.originalUpperBound.length);
+        System.arraycopy(lowerBound, 0, this.lowerBound, 0, this.lowerBound.length);
+        System.arraycopy(upperBound, 0, this.upperBound, 0, this.upperBound.length);
+
+        for (int i = 0; i < dimension; i++) {
+            setPrecisionUnit(i);
+        }
+
+        initBaseCoord();
     }
 
     /**

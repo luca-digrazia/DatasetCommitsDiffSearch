@@ -31,10 +31,10 @@ import smile.math.matrix.Matrix;
  */
 public class KrigingInterpolation1D implements Interpolation {
 
-    private final double[] x;
-    private final double[] yvi;
-    private final double alpha;
-    private final double beta;
+    private double[] x;
+    private double[] yvi;
+    private double alpha;
+    private double beta;
 
     /**
      * Constructor. The power variogram is employed for interpolation.
@@ -66,15 +66,15 @@ public class KrigingInterpolation1D implements Interpolation {
 
         this.x = x;
         this.beta = beta;
-        this.alpha = pow(x, y);
+        pow(x, y);
 
         int n = x.length;
-        double[] yv = new double[n + 1];
+        yvi = new double[n + 1];
 
         Matrix v = new Matrix(n + 1, n + 1);
         v.uplo(UPLO.LOWER);
         for (int i = 0; i < n; i++) {
-            yv[i] = y[i];
+            yvi[i] = y[i];
 
             for (int j = i; j < n; j++) {
                 double var = variogram(Math.abs(x[i] - x[j]));
@@ -85,11 +85,11 @@ public class KrigingInterpolation1D implements Interpolation {
             v.set(i, n, 1.0);
         }
 
-        yv[n] = 0.0;
+        yvi[n] = 0.0;
         v.set(n, n, 0.0);
 
         Matrix.SVD svd = v.svd(true, true);
-        yvi = svd.solve(yv);
+        yvi = svd.solve(yvi);
     }
 
     @Override
@@ -102,7 +102,7 @@ public class KrigingInterpolation1D implements Interpolation {
         return y;
     }
 
-    private double pow(double[] x, double[] y) {
+    private void pow(double[] x, double[] y) {
         int n = x.length;
 
         double num = 0.0, denom = 0.0;
@@ -115,7 +115,7 @@ public class KrigingInterpolation1D implements Interpolation {
             }
         }
 
-        return num / denom;
+        alpha = num / denom;
     }
 
     private double variogram(double r) {

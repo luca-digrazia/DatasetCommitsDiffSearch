@@ -51,7 +51,7 @@ public class BIRCHTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
         MathEx.setSeed(19650218); // to get repeatable results.
@@ -60,8 +60,8 @@ public class BIRCHTest {
         double[][] testx = USPS.testx;
 
         BIRCH model = new BIRCH(x[0].length, 5, 5, 6.0);
-        for (double[] xi : x) {
-            model.update(xi);
+        for (int i = 0; i < x.length; i++) {
+            model.update(x[i]);
         }
 
         double error = 0.0;

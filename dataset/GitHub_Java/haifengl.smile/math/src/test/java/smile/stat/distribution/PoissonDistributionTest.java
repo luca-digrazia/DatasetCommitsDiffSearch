@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.stat.distribution;
 
@@ -22,6 +22,8 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import smile.math.MathEx;
+
 import static org.junit.Assert.*;
 
 /**
@@ -55,23 +57,22 @@ public class PoissonDistributionTest {
     @Test
     public void testPoissonDistribution() {
         System.out.println("PoissonDistribution");
+        MathEx.setSeed(19650218); // to get repeatable results.
         PoissonDistribution instance = new PoissonDistribution(5.5);
-        int[] data = new int[1000];
-        for (int i = 0; i < data.length; i++)
-            data[i] = (int) instance.rand();
-        PoissonDistribution est = new PoissonDistribution(data);
-        assertEquals(5.5, est.getLambda(), 1.5E-1);
+        int[] data = instance.randi(1000);
+        PoissonDistribution est = PoissonDistribution.fit(data);
+        assertEquals(5.52, est.lambda, 1E-2);
     }
 
     /**
-     * Test of npara method, of class Poisson.
+     * Test of length method, of class Poisson.
      */
     @Test
-    public void testNpara() {
-        System.out.println("npara");
+    public void testLength() {
+        System.out.println("length");
         PoissonDistribution instance = new PoissonDistribution(3.5);
         instance.rand();
-        assertEquals(1, instance.npara());
+        assertEquals(1, instance.length());
     }
 
     /**
@@ -86,14 +87,14 @@ public class PoissonDistributionTest {
     }
 
     /**
-     * Test of var method, of class Poisson.
+     * Test of variance method, of class Poisson.
      */
     @Test
-    public void testVar() {
-        System.out.println("var");
+    public void testVariance() {
+        System.out.println("variance");
         PoissonDistribution instance = new PoissonDistribution(3.5);
         instance.rand();
-        assertEquals(3.5, instance.var(), 1E-7);
+        assertEquals(3.5, instance.variance(), 1E-7);
     }
 
     /**

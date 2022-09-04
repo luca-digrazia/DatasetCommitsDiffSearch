@@ -38,17 +38,9 @@ public interface Measure extends Serializable {
     /** Percent. */
     RatioScale Percent = new RatioScale(NumberFormat.getPercentInstance());
 
-    /**
-     * Returns a measurement value object represented by the argument string s.
-     * @param s a string.
-     * @return the parsed value.
-     */
+    /** Returns a measurement value object represented by the argument string s. */
     Number valueOf(String s) throws NumberFormatException;
 
-    /**
-     * Returns the string representation of an object in the measure.
-     * @param o an object.
-     * @return the string representation
-     */
+    /** Returns the string representation of a value of the measure. */
     String toString(Object o);
 }

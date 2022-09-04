@@ -84,8 +84,8 @@ public class ItemSet {
     public String toString() {
         StringBuilder sb = new StringBuilder();
 
-        for (int item : items) {
-            sb.append(item);
+        for (int i = 0; i < items.length; i++) {
+            sb.append(items[i]);
             sb.append(' ');
         }
         

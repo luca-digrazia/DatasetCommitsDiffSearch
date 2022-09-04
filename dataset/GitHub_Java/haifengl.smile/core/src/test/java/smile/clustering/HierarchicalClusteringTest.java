@@ -52,7 +52,11 @@ public class HierarchicalClusteringTest {
     public void tearDown() {
     }
 
-    @Test
+
+    /**
+     * Test of learn method, of class GMeans.
+     */
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
 

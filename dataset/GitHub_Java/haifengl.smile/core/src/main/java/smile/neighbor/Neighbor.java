@@ -77,14 +77,7 @@ public class Neighbor<K, V> implements Comparable<Neighbor<K,V>> {
         return String.format("%s(%d):%s", key, index, Strings.format(distance));
     }
 
-    /**
-     * Creates a neighbor object, of which key and object are the same.
-     * @param key the query key.
-     * @param index the index of object.
-     * @param distance the distance between query key and neighbor.
-     * @param <T> the data type of key and object.
-     * @return the neighbor object.
-     */
+    /** Creates a neighbor object, of which key and object are the same. */
     public static <T> Neighbor<T, T> of(T key, int index, double distance) {
         return new Neighbor<>(key, key, index, distance);
     }

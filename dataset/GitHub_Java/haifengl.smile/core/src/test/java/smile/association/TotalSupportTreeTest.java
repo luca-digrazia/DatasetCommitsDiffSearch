@@ -112,8 +112,8 @@ public class TotalSupportTreeTest {
         assertEquals(4, results.get(7).items[0]);
     }
     
-    @Test
-    public void testPima() {
+    @Test(expected = Test.None.class)
+    public void testPima() throws IOException {
         System.out.println("pima");
 
         FPTree tree = FPTree.of(20, () -> ItemSetTestData.read("transaction/pima.D38.N768.C2"));
@@ -121,8 +121,8 @@ public class TotalSupportTreeTest {
         assertEquals(1803, ttree.stream().count());
     }
     
-    @Test
-    public void testKosarak() {
+    @Test(expected = Test.None.class)
+    public void testKosarak() throws IOException {
         System.out.println("kosarak");
 
         FPTree tree = FPTree.of(1500, () -> ItemSetTestData.read("transaction/kosarak.dat"));

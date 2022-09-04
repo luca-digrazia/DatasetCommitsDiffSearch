@@ -47,23 +47,23 @@ public class LASVM<T> implements Serializable {
     /**
      * The kernel function.
      */
-    private final MercerKernel<T> kernel;
+    private MercerKernel<T> kernel;
     /**
      * The soft margin penalty parameter for positive samples.
      */
-    private final double Cp;
+    private double Cp = 1.0;
     /**
      * The soft margin penalty parameter for negative samples.
      */
-    private final double Cn;
+    private double Cn = 1.0;
     /**
      * The tolerance of convergence test.
      */
-    private final double tol;
+    private double tol = 1E-3;
     /**
      * Support vectors.
      */
-    private final LinkedList<SupportVector<T>> sv = new LinkedList<>();
+    private LinkedList<SupportVector<T>> sv = new LinkedList<>();
     /**
      * Threshold of decision function.
      */
@@ -337,7 +337,7 @@ public class LASVM<T> implements Serializable {
         // Perform update
         v1.alpha -= step;
         v2.alpha += step;
-        for (SupportVector<T> v : sv) {
+        for (SupportVector v : sv) {
             v.g -= step * (k(v2.i, v.i) - k(v1.i, v.i));
         }
 
@@ -414,7 +414,7 @@ public class LASVM<T> implements Serializable {
         finish(tol, sv.size());
 
         int bsv = 0;
-        for (SupportVector<T> v : sv) {
+        for (SupportVector v : sv) {
             if (v.alpha == v.cmin || v.alpha == v.cmax) {
                 bsv++;
             }
@@ -453,7 +453,7 @@ public class LASVM<T> implements Serializable {
 
         Iterator<SupportVector<T>> iter = sv.iterator();
         while (iter.hasNext()) {
-            SupportVector<T> v = iter.next();
+            SupportVector v = iter.next();
             if (v.alpha == 0) {
                 if ((v.g >= gmax && 0 >= v.cmax) || (v.g <= gmin && 0 <= v.cmin)) {
                     K[v.i] = null;

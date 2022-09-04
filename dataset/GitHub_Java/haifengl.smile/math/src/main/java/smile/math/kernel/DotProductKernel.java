@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,27 +13,40 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
+import smile.math.Function;
 import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
 
 /**
- * Dot product kernel that depends only on the dot product of x and y.
+ * Dot product kernel depends only on the dot product of x and y.
  *
  * @author Haifeng Li
  */
-public interface DotProductKernel {
+public interface DotProductKernel extends Function {
+
+    @Override
+    default double f(double dot) {
+        return k(dot);
+    }
+
     /**
-     * Kernel function.
+     * Computes the dot product kernel function.
      * @param dot the dot product.
      */
     double k(double dot);
 
     /**
-     * Kernel function.
+     * Computes the dot product kernel function and its gradient over hyperparameters..
+     * @param dot The dot product.
+     */
+    double[] kg(double dot);
+
+    /**
+     * Computes the kernel function.
      * This is simply for Scala convenience.
      */
     default double apply(double dot) {
@@ -41,7 +54,7 @@ public interface DotProductKernel {
     }
 
     /**
-     * Returns the kernel matrix.
+     * Computes the kernel matrix.
      *
      * @param pdot the pairwise dot product matrix.
      * @return the kernel matrix.

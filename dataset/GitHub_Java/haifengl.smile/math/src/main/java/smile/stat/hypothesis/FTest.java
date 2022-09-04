@@ -32,28 +32,24 @@ import smile.math.special.Beta;
  */
 public class FTest {
     /**
-     * The degree of freedom of F-statistic.
+     * The degree of freedom of f-statistic.
      */
     public final int df1, df2;
 
     /**
-     * F-statistic.
+     * f-statistic
      */
     public final double f;
 
     /**
-     * p-value.
+     * p-value
      */
     public final double pvalue;
 
     /**
      * Constructor.
-     * @param f the F-statistic.
-     * @param df1 the first degree of freedom of F-statistic.
-     * @param df2 the scoend degree of freedom of F-statistic.
-     * @param pvalue the p-value.
      */
-    public FTest(double f, int df1, int df2, double pvalue) {
+    private FTest(double f, int df1, int df2, double pvalue) {
         this.f = f;
         this.df1 = df1;
         this.df2 = df2;

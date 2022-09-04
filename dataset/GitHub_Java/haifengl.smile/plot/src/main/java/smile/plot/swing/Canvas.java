@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -22,6 +22,8 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.reflect.InvocationTargetException;
@@ -62,13 +64,17 @@ public class Canvas {
      */
     double margin = DEFAULT_MARGIN;
     /**
-     * The coordinate grid plot.
+     * The axis objects.
      */
-    BaseGrid baseGrid;
+    Axis[] axis;
     /**
      * The shapes in the canvas, e.g. label, plots, etc.
      */
     List<Shape> shapes = new ArrayList<>();
+    /**
+     * Show legends if true.
+     */
+    private boolean isLegendVisible = true;
     /**
      * The main title of plot.
      */
@@ -90,8 +96,7 @@ public class Canvas {
      * Constructor
      */
     public Canvas(double[] lowerBound, double[] upperBound) {
-        initBase(lowerBound, upperBound);
-        initGraphics();
+        this(lowerBound, upperBound, true);
     }
 
     /**
@@ -99,22 +104,6 @@ public class Canvas {
      */
     public Canvas(double[] lowerBound, double[] upperBound, boolean extendBound) {
         initBase(lowerBound, upperBound, extendBound);
-        initGraphics();
-    }
-
-    /**
-     * Constructor
-     */
-    public Canvas(double[] lowerBound, double[] upperBound, String[] axisLabels) {
-        initBase(lowerBound, upperBound, axisLabels);
-        initGraphics();
-    }
-
-    /**
-     * Constructor
-     */
-    public Canvas(double[] lowerBound, double[] upperBound, String[] axisLabels, boolean extendBound) {
-        initBase(lowerBound, upperBound, axisLabels, extendBound);
         initGraphics();
     }
 
@@ -163,48 +152,6 @@ public class Canvas {
     }
 
     /**
-     * Zooms in/out the plot.
-     *
-     * @param inout true if zoom in. Otherwise, zoom out.
-     */
-    public void zoom(boolean inout) {
-        for (int i = 0; i < base.dimension; i++) {
-            int s = baseGrid.getAxis(i).getLinearSlices();
-            double r = inout ? -1.0 / s : 1.0 / s;
-            double d = (base.upperBound[i] - base.lowerBound[i]) * r;
-            base.lowerBound[i] -= d;
-            base.upperBound[i] += d;
-        }
-
-        for (int i = 0; i < base.dimension; i++) {
-            base.setPrecisionUnit(i);
-        }
-
-        base.initBaseCoord();
-        graphics.projection.reset();
-        baseGrid.setBase(base);
-
-        PropertyChangeEvent event = new PropertyChangeEvent(this, "base", base, base);
-        pcs.firePropertyChange(event);
-    }
-
-    /**
-     * Resets the plot.
-     */
-    public void reset() {
-        base.reset();
-        graphics.projection.reset();
-        baseGrid.setBase(base);
-
-        if (graphics.projection instanceof Projection3D) {
-            ((Projection3D) graphics.projection).setDefaultView();
-        }
-
-        PropertyChangeEvent event = new PropertyChangeEvent(this, "canvas", this, this);
-        pcs.firePropertyChange(event);
-    }
-
-    /**
      * Initialize the Graphics object.
      */
     private void initGraphics() {
@@ -218,33 +165,36 @@ public class Canvas {
     /**
      * Initialize a coordinate base.
      */
-    private void initBase(double[] lowerBound, double[] upperBound) {
-        base = new Base(lowerBound, upperBound);
-        baseGrid = new BaseGrid(base);
-    }
-
-    /**
-     * Initialize a coordinate base.
-     */
     private void initBase(double[] lowerBound, double[] upperBound, boolean extendBound) {
         base = new Base(lowerBound, upperBound, extendBound);
-        baseGrid = new BaseGrid(base);
+        axis = new Axis[base.getDimension()];
+        for (int i = 0; i < base.getDimension(); i++) {
+            axis[i] = new Axis(base, i);
+        }
     }
 
     /**
-     * Initialize a coordinate base.
+     * Reset the grid (when the base changes).
      */
-    private void initBase(double[] lowerBound, double[] upperBound, String[] axisLabels) {
-        base = new Base(lowerBound, upperBound);
-        baseGrid = new BaseGrid(base, axisLabels);
+    void resetAxis() {
+        for (int i = 0; i < axis.length; i++) {
+            axis[i].reset();
+        }
     }
 
     /**
-     * Initialize a coordinate base.
+     * Returns true if legends are visible.
      */
-    private void initBase(double[] lowerBound, double[] upperBound, String[] axisLabels, boolean extendBound) {
-        base = new Base(lowerBound, upperBound, extendBound);
-        baseGrid = new BaseGrid(base, axisLabels);
+    public boolean isLegendVisible() {
+        return isLegendVisible;
+    }
+
+    /**
+     * Sets if legends are visible.
+     */
+    public Canvas setLegendVisible(boolean visible) {
+        isLegendVisible = visible;
+        return this;
     }
 
     /**
@@ -275,15 +225,6 @@ public class Canvas {
     }
 
     /**
-     * Returns the coordinate base.
-     *
-     * @return the coordinate base.
-     */
-    public Base getBase() {
-        return base;
-    }
-
-    /**
      * Returns the main title of canvas.
      */
     public String getTitle() {
@@ -308,13 +249,6 @@ public class Canvas {
     }
 
     /**
-     * Returns the color for title.
-     */
-    public Color getTitleColor() {
-        return titleColor;
-    }
-
-    /**
      * Set the font for title.
      */
     public Canvas setTitleFont(Font font) {
@@ -322,6 +256,13 @@ public class Canvas {
         this.titleFont = font;
         pcs.firePropertyChange(event);
         return this;
+    }
+
+    /**
+     * Returns the color for title.
+     */
+    public Color getTitleColor() {
+        return titleColor;
     }
 
     /**
@@ -338,7 +279,7 @@ public class Canvas {
      * Returns the i-<i>th</i> axis.
      */
     public Axis getAxis(int i) {
-        return baseGrid.getAxis(i);
+        return axis[i];
     }
 
     /**
@@ -347,7 +288,7 @@ public class Canvas {
     public String[] getAxisLabels() {
         String[] labels = new String[base.dimension];
         for (int i = 0; i < base.dimension; i++) {
-            labels[i] = baseGrid.getAxis(i).getAxisLabel();
+            labels[i] = axis[i].getLabel();
         }
         return labels;
     }
@@ -355,16 +296,18 @@ public class Canvas {
     /**
      * Returns the label/legend of an axis.
      */
-    public String getAxisLabel(int axis) {
-        return baseGrid.getAxis(axis).getAxisLabel();
+    public String getAxisLabel(int i) {
+        return axis[i].getLabel();
     }
 
     /**
      * Sets the labels/legends of axes.
      */
     public Canvas setAxisLabels(String... labels) {
-        PropertyChangeEvent event = new PropertyChangeEvent(this, "axisLabels", baseGrid.getAxisLabel(), labels);
-        baseGrid.setAxisLabel(labels);
+        PropertyChangeEvent event = new PropertyChangeEvent(this, "axisLabels", getAxisLabels(), labels);
+        for (int i = 0; i < labels.length; i++) {
+            axis[i].setLabel(labels[i]);
+        }
         pcs.firePropertyChange(event);
         return this;
     }
@@ -372,9 +315,9 @@ public class Canvas {
     /**
      * Sets the label/legend of an axis.
      */
-    public Canvas setAxisLabel(int axis, String label) {
-        PropertyChangeEvent event = new PropertyChangeEvent(this, "axisLabel", baseGrid.getAxisLabel(axis), label);
-        baseGrid.setAxisLabel(axis, label);
+    public Canvas setAxisLabel(int i, String label) {
+        PropertyChangeEvent event = new PropertyChangeEvent(this, "axisLabel", axis[i].getLabel(), label);
+        axis[i].setLabel(label);
         pcs.firePropertyChange(event);
         return this;
     }
@@ -454,7 +397,7 @@ public class Canvas {
     public void extendLowerBound(double[] bound) {
         PropertyChangeEvent event = new PropertyChangeEvent(this, "extendLowerBound", this, bound);
         base.extendLowerBound(bound);
-        baseGrid.setBase(base);
+        resetAxis();
         pcs.firePropertyChange(event);
     }
 
@@ -464,7 +407,7 @@ public class Canvas {
     public void extendUpperBound(double[] bound) {
         PropertyChangeEvent event = new PropertyChangeEvent(this, "extendUpperBound", this, bound);
         base.extendUpperBound(bound);
-        baseGrid.setBase(base);
+        resetAxis();
         pcs.firePropertyChange(event);
     }
 
@@ -474,7 +417,17 @@ public class Canvas {
     public void extendBound(double[] lowerBound, double[] upperBound) {
         PropertyChangeEvent event = new PropertyChangeEvent(this, "extendBound", this, new double[][]{lowerBound, upperBound});
         base.extendBound(lowerBound, upperBound);
-        baseGrid.setBase(base);
+        resetAxis();
+        pcs.firePropertyChange(event);
+    }
+
+    /**
+     * Extend lower and upper bounds.
+     */
+    public void setBound(double[] lowerBound, double[] upperBound) {
+        PropertyChangeEvent event = new PropertyChangeEvent(this, "setBound", this, new double[][]{lowerBound, upperBound});
+        base.setBound(lowerBound, upperBound);
+        resetAxis();
         pcs.firePropertyChange(event);
     }
 
@@ -484,11 +437,12 @@ public class Canvas {
     public void paint(java.awt.Graphics2D g2d, int width, int height) {
         graphics.setGraphics(g2d, width, height);
 
-        Color color = g2d.getColor();
         g2d.setColor(Color.WHITE);
         g2d.fillRect(0, 0, width, height);
-        g2d.setColor(color);
-        baseGrid.paint(graphics);
+
+        for (int i = 0; i < axis.length; i++) {
+            axis[i].paint(graphics);
+        }
 
         // draw plot
         graphics.clip();
@@ -502,23 +456,25 @@ public class Canvas {
         graphics.clearClip();
 
         // draw legends
-        Font font = g2d.getFont();
-        int x = (int) (width * (1 - margin) + 20);
-        int y = (int) (height * margin + 50);
-        int fontWidth = font.getSize();
-        int fontHeight = font.getSize();
+        if (isLegendVisible) {
+            Font font = g2d.getFont();
+            int x = (int) (width * (1 - margin) + 20);
+            int y = (int) (height * margin + 50);
+            int fontWidth = font.getSize();
+            int fontHeight = font.getSize();
 
-        for (int i = 0; i < shapes.size(); i++) {
-            Shape s = shapes.get(i);
-            if (s instanceof Plot) {
-                Plot p = (Plot) s;
-                if (p.legends().isPresent()) {
-                    for (Legend legend : p.legends().get()) {
-                        g2d.fillRect(x, y, fontWidth, fontHeight);
-                        g2d.drawRect(x, y, fontWidth, fontHeight);
-                        g2d.setColor(legend.color);
-                        g2d.drawString(legend.text, x + 2 * fontWidth, y + fontHeight);
-                        y += 2 * fontWidth;
+            for (int i = 0; i < shapes.size(); i++) {
+                Shape s = shapes.get(i);
+                if (s instanceof Plot) {
+                    Plot p = (Plot) s;
+                    if (p.legends().isPresent()) {
+                        for (Legend legend : p.legends().get()) {
+                            g2d.setColor(legend.color);
+                            g2d.fillRect(x, y, fontWidth, fontHeight);
+                            g2d.drawRect(x, y, fontWidth, fontHeight);
+                            g2d.drawString(legend.text, x + 2 * fontWidth, y + fontHeight);
+                            y += 2 * fontWidth;
+                        }
                     }
                 }
             }
@@ -528,19 +484,31 @@ public class Canvas {
             g2d.setFont(titleFont);
             g2d.setColor(titleColor);
             FontMetrics fm = g2d.getFontMetrics();
-            x = (width - fm.stringWidth(title)) / 2;
-            y = (int) (height * margin) / 2;
+            int x = (width - fm.stringWidth(title)) / 2;
+            int y = (int) (height * margin) / 2;
             g2d.drawString(title, x, y);
         }
-
-        g2d.setColor(color);
     }
 
     /**
      * Returns a Swing JPanel of the canvas.
      */
     public PlotPanel panel() {
-        return new PlotPanel(this);
+        PlotPanel panel = new PlotPanel(this);
+        panel.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                panel.reset();
+                panel.repaint();
+            }
+
+            @Override
+            public void componentShown(ComponentEvent e) {
+                panel.reset();
+                panel.repaint();
+            }
+        });
+        return panel;
     }
 
     /**

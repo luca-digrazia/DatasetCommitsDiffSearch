@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,20 +13,17 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.plot;
 
 import java.awt.GridLayout;
-
 import javax.swing.JFrame;
 import javax.swing.JPanel;
-
-import smile.data.parser.SparseMatrixParser;
 import smile.math.matrix.SparseMatrix;
-import smile.plot.Palette;
-import smile.plot.PlotCanvas;
-import smile.plot.SparseMatrixPlot;
+import smile.plot.swing.Palette;
+import smile.plot.swing.Canvas;
+import smile.plot.swing.SparseMatrixPlot;
 
 /**
  *
@@ -37,19 +34,19 @@ public class SparseMatrixPlotDemo extends JPanel {
     public SparseMatrixPlotDemo() {
         super(new GridLayout(1,2));
 
-        SparseMatrixParser parser = new SparseMatrixParser();
         try {
-            SparseMatrix m1 = parser.parse(smile.util.Paths.getTestData("matrix/08blocks.txt"));
-            PlotCanvas canvas = SparseMatrixPlot.plot(m1);
+            SparseMatrix m1 = SparseMatrix.text(smile.util.Paths.getTestData("matrix/08blocks.txt"));
+            Canvas canvas = SparseMatrixPlot.of(m1).canvas();
             canvas.setTitle("08blocks");
-            add(canvas);
+            add(canvas.panel());
 
-            SparseMatrix m2 = parser.parse(smile.util.Paths.getTestData("matrix/mesh2em5.txt"));
-            canvas = SparseMatrixPlot.plot(m2, Palette.jet(256));
+            SparseMatrix m2 = SparseMatrix.text(smile.util.Paths.getTestData("matrix/mesh2em5.txt"));
+            canvas = new SparseMatrixPlot(m2, Palette.jet(256)).canvas();
             canvas.setTitle("mesh2em5");
-            add(canvas);
+            add(canvas.panel());
         } catch (Exception ex) {
             System.err.println(ex);
+            ex.printStackTrace();
         }
     }
 

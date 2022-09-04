@@ -38,29 +38,17 @@ public class Text {
      */
     public final String body;
 
-    /**
-     * Constructor.
-     * @param body the text body of document.
-     */
+    /** Constructor. */
     public Text(String body) {
         this("", body);
     }
 
-    /**
-     * Constructor.
-     * @param title the title of document.
-     * @param body the text body of document.
-     */
+    /** Constructor. */
     public Text(String title, String body) {
         this(UUID.randomUUID().toString(), title, body);
     }
 
-    /**
-     * Constructor.
-     * @param id the id of document.
-     * @param title the title of document.
-     * @param body the text body of document.
-     */
+    /** Constructor. */
     public Text(String id, String title, String body) {
         this.id = id;
         this.title = title;

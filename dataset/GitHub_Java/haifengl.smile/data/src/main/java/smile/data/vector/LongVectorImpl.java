@@ -30,11 +30,11 @@ import smile.data.type.StructField;
  */
 class LongVectorImpl implements LongVector {
     /** The name of vector. */
-    private final String name;
+    private String name;
     /** Optional measure. */
-    private final Measure measure;
+    private Measure measure;
     /** The vector data. */
-    private final long[] vector;
+    private long[] vector;
 
     /** Constructor. */
     public LongVectorImpl(String name, long[] vector) {

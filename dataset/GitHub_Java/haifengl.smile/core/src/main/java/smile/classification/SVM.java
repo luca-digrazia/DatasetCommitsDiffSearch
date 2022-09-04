@@ -112,7 +112,7 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
         KernelMachine<double[]> svm = lasvm.fit(x, y);
 
         return new Classifier<double[]>() {
-            final LinearKernelMachine model = LinearKernelMachine.of(svm);
+            LinearKernelMachine model = LinearKernelMachine.of(svm);
 
             @Override
             public int predict(double[] x) {
@@ -134,7 +134,7 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
         KernelMachine<int[]> svm = lasvm.fit(x, y);
 
         return new Classifier<int[]>() {
-            final LinearKernelMachine model = LinearKernelMachine.binary(p, svm);
+            LinearKernelMachine model = LinearKernelMachine.binary(p, svm);
 
             @Override
             public int predict(int[] x) {
@@ -156,7 +156,7 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
         KernelMachine<SparseArray> svm = lasvm.fit(x, y);
 
         return new Classifier<SparseArray>() {
-            final LinearKernelMachine model = LinearKernelMachine.sparse(p, svm);
+            LinearKernelMachine model = LinearKernelMachine.sparse(p, svm);
 
             @Override
             public int predict(SparseArray x) {

@@ -74,7 +74,7 @@ public abstract class CategoricalMeasure implements Measure {
      * @param levels the levels of discrete values.
      */
     public CategoricalMeasure(List<String> levels) {
-        this(levels.toArray(new String[0]));
+        this(levels.toArray(new String[levels.size()]));
     }
 
     /**
@@ -82,7 +82,7 @@ public abstract class CategoricalMeasure implements Measure {
      * @param values the valid values.
      */
     public CategoricalMeasure(int[] values) {
-        this(values, Arrays.stream(values).mapToObj(Integer::toString).toArray(String[]::new));
+        this(values, Arrays.stream(values).mapToObj(v -> Integer.toString(v)).toArray(String[]::new));
     }
 
     /**
@@ -130,7 +130,7 @@ public abstract class CategoricalMeasure implements Measure {
     /** Returns the ordinal values of an enum. */
     static int[] values(Class<? extends Enum> clazz) {
         return Arrays.stream(clazz.getEnumConstants())
-                .mapToInt(Enum::ordinal)
+                .mapToInt(e -> ((Enum) e).ordinal())
                 .toArray();
     }
 
@@ -202,7 +202,7 @@ public abstract class CategoricalMeasure implements Measure {
     public boolean equals(Object o) {
         if (o instanceof CategoricalMeasure) {
             CategoricalMeasure measure = (CategoricalMeasure) o;
-            return Arrays.equals(levels, measure.levels) && Arrays.equals(values, measure.values);
+            return Arrays.equals(levels, measure.levels) && Arrays.equals(values, values);
         }
 
         return false;

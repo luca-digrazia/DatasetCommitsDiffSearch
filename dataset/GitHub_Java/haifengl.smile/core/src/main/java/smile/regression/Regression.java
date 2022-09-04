@@ -18,6 +18,7 @@
 package smile.regression;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.function.ToDoubleFunction;
 import smile.math.MathEx;
 

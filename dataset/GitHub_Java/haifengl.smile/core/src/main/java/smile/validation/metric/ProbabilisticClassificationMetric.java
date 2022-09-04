@@ -29,7 +29,6 @@ public interface ProbabilisticClassificationMetric extends Serializable {
      * Returns a score to measure the quality of classification.
      * @param truth the true class labels.
      * @param probability The posterior probability of positive class.
-     * @return the metric.
      */
     double score(int[] truth, double[] probability);
 }

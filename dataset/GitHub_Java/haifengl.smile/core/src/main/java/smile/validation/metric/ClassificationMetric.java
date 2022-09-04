@@ -29,7 +29,6 @@ public interface ClassificationMetric extends Serializable {
      * Returns a score to measure the quality of classification.
      * @param truth the true class labels.
      * @param prediction the predicted class labels.
-     * @return the metric.
      */
     double score(int[] truth, int[] prediction);
 }

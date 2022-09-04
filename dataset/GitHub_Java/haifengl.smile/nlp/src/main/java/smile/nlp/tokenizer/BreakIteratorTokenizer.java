@@ -32,7 +32,7 @@ public class BreakIteratorTokenizer implements Tokenizer {
     /**
      * The working horse for splitting words.
      */
-    private final BreakIterator boundary;
+    private BreakIterator boundary;
 
     /**
      * Constructor for the default locale.

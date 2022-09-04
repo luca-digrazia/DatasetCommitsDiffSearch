@@ -51,7 +51,7 @@ import smile.math.MathEx;
  */
 public class BBDTree {
 
-    static class Node {
+    class Node {
         /**
          * The number of data stored in this node.
          */
@@ -99,11 +99,11 @@ public class BBDTree {
     /**
      * Root node.
      */
-    private final Node root;
+    private Node root;
     /**
      * The index of data objects.
      */
-    private final int[] index;
+    private int[] index;
 
     /**
      * Constructs a tree out of the given n data data living in R^d.
@@ -321,7 +321,9 @@ public class BBDTree {
 
             // Recurse if there's at least two
             if (newk > 1) {
-                return filter(node.lower, centroids, newCandidates, newk, sum, size, y) + filter(node.upper, centroids, newCandidates, newk, sum, size, y);
+                double result = filter(node.lower, centroids, newCandidates, newk, sum, size, y) + filter(node.upper, centroids, newCandidates, newk, sum, size, y);
+
+                return result;
             }
         }
 

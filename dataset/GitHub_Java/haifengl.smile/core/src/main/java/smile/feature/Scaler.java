@@ -17,11 +17,15 @@
 
 package smile.feature;
 
-import java.util.Optional;
+import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
+import smile.data.type.StructField;
+import smile.data.vector.BaseVector;
+import smile.data.vector.DoubleVector;
 import smile.math.MathEx;
 import smile.data.DataFrame;
+import smile.data.Tuple;
 import smile.data.type.StructType;
 
 /**
@@ -51,32 +55,6 @@ public class Scaler implements FeatureTransform {
      * Upper bound.
      */
     double[] hi;
-    /**
-     * The span of data, i.e. hi - lo.
-     */
-    double[] span;
-
-    /**
-     * Constructor.
-     * @param lo the lower bound.
-     * @param hi the upper bound.
-     */
-    public Scaler(double[] lo, double[] hi) {
-        if (lo.length != hi.length) {
-            throw new IllegalArgumentException("Scaling factor size don't match");
-        }
-
-        this.lo = lo;
-        this.hi = hi;
-
-        span = new double[lo.length];
-        for (int i = 0; i < lo.length; i++) {
-            span[i] = hi[i] - lo[i];
-            if (MathEx.isZero(span[i])) {
-                hi[i] = 1.0;
-            }
-        }
-    }
 
     /**
      * Constructor.
@@ -85,21 +63,25 @@ public class Scaler implements FeatureTransform {
      * @param hi the upper bound.
      */
     public Scaler(StructType schema, double[] lo, double[] hi) {
-        this(lo, hi);
-        if (schema.length() != lo.length) {
+        if (schema.length() != lo.length || lo.length != hi.length) {
             throw new IllegalArgumentException("Schema and scaling factor size don't match");
+        }
+
+        this.schema = schema;
+        this.lo = lo;
+        this.hi = hi;
+
+        for (int i = 0; i < lo.length; i++) {
+            hi[i] -= lo[i];
+            if (MathEx.isZero(hi[i])) {
+                hi[i] = 1.0;
+            }
         }
     }
 
-    @Override
-    public Optional<StructType> schema() {
-        return Optional.ofNullable(schema);
-    }
-
     /**
-     * Fits the transformation parameters.
-     * @param data the training data.
-     * @return the model.
+     * Learns transformation parameters from a dataset.
+     * @param data The training data.
      */
     public static Scaler fit(DataFrame data) {
         if (data.isEmpty()) {
@@ -121,40 +103,77 @@ public class Scaler implements FeatureTransform {
     }
 
     /**
-     * Fits the transformation parameters.
-     * @param data the training data.
-     * @return the model.
+     * Learns transformation parameters from a dataset.
+     * @param data The training data.
      */
     public static Scaler fit(double[][] data) {
-        double[] lo = MathEx.colMin(data);
-        double[] hi = MathEx.colMax(data);
-        return new Scaler(lo, hi);
+        return fit(DataFrame.of(data));
     }
 
-    @Override
-    public double transform(double x, int i) {
-        double y = (x - lo[i]) / span[i];
+    /** Scales a value with i-th column parameters. */
+    private double scale(double x, int i) {
+        double y = (x - lo[i]) / hi[i];
         if (y < 0.0) y = 0.0;
         if (y > 1.0) y = 1.0;
         return y;
     }
 
     @Override
-    public double invert(double x, int i) {
-        return x * span[i] + lo[i];
+    public double[] transform(double[] x) {
+        double[] y = new double[x.length];
+        for (int i = 0; i < y.length; i++) {
+            y[i] = scale(x[i], i);
+        }
+        return y;
     }
 
-    /** Returns the string representation of i-th column scaling factor. */
-    private String toString(int i) {
-        String field = schema == null ? String.format("V%d", i+1) : schema.field(i).name;
-        return String.format("%s[%.4f, %.4f]", field, lo[i], hi[i]);
+    @Override
+    public Tuple transform(Tuple x) {
+        if (!schema.equals(x.schema())) {
+            throw new IllegalArgumentException(String.format("Invalid schema %s, expected %s", x.schema(), schema));
+        }
+
+        return new smile.data.AbstractTuple() {
+            @Override
+            public Object get(int i) {
+                if (schema.field(i).isNumeric()) {
+                    return scale(x.getDouble(i), i);
+                } else {
+                    return x.get(i);
+                }
+            }
+
+            @Override
+            public StructType schema() {
+                return schema;
+            }
+        };
+    }
+
+    @Override
+    public DataFrame transform(DataFrame data) {
+        if (!schema.equals(data.schema())) {
+            throw new IllegalArgumentException(String.format("Invalid schema %s, expected %s", data.schema(), schema));
+        }
+
+        BaseVector[] vectors = new BaseVector[schema.length()];
+        for (int i = 0; i < lo.length; i++) {
+            StructField field = schema.field(i);
+            if (field.isNumeric()) {
+                final int col = i;
+                DoubleStream stream = data.stream().mapToDouble(t -> scale(t.getDouble(col), col));
+                vectors[i] = DoubleVector.of(field, stream);
+            } else {
+                vectors[i] = data.column(i);
+            }
+        }
+        return DataFrame.of(vectors);
     }
 
     @Override
     public String toString() {
-        String className = getClass().getSimpleName();
         return IntStream.range(0, lo.length)
-                .mapToObj(this::toString)
-                .collect(Collectors.joining(",", className + "(", ")"));
+                .mapToObj(i -> String.format("%s[%.4f, %.4f]", schema.field(i).name, lo[i], hi[i]))
+                .collect(Collectors.joining(",", "Scaler(", ")"));
     }
 }

@@ -69,7 +69,7 @@ public class IsoMapDemo extends ManifoldDemo {
         return "IsoMap";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         IsoMapDemo demo = new IsoMapDemo();
         JFrame f = new JFrame("IsoMap");
         f.setSize(new Dimension(1000, 1000));

@@ -23,6 +23,7 @@ import java.util.List;
 import smile.data.Tuple;
 import smile.data.type.StructField;
 import smile.data.type.StructType;
+import smile.math.MathEx;
 
 /**
  * CART tree node.

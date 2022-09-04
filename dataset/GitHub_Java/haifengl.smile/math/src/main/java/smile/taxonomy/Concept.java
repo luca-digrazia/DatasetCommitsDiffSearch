@@ -17,7 +17,12 @@
 
 package smile.taxonomy;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Concept is a set of synonyms, i.e. group of words that are roughly
@@ -64,7 +69,9 @@ public class Concept {
         this.parent = parent;
 
         synset = new TreeSet<>();
-        synset.addAll(Arrays.asList(keywords));
+        for (String keyword : keywords) {
+            synset.add(keyword);
+        }
 
         if (parent.children == null) {
             parent.children = new ArrayList<>();
@@ -88,7 +95,7 @@ public class Concept {
      * Check if a node is a leaf in the taxonomy tree.
      */
     public boolean isLeaf() {
-        return children == null || children.isEmpty();
+        return children == null ? true : children.isEmpty();
     }
 
     /**
@@ -96,12 +103,12 @@ public class Concept {
      *
      * @return concept synomym set.
      */
-    public Set<String> keywords() {
+    public Set<String> getKeywords() {
         return synset;
     }
 
     /**
-     * Adds a list of synomym to the concept synset.
+     * Add a list of synomym to the concept synset.
      */
     public void addKeywords(String... keywords) {
         for (String keyword : keywords) {
@@ -118,11 +125,13 @@ public class Concept {
             synset = new TreeSet<>();
         }
 
-        synset.addAll(Arrays.asList(keywords));
+        for (String keyword : keywords) {
+            synset.add(keyword);
+        }
     }
 
     /**
-     * Removes a keyword from the concept synset.
+     * Remove a keyword from the concept synset.
      */
     public void removeKeyword(String keyword) {
         if (!taxonomy.concepts.containsKey(keyword)) {
@@ -136,23 +145,24 @@ public class Concept {
     }
 
     /**
-     * Gets all children concepts.
+     * Get all children concepts.
      *
      * @return a vector of children concepts.
      */
-    public List<Concept> children() {
+    public List<Concept> getChildren() {
         return children;
     }
 
     /**
-     * Adds a child to this node
+     * Add a child to this node
      */
     public Concept addChild(String concept) {
-        return new Concept(this, concept);
+        Concept c = new Concept(this, concept);
+        return c;
     }
 
     /**
-     * Adds a child to this node
+     * Add a child to this node
      */
     public void addChild(Concept concept) {
         if (taxonomy != concept.taxonomy) {
@@ -168,7 +178,7 @@ public class Concept {
     }
 
     /**
-     * Removes a child to this node
+     * Remove a child to this node
      */
     public boolean removeChild(Concept concept) {
         if (concept.parent != this) {

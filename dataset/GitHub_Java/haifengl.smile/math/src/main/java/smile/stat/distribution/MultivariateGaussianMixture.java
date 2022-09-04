@@ -49,7 +49,7 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
         super(L, n, components);
 
         for (Component component : components) {
-            if (!(component.distribution instanceof MultivariateGaussianDistribution)) {
+            if (component.distribution instanceof MultivariateGaussianDistribution == false) {
                 throw new IllegalArgumentException("Component " + component + " is not of Gaussian distribution.");
             }
         }
@@ -84,7 +84,8 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
         MultivariateGaussianDistribution gaussian;
         if (diagonal) {
             variance = new double[d];
-            for (double[] x : data) {
+            for (int i = 0; i < n; i++) {
+                double[] x = data[i];
                 for (int j = 0; j < d; j++) {
                     variance[j] += (x[j] - mu[j]) * (x[j] - mu[j]);
                 }
@@ -154,6 +155,7 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
      * @param data the training data.
      * @param diagonal true if the components have diagonal covariance matrix.
      */
+    @SuppressWarnings("unchecked")
     public static MultivariateGaussianMixture fit(double[][] data, boolean diagonal) {
         if (data.length < 20)
             throw new IllegalArgumentException("Too few samples.");

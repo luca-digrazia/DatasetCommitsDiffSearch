@@ -109,7 +109,7 @@ public class NeuralMapDemo extends VQDemo {
         return "Neural Map";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         NeuralMapDemo demo = new NeuralMapDemo();
         JFrame f = new JFrame("Neural Map");
         f.setSize(new Dimension(1000, 1000));

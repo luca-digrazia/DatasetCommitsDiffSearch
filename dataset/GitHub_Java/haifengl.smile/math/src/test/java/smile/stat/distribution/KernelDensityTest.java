@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.stat.distribution;
 
@@ -102,14 +102,14 @@ public class KernelDensityTest {
     }
 
     /**
-     * Test of var method, of class KernelDensity.
+     * Test of variance method, of class KernelDensity.
      */
     @Test
-    public void testVar() {
-        System.out.println("var");
+    public void testVariance() {
+        System.out.println("variance");
         KernelDensity instance = new KernelDensity(x);
         double expResult = 9.404966;
-        double result = instance.var();
+        double result = instance.variance();
         assertEquals(expResult, result, 1E-6);
     }
 

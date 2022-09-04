@@ -53,23 +53,23 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
     /**
      * The sample mean.
      */
-    private final double[] mu;
+    private double[] mu;
     /**
      * The projected sample mean.
      */
-    private final double[] pmu;
+    private double[] pmu;
     /**
      * The variance of noise part.
      */
-    private final double noise;
+    private double noise;
     /**
      * The loading matrix.
      */
-    private final Matrix loading;
+    private Matrix loading;
     /**
      * The projection matrix.
      */
-    private final Matrix projection;
+    private Matrix projection;
 
     /**
      * Constructor.
@@ -156,10 +156,10 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
 
         double[] mu = MathEx.colMeans(data);
         Matrix cov = new Matrix(n, n);
-        for (double[] datum : data) {
+        for (int l = 0; l < m; l++) {
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j <= i; j++) {
-                    cov.add(i, j, (datum[i] - mu[i]) * (datum[j] - mu[j]));
+                    cov.add(i, j, (data[l][i] - mu[i]) * (data[l][j] - mu[j]));
                 }
             }
         }

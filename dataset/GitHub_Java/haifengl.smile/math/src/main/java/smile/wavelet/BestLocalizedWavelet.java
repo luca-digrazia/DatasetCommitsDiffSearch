@@ -62,12 +62,11 @@ public class BestLocalizedWavelet extends Wavelet {
     /**
      * Constructor. Create a Best Localized wavelet with n coefficients.
      * n = 14, 18, or 20 are supported.
-     * @param n the number of wavelet coefficients.
      */
     public BestLocalizedWavelet(int n) {
         super(n == 14 ? c14 :
               n == 18 ? c18 :
-              n == 20 ? c20 : c14
+              n == 20 ? c20 : null
             );
 
         if ( n != 14 && n != 18 && n != 20) {

@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -68,13 +68,13 @@ public class Contour extends Plot {
      */
     private List<Isoline> contours;
     /**
-     * If show axis marks.
+     * If show axis ticks.
      */
-    private boolean isLabelVisible;
+    private boolean isTickVisible;
     /**
      * Show the level.
      */
-    private boolean showValue = true;
+    private boolean isLevelVisible = true;
 
     /**
      * Constructor.
@@ -97,6 +97,7 @@ public class Contour extends Plot {
     public Contour(double[][] z, double[] levels) {
         this.z = z;
         this.levels = levels;
+        isLevelVisible = false;
         init();
     }
 
@@ -145,15 +146,8 @@ public class Contour extends Plot {
         this.y = y;
         this.z = z;
         this.levels = levels;
+        isLevelVisible = false;
         init();
-    }
-
-    /**
-     * Sets if show the value of isoline.
-     * @param showValue
-     */
-    public void setShowValue(boolean showValue) {
-        this.showValue = showValue;
     }
 
     /**
@@ -190,7 +184,7 @@ public class Contour extends Plot {
      * Initialize the contour lines.
      */
     private void init() {
-        isLabelVisible = x != null || y != null;
+        isTickVisible = x != null || y != null;
 
         if (x == null) {
             x = new double[z[0].length];
@@ -542,7 +536,7 @@ public class Contour extends Plot {
                         }
 
                         // Save the contour locations into the list of contours
-                        Isoline contour = new Isoline(zc, showValue);
+                        Isoline contour = new Isoline(zc, isLevelVisible);
 
                         Segment s = start;
                         contour.add(s.x0, s.y0);
@@ -720,9 +714,9 @@ public class Contour extends Plot {
         Canvas canvas = new Canvas(getLowerBound(), getUpperBound(), false);
         canvas.add(this);
 
-        if (!isLabelVisible) {
-            canvas.getAxis(0).setLabelVisible(false);
-            canvas.getAxis(1).setLabelVisible(false);
+        if (!isTickVisible) {
+            canvas.getAxis(0).setTickVisible(false);
+            canvas.getAxis(1).setTickVisible(false);
         }
 
         return canvas;

@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.demo.util;
 
@@ -82,7 +83,7 @@ public class ParameterParser {
      */
     public ParameterParser(String usage) {
         this.usage = usage;
-        parameters = new HashMap<String, Parameter>();
+        parameters = new HashMap<>();
     }
 
     /**
@@ -135,7 +136,7 @@ public class ParameterParser {
      * @return a list of expanded name-value pair if monads are detected
      */
     private List<String> filterMonadics(String[] args) {// name-value for monads
-        List<String> filteredArgs = new ArrayList<String>();       // Y <- return List
+        List<String> filteredArgs = new ArrayList<>();       // Y <- return List
         for (String arg : args) {                        // iterate over args
             filteredArgs.add(arg);
             Parameter param = parameters.get(arg);
@@ -153,7 +154,7 @@ public class ParameterParser {
      * name.
      */
     public List<String> parse(String[] args) {    // merge args & defaults
-        List<String> extras = new ArrayList<String>();
+        List<String> extras = new ArrayList<>();
         List<String> filteredArgs = filterMonadics(args);          // detect and fill mons
         for (int i = 0; i < filteredArgs.size(); i++) {
             String key = filteredArgs.get(i);
@@ -187,7 +188,7 @@ public class ParameterParser {
                         break;
                         
                     default:
-                    	// Just to remove unmatched case warning
+                        // Just to remove unmatched case warning
                 }
                 i++;
             } else {

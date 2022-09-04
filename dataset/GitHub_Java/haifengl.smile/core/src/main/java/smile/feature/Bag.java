@@ -32,13 +32,13 @@ public class Bag {
     /**
      * The mapping from feature words to indices.
      */
-    private final Map<String, Integer> words;
+    private Map<String, Integer> words;
 
     /**
      * True to check if feature words appear in a document instead of their
      * frequencies.
      */
-    private final boolean binary;
+    private boolean binary;
 
     /**
      * Constructor.

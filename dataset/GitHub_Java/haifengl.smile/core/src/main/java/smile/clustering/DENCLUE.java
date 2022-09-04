@@ -20,6 +20,8 @@ package smile.clustering;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 import smile.math.MathEx;
+import smile.math.distance.EuclideanDistance;
+import smile.neighbor.LinearSearch;
 
 /**
  * DENsity CLUstering. The DENCLUE algorithm employs a cluster model based on
@@ -47,11 +49,11 @@ public class DENCLUE extends PartitionClustering {
     /**
      * The tolerance of hill-climbing procedure.
      */
-    private final double tol;
+    private double tol;
     /**
      * The smooth parameter in the Gaussian kernel.
      */
-    private final double sigma;
+    private double sigma;
     /**
      * The density attractor of each observation.
      */
@@ -59,11 +61,11 @@ public class DENCLUE extends PartitionClustering {
     /**
      * The radius of density attractor.
      */
-    private final double[] radius;
+    private double[] radius;
     /**
      * The samples decided by k-means used in the iterations of hill climbing.
      */
-    private final double[][] samples;
+    private double[][] samples;
 
     /**
      * Constructor.
@@ -135,12 +137,9 @@ public class DENCLUE extends PartitionClustering {
         double[][] steps = new double[n][2];
 
         logger.info("Hill-climbing of density function for each observation");
-        // Stream is lazy. Without calling toArray(), the computation won't be executed.
-        double[] density = IntStream.range(0, n).parallel()
-                .mapToDouble(i -> climb(data[i], attractors[i], steps[i], samples, sigma, tol))
-                .toArray();
+        IntStream.range(0, n).parallel().mapToDouble(i -> climb(data[i], attractors[i], steps[i], samples, sigma, tol)).toArray();
 
-        if (Arrays.stream(attractors).flatMapToDouble(Arrays::stream).anyMatch(ai -> !Double.isFinite(ai))) {
+        if (Arrays.stream(attractors).flatMapToDouble(a -> Arrays.stream(a)).anyMatch(ai -> !Double.isFinite(ai))) {
             throw new IllegalStateException("Attractors contains NaN/infinity. sigma is likely too small.");
         }
 
@@ -191,7 +190,7 @@ public class DENCLUE extends PartitionClustering {
      * @param samples the samples used in kernel density estimation.
      * @param sigma the bandwidth of Gaussian kernel.
      * @param tol the tolerance of convergence test.
-     * @return the local density of attractor.
+     * @return the radius of attractor, which is the sum of last 2 steps.
      */
     private static double climb(double[] x, double[] attractor, double[] step, double[][] samples, double sigma, double tol) {
         int m = samples.length;

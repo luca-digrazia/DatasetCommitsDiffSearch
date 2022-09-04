@@ -56,7 +56,7 @@ public class GradientTreeBoostTest {
     }
 
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testWeather() throws Exception {
         System.out.println("Weather");
 

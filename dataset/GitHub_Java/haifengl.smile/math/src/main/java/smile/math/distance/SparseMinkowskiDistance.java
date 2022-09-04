@@ -34,36 +34,37 @@ public class SparseMinkowskiDistance implements Metric<SparseArray> {
     /**
      * The order of Minkowski distance.
      */
-    private final int p;
+    private int p;
 
     /**
      * The weights used in weighted distance.
      */
-    private final double[] weight;
+    private double[] weight = null;
 
     /**
      * Constructor.
-     * @param p the order of Minkowski distance.
      */
     public SparseMinkowskiDistance(int p) {
-        this(p, null);
+        if (p <= 0) {
+            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = d", p));
+        }
+
+        this.p = p;
     }
 
     /**
      * Constructor.
-     * @param p the order of Minkowski distance.
+     *
      * @param weight the weight vector.
      */
     public SparseMinkowskiDistance(int p, double[] weight) {
         if (p <= 0) {
-            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = %d", p));
+            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = d", p));
         }
 
-        if (weight != null) {
-            for (double w : weight) {
-                if (w < 0) {
-                    throw new IllegalArgumentException(String.format("Weight has to be nonnegative: %f", w));
-                }
+        for (int i = 0; i < weight.length; i++) {
+            if (weight[i] < 0) {
+                throw new IllegalArgumentException(String.format("Weight has to be nonnegative: %f", weight[i]));
             }
         }
 

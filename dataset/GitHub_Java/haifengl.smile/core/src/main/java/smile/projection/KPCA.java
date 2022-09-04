@@ -64,35 +64,35 @@ public class KPCA<T> implements Projection<T>, Serializable {
     /**
      * The dimension of feature space.
      */
-    private final int p;
+    private int p;
     /**
      * Learning data.
      */
-    private final T[] data;
+    private T[] data;
     /**
      * Mercer kernel.
      */
-    private final MercerKernel<T> kernel;
+    private MercerKernel<T> kernel;
     /**
      * The row mean of kernel matrix.
      */
-    private final double[] mean;
+    private double[] mean;
     /**
      * The mean of kernel matrix.
      */
-    private final double mu;
+    private double mu;
     /**
      * The eigenvalues of kernel principal components.
      */
-    private final double[] latent;
+    private double[] latent;
     /**
      * The projection matrix.
      */
-    private final Matrix projection;
+    private Matrix projection;
     /**
      * The coordinates of projected training data.
      */
-    private final double[][] coordinates;
+    private double[][] coordinates;
 
     /**
      * Constructor.
@@ -165,7 +165,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
         }
 
         K.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = ARPACK.syev(K, ARPACK.SymmOption.LA, k);
+        Matrix.EVD eigen = ARPACK.syev(K, ARPACK.SymmOption.LA, k);;
 
         double[] eigvalues = eigen.wr;
         Matrix eigvectors = eigen.Vr;
@@ -190,7 +190,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
             }
         }
 
-        return new KPCA<>(data, kernel, mean, mu, coordinates, latent, projection);
+        return new KPCA<T>(data, kernel, mean, mu, coordinates, latent, projection);
     }
 
     /**

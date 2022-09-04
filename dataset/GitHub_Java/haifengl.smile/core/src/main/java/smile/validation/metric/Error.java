@@ -32,12 +32,7 @@ public class Error implements ClassificationMetric {
         return of(truth, prediction);
     }
 
-    /**
-     * Calculates the number of errors.
-     * @param truth the ground truth.
-     * @param prediction the prediction.
-     * @return the metric.
-     */
+    /** Calculates the number of errors. */
     public static int of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));

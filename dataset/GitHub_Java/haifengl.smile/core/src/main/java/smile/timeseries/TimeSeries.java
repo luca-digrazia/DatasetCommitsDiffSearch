@@ -108,13 +108,13 @@ public interface TimeSeries {
 
         double variance = 0.0;
         for (int i = 0; i < lag; i++) {
-            variance += MathEx.pow2(x[i] - mu);
+            variance += MathEx.sqr(x[i] - mu);
         }
 
         double cov = 0.0;
         for (int i = lag; i < T; i++) {
             cov += (x[i] - mu) * (x[i-lag] - mu);
-            variance += MathEx.pow2(x[i] - mu);
+            variance += MathEx.sqr(x[i] - mu);
         }
 
         return cov / variance;

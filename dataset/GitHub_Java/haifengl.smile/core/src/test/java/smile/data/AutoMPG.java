@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.data;
 
 import smile.data.formula.Formula;
-import smile.io.Arff;
+import smile.io.Read;
 import smile.util.Paths;
 
 /**
@@ -35,11 +35,10 @@ public class AutoMPG {
 
     static {
         try {
-            Arff arff = new Arff(Paths.getTestData("weka/autoMpg.arff"));
-            data = arff.read();
+            data = Read.arff(Paths.getTestData("weka/regression/autoMpg.arff")).omitNullRows();
 
-            x = formula.frame(data).toArray();
-            y = formula.response(data).toDoubleArray();
+            x = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
+            y = formula.y(data).toDoubleArray();
         } catch (Exception ex) {
             System.err.println("Failed to load 'autoMpg': " + ex);
             System.exit(-1);

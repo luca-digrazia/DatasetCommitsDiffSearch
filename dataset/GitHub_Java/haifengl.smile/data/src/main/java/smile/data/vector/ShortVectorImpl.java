@@ -29,11 +29,11 @@ import smile.data.type.StructField;
  */
 class ShortVectorImpl implements ShortVector {
     /** The name of vector. */
-    private final String name;
+    private String name;
     /** Optional measure. */
-    private final Measure measure;
+    private Measure measure;
     /** The vector data. */
-    private final short[] vector;
+    private short[] vector;
 
     /** Constructor. */
     public ShortVectorImpl(String name, short[] vector) {

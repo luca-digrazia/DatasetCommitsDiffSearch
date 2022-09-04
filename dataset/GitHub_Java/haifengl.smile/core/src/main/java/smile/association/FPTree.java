@@ -343,7 +343,6 @@ public class FPTree {
      *                 items. Note that it is reordered after the call.
      * @param minSupport the required minimum support of item sets in terms
      *                   of frequency.
-     * @return a full built FP-tree.
      */
     public static FPTree of(int minSupport, int[][] itemsets) {
         FPTree tree = new FPTree(minSupport, Arrays.stream(itemsets));
@@ -359,7 +358,6 @@ public class FPTree {
      *                 items. Note that it is reordered after the call.
      * @param minSupport the required minimum support of item sets in terms
      *                   of percentage.
-     * @return a full built FP-tree.
      */
     public static FPTree of(double minSupport, int[][] itemsets) {
         FPTree tree = new FPTree(minSupport, Arrays.stream(itemsets));
@@ -369,7 +367,6 @@ public class FPTree {
 
     /**
      * Returns the number transactions in the database.
-     * @return the number transactions in the database.
      */
     public int size() {
         return numTransactions;
@@ -378,7 +375,6 @@ public class FPTree {
     /**
      * Returns the required minimum support of item sets in terms
      * of frequency.
-     * @return the minimum support.
      */
     public int minSupport() {
         return minSupport;

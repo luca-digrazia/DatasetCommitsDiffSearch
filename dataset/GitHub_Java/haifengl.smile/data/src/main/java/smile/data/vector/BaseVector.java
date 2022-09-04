@@ -34,51 +34,34 @@ import smile.data.type.StructField;
  * @author Haifeng Li
  */
 public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializable {
-    /**
-     * Returns the (optional) name of vector.
-     * @return the (optional) name of vector.
-     */
+    /** Return the (optional) name associated with vector. */
     String name();
 
-    /**
-     * Returns the data type of elements.
-     * @return the data type of elements.
-     */
+    /** Returns the element type. */
     DataType type();
 
-    /**
-     * Returns the (optional) level of measurements. Only valid for number types.
-     * @return the (optional) level of measurements.
-     */
+    /** Returns the (optional) level of measurements. Only valid for number types. */
     default Measure measure() {
         return null;
     }
 
-    /**
-     * Returns a struct field corresponding to this vector.
-     * @return the struct field.
-     */
+    /** Returns a struct field corresponding to this vector. */
     default StructField field() {
         return new StructField(name(), type(), measure());
     }
 
-    /**
-     * Returns the number of elements in the vector.
-     * @return the number of elements in the vector.
-     */
+    /** Number of elements in the vector. */
     int size();
 
     /**
      * Returns the array that backs this vector.
      * This is mostly for smile internal use for high performance.
      * The application developers should not use this method.
-     * @return the array that backs this vector.
      */
     Object array();
 
     /**
      * Returns a double array of this vector.
-     * @return the double array.
      */
     default double[] toDoubleArray() {
         return toDoubleArray(new double[size()]);
@@ -86,7 +69,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
 
     /**
      * Copies the vector value as double to the given array.
-     * @param a the array to copy into.
      * @return the input array <code>a</code>.
      */
     default double[] toDoubleArray(double[] a) {
@@ -94,8 +76,7 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
     }
 
     /**
-     * Returns an int array of this vector.
-     * @return the int array.
+     * Returns an integer array of this vector.
      */
     default int[] toIntArray() {
         return toIntArray(new int[size()]);
@@ -103,7 +84,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
 
     /**
      * Copies the vector value as int to the given array.
-     * @param a the array to copy into.
      * @return the input array <code>a</code>.
      */
     default int[] toIntArray(int[] a) {
@@ -112,7 +92,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
 
     /**
      * Returns a string array of this vector.
-     * @return the string array.
      */
     default String[] toStringArray() {
         return toStringArray(new String[size()]);
@@ -120,7 +99,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
 
     /**
      * Copies the vector value as string to the given array.
-     * @param a the array to copy into.
      * @return the input array <code>a</code>.
      */
     default String[] toStringArray(String[] a) {
@@ -133,64 +111,47 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
 
     /**
      * Returns the value at position i, which may be null.
-     * @param i the index.
-     * @return the value.
      */
     T get(int i);
 
     /**
      * Returns a new vector with selected entries.
      * @param index the index of selected entries.
-     * @return the new vector of selected entries.
      */
     BaseVector<T, TS, S> get(int... index);
 
     /**
      * Returns the byte value at position i.
-     * @param i the index.
-     * @return the value.
      */
     byte getByte(int i);
 
     /**
      * Returns the short value at position i.
-     * @param i the index.
-     * @return the value.
      */
     short getShort(int i);
 
     /**
      * Returns the integer value at position i.
-     * @param i the index.
-     * @return the value.
      */
     int getInt(int i);
 
     /**
      * Returns the long value at position i.
-     * @param i the index.
-     * @return the value.
      */
     long getLong(int i);
 
     /**
      * Returns the float value at position i.
-     * @param i the index.
-     * @return the value.
      */
     float getFloat(int i);
 
     /**
      * Returns the double value at position i.
-     * @param i the index.
-     * @return the value.
      */
     double getDouble(int i);
 
     /**
      * Returns the value at position i, which may be null.
-     * @param i the index.
-     * @return the value.
      */
     default T apply(int i) {
         return get(i);
@@ -199,16 +160,15 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
     /**
      * Returns a new vector with selected entries.
      * @param index the index of selected entries.
-     * @return the new vector of selected entries.
      */
     default BaseVector<T, TS, S> apply(int... index) {
         return get(index);
     }
 
     /**
-     * Returns a stream of vector elements.
+     * Returns a (possibly parallel) Stream with this vector as its source.
      *
-     * @return the stream of vector elements.
+     * @return a (possibly parallel) Stream with this vector as its source.
      */
     S stream();
 }

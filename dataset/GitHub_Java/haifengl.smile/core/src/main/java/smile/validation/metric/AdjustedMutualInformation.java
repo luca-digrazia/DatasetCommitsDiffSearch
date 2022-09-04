@@ -87,12 +87,7 @@ public class AdjustedMutualInformation implements ClusteringMetric {
         }
     }
 
-    /**
-     * Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (max(H(y1), H(y2)) - E(MI)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (max(H(y1), H(y2)) - E(MI)). */
     public static double max(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -105,12 +100,7 @@ public class AdjustedMutualInformation implements ClusteringMetric {
         return (I - E) / (Math.max(h1, h2) - E);
     }
 
-    /**
-     * Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (0.5 * (H(y1) + H(y2)) - E(MI)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (0.5 * (H(y1) + H(y2)) - E(MI)). */
     public static double sum(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -123,12 +113,7 @@ public class AdjustedMutualInformation implements ClusteringMetric {
         return (I - E) / (0.5 * (h1 + h2) - E);
     }
 
-    /**
-     * Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (sqrt(H(y1) * H(y2)) - E(MI)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (sqrt(H(y1) * H(y2)) - E(MI)). */
     public static double sqrt(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -141,12 +126,7 @@ public class AdjustedMutualInformation implements ClusteringMetric {
         return (I - E) / (Math.sqrt(h1 * h2) - E);
     }
 
-    /**
-     * Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (min(H(y1), H(y2)) - E(MI)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the adjusted mutual information of (I(y1, y2) - E(MI)) / (min(H(y1), H(y2)) - E(MI)). */
     public static double min(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;

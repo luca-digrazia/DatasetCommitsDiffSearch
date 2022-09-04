@@ -42,7 +42,7 @@ public abstract class LeafNode implements Node {
     }
 
     @Override
-    public int leaves() {
+    public int leafs() {
         return 1;
     }
 

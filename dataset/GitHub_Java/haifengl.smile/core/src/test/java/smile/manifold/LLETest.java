@@ -50,7 +50,10 @@ public class LLETest {
     public void tearDown() {
     }
 
-    @Test
+    /**
+     * Test of learn method, of class LLE.
+     */
+    @Test(expected = Test.None.class)
     public void test() throws Exception {
         System.out.println("LLE");
 

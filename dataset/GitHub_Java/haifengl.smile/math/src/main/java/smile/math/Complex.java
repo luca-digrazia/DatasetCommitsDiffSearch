@@ -211,7 +211,7 @@ public class Complex implements Serializable {
     /** Packed array of complex numbers for better memory efficiency. */
     public static class Array {
         public final int length;
-        private final double[] data;
+        private double[] data;
 
         /** Constructor.
          *

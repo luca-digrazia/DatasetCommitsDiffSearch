@@ -67,8 +67,7 @@ public interface ByteVector extends BaseVector<Byte, Integer, IntStream> {
 
     /**
      * Returns the string representation of vector.
-     * @param n the number of elements to show.
-     * @return the string representation of vector.
+     * @param n Number of elements to show
      */
     default String toString(int n) {
         String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
@@ -79,7 +78,6 @@ public interface ByteVector extends BaseVector<Byte, Integer, IntStream> {
      *
      * @param name the name of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static ByteVector of(String name, byte[] vector) {
         return new ByteVectorImpl(name, vector);
@@ -89,7 +87,6 @@ public interface ByteVector extends BaseVector<Byte, Integer, IntStream> {
      *
      * @param field the struct field of vector.
      * @param vector the data of vector.
-     * @return the vector.
      */
     static ByteVector of(StructField field, byte[] vector) {
         return new ByteVectorImpl(field, vector);

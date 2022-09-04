@@ -31,31 +31,17 @@ public interface Paths {
     /** Smile home directory. */
     String home = System.getProperty("smile.home", "shell/src/universal/");
 
-    /**
-     * Get the file path of a test sample dataset.
-     * @param path the path strings to be joined to form the path.
-     * @return the file path to the test data.
-     */
+    /** Get the file path of a test sample dataset. */
     static Path getTestData(String... path) {
         return java.nio.file.Paths.get(home + "/data", path);
     }
 
-    /**
-     * Returns the reader of a test data.
-     * @param path the path strings to be joined to form the path.
-     * @return the reader of the test data.
-     * @throws IOException when fails to create the reader.
-     */
+    /** Returns the reader of a test data. */
     static BufferedReader getTestDataReader(String... path) throws IOException {
         return java.nio.file.Files.newBufferedReader(getTestData(path));
     }
 
-    /**
-     * Returns the reader of a test data.
-     * @param path the path strings to be joined to form the path.
-     * @return the file lines of test data.
-     * @throws IOException when fails to read the file.
-     */
+    /** Returns the reader of a test data. */
     static Stream<String> getTestDataLines(String... path) throws IOException {
         return java.nio.file.Files.lines(getTestData(path));
     }

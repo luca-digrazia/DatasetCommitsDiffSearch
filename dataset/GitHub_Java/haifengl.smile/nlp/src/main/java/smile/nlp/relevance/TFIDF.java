@@ -66,7 +66,7 @@ public class TFIDF implements RelevanceRanker {
     /**
      * The smoothing parameter in maximum tf normalization.
      */
-    private final double a;
+    private double a = 0.4;
 
     /**
      * Constructor.

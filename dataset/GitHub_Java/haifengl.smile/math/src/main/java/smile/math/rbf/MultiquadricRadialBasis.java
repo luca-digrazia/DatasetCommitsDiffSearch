@@ -35,10 +35,10 @@ package smile.math.rbf;
 public class MultiquadricRadialBasis implements RadialBasisFunction {
     private static final long serialVersionUID = 1L;
 
-    private final double r02;
+    private double r02;
 
     /**
-     * Constructor. The default scale is 1.0.
+     * Constructor.
      */
     public MultiquadricRadialBasis() {
         this(1.0);
@@ -46,7 +46,6 @@ public class MultiquadricRadialBasis implements RadialBasisFunction {
 
     /**
      * Constructor.
-     * @param scale the scale parameter.
      */
     public MultiquadricRadialBasis(double scale) {
         r02 = scale * scale;

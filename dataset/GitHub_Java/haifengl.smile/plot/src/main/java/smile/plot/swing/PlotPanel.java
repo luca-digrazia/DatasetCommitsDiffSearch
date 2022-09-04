@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -211,7 +211,7 @@ public class PlotPanel extends JPanel {
                                 }
                                 base.initBaseCoord();
                                 graphics.projection.reset();
-                                canvas.baseGrid.reset();
+                                canvas.resetAxis();
                             }
                         }
                     }
@@ -258,7 +258,7 @@ public class PlotPanel extends JPanel {
                 if (mouseDoubleClicked) {
                     double x = mouseClickX - e.getX();
                     if (Math.abs(x) > 20) {
-                        int s = canvas.baseGrid.getAxis(0).getLinearSlices();
+                        int s = canvas.axis[0].slices();
                         x = x > 0 ? 1.0 / s : -1.0 / s;
                         x *= (backupBase.upperBound[0] - backupBase.lowerBound[0]);
                         base.lowerBound[0] = backupBase.lowerBound[0] + x;
@@ -268,7 +268,7 @@ public class PlotPanel extends JPanel {
 
                     double y = mouseClickY - e.getY();
                     if (Math.abs(y) > 20) {
-                        int s = canvas.baseGrid.getAxis(1).getLinearSlices();
+                        int s = canvas.axis[1].slices();
                         y = y > 0 ? -1.0 / s : 1.0 / s;
                         y *= (backupBase.upperBound[1] - backupBase.lowerBound[1]);
                         base.lowerBound[1] = backupBase.lowerBound[1] + y;
@@ -278,7 +278,7 @@ public class PlotPanel extends JPanel {
 
                     base.initBaseCoord();
                     graphics.projection.reset();
-                    canvas.baseGrid.reset();
+                    canvas.resetAxis();
                     repaint();
                 } else {
                     String tooltip = null;
@@ -331,7 +331,7 @@ public class PlotPanel extends JPanel {
             Graphics graphics = canvas.graphics;
 
             for (int i = 0; i < base.dimension; i++) {
-                int s = canvas.baseGrid.getAxis(i).getLinearSlices();
+                int s = canvas.axis[i].slices();
                 double r = e.getWheelRotation() > 0 ? 1.0 / s : -1.0 / s;
                 if (r > -0.5) {
                     double d = (base.upperBound[i] - base.lowerBound[i]) * r;
@@ -346,7 +346,7 @@ public class PlotPanel extends JPanel {
 
             base.initBaseCoord();
             graphics.projection.reset();
-            canvas.baseGrid.reset();
+            canvas.resetAxis();
 
             repaint();
             e.consume();
@@ -360,7 +360,7 @@ public class PlotPanel extends JPanel {
             if (graphics != null) {
                 base.initBaseCoord();
                 graphics.projection.reset();
-                canvas.baseGrid.reset();
+                canvas.resetAxis();
             }
 
             repaint();
@@ -743,9 +743,9 @@ public class PlotPanel extends JPanel {
                     {"Title", canvas.getTitle()},
                     {"Title Font", canvas.getTitleFont()},
                     {"Title Color", canvas.getTitleColor()},
-                    {"X Axis Title", canvas.getAxis(0).getAxisLabel()},
+                    {"X Axis Title", canvas.getAxis(0).getLabel()},
                     {"X Axis Range", new double[]{base.getLowerBounds()[0], base.getUpperBounds()[0]}},
-                    {"Y Axis Title", canvas.getAxis(1).getAxisLabel()},
+                    {"Y Axis Title", canvas.getAxis(1).getLabel()},
                     {"Y Axis Range", new double[]{base.getLowerBounds()[1], base.getUpperBounds()[1]}}
             };
 
@@ -755,11 +755,11 @@ public class PlotPanel extends JPanel {
                     {"Title", canvas.getTitle()},
                     {"Title Font", canvas.getTitleFont()},
                     {"Title Color", canvas.getTitleColor()},
-                    {"X Axis Title", canvas.getAxis(0).getAxisLabel()},
+                    {"X Axis Title", canvas.getAxis(0).getLabel()},
                     {"X Axis Range", new double[]{base.getLowerBounds()[0], base.getUpperBounds()[0]}},
-                    {"Y Axis Title", canvas.getAxis(1).getAxisLabel()},
+                    {"Y Axis Title", canvas.getAxis(1).getLabel()},
                     {"Y Axis Range", new double[]{base.getLowerBounds()[1], base.getUpperBounds()[1]}},
-                    {"Z Axis Title", canvas.getAxis(2).getAxisLabel()},
+                    {"Z Axis Title", canvas.getAxis(2).getLabel()},
                     {"Z Axis Range", new double[]{base.getLowerBounds()[2], base.getUpperBounds()[2]}}
             };
 
@@ -809,18 +809,18 @@ public class PlotPanel extends JPanel {
             canvas.setTitleFont((Font) propertyTable.getValueAt(1, 1));
             canvas.setTitleColor((Color) propertyTable.getValueAt(2, 1));
 
-            canvas.getAxis(0).setAxisLabel((String) propertyTable.getValueAt(3, 1));
+            canvas.getAxis(0).setLabel((String) propertyTable.getValueAt(3, 1));
             double[] xbound = (double[]) propertyTable.getValueAt(4, 1);
             canvas.base.lowerBound[0] = xbound[0];
             canvas.base.upperBound[0] = xbound[1];
 
-            canvas.getAxis(1).setAxisLabel((String) propertyTable.getValueAt(5, 1));
+            canvas.getAxis(1).setLabel((String) propertyTable.getValueAt(5, 1));
             double[] ybound = (double[]) propertyTable.getValueAt(6, 1);
             canvas.base.lowerBound[1] = ybound[0];
             canvas.base.upperBound[1] = ybound[1];
 
             if (canvas.base.dimension > 2) {
-                canvas.getAxis(2).setAxisLabel((String) propertyTable.getValueAt(7, 1));
+                canvas.getAxis(2).setLabel((String) propertyTable.getValueAt(7, 1));
                 double[] zbound = (double[]) propertyTable.getValueAt(8, 1);
                 canvas.base.lowerBound[2] = zbound[0];
                 canvas.base.upperBound[2] = zbound[1];
@@ -832,7 +832,7 @@ public class PlotPanel extends JPanel {
 
             canvas.base.initBaseCoord();
             canvas.graphics.projection.reset();
-            canvas.baseGrid.reset();
+            canvas.resetAxis();
 
             dialog.setVisible(false);
             contentPane.repaint();
@@ -903,7 +903,7 @@ public class PlotPanel extends JPanel {
         Base base = canvas.base;
 
         for (int i = 0; i < base.dimension; i++) {
-            int s = canvas.baseGrid.getAxis(i).getLinearSlices();
+            int s = canvas.axis[i].slices();
             double r = inout ? -1.0 / s : 1.0 / s;
             double d = (base.upperBound[i] - base.lowerBound[i]) * r;
             base.lowerBound[i] -= d;
@@ -916,7 +916,7 @@ public class PlotPanel extends JPanel {
 
         base.initBaseCoord();
         canvas.graphics.projection.reset();
-        canvas.baseGrid.reset();
+        canvas.resetAxis();
 
         contentPane.repaint();
     }
@@ -930,7 +930,7 @@ public class PlotPanel extends JPanel {
 
         base.reset();
         graphics.projection.reset();
-        canvas.baseGrid.reset();
+        canvas.resetAxis();
 
         if (graphics.projection instanceof Projection3D) {
             ((Projection3D) graphics.projection).setDefaultView();

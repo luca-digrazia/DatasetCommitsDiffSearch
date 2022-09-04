@@ -32,12 +32,7 @@ public class MAD implements RegressionMetric {
         return of(truth, prediction);
     }
 
-    /**
-     * Calculates the mean absolute deviation error.
-     * @param truth the ground truth.
-     * @param prediction the prediction.
-     * @return the metric.
-     */
+    /** Calculates the mean absolute deviation error. */
     public static double of(double[] truth, double[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));

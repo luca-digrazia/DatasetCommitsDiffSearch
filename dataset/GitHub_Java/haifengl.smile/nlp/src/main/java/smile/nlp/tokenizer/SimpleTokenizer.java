@@ -100,7 +100,7 @@ public class SimpleTokenizer implements Tokenizer {
 
     private static final Pattern WHITESPACE = Pattern.compile("(?U)\\s+");
 
-    private final boolean splitContraction;
+    private boolean splitContraction;
     /**
      * Constructor.
      */
@@ -156,6 +156,6 @@ public class SimpleTokenizer implements Tokenizer {
             }
         }
         
-        return result.toArray(new String[0]);
+        return result.toArray(new String[result.size()]);
     }
 }

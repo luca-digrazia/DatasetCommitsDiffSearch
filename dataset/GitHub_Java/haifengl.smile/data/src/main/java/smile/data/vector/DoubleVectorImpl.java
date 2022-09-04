@@ -30,11 +30,11 @@ import smile.data.type.StructField;
  */
 class DoubleVectorImpl implements DoubleVector {
     /** The name of vector. */
-    private final String name;
+    private String name;
     /** Optional measure. */
-    private final Measure measure;
+    private Measure measure;
     /** The vector data. */
-    private final double[] vector;
+    private double[] vector;
 
     /** Constructor. */
     public DoubleVectorImpl(String name, double[] vector) {

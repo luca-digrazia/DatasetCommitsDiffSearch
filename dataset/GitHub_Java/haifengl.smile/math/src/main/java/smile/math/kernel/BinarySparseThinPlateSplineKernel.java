@@ -22,10 +22,11 @@ import smile.math.MathEx;
 /**
  * The Thin Plate Spline kernel on binary sparse data.
  * <p>
+ * <pre>
  *     k(u, v) = (||u-v|| / &sigma;)<sup>2</sup> log (||u-v|| / &sigma;)
- * <p>
- * where {@code &sigma; > 0} is the scale parameter of the kernel.
- * The kernel can work on sparse binary array as {@code int[]}, which are the
+ * </pre>
+ * where <code>&sigma; &gt; 0</code> is the scale parameter of the kernel.
+ * The kernel can work on sparse binary array as int[], which are the
  * indices of nonzero elements.
  * 
  * @author Haifeng Li

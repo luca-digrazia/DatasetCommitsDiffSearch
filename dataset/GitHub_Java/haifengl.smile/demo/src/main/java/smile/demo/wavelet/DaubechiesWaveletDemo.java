@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.wavelet;
 
@@ -22,8 +22,8 @@ import java.awt.Color;
 import javax.swing.*;
 
 import smile.plot.swing.LinePlot;
-import smile.plot.swing.PlotCanvas;
-import smile.plot.swing.PlotGroup;
+import smile.plot.swing.Canvas;
+import smile.plot.swing.PlotGrid;
 import smile.wavelet.DaubechiesWavelet;
 import smile.wavelet.Wavelet;
 import smile.wavelet.WaveletShrinkage;
@@ -33,7 +33,7 @@ import smile.wavelet.WaveletShrinkage;
  * @author Haifeng Li
  */
 @SuppressWarnings("serial")
-public class DaubechiesWaveletDemo extends PlotGroup {
+public class DaubechiesWaveletDemo extends PlotGrid {
     public DaubechiesWaveletDemo() {
         for (int i = 4; i <= 18; i+=2) {
             double[] x = new double[1024];
@@ -42,9 +42,9 @@ public class DaubechiesWaveletDemo extends PlotGroup {
             Wavelet wavelet = new DaubechiesWavelet(i);
             wavelet.inverse(x);
 
-            PlotCanvas canvas = LinePlot.plot(x);
+            Canvas canvas = LinePlot.of(x).canvas();
             canvas.setTitle(String.format("D%d", i));
-            add(canvas);
+            add(canvas.panel());
         }
         
         double[] sp500 = {
@@ -87,12 +87,12 @@ public class DaubechiesWaveletDemo extends PlotGroup {
             1242.52, 1241.84, 1241.58, 1236.34
         };
 
-        PlotCanvas canvas = LinePlot.plot(sp500);
+        Canvas canvas = LinePlot.of(sp500).canvas();
         double[] smooth = sp500.clone();
         WaveletShrinkage.denoise(smooth, new DaubechiesWavelet(8));
-        canvas.line(smooth, Color.BLUE);
-        canvas.setTitle("S&P 500 (D8)");
-        add(canvas);
+        canvas.add(LinePlot.of(smooth, Color.BLUE));
+        canvas.setTitle("S&P 500");
+        add(canvas.panel());
     }
 
     @Override

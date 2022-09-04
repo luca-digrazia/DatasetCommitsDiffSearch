@@ -43,10 +43,7 @@ public class UniversalGenerator implements RandomNumberGenerator {
      * <CODE>BIG_PRIME = 899999963</CODE>
      */
     static final int BIG_PRIME = 899999963;
-    private double c;
-    private double cd;
-    private double cm;
-    private double[] u;
+    private double c, cd, cm, u[];
     private int i97, j97;
 
     /**
@@ -58,7 +55,6 @@ public class UniversalGenerator implements RandomNumberGenerator {
 
     /**
      * Initialize Random with a specified integer seed
-     * @param seed the seed of random numbers.
      */
     public UniversalGenerator(int seed) {
         setSeed(seed);
@@ -66,7 +62,6 @@ public class UniversalGenerator implements RandomNumberGenerator {
 
     /**
      * Initialize Random with a specified long seed
-     * @param seed the seed of random numbers.
      */
     public UniversalGenerator(long seed) {
         setSeed(seed);

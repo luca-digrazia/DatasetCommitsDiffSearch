@@ -101,26 +101,26 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
     /**
      * The model formula.
      */
-    private final Formula formula;
+    private Formula formula;
 
     /**
      * Forest of decision trees. The second value is the accuracy of
      * tree on the OOB samples, which can be used a weight when aggregating
      * tree votes.
      */
-    private final Model[] models;
+    private Model[] models;
 
     /**
      * The number of classes.
      */
-    private final int k;
+    private int k = 2;
 
     /**
      * The overall out-of-bag metrics, which are quite accurate given that
      * enough trees have been grown (otherwise the OOB error estimate can
      * bias upward).
      */
-    private final ClassificationMetrics metrics;
+    private ClassificationMetrics metrics;
 
     /**
      * Variable importance. Every time a split of a node is made on variable
@@ -130,12 +130,12 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
      * variable importance that is often very consistent with the permutation
      * importance measure.
      */
-    private final double[] importance;
+    private double[] importance;
 
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private IntSet labels;
 
     /**
      * Constructor.
@@ -186,13 +186,13 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier,
      * @param data the data frame of the explanatory and response variables.
      */
     public static RandomForest fit(Formula formula, DataFrame data, Properties prop) {
-        int ntrees = Integer.parseInt(prop.getProperty("smile.random.forest.trees", "500"));
-        int mtry = Integer.parseInt(prop.getProperty("smile.random.forest.mtry", "0"));
+        int ntrees = Integer.valueOf(prop.getProperty("smile.random.forest.trees", "500"));
+        int mtry = Integer.valueOf(prop.getProperty("smile.random.forest.mtry", "0"));
         SplitRule rule = SplitRule.valueOf(prop.getProperty("smile.random.forest.split.rule", "GINI"));
-        int maxDepth = Integer.parseInt(prop.getProperty("smile.random.forest.max.depth", "20"));
-        int maxNodes = Integer.parseInt(prop.getProperty("smile.random.forest.max.nodes", String.valueOf(data.size() / 5)));
-        int nodeSize = Integer.parseInt(prop.getProperty("smile.random.forest.node.size", "5"));
-        double subsample = Double.parseDouble(prop.getProperty("smile.random.forest.sample.rate", "1.0"));
+        int maxDepth = Integer.valueOf(prop.getProperty("smile.random.forest.max.depth", "20"));
+        int maxNodes = Integer.valueOf(prop.getProperty("smile.random.forest.max.nodes", String.valueOf(data.size() / 5)));
+        int nodeSize = Integer.valueOf(prop.getProperty("smile.random.forest.node.size", "5"));
+        double subsample = Double.valueOf(prop.getProperty("smile.random.forest.sample.rate", "1.0"));
         int[] classWeight = Strings.parseIntArray(prop.getProperty("smile.random.forest.class.weight"));
         return fit(formula, data, ntrees, mtry, rule, maxDepth, maxNodes, nodeSize, subsample, classWeight, null);
     }

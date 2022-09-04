@@ -45,9 +45,9 @@ package smile.interpolation.variogram;
  * @author Haifeng Li
  */
 public class SphericalVariogram implements Variogram {
-    private final double a;
-    private final double b;
-    private final double c;
+    private double a;
+    private double b;
+    private double c;
 
     /**
      * Constructor. No nugget effect.

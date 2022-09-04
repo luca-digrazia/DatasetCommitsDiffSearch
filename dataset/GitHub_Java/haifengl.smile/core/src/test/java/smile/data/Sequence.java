@@ -70,7 +70,7 @@ public interface Sequence {
             k = Integer.parseInt(words[1]);
             p = Integer.parseInt(words[2]);
 
-            String line;
+            String line = null;
             while ((line = input.readLine()) != null) {
                 words = line.split(" ");
                 int seqid = Integer.parseInt(words[0]);

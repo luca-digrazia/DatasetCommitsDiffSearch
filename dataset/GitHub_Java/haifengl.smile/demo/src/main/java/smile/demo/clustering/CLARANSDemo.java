@@ -90,7 +90,7 @@ public class CLARANSDemo extends ClusteringDemo {
         return "CLARANS";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         ClusteringDemo demo = new CLARANSDemo();
         JFrame f = new JFrame("CLARANS");
         f.setSize(new Dimension(1000, 1000));

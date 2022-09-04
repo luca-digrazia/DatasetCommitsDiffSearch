@@ -1,18 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.netlib;
 
 import org.junit.After;
@@ -21,7 +23,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import smile.math.Math;
+import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.SVD;
 
@@ -76,8 +78,8 @@ public class SVDTest {
             {0.6240573, -0.44947578, -0.6391588}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         assertEquals(U[0].length, result.getU().ncols());
@@ -134,8 +136,8 @@ public class SVDTest {
             {-0.5156083, -0.36573746, -0.47613340, 0.41342817, -0.2659765, 0.1654796, -0.32346758}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         assertEquals(U[0].length, result.getU().ncols());
@@ -191,8 +193,8 @@ public class SVDTest {
             {0.06127719, 0.230326187, 0.04693098, -0.3300697, 0.825499232, -0.3880689}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         assertEquals(U[0].length, result.getU().ncols());
@@ -247,8 +249,8 @@ public class SVDTest {
             {0.82502638, -0.400562630, 0.30810911, -0.1797507, 0.1778750}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         assertEquals(U[0].length, result.getU().ncols());
@@ -302,8 +304,8 @@ public class SVDTest {
             {0.1873664, -0.7026270, -0.07117046, 0.6827473}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         assertEquals(U[0].length, result.getU().ncols());
@@ -357,8 +359,8 @@ public class SVDTest {
             {-0.5443460, 0.37590198, 0.55072289, -0.2115256, -0.2675392, -0.003003781}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         for (int i = 0; i < U.length; i++) {
@@ -408,8 +410,8 @@ public class SVDTest {
             {-0.4720051, -0.2247534, 0.42477493, -0.36219292, -0.4534882}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-7));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-7));
 
         assertEquals(U.length, result.getU().nrows());
         for (int i = 0; i < U.length; i++) {
@@ -457,8 +459,8 @@ public class SVDTest {
             {0.32967585, 0.18412070, -0.02567023, 0.2254902}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-6));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-6));
 
         assertEquals(U.length, result.getU().nrows());
         for (int i = 0; i < U.length; i++) {
@@ -522,8 +524,8 @@ public class SVDTest {
             {-0.406678, -0.10893, 0.492444, 0.0123293, 0.270696, -0.0538747, -0.0538747, -0.165339, -0.579426, -0.225424, 0.231961, 0.182535}
         };
 
-        SVD result = Matrix.newInstance(A).svd();
-        assertTrue(Math.equals(s, result.getSingularValues(), 1E-5));
+        SVD result = Matrix.of(A).svd();
+        assertTrue(MathEx.equals(s, result.getSingularValues(), 1E-5));
 
         assertEquals(Ut[0].length, result.getU().nrows());
         assertEquals(Ut.length, result.getU().ncols());
@@ -556,7 +558,7 @@ public class SVDTest {
         double[] B = {0.5, 0.5, 0.5};
         double[] X = {-0.2027027, 0.8783784, 0.4729730};
 
-        SVD result = Matrix.newInstance(A).svd();
+        SVD result = Matrix.of(A).svd();
         double[] x = new double[B.length];
         result.solve(B, x);
         assertEquals(X.length, x.length);

@@ -32,20 +32,12 @@ public class ConfusionMatrix implements Serializable {
     /** Confusion matrix. */
     public final int[][] matrix;
 
-    /**
-     * Constructor.
-     * @param matrix the confusion matrix.
-     */
+    /** Constructor. */
     public ConfusionMatrix(int[][] matrix) {
         this.matrix = matrix;
     }
 
-    /**
-     * Creates the confusion matrix.
-     * @param truth the ground truth.
-     * @param prediction the prediction.
-     * @return the confusion matrix.
-     */
+    /** Creates the confusion matrix. */
     public static ConfusionMatrix of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
              throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));

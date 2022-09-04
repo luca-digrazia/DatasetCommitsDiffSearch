@@ -26,6 +26,7 @@ import smile.data.*;
 import smile.math.kernel.GaussianKernel;
 import smile.math.MathEx;
 import smile.validation.*;
+import smile.validation.metric.RMSE;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -53,7 +54,7 @@ public class SVRTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testLongley() throws Exception {
         System.out.println("longley");
 
@@ -99,6 +100,8 @@ public class SVRTest {
     public void tesAbalone() {
         System.out.println("Abalone");
         GaussianKernel kernel = new GaussianKernel(5.0);
+        KernelMachine<double[]> model = SVR.fit(Abalone.x, Abalone.y, kernel, 1.5, 100, 1E-3);
+
         RegressionValidation<Regression<double[]>> result = RegressionValidation.of(Abalone.x, Abalone.y, Abalone.testx, Abalone.testy,
                 (x, y) -> SVR.fit(x, y, kernel, 1.5, 100, 1E-3));
 

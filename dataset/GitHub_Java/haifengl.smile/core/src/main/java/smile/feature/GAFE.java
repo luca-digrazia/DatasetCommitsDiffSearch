@@ -51,7 +51,7 @@ public class GAFE {
     /**
      * Selection strategy.
      */
-    private final Selection selection;
+    private Selection selection;
     /**
      * The number of best chromosomes to copy to new population. When creating
      * new population by crossover and mutation, we have a big chance, that we
@@ -60,20 +60,20 @@ public class GAFE {
      * classical way. Elitism can very rapidly increase performance of GA,
      * because it prevents losing the best found solution.
      */
-    private final int elitism;
+    private int elitism;
     /**
      * Crossover strategy.
      */
-    private final Crossover crossover;
+    private Crossover crossover;
     /**
      * Crossover rate.
      */
-    private final double crossoverRate;
+    private double crossoverRate;
     /**
      * Mutation rate.
      * The mutation parameters are set higher than usual to prevent premature convergence.
      */
-    private final double mutationRate;
+    private double mutationRate;
 
     /**
      * Constructor.

@@ -26,9 +26,7 @@ import java.util.stream.DoubleStream;
  * @author Haifeng Li
  */
 public class SumKernel<T> implements MercerKernel<T> {
-    /** The kernel to combine. */
     private final MercerKernel<T> k1;
-    /** The kernel to combine. */
     private final MercerKernel<T> k2;
 
     /**

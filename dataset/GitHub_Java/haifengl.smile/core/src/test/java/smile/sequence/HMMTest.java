@@ -32,6 +32,7 @@ import smile.stat.distribution.EmpiricalDistribution;
  *
  * @author Haifeng Li
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class HMMTest {
 
     double[] pi = {0.5, 0.5};

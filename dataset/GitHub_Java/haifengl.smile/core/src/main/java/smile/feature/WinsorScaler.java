@@ -39,15 +39,6 @@ public class WinsorScaler extends Scaler {
 
     /**
      * Constructor.
-     * @param lo the lower bound.
-     * @param hi the upper bound.
-     */
-    public WinsorScaler(double[] lo, double[] hi) {
-        super(lo, hi);
-    }
-
-    /**
-     * Constructor.
      * @param schema the schema of data.
      * @param lo the lower bound.
      * @param hi the upper bound.
@@ -57,22 +48,21 @@ public class WinsorScaler extends Scaler {
     }
 
     /**
-     * Fits the transformation parameters with 5% lower limit and 95% upper limit.
+     * Learns transformation parameters from a dataset with 5% lower limit
+     * and 95% upper limit.
      * @param data The training data.
-     * @return the model.
      */
     public static WinsorScaler fit(DataFrame data) {
         return fit(data, 0.05, 0.95);
     }
 
     /**
-     * Fits the transformation parameters.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
      * @param lower the lower limit in terms of percentiles of the original
      *              distribution (say 5th percentile).
      * @param upper the upper limit in terms of percentiles of the original
      *              distribution (say 95th percentile).
-     * @return the model.
      */
     public static WinsorScaler fit(DataFrame data, double lower, double upper) {
         if (data.isEmpty()) {
@@ -110,24 +100,29 @@ public class WinsorScaler extends Scaler {
     }
 
     /**
-     * Fits the transformation parameters with 5% lower limit and 95% upper limit.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
-     * @return the model.
      */
     public static WinsorScaler fit(double[][] data) {
         return fit(DataFrame.of(data));
     }
 
     /**
-     * Fits the transformation parameters.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
      * @param lower the lower limit in terms of percentiles of the original
      *              distribution (say 5th percentile).
      * @param upper the upper limit in terms of percentiles of the original
      *              distribution (say 95th percentile).
-     * @return the model.
      */
     public static WinsorScaler fit(double[][] data, double lower, double upper) {
         return fit(DataFrame.of(data), lower, upper);
+    }
+
+    @Override
+    public String toString() {
+        return IntStream.range(0, lo.length)
+                .mapToObj(i -> String.format("%s[%.4f, %.4f]", schema.field(i).name, lo[i], hi[i]))
+                .collect(Collectors.joining(",", "WinsorScaler(", ")"));
     }
 }

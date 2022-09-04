@@ -35,7 +35,7 @@ public class MinkowskiDistance implements Metric<double[]> {
     /**
      * The order of Minkowski distance.
      */
-    private final int p;
+    private int p;
 
     /**
      * The weights used in weighted distance.
@@ -44,11 +44,10 @@ public class MinkowskiDistance implements Metric<double[]> {
 
     /**
      * Constructor.
-     * @param p the order of Minkowski distance.
      */
     public MinkowskiDistance(int p) {
         if (p <= 0) {
-            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = %d", p));
+            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = d", p));
         }
 
         this.p = p;
@@ -56,17 +55,17 @@ public class MinkowskiDistance implements Metric<double[]> {
 
     /**
      * Constructor.
-     * @param p the order of Minkowski distance.
+     *
      * @param weight the weight vector.
      */
     public MinkowskiDistance(int p, double[] weight) {
         if (p <= 0) {
-            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = %d", p));
+            throw new IllegalArgumentException(String.format("The order p has to be larger than 0: p = d", p));
         }
 
-        for (double w : weight) {
-            if (w < 0) {
-                throw new IllegalArgumentException(String.format("Weight has to be nonnegative: %f", w));
+        for (int i = 0; i < weight.length; i++) {
+            if (weight[i] < 0) {
+                throw new IllegalArgumentException(String.format("Weight has to be nonnegative: %f", weight[i]));
             }
         }
 
@@ -85,9 +84,6 @@ public class MinkowskiDistance implements Metric<double[]> {
 
     /**
      * Minkowski distance between the two arrays of type integer.
-     * @param x a vector.
-     * @param y a vector.
-     * @return the distance.
      */
     public double d(int[] x, int[] y) {
         if (x.length != y.length) {
@@ -121,9 +117,6 @@ public class MinkowskiDistance implements Metric<double[]> {
      * calculation. Let m be the number non-missing values, and n be the
      * number of all values. The returned distance is pow(n * d / m, 1/p),
      * where d is the p-pow of distance between non-missing values.
-     * @param x a vector.
-     * @param y a vector.
-     * @return the distance.
      */
     public double d(float[] x, float[] y) {
         if (x.length != y.length) {

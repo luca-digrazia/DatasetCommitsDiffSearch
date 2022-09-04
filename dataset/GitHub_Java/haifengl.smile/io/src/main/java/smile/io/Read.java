@@ -365,7 +365,7 @@ public interface Read {
 
                 if (classification) {
                     data.add(new Instance<SparseArray>() {
-                        final int y = Integer.parseInt(firstToken);
+                        int y = Integer.parseInt(firstToken);
                         @Override
                         public SparseArray x() {
                             return row;
@@ -378,7 +378,7 @@ public interface Read {
                     });
                 } else {
                     data.add(new Instance<SparseArray>() {
-                        final double y = Double.parseDouble(firstToken);
+                        double y = Double.parseDouble(firstToken);
                         @Override
                         public SparseArray x() {
                             return row;

@@ -51,7 +51,7 @@ public class NeuralMapTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testUSPS() {
         System.out.println("USPS");
         MathEx.setSeed(19650218); // to get repeatable results.

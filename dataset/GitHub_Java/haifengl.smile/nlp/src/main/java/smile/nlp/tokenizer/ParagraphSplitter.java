@@ -27,8 +27,6 @@ package smile.nlp.tokenizer;
 public interface ParagraphSplitter {
     /**
      * Splits the text into paragraphs.
-     * @param text the text.
-     * @return the paragraphs.
      */
     String[] split(String text);
 }

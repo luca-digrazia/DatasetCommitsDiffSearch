@@ -18,12 +18,9 @@
 package smile.nlp.pos;
 
 import java.io.InputStreamReader;
-import java.io.IOException;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.ArrayList;
 import org.junit.After;
@@ -32,7 +29,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import smile.math.MathEx;
-import smile.util.Paths;
 import smile.validation.CrossValidation;
 import smile.validation.Bag;
 import static org.junit.Assert.*;
@@ -43,61 +39,62 @@ import static org.junit.Assert.*;
  */
 public class HMMPOSTaggerTest {
 
+    List<String[]> sentences = new ArrayList<>();
+    List<PennTreebankPOS[]> labels = new ArrayList<>();
     public HMMPOSTaggerTest() {
-
     }
     
     /**
      * Load training data from a corpora.
      * @param dir a file object defining the top directory
      */
-    public void read(Path dir, List<String[]> sentences, List<PennTreebankPOS[]> tags) throws IOException {
+    public void read(String dir) {
         List<File> files = new ArrayList<>();
-        walkin(dir, files);
+        walkin(new File(dir), files);
 
         for (File file : files) {
             try {
                 FileInputStream stream = new FileInputStream(file);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
-                String line;
-                List<String> sentence = new ArrayList<>();
-                List<PennTreebankPOS> tag = new ArrayList<>();
+                String line = null;
+                List<String> sent = new ArrayList<>();
+                List<PennTreebankPOS> label = new ArrayList<>();
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
                     if (line.isEmpty()) {
-                        if (!sentence.isEmpty()) {
-                            sentences.add(sentence.toArray(new String[0]));
-                            tags.add(tag.toArray(new PennTreebankPOS[0]));
-                            sentence.clear();
-                            tag.clear();
+                        if (!sent.isEmpty()) {
+                            sentences.add(sent.toArray(new String[sent.size()]));
+                            labels.add(label.toArray(new PennTreebankPOS[label.size()]));
+                            sent.clear();
+                            label.clear();
                         }
                     } else if (!line.startsWith("===") && !line.startsWith("*x*")) {
                         String[] words = line.split("\\s");
                         for (String word : words) {
                             String[] w = word.split("/");
                             if (w.length == 2) {
-                                sentence.add(w[0]);
+                                sent.add(w[0]);
                                 
-                                int index = w[1].indexOf('|');
-                                String pos = index == -1 ? w[1] : w[1].substring(0, index);
-                                if (pos.equals("PRP$R")) pos = "PRP$";
-                                if (pos.equals("JJSS")) pos = "JJS";
-                                tag.add(PennTreebankPOS.getValue(pos));
+                                int pos = w[1].indexOf('|');
+                                String tag = pos == -1 ? w[1] : w[1].substring(0, pos);
+                                if (tag.equals("PRP$R")) tag = "PRP$";
+                                if (tag.equals("JJSS")) tag = "JJS";
+                                label.add(PennTreebankPOS.getValue(tag));
                             }
                         }
                     }
                 }
                 
-                if (!sentence.isEmpty()) {
-                    sentences.add(sentence.toArray(new String[0]));
-                    tags.add(tag.toArray(new PennTreebankPOS[0]));
-                    sentence.clear();
-                    tag.clear();
+                if (!sent.isEmpty()) {
+                    sentences.add(sent.toArray(new String[sent.size()]));
+                    labels.add(label.toArray(new PennTreebankPOS[label.size()]));
+                    sent.clear();
+                    label.clear();
                 }
                 
                 reader.close();
-            } catch (Exception ex) {
-                System.err.println(ex.getMessage());
+            } catch (Exception e) {
+                System.err.println(e);
             }
         }
     }
@@ -107,22 +104,20 @@ public class HMMPOSTaggerTest {
      * that end with ".POS"
      * @param dir a file object defining the top directory
      **/
-    public static void walkin(Path dir, List<File> files) throws IOException {
+    public static void walkin(File dir, List<File> files) {
         String pattern = ".POS";
-        Files.newDirectoryStream(dir).forEach(path -> {
-            File file = path.toFile();
-            if (file.isDirectory()) {
-                try {
-                    walkin(path, files);
-                } catch (IOException ex) {
-                    System.err.println(ex.getMessage());
-                }
-            } else {
-                if (file.getName().endsWith(pattern)) {
-                    files.add(file);
+        File[] listFile = dir.listFiles();
+        if (listFile != null) {
+            for (File file : listFile) {                
+                if (file.isDirectory()) {
+                    walkin(file, files);
+                } else {
+                    if (file.getName().endsWith(pattern)) {
+                        files.add(file);
+                    }
                 }
             }
-        });
+        }
     }
     
     @BeforeClass
@@ -142,26 +137,20 @@ public class HMMPOSTaggerTest {
     }
 
     @Test
-    public void testWSJ() throws IOException {
+    public void testWSJ() {
         System.out.println("WSJ");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        List<String[]> sentences = new ArrayList<>();
-        List<PennTreebankPOS[]> tags = new ArrayList<>();
-        read(Paths.getTestData("nlp/PennTreebank/PennTreebank2/TAGGED/POS/WSJ"), sentences, tags);
-
-        // Data is not available
-        if (sentences.isEmpty()) return;
-
+        read("PennTreebank/PennTreebank2/TAGGED/POS/WSJ");
+        
         String[][] x = sentences.toArray(new String[sentences.size()][]);
-        PennTreebankPOS[][] y = tags.toArray(new PennTreebankPOS[tags.size()][]);
+        PennTreebankPOS[][] y = labels.toArray(new PennTreebankPOS[labels.size()][]);
         
         int n = x.length;
         int k = 10;
-        int error = 0;
-        int total = 0;
 
         Bag[] bags = CrossValidation.of(n, k);
+        int error = 0;
+        int total = 0;
+        
         for (int i = 0; i < k; i++) {
             String[][] trainx = MathEx.slice(x, bags[i].samples);
             PennTreebankPOS[][] trainy = MathEx.slice(y, bags[i].samples);
@@ -181,31 +170,25 @@ public class HMMPOSTaggerTest {
             }
         }
 
-        System.out.format("Error rate = %.2f%% as %d of %d\n", 100.0 * error / total, error, total);
+        System.out.format("Error rate = %.2f as %d of %d\n", 100.0 * error / total, error, total);
         assertEquals(51325, error);
     }
 
     @Test
-    public void testBrown() throws IOException {
+    public void testBrown() {
         System.out.println("BROWN");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        List<String[]> sentences = new ArrayList<>();
-        List<PennTreebankPOS[]> tags = new ArrayList<>();
-        read(Paths.getTestData("nlp/PennTreebank/PennTreebank2/TAGGED/POS/BROWN"), sentences, tags);
-
-        // Data is not available
-        if (sentences.isEmpty()) return;
-
+        read("PennTreebank/PennTreebank2/TAGGED/POS/BROWN");
+        
         String[][] x = sentences.toArray(new String[sentences.size()][]);
-        PennTreebankPOS[][] y = tags.toArray(new PennTreebankPOS[tags.size()][]);
+        PennTreebankPOS[][] y = labels.toArray(new PennTreebankPOS[labels.size()][]);
         
         int n = x.length;
         int k = 10;
-        int error = 0;
-        int total = 0;
 
         Bag[] bags = CrossValidation.of(n, k);
+        int error = 0;
+        int total = 0;
+        
         for (int i = 0; i < k; i++) {
             String[][] trainx = MathEx.slice(x, bags[i].samples);
             PennTreebankPOS[][] trainy = MathEx.slice(y, bags[i].samples);
@@ -225,7 +208,7 @@ public class HMMPOSTaggerTest {
             }
         }
 
-        System.out.format("Error rate = %.2f%% as %d of %d\n", 100.0 * error / total, error, total);
-        assertEquals(55589, error);
+        System.out.format("Error rate = %.2f as %d of %d\n", 100.0 * error / total, error, total);
+        assertEquals(55649, error);
     }
 }

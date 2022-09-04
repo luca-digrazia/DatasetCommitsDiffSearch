@@ -137,7 +137,7 @@ public class RBFNetworkTest {
         assertEquals(110, error);
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS");
 

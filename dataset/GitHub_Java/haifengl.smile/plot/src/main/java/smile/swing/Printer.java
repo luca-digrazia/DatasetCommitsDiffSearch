@@ -47,7 +47,7 @@ public class Printer {
     private static Printer singleton = null;
     
     /**
-     * Private constructor for singleton design pattern.
+     * Private constructor.
      */
     private Printer() {
         printer = PrinterJob.getPrinterJob();

@@ -17,11 +17,15 @@
 
 package smile.feature;
 
-import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import smile.data.DataFrame;
+import smile.data.Tuple;
+import smile.data.type.StructField;
 import smile.data.type.StructType;
+import smile.data.vector.BaseVector;
+import smile.data.vector.DoubleVector;
 import smile.math.MathEx;
 
 /**
@@ -47,50 +51,33 @@ public class Standardizer implements FeatureTransform {
     /**
      * Standard deviation or IQR.
      */
-    double[] sd;
-
-    /**
-     * Constructor.
-     * @param mu mean.
-     * @param sd standard deviation.
-     */
-    public Standardizer(double[] mu, double[] sd) {
-        if (mu.length != sd.length) {
-            throw new IllegalArgumentException("Scaling factor size don't match");
-        }
-
-        for (int i = 0; i < sd.length; i++) {
-            if (MathEx.isZero(sd[i])) {
-                sd[i] = 1.0;
-            }
-        }
-
-        this.mu = mu;
-        this.sd = sd;
-    }
+    double[] std;
 
     /**
      * Constructor.
      * @param schema the schema of data.
      * @param mu mean.
-     * @param sd standard deviation.
+     * @param std standard deviation.
      */
-    public Standardizer(StructType schema, double[] mu, double[] sd) {
-        this(mu, sd);
-        if (schema.length() != mu.length) {
+    public Standardizer(StructType schema, double[] mu, double[] std) {
+        if (schema.length() != mu.length || mu.length != std.length) {
             throw new IllegalArgumentException("Schema and scaling factor size don't match");
         }
-    }
 
-    @Override
-    public Optional<StructType> schema() {
-        return Optional.ofNullable(schema);
+        for (int i = 0; i < std.length; i++) {
+            if (MathEx.isZero(std[i])) {
+                std[i] = 1.0;
+            }
+        }
+
+        this.schema = schema;
+        this.mu = mu;
+        this.std = std;
     }
 
     /**
-     * Fits the transformation parameters.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
-     * @return the model.
      */
     public static Standardizer fit(DataFrame data) {
         if (data.isEmpty()) {
@@ -99,54 +86,94 @@ public class Standardizer implements FeatureTransform {
 
         StructType schema = data.schema();
         double[] mu = new double[schema.length()];
-        double[] sd = new double[schema.length()];
+        double[] std = new double[schema.length()];
 
-        int n = data.nrow();
+        int n = data.nrows();
         for (int i = 0; i < mu.length; i++) {
             if (schema.field(i).isNumeric()) {
                 final int col = i;
                 double sum = data.stream().mapToDouble(t -> t.getDouble(col)).sum();
                 double squaredSum = data.stream().mapToDouble(t -> t.getDouble(col)).map(x -> x*x).sum();
                 mu[i] = sum / n;
-                sd[i] = Math.sqrt(squaredSum / n - mu[i] * mu[i]);
+                std[i] = Math.sqrt(squaredSum / n - mu[i] * mu[i]);
+                if (MathEx.isZero(std[i])) {
+                    std[i] = 1.0;
+                }
             }
         }
 
-        return new Standardizer(schema, mu, sd);
+        return new Standardizer(schema, mu, std);
     }
 
     /**
-     * Fits the transformation parameters.
+     * Learns transformation parameters from a dataset.
      * @param data The training data.
-     * @return the model.
      */
     public static Standardizer fit(double[][] data) {
-        double[] mu = MathEx.colMeans(data);
-        double[] sd = MathEx.colSds(data);
-        return new Standardizer(mu, sd);
+        return fit(DataFrame.of(data));
+    }
+
+    /** Scales a value with i-th column parameters. */
+    private double scale(double x, int i) {
+        return (x - mu[i]) / std[i];
     }
 
     @Override
-    public double transform(double x, int i) {
-        return (x - mu[i]) / sd[i];
+    public double[] transform(double[] x) {
+        double[] y = new double[x.length];
+        for (int i = 0; i < y.length; i++) {
+            y[i] = scale(x[i], i);
+        }
+        return y;
     }
 
     @Override
-    public double invert(double x, int i) {
-        return x * sd[i] + mu[i];
+    public Tuple transform(Tuple x) {
+        if (!schema.equals(x.schema())) {
+            throw new IllegalArgumentException(String.format("Invalid schema %s, expected %s", x.schema(), schema));
+        }
+
+        return new smile.data.AbstractTuple() {
+            @Override
+            public Object get(int i) {
+                if (schema.field(i).isNumeric()) {
+                    return scale(x.getDouble(i), i);
+                } else {
+                    return x.get(i);
+                }
+            }
+
+            @Override
+            public StructType schema() {
+                return schema;
+            }
+        };
     }
 
-    /** Returns the string representation of i-th column scaling factor. */
-    private String toString(int i) {
-        String field = schema == null ? String.format("V%d", i+1) : schema.field(i).name;
-        return String.format("%s[%.4f, %.4f]", field, mu[i], sd[i]);
+    @Override
+    public DataFrame transform(DataFrame data) {
+        if (!schema.equals(data.schema())) {
+            throw new IllegalArgumentException(String.format("Invalid schema %s, expected %s", data.schema(), schema));
+        }
+
+        BaseVector[] vectors = new BaseVector[schema.length()];
+        for (int i = 0; i < mu.length; i++) {
+            StructField field = schema.field(i);
+            if (field.isNumeric()) {
+                final int col = i;
+                DoubleStream stream = data.stream().mapToDouble(t -> scale(t.getDouble(col), col));
+                vectors[i] = DoubleVector.of(field, stream);
+            } else {
+                vectors[i] = data.column(i);
+            }
+        }
+        return DataFrame.of(vectors);
     }
 
     @Override
     public String toString() {
-        String className = getClass().getSimpleName();
         return IntStream.range(0, mu.length)
-                .mapToObj(this::toString)
-                .collect(Collectors.joining(",", className + "(", ")"));
+                .mapToObj(i -> String.format("%s[%.4f, %.4f]", schema.field(i).name, mu[i], std[i]))
+                .collect(Collectors.joining(",", "Standardizer(", ")"));
     }
 }

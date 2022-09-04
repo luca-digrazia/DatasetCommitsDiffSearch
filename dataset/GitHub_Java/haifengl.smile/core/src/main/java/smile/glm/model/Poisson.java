@@ -17,7 +17,6 @@
 
 package smile.glm.model;
 
-import java.util.Arrays;
 import java.util.stream.IntStream;
 import smile.math.MathEx;
 
@@ -76,7 +75,7 @@ public interface Poisson {
 
             @Override
             public double nullDeviance(double[] y, double mu) {
-                return Arrays.stream(y).map(yi -> 2.0 * yi * Math.log(yi / mu)).sum();
+                return IntStream.range(0, y.length).mapToDouble(i -> 2.0 * y[i] * Math.log(y[i] / mu)).sum();
             }
 
             @Override

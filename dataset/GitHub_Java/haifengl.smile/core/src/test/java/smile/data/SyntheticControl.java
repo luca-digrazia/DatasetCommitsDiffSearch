@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data;
 
@@ -33,7 +33,7 @@ public class SyntheticControl {
     static {
         try {
             data = Read.csv(Paths.getTestData("uci/synthetic_control.data"), CSVFormat.DEFAULT.withDelimiter(' '));
-            x = data.toArray();
+            x = data.toArray(false, CategoricalEncoder.DUMMY);
         } catch (Exception ex) {
             System.err.println("Failed to load 'synthetic_control': " + ex);
             System.exit(-1);

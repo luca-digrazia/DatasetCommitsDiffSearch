@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data;
 
@@ -41,9 +41,9 @@ public class Segment {
             train = Read.arff(Paths.getTestData("weka/segment-challenge.arff"));
             test = Read.arff(Paths.getTestData("weka/segment-test.arff"));
 
-            x = formula.x(train).toArray();
+            x = formula.x(train).toArray(false, CategoricalEncoder.DUMMY);
             y = formula.y(train).toIntArray();
-            testx = formula.x(test).toArray();
+            testx = formula.x(test).toArray(false, CategoricalEncoder.DUMMY);
             testy = formula.y(test).toIntArray();
         } catch (Exception ex) {
             System.err.println("Failed to load 'segment': " + ex);

@@ -107,15 +107,15 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
     /**
      * The splitting rule.
      */
-    private final SplitRule rule;
+    private SplitRule rule = SplitRule.GINI;
     /**
      * The number of classes.
      */
-    private final int k;
+    private int k = 2;
     /**
      * The class label encoder.
      */
-    private IntSet labels;
+    private IntSet labels = null;
 
     /** The dependent variable. */
     private transient int[] y;
@@ -280,7 +280,7 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
         } else {
             // best-first split
             PriorityQueue<Split> queue = new PriorityQueue<>(2 * maxNodes, Split.comparator.reversed());
-            split.ifPresent(queue::add);
+            split.ifPresent(s -> queue.add(s));
 
             for (int leaves = 1; leaves < this.maxNodes && !queue.isEmpty(); ) {
                 if (split(queue.poll(), queue)) leaves++;
@@ -316,9 +316,9 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
      */
     public static DecisionTree fit(Formula formula, DataFrame data, Properties prop) {
         SplitRule rule = SplitRule.valueOf(prop.getProperty("smile.cart.split.rule", "GINI"));
-        int maxDepth = Integer.parseInt(prop.getProperty("smile.cart.max.depth", "20"));
-        int maxNodes = Integer.parseInt(prop.getProperty("smile.cart.max.nodes", String.valueOf(data.size() / 5)));
-        int nodeSize = Integer.parseInt(prop.getProperty("smile.cart.node.size", "5"));
+        int maxDepth = Integer.valueOf(prop.getProperty("smile.cart.max.depth", "20"));
+        int maxNodes = Integer.valueOf(prop.getProperty("smile.cart.max.nodes", String.valueOf(data.size() / 5)));
+        int nodeSize = Integer.valueOf(prop.getProperty("smile.cart.node.size", "5"));
         return fit(formula, data, rule, maxDepth, maxNodes, nodeSize);
     }
 

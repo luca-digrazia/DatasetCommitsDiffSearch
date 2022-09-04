@@ -143,7 +143,7 @@ public interface TimeFunction extends Serializable {
 
     /**
      * Returns the inverse decay function
-     * {@code initLearningRate * decaySteps / (t + decaySteps)}.
+     * <code>initLearningRate * decaySteps / (t + decaySteps)</code>.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the decay steps that should be a small percentage
@@ -165,7 +165,7 @@ public interface TimeFunction extends Serializable {
 
     /**
      * Returns the inverse decay function
-     * {@code initLearningRate / (1 + decayRate * t / decaySteps)}.
+     * <code>initLearningRate / (1 + decayRate * t / decaySteps)</code>.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps how often to apply decay.
@@ -177,7 +177,7 @@ public interface TimeFunction extends Serializable {
 
     /**
      * Returns the inverse decay function
-     * {@code initLearningRate / (1 + decayRate * t / decaySteps)}.
+     * <code>initLearningRate / (1 + decayRate * t / decaySteps)</code>.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps how often to apply decay.
@@ -205,7 +205,7 @@ public interface TimeFunction extends Serializable {
 
     /**
      * Returns the exponential decay function
-     * {@code initLearningRate * exp(-t / decaySteps)}.
+     * <code>initLearningRate * exp(-t / decaySteps)</code>.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the decay steps that should be a small percentage
@@ -227,7 +227,7 @@ public interface TimeFunction extends Serializable {
 
     /**
      * Returns the exponential decay function
-     * {@code initLearningRate * pow(endLearningRate / initLearningRate, min(t, decaySteps) / decaySteps)}.
+     * <code>initLearningRate * pow(endLearningRate / initLearningRate, min(t, decaySteps) / decaySteps)</code>.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the maximum decay steps.
@@ -250,7 +250,7 @@ public interface TimeFunction extends Serializable {
 
     /**
      * Returns the exponential decay function
-     * {@code initLearningRate * pow(decayRate, t / decaySteps)}.
+     * <code>initLearningRate * pow(decayRate, t / decaySteps)</code>.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps how often to apply decay.

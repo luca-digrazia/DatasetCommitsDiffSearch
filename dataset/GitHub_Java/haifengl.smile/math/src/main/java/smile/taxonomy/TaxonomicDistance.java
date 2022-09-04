@@ -32,7 +32,7 @@ public class TaxonomicDistance implements Distance<Concept> {
     /**
      * The taxonomy basis to calculate the distance.
      */
-    private final Taxonomy taxonomy;
+    private Taxonomy taxonomy;
 
     /**
      * Constructor.

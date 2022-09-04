@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.data;
 
@@ -30,14 +30,18 @@ public class WeatherNominal {
     public static DataFrame data;
     public static Formula formula = Formula.lhs("play");
 
-    public static double[][] x;
+    public static double[][] level;
+    public static double[][] dummy;
+    public static double[][] onehot;
     public static int[] y;
 
     static {
         try {
             data = Read.arff(Paths.getTestData("weka/weather.nominal.arff"));
 
-            x = formula.x(data).toArray();
+            level = formula.x(data).toArray(false, CategoricalEncoder.LEVEL);
+            dummy = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
+            onehot = formula.x(data).toArray(false, CategoricalEncoder.ONE_HOT);
             y = formula.y(data).toIntArray();
         } catch (Exception ex) {
             System.err.println("Failed to load 'weather nominal': " + ex);

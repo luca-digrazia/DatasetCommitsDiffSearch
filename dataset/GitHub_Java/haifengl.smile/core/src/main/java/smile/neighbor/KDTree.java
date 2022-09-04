@@ -59,7 +59,7 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
     /**
      * The root in the KD-tree.
      */
-    static class Node implements Serializable {
+    class Node implements Serializable {
 
         /**
          * Number of dataset stored in this node.
@@ -96,19 +96,19 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
     /**
      * The keys of data objects.
      */
-    private final double[][] keys;
+    private double[][] keys;
     /**
      * The data objects.
      */
-    private final E[] data;
+    private E[] data;
     /**
      * The root node of KD-Tree.
      */
-    private final Node root;
+    private Node root;
     /**
      * The index of objects in each nodes.
      */
-    private final int[] index;
+    private int[] index;
 
     /**
      * Constructor.

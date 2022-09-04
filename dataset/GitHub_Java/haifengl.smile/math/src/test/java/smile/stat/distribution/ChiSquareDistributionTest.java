@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.stat.distribution;
 
@@ -50,14 +50,14 @@ public class ChiSquareDistributionTest {
     }
 
     /**
-     * Test of npara method, of class ChiSquareDistribution.
+     * Test of length method, of class ChiSquareDistribution.
      */
     @Test
-    public void testNpara() {
-        System.out.println("npara");
+    public void testLength() {
+        System.out.println("length");
         ChiSquareDistribution instance = new ChiSquareDistribution(20);
         instance.rand();
-        assertEquals(1, instance.npara());
+        assertEquals(1, instance.length());
     }
 
     /**
@@ -72,14 +72,14 @@ public class ChiSquareDistributionTest {
     }
 
     /**
-     * Test of var method, of class ChiSquareDistribution.
+     * Test of variance method, of class ChiSquareDistribution.
      */
     @Test
-    public void testVar() {
-        System.out.println("var");
+    public void testVariance() {
+        System.out.println("variance");
         ChiSquareDistribution instance = new ChiSquareDistribution(20);
         instance.rand();
-        assertEquals(40, instance.var(), 1E-7);
+        assertEquals(40, instance.variance(), 1E-7);
     }
 
     /**

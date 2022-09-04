@@ -51,7 +51,10 @@ public class IsoMapTest {
     public void tearDown() {
     }
 
-    @Test
+    /**
+     * Test of learn method, of class IsoMap.
+     */
+    @Test(expected = Test.None.class)
     public void test() throws Exception {
         System.out.println("IsoMap");
 

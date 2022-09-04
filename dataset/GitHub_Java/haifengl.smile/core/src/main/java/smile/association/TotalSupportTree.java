@@ -36,7 +36,7 @@ import java.util.stream.StreamSupport;
  */
 class TotalSupportTree implements Iterable<ItemSet> {
 
-    static class Node {
+    class Node {
         /**
          * The id of item.
          */
@@ -68,23 +68,23 @@ class TotalSupportTree implements Iterable<ItemSet> {
     /**
      * The root of t-tree.
      */
-    private final Node root = new Node();
+    Node root = new Node();
     /**
      * The number transactions in the database.
      */
-    private final int numTransactions;
+    int numTransactions = 0;
     /**
      * The required minimum support of item sets.
      */
-    private final int minSupport;
+    private int minSupport;
     /**
      * The index of items after sorting.
      */
-    private final int[] order;
+    private int[] order;
     /**
      * The buffer to collect mining results.
      */
-    private final Queue<ItemSet> buffer = new LinkedList<>();
+    private Queue<ItemSet> buffer = new LinkedList<>();
 
     /**
      * Constructor.
@@ -102,13 +102,6 @@ class TotalSupportTree implements Iterable<ItemSet> {
      */
     public int size() {
         return numTransactions;
-    }
-
-    /**
-     * Returns the root node.
-     */
-    public Node root() {
-        return root;
     }
 
     @Override

@@ -37,7 +37,7 @@ import org.apache.commons.csv.CSVFormat;
 import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.io.Read;
-import smile.manifold.SammonMapping;
+import smile.mds.SammonMapping;
 import smile.plot.swing.Canvas;
 import smile.plot.swing.TextPlot;
 
@@ -49,12 +49,12 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
     };
 
     private static final String[] datasource = {
-        "mds/BritishTowns.txt",
-        "mds/eurodist.txt",
-        "mds/morsecode.txt",
-        "mds/colorstimuli.txt",
-        "mds/bank05d.txt",
-        "mds/bank25d.txt"
+        "projection/BritishTowns.txt",
+        "projection/eurodist.txt",
+        "projection/morsecode.txt",
+        "projection/colorstimuli.txt",
+        "projection/bank05d.txt",
+        "projection/bank25d.txt"
     };
 
     static DataFrame[] dataset = new DataFrame[datasetName.length];
@@ -169,7 +169,7 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
         return "Sammon's Mapping";
     }
 
-    public static void main(String[] args) {
+    public static void main(String argv[]) {
         SammonMappingDemo demo = new SammonMappingDemo();
         JFrame f = new JFrame("Sammon's Mapping");
         f.setSize(new Dimension(1000, 1000));

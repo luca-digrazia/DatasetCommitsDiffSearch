@@ -58,7 +58,7 @@ public class RLSTest {
         
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testLongley() throws Exception {
         System.out.println("longley");
 

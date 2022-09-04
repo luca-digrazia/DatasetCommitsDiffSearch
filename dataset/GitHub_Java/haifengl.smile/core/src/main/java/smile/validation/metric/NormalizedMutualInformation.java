@@ -85,12 +85,7 @@ public class NormalizedMutualInformation implements ClusteringMetric {
         }
     }
 
-    /**
-     * Calculates the normalized mutual information of I(y1, y2) / H(y1, y2).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the normalized mutual information of I(y1, y2) / H(y1, y2). */
     public static double joint(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -115,12 +110,7 @@ public class NormalizedMutualInformation implements ClusteringMetric {
         return I / H;
     }
 
-    /**
-     * Calculates the normalized mutual information of I(y1, y2) / max(H(y1), H(y2)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the normalized mutual information of I(y1, y2) / max(H(y1), H(y2)). */
     public static double max(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -132,12 +122,7 @@ public class NormalizedMutualInformation implements ClusteringMetric {
         return I / Math.max(h1, h2);
     }
 
-    /**
-     * Calculates the normalized mutual information of 2 * I(y1, y2) / (H(y1) + H(y2)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the normalized mutual information of 2 * I(y1, y2) / (H(y1) + H(y2)). */
     public static double sum(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -149,12 +134,7 @@ public class NormalizedMutualInformation implements ClusteringMetric {
         return 2 * I / (h1 + h2);
     }
 
-    /**
-     * Calculates the normalized mutual information of I(y1, y2) / sqrt(H(y1) * H(y2)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the normalized mutual information of I(y1, y2) / sqrt(H(y1) * H(y2)). */
     public static double sqrt(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;
@@ -166,12 +146,7 @@ public class NormalizedMutualInformation implements ClusteringMetric {
         return I / Math.sqrt(h1 * h2);
     }
 
-    /**
-     * Calculates the normalized mutual information of I(y1, y2) / min(H(y1), H(y2)).
-     * @param y1 the clustering labels.
-     * @param y2 the alternative cluster labels.
-     * @return the metric.
-     */
+    /** Calculates the normalized mutual information of I(y1, y2) / min(H(y1), H(y2)). */
     public static double min(int[] y1, int[] y2) {
         ContingencyTable contingency = new ContingencyTable(y1, y2);
         double n = contingency.n;

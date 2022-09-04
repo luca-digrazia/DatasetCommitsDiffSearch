@@ -33,30 +33,20 @@ public enum Diag {
     /** Unit triangular. */
     UNIT(132, (byte) 'U');
 
-    /** The value passed to BLAS. */
+    /** Byte value passed to BLAS. */
     private final int blas;
-    /** The value passed to LAPACK. */
+    /** Byte value passed to LAPACK. */
     private final byte lapack;
 
-    /**
-     * Constructor.
-     * @param blas The value passed to BLAS.
-     * @param lapack The value passed to LAPACK.
-     */
+    /** Constructor. */
     Diag(int blas, byte lapack) {
         this.blas = blas;
         this.lapack = lapack;
     }
 
-    /**
-     * Returns the value for BLAS.
-     * @return the value for BLAS.
-     */
+    /** Returns the byte value for BLAS. */
     public int blas() { return blas; }
 
-    /**
-     * Returns the value for LAPACK.
-     * @return the value for LAPACK.
-     */
+    /** Returns the byte value for LAPACK. */
     public byte lapack() { return lapack; }
 }

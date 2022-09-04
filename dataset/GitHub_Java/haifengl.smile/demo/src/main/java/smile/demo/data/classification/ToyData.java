@@ -87,7 +87,7 @@ public class ToyData {
         return samples;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] argv) {
         ToyData toy = new ToyData();
         int n = 100;
         double[][] s = toy.sample(n);

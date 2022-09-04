@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,22 +13,18 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.plot;
 
 import java.awt.Color;
 import java.awt.GridLayout;
-
 import javax.swing.JFrame;
 import javax.swing.JPanel;
-
-import smile.data.AttributeDataset;
-import smile.data.parser.microarray.RESParser;
-import smile.plot.Contour;
-import smile.plot.Heatmap;
-import smile.plot.Palette;
-import smile.plot.PlotCanvas;
+import smile.plot.swing.Contour;
+import smile.plot.swing.Heatmap;
+import smile.plot.swing.Palette;
+import smile.plot.swing.Canvas;
 
 /**
  *
@@ -56,34 +52,34 @@ public class HeatmapDemo extends JPanel {
                 z[i][j] = x[j] * Math.exp(-x[j]*x[j] - y[i]*y[i]);
         }
 
-        PlotCanvas canvas = Heatmap.plot(z, Palette.jet(256));
-        canvas.add(new Contour(z));
+        Canvas canvas = Heatmap.of(z, Palette.jet(256)).canvas();
+        canvas.add(Contour.of(z));
         canvas.setTitle("jet");
-        add(canvas);
-        canvas = Heatmap.plot(x, y, z, Palette.redblue(256));
-        canvas.add(new Contour(x, y, z));
+        add(canvas.panel());
+        canvas = new Heatmap(x, y, z, Palette.redblue(256)).canvas();
+        canvas.add(Contour.of(x, y, z));
         canvas.setTitle("redblue");
-        add(canvas);
-        canvas = Heatmap.plot(z, Palette.redgreen(256));
-        canvas.add(new Contour(z));
+        add(canvas.panel());
+        canvas = Heatmap.of(z, Palette.redgreen(256)).canvas();
+        canvas.add(Contour.of(z));
         canvas.setTitle("redgreen");
-        add(canvas);
-        canvas = Heatmap.plot(x, y, z, Palette.heat(256));
-        canvas.add(new Contour(x, y, z));
+        add(canvas.panel());
+        canvas = new Heatmap(x, y, z, Palette.heat(256)).canvas();
+        canvas.add(Contour.of(x, y, z));
         canvas.setTitle("heat");
-        add(canvas);
-        canvas = Heatmap.plot(z, Palette.terrain(256));
-        canvas.add(new Contour(z));
+        add(canvas.panel());
+        canvas = Heatmap.of(z, Palette.terrain(256)).canvas();
+        canvas.add(Contour.of(z));
         canvas.setTitle("terrain");
-        add(canvas);
-        canvas = Heatmap.plot(x, y, z, Palette.rainbow(256));
-        canvas.add(new Contour(x, y, z));
+        add(canvas.panel());
+        canvas = new Heatmap(x, y, z, Palette.rainbow(256)).canvas();
+        canvas.add(Contour.of(x, y, z));
         canvas.setTitle("rainbow");
-        add(canvas);
-        canvas = Heatmap.plot(z, Palette.topo(256));
-        canvas.add(new Contour(z));
+        add(canvas.panel());
+        canvas = Heatmap.of(z, Palette.topo(256)).canvas();
+        canvas.add(Contour.of(z));
         canvas.setTitle("topo");
-        add(canvas);
+        add(canvas.panel());
     }
 
     @Override
@@ -92,25 +88,11 @@ public class HeatmapDemo extends JPanel {
     }
 
     public static void main(String[] args) {
-        try {
-            RESParser parser = new RESParser();
-            AttributeDataset data = parser.parse("RES", smile.util.Paths.getTestData("microarray/all_aml_test.res"));
-            
-            double[][] x = data.toArray(new double[data.size()][]);
-            String[] genes = data.toArray(new String[data.size()]);
-            String[] arrays = new String[data.attributes().length];
-            for (int i = 0; i < arrays.length; i++) {
-                arrays[i] = data.attributes()[i].getName();
-            }
-
-            JFrame frame = new JFrame("Heatmap");
-            frame.setSize(1000, 1000);
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLocationRelativeTo(null);
-            frame.getContentPane().add(Heatmap.plot(genes, arrays, x, Palette.jet(256)));
-            frame.setVisible(true);
-        } catch (Exception ex) {
-            System.err.println(ex);
-        }
+        JFrame frame = new JFrame("Heatmap");
+        frame.setSize(1000, 1000);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setLocationRelativeTo(null);
+        frame.getContentPane().add(new HeatmapDemo());
+        frame.setVisible(true);
     }
 }

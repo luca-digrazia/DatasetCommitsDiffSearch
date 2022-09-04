@@ -63,7 +63,7 @@ public class RandomProjection implements LinearProjection, Serializable {
     /**
      * Projection matrix.
      */
-    private final Matrix projection;
+    private Matrix projection;
 
     /**
      * Constructor.

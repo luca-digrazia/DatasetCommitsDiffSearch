@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.projection.ica;
 
@@ -21,6 +21,8 @@ import smile.math.DifferentiableFunction;
 
 /**
  * A good general-purpose contrast function for ICA.
+ *
+ * @author Haifeng Li
  */
 public class LogCosh implements DifferentiableFunction {
 

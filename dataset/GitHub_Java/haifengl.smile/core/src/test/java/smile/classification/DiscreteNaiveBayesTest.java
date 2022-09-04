@@ -56,7 +56,7 @@ public class DiscreteNaiveBayesTest {
     public void tearDown() {
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testBatchMultinomial() throws Exception {
         System.out.println("---Batch Multinomial---");
 

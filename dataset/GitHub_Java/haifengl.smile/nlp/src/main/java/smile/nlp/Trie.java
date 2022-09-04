@@ -41,7 +41,7 @@ public class Trie<K, V> {
      * node will contains a lot of children. A plain list
      * will be slow for search.
      */
-    private final HashMap<K, Node> root;
+    private HashMap<K, Node> root;
     /**
      * The number of entries.
      */
@@ -50,9 +50,9 @@ public class Trie<K, V> {
     /** The nodes in the trie. */
     public class Node {
 
-        private final K key;
+        private K key;
         private V value;
-        private final LinkedList<Node> children;
+        private LinkedList<Node> children;
 
         public Node(K key) {
             this.key = key;

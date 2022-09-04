@@ -48,6 +48,10 @@ import smile.math.MathEx;
 public class BitString implements Chromosome {
 
     /**
+     * The length of chromosome.
+     */
+    public final int length;
+    /**
      * Binary encoding of chromosome.
      */
     private byte[] bits;
@@ -120,6 +124,7 @@ public class BitString implements Chromosome {
         }
 
         this.bits = bits;
+        this.length = bits.length;
         this.fitness = fitness;
         this.crossoverRate = crossoverRate;
         this.mutationRate = mutationRate;
@@ -142,7 +147,7 @@ public class BitString implements Chromosome {
 
     /** Returns the length of bit string. */
     public int length() {
-        return bits.length;
+        return length;
     }
 
     /**
@@ -168,7 +173,7 @@ public class BitString implements Chromosome {
 
     @Override
     public BitString newInstance() {
-        return new BitString(bits.length, fitness, crossover, crossoverRate, mutationRate);
+        return new BitString(length, fitness, crossover, crossoverRate, mutationRate);
     }
 
     /** Creates a new instance with given bits. */
@@ -194,7 +199,7 @@ public class BitString implements Chromosome {
 
     @Override
     public void mutate() {
-        for (int i = 0; i < bits.length; i++) {
+        for (int i = 0; i < length; i++) {
             if (MathEx.random() < mutationRate) {
                 bits[i] ^= 1;
             }

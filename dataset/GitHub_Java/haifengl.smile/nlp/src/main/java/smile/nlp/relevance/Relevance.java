@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.nlp.relevance;
 
@@ -30,39 +30,25 @@ public class Relevance implements Comparable<Relevance> {
     /**
      * The document to rank.
      */
-    private Text doc;
+    public final Text text;
 
     /**
      * The relevance score.
      */
-    private double score;
+    public final double score;
 
     /**
      * Constructor.
-     * @param doc the document to rank.
+     * @param text the document to rank.
      * @param score the relevance score.
      */
-    public Relevance(Text doc, double score) {
-        this.doc = doc;
+    public Relevance(Text text, double score) {
+        this.text = text;
         this.score = score;
-    }
-
-    /**
-     * Returns the document to rank.
-     */
-    public Text doc() {
-        return doc;
-    }
-
-    /**
-     * Returns the relevance score.
-     */
-    public double score() {
-        return score;
     }
 
     @Override
     public int compareTo(Relevance o) {
-        return (int) Math.signum(score - o.score);
+        return Double.compare(score, o.score);
     }
 }

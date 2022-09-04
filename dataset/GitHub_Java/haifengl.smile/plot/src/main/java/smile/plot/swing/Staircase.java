@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.plot.swing;
 
@@ -59,7 +59,7 @@ public class Staircase extends Shape {
             g.drawLine(begin, end);
         }
 
-        for (int i = 1; i < n - 1; i++) {
+        for (int i = 1; i < n; i++) {
             for (int j = 0; j < d; j++) {
                 begin[j] = points[i][j];
                 end[j] = points[i][j];

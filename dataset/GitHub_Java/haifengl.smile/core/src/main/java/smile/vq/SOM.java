@@ -115,31 +115,31 @@ public class SOM implements VectorQuantizer {
     /**
      * The number of rows in the lattice.
      */
-    private final int nrows;
+    private int nrows;
     /**
      * The number of columns in the lattice.
      */
-    private final int ncols;
+    private int ncols;
     /**
      * The lattice of neurons.
      */
-    private final Neuron[][] map;
+    private Neuron[][] map;
     /**
      * The neurons in linear array.
      */
-    private final Neuron[] neurons;
+    private Neuron[] neurons;
     /**
      * The distance between a new observation to neurons.
      */
-    private final double[] dist;
+    private double[] dist;
     /**
      * The learning rate function.
      */
-    private final TimeFunction alpha;
+    private TimeFunction alpha;
     /**
      * The neighborhood function.
      */
-    private final Neighborhood theta;
+    private Neighborhood theta;
     /**
      * The current iteration.
      */
@@ -147,7 +147,7 @@ public class SOM implements VectorQuantizer {
     /*
      * The threshold to update neuron if alpha * theta > eps.
      */
-    private final double eps = 1E-5;
+    private double eps = 1E-5;
 
     /**
      * Constructor.

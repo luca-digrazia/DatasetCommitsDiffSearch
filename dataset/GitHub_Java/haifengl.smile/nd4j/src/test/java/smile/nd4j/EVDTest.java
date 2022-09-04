@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.nd4j;
 
@@ -74,9 +74,6 @@ public class EVDTest {
     public void tearDown() {
     }
 
-    /**
-     * Test of decompose method, of class EigenValueDecomposition.
-     */
     @Test
     public void testDecompose() {
         System.out.println("decompose");
@@ -94,9 +91,6 @@ public class EVDTest {
         }
     }
 
-    /**
-     * Test of decompose method, of class EigenValueDecomposition.
-     */
     @Test
     public void testDecompose2() {
         System.out.println("decompose");
@@ -110,10 +104,7 @@ public class EVDTest {
             assertEquals(0.0, result[i], 1E-7);
     }
 
-    /**
-     * Test of decompose method, of class EigenValueDecomposition.
-     */
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testDecompose3() {
         System.out.println("decompose");
         NDMatrix a = new NDMatrix(B);
@@ -129,10 +120,7 @@ public class EVDTest {
         }
     }
 
-    /**
-     * Test of decompose method, of class EigenValueDecomposition.
-     */
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void testDecompose4() {
         System.out.println("decompose");
         NDMatrix a = new NDMatrix(B);

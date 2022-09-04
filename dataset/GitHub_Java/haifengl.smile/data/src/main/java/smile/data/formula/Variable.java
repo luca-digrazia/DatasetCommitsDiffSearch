@@ -77,9 +77,9 @@ final class Variable implements Term {
     public List<Feature> bind(StructType schema) {
         Feature feature = new Feature() {
             /** The column index in the schema. */
-            private final int index = schema.fieldIndex(name);
+            private int index = schema.fieldIndex(name);
             /** The struct field. */
-            private final StructField field = schema.field(index);
+            private StructField field = schema.field(index);
 
             @Override
             public boolean isVariable() {
