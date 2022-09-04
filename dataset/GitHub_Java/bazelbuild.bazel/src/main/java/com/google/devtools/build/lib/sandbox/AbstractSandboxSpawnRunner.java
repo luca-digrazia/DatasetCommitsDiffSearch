@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.sandbox;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -157,7 +156,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     subprocessBuilder.setStdout(outErr.getOutputPath().getPathFile());
     subprocessBuilder.setStderr(outErr.getErrorPath().getPathFile());
     subprocessBuilder.setEnv(sandbox.getEnvironment());
-    subprocessBuilder.setArgv(ImmutableList.copyOf(sandbox.getArguments()));
+    subprocessBuilder.setArgv(sandbox.getArguments());
     boolean useSubprocessTimeout = sandbox.useSubprocessTimeout();
     if (useSubprocessTimeout) {
       subprocessBuilder.setTimeoutMillis(timeout.toMillis());
