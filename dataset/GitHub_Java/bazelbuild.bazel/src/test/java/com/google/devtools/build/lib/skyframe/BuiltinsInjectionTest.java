@@ -52,7 +52,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
 
   @Before
   public void setUp() throws Exception {
-    setBuildLanguageOptions("--experimental_builtins_bzl_path=notdisabled");
+    setStarlarkSemanticsOptions("--experimental_builtins_bzl_path=notdisabled");
   }
 
   /**
@@ -118,8 +118,8 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
 
   @Test
   public void errorInEvaluatingBuiltins() throws Exception {
-    // Test case with a Starlark error in the @_builtins pseudo-repo itself.
-    // TODO(#11437): Use @_builtins//:... syntax for load, once supported.
+    // Test case with a Starlark error in the @builtins pseudo-repo itself.
+    // TODO(#11437): Use @builtins//:... syntax for load, once supported.
     scratch.file(
         "tools/builtins_staging/helper.bzl", //
         "toplevels = {'overridable_symbol': 1//0}  # <-- dynamic error");
@@ -146,7 +146,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
   @Test
   public void errorInProcessingExports() throws Exception {
     // Test case with an error in the symbols exported by exports.bzl, but no actual Starlark errors
-    // in the builtins files themselves.
+    // in the @builtins files themselves.
     writeExportsBzl(
         "exported_toplevels = None", // should be dict
         "exported_rules = {}",
@@ -172,7 +172,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
     writePkgBzl(
         "print('overridable_symbol :: ' + str(overridable_symbol))",
         "print('overridable_rule :: ' + str(native.overridable_rule))");
-    setBuildLanguageOptions("--experimental_builtins_bzl_path=");
+    setStarlarkSemanticsOptions("--experimental_builtins_bzl_path=");
 
     buildDummyAndAssertSuccess();
     assertContainsEvent("overridable_symbol :: original_value");
@@ -187,7 +187,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
     writePkgBzl(
         "print('overridable_symbol :: ' + str(overridable_symbol))",
         "print('overridable_rule :: ' + str(native.overridable_rule))");
-    setBuildLanguageOptions("--experimental_builtins_bzl_path=");
+    setStarlarkSemanticsOptions("--experimental_builtins_bzl_path=");
 
     buildDummyAndAssertSuccess();
     assertContainsEvent("overridable_symbol :: original_value");
@@ -225,7 +225,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
 
   @Test
   public void builtinsBzlCannotAccessNative() throws Exception {
-    // TODO(#11437): Use @_builtins//:... syntax for load, once supported.
+    // TODO(#11437): Use @builtins//:... syntax for load, once supported.
     scratch.file(
         "tools/builtins_staging/helper.bzl", //
         "builtins_dummy = None",
@@ -241,14 +241,14 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
 
     buildDummyWithoutAssertingSuccess();
     // The print() statement is never reached because we fail statically during name resolution in
-    // BzlCompileFunction.
+    // ASTFileLookupFunction.
     assertDoesNotContainEvent("made it to evaluation");
     assertContainsEvent("name 'native' is not defined");
   }
 
   @Test
   public void builtinsBzlCannotAccessRuleSpecificSymbol() throws Exception {
-    // TODO(#11437): Use @_builtins//:... syntax for load, once supported.
+    // TODO(#11437): Use @builtins//:... syntax for load, once supported.
     scratch.file(
         "tools/builtins_staging/helper.bzl", //
         "builtins_dummy = None",
@@ -264,7 +264,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
 
     buildDummyWithoutAssertingSuccess();
     // The print() statement is never reached because we fail statically during name resolution in
-    // BzlCompileFunction.
+    // ASTFileLookupFunction.
     assertDoesNotContainEvent("made it to evaluation");
     assertContainsEvent("name 'overridable_symbol' is not defined");
   }
@@ -284,7 +284,7 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
 
   @Test
   public void builtinsBzlCanAccessInternal() throws Exception {
-    // TODO(#11437): Use @_builtins//:... syntax for load, once supported.
+    // TODO(#11437): Use @builtins//:... syntax for load, once supported.
     scratch.file(
         "tools/builtins_staging/helper.bzl", //
         "builtins_dummy = None",
@@ -301,6 +301,10 @@ public class BuiltinsInjectionTest extends BuildViewTestCase {
     assertContainsEvent("_internal in helper.bzl :: <_internal module>");
     assertContainsEvent("_internal in exports.bzl :: <_internal module>");
   }
+
+  // TODO(#11437): Reject overriding symbols that don't already exist. Reject overriding "native".
+  // Reject overriding non-rule-logic symbols such as package(), select(), environment_extension,
+  // varref(), etc.
 
   // TODO(#11437): Add tests of the _internal symbol's usage within builtins bzls.
 
