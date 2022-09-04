@@ -1,9 +1,8 @@
 package io.dropwizard.jersey.validation;
 
 import com.google.common.base.Optional;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import io.dropwizard.validation.ConstraintViolations;
 import io.dropwizard.validation.ValidationMethod;
 import org.apache.commons.lang3.StringUtils;
@@ -19,26 +18,21 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentMap;
 
 public class ConstraintMessage {
-    private static final Cache<Path, String> MESSAGES_CACHE = CacheBuilder.newBuilder()
-            .expireAfterWrite(1, TimeUnit.HOURS)
-            .build();
-
-    private ConstraintMessage() {
-    }
+    private static final ConcurrentMap<Path, String> reflectCache = Maps.newConcurrentMap();
 
     /**
      * Gets the human friendly location of where the violation was raised.
      */
     public static String getMessage(ConstraintViolation<?> v) {
-        String message = MESSAGES_CACHE.getIfPresent(v.getPropertyPath());
-        if (message == null) {
-            message = calculateMessage(v);
-            MESSAGES_CACHE.put(v.getPropertyPath(), message);
+        if (reflectCache.containsKey(v.getPropertyPath())) {
+            return reflectCache.get(v.getPropertyPath());
         }
+
+        String message = calculateMessage(v);
+        reflectCache.put(v.getPropertyPath(), message);
         return message;
     }
 
