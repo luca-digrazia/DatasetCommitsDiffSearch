@@ -70,8 +70,6 @@ import com.google.devtools.build.lib.packages.SkylarkExportable;
 import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
@@ -239,7 +237,7 @@ public class SkylarkRuleClassFunctions {
             + "<a href='File.html'><code>File</code></a> object representing the file that should "
             + "be executed to run the target. By default it is the predeclared output "
             + "<code>ctx.outputs.executable</code>."
-            + "<li><code>files</code>: A <a href='depset.html'><code>depset</code></a> of "
+            + "<li><code>files</code>: A <a href='depset.html'><code>depset<code></a> of "
             + "<a href='File.html'><code>File</code></a> objects representing the default outputs "
             + "to build when this target is specified on the blaze command line. By default it is "
             + "all predeclared outputs."
@@ -416,7 +414,7 @@ public class SkylarkRuleClassFunctions {
         doc =
             "A schema for defining predeclared outputs. Unlike <a href='attr.html#output'><code>"
                 + "output</code></a> and <a href='attr.html#output_list'><code>output_list</code>"
-                + "</a> attributes, the user does not specify the labels for these files. See the "
+                + "</a>attributes, the user does not specify the labels for these files. See the "
                 + "<a href='../rules.$DOC_EXT#files'>Rules page</a> for more on predeclared "
                 + "outputs."
                 + "<p>The value of this argument is either a dictionary or a callback function "
@@ -846,16 +844,12 @@ public class SkylarkRuleClassFunctions {
               ImmutableSet.copyOf(fragments.getContents(String.class, "fragments")),
               HostTransition.INSTANCE,
               ImmutableSet.copyOf(hostFragments.getContents(String.class, "host_fragments")),
-              collectToolchainLabels(toolchains, ast));
+              collectToolchainLabels(toolchains, ast),
+              funcallEnv);
         }
       };
 
-  /**
-   * The implementation for the magic function "rule" that creates Skylark rule classes.
-   *
-   * <p>Exactly one of {@link #builder} or {@link #ruleClass} is null except inside {@link #export}.
-   */
-  @AutoCodec
+  /** The implementation for the magic function "rule" that creates Skylark rule classes */
   public static final class SkylarkRuleFunction extends BaseFunction
       implements SkylarkExportable, RuleFunction {
     private RuleClass.Builder builder;
@@ -876,28 +870,6 @@ public class SkylarkRuleClassFunctions {
       this.type = type;
       this.attributes = attributes;
       this.definitionLocation = definitionLocation;
-    }
-
-    /** This is for post-export reconstruction for serialization. */
-    @VisibleForSerialization
-    @AutoCodec.Instantiator
-    SkylarkRuleFunction(
-        RuleClass ruleClass,
-        RuleClassType type,
-        Location definitionLocation,
-        Label skylarkLabel
-    ) {
-      super("rule", FunctionSignature.KWARGS);
-      Preconditions.checkNotNull(
-          ruleClass,
-          "RuleClass must be non-null as this SkylarkRuleFunction should have been exported.");
-      Preconditions.checkNotNull(
-          skylarkLabel,
-          "Label must be non-null as this SkylarkRuleFunction should have been exported.");
-      this.ruleClass = ruleClass;
-      this.type = type;
-      this.definitionLocation = definitionLocation;
-      this.skylarkLabel = skylarkLabel;
     }
 
     @Override
