@@ -16,9 +16,6 @@ package com.google.devtools.build.android.xml;
 import static com.google.common.base.Predicates.equalTo;
 import static com.google.common.base.Predicates.not;
 
-import com.android.aapt.Resources.Attribute;
-import com.android.aapt.Resources.Attribute.Symbol;
-import com.android.aapt.Resources.Value;
 import com.android.resources.ResourceType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
@@ -26,6 +23,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.StartTag;
@@ -41,7 +39,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -98,7 +95,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
 
   private static Map<String, String> readSubValues(XMLEventReader reader, QName subTagType)
       throws XMLStreamException {
-    ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+    Builder<String, String> builder = ImmutableMap.builder();
     while (reader.hasNext()
         && XmlResourceValues.isTag(XmlResourceValues.peekNextTag(reader), subTagType)) {
       StartElement element = reader.nextEvent().asStartElement();
@@ -155,7 +152,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
   @SuppressWarnings("deprecation")
   public static XmlResourceValue from(SerializeFormat.DataValueXml proto)
       throws InvalidProtocolBufferException {
-    ImmutableMap.Builder<String, ResourceXmlAttrValue> formats =
+    Builder<String, ResourceXmlAttrValue> formats =
         ImmutableMap.<String, AttrXmlResourceValue.ResourceXmlAttrValue>builder();
     for (Entry<String, SerializeFormat.DataValueXml> entry : proto.getMappedXmlValue().entrySet()) {
       switch (entry.getKey()) {
@@ -198,65 +195,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     return of(formats.build());
   }
 
-  public static XmlResourceValue from(Value proto) throws InvalidProtocolBufferException {
-    ImmutableMap.Builder<String, ResourceXmlAttrValue> formats = ImmutableMap.builder();
-
-    Attribute attribute = proto.getCompoundValue().getAttr();
-    int formatFlags = attribute.getFormatFlags();
-
-    if (formatFlags != 0xFFFF) {
-      //These flags are defined in AOSP in ResourceTypes.h:ResTable_map
-      if ((formatFlags & 1 << 0) != 0) {
-        formats.put("reference", ReferenceResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 1) != 0) {
-        formats.put("string", StringResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 2) != 0) {
-        formats.put("integer", IntegerResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 3) != 0) {
-        formats.put("boolean", BooleanResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 4) != 0) {
-        formats.put("color", ColorResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 5) != 0) {
-        formats.put("float", FloatResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 6) != 0) {
-        formats.put("dimension", DimensionResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 7) != 0) {
-        formats.put("fraction", FractionResourceXmlAttrValue.of());
-      }
-      if ((formatFlags & 1 << 16) != 0) {
-        Map<String, String> enums = new HashMap<>();
-
-        for (Symbol attrSymbol : attribute.getSymbolList()) {
-          String name = attrSymbol.getName().getName().replaceFirst("id/", "");
-          enums.put(name, Integer.toString(attrSymbol.getValue()));
-        }
-
-        formats.put("enum", EnumResourceXmlAttrValue.of(enums));
-      }
-      if ((formatFlags & 1 << 17) != 0) {
-        Map<String, String> flags = new HashMap<>();
-        for (Symbol attrSymbol : attribute.getSymbolList()) {
-          String name = attrSymbol.getName().getName().replaceFirst("id/", "");
-          flags.put(name, Integer.toString(attrSymbol.getValue()));
-        }
-
-        formats.put("flags", FlagResourceXmlAttrValue.of(flags));
-      }
-      if ((formatFlags & 0xFFFCFF00) != 0) {
-        throw new InvalidProtocolBufferException(
-            "Unexpected format flags: " + formatFlags);
-      }
-    }
-    return of(formats.build());
-  }
-
   /**
    * Creates a new {@link AttrXmlResourceValue}. Returns null if there are no formats.
    */
@@ -278,7 +216,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
       }
     }
 
-    ImmutableMap.Builder<String, ResourceXmlAttrValue> formats = ImmutableMap.builder();
+    Builder<String, ResourceXmlAttrValue> formats = ImmutableMap.builder();
     for (String formatName : formatNames) {
       switch (formatName) {
         case FLAGS:
@@ -453,7 +391,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     public static Entry<String, ResourceXmlAttrValue> asEntryOf(String... keyThenValue) {
       Preconditions.checkArgument(keyThenValue.length > 0);
       Preconditions.checkArgument(keyThenValue.length % 2 == 0);
-      ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+      Builder<String, String> builder = ImmutableMap.builder();
       for (int i = 0; i < keyThenValue.length; i += 2) {
         builder.put(keyThenValue[i], keyThenValue[i + 1]);
       }
@@ -529,7 +467,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
 
     @VisibleForTesting
     public static Entry<String, ResourceXmlAttrValue> asEntryOf(String... keyThenValue) {
-      ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+      Builder<String, String> builder = ImmutableMap.builder();
       Preconditions.checkArgument(keyThenValue.length > 0);
       Preconditions.checkArgument(keyThenValue.length % 2 == 0);
       for (int i = 0; i < keyThenValue.length; i += 2) {

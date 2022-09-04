@@ -14,7 +14,6 @@
 // Copyright 2017 The Bazel Authors. All rights reserved.
 package com.google.devtools.build.android;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.android.aapt2.Aapt2ConfigOptions;
 import com.google.devtools.build.android.aapt2.CompiledResources;
 import com.google.devtools.build.android.aapt2.ResourceLinker;
@@ -34,34 +33,6 @@ public class ValidateAndLinkResourcesAction {
 
   /** Action configuration options. */
   public static class Options extends OptionsBase {
-    @Option(
-      name = "compiled",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      defaultValue = "null",
-      converter = Converters.ExistingPathConverter.class,
-      category = "input",
-      help = "Compiled resources to link.",
-      deprecationWarning = "Use --resources."
-    )
-    // TODO(b/64570523): Still used by blaze. Will be removed as part of the command line cleanup.
-    @Deprecated
-    public Path compiled;
-
-    @Option(
-      name = "manifest",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      defaultValue = "null",
-      converter = Converters.ExistingPathConverter.class,
-      category = "input",
-      help = "Manifest for the library.",
-      deprecationWarning = "Use --resources."
-    )
-    // TODO(b/64570523): Still used by blaze. Will be removed as part of the command line cleanup.
-    @Deprecated
-    public Path manifest;
-
     @Option(
       name = "resources",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -98,16 +69,6 @@ public class ValidateAndLinkResourcesAction {
     public List<StaticLibrary> libraries;
 
     @Option(
-      name = "packageForR",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      defaultValue = "null",
-      category = "input",
-      help = "Package for the resources."
-    )
-    public String packageForR;
-
-    @Option(
       name = "staticLibraryOut",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
@@ -128,17 +89,6 @@ public class ValidateAndLinkResourcesAction {
       help = "R.txt out."
     )
     public Path rTxtOut;
-
-    @Option(
-      name = "sourceJarOut",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      converter = Converters.PathConverter.class,
-      defaultValue = "null",
-      category = "output",
-      help = "Generated java classes from the resources."
-    )
-    public Path sourceJarOut;
   }
 
   public static void main(String[] args) throws Exception {
@@ -152,28 +102,12 @@ public class ValidateAndLinkResourcesAction {
 
     try (ScopedTemporaryDirectory scopedTmp =
         new ScopedTemporaryDirectory("android_resources_tmp")) {
-      CompiledResources resources =
-          // TODO(b/64570523): Remove when the flags are standardized.
-          Optional.ofNullable(options.resources)
-              .orElseGet(
-                  () ->
-                      CompiledResources.from(
-                          Preconditions.checkNotNull(options.compiled),
-                          Preconditions.checkNotNull(options.manifest)))
-              // We need to make the manifest aapt safe (w.r.t., placeholders). For now, just stub
-              // it out.
-              .processManifest(
-                  manifest ->
-                      AndroidManifestProcessor.writeDummyManifestForAapt(
-                          scopedTmp.getPath().resolve("manifest-aapt-dummy/AndroidManifest.xml"),
-                          options.packageForR));
 
       ResourceLinker.create(aapt2Options.aapt2, scopedTmp.getPath())
           .dependencies(Optional.ofNullable(options.deprecatedLibraries).orElse(options.libraries))
           .buildVersion(aapt2Options.buildToolsVersion)
-          .linkStatically(resources)
+          .linkStatically(options.resources)
           .copyLibraryTo(options.staticLibraryOut)
-          .copySourceJarTo(options.sourceJarOut)
           .copyRTxtTo(options.rTxtOut);
     }
   }

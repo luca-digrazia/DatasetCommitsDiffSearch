@@ -465,15 +465,15 @@ public final class Converters {
   /** Converts a list of static library strings into paths. */
   @Deprecated
   public static class StaticLibraryListConverter implements Converter<List<StaticLibrary>> {
-    static final Splitter SPLITTER = Splitter.on(File.pathSeparatorChar);
+    static final Splitter SPLITTER = Splitter.on(File.pathSeparator);
 
     static final StaticLibraryConverter libraryConverter = new StaticLibraryConverter();
 
     @Override
     public List<StaticLibrary> convert(String input) throws OptionsParsingException {
       final Builder<StaticLibrary> builder = ImmutableList.<StaticLibrary>builder();
-      for (String path : SPLITTER.splitToList(input)) {
-        builder.add(libraryConverter.convert(path));
+      for (String unused : SPLITTER.splitToList(input)) {
+        builder.add(libraryConverter.convert(input));
       }
       return builder.build();
     }
@@ -486,6 +486,7 @@ public final class Converters {
 
   /** Converts a static library string into path. */
   public static class StaticLibraryConverter implements Converter<StaticLibrary> {
+    static final Splitter SPLITTER = Splitter.on(File.pathSeparator);
 
     static final PathConverter pathConverter = new PathConverter(true);
 
