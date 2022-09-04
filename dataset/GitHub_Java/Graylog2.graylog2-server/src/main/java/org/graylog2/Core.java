@@ -239,7 +239,7 @@ public class Core implements GraylogServer {
     }
     
     private void loadPlugins() {
-        PluginLoader pl = new PluginLoader(configuration.getPluginDir());
+        PluginLoader pl = new PluginLoader("plugin");
         for (Class<? extends MessageFilter> filter : pl.loadFilterPlugins()) {
             LOG.info("Registering plugin filter [" + filter.getSimpleName() + "].");
             registerFilter(filter);
