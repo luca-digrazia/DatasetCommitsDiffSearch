@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.demo;
 
@@ -91,7 +91,7 @@ import smile.demo.plot.Histogram3Demo;
 import smile.demo.projection.GHADemo;
 import smile.demo.projection.KPCADemo;
 import smile.demo.projection.PCADemo;
-import smile.demo.projection.ProbabilisticPCADemo;
+import smile.demo.projection.PPCADemo;
 import smile.demo.projection.RandomProjectionDemo;
 import smile.demo.stat.distribution.BernoulliDistributionDemo;
 import smile.demo.stat.distribution.BetaDistributionDemo;
@@ -202,7 +202,7 @@ public class SmileDemo extends JPanel implements TreeSelectionListener {
         algorithm = new DefaultMutableTreeNode(new KPCADemo());
         category.add(algorithm);
 
-        algorithm = new DefaultMutableTreeNode(new ProbabilisticPCADemo());
+        algorithm = new DefaultMutableTreeNode(new PPCADemo());
         category.add(algorithm);
 
         algorithm = new DefaultMutableTreeNode(new GHADemo());
