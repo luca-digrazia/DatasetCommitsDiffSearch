@@ -45,6 +45,7 @@ import com.sun.codemodel.JInvocation;
 public class RestHandler extends BaseGeneratingAnnotationHandler<RestHolder> {
 
 	private final AnnotationHelper annotationHelper;
+	private final APTCodeModelHelper codeModelHelper;
 
 	public RestHandler(ProcessingEnvironment processingEnvironment) {
 		super(Rest.class, processingEnvironment);
