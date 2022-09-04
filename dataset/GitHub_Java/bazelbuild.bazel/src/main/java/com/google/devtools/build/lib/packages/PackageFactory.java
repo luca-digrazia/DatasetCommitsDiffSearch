@@ -55,11 +55,11 @@ import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Node;
 import com.google.devtools.build.lib.syntax.NodeVisitor;
-import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -140,8 +140,10 @@ public final class PackageFactory {
     /** Update the predeclared environment of WORKSPACE files. */
     void updateWorkspace(ImmutableMap.Builder<String, Object> env);
 
-    /** Update the environment of the native module. */
-    void updateNative(ImmutableMap.Builder<String, Object> env);
+    /**
+     * Returns the extra functions needed to be added to the Skylark native module.
+     */
+    ImmutableList<BaseFunction> nativeModuleFunctions();
 
     /**
      * Returns the extra arguments to the {@code package()} statement.
@@ -509,12 +511,7 @@ public final class PackageFactory {
       argumentSpecifiers[i++] = entry.getValue();
     }
 
-    return new BaseFunction(FunctionSignature.namedOnly(0, argumentNames)) {
-      @Override
-      public String getName() {
-        return "package";
-      }
-
+    return new BaseFunction("package", FunctionSignature.namedOnly(0, argumentNames)) {
       @Override
       public Object call(Object[] arguments, FuncallExpression ast, StarlarkThread thread)
           throws EvalException {
@@ -544,7 +541,7 @@ public final class PackageFactory {
               loc, "at least one argument must be given to the 'package' function");
         }
 
-        return Starlark.NONE;
+        return Runtime.NONE;
       }
     };
   }
@@ -571,7 +568,7 @@ public final class PackageFactory {
       RuleClass cl = ruleFactory.getRuleClass(ruleClassName);
       if (cl.getRuleClassType() == RuleClassType.NORMAL
           || cl.getRuleClassType() == RuleClassType.TEST) {
-        result.put(ruleClassName, new BuiltinRuleFunction(cl));
+        result.put(ruleClassName, new BuiltinRuleFunction(ruleClassName, ruleFactory));
       }
     }
     return result.build();
@@ -582,23 +579,29 @@ public final class PackageFactory {
    * com.google.devtools.build.lib.packages.RuleClass}es.
    */
   private static class BuiltinRuleFunction extends BuiltinFunction implements RuleFunction {
+    private final String ruleClassName;
     private final RuleClass ruleClass;
 
-    BuiltinRuleFunction(RuleClass ruleClass) {
-      super(FunctionSignature.KWARGS);
-      this.ruleClass = Preconditions.checkNotNull(ruleClass);
+    BuiltinRuleFunction(String ruleClassName, RuleFactory ruleFactory) {
+      super(ruleClassName, FunctionSignature.KWARGS);
+      this.ruleClassName = ruleClassName;
+      Preconditions.checkNotNull(ruleFactory, "ruleFactory was null");
+      this.ruleClass = Preconditions.checkNotNull(
+          ruleFactory.getRuleClass(ruleClassName),
+          "No such rule class: %s",
+          ruleClassName);
     }
 
     @SuppressWarnings("unused")
-    public NoneType invoke(Map<String, Object> kwargs, Location loc, StarlarkThread thread)
+    public Runtime.NoneType invoke(Map<String, Object> kwargs, Location loc, StarlarkThread thread)
         throws EvalException, InterruptedException {
-      SkylarkUtils.checkLoadingOrWorkspacePhase(thread, ruleClass.getName(), loc);
+      SkylarkUtils.checkLoadingOrWorkspacePhase(thread, ruleClassName, loc);
       try {
         addRule(getContext(thread, loc), kwargs, loc, thread);
       } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
         throw new EvalException(loc, e.getMessage());
       }
-      return Starlark.NONE;
+      return Runtime.NONE;
     }
 
     private void addRule(
@@ -614,11 +617,6 @@ public final class PackageFactory {
     @Override
     public RuleClass getRuleClass() {
       return ruleClass;
-    }
-
-    @Override
-    public String getName() {
-      return ruleClass.getName();
     }
 
     @Override
@@ -905,14 +903,16 @@ public final class PackageFactory {
     builder.putAll(SkylarkNativeModule.BINDINGS_FOR_BUILD_FILES);
     builder.putAll(ruleFunctions);
     builder.put("package", newPackageFunction(packageArguments));
-    for (EnvironmentExtension ext : environmentExtensions) {
-      ext.updateNative(builder);
+    for (EnvironmentExtension extension : environmentExtensions) {
+      for (BaseFunction function : extension.nativeModuleFunctions()) {
+        builder.put(function.getName(), function);
+      }
     }
     return StructProvider.STRUCT.create(builder.build(), "no native function or rule '%s'");
   }
 
   private void populateEnvironment(ImmutableMap.Builder<String, Object> env) {
-    env.putAll(Starlark.UNIVERSE);
+    env.putAll(BazelLibrary.GLOBALS.getBindings());
     env.putAll(StarlarkBuildLibrary.BINDINGS);
     env.putAll(SkylarkNativeModule.BINDINGS_FOR_BUILD_FILES);
     env.put("package", newPackageFunction(packageArguments));
@@ -1145,6 +1145,10 @@ public final class PackageFactory {
       return false; // Invalid package name 'foo'
     }
     return true;
+  }
+
+  static {
+    SkylarkSignatureProcessor.configureSkylarkFunctions(PackageFactory.class);
   }
 
   /**
