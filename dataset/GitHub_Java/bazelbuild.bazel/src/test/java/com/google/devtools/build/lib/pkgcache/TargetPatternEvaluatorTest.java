@@ -146,25 +146,25 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
             false)));
   }
 
-  private Set<Label> parseList(FilteringPolicy policy, String... patterns)
-      throws TargetParsingException, InterruptedException {
-    return targetsToLabels(
-        getFailFast(
-            parseTargetPatternList(
-                PathFragment.EMPTY_FRAGMENT,
-                parser,
-                parsingListener,
-                Arrays.asList(patterns),
-                policy,
-                false)));
-  }
-
   private Set<Label> parseListKeepGoingExpectFailure(String... patterns)
       throws TargetParsingException, InterruptedException {
     ResolvedTargets<Target> result =
         parseTargetPatternList(parser, parsingListener, Arrays.asList(patterns), true);
     assertThat(result.hasError()).isTrue();
     return targetsToLabels(result.getTargets());
+  }
+
+  private Set<Label> parseList(
+      FilteringPolicy policy, String... patterns)
+      throws TargetParsingException, InterruptedException {
+    return targetsToLabels(getFailFast(
+        parseTargetPatternList(
+            PathFragment.EMPTY_FRAGMENT,
+            parser,
+            parsingListener,
+            Arrays.asList(patterns),
+            policy,
+            false)));
   }
 
   private Set<Label> parseListRelative(String... patterns)
@@ -562,9 +562,9 @@ public class TargetPatternEvaluatorTest extends AbstractTargetPatternEvaluatorTe
 
   @Test
   public void testDoesNotRecurseIntoSymlinksToOutputBase() throws Exception {
-    Path outputBaseBuildFile = outputBase.getRelative("execroot/workspace/test/BUILD");
+    Path outputBaseBuildFile = outputBase.getRelative("workspace/test/BUILD");
     scratch.file(outputBaseBuildFile.getPathString(), "filegroup(name='c')");
-    PathFragment targetFragment = outputBase.asFragment().getRelative("execroot/workspace/test");
+    PathFragment targetFragment = outputBase.asFragment().getRelative("workspace/test");
     Path d = scratch.dir("d");
     d.getChild("c").createSymbolicLink(targetFragment);
     rootDirectory.getChild("convenience").createSymbolicLink(targetFragment);
