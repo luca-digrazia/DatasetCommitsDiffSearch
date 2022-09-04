@@ -169,7 +169,6 @@ public final class HibernateOrmProcessor {
     }
 
     @BuildStep
-//<<<<<<< HEAD
     public void parsePersistenceXmlDescriptors(
             BuildProducer<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptorBuildItemBuildProducer) {
         List<ParsedPersistenceXmlDescriptor> explicitDescriptors = QuarkusPersistenceXmlParser.locatePersistenceUnits();
@@ -280,12 +279,11 @@ public final class HibernateOrmProcessor {
                 generatedClassBuildItemBuildProducer);
         return new ProxyDefinitionsBuildItem(proxyDefinitions);
     }
-    
+
     @SuppressWarnings("unchecked")
     @BuildStep
     @Record(STATIC_INIT)
     public void build(RecorderContext recorderContext, HibernateOrmRecorder recorder,
-    		Capabilities capabilities,
             JpaEntitiesBuildItem domainObjects,
             List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
@@ -297,10 +295,7 @@ public final class HibernateOrmProcessor {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_ORM));
 
         final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
-        final boolean enableRX = capabilities.isCapabilityPresent(Capabilities.HIBERNATE_RX);
-        if (!enableRX) {
-            recorder.callHibernateFeatureInit(enableORM);
-        }
+        recorder.callHibernateFeatureInit(enableORM);
 
         if (!enableORM) {
             // we can bail out early
