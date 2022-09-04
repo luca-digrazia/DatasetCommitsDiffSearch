@@ -21,11 +21,13 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Ordering;
+import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.Configuration;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.slf4j.Logger;
@@ -34,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -112,7 +115,15 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
 
         if (configuration.isDisableOutputCache()) {
             LOG.debug("Finished processing message. Writing to output buffer.");
-                outputBuffer.insertBlocking(msg);
+            for (;;) {
+                try {
+                    outputBuffer.insertFailFast(msg, null);
+                    break;
+                } catch (BufferOutOfCapacityException e) {
+                    LOG.debug("Output buffer is full. Retrying.");
+                    Uninterruptibles.sleepUninterruptibly(10, TimeUnit.MILLISECONDS);
+                }
+            }
         } else {
             LOG.debug("Finished processing message. Writing to output cache.");
             outputBuffer.insertCached(msg, null);
