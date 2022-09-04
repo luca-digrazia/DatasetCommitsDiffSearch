@@ -15,11 +15,10 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecRegistry.CodecDescriptor;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException.NoCodecException;
-import com.google.protobuf.ByteString;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -31,32 +30,28 @@ public class ObjectCodecRegistryTest {
   @Test
   public void testDescriptorLookups() throws NoCodecException {
     SingletonCodec<String> codec1 = SingletonCodec.of("value1", "mnemonic1");
-    SingletonCodec<String> codec2 = SingletonCodec.of("value2", "mnemonic2");
+    SingletonCodec<Integer> codec2 = SingletonCodec.of(1, "mnemonic2");
 
-    ObjectCodecRegistry underTest = ObjectCodecRegistry.newBuilder()
-        .setAllowDefaultCodec(false)
-        .add("foo", codec1)
-        .add("bar", codec2)
-        .build();
+    ObjectCodecRegistry underTest =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(false)
+            .add(codec1)
+            .add(codec2)
+            .build();
 
-    CodecDescriptor fooDescriptor = underTest.getCodecDescriptor("foo");
-    assertThat(fooDescriptor.getCodec()).isSameAs(codec1);
-    assertThat(underTest.getCodecDescriptor(ByteString.copyFromUtf8("foo")))
-        .isSameAs(fooDescriptor);
-    assertThat(underTest.getCodecDescriptorByTag(fooDescriptor.getTag())).isSameAs(fooDescriptor);
+    CodecDescriptor fooDescriptor = underTest.getCodecDescriptorForObject("hello");
+    assertThat(fooDescriptor.getCodec()).isSameInstanceAs(codec1);
+    assertThat(underTest.getCodecDescriptorByTag(fooDescriptor.getTag()))
+        .isSameInstanceAs(fooDescriptor);
 
-    CodecDescriptor barDescriptor = underTest.getCodecDescriptor("bar");
-    assertThat(barDescriptor.getCodec()).isSameAs(codec2);
-    assertThat(underTest.getCodecDescriptor(ByteString.copyFromUtf8("bar")))
-        .isSameAs(barDescriptor);
-    assertThat(underTest.getCodecDescriptorByTag(barDescriptor.getTag())).isSameAs(barDescriptor);
+    CodecDescriptor barDescriptor = underTest.getCodecDescriptorForObject(1);
+    assertThat(barDescriptor.getCodec()).isSameInstanceAs(codec2);
+    assertThat(underTest.getCodecDescriptorByTag(barDescriptor.getTag()))
+        .isSameInstanceAs(barDescriptor);
 
     assertThat(barDescriptor.getTag()).isNotEqualTo(fooDescriptor.getTag());
 
-    assertThrows(NoCodecException.class, () -> underTest.getCodecDescriptor("baz"));
-    assertThrows(
-        NoCodecException.class,
-        () -> underTest.getCodecDescriptor(ByteString.copyFromUtf8("baz")));
+    assertThrows(NoCodecException.class, () -> underTest.getCodecDescriptorForObject((byte) 1));
     assertThrows(NoCodecException.class, () -> underTest.getCodecDescriptorByTag(42));
   }
 
@@ -64,21 +59,25 @@ public class ObjectCodecRegistryTest {
   public void testDefaultCodecFallback() throws NoCodecException {
     SingletonCodec<String> codec = SingletonCodec.of("value1", "mnemonic1");
 
-    ObjectCodecRegistry underTest = ObjectCodecRegistry.newBuilder()
-        .setAllowDefaultCodec(true)
-        .add("foo", codec)
-        .build();
+    ObjectCodecRegistry underTest =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addClassName(Integer.class.getName())
+            .build();
 
-    CodecDescriptor fooDescriptor = underTest.getCodecDescriptor("foo");
-    assertThat(fooDescriptor.getCodec()).isSameAs(codec);
+    CodecDescriptor fooDescriptor = underTest.getCodecDescriptorForObject("value1");
+    assertThat(fooDescriptor.getCodec()).isSameInstanceAs(codec);
 
-    CodecDescriptor barDefaultDescriptor = underTest.getCodecDescriptor("bar");
-    assertThat(barDefaultDescriptor.getCodec()).isNotSameAs(codec);
+    CodecDescriptor barDefaultDescriptor = underTest.getCodecDescriptorForObject(15);
+    assertThat(barDefaultDescriptor.getCodec()).isNotSameInstanceAs(codec);
     assertThat(barDefaultDescriptor.getTag()).isNotEqualTo(fooDescriptor.getTag());
     assertThat(underTest.getCodecDescriptorByTag(barDefaultDescriptor.getTag()))
-        .isSameAs(barDefaultDescriptor);
+        .isSameInstanceAs(barDefaultDescriptor);
 
-    assertThat(underTest.getCodecDescriptor("baz")).isSameAs(barDefaultDescriptor);
+    assertThat(underTest.getCodecDescriptorForObject((byte) 9).getCodec().getClass())
+        .isSameInstanceAs(barDefaultDescriptor.getCodec().getClass());
 
     // Bogus tags still throw.
     assertThrows(NoCodecException.class, () -> underTest.getCodecDescriptorByTag(42));
@@ -87,27 +86,31 @@ public class ObjectCodecRegistryTest {
   @Test
   public void testStableTagOrdering() throws NoCodecException {
     SingletonCodec<String> codec1 = SingletonCodec.of("value1", "mnemonic1");
-    SingletonCodec<String> codec2 = SingletonCodec.of("value2", "mnemonic2");
+    SingletonCodec<Integer> codec2 = SingletonCodec.of(1, "mnemonic2");
 
-    ObjectCodecRegistry underTest1 = ObjectCodecRegistry.newBuilder()
-        .setAllowDefaultCodec(true)
-        .add("foo", codec1)
-        .add("bar", codec2)
-        .build();
+    ObjectCodecRegistry underTest1 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec1)
+            .add(codec2)
+            .addClassName(Byte.class.getName())
+            .build();
 
-    ObjectCodecRegistry underTest2 = ObjectCodecRegistry.newBuilder()
-        .setAllowDefaultCodec(true)
-        .add("bar", codec2)
-        .add("foo", codec1)
-        .build();
+    ObjectCodecRegistry underTest2 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec2)
+            .add(codec1)
+            .addClassName(Byte.class.getName())
+            .build();
 
-    assertThat(underTest1.getCodecDescriptor("foo").getTag())
-        .isEqualTo(underTest2.getCodecDescriptor("foo").getTag());
-    assertThat(underTest1.getCodecDescriptor("bar").getTag())
-        .isEqualTo(underTest2.getCodecDescriptor("bar").getTag());
+    assertThat(underTest1.getCodecDescriptorForObject("value1").getTag())
+        .isEqualTo(underTest2.getCodecDescriptorForObject("value1").getTag());
+    assertThat(underTest1.getCodecDescriptorForObject(5).getTag())
+        .isEqualTo(underTest2.getCodecDescriptorForObject(5).getTag());
     // Default codec.
-    assertThat(underTest1.getCodecDescriptor("baz").getTag())
-        .isEqualTo(underTest2.getCodecDescriptor("baz").getTag());
+    assertThat(underTest1.getCodecDescriptorForObject((byte) 10).getTag())
+        .isEqualTo(underTest2.getCodecDescriptorForObject((byte) 10).getTag());
   }
 
   @Test
@@ -117,15 +120,15 @@ public class ObjectCodecRegistryTest {
     ObjectCodecRegistry underTest1 =
         ObjectCodecRegistry.newBuilder()
             .setAllowDefaultCodec(false)
-            .addConstant(constant1)
-            .addConstant(constant2)
-            .addConstant(constant1)
+            .addReferenceConstant(constant1)
+            .addReferenceConstant(constant2)
+            .addReferenceConstant(constant1)
             .build();
     ObjectCodecRegistry underTest2 =
         ObjectCodecRegistry.newBuilder()
             .setAllowDefaultCodec(false)
-            .addConstant(constant1)
-            .addConstant(constant2)
+            .addReferenceConstant(constant1)
+            .addReferenceConstant(constant2)
             .build();
     assertThat(underTest1.maybeGetTagForConstant(constant1)).isEqualTo(3);
     assertThat(underTest1.maybeGetTagForConstant(constant2)).isEqualTo(2);
@@ -133,49 +136,243 @@ public class ObjectCodecRegistryTest {
     assertThat(underTest2.maybeGetTagForConstant(constant2)).isEqualTo(2);
   }
 
-  @Test
-  public void memoizingOrderedByClassName() {
-    Memoizer.MemoizingCodec<String> memoizingCodec1 =
-        new Memoizer.ObjectCodecAdaptor<>(SingletonCodec.of("value1", "mnemonic1"));
-    Memoizer.MemoizingCodec<Object> memoizingCodec2 =
-        new Memoizer.ObjectCodecAdaptor<>(SingletonCodec.of(new Object(), "mnemonic2"));
-    ObjectCodecRegistry underTest =
-        ObjectCodecRegistry.newBuilder()
-            .setAllowDefaultCodec(false)
-            .addMemoizing(memoizingCodec1)
-            .addMemoizing(memoizingCodec2)
-            .build();
+  private static ObjectCodecRegistry.Builder builderWithThisClass() {
+    return ObjectCodecRegistry.newBuilder().addClassName(ObjectCodecRegistryTest.class.getName());
+  }
 
-    assertThat(underTest.getMemoizingCodecDescriptor(Object.class).getMemoizingCodec())
-        .isEqualTo(memoizingCodec2);
-    assertThat(underTest.getMemoizingCodecDescriptor(String.class).getMemoizingCodec())
-        .isEqualTo(memoizingCodec1);
-    assertThat(underTest.maybeGetMemoizingCodecByTag(1)).isEqualTo(memoizingCodec2);
-    assertThat(underTest.maybeGetMemoizingCodecByTag(2)).isEqualTo(memoizingCodec1);
+  @Test
+  public void excludingPrefix() throws NoCodecException {
+    ObjectCodecRegistry underTest = builderWithThisClass().build();
+    CodecDescriptor descriptor = underTest.getCodecDescriptorForObject(this);
+    assertThat(descriptor).isNotNull();
+    assertThat(descriptor.getCodec()).isInstanceOf(DynamicCodec.class);
+    ObjectCodecRegistry underTestWithExcludeList =
+        builderWithThisClass()
+            .excludeClassNamePrefix(this.getClass().getPackage().getName())
+            .build();
+    assertThrows(
+        NoCodecException.class, () -> underTestWithExcludeList.getCodecDescriptorForObject(this));
+    ObjectCodecRegistry underTestWithWideExcludeList =
+        builderWithThisClass().excludeClassNamePrefix("com").build();
+    assertThrows(
+        NoCodecException.class,
+        () -> underTestWithWideExcludeList.getCodecDescriptorForObject(this));
   }
 
   @Test
   public void testGetBuilder() throws NoCodecException {
     SingletonCodec<String> codec1 = SingletonCodec.of("value1", "mnemonic1");
-    SingletonCodec<String> codec2 = SingletonCodec.of("value2", "mnemonic2");
+    SingletonCodec<Integer> codec2 = SingletonCodec.of(1, "mnemonic2");
     Object constant = new Object();
-    Memoizer.MemoizingCodec<String> memoizingCodec = new Memoizer.ObjectCodecAdaptor<>(codec1);
 
     ObjectCodecRegistry underTest =
         ObjectCodecRegistry.newBuilder()
             .setAllowDefaultCodec(false)
-            .add("foo", codec1)
-            .add("bar", codec2)
-            .addConstant(constant)
-            .addMemoizing(memoizingCodec)
+            .add(codec1)
+            .add(codec2)
+            .addReferenceConstant(constant)
             .build();
 
     ObjectCodecRegistry copy = underTest.getBuilder().build();
-    assertThat(copy.getCodecDescriptor("bar").getTag()).isEqualTo(1);
-    assertThat(copy.getCodecDescriptor("foo").getTag()).isEqualTo(2);
-    assertThat(copy.getMemoizingCodecDescriptor(String.class).getMemoizingCodec())
-        .isEqualTo(memoizingCodec);
+    assertThat(copy.getCodecDescriptorForObject(12).getTag()).isEqualTo(1);
+    assertThat(copy.getCodecDescriptorForObject("value1").getTag()).isEqualTo(2);
     assertThat(copy.maybeGetTagForConstant(constant)).isNotNull();
-    assertThrows(NoCodecException.class, () -> copy.getCodecDescriptor("baz"));
+    assertThrows(NoCodecException.class, () -> copy.getCodecDescriptorForObject((byte) 5));
+  }
+
+  private enum TestEnum {
+    ONE {
+      @Override
+      public int val() {
+        return 1;
+      }
+    },
+    TWO {
+      @Override
+      public int val() {
+        return 2;
+      }
+    },
+    THREE {
+      @Override
+      public int val() {
+        return 3;
+      }
+    };
+
+    public abstract int val();
+  }
+
+  @SuppressWarnings("GetClassOnEnum")
+  @Test
+  public void testDefaultEnum() throws NoCodecException {
+    assertThat(TestEnum.ONE.getClass()).isNotEqualTo(TestEnum.class);
+    assertThat(TestEnum.ONE.getDeclaringClass()).isEqualTo(TestEnum.class);
+    assertThat(TestEnum.ONE.getClass()).isNotEqualTo(TestEnum.TWO.getClass());
+
+    ObjectCodecRegistry underTest =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .addClassName(TestEnum.class.getName())
+            .addClassName(TestEnum.ONE.getClass().getName())
+            .addClassName(TestEnum.TWO.getClass().getName())
+            .addClassName(TestEnum.THREE.getClass().getName())
+            .build();
+
+    CodecDescriptor oneDescriptor = underTest.getCodecDescriptorForObject(TestEnum.ONE);
+    CodecDescriptor twoDescriptor = underTest.getCodecDescriptorForObject(TestEnum.TWO);
+    assertThat(oneDescriptor).isEqualTo(twoDescriptor);
+
+    assertThat(oneDescriptor.getCodec().getEncodedClass()).isEqualTo(TestEnum.class);
+  }
+
+  @Test
+  public void checksum_nullIfNotComputed() {
+    ObjectCodecRegistry registry =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(SingletonCodec.of("value", "mnemonic"))
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(new Object())
+            .computeChecksum(false)
+            .build();
+    assertThat(registry.getChecksum()).isNull();
+  }
+
+  @Test
+  public void checksum_deterministic() {
+    ObjectCodec<String> codec = SingletonCodec.of("value", "mnemonic");
+    Object constant = new Object();
+    byte[] checksum1 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    byte[] checksum2 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    assertThat(checksum1).isNotNull();
+    assertThat(checksum1).isEqualTo(checksum2);
+  }
+
+  @Test
+  public void checksum_sensitiveToChangeInAllowDefaultCodec() {
+    ObjectCodec<String> codec = SingletonCodec.of("value", "mnemonic");
+    Object constant = new Object();
+    byte[] checksum1 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    byte[] checksum2 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(false)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    assertThat(checksum1).isNotNull();
+    assertThat(checksum2).isNotNull();
+    assertThat(checksum1).isNotEqualTo(checksum2);
+  }
+
+  @Test
+  public void checksum_sensitiveToChangeInCodecs() {
+    ObjectCodec<String> codec = SingletonCodec.of("value", "mnemonic");
+    Object constant = new Object();
+    byte[] checksum1 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    byte[] checksum2 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(false)
+            .add(codec)
+            .add(SingletonCodec.of("extra", "extra_mnemonic"))
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    assertThat(checksum1).isNotNull();
+    assertThat(checksum2).isNotNull();
+    assertThat(checksum1).isNotEqualTo(checksum2);
+  }
+
+  @Test
+  public void checksum_sensitiveToChangeInClassNames() {
+    ObjectCodec<String> codec = SingletonCodec.of("value", "mnemonic");
+    Object constant = new Object();
+    byte[] checksum1 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    byte[] checksum2 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(false)
+            .add(codec)
+            .addClassName(Integer.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    assertThat(checksum1).isNotNull();
+    assertThat(checksum2).isNotNull();
+    assertThat(checksum1).isNotEqualTo(checksum2);
+  }
+
+  @Test
+  public void checksum_sensitiveToChangeInReferenceConstants() {
+    ObjectCodec<String> codec = SingletonCodec.of("value", "mnemonic");
+    Object constant = new Object();
+    byte[] checksum1 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(true)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addReferenceConstant(constant)
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    byte[] checksum2 =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(false)
+            .add(codec)
+            .addClassName(Byte.class.getName())
+            .addClassName(Integer.class.getName())
+            .addReferenceConstant(constant)
+            .addReferenceConstant("another constant")
+            .computeChecksum(true)
+            .build()
+            .getChecksum();
+    assertThat(checksum1).isNotNull();
+    assertThat(checksum2).isNotNull();
+    assertThat(checksum1).isNotEqualTo(checksum2);
   }
 }
