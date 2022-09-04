@@ -664,7 +664,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "experimental_android_resource_filtering_method",
       converter = ResourceFilterFactory.Converter.class,
-      defaultValue = "filter_in_analysis",
+      defaultValue = "filter_in_execution",
       documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
       effectTags = {
         OptionEffectTag.CHANGES_INPUTS,
@@ -675,12 +675,13 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       help =
           "Determines when resource filtering attributes, such as the android_binary "
               + "'resource_configuration_filters' and 'densities' attributes, are applied. "
-              + "By default, bazel will 'filter_in_analysis'. The experimental "
+              + "By default, bazel will 'filter_in_execution'. The experimental "
+              + "'filter_in_analysis' option instead applies these filters earlier in the build "
+              + "process, with corresponding gains in speed. The experimental "
               + "'filter_in_analysis_with_dynamic_configuration' option also passes these options "
               + "to the android_binary's dependencies, which also filter their internal resources "
               + "in analysis, possibly making the build even faster (especially in systems that "
-              + "do not cache the results of those dependencies). When using aapt2, filtering is "
-              + "only performed in execution, and this setting does nothing."
+              + "do not cache the results of those dependencies)."
     )
     // The ResourceFilterFactory object holds the filtering behavior as well as settings for which
     // resources should be filtered. The filtering behavior is set from the command line, but the
