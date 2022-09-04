@@ -14,10 +14,14 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -160,89 +164,82 @@ public class PathPackageLocatorTest extends FoundationTestCase {
     return scratch.file(workspace + "/" + packageName + "/BUILD");
   }
 
-  private void checkFails(String packageName, String expectedError) {
-    checkFails(getLocator(), packageName, expectedError);
-  }
-
-  private static void checkFails(
-      PathPackageLocator locator, String packageName, String expectedError) {
+  private void checkFails(String packageName, String expectorError) {
     try {
-      locator.getPackageBuildFile(PackageIdentifier.createInMainRepo(packageName));
+      getLocator().getPackageBuildFile(PackageIdentifier.createInMainRepo(packageName));
       fail();
     } catch (NoSuchPackageException e) {
-      String message = e.getMessage();
-      assertThat(message)
-          .containsMatch(Pattern.compile(Pattern.quote(expectedError), Pattern.CASE_INSENSITIVE));
+      assertThat(e).hasMessage(expectorError);
     }
   }
 
   @Test
   public void testGetPackageBuildFile() throws Exception {
     AtomicReference<? extends UnixGlob.FilesystemCalls> cache = UnixGlob.DEFAULT_SYSCALLS_REF;
-    assertThat(locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("A")))
-        .isEqualTo(buildFile_1A);
-    assertThat(locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("A"), cache))
-        .isEqualTo(buildFile_1A);
-    assertThat(locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("B")))
-        .isEqualTo(buildFile_1B);
-    assertThat(locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("B"), cache))
-        .isEqualTo(buildFile_1B);
-    assertThat(locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("C")))
-        .isEqualTo(buildFile_2C);
-    assertThat(locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("C"), cache))
-        .isEqualTo(buildFile_2C);
-    assertThat(locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("C/D")))
-        .isEqualTo(buildFile_2CD);
-    assertThat(
-            locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("C/D"), cache))
-        .isEqualTo(buildFile_2CD);
+    assertEquals(buildFile_1A, locator.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("A")));
+    assertEquals(buildFile_1A, locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("A"), cache));
+    assertEquals(buildFile_1B, locator.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("B")));
+    assertEquals(buildFile_1B, locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("B"), cache));
+    assertEquals(buildFile_2C, locator.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("C")));
+    assertEquals(buildFile_2C, locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("C"), cache));
+    assertEquals(buildFile_2CD, locator.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("C/D")));
+    assertEquals(buildFile_2CD, locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("C/D"), cache));
     checkFails("C/E",
                "no such package 'C/E': BUILD file not found on package path");
-    assertThat(
-            locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("C/E"), cache))
-        .isNull();
-    assertThat(locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("F")))
-        .isEqualTo(buildFile_2F);
+    assertNull(locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("C/E"), cache));
+    assertEquals(buildFile_2F,
+                 locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("F")));
     checkFails("F/G",
                "no such package 'F/G': BUILD file not found on package path");
-    assertThat(
-            locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("F/G"), cache))
-        .isNull();
-    assertThat(locator.getPackageBuildFile(PackageIdentifier.createInMainRepo("F/G/H")))
-        .isEqualTo(buildFile_2FGH);
-    assertThat(
-            locator.getPackageBuildFileNullable(PackageIdentifier.createInMainRepo("F/G/H"), cache))
-        .isEqualTo(buildFile_2FGH);
+    assertNull(locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("F/G"), cache));
+    assertEquals(buildFile_2FGH, locator.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("F/G/H")));
+    assertEquals(buildFile_2FGH, locator.getPackageBuildFileNullable(
+        PackageIdentifier.createInMainRepo("F/G/H"), cache));
     checkFails("I", "no such package 'I': BUILD file not found on package path");
   }
 
   @Test
   public void testGetPackageBuildFileWithSymlinks() throws Exception {
-    assertThat(locatorWithSymlinks.getPackageBuildFile(PackageIdentifier.createInMainRepo("A")))
-        .isEqualTo(buildFile_3A);
-    assertThat(locatorWithSymlinks.getPackageBuildFile(PackageIdentifier.createInMainRepo("B")))
-        .isEqualTo(buildFile_3B);
-    assertThat(locatorWithSymlinks.getPackageBuildFile(PackageIdentifier.createInMainRepo("C/I")))
-        .isEqualTo(buildFile_3CI);
-    checkFails(
-        locatorWithSymlinks, "C/D", "no such package 'C/D': BUILD file not found on package path");
+    assertEquals(buildFile_3A, locatorWithSymlinks.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("A")));
+    assertEquals(buildFile_3B, locatorWithSymlinks.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("B")));
+    assertEquals(buildFile_3CI, locatorWithSymlinks.getPackageBuildFile(
+        PackageIdentifier.createInMainRepo("C/I")));
+    try {
+      locatorWithSymlinks.getPackageBuildFile(PackageIdentifier.createInMainRepo("C/D"));
+      fail();
+    } catch (BuildFileNotFoundException e) {
+      String message = e.getMessage();
+      assertThat(message)
+          .containsMatch(
+              Pattern.compile(
+                  "no such package 'C/D': BUILD file not found on package path",
+                  Pattern.CASE_INSENSITIVE));
+    }
   }
 
   @Test
   public void testGetWorkspaceFile() throws Exception {
-    assertThat(locator.getWorkspaceFile()).isEqualTo(rootDir1WorkspaceFile);
+    assertEquals(rootDir1WorkspaceFile, locator.getWorkspaceFile());
   }
 
   private Path setLocator(String root) {
     Path nonExistentRoot = scratch.resolve(root);
-    this.locator =
-        PathPackageLocator.create(
-            null,
-            Arrays.asList(root),
-            reporter,
+    this.locator = PathPackageLocator.create(null, Arrays.asList(root), reporter,
             /*workspace=*/ FileSystemUtils.getWorkingDirectory(scratch.getFileSystem()),
-            /* clientWorkingDirectory= */ FileSystemUtils.getWorkingDirectory(
-                scratch.getFileSystem()));
+            /*workingDir=*/ FileSystemUtils.getWorkingDirectory(scratch.getFileSystem()));
     return nonExistentRoot;
   }
 
@@ -292,11 +289,11 @@ public class PathPackageLocatorTest extends FoundationTestCase {
 
     // No warning if workspace == cwd.
     PathPackageLocator.create(null, ImmutableList.of("./foo"), reporter, workspace, workspace);
-    assertThat(eventCollector.count()).isSameAs(0);
+    assertSame(0, eventCollector.count());
 
     PathPackageLocator.create(
         null, ImmutableList.of("./foo"), reporter, workspace, workspace.getRelative("foo"));
-    assertThat(eventCollector.count()).isSameAs(1);
+    assertSame(1, eventCollector.count());
     assertContainsEvent("The package path element './foo' will be taken relative");
   }
 
