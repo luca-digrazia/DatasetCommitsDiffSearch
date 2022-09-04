@@ -16,12 +16,17 @@
  */
 package org.graylog.testing.ldap;
 
+import org.graylog.security.authservice.ldap.LDAPConnectorConfig;
+import org.graylog.security.authservice.ldap.LDAPTransportSecurity;
+import org.graylog2.security.encryption.EncryptedValueService;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Locale;
 
 /**
  * Creates an OpenLDAP server container configured with users and (nested) groups.
@@ -68,6 +73,19 @@ public class OpenLDAPContainer extends GenericContainer<OpenLDAPContainer> {
         withStartupTimeout(Duration.ofSeconds(10));
     }
 
+    /**
+     * Returns the {@link LDAPConnectorConfig} for the running container.
+     */
+    public LDAPConnectorConfig createLDAPConnectorConfig(EncryptedValueService encryptedValueService) {
+        return LDAPConnectorConfig.builder()
+                .systemUsername(bindDn())
+                .systemPassword(encryptedValueService.encrypt(bindPassword()))
+                .serverList(Collections.singletonList(LDAPConnectorConfig.LDAPServer.fromUrl(ldapURL())))
+                .transportSecurity(LDAPTransportSecurity.NONE)
+                .verifyCertificates(false)
+                .build();
+    }
+
     public String bindDn() {
         return BIND_DN;
     }
@@ -76,11 +94,31 @@ public class OpenLDAPContainer extends GenericContainer<OpenLDAPContainer> {
         return BIND_PASSWORD;
     }
 
+    /**
+     * The mapped LDAP port for plain text or StartTLS connections.
+     */
     public int ldapPort() {
         return getMappedPort(PORT);
     }
 
+    /**
+     * The mapped LDAP port for TLS connections.
+     */
     public int ldapsPort() {
         return getMappedPort(TLS_PORT);
+    }
+
+    /**
+     * Returns an LDAP URL string for plain text or StartTLS connections.
+     */
+    public String ldapURL() {
+        return String.format(Locale.US, "ldap://127.0.0.1:%s/", ldapPort());
+    }
+
+    /**
+     * Returns an LDAP URL string for TLS connections.
+     */
+    public String ldapsURL() {
+        return String.format(Locale.US, "ldaps://127.0.0.1:%s/", ldapsPort());
     }
 }
