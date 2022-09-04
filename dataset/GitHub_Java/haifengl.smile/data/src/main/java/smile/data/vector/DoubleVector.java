@@ -38,9 +38,6 @@ public interface DoubleVector extends BaseVector<Double, Double, DoubleStream> {
     double[] array();
 
     @Override
-    DoubleVector get(int... index);
-
-    @Override
     default byte getByte(int i) {
         throw new UnsupportedOperationException("cast double to byte");
     }
