@@ -20,16 +20,15 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
 import org.graylog2.Tools;
 import org.graylog2.messagehandlers.syslog.SyslogEventHandler;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
+
+import java.util.Map;
+import java.util.Set;
 
 /**
  * GELFClient.java: Sep 14, 2010 6:43:00 PM
@@ -48,15 +47,7 @@ class GELFClientHandlerBase {
     protected String clientMessage = null;
     protected GELFMessage message = new GELFMessage();
 
-    private final GraylogServer server;
-
-    protected GELFClientHandlerBase(GraylogServer server) {
-        this.server = server;
-    }
-
-    protected GraylogServer getServer() {
-        return server;
-    }
+    protected GELFClientHandlerBase() { }
 
     protected boolean parse() {
         JSONObject json;
@@ -125,6 +116,7 @@ class GELFClientHandlerBase {
             // Add to message.
             this.message.addAdditionalData(key, entry.getValue());
         }
+
         return true;
     }
 
@@ -145,7 +137,7 @@ class GELFClientHandlerBase {
 
         return null;
     }
-
+    
     private String jsonToString(Object json) {
         try {
             if (json != null) {
@@ -185,5 +177,4 @@ class GELFClientHandlerBase {
     protected String getClientMessage() {
         return clientMessage;
     }
-
 }
