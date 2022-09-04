@@ -18,21 +18,19 @@ package org.graylog2.rest.resources.tools;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
-import io.krakens.grok.api.Grok;
-import io.krakens.grok.api.GrokCompiler;
-import io.krakens.grok.api.Match;
-import io.krakens.grok.api.exception.GrokException;
+import oi.thekraken.grok.api.Grok;
+import oi.thekraken.grok.api.Match;
+import oi.thekraken.grok.api.exception.GrokException;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.audit.jersey.NoAuditEvent;
 import org.graylog2.grok.GrokPattern;
 import org.graylog2.grok.GrokPatternService;
-import org.graylog2.rest.models.tools.requests.GrokTestRequest;
+import org.graylog2.rest.resources.tools.requests.GrokTestRequest;
 import org.graylog2.rest.resources.tools.responses.GrokTesterResponse;
 import org.graylog2.shared.rest.resources.RestResource;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
-import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -61,42 +59,35 @@ public class GrokTesterResource extends RestResource {
     @GET
     @Timed
     public GrokTesterResponse grokTest(@QueryParam("pattern") @NotEmpty String pattern,
-                                       @QueryParam("string") @NotNull String string,
-                                       @QueryParam("named_captures_only") @NotNull boolean namedCapturesOnly) throws GrokException {
+                                       @QueryParam("string") @NotNull String string) throws GrokException {
 
-        return doTestGrok(string, pattern, namedCapturesOnly);
+        return doTestGrok(string, pattern);
     }
 
     @POST
     @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @NoAuditEvent("only used to test Grok patterns")
     public GrokTesterResponse testGrok(@Valid @NotNull GrokTestRequest grokTestRequest) throws GrokException {
-        return doTestGrok(grokTestRequest.string(), grokTestRequest.pattern(), grokTestRequest.namedCapturesOnly());
+        return doTestGrok(grokTestRequest.string(), grokTestRequest.pattern());
     }
 
-    private GrokTesterResponse doTestGrok(String string, String pattern, boolean namedCapturesOnly) throws GrokException {
+    private GrokTesterResponse doTestGrok(String string, String pattern) throws GrokException {
         final Set<GrokPattern> grokPatterns = grokPatternService.loadAll();
 
-        final GrokCompiler grokCompiler = GrokCompiler.newInstance();
+        final Grok grok = new Grok();
         for (GrokPattern grokPattern : grokPatterns) {
-            grokCompiler.register(grokPattern.name(), grokPattern.pattern());
+            grok.addPattern(grokPattern.name, grokPattern.pattern);
         }
 
-        final Grok grok;
-        try {
-            grok = grokCompiler.compile(pattern, namedCapturesOnly);
-        } catch (Exception e) {
-            return GrokTesterResponse.createError(pattern, string, e.getMessage());
-        }
-
+        grok.compile(pattern);
         final Match match = grok.match(string);
-        final Map<String, Object> matches = match.captureFlattened();
+        match.captures();
+        final Map<String, Object> matches = match.toMap();
 
         final GrokTesterResponse response;
         if (matches.isEmpty()) {
-            response = GrokTesterResponse.createSuccess(false, Collections.<GrokTesterResponse.Match>emptyList(), pattern, string);
+            response = GrokTesterResponse.create(false, Collections.<GrokTesterResponse.Match>emptyList(), pattern, string);
         } else {
             final List<GrokTesterResponse.Match> responseMatches = Lists.newArrayList();
             for (final Map.Entry<String, Object> entry : matches.entrySet()) {
@@ -106,7 +97,7 @@ public class GrokTesterResource extends RestResource {
                 }
             }
 
-            response = GrokTesterResponse.createSuccess(true, responseMatches, pattern, string);
+            response = GrokTesterResponse.create(true, responseMatches, pattern, string);
         }
         return response;
     }
