@@ -34,7 +34,7 @@ public class UdpSocketAppenderFactoryTest {
     private final CountDownLatch countDownLatch = new CountDownLatch(messagesCount);
 
     @BeforeEach
-    void setUp() throws Exception {
+    public void setUp() throws Exception {
         datagramSocket = new DatagramSocket(UDP_PORT);
         thread = new Thread(() -> {
             byte[] buffer = new byte[256];
@@ -54,13 +54,13 @@ public class UdpSocketAppenderFactoryTest {
     }
 
     @AfterEach
-    void tearDown() throws Exception {
+    public void tearDown() throws Exception {
         thread.interrupt();
         datagramSocket.close();
     }
 
     @Test
-    void testSendLogsByTcp() throws Exception {
+    public void testSendLogsByTcp() throws Exception {
         ObjectMapper objectMapper = Jackson.newObjectMapper();
         objectMapper.getSubtypeResolver().registerSubtypes(UdpSocketAppenderFactory.class);
 
