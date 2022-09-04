@@ -23,10 +23,8 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -55,10 +53,7 @@ import javax.annotation.Nullable;
 // TODO(b/77669139): Rename to CcCompilationContext.
 public final class CcCompilationContext implements CcCompilationContextApi {
   /** An empty {@code CcCompilationContext}. */
-  public static final CcCompilationContext EMPTY =
-      new Builder(
-              /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null)
-          .build();
+  public static final CcCompilationContext EMPTY = new Builder(null).build();
 
   private final CommandLineCcCompilationContext commandLineCcCompilationContext;
 
@@ -422,8 +417,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
 
   public static CcCompilationContext merge(Collection<CcCompilationContext> ccCompilationContexts) {
     CcCompilationContext.Builder builder =
-        new CcCompilationContext.Builder(
-            /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null);
+        new CcCompilationContext.Builder(/* ruleContext= */ null);
     builder.mergeDependentCcCompilationContexts(ccCompilationContexts);
     return builder.build();
   }
@@ -485,19 +479,11 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         NestedSetBuilder.stableOrder();
 
     /** The rule that owns the context */
-    private final ActionConstructionContext actionConstructionContext;
-
-    private final BuildConfiguration configuration;
-    private final Label label;
+    private final RuleContext ruleContext;
 
     /** Creates a new builder for a {@link CcCompilationContext} instance. */
-    public Builder(
-        ActionConstructionContext actionConstructionContext,
-        BuildConfiguration configuration,
-        Label label) {
-      this.actionConstructionContext = actionConstructionContext;
-      this.configuration = configuration;
-      this.label = label;
+    public Builder(RuleContext ruleContext) {
+      this.ruleContext = ruleContext;
     }
 
     /**
@@ -731,10 +717,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     /** Builds the {@link CcCompilationContext}. */
     public CcCompilationContext build() {
       return build(
-          actionConstructionContext == null ? null : actionConstructionContext.getActionOwner(),
-          actionConstructionContext == null
-              ? null
-              : actionConstructionContext.getAnalysisEnvironment().getMiddlemanFactory());
+          ruleContext == null ? null : ruleContext.getActionOwner(),
+          ruleContext == null ? null : ruleContext.getAnalysisEnvironment().getMiddlemanFactory());
     }
 
     @VisibleForTesting // productionVisibility = Visibility.PRIVATE
@@ -798,13 +782,13 @@ public final class CcCompilationContext implements CcCompilationContextApi {
       // Such middleman will be ignored by the dependency checker yet will still
       // represent an edge in the action dependency graph - forcing proper execution
       // order and error propagation.
-      String name = cppModuleMap != null ? cppModuleMap.getName() : label.toString();
+      String name =
+          cppModuleMap != null ? cppModuleMap.getName() : ruleContext.getLabel().toString();
       return middlemanFactory.createErrorPropagatingMiddleman(
-          owner,
-          name,
-          purpose,
+          owner, name, purpose,
           ImmutableList.copyOf(compilationPrerequisites),
-          configuration.getMiddlemanDirectory(label.getPackageIdentifier().getRepository()));
+          ruleContext.getConfiguration().getMiddlemanDirectory(
+              ruleContext.getRule().getRepository()));
     }
   }
 
