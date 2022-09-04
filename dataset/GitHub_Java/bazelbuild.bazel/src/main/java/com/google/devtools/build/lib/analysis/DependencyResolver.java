@@ -91,15 +91,13 @@ public abstract class DependencyResolver {
    *     This is needed to support {@link LateBoundDefault#useHostConfiguration()}.
    * @param aspect the aspect applied to this target (if any)
    * @param configConditions resolver for config_setting labels
-   * @param toolchainContext {@link ToolchainContext} for this target
    * @return a mapping of each attribute in this rule or aspects to its dependent nodes
    */
   public final OrderedSetMultimap<Attribute, Dependency> dependentNodeMap(
       TargetAndConfiguration node,
       BuildConfiguration hostConfig,
       @Nullable Aspect aspect,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      ToolchainContext toolchainContext)
+      ImmutableMap<Label, ConfigMatchingProvider> configConditions)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException {
     NestedSetBuilder<Label> rootCauses = NestedSetBuilder.<Label>stableOrder();
@@ -109,7 +107,7 @@ public abstract class DependencyResolver {
             hostConfig,
             aspect != null ? ImmutableList.of(aspect) : ImmutableList.<Aspect>of(),
             configConditions,
-            toolchainContext,
+            /*toolchainContext=*/ null,
             rootCauses);
     if (!rootCauses.isEmpty()) {
       throw new IllegalStateException(rootCauses.build().iterator().next().toString());

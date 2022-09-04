@@ -218,6 +218,11 @@ public final class ConfigurationResolver {
       return Iterables.getOnlyElement(
           ComposingSplitTransition.apply(options, configurator.apply(options)));
     }
+
+    @Override
+    public boolean defaultsToSelf() {
+      return false;
+    }
   }
 
   /**

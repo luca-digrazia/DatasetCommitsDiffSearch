@@ -747,18 +747,6 @@ public final class BuildConfiguration implements BuildEvent {
     public boolean useLLVMCoverageMapFormat;
 
     @Option(
-      name = "build_runfile_manifests",
-      defaultValue = "true",
-      category = "strategy",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "If true, write runfiles manifests for all targets.  "
-              + "If false, omit them."
-    )
-    public boolean buildRunfilesManifests;
-
-    @Option(
       name = "build_runfile_links",
       defaultValue = "true",
       category = "strategy",
@@ -1032,7 +1020,7 @@ public final class BuildConfiguration implements BuildEvent {
     public boolean windowsExeLauncher;
 
     @Override
-    public FragmentOptions getHost() {
+    public FragmentOptions getHost(boolean fallback) {
       Options host = (Options) getDefault();
 
       host.outputDirectoryName = "host";
@@ -1045,10 +1033,17 @@ public final class BuildConfiguration implements BuildEvent {
       host.commandLineBuildVariables = commandLineBuildVariables;
       host.enforceConstraints = enforceConstraints;
       host.separateGenfilesDirectory = separateGenfilesDirectory;
-      host.cpu = hostCpu;
+
+      if (fallback) {
+        // In the fallback case, we have already tried the target options and they didn't work, so
+        // now we try the default options; the hostCpu field has the default value, because we use
+        // getDefault() above.
+        host.cpu = host.hostCpu;
+      } else {
+        host.cpu = hostCpu;
+      }
 
       // === Runfiles ===
-      host.buildRunfilesManifests = buildRunfilesManifests;
       host.buildRunfiles = buildRunfiles;
 
       // === Linkstamping ===
@@ -1876,13 +1871,6 @@ public final class BuildConfiguration implements BuildEvent {
    */
   public boolean extendedSanityChecks() {
     return options.extendedSanityChecks;
-  }
-
-  /**
-   * Returns true if we are building runfiles manifests for this configuration.
-   */
-  public boolean buildRunfilesManifests() {
-    return options.buildRunfilesManifests;
   }
 
   /**
