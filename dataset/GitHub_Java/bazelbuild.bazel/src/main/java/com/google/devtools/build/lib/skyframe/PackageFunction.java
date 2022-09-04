@@ -72,6 +72,7 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
+import com.google.devtools.build.skyframe.ValueOrException3;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -674,7 +675,13 @@ public class PackageFunction implements SkyFunction {
     Set<SkyKey> containingPkgLookupKeys = Sets.newHashSet();
     Map<Target, SkyKey> targetToKey = new HashMap<>();
     for (Target target : pkgBuilder.getTargets()) {
-      PathFragment dir = Label.getContainingDirectory(target.getLabel());
+      PathFragment dir = getContainingDirectory(target.getLabel());
+      if (dir == null) {
+        throw new IllegalStateException(
+            String.format(
+                "Null pkg for label %s as path fragment %s in pkg %s",
+                target.getLabel(), target.getLabel().getPackageFragment(), pkgId));
+      }
       if (dir.equals(pkgDir)) {
         continue;
       }
@@ -700,16 +707,25 @@ public class PackageFunction implements SkyFunction {
       ContainingPackageLookupValue containingPackageLookupValue =
           getContainingPkgLookupValueAndPropagateInconsistentFilesystemExceptions(
               pkgId, containingPkgLookupValues.get(key), env);
-      if (maybeAddEventAboutLabelCrossingSubpackage(
-          pkgBuilder,
-          pkgRoot,
-          target.getLabel(),
-          target.getLocation(),
-          containingPackageLookupValue)) {
+        if (maybeAddEventAboutLabelCrossingSubpackage(pkgBuilder, pkgRoot, target.getLabel(),
+          target.getLocation(), containingPackageLookupValue)) {
         pkgBuilder.removeTarget(target);
         pkgBuilder.setContainsErrors();
       }
     }
+  }
+
+  private static PathFragment getContainingDirectory(Label label) {
+    PathFragment pkg = label.getPackageFragment();
+    String name = label.getName();
+    if (name.equals(".")) {
+      return pkg;
+    }
+    if (PathFragment.isNormalizedRelativePath(name) && !PathFragment.containsSeparator(name)) {
+      // Optimize for the common case of a label like '//pkg:target'.
+      return pkg;
+    }
+    return pkg.getRelative(name).getParentDirectory();
   }
 
   @Nullable
@@ -758,8 +774,24 @@ public class PackageFunction implements SkyFunction {
       // exceptions), it reaches here, and we tolerate it.
       return false;
     }
-    String message = ContainingPackageLookupValue.getErrorMessageForLabelCrossingPackageBoundary(
-        pkgRoot, label, containingPkgLookupValue);
+    PathFragment labelNameFragment = PathFragment.create(label.getName());
+    String message = String.format("Label '%s' crosses boundary of subpackage '%s'",
+        label, containingPkg);
+    Root containingRoot = containingPkgLookupValue.getContainingPackageRoot();
+    if (pkgRoot.equals(containingRoot)) {
+      PathFragment labelNameInContainingPackage = labelNameFragment.subFragment(
+          containingPkg.getPackageFragment().segmentCount()
+              - label.getPackageFragment().segmentCount(),
+          labelNameFragment.segmentCount());
+      message += " (perhaps you meant to put the colon here: '";
+      if (containingPkg.getRepository().isDefault() || containingPkg.getRepository().isMain()) {
+        message += "//";
+      }
+      message += containingPkg + ":" + labelNameInContainingPackage + "'?)";
+    } else {
+      message += " (have you deleted " + containingPkg + "/BUILD? "
+          + "If so, use the --deleted_packages=" + containingPkg + " option)";
+    }
     pkgBuilder.addEvent(Event.error(location, message));
     return true;
   }
@@ -879,8 +911,10 @@ public class PackageFunction implements SkyFunction {
       }
       globDepsRequested.addAll(globKeys);
 
-      Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap =
-          env.getValuesOrThrow(globKeys, IOException.class, BuildFileNotFoundException.class);
+      Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
+          FileSymlinkCycleException>> globValueMap =
+          env.getValuesOrThrow(globKeys, IOException.class, BuildFileNotFoundException.class,
+              FileSymlinkCycleException.class);
 
       // For each missing glob, evaluate it asychronously via the delegate.
       //
@@ -913,11 +947,12 @@ public class PackageFunction implements SkyFunction {
     }
 
     private Collection<SkyKey> getMissingKeys(Collection<SkyKey> globKeys,
-        Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap) {
+        Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
+            FileSymlinkCycleException>> globValueMap) {
       List<SkyKey> missingKeys = new ArrayList<>(globKeys.size());
       for (SkyKey globKey : globKeys) {
-        ValueOrException2<IOException, BuildFileNotFoundException> valueOrException =
-            globValueMap.get(globKey);
+        ValueOrException3<IOException, BuildFileNotFoundException, FileSymlinkCycleException>
+            valueOrException = globValueMap.get(globKey);
         if (valueOrException == null) {
           missingKeys.add(globKey);
         }
@@ -980,8 +1015,8 @@ public class PackageFunction implements SkyFunction {
      */
     private static class HybridToken extends Globber.Token {
       // The result of the Skyframe lookup for all the needed glob patterns.
-      private final Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>>
-          globValueMap;
+      private final Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
+          FileSymlinkCycleException>> globValueMap;
       // The skyframe keys corresponding to the 'includes' patterns fetched from Skyframe
       // (this is includes_sky above).
       private final Iterable<SkyKey> includesGlobKeys;
@@ -993,12 +1028,10 @@ public class PackageFunction implements SkyFunction {
       // A token for computing excludes_leg.
       private final Token legacyExcludesToken;
 
-      private HybridToken(
-          Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap,
-          Iterable<SkyKey> includesGlobKeys,
-          Iterable<SkyKey> excludesGlobKeys,
-          Token delegateIncludesToken,
-          Token delegateExcludesToken) {
+      private HybridToken(Map<SkyKey, ValueOrException3<IOException, BuildFileNotFoundException,
+          FileSymlinkCycleException>> globValueMap,
+          Iterable<SkyKey> includesGlobKeys, Iterable<SkyKey> excludesGlobKeys,
+          Token delegateIncludesToken, Token delegateExcludesToken) {
         this.globValueMap = globValueMap;
         this.includesGlobKeys = includesGlobKeys;
         this.excludesGlobKeys = excludesGlobKeys;
@@ -1032,15 +1065,19 @@ public class PackageFunction implements SkyFunction {
 
       private static NestedSet<PathFragment> getGlobMatches(
           SkyKey globKey,
-          Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap)
+          Map<
+                  SkyKey,
+                  ValueOrException3<
+                      IOException, BuildFileNotFoundException, FileSymlinkCycleException>>
+              globValueMap)
           throws SkyframeGlobbingIOException {
-        ValueOrException2<IOException, BuildFileNotFoundException> valueOrException =
-            Preconditions.checkNotNull(
-                globValueMap.get(globKey), "%s should not be missing", globKey);
+        ValueOrException3<IOException, BuildFileNotFoundException, FileSymlinkCycleException>
+            valueOrException =
+                Preconditions.checkNotNull(globValueMap.get(globKey), "%s should not be missing",
+                    globKey);
         try {
-          return Preconditions.checkNotNull(
-                  (GlobValue) valueOrException.get(), "%s should not be missing", globKey)
-              .getMatches();
+          return Preconditions.checkNotNull((GlobValue) valueOrException.get(),
+              "%s should not be missing", globKey).getMatches();
         } catch (BuildFileNotFoundException e) {
           // Legacy package loading is only able to handle an IOException, so a rethrow here is the
           // best we can do.
