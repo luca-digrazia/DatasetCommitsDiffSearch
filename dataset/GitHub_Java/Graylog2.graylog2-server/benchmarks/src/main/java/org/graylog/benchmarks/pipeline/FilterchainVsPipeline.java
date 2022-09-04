@@ -16,17 +16,14 @@
  */
 package org.graylog.benchmarks.pipeline;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import com.codahale.metrics.MetricRegistry;
-
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
-import org.graylog.plugins.pipelineprocessor.codegen.CodeGenerator;
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
 import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
@@ -138,15 +135,14 @@ public class FilterchainVsPipeline {
 
             final PipelineRuleParser parser = setupParser(functions);
 
-            final MetricRegistry metricRegistry = new MetricRegistry();
             final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
-                    pipelineService,
-                    pipelineStreamConnectionsService,
-                    parser,
-                    new MetricRegistry(),
-                    Executors.newScheduledThreadPool(1),
-                    mock(EventBus.class),
-                    (currentPipelines, streamPipelineConnections) -> new PipelineInterpreter.State(currentPipelines, streamPipelineConnections, metricRegistry, 1, true));
+                                                                                         pipelineService,
+                                                                                         pipelineStreamConnectionsService,
+                                                                                         parser,
+                                                                                         new MetricRegistry(),
+                                                                                         Executors.newScheduledThreadPool(1),
+                                                                                         mock(EventBus.class));
+            final MetricRegistry metricRegistry = new MetricRegistry();
             interpreter = new PipelineInterpreter(
                     mock(Journal.class),
                     metricRegistry,
@@ -157,7 +153,7 @@ public class FilterchainVsPipeline {
 
         private PipelineRuleParser setupParser(Map<String, org.graylog.plugins.pipelineprocessor.ast.functions.Function<?>> functions) {
             final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
-            return new PipelineRuleParser(functionRegistry, new CodeGenerator(functionRegistry));
+            return new PipelineRuleParser(functionRegistry);
         }
 
     }

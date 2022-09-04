@@ -16,6 +16,9 @@
  */
 package org.graylog.plugins.pipelineprocessor.rest;
 
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.elasticsearch.common.Strings;
@@ -32,9 +35,6 @@ import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.streams.StreamService;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import javax.inject.Inject;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
@@ -42,10 +42,8 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import java.util.ArrayList;
+import java.util.List;
 
 @Api(value = "Pipelines/Simulator", description = "Simulate pipeline message processor")
 @Path("/system/pipelines/simulate")
@@ -74,9 +72,10 @@ public class SimulatorResource extends RestResource implements PluginRestResourc
         checkPermission(RestPermissions.STREAMS_READ, request.streamId());
 
         final Message message = new Message(request.message());
-        final Stream stream = streamService.load(request.streamId());
-        message.addStream(stream);
-
+        if (!request.streamId().equals("default")) {
+            final Stream stream = streamService.load(request.streamId());
+            message.addStream(stream);
+        }
         if (!Strings.isNullOrEmpty(request.inputId())) {
             message.setSourceInputId(request.inputId());
         }
@@ -91,6 +90,7 @@ public class SimulatorResource extends RestResource implements PluginRestResourc
             simulationResults.add(ResultMessageSummary.create(null, processedMessage.getFields(), ""));
         }
 
+        pipelineInterpreter.stop();
         return SimulationResponse.create(simulationResults,
                                          pipelineInterpreterTracer.getExecutionTrace(),
                                          pipelineInterpreterTracer.took());

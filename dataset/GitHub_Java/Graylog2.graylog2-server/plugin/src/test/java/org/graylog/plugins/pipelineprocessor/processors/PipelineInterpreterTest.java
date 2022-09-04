@@ -16,17 +16,14 @@
  */
 package org.graylog.plugins.pipelineprocessor.processors;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
-
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-
 import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
-import org.graylog.plugins.pipelineprocessor.codegen.CodeGenerator;
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
 import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
@@ -46,7 +43,6 @@ import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Messages;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.journal.Journal;
 import org.junit.Test;
 
@@ -58,7 +54,6 @@ import java.util.concurrent.Executors;
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.collect.Sets.newHashSet;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.graylog2.plugin.streams.Stream.DEFAULT_STREAM_ID;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -95,7 +90,7 @@ public class PipelineInterpreterTest {
         final PipelineStreamConnectionsService pipelineStreamConnectionsService = mock(
                 MongoDbPipelineStreamConnectionsService.class);
         final PipelineConnections pipelineConnections = PipelineConnections.create(null,
-                                                                                   DEFAULT_STREAM_ID,
+                                                                                   "default",
                                                                                    newHashSet("cde"));
         when(pipelineStreamConnectionsService.loadAll()).thenReturn(
                 newHashSet(pipelineConnections)
@@ -108,13 +103,12 @@ public class PipelineInterpreterTest {
         final PipelineRuleParser parser = setupParser(functions);
 
         final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
-                pipelineService,
-                pipelineStreamConnectionsService,
-                parser,
-                new MetricRegistry(),
-                Executors.newScheduledThreadPool(1),
-                mock(EventBus.class),
-                (currentPipelines, streamPipelineConnections) -> new PipelineInterpreter.State(currentPipelines, streamPipelineConnections, new MetricRegistry(), 1, true));
+                                                                                     pipelineService,
+                                                                                     pipelineStreamConnectionsService,
+                                                                                     parser,
+                                                                                     new MetricRegistry(),
+                                                                                     Executors.newScheduledThreadPool(1),
+                                                                                     mock(EventBus.class));
         final PipelineInterpreter interpreter = new PipelineInterpreter(
                 mock(Journal.class),
                 new MetricRegistry(),
@@ -122,7 +116,7 @@ public class PipelineInterpreterTest {
                 stateUpdater
         );
 
-        Message msg = messageInDefaultStream("original message", "test");
+        Message msg = new Message("original message", "test", Tools.nowUTC());
         final Messages processed = interpreter.process(msg);
 
         final Message[] messages = Iterables.toArray(processed, Message.class);
@@ -157,7 +151,7 @@ public class PipelineInterpreterTest {
 
         final PipelineStreamConnectionsService pipelineStreamConnectionsService = new InMemoryPipelineStreamConnectionsService();
         pipelineStreamConnectionsService.save(PipelineConnections.create(null,
-                                                                         DEFAULT_STREAM_ID,
+                                                                         "default",
                                                                          newHashSet("cde")));
 
         final Map<String, Function<?>> functions = Maps.newHashMap();
@@ -166,12 +160,12 @@ public class PipelineInterpreterTest {
 
         final MetricRegistry metricRegistry = new MetricRegistry();
         final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
-                pipelineService,
-                pipelineStreamConnectionsService,
-                parser,
-                metricRegistry,
-                Executors.newScheduledThreadPool(1),
-                mock(EventBus.class), (currentPipelines, streamPipelineConnections) -> new PipelineInterpreter.State(currentPipelines, streamPipelineConnections, new MetricRegistry(), 1, true));
+                                                                                     pipelineService,
+                                                                                     pipelineStreamConnectionsService,
+                                                                                     parser,
+                                                                                     metricRegistry,
+                                                                                     Executors.newScheduledThreadPool(1),
+                                                                                     mock(EventBus.class));
         final PipelineInterpreter interpreter = new PipelineInterpreter(
                 mock(Journal.class),
                 metricRegistry,
@@ -179,7 +173,7 @@ public class PipelineInterpreterTest {
                 stateUpdater
         );
 
-        interpreter.process(messageInDefaultStream("", ""));
+        interpreter.process(new Message("", "", Tools.nowUTC()));
 
         final SortedMap<String, Meter> meters = metricRegistry.getMeters((name, metric) -> name.startsWith(name(Pipeline.class, "cde")) || name.startsWith(name(Rule.class, "abc")));
 
@@ -225,17 +219,7 @@ public class PipelineInterpreterTest {
 
     private PipelineRuleParser setupParser(Map<String, Function<?>> functions) {
         final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
-        return new PipelineRuleParser(functionRegistry, new CodeGenerator(functionRegistry));
-    }
-
-    private Message messageInDefaultStream(String message, String source) {
-        final Message msg = new Message(message, source, Tools.nowUTC());
-
-        final Stream mockedStream = mock(Stream.class);
-        when(mockedStream.getId()).thenReturn(DEFAULT_STREAM_ID);
-        msg.addStream(mockedStream);
-
-        return msg;
+        return new PipelineRuleParser(functionRegistry);
     }
 
 }

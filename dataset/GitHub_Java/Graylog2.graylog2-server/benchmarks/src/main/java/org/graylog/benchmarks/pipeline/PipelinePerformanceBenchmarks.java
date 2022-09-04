@@ -16,6 +16,10 @@
  */
 package org.graylog.benchmarks.pipeline;
 
+import au.com.bytecode.opencsv.CSVParser;
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
+import com.eaio.uuid.UUID;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
@@ -28,17 +32,7 @@ import com.google.common.io.LineProcessor;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.name.Names;
-
-import au.com.bytecode.opencsv.CSVParser;
-
-import com.codahale.metrics.ConsoleReporter;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.eaio.uuid.UUID;
 import com.moandjiezana.toml.Toml;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -85,16 +79,10 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.infra.BenchmarkParams;
 import org.openjdk.jmh.infra.Blackhole;
-import org.openjdk.jmh.infra.IterationParams;
 import org.openjdk.jmh.profile.GCProfiler;
-import org.openjdk.jmh.profile.InternalProfiler;
-import org.openjdk.jmh.results.AggregationPolicy;
-import org.openjdk.jmh.results.IterationResult;
-import org.openjdk.jmh.results.Result;
+import org.openjdk.jmh.profile.Profiler;
 import org.openjdk.jmh.results.RunResult;
-import org.openjdk.jmh.results.ScalarResult;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -104,6 +92,7 @@ import org.openjdk.jmh.runner.options.TimeValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -119,10 +108,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.stream.Collectors;
-
-import javax.annotation.Nonnull;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 
@@ -132,21 +118,12 @@ public class PipelinePerformanceBenchmarks {
 
     private static String benchmarkDir = System.getProperty("benchmarkDir", "benchmarks");
 
-    private static MetricRegistry metricRegistry;
-
     @State(Scope.Benchmark)
     public static class PipelineConfig {
 
         // the parameter values are created dynamically
         @Param({})
         private String directoryName;
-
-        @Param({"false", "true"})
-        private String codeGenerator;
-
-        @Param({"false", "true"})
-        private String cachedStageIterators;
-
         private PipelineInterpreter interpreter;
         private BenchmarkConfig config;
         private Injector injector;
@@ -174,9 +151,6 @@ public class PipelinePerformanceBenchmarks {
                             bind(StreamService.class).toInstance(new DummyStreamService());
                             bind(GrokPatternService.class).to(InMemoryGrokPatternService.class);
                             bind(MetricRegistry.class).toProvider(MetricRegistryProvider.class);
-                            bindConstant().annotatedWith(Names.named("processbuffer_processors")).to(1);
-                            bindConstant().annotatedWith(Names.named("cached_stageiterators")).to(Boolean.valueOf(cachedStageIterators));
-                            install(new FactoryModuleBuilder().build(PipelineInterpreter.State.Factory.class));
                         }
                     });
 
@@ -290,20 +264,13 @@ public class PipelinePerformanceBenchmarks {
             if (!configFiles.containsKey(Type.MESSAGES)) {
                 if ("generate".equalsIgnoreCase(config.messages)) {
                     final ArrayList<Message> objects = Lists.newArrayList();
-                    Seq.range(0, 25000).forEach(i -> objects.add(new Message("hallo welt",
-                                                                             "127.0.0.1",
-                                                                             Tools.nowUTC())));
+                    Seq.range(0, 25000).forEach(i -> objects.add(new Message("hallo welt", "127.0.0.1", Tools.nowUTC())));
                     messageCycler = Iterators.cycle(objects);
                 } else {
                     messageCycler = Iterators.cycle(MESSAGE);
                 }
             }
-            final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
-            // make the registry available to the profiler
-            metricRegistry = metrics;
 
-            // toggle code generation
-            PipelineRuleParser.setAllowCodeGeneration(Boolean.valueOf(codeGenerator));
             interpreter = injector.getInstance(PipelineInterpreter.class);
         }
 
@@ -311,16 +278,14 @@ public class PipelinePerformanceBenchmarks {
         public void dumpMetrics() throws Exception {
 
             // enable when using yourkit for single runs
-//            if (controller != null) {
-//                controller.captureSnapshot(Controller.SNAPSHOT_WITH_HEAP);
-//            }
+//            controller.captureSnapshot(Controller.SNAPSHOT_WITH_HEAP);
             final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
-            // make the registry available to the profiler
-            metricRegistry = metrics;
+
             final ConsoleReporter reporter = ConsoleReporter.forRegistry(metrics)
                     .outputTo(new PrintStream("/tmp/bench-" + directoryName + ".txt"))
                     .build();
             reporter.report();
+
         }
 
         private String readFile(File file) {
@@ -610,7 +575,7 @@ public class PipelinePerformanceBenchmarks {
             }
 
             if (line.hasOption('f')) {
-                forks = Integer.parseInt(line.getOptionValue('f', "1"));
+                forks = Integer.parseInt(line.getOptionValue('f', "1"));;
             }
 
             if (line.hasOption('w')) {
@@ -630,17 +595,14 @@ public class PipelinePerformanceBenchmarks {
                 .warmupIterations(warmupIterations)
                 .warmupTime(TimeValue.seconds(5))
                 .measurementIterations(iterations)
-                .measurementTime(TimeValue.seconds(60))
+                .measurementTime(TimeValue.seconds(20))
                 .detectJvmArgs()
                 .threads(1)
                 .forks(forks)
                 .param("directoryName", benchmarkParams)
-//                .param("codeGenerator", "false")
-//                .param("cachedStageIterators", "false")
-                .jvmArgsAppend("-DbenchmarkDir=" + benchmarkDir)
-                .resultFormat(ResultFormatType.JSON)
+                .jvmArgsAppend("-DbenchmarkDir="+benchmarkDir)
+                .resultFormat(ResultFormatType.CSV)
                 .addProfiler(GCProfiler.class)
-                .addProfiler(MetricsProfiler.class)
                 .build();
 
         final Runner runner = new Runner(opt);
@@ -659,36 +621,4 @@ public class PipelinePerformanceBenchmarks {
                 .collect(Collectors.toList());
     }
 
-    public static class MetricsProfiler implements InternalProfiler {
-
-        @Override
-        public String getDescription() {
-            return "Metrics profile via MetricRegistry";
-        }
-
-        @Override
-        public void beforeIteration(BenchmarkParams benchmarkParams, IterationParams iterationParams) {
-
-        }
-
-        @Override
-        public Collection<? extends Result> afterIteration(BenchmarkParams benchmarkParams,
-                                                           IterationParams iterationParams,
-                                                           IterationResult result) {
-            final ArrayList<Result> results = Lists.newArrayList();
-            if (metricRegistry == null) {
-                return results;
-            }
-            final SortedMap<String, Meter> counters = metricRegistry.getMeters((name, metric) -> {
-                return name.startsWith(MetricRegistry.name(Rule.class)) || name.startsWith(MetricRegistry.name(Pipeline.class));
-            });
-            counters.entrySet()
-                    .forEach(stringCounterEntry -> result.addResult(new ScalarResult(stringCounterEntry.getKey(),
-                                                                                     stringCounterEntry.getValue().getCount(),
-                                                                                     "calls",
-                                                                                     AggregationPolicy.SUM)));
-
-            return results;
-        }
-    }
 }
