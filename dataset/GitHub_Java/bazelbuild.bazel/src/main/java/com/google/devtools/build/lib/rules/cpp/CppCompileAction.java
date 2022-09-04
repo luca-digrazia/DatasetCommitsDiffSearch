@@ -140,8 +140,9 @@ public class CppCompileAction extends AbstractAction
   private Iterable<Artifact> additionalInputs = null;
 
   /**
-   * Used only during input discovery, when input discovery requires other actions
-   * to be executed first.
+   * Set when a two-stage input discovery is used.
+   *
+   * <p>Used only during action execution.
    */
   private Set<Artifact> usedModules = null;
 
@@ -159,11 +160,13 @@ public class CppCompileAction extends AbstractAction
    *   <li><i>Action caching.</i> It is set when restoring from the action cache. It is queried
    *       immediately after restoration to populate the {@link
    *       com.google.devtools.build.lib.skyframe.ActionExecutionValue}.
-   *   <li><i>Input discovery</i>It is set by {@link #discoverInputs}. It is queried to
+   *   <li><i>Input discovery</i>It is set by {@link #discoverInputsStage2}. It is queried to
    *       populate the {@link com.google.devtools.build.lib.skyframe.ActionExecutionValue}.
    *   <li><i>Compilation</i>Compilation reads this field to know what needs to be staged.
    * </ul>
    */
+  // TODO(djasper): investigate releasing memory used by this field as early as possible, for
+  // example, by including these values in additionalInputs.
   private ImmutableList<Artifact> discoveredModules = null;
 
   /**
@@ -436,38 +439,45 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     Preconditions.checkArgument(!sourceFile.isFileType(CppFileTypes.CPP_MODULE));
 
-    if (additionalInputs == null) {
-      additionalInputs = findUsedHeaders(actionExecutionContext);
-
-      if (!shouldScanIncludes) {
-        return additionalInputs;
-      }
-
-      if (!shouldScanDotdFiles()) {
-        // If we aren't looking at .d files later, remove undeclared inputs now.
-        additionalInputs = filterDiscoveredHeaders(actionExecutionContext, additionalInputs);
-      }
-    }
-
-    if (!shouldScanIncludes || !shouldPruneModules) {
+    additionalInputs = findUsedHeaders(actionExecutionContext);
+    if (!shouldScanIncludes) {
       return additionalInputs;
     }
 
-    if (usedModules == null) {
-      usedModules =
-          ccCompilationContext.getUsedModules(usePic, ImmutableSet.copyOf(additionalInputs));
+    if (!shouldScanDotdFiles()) {
+      additionalInputs = filterDiscoveredHeaders(actionExecutionContext, additionalInputs);
     }
-    Set<Artifact> transitivelyUsedModules =
-        computeTransitivelyUsedModules(
-            actionExecutionContext.getEnvironmentForDiscoveringInputs(), usedModules);
+
+    if (!shouldPruneModules) {
+      return additionalInputs;
+    }
+
+    usedModules =
+        ccCompilationContext.getUsedModules(usePic, ImmutableSet.copyOf(additionalInputs));
+    return Iterables.concat(additionalInputs, usedModules);
+  }
+
+  /** @return null when either {@link #usedModules} was null or on Skyframe lookup failure */
+  @Nullable
+  @Override
+  public Iterable<Artifact> discoverInputsStage2(SkyFunction.Environment env)
+      throws InterruptedException {
+    if (usedModules == null) {
+      // No modules were used in this compilation, no need to do any work.
+      return null;
+    }
+
+    Set<Artifact> transitivelyUsedModules = computeTransitivelyUsedModules(env, usedModules);
     if (transitivelyUsedModules == null) {
+      // Not all used modules available yet. ActionExecutionValues have been requested. Return so
+      // that this function can be re-executed when ready.
       return null;
     }
 
     discoveredModules = ImmutableList.copyOf(Sets.union(usedModules, transitivelyUsedModules));
     topLevelModules = ImmutableList.copyOf(Sets.difference(usedModules, transitivelyUsedModules));
     usedModules = null;
-    return Iterables.concat(additionalInputs, discoveredModules);
+    return transitivelyUsedModules;
   }
 
   @Override
