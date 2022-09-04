@@ -39,8 +39,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.exec.SpawnCache.CacheHandle;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -247,16 +245,13 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     public SortedMap<PathFragment, ActionInput> getInputMapping(
         boolean expandTreeArtifactsInRunfiles) throws IOException {
       if (lazyInputMapping == null) {
-        try (SilentCloseable c =
-            Profiler.instance().profile("AbstractSpawnStrategy.getInputMapping")) {
-          lazyInputMapping =
-              spawnInputExpander.getInputMapping(
-                  spawn,
-                  actionExecutionContext.getArtifactExpander(),
-                  actionExecutionContext.getPathResolver(),
-                  actionExecutionContext.getMetadataProvider(),
-                  expandTreeArtifactsInRunfiles);
-        }
+        lazyInputMapping =
+            spawnInputExpander.getInputMapping(
+                spawn,
+                actionExecutionContext.getArtifactExpander(),
+                actionExecutionContext.getPathResolver(),
+                actionExecutionContext.getMetadataProvider(),
+                expandTreeArtifactsInRunfiles);
       }
       return lazyInputMapping;
     }

@@ -513,14 +513,4 @@ public class RemoteSpawnCacheTest {
         .containsExactly(Pair.of(ProgressStatus.CHECKING_CACHE, "remote-cache"));
     assertThat(eventHandler.getEvents()).isEmpty(); // no warning is printed.
   }
-
-  @Test
-  public void failedCacheActionAsCacheMiss() throws Exception {
-    ActionResult actionResult = ActionResult.newBuilder().setExitCode(1).build();
-    when(remoteCache.getCachedActionResult(any(ActionKey.class))).thenReturn(actionResult);
-
-    CacheHandle entry = cache.lookup(simpleSpawn, simplePolicy);
-
-    assertThat(entry.hasResult()).isFalse();
-  }
 }

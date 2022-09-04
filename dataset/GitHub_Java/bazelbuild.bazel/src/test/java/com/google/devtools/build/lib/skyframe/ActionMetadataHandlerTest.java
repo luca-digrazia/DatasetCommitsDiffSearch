@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -104,9 +104,12 @@ public class ActionMetadataHandlerTest {
         /* tsgm= */ null,
         ArtifactPathResolver.IDENTITY,
         new MinimalOutputStore());
-    IllegalStateException expected =
-        assertThrows(IllegalStateException.class, () -> handler.getMetadata(artifact));
-    assertThat(expected).hasMessageThat().contains("null for ");
+    try {
+      handler.getMetadata(artifact);
+      fail();
+    } catch (IllegalStateException expected) {
+      assertThat(expected).hasMessageThat().contains("null for ");
+    }
   }
 
   @Test
@@ -167,7 +170,11 @@ public class ActionMetadataHandlerTest {
         /* tsgm= */ null,
         ArtifactPathResolver.IDENTITY,
         new MinimalOutputStore());
-    assertThrows(FileNotFoundException.class, () -> handler.getMetadata(artifact));
+    try {
+      handler.getMetadata(artifact);
+      fail();
+    } catch (FileNotFoundException expected) {
+    }
   }
 
   @Test
@@ -182,7 +189,11 @@ public class ActionMetadataHandlerTest {
         /* tsgm= */ null,
         ArtifactPathResolver.IDENTITY,
         new MinimalOutputStore());
-    assertThrows(IllegalStateException.class, () -> handler.getMetadata(artifact));
+    try {
+      handler.getMetadata(artifact);
+      fail();
+    } catch (IllegalStateException expected) {
+    }
   }
 
   @Test
@@ -238,7 +249,11 @@ public class ActionMetadataHandlerTest {
         /* tsgm= */ null,
         ArtifactPathResolver.IDENTITY,
         new MinimalOutputStore());
-    assertThrows(IllegalStateException.class, () -> handler.getMetadata(artifact));
+    try {
+      handler.getMetadata(artifact);
+      fail();
+    } catch (IllegalStateException expected) {
+    }
   }
 
   @Test

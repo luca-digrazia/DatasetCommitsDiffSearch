@@ -58,7 +58,6 @@ import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.OutputPathMapper;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -97,7 +96,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -117,7 +115,6 @@ public final class ActionsTestUtil {
 
   public static ActionExecutionContext createContext(
       Executor executor,
-      ExtendedEventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       FileOutErr fileOutErr,
       Path execRoot,
@@ -125,7 +122,6 @@ public final class ActionsTestUtil {
       @Nullable ActionGraph actionGraph) {
     return createContext(
         executor,
-        eventHandler,
         actionKeyContext,
         fileOutErr,
         execRoot,
@@ -136,7 +132,6 @@ public final class ActionsTestUtil {
 
   public static ActionExecutionContext createContext(
       Executor executor,
-      ExtendedEventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       FileOutErr fileOutErr,
       Path execRoot,
@@ -150,7 +145,7 @@ public final class ActionsTestUtil {
         actionKeyContext,
         metadataHandler,
         fileOutErr,
-        eventHandler,
+        executor != null ? executor.getEventHandler() : null,
         ImmutableMap.copyOf(clientEnv),
         ImmutableMap.of(),
         actionGraph == null
@@ -161,7 +156,7 @@ public final class ActionsTestUtil {
   }
 
   public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
-    DummyExecutor dummyExecutor = new DummyExecutor();
+    DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
     return new ActionExecutionContext(
         dummyExecutor,
         null,
@@ -179,12 +174,12 @@ public final class ActionsTestUtil {
 
   public static ActionExecutionContext createContextForInputDiscovery(
       Executor executor,
-      ExtendedEventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       FileOutErr fileOutErr,
       Path execRoot,
       MetadataHandler metadataHandler,
       BuildDriver buildDriver) {
+    ExtendedEventHandler eventHandler = executor != null ? executor.getEventHandler() : null;
     return ActionExecutionContext.forInputDiscovery(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
@@ -207,34 +202,6 @@ public final class ActionsTestUtil {
     };
   }
 
-  public static Artifact createArtifact(ArtifactRoot root, Path path) {
-    return createArtifactWithRootRelativePath(root, root.getRoot().relativize(path));
-  }
-
-  public static Artifact createArtifact(ArtifactRoot root, String path) {
-    return createArtifactWithRootRelativePath(root, PathFragment.create(path));
-  }
-
-  public static Artifact createArtifactWithRootRelativePath(
-      ArtifactRoot root, PathFragment rootRelativePath) {
-    PathFragment execPath = root.getExecPath().getRelative(rootRelativePath);
-    return createArtifactWithExecPath(root, execPath);
-  }
-
-  public static Artifact createArtifactWithExecPath(ArtifactRoot root, PathFragment execPath) {
-    return root.isSourceRoot()
-        ? new Artifact.SourceArtifact(root, execPath, ArtifactOwner.NullArtifactOwner.INSTANCE)
-        : new Artifact.DerivedArtifact(root, execPath, ArtifactOwner.NullArtifactOwner.INSTANCE);
-  }
-
-  public static void assertNoArtifactEndingWith(RuleConfiguredTarget target, String path) {
-    Pattern endPattern = Pattern.compile(path + "$");
-    for (ActionAnalysisMetadata action : target.getActions()) {
-      for (Artifact output : action.getOutputs()) {
-        assertThat(output.getExecPathString()).doesNotMatch(endPattern);
-      }
-    }
-  }
 
   /**
    * {@link SkyFunction.Environment} that internally makes a full Skyframe evaluate call for the
@@ -297,22 +264,10 @@ public final class ActionsTestUtil {
     }
   }
 
-  static class NullArtifactOwner implements ArtifactOwner {
-    private NullArtifactOwner() {}
-
-    @Override
-    public Label getLabel() {
-      return NULL_LABEL;
-    }
-  }
-
-  @AutoCodec public static final ArtifactOwner NULL_ARTIFACT_OWNER = new NullArtifactOwner();
-
   public static final Artifact DUMMY_ARTIFACT =
-      new Artifact.SourceArtifact(
-          ArtifactRoot.asSourceRoot(Root.absoluteRoot(new InMemoryFileSystem())),
+      new Artifact(
           PathFragment.create("/dummy"),
-          NULL_ARTIFACT_OWNER);
+          ArtifactRoot.asSourceRoot(Root.absoluteRoot(new InMemoryFileSystem())));
 
   public static final ActionOwner NULL_ACTION_OWNER =
       ActionOwner.create(
@@ -325,6 +280,17 @@ public final class ActionsTestUtil {
           null,
           null,
           null);
+
+  static class NullArtifactOwner implements ArtifactOwner {
+    private NullArtifactOwner() {}
+
+    @Override
+    public Label getLabel() {
+      return NULL_LABEL;
+    }
+  }
+
+  @AutoCodec public static final ArtifactOwner NULL_ARTIFACT_OWNER = new NullArtifactOwner();
 
   /** An unchecked exception class for action conflicts. */
   public static class UncheckedActionConflictException extends RuntimeException {
@@ -571,7 +537,7 @@ public final class ActionsTestUtil {
    * suffix and returns the Artifact.
    */
   public static Artifact getFirstArtifactEndingWith(
-      Iterable<? extends Artifact> artifacts, String suffix) {
+      Iterable<Artifact> artifacts, String suffix) {
     for (Artifact a : artifacts) {
       if (a.getExecPath().getPathString().endsWith(suffix)) {
         return a;
@@ -777,7 +743,7 @@ public final class ActionsTestUtil {
 
     @Override
     public void injectRemoteDirectory(
-        SpecialArtifact treeArtifact, Map<PathFragment, RemoteFileArtifactValue> children) {
+        Artifact treeArtifact, Map<PathFragment, RemoteFileArtifactValue> children) {
       throw new UnsupportedOperationException();
     }
 
