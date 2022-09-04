@@ -100,10 +100,7 @@ public class StandaloneTestStrategy extends TestStrategy {
             action.isEnableRunfiles());
     Path tmpDir =
         tmpDirRoot.getChild(
-            getTmpDirName(
-                action.getExecutionSettings().getExecutable().getExecPath(),
-                action.getShardNum(),
-                action.getRunNumber()));
+            getTmpDirName(action.getExecutionSettings().getExecutable().getExecPath()));
     Map<String, String> env = setupEnvironment(action, execRoot, runfilesDir, tmpDir);
     Path workingDirectory = runfilesDir.getRelative(action.getRunfilesPrefix());
 
@@ -173,13 +170,8 @@ public class StandaloneTestStrategy extends TestStrategy {
           .getEventBus()
           .post(
               new TestAttempt(
-                  action,
-                  attempt,
-                  data.getStatus(),
-                  data.getStartTimeMillisEpoch(),
-                  data.getRunDurationMillis(),
-                  testOutputsBuilder.build(),
-                  true));
+                  action, attempt, data.getTestPassed(), data.getRunDurationMillis(),
+                  testOutputsBuilder.build(), true));
       finalizeTest(actionExecutionContext, action, dataBuilder.build());
     } catch (IOException e) {
       executor.getEventHandler().handle(Event.error("Caught I/O exception: " + e));
@@ -222,13 +214,8 @@ public class StandaloneTestStrategy extends TestStrategy {
         .getEventBus()
         .post(
             new TestAttempt(
-                action,
-                attempt,
-                data.getStatus(),
-                data.getStartTimeMillisEpoch(),
-                data.getRunDurationMillis(),
-                testOutputsBuilder.build(),
-                false));
+                action, attempt, data.getTestPassed(), data.getRunDurationMillis(),
+                testOutputsBuilder.build(), false));
     processTestOutput(executor, outErr, new TestResult(action, data, false), testLog);
   }
 
@@ -249,7 +236,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
     dataBuilder.addTestTimes(data.getTestTimes(0));
     dataBuilder.addAllTestProcessTimes(data.getTestProcessTimesList());
-    dataBuilder.setStartTimeMillisEpoch(data.getStartTimeMillisEpoch());
     dataBuilder.setRunDurationMillis(data.getRunDurationMillis());
     if (data.hasTestCase()) {
       dataBuilder.setTestCase(data.getTestCase());
@@ -338,7 +324,6 @@ public class StandaloneTestStrategy extends TestStrategy {
         }
       } finally {
         long duration = executor.getClock().currentTimeMillis() - startTime;
-        builder.setStartTimeMillisEpoch(startTime);
         builder.addTestTimes(duration);
         builder.addTestProcessTimes(duration);
         builder.setRunDurationMillis(duration);
