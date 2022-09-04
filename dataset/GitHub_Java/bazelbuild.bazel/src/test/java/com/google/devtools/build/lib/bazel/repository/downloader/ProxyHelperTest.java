@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.bazel.repository.downloader;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
@@ -185,27 +185,36 @@ public class ProxyHelperTest {
 
   @Test
   public void testProxyNoProtocol() throws Exception {
-    IOException e =
-        assertThrows(IOException.class, () -> ProxyHelper.createProxy("my.example.com"));
-    assertThat(e).hasMessageThat().contains("Proxy address my.example.com is not a valid URL");
+    try {
+      ProxyHelper.createProxy("my.example.com");
+      fail("Expected protocol error");
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().contains("Proxy address my.example.com is not a valid URL");
+    }
   }
 
   @Test
   public void testProxyNoProtocolWithPort() throws Exception {
-    IOException e =
-        assertThrows(IOException.class, () -> ProxyHelper.createProxy("my.example.com:12345"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Proxy address my.example.com:12345 is not a valid URL");
+    try {
+      ProxyHelper.createProxy("my.example.com:12345");
+      fail("Expected protocol error");
+    } catch (IOException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("Proxy address my.example.com:12345 is not a valid URL");
+    }
   }
 
   @Test
   public void testProxyPortParsingError() throws Exception {
-    IOException e =
-        assertThrows(IOException.class, () -> ProxyHelper.createProxy("http://my.example.com:foo"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Proxy address http://my.example.com:foo is not a valid URL");
+    try {
+      ProxyHelper.createProxy("http://my.example.com:foo");
+      fail("Should have thrown an error for invalid port");
+    } catch (IOException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("Proxy address http://my.example.com:foo is not a valid URL");
+    }
   }
 
   @Test
@@ -227,9 +236,12 @@ public class ProxyHelperTest {
 
   @Test
   public void testInvalidAuth() throws Exception {
-    IOException e =
-        assertThrows(IOException.class, () -> ProxyHelper.createProxy("http://foo@my.example.com"));
-    assertThat(e).hasMessageThat().contains("No password given for proxy");
+    try {
+      ProxyHelper.createProxy("http://foo@my.example.com");
+      fail("Should have thrown an error for invalid auth");
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().contains("No password given for proxy");
+    }
   }
 
   @Test
