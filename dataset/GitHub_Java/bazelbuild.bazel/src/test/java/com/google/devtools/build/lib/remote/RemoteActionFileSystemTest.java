@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -138,7 +137,7 @@ public class RemoteActionFileSystemTest {
   private Artifact createRemoteArtifact(
       String pathFragment, String contents, ActionInputMap inputs) {
     Path p = outputRoot.getRoot().asPath().getRelative(pathFragment);
-    Artifact a = ActionsTestUtil.createArtifact(outputRoot, p);
+    Artifact a = new Artifact(p, outputRoot);
     byte[] b = contents.getBytes(StandardCharsets.UTF_8);
     HashCode h = HASH_FUNCTION.getHashFunction().hashBytes(b);
     FileArtifactValue f =
@@ -152,9 +151,8 @@ public class RemoteActionFileSystemTest {
       throws IOException {
     Path p = outputRoot.getRoot().asPath().getRelative(pathFragment);
     FileSystemUtils.writeContent(p, StandardCharsets.UTF_8, contents);
-    Artifact a = ActionsTestUtil.createArtifact(outputRoot, p);
-    inputs.putWithNoDepOwner(
-        a, FileArtifactValue.createFromFileSystem(a.getPath(), /* isShareable= */ true));
+    Artifact a = new Artifact(p, outputRoot);
+    inputs.putWithNoDepOwner(a, FileArtifactValue.create(a.getPath(), /* isShareable= */ true));
     return a;
   }
 }

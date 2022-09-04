@@ -14,12 +14,11 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -30,6 +29,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -188,9 +188,9 @@ public class PathPackageLocatorTest extends FoundationTestCase {
         assertThrows(
             NoSuchPackageException.class,
             () -> locator.getPackageBuildFile(PackageIdentifier.createInMainRepo(packageName)));
-    assertThat(e).hasMessageThat().ignoringCase().contains(expectedError);
-    assertThat(e.getDetailedExitCode().getFailureDetail().getPackageLoading().getCode())
-        .isEqualTo(PackageLoading.Code.BUILD_FILE_MISSING);
+    String message = e.getMessage();
+    assertThat(message)
+        .containsMatch(Pattern.compile(Pattern.quote(expectedError), Pattern.CASE_INSENSITIVE));
   }
 
   @Test
@@ -254,10 +254,10 @@ public class PathPackageLocatorTest extends FoundationTestCase {
     Path nonExistentRoot = scratch.resolve(root);
     this.locator =
         PathPackageLocator.create(
-            /*outputBase=*/ null,
+            null,
             Arrays.asList(root),
             reporter,
-            /*workspace=*/ FileSystemUtils.getWorkingDirectory(),
+            /*workspace=*/ FileSystemUtils.getWorkingDirectory(scratch.getFileSystem()),
             /* clientWorkingDirectory= */ FileSystemUtils.getWorkingDirectory(
                 scratch.getFileSystem()),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
@@ -299,10 +299,10 @@ public class PathPackageLocatorTest extends FoundationTestCase {
         clientPath.getRelative("below").getPathString());
     assertThat(
             PathPackageLocator.create(
-                    /*outputBase=*/ null,
+                    null,
                     pathElements,
                     reporter,
-                    workspace.asFragment(),
+                    workspace,
                     clientPath,
                     BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY)
                 .getPathEntries())
@@ -320,19 +320,19 @@ public class PathPackageLocatorTest extends FoundationTestCase {
 
     // No warning if workspace == cwd.
     PathPackageLocator.create(
-        /*outputBase=*/ null,
+        null,
         ImmutableList.of("./foo"),
         reporter,
-        workspace.asFragment(),
+        workspace,
         workspace,
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     assertThat(eventCollector.count()).isSameInstanceAs(0);
 
     PathPackageLocator.create(
-        /*outputBase=*/ null,
+        null,
         ImmutableList.of("./foo"),
         reporter,
-        workspace.asFragment(),
+        workspace,
         workspace.getRelative("foo"),
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     assertThat(eventCollector.count()).isSameInstanceAs(1);
@@ -345,10 +345,10 @@ public class PathPackageLocatorTest extends FoundationTestCase {
     Path workspace = scratch.dir("/some/path/to/workspace$1");
 
     PathPackageLocator.create(
-        /*outputBase=*/ null,
+        null,
         ImmutableList.of("%workspace%/blabla"),
         reporter,
-        workspace.asFragment(),
+        workspace,
         workspace.getRelative("foo"),
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
   }

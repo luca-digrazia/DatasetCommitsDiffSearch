@@ -638,13 +638,15 @@ public class BuildViewTest extends BuildViewTestBase {
     scratch.file("parent/BUILD",
         "sh_library(name = 'foo',",
         "           srcs = ['//badpkg1:okay-target', '//okaypkg:transitively-bad-target'])");
-    Path badpkg1BuildFile =
-        scratch.file("badpkg1/BUILD", "exports_files(['okay-target'])", "fail()");
+    Path badpkg1BuildFile = scratch.file("badpkg1/BUILD",
+        "exports_files(['okay-target'])",
+        "invalidbuildsyntax");
     scratch.file("okaypkg/BUILD",
         "sh_library(name = 'transitively-bad-target',",
         "           srcs = ['//badpkg2:bad-target'])");
-    Path badpkg2BuildFile =
-        scratch.file("badpkg2/BUILD", "sh_library(name = 'bad-target')", "fail()");
+    Path badpkg2BuildFile = scratch.file("badpkg2/BUILD",
+        "sh_library(name = 'bad-target')",
+        "invalidbuildsyntax");
     update(defaultFlags().with(Flag.KEEP_GOING), "//parent:foo");
     assertThat(getFrequencyOfErrorsWithLocation(badpkg1BuildFile.asFragment(), eventCollector))
         .isEqualTo(1);
@@ -693,9 +695,12 @@ public class BuildViewTest extends BuildViewTestBase {
       return;
     }
     reporter.removeHandler(failFastHandler);
-    scratch.file(
-        "parent/BUILD", "sh_library(name = 'a', deps = ['//child:b'])", "fail('parentisbad')");
-    scratch.file("child/BUILD", "sh_library(name = 'b')", "fail('childisbad')");
+    scratch.file("parent/BUILD",
+        "sh_library(name = 'a', deps = ['//child:b'])",
+        "parentisbad");
+    scratch.file("child/BUILD",
+        "sh_library(name = 'b')",
+        "childisbad");
     update(defaultFlags().with(Flag.KEEP_GOING), "//parent:a");
     assertContainsEventWithFrequency("parentisbad", 1);
     assertContainsEventWithFrequency("childisbad", 1);
@@ -1037,10 +1042,12 @@ public class BuildViewTest extends BuildViewTestBase {
     }
     scratch.file("parent/BUILD",
         "sh_library(name = 'a', deps = ['//child:b'])");
-    scratch.file("child/BUILD", "sh_library(name = 'b')", "fail('some error')");
+    scratch.file("child/BUILD",
+        "sh_library(name = 'b')",
+        "undefined_symbol");
     reporter.removeHandler(failFastHandler);
     assertThrows(ViewCreationFailedException.class, () -> update("//parent:a"));
-    assertContainsEventWithFrequency("some error", 1);
+    assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
         "Target '//child:b' contains an error and its package is in error and referenced "
         + "by '//parent:a'", 1);
@@ -1054,10 +1061,12 @@ public class BuildViewTest extends BuildViewTestBase {
     }
     scratch.file("parent/BUILD",
         "sh_library(name = 'a', deps = ['//child:b'])");
-    scratch.file("child/BUILD", "sh_library(name = 'b')", "fail('some error')");
+    scratch.file("child/BUILD",
+        "sh_library(name = 'b')",
+        "undefined_symbol");
     reporter.removeHandler(failFastHandler);
     update(defaultFlags().with(Flag.KEEP_GOING), "//parent:a");
-    assertContainsEventWithFrequency("some error", 1);
+    assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
         "Target '//child:b' contains an error and its package is in error and referenced "
         + "by '//parent:a'", 1);
@@ -1071,13 +1080,15 @@ public class BuildViewTest extends BuildViewTestBase {
     }
     scratch.file("parent/BUILD",
         "sh_library(name = 'a', deps = ['//child:b'])");
-    scratch.file("child/BUILD", "sh_library(name = 'b')", "fail('some error')");
+    scratch.file("child/BUILD",
+        "sh_library(name = 'b')",
+        "undefined_symbol");
     scratch.file("okay/BUILD",
         "sh_binary(name = 'okay', srcs = ['okay.sh'])");
     useConfiguration("--experimental_action_listener=//parent:a");
     reporter.removeHandler(failFastHandler);
     assertThrows(ViewCreationFailedException.class, () -> update("//okay"));
-    assertContainsEventWithFrequency("some error", 1);
+    assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
         "Target '//child:b' contains an error and its package is in error and referenced "
         + "by '//parent:a'", 1);
@@ -1091,13 +1102,15 @@ public class BuildViewTest extends BuildViewTestBase {
     }
     scratch.file("parent/BUILD",
         "sh_library(name = 'a', deps = ['//child:b'])");
-    scratch.file("child/BUILD", "sh_library(name = 'b')", "fail('some error')");
+    scratch.file("child/BUILD",
+        "sh_library(name = 'b')",
+        "undefined_symbol");
     scratch.file("okay/BUILD",
         "sh_binary(name = 'okay', srcs = ['okay.sh'])");
     useConfiguration("--experimental_action_listener=//parent:a");
     reporter.removeHandler(failFastHandler);
     update(defaultFlags().with(Flag.KEEP_GOING), "//okay");
-    assertContainsEventWithFrequency("some error", 1);
+    assertContainsEventWithFrequency("name 'undefined_symbol' is not defined", 1);
     assertContainsEventWithFrequency(
         "Target '//child:b' contains an error and its package is in error and referenced "
         + "by '//parent:a'", 1);
@@ -1229,9 +1242,9 @@ public class BuildViewTest extends BuildViewTestBase {
     reporter.removeHandler(failFastHandler);
     update(defaultFlags().with(Flag.KEEP_GOING), "//foo:foo");
     assertContainsEvent(
-        "every rule of type custom_rule implicitly depends upon the target '//bad2:label', but"
-            + " this target could not be found because of: no such package 'bad2': BUILD file not"
-            + " found");
+        "every rule of type custom_rule implicitly depends upon the target '//bad2:label', but this"
+            + " target could not be found because of: no such package 'bad2': BUILD file not found "
+            + "on package path");
     assertContainsEvent(
         "every rule of type custom_rule implicitly depends upon the target '//bad:label', but this "
             + "target could not be found because of: Target '//bad:label' contains an error and its"

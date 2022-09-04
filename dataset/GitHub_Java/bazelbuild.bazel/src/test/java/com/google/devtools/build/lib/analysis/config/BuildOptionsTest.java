@@ -51,13 +51,9 @@ public final class BuildOptionsTest {
   @Test
   public void optionSetCaching() {
     BuildOptions a =
-        BuildOptions.of(
-            BUILD_CONFIG_OPTIONS,
-            OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build());
+        BuildOptions.of(BUILD_CONFIG_OPTIONS, OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS));
     BuildOptions b =
-        BuildOptions.of(
-            BUILD_CONFIG_OPTIONS,
-            OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build());
+        BuildOptions.of(BUILD_CONFIG_OPTIONS, OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS));
     // The cache keys of the OptionSets must be equal even if these are
     // different objects, if they were created with the same options (no options in this case).
     assertThat(b.toString()).isEqualTo(a.toString());
@@ -369,9 +365,7 @@ public final class BuildOptionsTest {
   @Test
   public void testMultiValueOptionImmutability() {
     BuildOptions options =
-        BuildOptions.of(
-            BUILD_CONFIG_OPTIONS,
-            OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build());
+        BuildOptions.of(BUILD_CONFIG_OPTIONS, OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS));
     CoreOptions coreOptions = options.get(CoreOptions.class);
     assertThrows(
         UnsupportedOperationException.class,
@@ -383,7 +377,7 @@ public final class BuildOptionsTest {
   public void parsingResultTransform() throws Exception {
     BuildOptions original = BuildOptions.of(BUILD_CONFIG_OPTIONS, "--cpu=foo", "--stamp");
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     parser.parse("--cpu=bar", "--nostamp");
     parser.setStarlarkOptions(ImmutableMap.of("//custom:flag", "hello"));
 
@@ -406,8 +400,7 @@ public final class BuildOptionsTest {
 
     fragmentClassesBuilder.add(CppOptions.class);
 
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(fragmentClassesBuilder.build()).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(fragmentClassesBuilder.build());
     parser.parse("--cxxopt=bar");
 
     BuildOptions modified = original.applyParsingResult(parser);
@@ -419,7 +412,7 @@ public final class BuildOptionsTest {
   public void parsingResultTransformIllegalStarlarkLabel() throws Exception {
     BuildOptions original = BuildOptions.of(BUILD_CONFIG_OPTIONS);
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     parser.setStarlarkOptions(ImmutableMap.of("@@@", "hello"));
 
     assertThrows(IllegalArgumentException.class, () -> original.applyParsingResult(parser));
@@ -429,7 +422,7 @@ public final class BuildOptionsTest {
   public void parsingResultTransformMultiValueOption() throws Exception {
     BuildOptions original = BuildOptions.of(BUILD_CONFIG_OPTIONS);
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     parser.parse("--features=foo");
 
     BuildOptions modified = original.applyParsingResult(parser);
@@ -441,12 +434,10 @@ public final class BuildOptionsTest {
   public void parsingResultMatch() throws Exception {
     BuildOptions original = BuildOptions.of(BUILD_CONFIG_OPTIONS, "--cpu=foo", "--stamp");
 
-    OptionsParser matchingParser =
-        OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser matchingParser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     matchingParser.parse("--cpu=foo", "--stamp");
 
-    OptionsParser notMatchingParser =
-        OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser notMatchingParser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     notMatchingParser.parse("--cpu=foo", "--nostamp");
 
     assertThat(original.matches(matchingParser)).isTrue();
@@ -460,12 +451,10 @@ public final class BuildOptionsTest {
             .addStarlarkOption(Label.parseAbsoluteUnchecked("//custom:flag"), "hello")
             .build();
 
-    OptionsParser matchingParser =
-        OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser matchingParser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     matchingParser.setStarlarkOptions(ImmutableMap.of("//custom:flag", "hello"));
 
-    OptionsParser notMatchingParser =
-        OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser notMatchingParser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     notMatchingParser.setStarlarkOptions(ImmutableMap.of("//custom:flag", "foo"));
 
     assertThat(original.matches(matchingParser)).isTrue();
@@ -482,7 +471,7 @@ public final class BuildOptionsTest {
             .add(CppOptions.class)
             .build();
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(fragmentClasses).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(fragmentClasses);
     parser.parse("--cpu=foo", "--cxxopt=bar");
 
     assertThat(original.matches(parser)).isTrue();
@@ -498,7 +487,7 @@ public final class BuildOptionsTest {
             .add(CppOptions.class)
             .build();
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(fragmentClasses).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(fragmentClasses);
     parser.parse("--cxxopt=bar");
 
     assertThat(original.matches(parser)).isFalse();
@@ -517,7 +506,7 @@ public final class BuildOptionsTest {
             .add(CppOptions.class)
             .build();
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(fragmentClasses).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(fragmentClasses);
     parser.parse("--cxxopt=bar");
     parser.setStarlarkOptions(ImmutableMap.of("//custom:flag", "hello"));
 
@@ -531,7 +520,7 @@ public final class BuildOptionsTest {
             .addStarlarkOption(Label.parseAbsoluteUnchecked("//custom:flag1"), "hello")
             .build();
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     parser.setStarlarkOptions(ImmutableMap.of("//custom:flag2", "foo"));
 
     assertThat(original.matches(parser)).isFalse();
@@ -541,7 +530,7 @@ public final class BuildOptionsTest {
   public void parsingResultMatchNullOption() throws Exception {
     BuildOptions original = BuildOptions.of(BUILD_CONFIG_OPTIONS);
 
-    OptionsParser parser = OptionsParser.builder().optionsClasses(BUILD_CONFIG_OPTIONS).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(BUILD_CONFIG_OPTIONS);
     parser.parse("--platform_suffix=foo"); // Note: platform_suffix is null by default.
 
     assertThat(original.matches(parser)).isFalse();

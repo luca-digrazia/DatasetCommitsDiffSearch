@@ -1227,7 +1227,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void javaProviderFieldsAreCorrectAfterCreatingProvider() throws Exception {
-    setSkylarkSemanticsOptions("--noincompatible_disallow_legacy_javainfo");
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
@@ -1279,7 +1278,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void javaProviderFieldsAreCorrectAfterCreatingProviderSomeEmptyFields() throws Exception {
-    setSkylarkSemanticsOptions("--noincompatible_disallow_legacy_javainfo");
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
@@ -1320,7 +1318,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void constructJavaProvider() throws Exception {
-    setSkylarkSemanticsOptions("--noincompatible_disallow_legacy_javainfo");
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
@@ -1371,7 +1368,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void constructJavaProviderWithAnotherJavaProvider() throws Exception {
-    setSkylarkSemanticsOptions("--noincompatible_disallow_legacy_javainfo");
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
@@ -1413,7 +1409,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void constructJavaProviderJavaLibrary() throws Exception {
-    setSkylarkSemanticsOptions("--noincompatible_disallow_legacy_javainfo");
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",

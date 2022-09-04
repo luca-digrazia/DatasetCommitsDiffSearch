@@ -37,7 +37,7 @@ public abstract class PathAbstractTest {
 
   @Before
   public void setup() {
-    fileSystem = new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.SHA256);
+    fileSystem = new InMemoryFileSystem(BlazeClock.instance());
     isCaseSensitive = OsPathPolicy.getFilePathOs().isCaseSensitive();
   }
 
@@ -62,7 +62,7 @@ public abstract class PathAbstractTest {
     String normal1 = "/a/b/hello.txt";
     assertThat(create(normal1).getPathString()).isSameInstanceAs(normal1);
 
-    // Check our testing strategy
+    // Sanity check our testing strategy
     String notNormal = "/a/../b";
     assertThat(create(notNormal).getPathString()).isNotSameInstanceAs(notNormal);
   }

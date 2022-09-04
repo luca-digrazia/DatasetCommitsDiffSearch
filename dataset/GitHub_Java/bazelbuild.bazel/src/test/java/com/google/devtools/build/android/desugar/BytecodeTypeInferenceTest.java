@@ -24,11 +24,9 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.objectweb.asm.Label;
 
 /** Test for {@link BytecodeTypeInference} */
 @RunWith(JUnit4.class)
@@ -37,7 +35,6 @@ public class BytecodeTypeInferenceTest {
   private static final Path JAR_PATH = Paths.get(System.getProperty("jar_path"));
   private static final Path GOLDEN_PATH = Paths.get(System.getProperty("golden_file"));
 
-  @Ignore // TODO(b/112134205): re-enable after ASM update
   @Test
   public void testTypeInference() throws IOException {
     StringWriter stringWriter = new StringWriter();
@@ -51,15 +48,7 @@ public class BytecodeTypeInferenceTest {
   }
 
   @Test
-  public void testUninitializedInferType() {
-    Label label = new Label();
-    InferredType type = InferredType.createUninitializedType(label);
-    assertThat(type.descriptor()).isEqualTo(InferredType.UNINITIALIZED_PREFIX);
-    assertThat(type.uninitializationLabel()).isEqualTo(label);
-  }
-
-  @Test
-  public void testNonUninitializedInferType() {
+  public void testInferType() {
     ImmutableMap<String, InferredType> map =
         ImmutableMap.<String, InferredType>builder()
             .put("Z", InferredType.BOOLEAN)
@@ -74,10 +63,9 @@ public class BytecodeTypeInferenceTest {
             .build();
     map.forEach(
         (descriptor, expected) -> {
-          InferredType type = InferredType.createNonUninitializedType(descriptor);
-          assertThat(type.uninitializationLabel()).isNull();
+          InferredType type = InferredType.create(descriptor);
           assertThat(type.descriptor()).isEqualTo(descriptor);
-          assertThat(type).isSameAs(expected);
+          assertThat(type).isSameInstanceAs(expected);
         });
   }
 }

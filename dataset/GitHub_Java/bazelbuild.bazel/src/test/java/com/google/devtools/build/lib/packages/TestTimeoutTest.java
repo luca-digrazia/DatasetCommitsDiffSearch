@@ -36,10 +36,10 @@ public class TestTimeoutTest {
 
   @Test
   public void testBasicConversion() throws Exception {
-    assertThat(TestTimeout.valueOf("SHORT")).isSameAs(SHORT);
-    assertThat(TestTimeout.valueOf("MODERATE")).isSameAs(MODERATE);
-    assertThat(TestTimeout.valueOf("LONG")).isSameAs(LONG);
-    assertThat(TestTimeout.valueOf("ETERNAL")).isSameAs(ETERNAL);
+    assertThat(TestTimeout.valueOf("SHORT")).isSameInstanceAs(SHORT);
+    assertThat(TestTimeout.valueOf("MODERATE")).isSameInstanceAs(MODERATE);
+    assertThat(TestTimeout.valueOf("LONG")).isSameInstanceAs(LONG);
+    assertThat(TestTimeout.valueOf("ETERNAL")).isSameInstanceAs(ETERNAL);
   }
 
   @Test
@@ -54,7 +54,7 @@ public class TestTimeoutTest {
 
   @Test
   public void testAllTimesHaveSuggestions() throws Exception {
-    for (int timeout = 0; timeout < ETERNAL.getTimeout(); timeout++) {
+    for (int timeout = 0; timeout < ETERNAL.getTimeoutSeconds(); timeout++) {
       TestTimeout suggested = getSuggestedTestTimeout(timeout);
       assertWithMessage("No suggested TestTimeout found for timeout " + timeout)
           .that(suggested)
@@ -85,7 +85,7 @@ public class TestTimeoutTest {
 
   @Test
   public void testAllFuzzyRangesCovered() throws Exception {
-    for (int timeout = 0; timeout < ETERNAL.getTimeout(); timeout++) {
+    for (int timeout = 0; timeout < ETERNAL.getTimeoutSeconds(); timeout++) {
       List<Boolean> truthValues = new ArrayList<>();
       for (TestTimeout testTimeout : Arrays.asList(SHORT, MODERATE, LONG, ETERNAL)) {
         truthValues.add(testTimeout.isInRangeFuzzy(timeout));

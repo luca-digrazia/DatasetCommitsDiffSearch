@@ -144,9 +144,7 @@ public class PackageCacheTest extends FoundationTestCase {
 
   private OptionsParser parse(String... options) throws Exception {
     OptionsParser parser =
-        OptionsParser.builder()
-            .optionsClasses(PackageCacheOptions.class, StarlarkSemanticsOptions.class)
-            .build();
+        OptionsParser.newOptionsParser(PackageCacheOptions.class, StarlarkSemanticsOptions.class);
     parser.parse("--default_visibility=public");
     parser.parse(options);
 
@@ -220,7 +218,8 @@ public class PackageCacheTest extends FoundationTestCase {
 
   @Test
   public void testGetNonexistentPackage() throws Exception {
-    checkGetPackageFails("not-there", "no such package 'not-there': " + "BUILD file not found");
+    checkGetPackageFails(
+        "not-there", "no such package 'not-there': " + "BUILD file not found on package path");
   }
 
   @Test
@@ -257,16 +256,19 @@ public class PackageCacheTest extends FoundationTestCase {
    */
   @Test
   public void testRepeatedAttemptsToParseMissingPackage() throws Exception {
-    checkGetPackageFails("missing", "no such package 'missing': " + "BUILD file not found");
+    checkGetPackageFails(
+        "missing", "no such package 'missing': " + "BUILD file not found on package path");
 
     // Still missing:
-    checkGetPackageFails("missing", "no such package 'missing': " + "BUILD file not found");
+    checkGetPackageFails(
+        "missing", "no such package 'missing': " + "BUILD file not found on package path");
 
     // Update the BUILD file on disk so "missing" is no longer missing:
     scratch.file("missing/BUILD", "# an ok build file");
 
     // Still missing:
-    checkGetPackageFails("missing", "no such package 'missing': " + "BUILD file not found");
+    checkGetPackageFails(
+        "missing", "no such package 'missing': " + "BUILD file not found on package path");
 
     invalidatePackages();
 

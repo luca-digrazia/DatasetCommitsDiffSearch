@@ -16,7 +16,10 @@ package com.google.devtools.build.lib.packages;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.testing.EqualsTester;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
+import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,10 +32,22 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
   @Before
   public final void createRule() throws Exception {
-    scratch.file("pkg/BUILD", "genrule(name='foo', srcs=[], cmd='', outs=['x', 'subdir/y'])");
-    this.rule = (Rule) getTarget("//pkg:foo");
-    this.pkg = rule.getPackage();
+    Path buildfile =
+        scratch.file(
+            "pkg/BUILD",
+            "genrule(name='foo', ",
+            "        srcs=[], ",
+            "        cmd='', ",
+            "        outs=['x', 'subdir/y'])");
+    this.pkg =
+        packageFactory.createPackageForTesting(
+            PackageIdentifier.createInMainRepo("pkg"),
+            RootedPath.toRootedPath(root, buildfile),
+            getPackageManager(),
+            reporter);
     assertNoEvents();
+
+    this.rule = (Rule) pkg.getTarget("foo");
   }
 
   private void checkTargetRetainsGeneratingRule(OutputFile output) throws Exception {
@@ -85,18 +100,23 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
   @Test
   public void testDuplicateOutputFilesInDifferentRules() throws Exception {
-    scratch.file(
-        "two_outs/BUILD",
-        "genrule(name='a',",
-        "        cmd='ls >$(location out)',",
-        "        outs=['out'])",
-        "",
-        "genrule(name='b',",
-        "        cmd='ls >$(location out)',",
-        "        outs=['out'])");
+    Path buildfile =
+        scratch.file(
+            "two_outs/BUILD",
+            "genrule(name='a',",
+            "        cmd='ls >$(location out)',",
+            "        outs=['out'])",
+            "",
+            "genrule(name='b',",
+            "        cmd='ls >$(location out)',",
+            "        outs=['out'])");
 
     reporter.removeHandler(failFastHandler);
-    getTarget("//two_outs:BUILD");
+    packageFactory.createPackageForTesting(
+        PackageIdentifier.createInMainRepo("two_outs"),
+        RootedPath.toRootedPath(root, buildfile),
+        getPackageManager(),
+        reporter);
     assertContainsEvent(
         "generated file 'out' in rule 'b' conflicts with "
             + "existing generated file from rule 'a'");
@@ -104,27 +124,41 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
   @Test
   public void testOutputFileNameConflictsWithExistingRule() throws Exception {
-    scratch.file(
-        "out_is_rule/BUILD",
-        "genrule(name='a',",
-        "        cmd='ls >$(location out)',",
-        "        outs=['out'])",
-        "",
-        "genrule(name='b',",
-        "        cmd='ls >$(location out)',",
-        "        outs=['a'])");
+    Path buildfile =
+        scratch.file(
+            "out_is_rule/BUILD",
+            "genrule(name='a',",
+            "        cmd='ls >$(location out)',",
+            "        outs=['out'])",
+            "",
+            "genrule(name='b',",
+            "        cmd='ls >$(location out)',",
+            "        outs=['a'])");
 
     reporter.removeHandler(failFastHandler);
-    getTarget("//out_is_rule:BUILD");
+    packageFactory.createPackageForTesting(
+        PackageIdentifier.createInMainRepo("out_is_rule"),
+        RootedPath.toRootedPath(root, buildfile),
+        getPackageManager(),
+        reporter);
     assertContainsEvent("generated file 'a' in rule 'b' conflicts with existing genrule rule");
   }
 
   @Test
   public void testDuplicateOutputFilesInSameRule() throws Exception {
-    scratch.file(
-        "two_outs/BUILD", "genrule(name='a', cmd='ls >$(location out)',outs=['out', 'out'])");
+    Path buildfile =
+        scratch.file(
+            "two_outs/BUILD",
+            "genrule(name='a',",
+            "        cmd='ls >$(location out)',",
+            "        outs=['out', 'out'])");
+
     reporter.removeHandler(failFastHandler);
-    getTarget("//two_outs:BUILD");
+    packageFactory.createPackageForTesting(
+        PackageIdentifier.createInMainRepo("two_outs"),
+        RootedPath.toRootedPath(root, buildfile),
+        getPackageManager(),
+        reporter);
     assertContainsEvent(
         "generated file 'out' in rule 'a' conflicts with "
             + "existing generated file from rule 'a'");
@@ -132,25 +166,55 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
   @Test
   public void testOutputFileWithIllegalName() throws Exception {
-    scratch.file("bad_out_name/BUILD", "genrule(name='a', cmd='ls', outs=['!@#:'])");
+    Path buildfile =
+        scratch.file(
+            "bad_out_name/BUILD",
+            "genrule(name='a',",
+            "        cmd='ls',",
+            "        outs=['!@#:'])");
+
     reporter.removeHandler(failFastHandler);
-    getTarget("//bad_out_name:BUILD");
+    packageFactory.createPackageForTesting(
+        PackageIdentifier.createInMainRepo("bad_out_name"),
+        RootedPath.toRootedPath(root, buildfile),
+        getPackageManager(),
+        reporter);
     assertContainsEvent("illegal output file name '!@#:' in rule //bad_out_name:a");
   }
 
   @Test
   public void testOutputFileWithCrossPackageLabel() throws Exception {
-    scratch.file("cross_package_out/BUILD", "genrule(name='a', cmd='ls', outs=['//foo:bar'])");
+    Path buildfile =
+        scratch.file(
+            "cross_package_out/BUILD",
+            "genrule(name='a',",
+            "        cmd='ls',",
+            "        outs=['//foo:bar'])");
+
     reporter.removeHandler(failFastHandler);
-    getTarget("//cross_package_out:BUILD");
+    packageFactory.createPackageForTesting(
+        PackageIdentifier.createInMainRepo("cross_package_out"),
+        RootedPath.toRootedPath(root, buildfile),
+        getPackageManager(),
+        reporter);
     assertContainsEvent("label '//foo:bar' is not in the current package");
   }
 
   @Test
   public void testOutputFileNamedBUILD() throws Exception {
-    scratch.file("output_called_build/BUILD", "genrule(name='a', cmd='ls', outs=['BUILD'])");
+    Path buildfile =
+        scratch.file(
+            "output_called_build/BUILD",
+            "genrule(name='a',",
+            "        cmd='ls',",
+            "        outs=['BUILD'])");
+
     reporter.removeHandler(failFastHandler);
-    getTarget("//output_called_build:BUILD");
+    packageFactory.createPackageForTesting(
+        PackageIdentifier.createInMainRepo("output_called_build"),
+        RootedPath.toRootedPath(root, buildfile),
+        getPackageManager(),
+        reporter);
     assertContainsEvent("generated file 'BUILD' in rule 'a' conflicts with existing source file");
   }
 }

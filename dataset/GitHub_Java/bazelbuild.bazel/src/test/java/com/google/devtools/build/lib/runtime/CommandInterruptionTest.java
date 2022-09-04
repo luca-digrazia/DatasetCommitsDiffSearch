@@ -359,7 +359,7 @@ public final class CommandInterruptionTest {
             .setProductName(productName)
             .setServerDirectories(serverDirectories)
             .setStartupOptionsProvider(
-                OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build())
+                OptionsParser.newOptionsParser(BlazeServerStartupOptions.class))
             .addBlazeModule(
                 new BlazeModule() {
                   @Override

@@ -265,7 +265,8 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     useConfiguration("--cpu=k8");
     scratch.file(
         "conflict/BUILD",
-        "cc_library(name='x', srcs=['foo1.cc'])",
+        "cc_library(name='x', srcs=['foo1.cc', 'foo2.cc', 'foo3.cc', 'foo4.cc', 'foo5.cc'"
+            + ", 'foo6.cc'])",
         "genrule(name = 'foo', outs=['_objs/x/foo1.o'], srcs=['foo1.cc', 'foo2.cc', "
             + "'foo3.cc', 'foo4.cc', 'foo5.cc', 'foo6.cc'], cmd='', output_to_bindir=1)");
     reporter.removeHandler(failFastHandler); // expect errors
@@ -276,17 +277,14 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     assertContainsEvent("Outputs");
 
     // Validate that maximum of 5 artifacts in MandatoryInputs are part of output.
-    Pattern pattern = Pattern.compile("\tconflict\\/foo[2-6].cc");
+    Pattern pattern = Pattern.compile("\tconflict\\/foo[1-6].cc");
     Matcher matcher = pattern.matcher(event.getMessage());
     int matchCount = 0;
     while (matcher.find()) {
       matchCount++;
     }
 
-    assertWithMessage(
-            "Event does not contain expected number of file conflicts:\n" + event.getMessage())
-        .that(matchCount)
-        .isEqualTo(5);
+    assertThat(matchCount).isEqualTo(5);
   }
 
   /**

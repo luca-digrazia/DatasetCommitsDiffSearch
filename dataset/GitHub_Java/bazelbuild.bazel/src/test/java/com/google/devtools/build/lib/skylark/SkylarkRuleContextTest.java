@@ -1496,9 +1496,13 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
             .add("local_repository(name = 'foo', path = '/baz')")
             .build());
 
+    assertThrows(
+        Exception.class,
+        () -> {
           invalidatePackages(
               /*alsoConfigs=*/ false); // Repository shuffling messes with toolchains.
-    assertThrows(Exception.class, () -> createRuleContext("@foo//:baz"));
+          createRuleContext("@foo//:baz");
+        });
     assertContainsEvent(
         "Cannot redefine repository after any load statement in the WORKSPACE file "
             + "(for repository 'foo')");

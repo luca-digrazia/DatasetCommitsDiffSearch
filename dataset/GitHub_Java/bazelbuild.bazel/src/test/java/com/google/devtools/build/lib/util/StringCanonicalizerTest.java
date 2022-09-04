@@ -11,36 +11,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package com.google.devtools.build.lib.vfs;
+package com.google.devtools.build.lib.util;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.devtools.build.lib.vfs.util.FileSystems;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /**
- * This class handles the tests for the FileSystems class.
+ * Tests for String canonicalizer.
  */
 @RunWith(JUnit4.class)
-public class FileSystemsTest {
+public class StringCanonicalizerTest {
 
   @Test
-  public void testFileSystemsCreatesOnlyOneDefaultNative() {
-    assertThat(FileSystems.getNativeFileSystem())
-        .isSameInstanceAs(FileSystems.getNativeFileSystem());
+  public void twoDifferentStringsAreDifferent() {
+    String stringA = StringCanonicalizer.intern("A");
+    String stringB = StringCanonicalizer.intern("B");
+    assertThat(stringA).isNotEqualTo(stringB);
   }
 
   @Test
-  public void testFileSystemsCreatesOnlyOneDefaultJavaIo() {
-    assertThat(FileSystems.getJavaIoFileSystem())
-        .isSameInstanceAs(FileSystems.getJavaIoFileSystem());
-  }
-
-  @Test
-  public void testFileSystemsCanSwitchDefaults() {
-    assertThat(FileSystems.getJavaIoFileSystem())
-        .isNotSameInstanceAs(FileSystems.getNativeFileSystem());
+  public void twoSameStringsAreCanonicalized() {
+    String stringA1 = StringCanonicalizer.intern(new String("A"));
+    String stringA2 = StringCanonicalizer.intern(new String("A"));
+    assertThat(stringA2).isSameInstanceAs(stringA1);
   }
 }

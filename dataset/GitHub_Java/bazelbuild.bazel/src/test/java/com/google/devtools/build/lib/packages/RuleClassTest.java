@@ -918,7 +918,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
         supportsConstraintChecking,
         ThirdPartyLicenseExistencePolicy.USER_CONTROLLABLE,
         /*requiredToolchains=*/ ImmutableSet.of(),
-        /*useToolchainResolution=*/ true,
+        /*supportsPlatforms=*/ true,
         ExecutionPlatformConstraintsAllowed.PER_RULE,
         /* executionPlatformConstraints= */ ImmutableSet.of(),
         OutputFile.Kind.FILE,

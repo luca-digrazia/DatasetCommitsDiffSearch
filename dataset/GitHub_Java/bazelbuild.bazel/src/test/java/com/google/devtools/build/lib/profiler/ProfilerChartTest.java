@@ -264,7 +264,7 @@ public class ProfilerChartTest extends FoundationTestCase {
           BlazeClock.instance().nanoTime(),
           /* enabledCpuUsageProfiling= */ false,
           /* slimProfile= */ false,
-          /* enableActionCountProfile= */ false);
+          /* enableJsonMetadata= */ false);
 
       // Write from multiple threads to generate multiple rows in the chart.
       for (int i = 0; i < noOfRows; i++) {

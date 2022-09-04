@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
@@ -133,7 +132,6 @@ import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
@@ -143,6 +141,7 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.PackageRootsNoSymlinkCreation;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
+import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor.WorkspaceFileHeaderListener;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
@@ -159,8 +158,6 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -284,7 +281,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
                 DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
             .setWorkspaceStatusActionFactory(workspaceStatusActionFactory)
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
-            .setManagedDirectoriesKnowledge(getManagedDirectoriesKnowledge())
+            .setWorkspaceFileHeaderListener(getWorkspaceFileListener())
             .build();
     TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     skyframeExecutor.injectExtraPrecomputedValues(extraPrecomputedValues);
@@ -325,7 +322,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getAnalysisMock().createRuleClassProvider();
   }
 
-  protected ManagedDirectoriesKnowledge getManagedDirectoriesKnowledge() {
+  protected WorkspaceFileHeaderListener getWorkspaceFileListener() {
     return null;
   }
 
@@ -569,12 +566,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return new CachingAnalysisEnvironment(
         view.getArtifactFactory(),
         actionKeyContext,
-        new ActionLookupValue.ActionLookupKey() {
-          @Override
-          public SkyFunctionName functionName() {
-            return null;
-          }
-        },
+        ArtifactOwner.NullArtifactOwner.INSTANCE,
         /*isSystemEnv=*/ true,
         /*extendedSanityChecks=*/ false,
         /*allowAnalysisFailures=*/ false,
@@ -1138,12 +1130,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Given a collection of Artifacts, returns a corresponding set of strings of the form "[root]
-   * [relpath]", such as "bin x/libx.a". Such strings make assertions easier to write.
+   * Given a collection of Artifacts, returns a corresponding set of strings of
+   * the form "[root] [relpath]", such as "bin x/libx.a".  Such strings make
+   * assertions easier to write.
    *
    * <p>The returned set preserves the order of the input.
    */
-  protected Set<String> artifactsToStrings(Iterable<? extends Artifact> artifacts) {
+  protected Set<String> artifactsToStrings(Iterable<Artifact> artifacts) {
     return AnalysisTestUtil.artifactsToStrings(masterConfig, artifacts);
   }
 
@@ -1203,27 +1196,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * that does not exercise the analysis phase, the convenience methods {@link
    * #getBinArtifactWithNoOwner} or {@link #getGenfilesArtifactWithNoOwner} should be used instead.
    */
-  protected final Artifact.DerivedArtifact getDerivedArtifact(
+  protected Artifact getDerivedArtifact(
       PathFragment rootRelativePath, ArtifactRoot root, ArtifactOwner owner) {
-    if ((owner instanceof ActionLookupValue.ActionLookupKey)) {
-      ActionLookupValue actionLookupValue;
-      try {
-        actionLookupValue =
-            (ActionLookupValue)
-                skyframeExecutor.getEvaluatorForTesting().getExistingValue((SkyKey) owner);
-      } catch (InterruptedException e) {
-        throw new IllegalStateException(e);
-      }
-      for (ActionAnalysisMetadata action : actionLookupValue.getActions()) {
-        for (Artifact output : action.getOutputs()) {
-          if (output.getRootRelativePath().equals(rootRelativePath)
-              && output.getRoot().equals(root)) {
-            return (Artifact.DerivedArtifact) output;
-          }
-        }
-      }
-    }
-    // Fall back: some tests don't actually need an artifact with an owner.
     return view.getArtifactFactory().getDerivedArtifact(rootRelativePath, root, owner);
   }
 
@@ -1300,7 +1274,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * to own this artifact. If the test runs the analysis phase, {@link #getBinArtifact(String,
    * ConfiguredTarget)} or its convenience methods should be used instead.
    */
-  protected Artifact.DerivedArtifact getBinArtifactWithNoOwner(String rootRelativePath) {
+  protected Artifact getBinArtifactWithNoOwner(String rootRelativePath) {
     return getDerivedArtifact(PathFragment.create(rootRelativePath),
         targetConfig.getBinDirectory(RepositoryName.MAIN),
         ActionsTestUtil.NULL_ARTIFACT_OWNER);
@@ -1700,7 +1674,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         : provider.getOutputGroup(outputGroup);
   }
 
-  protected NestedSet<Artifact.DerivedArtifact> getExtraActionArtifacts(ConfiguredTarget target) {
+  protected NestedSet<Artifact> getExtraActionArtifacts(ConfiguredTarget target) {
     return target.getProvider(ExtraActionArtifactsProvider.class).getExtraActionArtifacts();
   }
 
@@ -2023,8 +1997,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public Artifact.DerivedArtifact getDerivedArtifact(
-        PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
       throw new UnsupportedOperationException();
     }
 
@@ -2045,7 +2018,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public ActionLookupValue.ActionLookupKey getOwner() {
+    public ArtifactOwner getOwner() {
       throw new UnsupportedOperationException();
     }
 

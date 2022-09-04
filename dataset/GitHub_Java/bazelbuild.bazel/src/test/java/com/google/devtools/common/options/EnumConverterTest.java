@@ -16,6 +16,7 @@ package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static com.google.devtools.common.options.OptionsParser.newOptionsParser;
 
 import java.util.List;
 import org.junit.Test;
@@ -102,8 +103,7 @@ public class EnumConverterTest {
 
   @Test
   public void enumList() throws OptionsParsingException {
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(EnumListTestOptions.class).build();
+    OptionsParser parser = newOptionsParser(EnumListTestOptions.class);
     parser.parse("--goo=ALPHA", "--goo=BRAVO");
     EnumListTestOptions options = parser.getOptions(EnumListTestOptions.class);
     assertThat(options.goo).isNotNull();

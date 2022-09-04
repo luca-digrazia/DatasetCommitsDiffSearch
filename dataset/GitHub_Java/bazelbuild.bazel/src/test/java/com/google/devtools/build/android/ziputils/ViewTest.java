@@ -14,8 +14,8 @@
 package com.google.devtools.build.android.ziputils;
 
 import static com.google.common.truth.Truth.assertWithMessage;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertThrows;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -143,22 +143,22 @@ public class ViewTest {
       super(buffer);
     }
 
-    // Will advance buffer position.
+    // Will advance buffer position
     public void putInt(int value) {
       buffer.putInt(value);
     }
 
-    // Will not advance buffer position.
-    public void putInt(int index, int value) {
-      buffer.putInt(index, value);
-    }
-
-    // Will advance buffer position.
+    // Will advance buffer position
     public int getInt() {
       return buffer.getInt();
     }
 
-    // Will not advance buffer position.
+    // will not advance buffer position
+    public void putInt(int index, int value) {
+      buffer.putInt(index, value);
+    }
+
+    // will not advance buffer position
     public int getInt(int index) {
       return buffer.getInt(index);
     }
