@@ -1919,14 +1919,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact filteredDeployJar =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_TEST_FILTERED_JAR);
     AndroidCommon.createZipFilterAction(
-        ruleContext,
-        deployJar,
-        filterJar,
-        filteredDeployJar,
-        CheckHashMismatchMode.NONE,
-        ruleContext
-            .getFragment(AndroidConfiguration.class)
-            .removeRClassesFromInstrumentationTestJar());
+        ruleContext, deployJar, filterJar, filteredDeployJar, CheckHashMismatchMode.NONE);
     return filteredDeployJar;
   }
 }

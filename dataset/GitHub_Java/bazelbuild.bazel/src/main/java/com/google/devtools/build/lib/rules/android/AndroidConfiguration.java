@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -815,6 +815,17 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
         metadataTags = {OptionMetadataTag.EXPERIMENTAL},
         help = "If true, robolectric resources will be packaged using aapt2 if available.")
     public boolean useAapt2ForRobolectric;
+
+    @Option(
+        name = "experimental_android_throw_on_resource_conflict",
+        defaultValue = "false",
+        documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
+        effectTags = {
+          OptionEffectTag.EAGERNESS_TO_EXIT,
+          OptionEffectTag.LOADING_AND_ANALYSIS,
+        },
+        help = "If passed, resource merge conflicts will be treated as errors instead of warnings")
+    public boolean throwOnResourceConflict;
 
     @Option(
         name = "experimental_omit_resources_info_provider_from_android_binary",
