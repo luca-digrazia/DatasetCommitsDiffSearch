@@ -146,35 +146,33 @@ public class LexerTest {
   public void testBasics1() throws Exception {
     assertThat(names(tokens("wiz) "))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
     assertThat(names(tokens("wiz )"))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
-    assertThat(names(tokens(" wiz)")))
-        .isEqualTo("INDENT IDENTIFIER RPAREN NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(names(tokens(" wiz ) ")))
-        .isEqualTo("INDENT IDENTIFIER RPAREN NEWLINE OUTDENT NEWLINE EOF");
+    assertThat(names(tokens(" wiz)"))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
+    assertThat(names(tokens(" wiz ) "))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
     assertThat(names(tokens("wiz\t)"))).isEqualTo("IDENTIFIER RPAREN NEWLINE EOF");
   }
 
   @Test
   public void testBasics2() throws Exception {
     assertThat(names(tokens(")"))).isEqualTo("RPAREN NEWLINE EOF");
-    assertThat(names(tokens(" )"))).isEqualTo("INDENT RPAREN NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(names(tokens(" ) "))).isEqualTo("INDENT RPAREN NEWLINE OUTDENT NEWLINE EOF");
+    assertThat(names(tokens(" )"))).isEqualTo("RPAREN NEWLINE EOF");
+    assertThat(names(tokens(" ) "))).isEqualTo("RPAREN NEWLINE EOF");
     assertThat(names(tokens(") "))).isEqualTo("RPAREN NEWLINE EOF");
   }
 
   @Test
   public void testBasics3() throws Exception {
-    assertThat(names(tokens("123#456\n789"))).isEqualTo("INT NEWLINE INT NEWLINE EOF");
-    assertThat(names(tokens("123 #456\n789"))).isEqualTo("INT NEWLINE INT NEWLINE EOF");
-    assertThat(names(tokens("123#456 \n789"))).isEqualTo("INT NEWLINE INT NEWLINE EOF");
+    assertThat(names(tokens("123#456\n789"))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
+    assertThat(names(tokens("123 #456\n789"))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
+    assertThat(names(tokens("123#456 \n789"))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
     assertThat(names(tokens("123#456\n 789")))
-        .isEqualTo("INT NEWLINE INDENT INT NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(names(tokens("123#456\n789 "))).isEqualTo("INT NEWLINE INT NEWLINE EOF");
+        .isEqualTo("INT COMMENT NEWLINE INDENT INT NEWLINE OUTDENT NEWLINE EOF");
+    assertThat(names(tokens("123#456\n789 "))).isEqualTo("INT COMMENT NEWLINE INT NEWLINE EOF");
   }
 
   @Test
   public void testBasics4() throws Exception {
     assertThat(names(tokens(""))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("# foo"))).isEqualTo("NEWLINE EOF");
+    assertThat(names(tokens("# foo"))).isEqualTo("COMMENT NEWLINE EOF");
     assertThat(names(tokens("1 2 3 4"))).isEqualTo("INT INT INT INT NEWLINE EOF");
     assertThat(names(tokens("1.234"))).isEqualTo("INT DOT INT NEWLINE EOF");
     assertThat(names(tokens("foo(bar, wiz)")))
@@ -192,8 +190,9 @@ public class LexerTest {
   @Test
   public void testCrLf() throws Exception {
     assertThat(names(tokens("\r\n\r\n"))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("\r\n\r1\r\r\n"))).isEqualTo("INT NEWLINE EOF");
-    assertThat(names(tokens("# foo\r\n# bar\r\n"))).isEqualTo("NEWLINE EOF");
+    assertThat(names(tokens("\r\n\r1\r\r\n"))).isEqualTo("NEWLINE INT NEWLINE EOF");
+    assertThat(names(tokens("# foo\r\n# bar\r\n")))
+        .isEqualTo("COMMENT NEWLINE COMMENT NEWLINE EOF");
   }
 
   @Test
@@ -420,24 +419,35 @@ public class LexerTest {
   }
 
   @Test
-  public void testIndentationOnFirstLine() throws Exception {
-    assertThat(values(tokens("    1"))).isEqualTo("INDENT INT(1) NEWLINE OUTDENT NEWLINE EOF");
-    assertThat(values(tokens("\n\n    1"))).isEqualTo("INDENT INT(1) NEWLINE OUTDENT NEWLINE EOF");
-  }
-
-  @Test
   public void testBlankLineIndentation() throws Exception {
     // Blank lines and comment lines should not generate any newlines indents
     // (but note that every input ends with NEWLINE EOF).
-    assertThat(names(tokens("\n      #\n"))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("      #"))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("      #\n"))).isEqualTo("NEWLINE EOF");
-    assertThat(names(tokens("      #comment\n"))).isEqualTo("NEWLINE EOF");
+    assertThat(names(tokens("\n      #\n"))).isEqualTo("COMMENT NEWLINE EOF");
+    assertThat(names(tokens("      #"))).isEqualTo("COMMENT NEWLINE EOF");
+    assertThat(names(tokens("      #\n"))).isEqualTo("COMMENT NEWLINE EOF");
+    assertThat(names(tokens("      #comment\n"))).isEqualTo("COMMENT NEWLINE EOF");
     assertThat(names(tokens("def f(x):\n" + "  # comment\n" + "\n" + "  \n" + "  return x\n")))
         .isEqualTo(
             "DEF IDENTIFIER LPAREN IDENTIFIER RPAREN COLON NEWLINE "
-                + "INDENT RETURN IDENTIFIER NEWLINE "
+                + "COMMENT INDENT RETURN IDENTIFIER NEWLINE "
                 + "OUTDENT NEWLINE EOF");
+  }
+
+  @Test
+  public void testMultipleCommentLines() throws Exception {
+    assertThat(
+            names(
+                tokens(
+                    "# Copyright\n"
+                        + "#\n"
+                        + "# A comment line\n"
+                        + "# An adjoining line\n"
+                        + "def f(x):\n"
+                        + "  return x\n")))
+        .isEqualTo(
+            "COMMENT NEWLINE COMMENT COMMENT COMMENT "
+                + "DEF IDENTIFIER LPAREN IDENTIFIER RPAREN COLON NEWLINE "
+                + "INDENT RETURN IDENTIFIER NEWLINE OUTDENT NEWLINE EOF");
   }
 
   @Test
@@ -455,7 +465,7 @@ public class LexerTest {
             // foo (     bar   ,     {      1       :
             "[0,3) [3,4) [4,7) [7,8) [9,10) [10,11) [11,12)"
                 //  'quux'  }       ,       """b""" ,       r""     )       NEWLINE EOF
-                + " [13,19) [19,20) [20,21) [22,29) [29,30) [31,34) [34,35) [35,35) [35,35)");
+                + " [13,19) [19,20) [20,21) [22,29) [29,30) [31,34) [34,35) [34,35) [35,35)");
   }
 
   @Test
