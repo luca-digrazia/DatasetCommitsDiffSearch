@@ -42,12 +42,10 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.SpawnCache.CacheHandle;
 import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
-import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
+import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionPolicy;
 import com.google.devtools.build.lib.exec.util.FakeOwner;
+import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
-import com.google.devtools.build.lib.remote.util.DigestUtil;
-import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
-import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
@@ -95,8 +93,8 @@ public class RemoteSpawnCacheTest {
 
   private StoredEventHandler eventHandler = new StoredEventHandler();
 
-  private final SpawnExecutionContext simplePolicy =
-      new SpawnExecutionContext() {
+  private final SpawnExecutionPolicy simplePolicy =
+      new SpawnExecutionPolicy() {
         @Override
         public int getId() {
           return 0;
@@ -248,12 +246,7 @@ public class RemoteSpawnCacheTest {
   public void cacheMiss() throws Exception {
     CacheHandle entry = cache.lookup(simpleSpawn, simplePolicy);
     assertThat(entry.hasResult()).isFalse();
-    SpawnResult result =
-        new SpawnResult.Builder()
-            .setExitCode(0)
-            .setStatus(Status.SUCCESS)
-            .setRunnerName("test")
-            .build();
+    SpawnResult result = new SpawnResult.Builder().setExitCode(0).setStatus(Status.SUCCESS).build();
     ImmutableList<Path> outputFiles = ImmutableList.of(fs.getPath("/random/file"));
     Mockito.doAnswer(
             new Answer<Void>() {
@@ -289,12 +282,7 @@ public class RemoteSpawnCacheTest {
     verify(remoteCache, never())
         .getCachedActionResult(any(ActionKey.class));
     assertThat(entry.hasResult()).isFalse();
-    SpawnResult result =
-        new SpawnResult.Builder()
-            .setExitCode(0)
-            .setStatus(Status.SUCCESS)
-            .setRunnerName("test")
-            .build();
+    SpawnResult result = new SpawnResult.Builder().setExitCode(0).setStatus(Status.SUCCESS).build();
     ImmutableList<Path> outputFiles = ImmutableList.of(fs.getPath("/random/file"));
     entry.store(result, outputFiles);
     verify(remoteCache)
@@ -309,11 +297,7 @@ public class RemoteSpawnCacheTest {
     verify(remoteCache).getCachedActionResult(any(ActionKey.class));
     assertThat(entry.hasResult()).isFalse();
     SpawnResult result =
-        new SpawnResult.Builder()
-            .setExitCode(1)
-            .setStatus(Status.NON_ZERO_EXIT)
-            .setRunnerName("test")
-            .build();
+        new SpawnResult.Builder().setExitCode(1).setStatus(Status.NON_ZERO_EXIT).build();
     ImmutableList<Path> outputFiles = ImmutableList.of(fs.getPath("/random/file"));
     entry.store(result, outputFiles);
     verify(remoteCache)
@@ -324,12 +308,7 @@ public class RemoteSpawnCacheTest {
   public void printWarningIfUploadFails() throws Exception {
     CacheHandle entry = cache.lookup(simpleSpawn, simplePolicy);
     assertThat(entry.hasResult()).isFalse();
-    SpawnResult result =
-        new SpawnResult.Builder()
-            .setExitCode(0)
-            .setStatus(Status.SUCCESS)
-            .setRunnerName("test")
-            .build();
+    SpawnResult result = new SpawnResult.Builder().setExitCode(0).setStatus(Status.SUCCESS).build();
     ImmutableList<Path> outputFiles = ImmutableList.of(fs.getPath("/random/file"));
 
     doThrow(new IOException("cache down"))
