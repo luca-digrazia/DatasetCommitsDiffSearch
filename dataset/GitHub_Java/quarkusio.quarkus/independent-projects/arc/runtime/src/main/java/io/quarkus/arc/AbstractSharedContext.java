@@ -19,6 +19,7 @@ package io.quarkus.arc;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 import javax.enterprise.context.spi.Contextual;
@@ -26,7 +27,7 @@ import javax.enterprise.context.spi.CreationalContext;
 
 abstract class AbstractSharedContext implements InjectableContext {
 
-    private final ComputingCache<Key<?>, ContextInstanceHandle<?>> instances;
+    private final ComputingCache<Key<?>, InstanceHandleImpl<?>> instances;
 
     @SuppressWarnings("rawtypes")
     public AbstractSharedContext() {
@@ -42,13 +43,15 @@ abstract class AbstractSharedContext implements InjectableContext {
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(Contextual<T> contextual) {
-        ContextInstanceHandle<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
+        InstanceHandleImpl<?> handle = instances.getValueIfPresent(new Key<>(contextual, null));
         return handle != null ? (T) handle.get() : null;
     }
 
     @Override
-    public Collection<ContextInstanceHandle<?>> getAll() {
-        return new ArrayList<>(instances.getPresentValues());
+    public Collection<InstanceHandle<?>> getAll() {
+        List<InstanceHandle<?>> all = new ArrayList<>();
+        instances.forEachValue(all::add);
+        return all;
     }
 
     @Override
@@ -58,32 +61,32 @@ abstract class AbstractSharedContext implements InjectableContext {
 
     @Override
     public void destroy(Contextual<?> contextual) {
-        ContextInstanceHandle<?> handle = instances.remove(new Key<>(contextual, null));
+        InstanceHandleImpl<?> handle = instances.remove(new Key<>(contextual, null));
         if (handle != null) {
-            handle.destroy();
+            handle.destroyInternal();
         }
     }
 
     @Override
     public synchronized void destroy() {
-        Set<ContextInstanceHandle<?>> values = instances.getPresentValues();
+        Set<InstanceHandleImpl<?>> values = instances.getPresentValues();
         // Destroy the producers first
-        for (Iterator<ContextInstanceHandle<?>> iterator = values.iterator(); iterator.hasNext();) {
-            ContextInstanceHandle<?> instanceHandle = iterator.next();
+        for (Iterator<InstanceHandleImpl<?>> iterator = values.iterator(); iterator.hasNext();) {
+            InstanceHandleImpl<?> instanceHandle = iterator.next();
             if (instanceHandle.getBean().getDeclaringBean() != null) {
-                instanceHandle.destroy();
+                instanceHandle.destroyInternal();
                 iterator.remove();
             }
         }
-        for (ContextInstanceHandle<?> instanceHandle : values) {
-            instanceHandle.destroy();
+        for (InstanceHandleImpl<?> instanceHandle : values) {
+            instanceHandle.destroyInternal();
         }
         instances.clear();
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    private static ContextInstanceHandle createInstanceHandle(InjectableBean bean, CreationalContext ctx) {
-        return new ContextInstanceHandleImpl(bean, bean.create(ctx), ctx);
+    private static InstanceHandleImpl createInstanceHandle(InjectableBean bean, CreationalContext ctx) {
+        return new InstanceHandleImpl(bean, bean.create(ctx), ctx);
     }
 
     private static class Key<T> {
