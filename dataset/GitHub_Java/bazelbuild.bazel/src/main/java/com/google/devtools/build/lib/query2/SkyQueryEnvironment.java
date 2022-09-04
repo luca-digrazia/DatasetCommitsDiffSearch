@@ -688,8 +688,10 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private Pair<TargetPattern, ImmutableSet<PathFragment>> getPatternAndExcludes(String pattern)
       throws TargetParsingException, InterruptedException {
     TargetPatternKey targetPatternKey =
-        TargetPatternValue.key(
-            pattern, TargetPatternEvaluator.DEFAULT_FILTERING_POLICY, parserPrefix);
+        ((TargetPatternKey)
+            TargetPatternValue.key(
+                    pattern, TargetPatternEvaluator.DEFAULT_FILTERING_POLICY, parserPrefix)
+                .argument());
     ImmutableSet<PathFragment> subdirectoriesToExclude =
         targetPatternKey.getAllSubdirectoriesToExclude(blacklistPatternsSupplier);
     return Pair.of(targetPatternKey.getParsedPattern(), subdirectoriesToExclude);
