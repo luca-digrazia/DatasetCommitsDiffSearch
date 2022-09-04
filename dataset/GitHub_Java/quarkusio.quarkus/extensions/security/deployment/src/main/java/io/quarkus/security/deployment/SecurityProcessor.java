@@ -36,8 +36,7 @@ import io.quarkus.arc.deployment.InterceptorBindingRegistrarBuildItem;
 import io.quarkus.arc.processor.BeanConfigurator;
 import io.quarkus.arc.processor.BeanRegistrar;
 import io.quarkus.arc.processor.BuiltinScope;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
@@ -52,7 +51,6 @@ import io.quarkus.security.runtime.IdentityProviderManagerCreator;
 import io.quarkus.security.runtime.SecurityBuildTimeConfig;
 import io.quarkus.security.runtime.SecurityIdentityAssociation;
 import io.quarkus.security.runtime.SecurityIdentityProxy;
-import io.quarkus.security.runtime.X509IdentityProvider;
 import io.quarkus.security.runtime.interceptor.AuthenticatedInterceptor;
 import io.quarkus.security.runtime.interceptor.DenyAllInterceptor;
 import io.quarkus.security.runtime.interceptor.PermitAllInterceptor;
@@ -63,7 +61,6 @@ import io.quarkus.security.runtime.interceptor.SecurityConstrainer;
 import io.quarkus.security.runtime.interceptor.SecurityHandler;
 import io.quarkus.security.runtime.interceptor.check.SecurityCheck;
 import io.quarkus.security.spi.AdditionalSecuredClassesBuildIem;
-import io.quarkus.security.spi.runtime.AuthorizationController;
 
 public class SecurityProcessor {
 
@@ -82,11 +79,6 @@ public class SecurityProcessor {
             jcaProviders.produce(new JCAProviderBuildItem(providerName));
             log.debugf("Added providerName: %s", providerName);
         }
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem authorizationController() {
-        return AdditionalBeanBuildItem.builder().addBeanClass(AuthorizationController.class).build();
     }
 
     /**
@@ -222,16 +214,15 @@ public class SecurityProcessor {
             Map<DotName, ClassInfo> additionalSecuredClasses, boolean denyUnannotated) {
 
         Map<MethodInfo, AnnotationInstance> methodToInstanceCollector = new HashMap<>();
-        Map<ClassInfo, AnnotationInstance> classAnnotations = new HashMap<>();
         Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> result = new HashMap<>(gatherSecurityAnnotations(
-                index, DotNames.ROLES_ALLOWED, methodToInstanceCollector, classAnnotations,
+                index, DotNames.ROLES_ALLOWED, methodToInstanceCollector,
                 (instance -> rolesAllowedSecurityCheck(instance.value().asStringArray()))));
-        result.putAll(gatherSecurityAnnotations(index, DotNames.PERMIT_ALL, methodToInstanceCollector, classAnnotations,
+        result.putAll(gatherSecurityAnnotations(index, DotNames.PERMIT_ALL, methodToInstanceCollector,
                 (instance -> permitAllSecurityCheck())));
-        result.putAll(gatherSecurityAnnotations(index, DotNames.AUTHENTICATED, methodToInstanceCollector, classAnnotations,
+        result.putAll(gatherSecurityAnnotations(index, DotNames.AUTHENTICATED, methodToInstanceCollector,
                 (instance -> authenticatedSecurityCheck())));
 
-        result.putAll(gatherSecurityAnnotations(index, DotNames.DENY_ALL, methodToInstanceCollector, classAnnotations,
+        result.putAll(gatherSecurityAnnotations(index, DotNames.DENY_ALL, methodToInstanceCollector,
                 (instance -> denyAllSecurityCheck())));
 
         /*
@@ -286,7 +277,6 @@ public class SecurityProcessor {
     private Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> gatherSecurityAnnotations(
             IndexView index, DotName dotName,
             Map<MethodInfo, AnnotationInstance> alreadyCheckedMethods,
-            Map<ClassInfo, AnnotationInstance> classLevelAnnotations,
             Function<AnnotationInstance, Function<BytecodeCreator, ResultHandle>> securityCheckInstanceCreator) {
 
         Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> result = new HashMap<>();
@@ -310,22 +300,16 @@ public class SecurityProcessor {
             AnnotationTarget target = instance.target();
             if (target.kind() == AnnotationTarget.Kind.CLASS) {
                 List<MethodInfo> methods = target.asClass().methods();
-                AnnotationInstance existingClassInstance = classLevelAnnotations.get(target.asClass());
-                if (existingClassInstance == null) {
-                    classLevelAnnotations.put(target.asClass(), instance);
-                    for (MethodInfo methodInfo : methods) {
-                        AnnotationInstance alreadyExistingInstance = alreadyCheckedMethods.get(methodInfo);
-                        if ((alreadyExistingInstance == null)) {
-                            result.put(methodInfo, securityCheckInstanceCreator.apply(instance));
-                        }
+                for (MethodInfo methodInfo : methods) {
+                    AnnotationInstance alreadyExistingInstance = alreadyCheckedMethods.get(methodInfo);
+                    if ((alreadyExistingInstance == null)) {
+                        result.put(methodInfo, securityCheckInstanceCreator.apply(instance));
+                    } else if (alreadyExistingInstance.target().kind() == AnnotationTarget.Kind.CLASS) {
+                        throw new IllegalStateException(
+                                "Class " + methodInfo.declaringClass() + " is annotated with multiple security annotations");
                     }
-                } else {
-                    throw new IllegalStateException(
-                            "Class " + target.asClass() + " is annotated with multiple security annotations " + instance.name()
-                                    + " and " + existingClassInstance.name());
                 }
             }
-
         }
 
         return result;
@@ -357,12 +341,12 @@ public class SecurityProcessor {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.SECURITY);
+        return new CapabilityBuildItem(Capabilities.SECURITY);
     }
 
     @BuildStep
     FeatureBuildItem feature() {
-        return new FeatureBuildItem(Feature.SECURITY);
+        return new FeatureBuildItem(FeatureBuildItem.SECURITY);
     }
 
     @BuildStep
@@ -370,6 +354,5 @@ public class SecurityProcessor {
         beans.produce(AdditionalBeanBuildItem.unremovableOf(SecurityIdentityAssociation.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(IdentityProviderManagerCreator.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(SecurityIdentityProxy.class));
-        beans.produce(AdditionalBeanBuildItem.unremovableOf(X509IdentityProvider.class));
     }
 }
