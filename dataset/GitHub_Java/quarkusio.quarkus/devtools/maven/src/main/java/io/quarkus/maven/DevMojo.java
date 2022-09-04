@@ -31,14 +31,12 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -57,7 +55,6 @@ import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 
-import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
@@ -234,23 +231,16 @@ public class DevMojo extends AbstractMojo {
             }
 
             final AppModel appModel;
-            Map<String, MavenProject> projectMap = session.getProjectMap();
             try {
                 final LocalProject localProject = LocalProject.loadWorkspace(outputDirectory.toPath());
                 for (LocalProject project : localProject.getSelfWithLocalDeps()) {
-                    AppArtifact appArtifact = project.getAppArtifact();
-                    MavenProject mavenProject = projectMap.get(String.format("%s:%s:%s",
-                            appArtifact.getGroupId(), appArtifact.getArtifactId(), appArtifact.getVersion()));
                     String sourcePath = null;
                     String classesPath = null;
                     String resourcePath = null;
-
-                    List<String> sourcePaths = mavenProject.getCompileSourceRoots().stream()
-                            .map(Paths::get)
-                            .filter(Files::isDirectory)
-                            .map(src -> src.toAbsolutePath().toString())
-                            .collect(Collectors.toList());
-
+                    Path javaSourcesDir = project.getSourcesSourcesDir();
+                    if (Files.isDirectory(javaSourcesDir)) {
+                        sourcePath = javaSourcesDir.toAbsolutePath().toString();
+                    }
                     Path classesDir = project.getClassesDir();
                     if (Files.isDirectory(classesDir)) {
                         classesPath = classesDir.toAbsolutePath().toString();
@@ -259,7 +249,7 @@ public class DevMojo extends AbstractMojo {
                     if (Files.isDirectory(resourcesSourcesDir)) {
                         resourcePath = resourcesSourcesDir.toAbsolutePath().toString();
                     }
-                    DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(project.getArtifactId(), sourcePaths,
+                    DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(project.getArtifactId(), sourcePath,
                             classesPath, resourcePath);
                     devModeContext.getModules().add(moduleInfo);
                 }

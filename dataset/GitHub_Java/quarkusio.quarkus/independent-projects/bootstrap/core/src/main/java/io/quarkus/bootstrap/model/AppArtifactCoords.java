@@ -1,14 +1,29 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.bootstrap.model;
 
 import io.quarkus.bootstrap.BootstrapConstants;
-import java.io.Serializable;
 
 /**
  * GroupId, artifactId, classifier, type, version
  *
  * @author Alexey Loubyansky
  */
-public class AppArtifactCoords implements Serializable {
+public class AppArtifactCoords {
 
     public static final String TYPE_JAR = BootstrapConstants.JAR;
     public static final String TYPE_POM = BootstrapConstants.POM;
@@ -19,7 +34,7 @@ public class AppArtifactCoords implements Serializable {
 
     protected static String[] split(String str, String[] parts) {
         final int versionSep = str.lastIndexOf(':');
-        if (versionSep <= 0 || versionSep == str.length() - 1) {
+        if(versionSep <= 0 || versionSep == str.length() - 1) {
             throw new IllegalArgumentException("One of type, version or separating them ':' is missing from '" + str + "'");
         }
         parts[4] = str.substring(versionSep + 1);
@@ -33,7 +48,7 @@ public class AppArtifactCoords implements Serializable {
     protected final String type;
     protected final String version;
 
-    protected transient AppArtifactKey key;
+    protected AppArtifactKey key;
 
     protected AppArtifactCoords(String[] parts) {
         groupId = parts[0];
@@ -54,7 +69,7 @@ public class AppArtifactCoords implements Serializable {
     public AppArtifactCoords(String groupId, String artifactId, String classifier, String type, String version) {
         this.groupId = groupId;
         this.artifactId = artifactId;
-        this.classifier = classifier == null ? "" : classifier;
+        this.classifier = classifier;
         this.type = type;
         this.version = version;
     }
@@ -141,7 +156,7 @@ public class AppArtifactCoords implements Serializable {
 
     protected StringBuilder append(final StringBuilder buf) {
         buf.append(groupId).append(':').append(artifactId).append(':');
-        if (!classifier.isEmpty()) {
+        if(!classifier.isEmpty()) {
             buf.append(classifier);
         }
         return buf.append(':').append(type).append(':').append(version);

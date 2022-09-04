@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.bootstrap;
 
 /**
@@ -6,21 +22,13 @@ package io.quarkus.bootstrap;
  */
 public interface BootstrapConstants {
 
-    String SERIALIZED_APP_MODEL = "quarkus-internal.serialized-app-model.path";
     String DESCRIPTOR_FILE_NAME = "quarkus-extension.properties";
-
-    @Deprecated
-    String EXTENSION_PROPS_JSON_FILE_NAME = "quarkus-extension.json";
-
-    String QUARKUS_EXTENSION_FILE_NAME = "quarkus-extension.yaml";
 
     String META_INF = "META-INF";
 
     String DESCRIPTOR_PATH = META_INF + '/' + DESCRIPTOR_FILE_NAME;
 
     String PROP_DEPLOYMENT_ARTIFACT = "deployment-artifact";
-    String PARENT_FIRST_ARTIFACTS = "parent-first-artifacts";
-    String EXCLUDED_ARTIFACTS = "excluded-artifacts";
 
     String EMPTY = "";
     String JAR = "jar";
