@@ -26,11 +26,11 @@ import com.google.common.io.Resources;
 import org.graylog2.plugin.Plugin;
 import org.graylog2.web.IndexHtmlGenerator;
 import org.graylog2.web.PluginAssets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.activation.MimetypesFileTypeMap;
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
@@ -50,6 +50,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileSystemNotFoundException;
@@ -63,10 +64,9 @@ import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 
-@Singleton
 @Path("/")
 public class WebInterfaceAssetsResource {
-    private static final MimetypesFileTypeMap MIME_TYPES = new MimetypesFileTypeMap();
+    private static final Logger log = LoggerFactory.getLogger(WebInterfaceAssetsResource.class);
     private final IndexHtmlGenerator indexHtmlGenerator;
     private final Set<Plugin> plugins;
     private final LoadingCache<URI, FileSystem> fileSystemCache;
@@ -130,7 +130,8 @@ public class WebInterfaceAssetsResource {
         }
     }
 
-    private Response getResponse(Request request, String filename,
+    private Response getResponse(@Context Request request,
+                                 @PathParam("filename") String filename,
                                  URL resourceUrl, boolean fromPlugin) throws IOException, URISyntaxException {
         final Date lastModified;
         final InputStream stream;
@@ -168,7 +169,7 @@ public class WebInterfaceAssetsResource {
             return response.build();
         }
 
-        final String contentType = firstNonNull(MIME_TYPES.getContentType(filename),
+        final String contentType = firstNonNull(URLConnection.guessContentTypeFromName(filename),
                                                 MediaType.APPLICATION_OCTET_STREAM);
         final CacheControl cacheControl = new CacheControl();
         cacheControl.setMaxAge((int) TimeUnit.DAYS.toSeconds(365));
