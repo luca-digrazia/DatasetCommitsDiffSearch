@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.StarlarkImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.Package.ConfigSettingVisibilityPolicy;
@@ -258,9 +257,10 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
     Attribute attribute = ruleClass.getAttributeByNameMaybe(attributeName);
     // TODO(murali): This method should be property of ruleclass not rule instance.
     // Further, this call to AbstractAttributeMapper.isConfigurable is delegated right back
-    // to this instance!
+    // to this instance!.
     return attribute != null
-        && AbstractAttributeMapper.isConfigurable(this, attributeName, attribute.getType());
+        ? AbstractAttributeMapper.isConfigurable(this, attributeName, attribute.getType())
+        : false;
   }
 
   /**
@@ -470,7 +470,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
     // TODO(b/151165647): this logic has always been wrong:
     // it spuriously matches occurrences of the package name earlier in the path.
     String absolutePath = location.toString();
-    int pos = absolutePath.indexOf(label.getPackageName());
+    int pos = absolutePath.indexOf(getLabel().getPackageName());
     return (pos < 0) ? null : absolutePath.substring(pos);
   }
 
@@ -496,7 +496,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
     Integer index = ruleClass.getAttributeIndex(attrName);
     if (index == null) {
       throw new IllegalArgumentException(
-          "No such attribute " + attrName + " in " + ruleClass + " rule " + label);
+          "No such attribute " + attrName + " in " + ruleClass + " rule " + getLabel());
     }
     Attribute attr = ruleClass.getAttribute(index);
     if (attr.getType() != type) {
@@ -510,7 +510,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
               + " in "
               + ruleClass
               + " rule "
-              + label);
+              + getLabel());
     }
     return getAttrWithIndex(index);
   }
@@ -539,7 +539,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
               + " in "
               + ruleClass
               + " rule "
-              + label);
+              + getLabel());
     }
     return (BuildType.SelectorList<T>) attrValue;
   }
@@ -644,7 +644,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
    * Check if this rule is valid according to the validityPredicate of its RuleClass.
    */
   void checkValidityPredicate(EventHandler eventHandler) {
-    PredicateWithMessage<Rule> predicate = ruleClass.getValidityPredicate();
+    PredicateWithMessage<Rule> predicate = getRuleClassObject().getValidityPredicate();
     if (!predicate.apply(this)) {
       reportError(predicate.getErrorReason(this), eventHandler);
     }
@@ -660,10 +660,11 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
         eventHandler, pkgBuilder.getPackageIdentifier(), /*checkLabels=*/ true);
   }
 
-  void populateOutputFilesUnchecked(Package.Builder pkgBuilder) throws InterruptedException {
+  void populateOutputFilesUnchecked(EventHandler eventHandler, Package.Builder pkgBuilder)
+      throws InterruptedException {
     try {
       populateOutputFilesInternal(
-          NullEventHandler.INSTANCE, pkgBuilder.getPackageIdentifier(), /*checkLabels=*/ false);
+          eventHandler, pkgBuilder.getPackageIdentifier(), /*checkLabels=*/ false);
     } catch (LabelSyntaxException e) {
       throw new IllegalStateException(e);
     }
@@ -671,12 +672,12 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
 
   @FunctionalInterface
   private interface ExplicitOutputHandler {
-    void accept(Attribute attribute, Label outputLabel) throws LabelSyntaxException;
+    public void accept(Attribute attribute, Label outputLabel) throws LabelSyntaxException;
   }
 
   @FunctionalInterface
   private interface ImplicitOutputHandler {
-    void accept(String outputKey, String outputName);
+    public void accept(String outputKey, String outputName);
   }
 
   private void populateOutputFilesInternal(
@@ -710,7 +711,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
               reportError(
                   String.format(
                       "illegal output file name '%s' in rule %s due to: %s",
-                      outputName, this.label, e.getMessage()),
+                      outputName, getLabel(), e.getMessage()),
                   eventHandler);
               return;
             }
@@ -744,7 +745,8 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
         }
       }
     } catch (EvalException e) {
-      reportError(String.format("In rule %s: %s", label, e.getMessageWithStack()), eventHandler);
+      reportError(
+          String.format("In rule %s: %s", getLabel(), e.getMessageWithStack()), eventHandler);
     }
 
     ExplicitOutputHandler explicitOutputHandler =
@@ -828,7 +830,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
   /** Returns a string of the form "cc_binary rule //foo:foo" */
   @Override
   public String toString() {
-    return getRuleClass() + " rule " + label;
+    return getRuleClass() + " rule " + getLabel();
   }
 
  /**
@@ -845,7 +847,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
     // enforced). See https://github.com/bazelbuild/bazel/issues/12669. Ultimately this entire
     // conditional should be removed.
     if (ruleClass.getName().equals("config_setting")) {
-      ConfigSettingVisibilityPolicy policy = pkg.getConfigSettingVisibilityPolicy();
+      ConfigSettingVisibilityPolicy policy = getPackage().getConfigSettingVisibilityPolicy();
       if (visibility != null) {
         return visibility; // Use explicitly set visibility
       } else if (policy == ConfigSettingVisibilityPolicy.DEFAULT_PUBLIC) {
@@ -877,7 +879,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
         && isAttributeValueExplicitlySpecified("distribs")) {
       return NonconfigurableAttributeMapper.of(this).get("distribs", BuildType.DISTRIBUTIONS);
     } else {
-      return pkg.getDefaultDistribs();
+      return getPackage().getDefaultDistribs();
     }
   }
 
@@ -892,10 +894,10 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
     } else if (isAttrDefined("licenses", BuildType.LICENSE)
         && isAttributeValueExplicitlySpecified("licenses")) {
       return NonconfigurableAttributeMapper.of(this).get("licenses", BuildType.LICENSE);
-    } else if (ruleClass.ignoreLicenses()) {
+    } else if (getRuleClassObject().ignoreLicenses()) {
       return License.NO_LICENSE;
     } else {
-      return pkg.getDefaultLicense();
+      return getPackage().getDefaultLicense();
     }
   }
 
@@ -917,7 +919,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
    */
   public Set<String> getRuleTags() {
     Set<String> ruleTags = new LinkedHashSet<>();
-    for (Attribute attribute : ruleClass.getAttributes()) {
+    for (Attribute attribute : getRuleClassObject().getAttributes()) {
       if (attribute.isTaggable()) {
         Type<?> attrType = attribute.getType();
         String name = attribute.getName();
@@ -931,10 +933,10 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
   }
 
   /**
-   * Computes labels of additional dependencies that can be provided by aspects that this rule can
-   * require from its direct dependencies.
+   * Computes labels of additional dependencies that can be provided by aspects that this rule
+   * can require from its direct dependencies.
    */
-  public Collection<Label> getAspectLabelsSuperset(DependencyFilter predicate) {
+  public Collection<? extends Label> getAspectLabelsSuperset(DependencyFilter predicate) {
     if (!hasAspects()) {
       return ImmutableList.of();
     }
@@ -951,7 +953,7 @@ public class Rule implements Target, DependencyFilter.AttributeInfoProvider {
    * @return The repository name.
    */
   public RepositoryName getRepository() {
-    return label.getPackageIdentifier().getRepository();
+    return getLabel().getPackageIdentifier().getRepository();
   }
 
   /** Returns the suffix of target kind for all rules. */
