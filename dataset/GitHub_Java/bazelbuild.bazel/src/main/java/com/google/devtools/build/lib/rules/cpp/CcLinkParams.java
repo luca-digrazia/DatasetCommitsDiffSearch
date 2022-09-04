@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -27,9 +26,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -43,9 +40,7 @@ import javax.annotation.Nullable;
  * <p>Items in the collections are stored in nested sets. Link options and libraries are stored in
  * link order (preorder) and linkstamps are sorted.
  */
-@AutoCodec
 public final class CcLinkParams {
-  public static final ObjectCodec<CcLinkParams> CODEC = new CcLinkParams_AutoCodec();
 
   /**
    * A list of link options contributed by a single configured target.
@@ -78,9 +73,7 @@ public final class CcLinkParams {
   private final ExtraLinkTimeLibraries extraLinkTimeLibraries;
   private final NestedSet<Artifact> nonCodeInputs;
 
-  @AutoCodec.Instantiator
-  @VisibleForSerialization
-  CcLinkParams(
+  private CcLinkParams(
       NestedSet<LinkOptions> linkOpts,
       NestedSet<Linkstamp> linkstamps,
       NestedSet<LibraryToLink> libraries,
@@ -394,18 +387,14 @@ public final class CcLinkParams {
   /**
    * A linkstamp that also knows about its declared includes.
    *
-   * <p>This object is required because linkstamp files may include other headers which will have to
-   * be provided during compilation.
+   * <p>This object is required because linkstamp files may include other headers which
+   * will have to be provided during compilation.
    */
-  @AutoCodec
   public static final class Linkstamp {
-    public static final ObjectCodec<Linkstamp> CODEC = new CcLinkParams_Linkstamp_AutoCodec();
-
     private final Artifact artifact;
     private final NestedSet<Artifact> declaredIncludeSrcs;
 
-    @VisibleForSerialization
-    Linkstamp(Artifact artifact, NestedSet<Artifact> declaredIncludeSrcs) {
+    private Linkstamp(Artifact artifact, NestedSet<Artifact> declaredIncludeSrcs) {
       this.artifact = Preconditions.checkNotNull(artifact);
       this.declaredIncludeSrcs = Preconditions.checkNotNull(declaredIncludeSrcs);
     }

@@ -19,7 +19,6 @@ import static java.util.stream.Collectors.toCollection;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -58,6 +57,7 @@ import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1027,6 +1027,7 @@ public final class CcLibraryHelper {
 
     DwoArtifactsCollector dwoArtifacts =
         DwoArtifactsCollector.transitiveCollector(
+            ruleContext,
             ccOutputs,
             deps, /*generateDwo=*/
             false, /*ltoBackendArtifactsUsePic=*/

@@ -405,6 +405,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               srcs = ['A.java'],",
         "               deps = [':native', '//java/android/common:common'],",
         "               manifest = 'AndroidManifest.xml',",
+        "               legacy_native_support = 0,",
         "              )");
   }
 
@@ -3776,38 +3777,5 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         getFilesToBuild(binary), "_proguard.jar");
 
     checkProguardLibJars(action, getAndroidJarPath());
-  }
-
-  @Test
-  public void testInstrumentationInfoProviderHasApks() throws Exception {
-    scratch.file(
-        "java/com/google/android/instr/BUILD",
-        "android_binary(name = 'b1',",
-        "               srcs = ['b1.java'],",
-        "               instruments = ':b2',",
-        "               manifest = 'AndroidManifest.xml')",
-        "android_binary(name = 'b2',",
-        "               srcs = ['b2.java'],",
-        "               manifest = 'AndroidManifest.xml')");
-    ConfiguredTarget b1 = getConfiguredTarget("//java/com/google/android/instr:b1");
-    AndroidInstrumentationInfo provider = b1.get(AndroidInstrumentationInfo.PROVIDER);
-    assertThat(provider.getTargetApk()).isNotNull();
-    assertThat(provider.getTargetApk().prettyPrint())
-        .isEqualTo("java/com/google/android/instr/b2.apk");
-    assertThat(provider.getInstrumentationApk()).isNotNull();
-    assertThat(provider.getInstrumentationApk().prettyPrint())
-        .isEqualTo("java/com/google/android/instr/b1.apk");
-  }
-
-  @Test
-  public void testNoInstrumentationInfoProviderIfNotInstrumenting() throws Exception {
-    scratch.file(
-        "java/com/google/android/instr/BUILD",
-        "android_binary(name = 'b1',",
-        "               srcs = ['b1.java'],",
-        "               manifest = 'AndroidManifest.xml')");
-    ConfiguredTarget b1 = getConfiguredTarget("//java/com/google/android/instr:b1");
-    AndroidInstrumentationInfo provider = b1.get(AndroidInstrumentationInfo.PROVIDER);
-    assertThat(provider).isNull();
   }
 }
