@@ -1,55 +1,38 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data;
 
-import java.beans.BeanInfo;
-import java.beans.Introspector;
-import java.beans.PropertyDescriptor;
-import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.Spliterator;
-import java.util.stream.Collectors;
+import java.util.Iterator;
 import java.util.stream.Stream;
-
-import smile.data.formula.Term;
-import smile.data.measure.Measure;
-import smile.data.measure.NominalScale;
 import smile.data.type.*;
 import smile.data.vector.*;
-import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.Matrix;
 
 /**
  * A data frame with a new index instead of the default [0, n) row index.
  *
  * @author Haifeng Li
  */
-class IndexDataFrame implements DataFrame {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(IndexDataFrame.class);
-
+public class IndexDataFrame implements DataFrame {
     /** The underlying data frame. */
-    private DataFrame df;
+    private final DataFrame df;
     /** The row index. */
-    private int[] index;
+    private final int[] index;
 
     /**
      * Constructor.
@@ -72,13 +55,18 @@ class IndexDataFrame implements DataFrame {
     }
 
     @Override
-    public int columnIndex(String name) {
-        return df.columnIndex(name);
+    public Iterator<BaseVector> iterator() {
+        return df.iterator();
+    }
+
+    @Override
+    public int indexOf(String name) {
+        return df.indexOf(name);
     }
 
     @Override
     public int size() {
-        return df.size();
+        return index.length;
     }
 
     @Override
@@ -88,62 +76,67 @@ class IndexDataFrame implements DataFrame {
 
     @Override
     public Object get(int i, int j) {
-        return df.get(i, j);
+        return df.get(index[i], j);
     }
 
     @Override
     public Stream<Tuple> stream() {
-        return Arrays.stream(index).mapToObj(i -> df.get(i));
+        return Arrays.stream(index).mapToObj(df::get);
     }
 
     @Override
     public BaseVector column(int i) {
-        return df.column(i);
+        return df.column(i).get(index);
     }
 
     @Override
     public <T> Vector<T> vector(int i) {
-        return df.vector(i);
+        return df.<T>vector(i).get(index);
     }
 
     @Override
     public BooleanVector booleanVector(int i) {
-        return df.booleanVector(i);
+        return df.booleanVector(i).get(index);
     }
 
     @Override
     public CharVector charVector(int i) {
-        return df.charVector(i);
+        return df.charVector(i).get(index);
     }
 
     @Override
     public ByteVector byteVector(int i) {
-        return df.byteVector(i);
+        return df.byteVector(i).get(index);
     }
 
     @Override
     public ShortVector shortVector(int i) {
-        return df.shortVector(i);
+        return df.shortVector(i).get(index);
     }
 
     @Override
     public IntVector intVector(int i) {
-        return df.intVector(i);
+        return df.intVector(i).get(index);
     }
 
     @Override
     public LongVector longVector(int i) {
-        return df.longVector(i);
+        return df.longVector(i).get(index);
     }
 
     @Override
     public FloatVector floatVector(int i) {
-        return df.floatVector(i);
+        return df.floatVector(i).get(index);
     }
 
     @Override
     public DoubleVector doubleVector(int i) {
-        return df.doubleVector(i);
+        return df.doubleVector(i).get(index);
+    }
+
+    @Override
+    public StringVector stringVector(int i) {
+        return df.stringVector(i).get(index);
     }
 
     @Override
@@ -158,7 +151,7 @@ class IndexDataFrame implements DataFrame {
 
     /** Returns a new data frame with regular index. */
     private DataFrame rebase() {
-        return DataFrame.of(stream().collect(Collectors.toList()));
+        return DataFrame.of(stream().collect(java.util.stream.Collectors.toList()));
     }
 
     @Override
@@ -197,11 +190,5 @@ class IndexDataFrame implements DataFrame {
     @Override
     public Tuple get(int i) {
         return df.get(index[i]);
-    }
-
-    @Override
-    public DenseMatrix toMatrix() {
-        // Although clean, this is not optimal in term of performance.
-        return rebase().toMatrix();
     }
 }
