@@ -18,12 +18,10 @@ package org.graylog2.indexer.ranges;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.primitives.Ints;
-import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.NoShardAvailableActionException;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
@@ -36,34 +34,24 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchScrollRequest;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.index.Index;
 import org.elasticsearch.index.query.BoolQueryBuilder;
-import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.query.RangeQueryBuilder;
-import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.aggregations.AggregationBuilders;
-import org.elasticsearch.search.aggregations.bucket.filter.Filter;
-import org.elasticsearch.search.aggregations.bucket.filter.FilterAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.stats.Stats;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.IndexMapping;
+import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.TimestampStats;
-import org.graylog2.plugin.Tools;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,12 +68,14 @@ public class EsIndexRangeService implements IndexRangeService {
 
     private final Client client;
     private final ActivityWriter activityWriter;
+    private final Searches searches;
     private final ObjectMapper objectMapper;
 
     @Inject
-    public EsIndexRangeService(Client client, ActivityWriter activityWriter, ObjectMapper objectMapper) {
+    public EsIndexRangeService(Client client, ActivityWriter activityWriter, Searches searches, ObjectMapper objectMapper) {
         this.client = client;
         this.activityWriter = activityWriter;
+        this.searches = searches;
         this.objectMapper = objectMapper;
     }
 
@@ -100,7 +90,7 @@ public class EsIndexRangeService implements IndexRangeService {
         final GetResponse r;
         try {
             r = client.get(request).actionGet();
-        } catch (IndexMissingException | NoShardAvailableActionException e) {
+        } catch (NoShardAvailableActionException e) {
             throw new NotFoundException(e);
         }
 
@@ -181,19 +171,14 @@ public class EsIndexRangeService implements IndexRangeService {
                 .setType(IndexMapping.TYPE_META)
                 .setRefresh(true)
                 .request();
+        final DeleteResponse response = client.delete(request).actionGet();
 
-        try {
-            final DeleteResponse response = client.delete(request).actionGet();
-
-            if (response.isFound()) {
-                String msg = "Removed range meta-information of [" + index + "]";
-                LOG.info(msg);
-                activityWriter.write(new Activity(msg, IndexRange.class));
-            } else {
-                LOG.warn("Couldn't find meta-information of index [{}]", index);
-            }
-        } catch (IndexMissingException e) {
-            LOG.debug("Couldn't find index", e);
+        if (response.isFound()) {
+            String msg = "Removed range meta-information of [" + index + "]";
+            LOG.info(msg);
+            activityWriter.write(new Activity(msg, IndexRange.class));
+        } else {
+            LOG.warn("Couldn't find meta-information of index [{}]", index);
         }
     }
 
@@ -237,56 +222,13 @@ public class EsIndexRangeService implements IndexRangeService {
         final Stopwatch sw = Stopwatch.createStarted();
         final DateTime now = DateTime.now(DateTimeZone.UTC);
         final TimestampStats stats = firstNonNull(
-                timestampStatsOfIndex(index),
+                searches.timestampStatsOfIndex(index),
                 TimestampStats.create(new DateTime(0L, DateTimeZone.UTC), now, new DateTime(0L, DateTimeZone.UTC))
         );
         final int duration = Ints.saturatedCast(sw.stop().elapsed(TimeUnit.MILLISECONDS));
 
         LOG.info("Calculated range of [{}] in [{}ms].", index, duration);
         return IndexRange.create(index, stats.min(), stats.max(), now, duration);
-    }
-
-    /**
-     * Calculate stats (min, max, avg) about the message timestamps in the given index.
-     *
-     * @param index Name of the index to query.
-     * @return the timestamp stats in the given index, or {@code null} if they couldn't be calculated.
-     * @see org.elasticsearch.search.aggregations.metrics.stats.Stats
-     */
-    @VisibleForTesting
-    @Nullable
-    protected TimestampStats timestampStatsOfIndex(String index) {
-        final FilterAggregationBuilder builder = AggregationBuilders.filter("agg")
-                .filter(FilterBuilders.existsFilter("timestamp"))
-                .subAggregation(AggregationBuilders.stats("ts_stats").field("timestamp"));
-        final SearchRequestBuilder srb = client.prepareSearch()
-                .setIndices(index)
-                .setSearchType(SearchType.COUNT)
-                .addAggregation(builder);
-
-        final SearchResponse response;
-        try {
-            response = client.search(srb.request()).actionGet();
-        } catch (IndexMissingException e) {
-            throw e;
-        } catch (ElasticsearchException e) {
-            LOG.error("Error while calculating timestamp stats in index <" + index + ">", e);
-            throw new IndexMissingException(new Index(index));
-        }
-
-        final Filter f = response.getAggregations().get("agg");
-        if (f.getDocCount() == 0L) {
-            LOG.debug("No documents with attribute \"timestamp\" found in index <{}>", index);
-            return null;
-        }
-
-        final Stats stats = f.getAggregations().get("ts_stats");
-        final DateTimeFormatter formatter = DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT).withZoneUTC();
-        final DateTime min = formatter.parseDateTime(stats.getMinAsString());
-        final DateTime max = formatter.parseDateTime(stats.getMaxAsString());
-        final DateTime avg = formatter.parseDateTime(stats.getAvgAsString());
-
-        return TimestampStats.create(min, max, avg);
     }
 
     @Override

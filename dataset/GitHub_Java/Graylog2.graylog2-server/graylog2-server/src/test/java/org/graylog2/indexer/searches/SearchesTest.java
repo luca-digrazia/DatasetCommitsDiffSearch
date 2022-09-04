@@ -46,18 +46,20 @@ import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import javax.inject.Inject;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedSet;
 
 import static com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
 import static com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -75,35 +77,53 @@ public class SearchesTest {
             .orderedBy(new IndexRangeComparator())
             .add(new IndexRange() {
                 @Override
-                public String indexName() {
+                public String getIndexName() {
                     return INDEX_NAME;
                 }
 
                 @Override
-                public DateTime calculatedAt() {
+                public DateTime getCalculatedAt() {
                     return DateTime.now();
                 }
 
                 @Override
-                public DateTime end() {
+                public DateTime getStart() {
                     return new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
                 }
 
                 @Override
-                public int calculationDuration() {
+                public int getCalculationTookMs() {
                     return 0;
                 }
 
                 @Override
-                public DateTime begin() {
-                    return new DateTime(0L, DateTimeZone.UTC);
+                public String getId() {
+                    return "id";
+                }
+
+                @Override
+                public Map<String, Object> getFields() {
+                    return Collections.emptyMap();
+                }
+
+                @Override
+                public Map<String, Validator> getValidations() {
+                    return Collections.emptyMap();
+                }
+
+                @Override
+                public Map<String, Validator> getEmbeddedValidations(String key) {
+                    return Collections.emptyMap();
+                }
+
+                @Override
+                public Map<String, Object> asMap() {
+                    return Collections.emptyMap();
                 }
             }).build();
 
-    @Mock
-    private Deflector deflector;
-    @Mock
-    private IndexRangeService indexRangeService;
+    private final Deflector deflector = mock(Deflector.class);
+    private final IndexRangeService indexRangeService = mock(IndexRangeService.class);
 
     private MetricRegistry metricRegistry;
     private Searches searches;
@@ -118,7 +138,7 @@ public class SearchesTest {
 
     @Before
     public void setUp() throws Exception {
-        when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(INDEX_RANGES);
+        when(indexRangeService.getFrom(anyInt())).thenReturn(INDEX_RANGES);
         metricRegistry = new MetricRegistry();
         searches = new Searches(new Configuration(), deflector, indexRangeService, client, metricRegistry);
     }
@@ -325,4 +345,88 @@ public class SearchesTest {
         assertThat(histogram.getCount()).isEqualTo(1L);
         assertThat(histogram.getSnapshot().getValues()).containsExactly(86400L);
     }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testFirstOfIndex() throws Exception {
+        SearchHit searchHit = searches.firstOfIndex("graylog");
+
+        assertThat(searchHit.getSource()).containsKey("timestamp");
+        assertThat(searchHit.getSource().get("timestamp")).isEqualTo("2015-01-01 05:00:00.000");
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testLastOfIndex() throws Exception {
+        SearchHit searchHit = searches.lastOfIndex("graylog");
+
+        assertThat(searchHit.getSource()).containsKey("timestamp");
+        assertThat(searchHit.getSource().get("timestamp")).isEqualTo("2015-01-01 01:00:00.000");
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testFindNewestMessageTimestampOfIndex() throws Exception {
+        DateTime dateTime = searches.findNewestMessageTimestampOfIndex("graylog");
+
+        assertThat(dateTime).isEqualTo(new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC));
+    }
+
+    @Test
+    @UsingDataSet(locations = "SearchesTest-EmptyIndex.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testFindNewestMessageTimestampOfIndexWithEmptyIndex() throws Exception {
+        DateTime dateTime = searches.findNewestMessageTimestampOfIndex("graylog");
+
+        assertThat(dateTime).isNull();
+    }
+
+    @Test(expected = IndexMissingException.class)
+    public void testFindNewestMessageTimestampOfIndexWithNonExistingIndex() throws Exception {
+        searches.findNewestMessageTimestampOfIndex("does-not-exist");
+    }
+
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testFindOldestMessageTimestampOfIndex() throws Exception {
+        DateTime dateTime = searches.findOldestMessageTimestampOfIndex("graylog");
+
+        assertThat(dateTime).isEqualTo(new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC));
+    }
+
+    @Test
+    @UsingDataSet(locations = "SearchesTest-EmptyIndex.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testFindOldestMessageTimestampOfIndexWithEmptyIndex() throws Exception {
+        DateTime dateTime = searches.findOldestMessageTimestampOfIndex("graylog");
+
+        assertThat(dateTime).isNull();
+    }
+
+    @Test(expected = IndexMissingException.class)
+    public void testFindOldestMessageTimestampOfIndexWithNonExistingIndex() throws Exception {
+        searches.findOldestMessageTimestampOfIndex("does-not-exist");
+    }
+    
+    @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testTimestampStatsOfIndex() throws Exception {
+        TimestampStats stats = searches.timestampStatsOfIndex("graylog");
+
+        assertThat(stats.min()).isEqualTo(new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC));
+        assertThat(stats.max()).isEqualTo(new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC));
+        assertThat(stats.avg()).isEqualTo(new DateTime(2015, 1, 1, 3, 0, DateTimeZone.UTC));
+    }
+
+    @Test
+    @UsingDataSet(locations = "SearchesTest-EmptyIndex.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testTimestampStatsOfIndexWithEmptyIndex() throws Exception {
+        TimestampStats stats = searches.timestampStatsOfIndex("graylog");
+
+        assertThat(stats).isNull();
+    }
+
+    @Test(expected = IndexMissingException.class)
+    public void testTimestampStatsOfIndexWithNonExistingIndex() throws Exception {
+        searches.timestampStatsOfIndex("does-not-exist");
+    }
+
 }
