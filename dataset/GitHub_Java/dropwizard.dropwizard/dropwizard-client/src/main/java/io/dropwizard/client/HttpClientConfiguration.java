@@ -8,6 +8,8 @@ import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
+// TODO: 5/15/13 <coda> -- write tests for HttpClientConfiguration
+
 /**
  * The configuration class used by {@link HttpClientBuilder}.
  *
@@ -19,7 +21,7 @@ public class HttpClientConfiguration {
 
     @NotNull
     private Duration connectionTimeout = Duration.milliseconds(500);
-
+    
     @NotNull
     private Duration connectionRequestTimeout = Duration.milliseconds(500);
 
@@ -95,18 +97,18 @@ public class HttpClientConfiguration {
     public void setConnectionTimeout(Duration duration) {
         this.connectionTimeout = duration;
     }
-
+    
     @JsonProperty
     public Duration getConnectionRequestTimeout() {
-        return connectionRequestTimeout;
-    }
+		return connectionRequestTimeout;
+	}
 
     @JsonProperty
-    public void setConnectionRequestTimeout(Duration connectionRequestTimeout) {
-        this.connectionRequestTimeout = connectionRequestTimeout;
-    }
-
-    @JsonProperty
+	public void setConnectionRequestTimeout(Duration connectionRequestTimeout) {
+		this.connectionRequestTimeout = connectionRequestTimeout;
+	}
+    
+	@JsonProperty
     public void setTimeToLive(Duration timeToLive) {
         this.timeToLive = timeToLive;
     }
