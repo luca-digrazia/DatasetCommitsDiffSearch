@@ -583,20 +583,6 @@ public class JavaOptions extends FragmentOptions {
   )
   public List<Label> pluginList;
 
-  @Option(
-      name = "incompatible_require_java_toolchain_header_compiler_direct",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If enabled, java_toolchains.header_compilation_direct must be set when "
-              + "--java_header_compilation is enabled.")
-  public boolean requireJavaToolchainHeaderCompilerDirect;
-
   @Override
   public FragmentOptions getHost() {
     JavaOptions host = (JavaOptions) getDefault();
@@ -630,8 +616,6 @@ public class JavaOptions extends FragmentOptions {
     host.jplPropagateCcLinkParamsStore = jplPropagateCcLinkParamsStore;
 
     host.protoGeneratedStrictDeps = protoGeneratedStrictDeps;
-
-    host.requireJavaToolchainHeaderCompilerDirect = requireJavaToolchainHeaderCompilerDirect;
 
     return host;
   }
