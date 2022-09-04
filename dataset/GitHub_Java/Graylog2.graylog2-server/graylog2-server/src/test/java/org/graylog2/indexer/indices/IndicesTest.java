@@ -19,11 +19,11 @@ package org.graylog2.indexer.indices;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule;
+import com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import com.google.common.collect.ImmutableMap;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
-import com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule;
-import com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequest;
@@ -40,19 +40,11 @@ import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
 import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.compress.CompressedXContent;
 import org.elasticsearch.index.IndexNotFoundException;
-import org.graylog2.audit.NullAuditEventSender;
+import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexMapping;
-import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.TestIndexSet;
-import org.graylog2.indexer.indexset.IndexSetConfig;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.nosqlunit.IndexCreatingLoadStrategyFactory;
-import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy;
-import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig;
-import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
-import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
-import org.graylog2.indexer.searches.IndexRangeStats;
-import org.graylog2.plugin.system.NodeId;
+import org.graylog2.indexer.searches.TimestampStats;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -60,66 +52,48 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import javax.inject.Inject;
-import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
-import static com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
+import static com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
+import static com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
+@RunWith(MockitoJUnitRunner.class)
 public class IndicesTest {
     @ClassRule
     public static final EmbeddedElasticsearch EMBEDDED_ELASTICSEARCH = newEmbeddedElasticsearchRule().build();
 
     private static final long ES_TIMEOUT = TimeUnit.SECONDS.toMillis(1L);
     private static final String INDEX_NAME = "graylog_0";
+    private static final ElasticsearchConfiguration CONFIG = new ElasticsearchConfiguration() {
+        @Override
+        public String getIndexPrefix() {
+            return "graylog";
+        }
+    };
 
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
     @Rule
     public ElasticsearchRule elasticsearchRule;
-
-    private final IndexSetConfig indexSetConfig;
-    private final IndexSet indexSet;
 
     @Inject
     private Client client;
     private Indices indices;
 
     public IndicesTest() {
-        this.indexSetConfig = IndexSetConfig.builder()
-                .id("index-set-1")
-                .title("Index set 1")
-                .description("For testing")
-                .indexPrefix("graylog")
-                .creationDate(ZonedDateTime.now())
-                .shards(1)
-                .replicas(0)
-                .rotationStrategyClass(MessageCountRotationStrategy.class.getCanonicalName())
-                .rotationStrategy(MessageCountRotationStrategyConfig.createDefault())
-                .retentionStrategyClass(DeletionRetentionStrategy.class.getCanonicalName())
-                .retentionStrategy(DeletionRetentionStrategyConfig.createDefault())
-                .indexAnalyzer("standard")
-                .indexTemplateName("template-1")
-                .indexOptimizationMaxNumSegments(1)
-                .indexOptimizationDisabled(false)
-                .build();
-        this.indexSet = new TestIndexSet(indexSetConfig);
         this.elasticsearchRule = newElasticsearchRule().defaultEmbeddedElasticsearch();
-        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(indexSet, Collections.singleton(INDEX_NAME)));
+        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(CONFIG, Collections.singleton(INDEX_NAME)));
     }
 
     @Before
     public void setUp() throws Exception {
-        indices = new Indices(client, new IndexMapping(), new Messages(client, new MetricRegistry()), mock(NodeId.class), new NullAuditEventSender());
+        indices = new Indices(client, CONFIG, new IndexMapping(), new Messages(client, CONFIG, new MetricRegistry()));
     }
 
     @Test
@@ -184,7 +158,7 @@ public class IndicesTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testTimestampStatsOfIndex() throws Exception {
-        IndexRangeStats stats = indices.indexRangeStatsOfIndex(INDEX_NAME);
+        TimestampStats stats = indices.timestampStatsOfIndex(INDEX_NAME);
 
         assertThat(stats.min()).isEqualTo(new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC));
         assertThat(stats.max()).isEqualTo(new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC));
@@ -193,7 +167,7 @@ public class IndicesTest {
     @Test
     @UsingDataSet(locations = "IndicesTest-EmptyIndex.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testTimestampStatsOfIndexWithEmptyIndex() throws Exception {
-        IndexRangeStats stats = indices.indexRangeStatsOfIndex(INDEX_NAME);
+        TimestampStats stats = indices.timestampStatsOfIndex(INDEX_NAME);
 
         assertThat(stats.min()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
         assertThat(stats.max()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
@@ -201,19 +175,19 @@ public class IndicesTest {
 
     @Test(expected = IndexNotFoundException.class)
     public void testTimestampStatsOfIndexWithNonExistingIndex() throws Exception {
-        indices.indexRangeStatsOfIndex("does-not-exist");
+        indices.timestampStatsOfIndex("does-not-exist");
     }
 
     @Test
     public void testCreateEnsuresIndexTemplateExists() throws Exception {
-        final String templateName = indexSetConfig.indexTemplateName();
+        final String templateName = CONFIG.getTemplateName();
         final IndicesAdminClient client = this.client.admin().indices();
         final GetIndexTemplatesRequest request = client.prepareGetTemplates(templateName).request();
         final GetIndexTemplatesResponse responseBefore = client.getTemplates(request).actionGet();
 
         assertThat(responseBefore.getIndexTemplates()).isEmpty();
 
-        indices.create("index_template_test", indexSet);
+        indices.create("index_template_test");
 
         final GetIndexTemplatesResponse responseAfter = client.getTemplates(request).actionGet();
         assertThat(responseAfter.getIndexTemplates()).hasSize(1);
@@ -231,17 +205,17 @@ public class IndicesTest {
     @Test
     public void testCreateOverwritesIndexTemplate() throws Exception {
         final ObjectMapper mapper = new ObjectMapperProvider().get();
-        final String templateName = indexSetConfig.indexTemplateName();
+        final String templateName = CONFIG.getTemplateName();
         final IndicesAdminClient client = this.client.admin().indices();
 
         final ImmutableMap<String, Object> beforeMapping = ImmutableMap.of(
             "_source", ImmutableMap.of("enabled", false),
             "properties", ImmutableMap.of("message",
                 ImmutableMap.of(
-                    "type", "string",
+                    "type", "binary",
                     "index", "not_analyzed")));
         assertThat(client.preparePutTemplate(templateName)
-                .setTemplate(indexSet.getWriteIndexWildcard())
+                .setTemplate(indices.allIndicesAlias())
                 .addMapping(IndexMapping.TYPE_MESSAGE, beforeMapping)
                 .get()
                 .isAcknowledged())
@@ -254,7 +228,7 @@ public class IndicesTest {
         final Map<String, Object> actualMapping = mapper.readValue(beforeMappings.get(IndexMapping.TYPE_MESSAGE).uncompressed(), new TypeReference<Map<String, Object>>() {});
         assertThat(actualMapping.get(IndexMapping.TYPE_MESSAGE)).isEqualTo(beforeMapping);
 
-        indices.create("index_template_test", indexSet);
+        indices.create("index_template_test");
 
         final GetIndexTemplatesResponse responseAfter = client.prepareGetTemplates(templateName).get();
         assertThat(responseAfter.getIndexTemplates()).hasSize(1);
@@ -263,7 +237,7 @@ public class IndicesTest {
         assertThat(templateMetaData.getMappings().keysIt()).containsExactly(IndexMapping.TYPE_MESSAGE);
 
         final Map<String, Object> mapping = mapper.readValue(templateMetaData.getMappings().get(IndexMapping.TYPE_MESSAGE).uncompressed(), new TypeReference<Map<String, Object>>() {});
-        final Map<String, Object> expectedTemplate = new IndexMapping().messageTemplate(indexSet.getWriteIndexWildcard(), indexSetConfig.indexAnalyzer());
+        final Map<String, Object> expectedTemplate = new IndexMapping().messageTemplate(indices.allIndicesAlias(), CONFIG.getAnalyzer());
         assertThat(mapping).isEqualTo(expectedTemplate.get("mappings"));
 
         final DeleteIndexTemplateRequest deleteRequest = client.prepareDeleteTemplate(templateName).request();
@@ -277,7 +251,7 @@ public class IndicesTest {
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void indexCreationDateReturnsIndexCreationDateOfExistingIndexAsDateTime() {
         final DateTime now = DateTime.now(DateTimeZone.UTC);
-        indices.create("index_creation_date_test", indexSet);
+        indices.create("index_creation_date_test");
 
         final DateTime indexCreationDate = indices.indexCreationDate("index_creation_date_test");
         org.assertj.jodatime.api.Assertions.assertThat(indexCreationDate).isAfterOrEqualTo(now);
