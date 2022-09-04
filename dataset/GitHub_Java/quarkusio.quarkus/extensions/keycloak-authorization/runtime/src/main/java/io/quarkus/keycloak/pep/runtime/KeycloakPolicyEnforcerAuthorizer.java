@@ -150,12 +150,16 @@ public class KeycloakPolicyEnforcerAuthorizer
                     PolicyEnforcerConfig.EnforcementMode.valueOf(config.policyEnforcer.enforcementMode));
             enforcerConfig.setHttpMethodAsScope(config.policyEnforcer.httpMethodAsScope);
 
-            KeycloakPolicyEnforcerConfig.KeycloakConfigPolicyEnforcer.PathCacheConfig pathCache = config.policyEnforcer.pathCache;
+            Optional<KeycloakPolicyEnforcerConfig.KeycloakConfigPolicyEnforcer.PathCacheConfig> pathCache = config.policyEnforcer.pathCache;
 
-            PolicyEnforcerConfig.PathCacheConfig pathCacheConfig = new PolicyEnforcerConfig.PathCacheConfig();
-            pathCacheConfig.setLifespan(pathCache.lifespan);
-            pathCacheConfig.setMaxEntries(pathCache.maxEntries);
-            enforcerConfig.setPathCacheConfig(pathCacheConfig);
+            if (pathCache.isPresent()) {
+                PolicyEnforcerConfig.PathCacheConfig pathCacheConfig = new PolicyEnforcerConfig.PathCacheConfig();
+
+                pathCacheConfig.setLifespan(pathCache.get().lifespan);
+                pathCacheConfig.setMaxEntries(pathCache.get().maxEntries);
+
+                enforcerConfig.setPathCacheConfig(pathCacheConfig);
+            }
 
             enforcerConfig.setClaimInformationPointConfig(
                     getClaimInformationPointConfig(config.policyEnforcer.claimInformationPoint));

@@ -19,7 +19,6 @@ import org.jboss.resteasy.spi.ResteasyDeployment;
 
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.quarkus.vertx.http.runtime.VertxInputStream;
@@ -80,34 +79,25 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
             request.fail(e);
             return;
         }
-        if (BlockingOperationControl.isBlockingAllowed()) {
-            try {
-                dispatch(request, is, new VertxBlockingOutput(request.request()));
-            } catch (Throwable e) {
-                request.fail(e);
-            }
-        } else {
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        dispatch(request, is, new VertxBlockingOutput(request.request()));
-                    } catch (Throwable e) {
-                        request.fail(e);
-                    }
-                }
-            });
-        }
 
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    dispatch(request, is, new VertxBlockingOutput(request.request()));
+                } catch (Throwable e) {
+                    request.fail(e);
+                }
+            }
+        });
     }
 
     private void dispatch(RoutingContext routingContext, InputStream is, VertxOutput output) {
         ManagedContext requestContext = beanContainer.requestContext();
         requestContext.activate();
-        routingContext.remove(QuarkusHttpUser.AUTH_FAILURE_HANDLER);
         QuarkusHttpUser user = (QuarkusHttpUser) routingContext.user();
-        if (association != null) {
-            association.setIdentity(QuarkusHttpUser.getSecurityIdentity(routingContext, null));
+        if (user != null && association != null) {
+            association.setIdentity(user.getSecurityIdentity());
         }
         currentVertxRequest.setCurrent(routingContext);
         try {
@@ -127,7 +117,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
                     dispatcher.getDispatcher(), vertxResponse, requestContext);
             vertxRequest.setInputStream(is);
             try {
-                ResteasyContext.pushContext(SecurityContext.class, new QuarkusResteasySecurityContext(request, routingContext));
+                ResteasyContext.pushContext(SecurityContext.class, new QuarkusResteasySecurityContext(request));
                 ResteasyContext.pushContext(RoutingContext.class, routingContext);
                 dispatcher.service(ctx, request, response, vertxRequest, vertxResponse, true);
             } catch (Failure e1) {

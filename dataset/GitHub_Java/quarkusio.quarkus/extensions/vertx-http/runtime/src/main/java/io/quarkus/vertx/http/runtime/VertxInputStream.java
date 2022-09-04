@@ -3,7 +3,6 @@ package io.quarkus.vertx.http.runtime;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
-import java.nio.channels.ClosedChannelException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
@@ -16,7 +15,6 @@ import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
-import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 
 public class VertxInputStream extends InputStream {
@@ -29,6 +27,7 @@ public class VertxInputStream extends InputStream {
     private final long limit;
 
     public VertxInputStream(RoutingContext request, long timeout) throws IOException {
+
         this.exchange = new VertxBlockingInput(request.request(), timeout);
         Long limitObj = request.get(VertxHttpRecorder.MAX_REQUEST_SIZE_KEY);
         if (limitObj == null) {
@@ -154,51 +153,46 @@ public class VertxInputStream extends InputStream {
         public VertxBlockingInput(HttpServerRequest request, long timeout) throws IOException {
             this.request = request;
             this.timeout = timeout;
-            final ConnectionBase connection = (ConnectionBase) request.connection();
-            synchronized (connection) {
-                if (!connection.channel().isOpen()) {
-                    readException = new ClosedChannelException();
-                } else if (!request.isEnded()) {
-                    request.pause();
-                    request.handler(this);
-                    request.endHandler(new Handler<Void>() {
-                        @Override
-                        public void handle(Void event) {
-                            synchronized (connection) {
-                                eof = true;
-                                if (waiting) {
-                                    connection.notify();
-                                }
+            if (!request.isEnded()) {
+                request.pause();
+                request.handler(this);
+                request.endHandler(new Handler<Void>() {
+                    @Override
+                    public void handle(Void event) {
+                        synchronized (request.connection()) {
+                            eof = true;
+                            if (waiting) {
+                                request.connection().notify();
                             }
                         }
-                    });
-                    request.exceptionHandler(new Handler<Throwable>() {
-                        @Override
-                        public void handle(Throwable event) {
-                            synchronized (connection) {
-                                readException = new IOException(event);
-                                if (input1 != null) {
-                                    input1.getByteBuf().release();
-                                    input1 = null;
-                                }
-                                if (inputOverflow != null) {
-                                    Buffer d = inputOverflow.poll();
-                                    while (d != null) {
-                                        d.getByteBuf().release();
-                                        d = inputOverflow.poll();
-                                    }
-                                }
-                                if (waiting) {
-                                    connection.notify();
+                    }
+                });
+                request.exceptionHandler(new Handler<Throwable>() {
+                    @Override
+                    public void handle(Throwable event) {
+                        synchronized (request.connection()) {
+                            readException = new IOException(event);
+                            if (input1 != null) {
+                                input1.getByteBuf().release();
+                                input1 = null;
+                            }
+                            if (inputOverflow != null) {
+                                Buffer d = inputOverflow.poll();
+                                while (d != null) {
+                                    d.getByteBuf().release();
+                                    d = inputOverflow.poll();
                                 }
                             }
+                            if (waiting) {
+                                request.connection().notify();
+                            }
                         }
+                    }
 
-                    });
-                    request.fetch(1);
-                } else {
-                    eof = true;
-                }
+                });
+                request.fetch(1);
+            } else {
+                eof = true;
             }
         }
 

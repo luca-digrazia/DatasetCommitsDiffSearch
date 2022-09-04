@@ -16,7 +16,7 @@ public class HttpConfiguration {
     /**
      * Enable the CORS filter.
      */
-    @ConfigItem(name = "cors")
+    @ConfigItem(name = "cors", defaultValue = "false")
     public boolean corsEnabled;
 
     /**
@@ -59,14 +59,14 @@ public class HttpConfiguration {
      * If this is true then the address, scheme etc will be set from headers forwarded by the proxy server, such as
      * {@code X-Forwarded-For}. This should only be set if you are behind a proxy that sets these headers.
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean proxyAddressForwarding;
 
     /**
      * If this is true and proxy address forwarding is enabled then the standard {@code Forwarded} header will be used,
      * rather than the more common but not standard {@code X-Forwarded-For}.
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean allowForwarded;
 
     /**
@@ -77,16 +77,6 @@ public class HttpConfiguration {
      */
     @ConfigItem(defaultValue = "enabled")
     public InsecureRequests insecureRequests;
-
-    /**
-     * If this is true (the default) then HTTP/2 will be enabled.
-     *
-     * Note that for browsers to be able to use it HTTPS must be enabled,
-     * and you must be running on JDK11 or above, as JDK8 does not support
-     * ALPN.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean http2;
 
     /**
      * The CORS config
@@ -147,25 +137,25 @@ public class HttpConfiguration {
     /**
      * Enable socket reuse port (linux/macOs native transport only)
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean soReusePort;
 
     /**
      * Enable tcp quick ack (linux native transport only)
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean tcpQuickAck;
 
     /**
      * Enable tcp cork (linux native transport only)
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean tcpCork;
 
     /**
      * Enable tcp fast open (linux native transport only)
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean tcpFastOpen;
 
     /**
@@ -177,18 +167,8 @@ public class HttpConfiguration {
     /**
      * Enable listening to host:port
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "false")
     public boolean domainSocketEnabled;
-
-    /**
-     * If this is true then the request start time will be recorded to enable logging of total request time.
-     * 
-     * This has a small performance penalty, so is disabled by default.
-     */
-    @ConfigItem
-    public boolean recordRequestStartTime;
-
-    AccessLogConfig accessLog;
 
     public int determinePort(LaunchMode launchMode) {
         return launchMode == LaunchMode.TEST ? testPort : port;
@@ -198,7 +178,7 @@ public class HttpConfiguration {
         return launchMode == LaunchMode.TEST ? testSslPort : sslPort;
     }
 
-    public enum InsecureRequests {
+    public static enum InsecureRequests {
         ENABLED,
         REDIRECT,
         DISABLED;
