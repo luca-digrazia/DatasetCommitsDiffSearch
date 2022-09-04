@@ -32,7 +32,10 @@ public abstract class SearchResultChartConfig extends WidgetConfigBase implement
     @Override
     public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
         return Collections.singleton(
-                createViewWidget(randomUUIDProvider.get())
+                ViewWidget.builder()
+                        .id(randomUUIDProvider.get())
+                        .query(query())
+                        .timerange(timerange())
                         .config(
                                 AggregationConfig.builder()
                                         .rowPivots(Collections.singletonList(

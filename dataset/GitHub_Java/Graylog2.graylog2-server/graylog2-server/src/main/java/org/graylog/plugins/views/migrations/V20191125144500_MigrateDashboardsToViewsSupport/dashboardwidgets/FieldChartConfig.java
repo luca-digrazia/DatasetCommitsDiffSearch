@@ -46,13 +46,16 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
                 .rowPivots(Collections.singletonList(
                         Pivot.timeBuilder()
                                 .field(TIMESTAMP_FIELD)
-                                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoInterval.of(interval(), timerange())).build())
+                                .config(TimeHistogramConfig.builder().interval(timestampInterval(interval())).build())
                                 .build()
                 ))
                 .series(Collections.singletonList(series()))
                 .visualization(visualization());
         return Collections.singleton(
-                createViewWidget(randomUUIDProvider.get())
+                ViewWidget.builder()
+                        .id(randomUUIDProvider.get())
+                        .query(query())
+                        .timerange(timerange())
                         .config(visualizationConfig().map(configBuilder::visualizationConfig).orElse(configBuilder).build())
                         .build()
         );
