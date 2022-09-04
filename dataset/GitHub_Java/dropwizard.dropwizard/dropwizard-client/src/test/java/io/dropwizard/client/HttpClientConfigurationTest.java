@@ -14,7 +14,8 @@ import org.junit.Test;
 import javax.validation.Validation;
 import java.io.File;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 public class HttpClientConfigurationTest {
 
@@ -43,8 +44,7 @@ public class HttpClientConfigurationTest {
 
         assertThat(proxy.getHost()).isEqualTo("192.168.52.11");
         assertThat(proxy.getPort()).isEqualTo(8080);
-        assertThat(proxy.getScheme()).isNotNull();
-        assertThat(proxy.getPresentScheme()).isEqualTo("https");
+        assertThat(proxy.getScheme()).isEqualTo("https");
 
         AuthConfiguration auth = proxy.getAuth();
         assertThat(auth).isNotNull();
@@ -60,8 +60,7 @@ public class HttpClientConfigurationTest {
         assertThat(proxy).isNotNull();
         assertThat(proxy.getHost()).isEqualTo("192.168.52.11");
         assertThat(proxy.getPort()).isEqualTo(8080);
-        assertThat(proxy.getScheme()).isNull();
-        assertThat(proxy.getPresentScheme()).isEqualTo("http");
+        assertThat(proxy.getScheme()).isEqualTo("http");
     }
 
     @Test
@@ -81,8 +80,7 @@ public class HttpClientConfigurationTest {
         ProxyConfiguration proxy = configuration.getProxyConfiguration();
         assertThat(proxy).isNotNull();
         assertThat(proxy.getHost()).isNotNull();
-        assertThat(proxy.getPort()).isNull();
-        assertThat(proxy.getPresentPort()).isEqualTo(-1);
+        assertThat(proxy.getPort()).isEqualTo(-1);
     }
 
     @Test(expected = ConfigurationValidationException.class)

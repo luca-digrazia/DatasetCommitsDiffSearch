@@ -33,6 +33,7 @@ import org.apache.http.impl.NoConnectionReuseStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.http.impl.conn.DefaultRoutePlanner;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
@@ -209,7 +210,7 @@ public class HttpClientBuilderTest {
         assertThat(builder.using(configuration).createClient(apacheBuilder, connectionManager, "test")).isNotNull();
 
         assertThat(((RequestConfig) spyHttpClientBuilderField("defaultRequestConfig", apacheBuilder)).getCookieSpec())
-                .isEqualTo(CookieSpecs.DEFAULT);
+                .isEqualTo(CookieSpecs.BEST_MATCH);
     }
 
     @Test
@@ -330,7 +331,7 @@ public class HttpClientBuilderTest {
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080);
         config.setProxyConfiguration(proxy);
 
-        checkProxy(config, new HttpHost("dropwizard.io", 80), new HttpHost("192.168.52.11", 8080));
+        checkProxy(config, new HttpHost("192.168.52.11", 8080, "http"));
     }
 
     @Test
@@ -339,7 +340,7 @@ public class HttpClientBuilderTest {
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11");
         config.setProxyConfiguration(proxy);
 
-        checkProxy(config, new HttpHost("dropwizard.io", 80), new HttpHost("192.168.52.11"));
+        checkProxy(config, new HttpHost("192.168.52.11"));
     }
 
     @Test
@@ -349,52 +350,31 @@ public class HttpClientBuilderTest {
         ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080, "http", auth);
         config.setProxyConfiguration(proxy);
 
-        CloseableHttpClient httpClient = checkProxy(config, new HttpHost("dropwizard.io", 80),
-                new HttpHost("192.168.52.11", 8080, "http"));
-        CredentialsProvider credentialsProvider = (CredentialsProvider)
-                FieldUtils.getField(httpClient.getClass(), "credentialsProvider", true)
-                        .get(httpClient);
+        CloseableHttpClient httpClient = checkProxy(config, new HttpHost("192.168.52.11", 8080, "http"));
 
+        CredentialsProvider credentialsProvider = (CredentialsProvider)
+                FieldUtils.getField(httpClient.getClass(), "credentialsProvider", true).get(httpClient);
         assertThat(credentialsProvider.getCredentials(new AuthScope("192.168.52.11", 8080)))
                 .isEqualTo(new UsernamePasswordCredentials("secret", "stuff"));
     }
 
     @Test
-    public void usesProxyWithNonProxyHosts() throws Exception {
-        HttpClientConfiguration config = new HttpClientConfiguration();
-        ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11", 8080);
-        proxy.setNonProxyHosts(ImmutableList.of("*.example.com"));
-        config.setProxyConfiguration(proxy);
-
-        checkProxy(config, new HttpHost("host.example.com", 80), null);
-    }
-
-    @Test
-    public void usesProxyWithNonProxyHostsAndTargetDoesNotMatch() throws Exception {
-        HttpClientConfiguration config = new HttpClientConfiguration();
-        ProxyConfiguration proxy = new ProxyConfiguration("192.168.52.11");
-        proxy.setNonProxyHosts(ImmutableList.of("*.example.com"));
-        config.setProxyConfiguration(proxy);
-
-        checkProxy(config, new HttpHost("dropwizard.io", 80), new HttpHost("192.168.52.11"));
-    }
-
-    @Test
     public void usesNoProxy() throws Exception {
-        checkProxy(new HttpClientConfiguration(), new HttpHost("dropwizard.io", 80), null);
+        checkProxy(new HttpClientConfiguration(), null);
     }
 
-    private CloseableHttpClient checkProxy(HttpClientConfiguration config, HttpHost target, HttpHost expectedProxy)
-            throws Exception {
+    private CloseableHttpClient checkProxy(HttpClientConfiguration config, HttpHost proxyHost) throws Exception {
         CloseableHttpClient httpClient = builder.using(config).build("test");
+
         HttpRoutePlanner routePlanner = (HttpRoutePlanner)
                 FieldUtils.getField(httpClient.getClass(), "routePlanner", true).get(httpClient);
 
+        HttpHost target = new HttpHost("dropwizard.io", 80);
         HttpRoute route = routePlanner.determineRoute(target, new HttpGet(target.toURI()),
                 new BasicHttpContext());
-        assertThat(route.getProxyHost()).isEqualTo(expectedProxy);
-        assertThat(route.getTargetHost()).isEqualTo(target);
-        assertThat(route.getHopCount()).isEqualTo(expectedProxy != null ? 2 : 1);
+        assertThat(route.getProxyHost()).isEqualTo(proxyHost);
+        assertThat(route.getTargetHost()).isEqualTo(new HttpHost("dropwizard.io", 80, "http"));
+        assertThat(route.getHopCount()).isEqualTo(proxyHost != null ? 2 : 1);
 
         return httpClient;
     }
