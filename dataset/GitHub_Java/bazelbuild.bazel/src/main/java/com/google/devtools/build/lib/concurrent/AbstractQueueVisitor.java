@@ -44,14 +44,19 @@ public class AbstractQueueVisitor implements QuiescingExecutor {
    * ThreadPoolExecutor}.
    */
   public static final Function<ExecutorParams, ThreadPoolExecutor> EXECUTOR_FACTORY =
-      p ->
-          new ThreadPoolExecutor(
+      new Function<ExecutorParams, ThreadPoolExecutor>() {
+        @Override
+        public ThreadPoolExecutor apply(ExecutorParams p) {
+          return new ThreadPoolExecutor(
               /*corePoolSize=*/ p.getParallelism(),
               /*maximumPoolSize=*/ p.getParallelism(),
               p.getKeepAliveTime(),
               p.getUnits(),
               p.getWorkQueue(),
               new ThreadFactoryBuilder().setNameFormat(p.getPoolName() + " %d").build());
+        }
+      };
+
   /**
    * The most severe unhandled exception thrown by a worker thread, according to
    * {@link #errorClassifier}. This exception gets propagated to the calling thread of
