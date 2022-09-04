@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2019 the AndroidAnnotations project
+ * Copyright (C) 2016-2018 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,7 +27,6 @@ import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.handler.AnnotationHandler;
 import org.androidannotations.handler.GeneratingAnnotationHandler;
-import org.androidannotations.helper.ClassesHolder;
 import org.androidannotations.holder.GeneratedClassHolder;
 import org.androidannotations.internal.InternalAndroidAnnotationsEnvironment;
 import org.androidannotations.internal.exception.ProcessingException;
@@ -62,20 +61,19 @@ public class ModelProcessor {
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public ProcessResult process(AnnotationElements validatedModel) throws Exception {
-		ProcessHolder processHolder = new ProcessHolder();
-		ClassesHolder classesHolder = new ClassesHolder(environment.getProcessingEnvironment());
+		ProcessHolder processHolder = new ProcessHolder(environment.getProcessingEnvironment());
 
 		environment.setProcessHolder(processHolder);
-		environment.setClassesHolder(classesHolder);
 
 		LOGGER.info("Processing root elements");
 
 		/*
-		 * We generate top classes then inner classes, then inner classes of inner
-		 * classes, etc... until there is no more classes to generate.
+		 * We generate top classes then inner classes, then inner classes of
+		 * inner classes, etc... until there is no more classes to generate.
 		 */
 		while (generateElements(validatedModel, processHolder)) {
 			// CHECKSTYLE:OFF
+			;
 			// CHECKSTYLE:ON
 		}
 
@@ -88,8 +86,8 @@ public class ModelProcessor {
 			String annotationName = annotationHandler.getTarget();
 
 			/*
-			 * For ancestors, the annotationHandler manipulates the annotated elements, but
-			 * uses the holder for the root element
+			 * For ancestors, the annotationHandler manipulates the annotated
+			 * elements, but uses the holder for the root element
 			 */
 			Set<AnnotatedAndRootElements> ancestorAnnotatedElements = validatedModel.getAncestorAnnotatedElements(annotationName);
 
@@ -100,8 +98,8 @@ public class ModelProcessor {
 			for (AnnotatedAndRootElements elements : ancestorAnnotatedElements) {
 				GeneratedClassHolder holder = processHolder.getGeneratedClassHolder(elements.rootTypeElement);
 				/*
-				 * Annotations coming from ancestors may be applied to root elements that are
-				 * not validated, and therefore not available.
+				 * Annotations coming from ancestors may be applied to root
+				 * elements that are not validated, and therefore not available.
 				 */
 				if (holder != null) {
 					processThrowing(annotationHandler, elements.annotatedElement, holder);
@@ -126,14 +124,15 @@ public class ModelProcessor {
 				}
 
 				/*
-				 * We do not generate code for elements belonging to abstract classes, because
-				 * the generated classes are final anyway
+				 * We do not generate code for elements belonging to abstract
+				 * classes, because the generated classes are final anyway
 				 */
 				if (!isAbstractClass(enclosingElement)) {
 					GeneratedClassHolder holder = processHolder.getGeneratedClassHolder(enclosingElement);
-
+					
 					/*
-					 * The holder can be null if the annotated holder class is already invalidated.
+					 * The holder can be null if the annotated holder class is
+					 * already invalidated.
 					 */
 					if (holder != null) {
 						processThrowing(annotationHandler, annotatedElement, holder);
@@ -146,7 +145,7 @@ public class ModelProcessor {
 		}
 
 		return new ProcessResult(//
-				classesHolder.codeModel(), //
+				processHolder.codeModel(), //
 				processHolder.getOriginatingElements());
 	}
 
@@ -185,8 +184,9 @@ public class ModelProcessor {
 
 			for (Element annotatedElement : annotatedElements) {
 				/*
-				 * We do not generate code for abstract classes, because the generated classes
-				 * are final anyway (we do not want anyone to extend them).
+				 * We do not generate code for abstract classes, because the
+				 * generated classes are final anyway (we do not want anyone to
+				 * extend them).
 				 */
 				if (!isAbstractClass(annotatedElement)) {
 					if (processHolder.getGeneratedClassHolder(annotatedElement) == null) {
@@ -210,8 +210,8 @@ public class ModelProcessor {
 				}
 			}
 			/*
-			 * We currently do not take into account class annotations from ancestors. We
-			 * should careful design the priority rules first.
+			 * We currently do not take into account class annotations from
+			 * ancestors. We should careful design the priority rules first.
 			 */
 		}
 		return isElementRemaining;
