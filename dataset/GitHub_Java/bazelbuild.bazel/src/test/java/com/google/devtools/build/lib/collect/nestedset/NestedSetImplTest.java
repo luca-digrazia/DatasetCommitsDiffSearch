@@ -14,14 +14,12 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -96,13 +94,12 @@ public class NestedSetImplTest {
             .addTransitive(NestedSetBuilder.stableOrder().build()).build())
         .addTransitive(NestedSetBuilder.naiveLinkOrder()
             .addTransitive(NestedSetBuilder.stableOrder().build()).build()).build();
-    assertThrows(
-        "Shouldn't be able to include a non-stable order inside a different non-stable order!",
-        IllegalArgumentException.class,
-        () ->
-            NestedSetBuilder.compileOrder()
-                .addTransitive(NestedSetBuilder.linkOrder().build())
-                .build());
+    try {
+      NestedSetBuilder.compileOrder().addTransitive(NestedSetBuilder.linkOrder().build()).build();
+      fail("Shouldn't be able to include a non-stable order inside a different non-stable order!");
+    } catch (IllegalArgumentException e) {
+      // Expected.
+    }
   }
 
   /**
@@ -247,29 +244,5 @@ public class NestedSetImplTest {
       builder.addTransitive(new NestedSetBuilder<Integer>(transitiveOrder).add(transitive).build());
     }
     return builder.build();
-  }
-
-  @Test
-  public void addTransitiveAndBlockIfFuture_propagatesInterrupt() throws Exception {
-    SettableFuture<Object[]> deserializationFuture = SettableFuture.create();
-    NestedSet<String> deserialzingNestedSet =
-        NestedSet.withFuture(Order.STABLE_ORDER, deserializationFuture);
-    NestedSetBuilder<String> builder = NestedSetBuilder.stableOrder();
-    AtomicBoolean interruptPropagated = new AtomicBoolean();
-
-    Thread add =
-        new Thread(
-            () -> {
-              try {
-                builder.addTransitiveAndBlockIfFuture(deserialzingNestedSet);
-              } catch (InterruptedException e) {
-                interruptPropagated.set(true);
-              }
-            });
-    add.start();
-    add.interrupt();
-    add.join();
-
-    assertThat(interruptPropagated.get()).isTrue();
   }
 }

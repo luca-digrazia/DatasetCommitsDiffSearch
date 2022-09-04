@@ -20,7 +20,6 @@ import com.google.common.collect.Multiset;
 import com.google.devtools.build.lib.actions.CommandLineItem;
 import com.google.devtools.build.lib.actions.CommandLineItem.MapFn;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Computes fingerprints for nested sets, reusing sub-computations from children. */
 public class NestedSetFingerprintCache {
+  private static final int DIGEST_SIZE = 16;
   private static final int EMPTY_SET_DIGEST = 104_395_303;
 
   /** Memoize the subresults. We have to have one cache per type of command item map function. */
@@ -121,8 +121,6 @@ public class NestedSetFingerprintCache {
                 mapFnClass.getName()));
       }
     }
-    // TODO(b/112460990): Use the value from DigestHashFunction.getDefault(), but check for
-    // contention.
-    return new DigestMap(DigestHashFunction.SHA256, 1024);
+    return new DigestMap(DIGEST_SIZE, 1024);
   }
 }
