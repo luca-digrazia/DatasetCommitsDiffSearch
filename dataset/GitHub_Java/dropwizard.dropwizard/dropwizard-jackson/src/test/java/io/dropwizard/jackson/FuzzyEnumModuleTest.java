@@ -122,8 +122,7 @@ public class FuzzyEnumModuleTest {
             failBecauseExceptionWasNotThrown(JsonMappingException.class);
         } catch (JsonMappingException e) {
             assertThat(e.getOriginalMessage())
-                    .isEqualTo("Cannot deserialize value of type `java.util.concurrent.TimeUnit` from String \"wrong\": " +
-                        "wrong was not one of [NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS]");
+                    .isEqualTo("wrong was not one of [NANOSECONDS, MICROSECONDS, MILLISECONDS, SECONDS, MINUTES, HOURS, DAYS]");
         }
     }
 
