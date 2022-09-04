@@ -30,7 +30,6 @@ import smile.math.MathEx;
 import smile.regression.Regression;
 import smile.regression.DataFrameRegression;
 import smile.validation.metric.*;
-import smile.validation.metric.Error;
 
 /**
  * Leave-one-out cross validation. LOOCV uses a single observation
@@ -119,15 +118,11 @@ public class LOOCV implements Serializable {
             }
         }
 
-        int error = Error.of(y, prediction);
         double accuracy = Accuracy.of(y, prediction);
         if (soft) {
             if (k == 2) {
                 double[] probability = Arrays.stream(posteriori).mapToDouble(p -> p[1]).toArray();
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
                         Sensitivity.of(y, prediction),
                         Specificity.of(y, prediction),
                         Precision.of(y, prediction),
@@ -137,20 +132,13 @@ public class LOOCV implements Serializable {
                         LogLoss.of(y, probability),
                         CrossEntropy.of(y, posteriori));
             } else {
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
-                        Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-                        Double.NaN, Double.NaN, Double.NaN,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
+                        Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                         CrossEntropy.of(y, posteriori));
             }
         } else {
             if (k == 2) {
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
                         Sensitivity.of(y, prediction),
                         Specificity.of(y, prediction),
                         Precision.of(y, prediction),
@@ -158,12 +146,8 @@ public class LOOCV implements Serializable {
                         MatthewsCorrelation.of(y, prediction),
                         Double.NaN, Double.NaN, Double.NaN);
             } else {
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
-                        Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-                        Double.NaN, Double.NaN, Double.NaN,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
+                        Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                         CrossEntropy.of(y, posteriori));
             }
         }
@@ -205,15 +189,11 @@ public class LOOCV implements Serializable {
             }
         }
 
-        int error = Error.of(y, prediction);
         double accuracy = Accuracy.of(y, prediction);
         if (soft) {
             if (k == 2) {
                 double[] probability = Arrays.stream(posteriori).mapToDouble(p -> p[1]).toArray();
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
                         Sensitivity.of(y, prediction),
                         Specificity.of(y, prediction),
                         Precision.of(y, prediction),
@@ -223,20 +203,13 @@ public class LOOCV implements Serializable {
                         LogLoss.of(y, probability),
                         CrossEntropy.of(y, posteriori));
             } else {
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
-                        Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-                        Double.NaN, Double.NaN, Double.NaN,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
+                        Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                         CrossEntropy.of(y, posteriori));
             }
         } else {
             if (k == 2) {
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
                         Sensitivity.of(y, prediction),
                         Specificity.of(y, prediction),
                         Precision.of(y, prediction),
@@ -244,12 +217,8 @@ public class LOOCV implements Serializable {
                         MatthewsCorrelation.of(y, prediction),
                         Double.NaN, Double.NaN, Double.NaN);
             } else {
-                return new ClassificationMetrics(
-                        fitTime / (n * 1E6),
-                        scoreTime / (n * 1E6),
-                        n, error, accuracy,
-                        Double.NaN, Double.NaN, Double.NaN, Double.NaN,
-                        Double.NaN, Double.NaN, Double.NaN,
+                return new ClassificationMetrics(fitTime / (n * 1E6),scoreTime / (n * 1E6), accuracy,
+                        Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
                         CrossEntropy.of(y, posteriori));
             }
         }
@@ -282,7 +251,6 @@ public class LOOCV implements Serializable {
         return new RegressionMetrics(
                 fitTime / (n * 1E6),
                 scoreTime / (n * 1E6),
-                n,
                 RSS.of(y, prediction),
                 MSE.of(y, prediction),
                 RMSE.of(y, prediction),
@@ -316,7 +284,6 @@ public class LOOCV implements Serializable {
         return new RegressionMetrics(
                 fitTime / (n * 1E6),
                 scoreTime / (n * 1E6),
-                n,
                 RSS.of(y, prediction),
                 MSE.of(y, prediction),
                 RMSE.of(y, prediction),
