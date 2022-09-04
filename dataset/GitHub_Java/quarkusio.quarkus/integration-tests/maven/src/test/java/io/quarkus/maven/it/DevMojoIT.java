@@ -1,6 +1,5 @@
 package io.quarkus.maven.it;
 
-import static io.quarkus.maven.it.ApplicationNameAndVersionTestUtil.assertApplicationPropertiesSetCorrectly;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -30,7 +29,6 @@ import io.quarkus.maven.it.verifier.RunningInvoker;
  *
  *         mvn install -Dit.test=DevMojoIT#methodName
  */
-@DisableForNative
 public class DevMojoIT extends RunAndCheckMojoTestBase {
 
     @Test
@@ -44,16 +42,13 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         //make sure webjars work
         getHttpResponse("webjars/bootstrap/3.1.0/css/bootstrap.min.css");
-
         assertThatOutputWorksCorrectly(running.log());
-
-        assertApplicationPropertiesSetCorrectly();
     }
 
     @Test
     public void testThatResteasyWithoutUndertowCanRun() throws MavenInvocationException, IOException {
         testDir = initProject("projects/classic-no-undertow", "projects/project-classic-no-undertow-run");
-        run(false);
+        run();
 
         //make sure that a simple HTTP GET request always works
         IntStream.range(0, 10).forEach(i -> {
@@ -286,7 +281,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
     @Test
     public void testSourceModificationBeforeFirstCallWorks() throws MavenInvocationException, IOException {
         testDir = initProject("projects/classic", "projects/project-classic-source-modification-before-first-call");
-        run(true);
+        run();
 
         File source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
         // Edit the "Hello" message and provide a random string.
@@ -384,7 +379,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(configurationFile::isFile);
 
-        run(true);
+        run();
 
         // Wait until we get "uuid"
         await()

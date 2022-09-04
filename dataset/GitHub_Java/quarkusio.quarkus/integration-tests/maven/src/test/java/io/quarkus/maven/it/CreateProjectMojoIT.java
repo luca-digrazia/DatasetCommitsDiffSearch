@@ -26,8 +26,7 @@ import io.quarkus.platform.tools.ToolsConstants;
 /**
  * @author <a href="http://escoffier.me">Clement Escoffier</a>
  */
-@DisableForNative
-public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
+public class CreateProjectMojoIT extends MojoTestBase {
 
     private Invoker invoker;
     private RunningInvoker running;
@@ -85,21 +84,18 @@ public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
         setup(new Properties());
 
         assertThat(new File(testDir, "pom.xml")).isFile();
+        assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
+                .contains(MojoUtils.getPluginArtifactId(), MojoUtils.TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_VALUE,
+                        MojoUtils.getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
         assertThat(new File(testDir, "src/main/resources/application.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).exists();
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
-                .contains(getPluginArtifactId(), MojoUtils.TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_VALUE,
-                        getPluginGroupId());
+                .containsIgnoringCase(MojoUtils.getBomArtifactId());
 
-        final Model model = loadPom(testDir);
-        assertThat(model.getProperties().getProperty(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_PLUGIN_VERSION_NAME))
-                .isEqualTo(getPluginVersion());
-        assertThat(model.getProperties().getProperty(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_NAME))
-                .isEqualTo(getBomArtifactId());
-
+        Model model = loadPom(testDir);
         assertThat(model.getDependencyManagement().getDependencies().stream()
                 .anyMatch(d -> d.getArtifactId().equals(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_PLATFORM_ARTIFACT_ID_VALUE)
                         && d.getVersion().equals(MojoUtils.TEMPLATE_PROPERTY_QUARKUS_PLATFORM_VERSION_VALUE)
@@ -131,23 +127,6 @@ public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
-    }
-
-    @Test
-    public void testProjectGenerationWithInvalidPackage() throws Exception {
-        testDir = initEmptyProject("projects/project-generation-invalid-package");
-        assertThat(testDir).isDirectory();
-        invoker = initInvoker(testDir);
-
-        Properties properties = new Properties();
-        properties.put("projectGroupId", "org.acme");
-        properties.put("projectArtifactId", "acme");
-        properties.put("className", "org.acme.invalid-package-name.MyResource");
-
-        InvocationResult result = setup(properties);
-
-        assertThat(result.getExitCode()).isNotZero();
-        assertThat(new File(testDir, "src/main/java/org/acme")).doesNotExist();
     }
 
     @Test
@@ -341,12 +320,12 @@ public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
 
         params.setProperty("platformGroupId", ToolsConstants.IO_QUARKUS);
         params.setProperty("platformArtifactId", "quarkus-bom");
-        params.setProperty("platformVersion", getPluginVersion());
+        params.setProperty("platformVersion", MojoUtils.getPluginVersion());
 
         InvocationRequest request = new DefaultInvocationRequest();
         request.setBatchMode(true);
         request.setGoals(Collections.singletonList(
-                getPluginGroupId() + ":" + getPluginArtifactId() + ":" + getPluginVersion() + ":create"));
+                MojoUtils.getPluginKey() + ":" + MojoUtils.getPluginVersion() + ":create"));
         request.setDebug(false);
         request.setShowErrors(false);
         request.setProperties(params);
