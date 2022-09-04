@@ -65,7 +65,7 @@ public class ArtifactTest {
   @Before
   public final void setRootDir() throws Exception  {
     scratch = new Scratch();
-    execDir = scratch.dir("/base/exec");
+    execDir = scratch.dir("/exec");
     rootDir = ArtifactRoot.asDerivedRoot(execDir, "root");
   }
 
@@ -297,6 +297,7 @@ public class ArtifactTest {
     ArtifactRoot artifactRoot = ArtifactRoot.asSourceRoot(root);
     ArtifactFactory artifactFactory =
         new ArtifactFactory(execDir.getParentDirectory(), "blaze-out");
+    artifactFactory.setSourceArtifactRoots(ImmutableMap.of(root, artifactRoot));
     ArtifactResolverSupplier artifactResolverSupplierForTest =
         new ArtifactResolverSupplier() {
           @Override
