@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,22 +15,24 @@
  */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr.invoke;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JMethod;
+import org.androidannotations.annotations.IgnoredWhenDetached;
+import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.holder.EFragmentHolder;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.process.IsValid;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
-import org.androidannotations.annotations.IgnoredWhenDetached;
-import org.androidannotations.holder.EFragmentHolder;
-import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.IsValid;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JMethod;
+import static com.sun.codemodel.JExpr.*;
 
 public class IgnoredWhenDetachedHandler extends BaseAnnotationHandler<EFragmentHolder> {
+
+	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public IgnoredWhenDetachedHandler(ProcessingEnvironment processingEnvironment) {
 		super(IgnoredWhenDetached.class, processingEnvironment);
@@ -50,6 +52,9 @@ public class IgnoredWhenDetachedHandler extends BaseAnnotationHandler<EFragmentH
 		JMethod delegatingMethod = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
 		JBlock previousMethodBody = codeModelHelper.removeBody(delegatingMethod);
 
-		delegatingMethod.body()._if(invoke(holder.getGeneratedClass().staticRef("this"), "getActivity").ne(_null()))._then().add(previousMethodBody);
+
+		delegatingMethod.body()
+				._if(invoke(holder.getGeneratedClass().staticRef("this"), "getActivity").ne(_null()))
+				._then().add(previousMethodBody);
 	}
 }
