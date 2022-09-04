@@ -89,6 +89,7 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
@@ -201,24 +202,23 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   private String configurationDir(
       String arch, ConfigurationDistinguisher configurationDistinguisher,
       DottedVersion minOsVersion) {
-    String minOsSegment = minOsVersion == null ? "" : "-min" + minOsVersion;
     switch (configurationDistinguisher) {
       case UNKNOWN:
         return String.format("%s-out/ios_%s-fastbuild/", TestConstants.PRODUCT_NAME, arch);
       case APPLEBIN_IOS:
         return String.format(
-            "%1$s-out/ios-%2$s%4$s-%3$s-ios_%2$s-fastbuild/",
+            "%1$s-out/ios-%2$s-min%4$s-%3$s-ios_%2$s-fastbuild/",
             TestConstants.PRODUCT_NAME,
             arch,
             configurationDistinguisher.toString().toLowerCase(Locale.US),
-            minOsSegment);
+            minOsVersion);
       case APPLEBIN_WATCHOS:
         return String.format(
-            "%1$s-out/watchos-%2$s%4$s-%3$s-watchos_%2$s-fastbuild/",
+            "%1$s-out/watchos-%2$s-min%4$s-%3$s-watchos_%2$s-fastbuild/",
             TestConstants.PRODUCT_NAME,
             arch,
             configurationDistinguisher.toString().toLowerCase(Locale.US),
-            minOsSegment);
+            minOsVersion);
       default:
         throw new AssertionError();
     }
@@ -236,7 +236,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
    */
   protected String configurationBin(
       String arch, ConfigurationDistinguisher configurationDistinguisher) {
-    return configurationBin(arch, configurationDistinguisher, null);
+    return configurationBin(arch, configurationDistinguisher,
+        defaultMinimumOs(configurationDistinguisher));
   }
 
   /**
@@ -254,6 +255,23 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
             arch);
       case UNKNOWN:
         return String.format("%s-out/ios_%s-fastbuild/bin/", TestConstants.PRODUCT_NAME, arch);
+      default:
+        throw new AssertionError();
+    }
+  }
+
+  /**
+   * Returns the default minimum os version that dependencies under a given configuration
+   * distinguisher (and thus a given platform type) will be compiled for.
+   */
+  protected static DottedVersion defaultMinimumOs(
+      ConfigurationDistinguisher configurationDistinguisher) {
+    switch (configurationDistinguisher) {
+      case UNKNOWN:
+      case APPLEBIN_IOS:
+        return DEFAULT_IOS_SDK_VERSION;
+      case APPLEBIN_WATCHOS:
+        return DottedVersion.fromString(XcodeVersionProperties.DEFAULT_WATCHOS_SDK_VERSION);
       default:
         throw new AssertionError();
     }
@@ -3608,7 +3626,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     assertThat(Artifact.toExecPaths(genOAction.getInputs()))
         .contains(
-            configurationGenfiles("x86_64", ConfigurationDistinguisher.UNKNOWN, null)
+            configurationGenfiles(
+                    "x86_64",
+                    ConfigurationDistinguisher.UNKNOWN,
+                    defaultMinimumOs(ConfigurationDistinguisher.UNKNOWN))
                 + "/x/gen.m");
   }
 

@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
@@ -378,6 +379,45 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
   }
 
   @Test
+  public void testCrosstoolCompilationSupport() throws Exception {
+    MockObjcSupport.createCrosstoolPackage(mockToolsConfig);
+    useConfiguration(
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
+        "--experimental_objc_crosstool=all");
+    addSimpleBinaryTarget("//java/com/google/dummy/test:transpile");
+    assertThat(getConfiguredTarget("//app:app")).isNotNull();
+  }
+
+  @Test
+  public void testProtoCrosstoolCompilationSupport() throws Exception {
+    MockObjcSupport.createCrosstoolPackage(mockToolsConfig);
+    useConfiguration(
+        "--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL,
+        "--experimental_objc_crosstool=all");
+    scratch.file("x/test.java");
+    scratch.file("x/test.proto");
+    scratch.file("x/BUILD",
+        "package(default_visibility=['//visibility:public'])",
+        "proto_library(",
+        "    name = 'test_proto',",
+        "    srcs = ['test.proto'],",
+        "    cc_api_version = 2,",
+        "    java_api_version = 2,",
+        "    j2objc_api_version = 1)",
+        "",
+        "java_library(",
+        "    name = 'test',",
+        "    srcs = ['test.java'],",
+        "    deps = [':test_proto'])",
+        "",
+        "j2objc_library(",
+        "    name = 'transpile',",
+        "    deps = ['test'])");
+    addSimpleBinaryTarget("//x:transpile");
+    assertThat(getConfiguredTarget("//app:app")).isNotNull();
+  }
+
+  @Test
   public void testJ2ObjcHeaderMappingAction() throws Exception {
     scratch.file("java/com/google/transpile/BUILD",
         "java_library(name = 'lib1',",
@@ -662,13 +702,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     ActionExecutionContext dummyActionExecutionContext =
         new ActionExecutionContext(
-            null,
-            null,
-            ActionInputPrefetcher.NONE,
-            actionKeyContext,
-            null,
-            null,
-            ImmutableMap.<String, String>of(),
+            null, null, ActionInputPrefetcher.NONE, null, null, ImmutableMap.<String, String>of(),
             DUMMY_ARTIFACT_EXPANDER);
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
     ByteArrayOutputStream umbrellaHeaderStream = new ByteArrayOutputStream();
@@ -711,13 +745,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
 
     ActionExecutionContext dummyActionExecutionContext =
         new ActionExecutionContext(
-            null,
-            null,
-            ActionInputPrefetcher.NONE,
-            actionKeyContext,
-            null,
-            null,
-            ImmutableMap.<String, String>of(),
+            null, null, ActionInputPrefetcher.NONE, null, null, ImmutableMap.<String, String>of(),
             DUMMY_ARTIFACT_EXPANDER);
 
     ByteArrayOutputStream moduleMapStream = new ByteArrayOutputStream();
@@ -863,7 +891,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
             .add("--dummy_archive")
             .add(execPath + "tools/objc/libdummy_lib.a")
             .add("--xcrunwrapper")
-            .add(MOCK_XCRUNWRAPPER_EXECUTABLE_PATH)
+            .add("tools/objc/xcrunwrapper")
             .add("--dependency_mapping_files")
             .add(dependencyMappingFile.getExecPathString())
             .add("--header_mapping_files")

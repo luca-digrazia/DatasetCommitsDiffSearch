@@ -15,9 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.testutil.Scratch;
 import java.io.IOException;
@@ -34,8 +32,7 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
     Iterable<String> requiredAttributes(Scratch scratch, String packageDir,
         Set<String> alreadyAdded) throws IOException {
       return Iterables.concat(ImmutableList.of("binary_type = 'dylib'"),
-          AppleBinaryTest.RULE_TYPE.requiredAttributes(scratch, packageDir,
-          Sets.union(alreadyAdded, ImmutableSet.of("binary_type"))));
+          AppleBinaryTest.RULE_TYPE.requiredAttributes(scratch, packageDir, alreadyAdded));
     }
   };
 
