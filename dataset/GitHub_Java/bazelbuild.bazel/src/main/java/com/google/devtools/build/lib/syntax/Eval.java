@@ -121,7 +121,7 @@ final class Eval {
 
   private static void execDef(StarlarkThread.Frame fr, DefStatement node)
       throws EvalException, InterruptedException {
-    Resolver.Function rfn = node.getResolvedFunction();
+    Resolver.Function rfn = node.resolved;
 
     // Evaluate default value expressions of optional parameters.
     // We use MANDATORY to indicate a required parameter
@@ -129,10 +129,9 @@ final class Eval {
     // it will be constructed by the code emitted by the compiler).
     // As an optimization, we omit the prefix of MANDATORY parameters.
     Object[] defaults = null;
-    int nparams =
-        rfn.getParameters().size() - (rfn.hasKwargs() ? 1 : 0) - (rfn.hasVarargs() ? 1 : 0);
+    int nparams = rfn.params.size() - (rfn.hasKwargs ? 1 : 0) - (rfn.hasVarargs ? 1 : 0);
     for (int i = 0; i < nparams; i++) {
-      Expression expr = rfn.getParameters().get(i).getDefaultValue();
+      Expression expr = rfn.params.get(i).getDefaultValue();
       if (expr == null && defaults == null) {
         continue; // skip prefix of required parameters
       }
@@ -308,7 +307,7 @@ final class Eval {
               ? Resolver.Scope.GLOBAL //
               : Resolver.Scope.LOCAL;
     } else {
-      scope = bind.getScope();
+      scope = bind.scope;
     }
 
     String name = id.getName();
@@ -642,7 +641,7 @@ final class Eval {
     }
 
     Object result;
-    switch (bind.getScope()) {
+    switch (bind.scope) {
       case LOCAL:
         result = fr.locals.get(name);
         break;
@@ -661,8 +660,7 @@ final class Eval {
       // but its assignment was not yet executed.
       throw new EvalException(
           id.getStartLocation(),
-          String.format(
-              "%s variable '%s' is referenced before assignment.", bind.getScope(), name));
+          String.format("%s variable '%s' is referenced before assignment.", bind.scope, name));
     }
     return result;
   }
