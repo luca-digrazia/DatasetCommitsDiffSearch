@@ -76,8 +76,8 @@ public class MessageFilterChainProcessor implements MessageProcessor {
     @Override
     public Messages process(Messages messages) {
 
-        for (Message msg : messages) {
-            for (final MessageFilter filter : filterRegistry) {
+        for (final MessageFilter filter : filterRegistry) {
+            for (Message msg : messages) {
                 final String timerName = name(filter.getClass(), "executionTime");
                 final Timer timer = metricRegistry.timer(timerName);
                 final Timer.Context timerContext = timer.time();
@@ -87,16 +87,15 @@ public class MessageFilterChainProcessor implements MessageProcessor {
 
                     if (filter.filter(msg)) {
                         LOG.debug("Filter [{}] marked message <{}> to be discarded. Dropping message.",
-                                  filter.getName(),
-                                  msg.getId());
+                                filter.getName(),
+                                msg.getId());
+                        msg.setFilterOut(true);
                         filteredOutMessages.mark();
                         journal.markJournalOffsetCommitted(msg.getJournalOffset());
-                        continue;
                     }
-                    return msg;
                 } catch (Exception e) {
                     LOG.error("Could not apply filter [" + filter.getName() + "] on message <" + msg.getId() + ">: ",
-                              e);
+                            e);
                 } finally {
                     final long elapsedNanos = timerContext.stop();
                     msg.recordTiming(serverStatus, timerName, elapsedNanos);
