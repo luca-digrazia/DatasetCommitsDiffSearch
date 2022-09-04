@@ -555,15 +555,15 @@ public abstract class AbstractQueryTest<T> {
 
   @Test
   public void testDepsDoesNotIncludeBuildFiles() throws Exception {
-    writeFile("deps/BUILD", "exports_files(['build_def', 'starlark.bzl'])");
+    writeFile("deps/BUILD", "exports_files(['build_def', 'skylark.bzl'])");
     writeFile(
-        "deps/starlark.bzl",
+        "deps/skylark.bzl",
         "def macro():",
         "  native.genrule(name = 'dep2', outs = ['dep2.txt'], cmd = 'echo Hi >$@')");
 
     writeFile(
         "s/BUILD",
-        "load('//deps:starlark.bzl', 'macro')",
+        "load('//deps:skylark.bzl', 'macro')",
         "macro()",
         "genrule(name = 'my_rule',",
         "        outs = ['my.txt'],",
@@ -573,7 +573,7 @@ public abstract class AbstractQueryTest<T> {
     List<String> result = evalToListOfStrings("deps(//s:my_rule)");
     assertThat(result).containsAtLeast("//s:dep2", "//s:dep1.txt", "//s:dep2.txt", "//s:my_rule");
     assertThat(result)
-        .containsNoneOf("//deps:BUILD", "//deps:build_def", "//deps:starlark.bzl", "//s:BUILD");
+        .containsNoneOf("//deps:BUILD", "//deps:build_def", "//deps:skylark.bzl", "//s:BUILD");
   }
 
   @Test
