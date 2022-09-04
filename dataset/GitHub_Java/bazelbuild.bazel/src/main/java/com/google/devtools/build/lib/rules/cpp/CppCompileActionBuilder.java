@@ -73,7 +73,7 @@ public class CppCompileActionBuilder {
   private UUID actionClassId = GUID;
   private CppConfiguration cppConfiguration;
   private ImmutableMap<Artifact, IncludeScannable> lipoScannableMap;
-  private final ArrayList<Artifact> additionalIncludeScanningRoots;
+  private final ImmutableList.Builder<Artifact> additionalIncludeScanningRoots;
   private Boolean shouldScanIncludes;
   private Map<String, String> executionInfo = new LinkedHashMap<>();
   private CppSemantics cppSemantics;
@@ -121,7 +121,7 @@ public class CppCompileActionBuilder {
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
     this.lipoScannableMap = ImmutableMap.copyOf(lipoScannableMap);
     this.mandatoryInputsBuilder = NestedSetBuilder.stableOrder();
-    this.additionalIncludeScanningRoots = new ArrayList<>();
+    this.additionalIncludeScanningRoots = new ImmutableList.Builder<>();
     this.allowUsingHeaderModules = true;
     this.env = configuration.getActionEnvironment();
     this.codeCoverageEnabled = configuration.isCodeCoverageEnabled();
@@ -139,8 +139,8 @@ public class CppCompileActionBuilder {
     this.mandatoryInputsBuilder = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(other.mandatoryInputsBuilder.build());
     this.inputsForInvalidation = other.inputsForInvalidation;
-    this.additionalIncludeScanningRoots = new ArrayList<>();
-    this.additionalIncludeScanningRoots.addAll(other.additionalIncludeScanningRoots);
+    this.additionalIncludeScanningRoots =
+        new ImmutableList.Builder<Artifact>().addAll(other.additionalIncludeScanningRoots.build());
     this.outputFile = other.outputFile;
     this.dwoFile = other.dwoFile;
     this.ltoIndexingFile = other.ltoIndexingFile;
@@ -232,15 +232,15 @@ public class CppCompileActionBuilder {
     }
     PathFragment sourcePath = sourceFile.getExecPath();
     if (CppFileTypes.CPP_MODULE_MAP.matches(sourcePath)) {
-      return CppActionNames.CPP_MODULE_COMPILE;
+      return CppCompileAction.CPP_MODULE_COMPILE;
     } else if (CppFileTypes.CPP_HEADER.matches(sourcePath)) {
       // TODO(bazel-team): Handle C headers that probably don't work in C++ mode.
       if (!cppConfiguration.getParseHeadersVerifiesModules()
           && featureConfiguration.isEnabled(CppRuleClasses.PARSE_HEADERS)) {
-        return CppActionNames.CPP_HEADER_PARSING;
+        return CppCompileAction.CPP_HEADER_PARSING;
       } else if (!cppConfiguration.getParseHeadersVerifiesModules()
           && featureConfiguration.isEnabled(CppRuleClasses.PREPROCESS_HEADERS)) {
-        return CppActionNames.CPP_HEADER_PREPROCESSING;
+        return CppCompileAction.CPP_HEADER_PREPROCESSING;
       } else {
         // CcCommon.collectCAndCppSources() ensures we do not add headers to
         // the compilation artifacts unless either 'parse_headers' or
@@ -248,21 +248,21 @@ public class CppCompileActionBuilder {
         throw new IllegalStateException();
       }
     } else if (CppFileTypes.C_SOURCE.matches(sourcePath)) {
-      return CppActionNames.C_COMPILE;
+      return CppCompileAction.C_COMPILE;
     } else if (CppFileTypes.CPP_SOURCE.matches(sourcePath)) {
-      return CppActionNames.CPP_COMPILE;
+      return CppCompileAction.CPP_COMPILE;
     } else if (CppFileTypes.OBJC_SOURCE.matches(sourcePath)) {
-      return CppActionNames.OBJC_COMPILE;
+      return CppCompileAction.OBJC_COMPILE;
     } else if (CppFileTypes.OBJCPP_SOURCE.matches(sourcePath)) {
-      return CppActionNames.OBJCPP_COMPILE;
+      return CppCompileAction.OBJCPP_COMPILE;
     } else if (CppFileTypes.ASSEMBLER.matches(sourcePath)) {
-      return CppActionNames.ASSEMBLE;
+      return CppCompileAction.ASSEMBLE;
     } else if (CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR.matches(sourcePath)) {
-      return CppActionNames.PREPROCESS_ASSEMBLE;
+      return CppCompileAction.PREPROCESS_ASSEMBLE;
     } else if (CppFileTypes.CLIF_INPUT_PROTO.matches(sourcePath)) {
-      return CppActionNames.CLIF_MATCH;
+      return CppCompileAction.CLIF_MATCH;
     } else if (CppFileTypes.CPP_MODULE.matches(sourcePath)) {
-      return CppActionNames.CPP_MODULE_CODEGEN;
+      return CppCompileAction.CPP_MODULE_CODEGEN;
     }
     // CcCompilationHelper ensures CppCompileAction only gets instantiated for supported file types.
     throw new IllegalStateException();
@@ -412,7 +412,7 @@ public class CppCompileActionBuilder {
               ccCompilationContext,
               coptsFilter,
               getLipoScannables(realMandatoryInputs),
-              ImmutableList.copyOf(additionalIncludeScanningRoots),
+              additionalIncludeScanningRoots.build(),
               actionClassId,
               ImmutableMap.copyOf(executionInfo),
               getActionName(),
@@ -564,7 +564,7 @@ public class CppCompileActionBuilder {
   }
 
   public CppCompileActionBuilder addAdditionalIncludeScanningRoots(
-      List<Artifact> additionalIncludeScanningRoots) {
+      Iterable<Artifact> additionalIncludeScanningRoots) {
     this.additionalIncludeScanningRoots.addAll(additionalIncludeScanningRoots);
     return this;
   }

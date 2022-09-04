@@ -78,6 +78,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       ActionEnvironment env,
       CcCompilationContext ccCompilationContext,
       CoptsFilter nocopts,
+      Iterable<IncludeScannable> lipoScannables,
       CppSemantics cppSemantics,
       CcToolchainProvider cppProvider,
       ImmutableMap<String, String> executionInfo,
@@ -113,10 +114,11 @@ public class FakeCppCompileAction extends CppCompileAction {
         // time, so they can't depend on the contents of the ".d" file.)
         CcCompilationContext.disallowUndeclaredHeaders(ccCompilationContext),
         nocopts,
+        lipoScannables,
         /* additionalIncludeScanningRoots=*/ ImmutableList.of(),
         GUID,
         executionInfo,
-        CppActionNames.CPP_COMPILE,
+        CppCompileAction.CPP_COMPILE,
         cppSemantics,
         cppProvider,
         grepIncludes);
