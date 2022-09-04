@@ -30,9 +30,10 @@ import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.support.media.ExifInterface;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build.VERSION;
 import android.os.Handler;
 import android.os.Message;
 import android.provider.MediaStore;
@@ -56,12 +57,15 @@ import com.davemorrissey.labs.subscaleview.decoder.SkiaImageDecoder;
 import com.davemorrissey.labs.subscaleview.decoder.SkiaImageRegionDecoder;
 
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 /**
  * Displays an image subsampled as necessary to avoid loading too much image data into memory. After a pinch to zoom in,
@@ -266,8 +270,7 @@ public class SubsamplingScaleImageView extends View {
 
     // Paint objects created once and reused for efficiency
     private Paint bitmapPaint;
-    private Paint debugTextPaint;
-    private Paint debugLinePaint;
+    private Paint debugPaint;
     private Paint tileBgPaint;
 
     // Volatile fields used to reduce object creation
@@ -1040,13 +1043,13 @@ public class SubsamplingScaleImageView extends View {
                             matrix.setPolyToPoly(srcArray, 0, dstArray, 0, 4);
                             canvas.drawBitmap(tile.bitmap, matrix, bitmapPaint);
                             if (debug) {
-                                canvas.drawRect(tile.vRect, debugLinePaint);
+                                canvas.drawRect(tile.vRect, debugPaint);
                             }
                         } else if (tile.loading && debug) {
-                            canvas.drawText("LOADING", tile.vRect.left + px(5), tile.vRect.top + px(35), debugTextPaint);
+                            canvas.drawText("LOADING", tile.vRect.left + 5, tile.vRect.top + 35, debugPaint);
                         }
                         if (tile.visible && debug) {
-                            canvas.drawText("ISS " + tile.sampleSize + " RECT " + tile.sRect.top + "," + tile.sRect.left + "," + tile.sRect.bottom + "," + tile.sRect.right, tile.vRect.left + px(5), tile.vRect.top + px(15), debugTextPaint);
+                            canvas.drawText("ISS " + tile.sampleSize + " RECT " + tile.sRect.top + "," + tile.sRect.left + "," + tile.sRect.bottom + "," + tile.sRect.right, tile.vRect.left + 5, tile.vRect.top + 15, debugPaint);
                         }
                     }
                 }
@@ -1085,35 +1088,37 @@ public class SubsamplingScaleImageView extends View {
         }
 
         if (debug) {
-            canvas.drawText("Scale: " + String.format(Locale.ENGLISH, "%.2f", scale) + " (" + String.format(Locale.ENGLISH, "%.2f", minScale()) + " - " + String.format(Locale.ENGLISH, "%.2f", maxScale) + ")", px(5), px(15), debugTextPaint);
-            canvas.drawText("Translate: " + String.format(Locale.ENGLISH, "%.2f", vTranslate.x) + ":" + String.format(Locale.ENGLISH, "%.2f", vTranslate.y), px(5), px(30), debugTextPaint);
+            canvas.drawText("Scale: " + String.format(Locale.ENGLISH, "%.2f", scale), 5, 15, debugPaint);
+            canvas.drawText("Translate: " + String.format(Locale.ENGLISH, "%.2f", vTranslate.x) + ":" + String.format(Locale.ENGLISH, "%.2f", vTranslate.y), 5, 35, debugPaint);
             PointF center = getCenter();
-            canvas.drawText("Source center: " + String.format(Locale.ENGLISH, "%.2f", center.x) + ":" + String.format(Locale.ENGLISH, "%.2f", center.y), px(5), px(45), debugTextPaint);
+            canvas.drawText("Source center: " + String.format(Locale.ENGLISH, "%.2f", center.x) + ":" + String.format(Locale.ENGLISH, "%.2f", center.y), 5, 55, debugPaint);
+            debugPaint.setStrokeWidth(2f);
             if (anim != null) {
                 PointF vCenterStart = sourceToViewCoord(anim.sCenterStart);
                 PointF vCenterEndRequested = sourceToViewCoord(anim.sCenterEndRequested);
                 PointF vCenterEnd = sourceToViewCoord(anim.sCenterEnd);
-                canvas.drawCircle(vCenterStart.x, vCenterStart.y, px(10), debugLinePaint);
-                debugLinePaint.setColor(Color.RED);
-                canvas.drawCircle(vCenterEndRequested.x, vCenterEndRequested.y, px(20), debugLinePaint);
-                debugLinePaint.setColor(Color.BLUE);
-                canvas.drawCircle(vCenterEnd.x, vCenterEnd.y, px(25), debugLinePaint);
-                debugLinePaint.setColor(Color.CYAN);
-                canvas.drawCircle(getWidth() / 2, getHeight() / 2, px(30), debugLinePaint);
+                canvas.drawCircle(vCenterStart.x, vCenterStart.y, 10, debugPaint);
+                debugPaint.setColor(Color.RED);
+                canvas.drawCircle(vCenterEndRequested.x, vCenterEndRequested.y, 20, debugPaint);
+                debugPaint.setColor(Color.BLUE);
+                canvas.drawCircle(vCenterEnd.x, vCenterEnd.y, 25, debugPaint);
+                debugPaint.setColor(Color.CYAN);
+                canvas.drawCircle(getWidth() / 2, getHeight() / 2, 30, debugPaint);
             }
             if (vCenterStart != null) {
-                debugLinePaint.setColor(Color.RED);
-                canvas.drawCircle(vCenterStart.x, vCenterStart.y, px(20), debugLinePaint);
+                debugPaint.setColor(Color.RED);
+                canvas.drawCircle(vCenterStart.x, vCenterStart.y, 20, debugPaint);
             }
             if (quickScaleSCenter != null) {
-                debugLinePaint.setColor(Color.BLUE);
-                canvas.drawCircle(sourceToViewX(quickScaleSCenter.x), sourceToViewY(quickScaleSCenter.y), px(35), debugLinePaint);
+                debugPaint.setColor(Color.BLUE);
+                canvas.drawCircle(sourceToViewX(quickScaleSCenter.x), sourceToViewY(quickScaleSCenter.y), 35, debugPaint);
             }
-            if (quickScaleVStart != null && isQuickScaling) {
-                debugLinePaint.setColor(Color.CYAN);
-                canvas.drawCircle(quickScaleVStart.x, quickScaleVStart.y, px(30), debugLinePaint);
+            if (quickScaleVStart != null) {
+                debugPaint.setColor(Color.CYAN);
+                canvas.drawCircle(quickScaleVStart.x, quickScaleVStart.y, 30, debugPaint);
             }
-            debugLinePaint.setColor(Color.MAGENTA);
+            debugPaint.setColor(Color.MAGENTA);
+            debugPaint.setStrokeWidth(1f);
         }
     }
 
@@ -1198,15 +1203,11 @@ public class SubsamplingScaleImageView extends View {
             bitmapPaint.setFilterBitmap(true);
             bitmapPaint.setDither(true);
         }
-        if ((debugTextPaint == null || debugLinePaint == null) && debug) {
-            debugTextPaint = new Paint();
-            debugTextPaint.setTextSize(px(12));
-            debugTextPaint.setColor(Color.MAGENTA);
-            debugTextPaint.setStyle(Style.FILL);
-            debugLinePaint = new Paint();
-            debugLinePaint.setColor(Color.MAGENTA);
-            debugLinePaint.setStyle(Style.STROKE);
-            debugLinePaint.setStrokeWidth(px(1));
+        if (debugPaint == null && debug) {
+            debugPaint = new Paint();
+            debugPaint.setTextSize(18);
+            debugPaint.setColor(Color.MAGENTA);
+            debugPaint.setStyle(Style.STROKE);
         }
     }
 
@@ -1835,11 +1836,18 @@ public class SubsamplingScaleImageView extends View {
     }
 
     private void execute(AsyncTask<Void, Void, ?> asyncTask) {
-        if (parallelLoadingEnabled) {
-            asyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-        } else {
-            asyncTask.execute();
+        if (parallelLoadingEnabled && VERSION.SDK_INT >= 11) {
+            try {
+                Field executorField = AsyncTask.class.getField("THREAD_POOL_EXECUTOR");
+                Executor executor = (Executor)executorField.get(null);
+                Method executeMethod = AsyncTask.class.getMethod("executeOnExecutor", Executor.class, Object[].class);
+                executeMethod.invoke(asyncTask, executor, null);
+                return;
+            } catch (Exception e) {
+                Log.i(TAG, "Failed to execute AsyncTask on thread pool executor, falling back to single threaded executor", e);
+            }
         }
+        asyncTask.execute();
     }
 
     private static class Tile {
@@ -1917,10 +1925,20 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Use canvas max bitmap width and height instead of the default 2048, to avoid redundant tiling.
+     * In SDK 14 and above, use canvas max bitmap width and height instead of the default 2048, to avoid redundant tiling.
      */
     private Point getMaxBitmapDimensions(Canvas canvas) {
-        return new Point(Math.min(canvas.getMaximumBitmapWidth(), maxTileWidth), Math.min(canvas.getMaximumBitmapHeight(), maxTileHeight));
+        int maxWidth = 2048;
+        int maxHeight = 2048;
+        if (VERSION.SDK_INT >= 14) {
+            try {
+                maxWidth = (Integer)Canvas.class.getMethod("getMaximumBitmapWidth").invoke(canvas);
+                maxHeight = (Integer)Canvas.class.getMethod("getMaximumBitmapHeight").invoke(canvas);
+            } catch (Exception e) {
+                // Return default
+            }
+        }
+        return new Point(Math.min(maxWidth, maxTileWidth), Math.min(maxHeight, maxTileHeight));
     }
 
     /**
@@ -1996,8 +2014,7 @@ public class SubsamplingScaleImageView extends View {
     public void recycle() {
         reset(true);
         bitmapPaint = null;
-        debugTextPaint = null;
-        debugLinePaint = null;
+        debugPaint = null;
         tileBgPaint = null;
     }
 
@@ -2224,13 +2241,6 @@ public class SubsamplingScaleImageView extends View {
         if (debug) {
             Log.d(TAG, String.format(message, args));
         }
-    }
-
-    /**
-     * For debug overlays. Scale pixel value according to screen density.
-     */
-    private int px(int px) {
-        return (int)(density * px);
     }
 
     /**
@@ -2614,9 +2624,10 @@ public class SubsamplingScaleImageView extends View {
     }
 
     /**
-     * Toggle parallel loading. When enabled, tiles are loaded using the thread pool executor.
-     * Parallel loading may use more memory and there is a possibility that it will make the tile
-     * loading unreliable, but it reduces the chances of an app's background processes blocking loading.
+     * Toggle parallel loading. When enabled, tiles are loaded using the thread pool executor available
+     * in SDK 11+. In older versions this has no effect. Parallel loading may use more memory and there
+     * is a possibility that it will make the tile loading unreliable, but it reduces the chances of
+     * an app's background processes blocking loading.
      * @param parallelLoadingEnabled Whether to run AsyncTasks using a thread pool executor.
      */
     public void setParallelLoadingEnabled(boolean parallelLoadingEnabled) {
