@@ -14,20 +14,18 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.clientproxy;
+package io.quarkus.arc.test.clientproxy;
 
 import static org.junit.Assert.assertEquals;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.test.ArcTestContainer;
 import java.io.IOException;
-
+import java.util.function.Function;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
 import javax.inject.Singleton;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.InstanceHandle;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
-import org.jboss.quarkus.arc.test.clientproxy.ProducerClientProxyTest.Product;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -45,6 +43,9 @@ public class ProducerClientProxyTest {
         InstanceHandle<Product2> instance2 = Arc.container().instance(Product2.class);
         assertEquals(Long.valueOf(1), instance2.get().get(Long.valueOf(1)));
         assertEquals(Long.valueOf(1), instance2.get().getDefault(Long.valueOf(1)));
+
+        InstanceHandle<FunctionChild> supInstance = Arc.container().instance(FunctionChild.class);
+        assertEquals("hi stu", supInstance.get().apply("stu"));
     }
 
     @Singleton
@@ -69,7 +70,15 @@ public class ProducerClientProxyTest {
         Product2 produce2() {
             return new MyProduct2();
         };
-}
+
+        @Produces
+        @ApplicationScoped
+        FunctionChild produceSupplier() {
+            return new FunctionChild() {
+
+            };
+        }
+    }
 
     static class MyProduct implements Product {
         @Override
@@ -88,7 +97,8 @@ public class ProducerClientProxyTest {
     interface Product {
 
         <T extends Number> T get(T number) throws IOException;
-        default <T extends Number> T getDefault(T number) throws IOException{
+
+        default <T extends Number> T getDefault(T number) throws IOException {
             return number;
         }
     }
@@ -99,8 +109,20 @@ public class ProducerClientProxyTest {
 
     interface Product2Interface {
         <T extends Number> T get(T number) throws IOException;
-        default <T extends Number> T getDefault(T number) throws IOException{
+
+        default <T extends Number> T getDefault(T number) throws IOException {
             return number;
+        }
+    }
+
+    interface FunctionSuper extends Function<String, String> {
+
+    }
+
+    interface FunctionChild extends FunctionSuper {
+        @Override
+        default String apply(String val) {
+            return "hi " + val;
         }
     }
 }

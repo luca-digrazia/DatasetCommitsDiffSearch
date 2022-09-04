@@ -17,15 +17,12 @@
 package io.quarkus.arc.processor;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 import javax.enterprise.inject.spi.DefinitionException;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.MethodParameterInfo;
-import org.jboss.jandex.Type;
 
 /**
  *
@@ -74,16 +71,6 @@ public class DisposerInfo {
         for (InjectionPointInfo injectionPoint : injection.injectionPoints) {
             Beans.resolveInjectionPoint(declaringBean.getDeployment(), null, injectionPoint, errors);
         }
-    }
-
-    Collection<AnnotationInstance> getDisposedParameteterQualifiers() {
-        return Annotations.getParameterAnnotations(declaringBean.getDeployment(), disposerMethod, disposedParameter.position())
-                .stream().filter(a -> declaringBean.getDeployment().getQualifier(a.name()) != null)
-                .collect(Collectors.toList());
-    }
-
-    Type getDiposedParameterType() {
-        return disposerMethod.parameters().get(disposedParameter.position());
     }
 
     MethodParameterInfo initDisposedParam(MethodInfo disposerMethod) {

@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.name;
+package io.quarkus.arc.test.name;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import io.quarkus.arc.test.ArcTestContainer;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.spi.DeploymentException;
 import javax.inject.Named;
 import javax.inject.Singleton;
-
-import org.jboss.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 

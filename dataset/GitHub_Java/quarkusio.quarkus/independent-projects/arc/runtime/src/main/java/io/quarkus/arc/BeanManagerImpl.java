@@ -18,7 +18,6 @@ package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -49,17 +48,12 @@ import javax.enterprise.inject.spi.InterceptionType;
 import javax.enterprise.inject.spi.Interceptor;
 import javax.enterprise.inject.spi.ObserverMethod;
 import javax.enterprise.inject.spi.ProducerFactory;
-import javax.enterprise.util.TypeLiteral;
 import javax.interceptor.InterceptorBinding;
 
 /**
  * @author Martin Kouba
  */
 public class BeanManagerImpl implements BeanManager {
-
-    @SuppressWarnings("serial")
-    static final TypeLiteral<Instance<Object>> INSTANCE_LITERAL = new TypeLiteral<Instance<Object>>() {
-    };
 
     static final LazyValue<BeanManagerImpl> INSTANCE = new LazyValue<>(BeanManagerImpl::new);
 
@@ -285,8 +279,7 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public Instance<Object> createInstance() {
-        return new InstanceImpl<>(null, INSTANCE_LITERAL.getType(), Collections.emptySet(), new CreationalContextImpl<>(),
-                Collections.emptySet(), null, -1);
+        return new InstanceImpl<>(Object.class, null, new CreationalContextImpl<>());
     }
 
 }

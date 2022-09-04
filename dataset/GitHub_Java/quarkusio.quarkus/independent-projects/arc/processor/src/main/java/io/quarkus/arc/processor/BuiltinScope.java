@@ -5,15 +5,12 @@ import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Singleton;
-import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.DotName;
 
 public enum BuiltinScope {
 
-    DEPENDENT(Dependent.class, false),
-    SINGLETON(Singleton.class, false),
-    APPLICATION(ApplicationScoped.class, true),
-    REQUEST(RequestScoped.class, true);
+    DEPENDENT(Dependent.class, false), SINGLETON(Singleton.class, false), APPLICATION(ApplicationScoped.class,
+            true), REQUEST(RequestScoped.class, true);
 
     private ScopeInfo info;
 
@@ -23,10 +20,6 @@ public enum BuiltinScope {
 
     public ScopeInfo getInfo() {
         return info;
-    }
-
-    public DotName getName() {
-        return info.getDotName();
     }
 
     public static BuiltinScope from(DotName name) {
@@ -44,15 +37,6 @@ public enum BuiltinScope {
 
     public boolean is(ScopeInfo scope) {
         return getInfo().equals(scope);
-    }
-
-    public static boolean isIn(Iterable<AnnotationInstance> annotations) {
-        for (AnnotationInstance annotation : annotations) {
-            if (from(annotation.name()) != null) {
-                return true;
-            }
-        }
-        return false;
     }
 
 }

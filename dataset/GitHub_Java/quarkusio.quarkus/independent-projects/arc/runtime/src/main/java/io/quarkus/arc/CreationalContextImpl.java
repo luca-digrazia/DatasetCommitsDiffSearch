@@ -1,10 +1,25 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 
 /**
@@ -15,16 +30,15 @@ import javax.enterprise.context.spi.CreationalContext;
  */
 public class CreationalContextImpl<T> implements CreationalContext<T> {
 
-    private final Contextual<T> contextual;
     private final CreationalContextImpl<?> parent;
+
     private final List<InstanceHandle<?>> dependentInstances;
 
-    public CreationalContextImpl(Contextual<T> contextual) {
-        this(contextual, null);
+    public CreationalContextImpl() {
+        this(null);
     }
 
-    public CreationalContextImpl(Contextual<T> contextual, CreationalContextImpl<?> parent) {
-        this.contextual = contextual;
+    public CreationalContextImpl(CreationalContextImpl<?> parent) {
         this.parent = parent;
         this.dependentInstances = Collections.synchronizedList(new ArrayList<>());
     }
@@ -68,15 +82,8 @@ public class CreationalContextImpl<T> implements CreationalContext<T> {
         return parent;
     }
 
-    /**
-     * @return the contextual or {@code null}
-     */
-    public Contextual<T> getContextual() {
-        return contextual;
-    }
-
-    public <C> CreationalContextImpl<C> child(Contextual<C> contextual) {
-        return new CreationalContextImpl<>(contextual, this);
+    public <C> CreationalContextImpl<C> child() {
+        return new CreationalContextImpl<>(this);
     }
 
     public static <T> CreationalContextImpl<T> unwrap(CreationalContext<T> ctx) {
@@ -88,13 +95,7 @@ public class CreationalContextImpl<T> implements CreationalContext<T> {
     }
 
     public static <C> CreationalContextImpl<C> child(CreationalContext<?> creationalContext) {
-        return child(null, creationalContext);
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <C> CreationalContextImpl<C> child(InjectableReferenceProvider<?> provider,
-            CreationalContext<?> creationalContext) {
-        return unwrap(creationalContext).child(provider instanceof InjectableBean ? (InjectableBean<C>) provider : null);
+        return unwrap(creationalContext).child();
     }
 
     public static <I> void addDependencyToParent(InjectableBean<I> bean, I instance, CreationalContext<I> ctx) {

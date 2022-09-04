@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
@@ -96,7 +96,8 @@ class TypeResolver {
             resolvedType = resolveType((GenericArrayType) genericComponentType);
         }
         /*
-         * If the generic component type resolved to a class (e.g. String) we return [Ljava.lang.String; (the class representing the
+         * If the generic component type resolved to a class (e.g. String) we return [Ljava.lang.String; (the class representing
+         * the
          * array) instead of GenericArrayType with String as its generic component type.
          */
         if (resolvedType instanceof Class<?>) {

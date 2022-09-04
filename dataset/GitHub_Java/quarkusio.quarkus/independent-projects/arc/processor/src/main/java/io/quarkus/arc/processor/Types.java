@@ -23,7 +23,6 @@ import io.quarkus.arc.WildcardTypeImpl;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
@@ -145,67 +143,56 @@ final class Types {
         }
     }
 
-    static Set<Type> getProducerMethodTypeClosure(MethodInfo producerMethod, BeanDeployment beanDeployment) {
-        Set<Type> types;
+    static Set<Type> getTypeClosure(MethodInfo producerMethod, BeanDeployment beanDeployment) {
         Type returnType = producerMethod.returnType();
         if (returnType.kind() == Kind.PRIMITIVE) {
-            types = new HashSet<>();
+            Set<Type> types = new HashSet<>();
             types.add(returnType);
             types.add(OBJECT_TYPE);
             return types;
-        } else {
-            ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(returnType.name());
-            if (returnTypeClassInfo == null) {
-                throw new IllegalArgumentException(
-                        "Producer method return type not found in index: " + producerMethod.returnType().name());
-            }
-            if (Kind.CLASS.equals(returnType.kind())) {
-                types = getTypeClosure(returnTypeClassInfo, Collections.emptyMap(), beanDeployment);
-            } else if (Kind.PARAMETERIZED_TYPE.equals(returnType.kind())) {
-                types = getTypeClosure(returnTypeClassInfo,
-                        buildResolvedMap(returnType.asParameterizedType().arguments(), returnTypeClassInfo.typeParameters(),
-                                Collections.emptyMap()),
-                        beanDeployment);
-            } else {
-                throw new IllegalArgumentException("Unsupported return type");
-            }
         }
-        return restrictBeanTypes(types, beanDeployment.getAnnotations(producerMethod));
+        ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(returnType.name());
+        if (returnTypeClassInfo == null) {
+            throw new IllegalArgumentException(
+                    "Producer method return type not found in index: " + producerMethod.returnType().name());
+        }
+        if (Kind.CLASS.equals(returnType.kind())) {
+            return getTypeClosure(returnTypeClassInfo, Collections.emptyMap(), beanDeployment);
+        } else if (Kind.PARAMETERIZED_TYPE.equals(returnType.kind())) {
+            return getTypeClosure(returnTypeClassInfo,
+                    buildResolvedMap(returnType.asParameterizedType().arguments(), returnTypeClassInfo.typeParameters(),
+                            Collections.emptyMap()),
+                    beanDeployment);
+        } else {
+            throw new IllegalArgumentException("Unsupported return type");
+        }
     }
 
-    static Set<Type> getProducerFieldTypeClosure(FieldInfo producerField, BeanDeployment beanDeployment) {
-        Set<Type> types;
+    static Set<Type> getTypeClosure(FieldInfo producerField, BeanDeployment beanDeployment) {
         Type fieldType = producerField.type();
         if (fieldType.kind() == Kind.PRIMITIVE) {
-            types = new HashSet<>();
+            Set<Type> types = new HashSet<>();
             types.add(fieldType);
             types.add(OBJECT_TYPE);
-        } else {
-            ClassInfo fieldClassInfo = beanDeployment.getIndex().getClassByName(producerField.type().name());
-            if (fieldClassInfo == null) {
-                throw new IllegalArgumentException("Producer field type not found in index: " + producerField.type().name());
-            }
-            if (Kind.CLASS.equals(fieldType.kind())) {
-                types = getTypeClosure(fieldClassInfo, Collections.emptyMap(), beanDeployment);
-            } else if (Kind.PARAMETERIZED_TYPE.equals(fieldType.kind())) {
-                types = getTypeClosure(fieldClassInfo,
-                        buildResolvedMap(fieldType.asParameterizedType().arguments(), fieldClassInfo.typeParameters(),
-                                Collections.emptyMap()),
-                        beanDeployment);
-            } else {
-                throw new IllegalArgumentException("Unsupported return type");
-            }
+            return types;
         }
-        return restrictBeanTypes(types, beanDeployment.getAnnotations(producerField));
+        ClassInfo fieldClassInfo = beanDeployment.getIndex().getClassByName(producerField.type().name());
+        if (fieldClassInfo == null) {
+            throw new IllegalArgumentException("Producer field type not found in index: " + producerField.type().name());
+        }
+        if (Kind.CLASS.equals(fieldType.kind())) {
+            return getTypeClosure(fieldClassInfo, Collections.emptyMap(), beanDeployment);
+        } else if (Kind.PARAMETERIZED_TYPE.equals(fieldType.kind())) {
+            return getTypeClosure(fieldClassInfo,
+                    buildResolvedMap(fieldType.asParameterizedType().arguments(), fieldClassInfo.typeParameters(),
+                            Collections.emptyMap()),
+                    beanDeployment);
+        } else {
+            throw new IllegalArgumentException("Unsupported return type");
+        }
     }
 
-    static Set<Type> getClassBeanTypeClosure(ClassInfo classInfo, Map<TypeVariable, Type> resolvedTypeParameters,
-            BeanDeployment beanDeployment) {
-        return restrictBeanTypes(getTypeClosure(classInfo, resolvedTypeParameters, beanDeployment),
-                beanDeployment.getAnnotations(classInfo));
-    }
-
-    private static Set<Type> getTypeClosure(ClassInfo classInfo, Map<TypeVariable, Type> resolvedTypeParameters,
+    static Set<Type> getTypeClosure(ClassInfo classInfo, Map<TypeVariable, Type> resolvedTypeParameters,
             BeanDeployment beanDeployment) {
         Set<Type> types = new HashSet<>();
         List<TypeVariable> typeParameters = classInfo.typeParameters();
@@ -249,26 +236,18 @@ final class Types {
                 types.addAll(getTypeClosure(superClassInfo, resolved, beanDeployment));
             }
         }
-        return types;
-    }
 
-    static Set<Type> restrictBeanTypes(Set<Type> types, Collection<AnnotationInstance> annotations) {
-        AnnotationInstance typed = annotations.stream().filter(a -> a.name().equals(DotNames.TYPED))
+        // Bean types restriction
+        AnnotationInstance typed = classInfo.classAnnotations().stream().filter(a -> a.name().equals(DotNames.TYPED))
                 .findFirst().orElse(null);
         if (typed != null) {
-            AnnotationValue typedValue = typed.value();
-            if (typedValue == null) {
-                types.clear();
-                types.add(OBJECT_TYPE);
-            } else {
-                Set<DotName> typedClasses = new HashSet<>();
-                for (Type type : typedValue.asClassArray()) {
-                    typedClasses.add(type.name());
-                }
-                for (Iterator<Type> iterator = types.iterator(); iterator.hasNext();) {
-                    if (!typedClasses.contains(iterator.next().name())) {
-                        iterator.remove();
-                    }
+            Set<DotName> typedClasses = new HashSet<>();
+            for (Type type : typed.value().asClassArray()) {
+                typedClasses.add(type.name());
+            }
+            for (Iterator<Type> iterator = types.iterator(); iterator.hasNext();) {
+                if (!typedClasses.contains(iterator.next().name())) {
+                    iterator.remove();
                 }
             }
         }

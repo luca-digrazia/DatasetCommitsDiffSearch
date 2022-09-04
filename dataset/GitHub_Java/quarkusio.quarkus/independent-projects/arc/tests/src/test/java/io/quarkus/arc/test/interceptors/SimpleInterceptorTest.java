@@ -14,22 +14,23 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.interceptors;
+package io.quarkus.arc.test.interceptors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.ArcContainer;
-import org.jboss.quarkus.arc.InstanceHandle;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
 public class SimpleInterceptorTest {
 
     @Rule
-    public ArcTestContainer container = new ArcTestContainer(Counter.class, SimpleBean.class, Simple.class, SimpleInterceptor.class, Logging.class,
+    public ArcTestContainer container = new ArcTestContainer(Counter.class, SimpleBean.class, Simple.class,
+            SimpleInterceptor.class, Logging.class,
             LoggingInterceptor.class, Lifecycle.class, LifecycleInterceptor.class);
 
     @Test

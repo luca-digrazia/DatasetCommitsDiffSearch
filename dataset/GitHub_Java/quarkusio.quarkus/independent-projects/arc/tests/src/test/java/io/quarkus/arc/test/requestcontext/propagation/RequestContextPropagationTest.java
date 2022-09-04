@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.requestcontext.propagation;
+package io.quarkus.arc.test.requestcontext.propagation;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -22,15 +22,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.ContextInstanceHandle;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.ManagedContext;
+import io.quarkus.arc.test.ArcTestContainer;
 import java.util.Collection;
-
 import javax.enterprise.context.ContextNotActiveException;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.ArcContainer;
-import org.jboss.quarkus.arc.InstanceHandle;
-import org.jboss.quarkus.arc.ManagedContext;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -61,7 +60,7 @@ public class RequestContextPropagationTest {
         assertTrue(controller2.getButton() == controller1.getButton());
 
         // Store existing instances
-        Collection<InstanceHandle<?>> instances = requestContext.getAll();
+        Collection<ContextInstanceHandle<?>> instances = requestContext.getAll();
         // Deactivate but don't destroy
         requestContext.deactivate();
 

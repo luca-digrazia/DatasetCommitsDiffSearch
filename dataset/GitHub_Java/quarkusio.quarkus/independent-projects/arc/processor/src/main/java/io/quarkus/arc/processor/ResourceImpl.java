@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import io.quarkus.arc.processor.ResourceOutput.Resource;
@@ -15,8 +31,8 @@ class ResourceImpl implements ResourceOutput.Resource {
 
     private final boolean applicationClass;
 
-    static Resource javaClass(String name, byte[] data, SpecialType specialType, boolean applicationClass, String source) {
-        return new ResourceImpl(applicationClass, name, data, Type.JAVA_CLASS, specialType, source);
+    static Resource javaClass(String name, byte[] data, SpecialType specialType, boolean applicationClass) {
+        return new ResourceImpl(applicationClass, name, data, Type.JAVA_CLASS, specialType);
 
     }
 
@@ -25,23 +41,23 @@ class ResourceImpl implements ResourceOutput.Resource {
     }
 
     static Resource serviceProvider(String name, byte[] data, SpecialType specialType) {
-        return new ResourceImpl(true, name, data, Type.SERVICE_PROVIDER, specialType, null);
+        return new ResourceImpl(true, name, data, Type.SERVICE_PROVIDER, specialType);
     }
 
     private final String name;
+
     private final byte[] data;
-    private final String source;
+
     private final Type type;
+
     private final SpecialType specialType;
 
-    private ResourceImpl(boolean applicationClass, String name, byte[] data, Type type, SpecialType specialType,
-            String source) {
+    private ResourceImpl(boolean applicationClass, String name, byte[] data, Type type, SpecialType specialType) {
         this.applicationClass = applicationClass;
         this.name = name;
         this.data = data;
         this.type = type;
         this.specialType = specialType;
-        this.source = source;
     }
 
     @Override
@@ -84,11 +100,6 @@ class ResourceImpl implements ResourceOutput.Resource {
     @Override
     public SpecialType getSpecialType() {
         return specialType;
-    }
-
-    @Override
-    public String getSource() {
-        return source;
     }
 
     private Path getOutputDirectory(File directory) throws IOException {

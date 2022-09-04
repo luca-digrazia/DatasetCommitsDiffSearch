@@ -34,7 +34,7 @@ import org.jboss.jandex.Type;
  *
  * @author Martin Kouba
  */
-public class ObserverInfo implements InjectionTargetInfo {
+public class ObserverInfo {
 
     private final BeanInfo declaringBean;
 
@@ -65,16 +65,6 @@ public class ObserverInfo implements InjectionTargetInfo {
         this.isAsync = isAsync;
     }
 
-    @Override
-    public TargetKind kind() {
-        return TargetKind.OBSERVER;
-    }
-
-    @Override
-    public ObserverInfo asObserver() {
-        return this;
-    }
-
     public BeanInfo getDeclaringBean() {
         return declaringBean;
     }
@@ -101,7 +91,7 @@ public class ObserverInfo implements InjectionTargetInfo {
 
     void init(List<Throwable> errors) {
         for (InjectionPointInfo injectionPoint : injection.injectionPoints) {
-            Beans.resolveInjectionPoint(declaringBean.getDeployment(), this, injectionPoint, errors);
+            Beans.resolveInjectionPoint(declaringBean.getDeployment(), getDeclaringBean(), injectionPoint, errors);
         }
     }
 

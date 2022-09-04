@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.producer.privatemember;
+package io.quarkus.arc.test.producer.privatemember;
 
 import static org.junit.Assert.assertEquals;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.test.ArcTestContainer;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 

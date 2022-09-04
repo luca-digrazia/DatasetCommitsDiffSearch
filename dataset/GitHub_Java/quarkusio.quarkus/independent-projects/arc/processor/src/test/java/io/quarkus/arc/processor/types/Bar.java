@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.processor.types;
+package io.quarkus.arc.processor.types;
 
 import java.util.List;
-
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 

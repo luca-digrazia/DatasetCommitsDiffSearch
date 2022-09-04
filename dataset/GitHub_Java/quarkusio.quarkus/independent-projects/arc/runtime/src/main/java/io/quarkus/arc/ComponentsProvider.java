@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 /**
  *
@@ -23,5 +23,5 @@ package org.jboss.quarkus.arc;
 public interface ComponentsProvider {
 
     Components getComponents();
-    
+
 }

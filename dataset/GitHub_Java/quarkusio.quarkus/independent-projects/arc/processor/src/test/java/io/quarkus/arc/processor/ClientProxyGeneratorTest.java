@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.processor;
+package io.quarkus.arc.processor;
 
-import static org.jboss.quarkus.arc.processor.Basics.index;
+import static io.quarkus.arc.processor.Basics.index;
 
+import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
+import io.quarkus.arc.processor.ResourceOutput.Resource;
 import java.io.IOException;
 import java.util.AbstractList;
 import java.util.Collection;
 import java.util.List;
-
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Produces;
-
 import org.jboss.jandex.Index;
-import org.jboss.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
-import org.jboss.quarkus.arc.processor.ResourceOutput.Resource;
 import org.junit.Test;
 
 public class ClientProxyGeneratorTest {
@@ -41,7 +39,8 @@ public class ClientProxyGeneratorTest {
         BeanDeployment deployment = new BeanDeployment(index, null, null);
         deployment.init();
 
-        BeanGenerator beanGenerator = new BeanGenerator( new AnnotationLiteralProcessor(true, TruePredicate.INSTANCE), TruePredicate.INSTANCE, new PrivateMembersCollector());
+        BeanGenerator beanGenerator = new BeanGenerator(new AnnotationLiteralProcessor(true, TruePredicate.INSTANCE),
+                TruePredicate.INSTANCE, new PrivateMembersCollector());
         ClientProxyGenerator proxyGenerator = new ClientProxyGenerator(TruePredicate.INSTANCE);
 
         deployment.getBeans().stream().filter(bean -> bean.getScope().isNormal()).forEach(bean -> {

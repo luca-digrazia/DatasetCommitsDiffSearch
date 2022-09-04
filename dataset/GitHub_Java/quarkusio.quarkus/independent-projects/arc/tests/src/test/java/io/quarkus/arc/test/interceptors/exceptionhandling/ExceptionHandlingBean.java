@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.interceptors.exceptionhandling;
+package io.quarkus.arc.test.interceptors.exceptionhandling;
 
 import javax.enterprise.context.Dependent;
 
@@ -27,13 +27,13 @@ public class ExceptionHandlingBean {
     @ExceptionHandlingInterceptorBinding
     void foo(ExceptionHandlingCase exceptionHandlingCase) throws MyDeclaredException {
         switch (exceptionHandlingCase) {
-        case DECLARED_EXCEPTION:
-            throw new MyDeclaredException();
-        case RUNTIME_EXCEPTION:
-            throw new MyRuntimeException();
-        case OTHER_EXCEPTIONS:
-            // this case should be handled by the interceptor
-            break;
+            case DECLARED_EXCEPTION:
+                throw new MyDeclaredException();
+            case RUNTIME_EXCEPTION:
+                throw new MyRuntimeException();
+            case OTHER_EXCEPTIONS:
+                // this case should be handled by the interceptor
+                break;
         }
     }
 

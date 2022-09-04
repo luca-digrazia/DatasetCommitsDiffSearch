@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
@@ -56,7 +56,8 @@ public class ParameterizedTypeImpl implements ParameterizedType, Serializable {
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(actualTypeArguments) ^ (ownerType == null ? 0 : ownerType.hashCode()) ^ (rawType == null ? 0 : rawType.hashCode());
+        return Arrays.hashCode(actualTypeArguments) ^ (ownerType == null ? 0 : ownerType.hashCode())
+                ^ (rawType == null ? 0 : rawType.hashCode());
     }
 
     @Override

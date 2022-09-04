@@ -46,6 +46,7 @@ import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
@@ -113,10 +114,14 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
     }
 
     static void createAnnotationLiteral(ClassOutput classOutput, ClassInfo annotationClass,
-            AnnotationInstance annotationInstance,
+            AnnotationInstance annotationInstance, String literalName) {
+        createAnnotationLiteral(classOutput, annotationClass, annotationInstance.values(), literalName);
+    }
+
+    static void createAnnotationLiteral(ClassOutput classOutput, ClassInfo annotationClass, List<AnnotationValue> values,
             String literalName) {
 
-        Map<String, AnnotationValue> annotationValues = annotationInstance.values().stream()
+        Map<String, AnnotationValue> annotationValues = values.stream()
                 .collect(Collectors.toMap(AnnotationValue::name, Function.identity()));
 
         // Ljavax/enterprise/util/AnnotationLiteral<Lcom/foo/MyQualifier;>;Lcom/foo/MyQualifier;
@@ -137,12 +142,45 @@ public class AnnotationLiteralGenerator extends AbstractGenerator {
             if (value == null) {
                 value = method.defaultValue();
             }
+            ResultHandle retValue = null;
             if (value == null) {
-                throw new NullPointerException(String.format(
-                        "Value is not set for %s.%s(). Most probably an older version of Jandex was used to index an application dependency. Make sure that Jandex 2.1+ is used.",
-                        method.declaringClass().name(), method.name()));
+                switch (method.returnType().kind()) {
+                    case CLASS:
+                    case ARRAY:
+                        retValue = valueMethod.loadNull();
+                        break;
+                    case PRIMITIVE:
+                        PrimitiveType primitiveType = method.returnType().asPrimitiveType();
+                        switch (primitiveType.primitive()) {
+                            case BOOLEAN:
+                                retValue = valueMethod.load(false);
+                                break;
+                            case BYTE:
+                            case SHORT:
+                            case INT:
+                                retValue = valueMethod.load(0);
+                                break;
+                            case LONG:
+                                retValue = valueMethod.load(0L);
+                                break;
+                            case FLOAT:
+                                retValue = valueMethod.load(0.0f);
+                                break;
+                            case DOUBLE:
+                                retValue = valueMethod.load(0.0d);
+                                break;
+                            case CHAR:
+                                retValue = valueMethod.load('\u0000');
+                                break;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                retValue = loadValue(valueMethod, value, annotationClass, method);
             }
-            valueMethod.returnValue(loadValue(valueMethod, value, annotationClass, method));
+            valueMethod.returnValue(retValue);
         }
         annotationLiteral.close();
         LOGGER.debugf("Annotation literal generated: %s", literalName);

@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.processor.types;
+package io.quarkus.arc.processor.types;
 
 import java.util.AbstractList;
-
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Default;

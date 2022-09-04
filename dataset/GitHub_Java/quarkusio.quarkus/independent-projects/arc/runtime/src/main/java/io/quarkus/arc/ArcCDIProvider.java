@@ -37,9 +37,6 @@ public class ArcCDIProvider implements CDIProvider {
 
     @Override
     public CDI<Object> getCDI() {
-        if (Arc.container() == null) {
-            throw new IllegalStateException("No CDI container is available");
-        }
         return arcCDI;
     }
 

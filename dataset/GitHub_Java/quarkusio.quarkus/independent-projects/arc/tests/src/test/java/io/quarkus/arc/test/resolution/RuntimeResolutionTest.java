@@ -14,22 +14,20 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.resolution;
+package io.quarkus.arc.test.resolution;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.test.ArcTestContainer;
 import java.io.IOException;
 import java.util.AbstractList;
 import java.util.List;
-
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.Singleton;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.ArcContainer;
-import org.jboss.quarkus.arc.InstanceHandle;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 

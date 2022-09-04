@@ -14,30 +14,29 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.build.extension.beans;
+package io.quarkus.arc.test.build.extension.beans;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.BeanCreator;
+import io.quarkus.arc.processor.BeanConfigurator;
+import io.quarkus.arc.processor.BeanRegistrar;
+import io.quarkus.arc.test.ArcTestContainer;
+import io.quarkus.gizmo.MethodDescriptor;
+import io.quarkus.gizmo.ResultHandle;
 import java.util.Map;
-
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.spi.CreationalContext;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.BeanCreator;
-import org.jboss.quarkus.arc.processor.BeanConfigurator;
-import org.jboss.quarkus.arc.processor.BeanRegistrar;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
-import org.jboss.protean.gizmo.MethodDescriptor;
-import org.jboss.protean.gizmo.ResultHandle;
 import org.junit.Rule;
 import org.junit.Test;
 
 public class BeanRegistrarTest {
 
     @Rule
-    public ArcTestContainer container = ArcTestContainer.builder().beanClasses(UselessBean.class).beanRegistrars(new TestRegistrar()).build();
+    public ArcTestContainer container = ArcTestContainer.builder().beanClasses(UselessBean.class)
+            .beanRegistrars(new TestRegistrar()).build();
 
     @Test
     public void testSyntheticBean() {
@@ -49,7 +48,8 @@ public class BeanRegistrarTest {
 
         @Override
         public boolean initialize(BuildContext buildContext) {
-            assertTrue(buildContext.get(Key.INDEX).getKnownClasses().stream().anyMatch(cl -> cl.name().toString().equals(UselessBean.class.getName())));
+            assertTrue(buildContext.get(Key.INDEX).getKnownClasses().stream()
+                    .anyMatch(cl -> cl.name().toString().equals(UselessBean.class.getName())));
             return true;
         }
 
@@ -66,7 +66,8 @@ public class BeanRegistrarTest {
             });
             integerConfigurator.done();
 
-            registrationContext.configure(String.class).types(String.class).param("name", "Frantisek").creator(StringCreator.class).done();
+            registrationContext.configure(String.class).types(String.class).param("name", "Frantisek")
+                    .creator(StringCreator.class).done();
         }
 
     }

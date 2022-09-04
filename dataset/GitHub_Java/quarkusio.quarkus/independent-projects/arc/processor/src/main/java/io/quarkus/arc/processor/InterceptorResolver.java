@@ -17,7 +17,6 @@
 package io.quarkus.arc.processor;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -43,10 +42,10 @@ public class InterceptorResolver {
             if (!interceptor.intercepts(interceptionType)) {
                 continue;
             }
-            boolean matches = false;
+            boolean matches = true;
             for (AnnotationInstance interceptorBinding : interceptor.getBindings()) {
-                if (hasInterceptorBinding(bindings, interceptorBinding)) {
-                    matches = true;
+                if (!hasInterceptorBinding(bindings, interceptorBinding)) {
+                    matches = false;
                     break;
                 }
             }
@@ -65,42 +64,24 @@ public class InterceptorResolver {
         return Integer.compare(i1.getPriority(), i2.getPriority());
     }
 
-    private boolean hasInterceptorBinding(Collection<AnnotationInstance> bindings, AnnotationInstance interceptorBinding) {
+    private boolean hasInterceptorBinding(Set<AnnotationInstance> bindings, AnnotationInstance interceptorBinding) {
+        ClassInfo interceptorBindingClass = beanDeployment.getInterceptorBinding(interceptorBinding.name());
+
         for (AnnotationInstance binding : bindings) {
-            if (isInterceptorBinding(interceptorBinding, binding)) {
-                return true;
-            } else {
-                // could be transitive binding
-                Set<AnnotationInstance> transitiveInterceptorBindings = beanDeployment
-                        .getTransitiveInterceptorBindings(binding.name());
-                if (transitiveInterceptorBindings == null) {
-                    continue;
-                }
-                for (AnnotationInstance transitiveBindingInstance : transitiveInterceptorBindings) {
-                    if (isInterceptorBinding(interceptorBinding,
-                            transitiveBindingInstance)) {
-                        return true;
+
+            if (binding.name().equals(interceptorBinding.name())) {
+                // Must have the same annotation member value for each member which is not annotated @Nonbinding
+                boolean matches = true;
+                for (AnnotationValue value : binding.valuesWithDefaults(beanDeployment.getIndex())) {
+                    if (!interceptorBindingClass.method(value.name()).hasAnnotation(DotNames.NONBINDING)
+                            && !value.equals(interceptorBinding.value(value.name()))) {
+                        matches = false;
+                        break;
                     }
                 }
-            }
-        }
-        return false;
-    }
-
-    private boolean isInterceptorBinding(AnnotationInstance interceptorBinding, AnnotationInstance candidate) {
-        ClassInfo interceptorBindingClass = beanDeployment.getInterceptorBinding(interceptorBinding.name());
-        if (candidate.name().equals(interceptorBinding.name())) {
-            // Must have the same annotation member value for each member which is not annotated @Nonbinding
-            boolean matches = true;
-            for (AnnotationValue value : candidate.valuesWithDefaults(beanDeployment.getIndex())) {
-                if (!interceptorBindingClass.method(value.name()).hasAnnotation(DotNames.NONBINDING)
-                        && !value.equals(interceptorBinding.value(value.name()))) {
-                    matches = false;
-                    break;
+                if (matches) {
+                    return true;
                 }
-            }
-            if (matches) {
-                return true;
             }
         }
         return false;

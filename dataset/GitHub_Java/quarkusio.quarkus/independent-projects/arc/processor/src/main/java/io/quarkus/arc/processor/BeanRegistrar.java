@@ -1,9 +1,26 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
+import io.quarkus.arc.InjectableBean;
 import org.jboss.jandex.DotName;
 
 /**
- * Allows a build-time extension to register synthetic beans and observers.
+ * Allows a build-time extension to register synthetic {@link InjectableBean} implementations.
  *
  * @author Martin Kouba
  */
@@ -11,15 +28,13 @@ public interface BeanRegistrar extends BuildExtension {
 
     /**
      *
-     * @param context
+     * @param registrationContext
      */
-    void register(RegistrationContext context);
+    void register(RegistrationContext registrationContext);
 
     interface RegistrationContext extends BuildContext {
 
         /**
-         * Configure a new synthetic bean. The bean is not added to the deployment unless the {@link BeanConfigurator#done()}
-         * method is called.
          *
          * @param beanClass
          * @return a new synthetic bean configurator
@@ -27,8 +42,6 @@ public interface BeanRegistrar extends BuildExtension {
         <T> BeanConfigurator<T> configure(DotName beanClassName);
 
         /**
-         * Configure a new synthetic bean. The bean is not added to the deployment unless the {@link BeanConfigurator#done()}
-         * method is called.
          * 
          * @param beanClass
          * @return a new synthetic bean configurator
@@ -36,14 +49,6 @@ public interface BeanRegistrar extends BuildExtension {
         default <T> BeanConfigurator<T> configure(Class<?> beanClass) {
             return configure(DotName.createSimple(beanClass.getName()));
         }
-
-        /**
-         * The returned stream contains all non-synthetic beans (beans derived from classes) and beans
-         * registered by other {@link BeanRegistrar}s before the stream is created.
-         * 
-         * @return a new stream of beans
-         */
-        BeanStream beans();
 
     }
 

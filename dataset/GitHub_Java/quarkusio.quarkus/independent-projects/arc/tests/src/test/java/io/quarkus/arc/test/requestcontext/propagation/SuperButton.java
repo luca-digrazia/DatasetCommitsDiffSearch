@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.requestcontext.propagation;
+package io.quarkus.arc.test.requestcontext.propagation;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.Dependent;
 

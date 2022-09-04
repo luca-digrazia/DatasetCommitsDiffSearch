@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
@@ -45,6 +45,7 @@ class HierarchyDiscovery {
 
     /**
      * Constructs a new {@link HierarchyDiscovery} instance.
+     * 
      * @param type the type whose hierarchy will be discovered
      */
     HierarchyDiscovery(Type type) {

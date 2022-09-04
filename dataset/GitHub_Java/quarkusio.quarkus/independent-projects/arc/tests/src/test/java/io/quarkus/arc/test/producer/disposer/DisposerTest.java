@@ -56,7 +56,7 @@ public class DisposerTest {
                 }
             };
         }
-    }).around(new ArcTestContainer(StringProducer.class, LongProducer.class, BigDecimalProducer.class, MyQualifier.class));
+    }).around(new ArcTestContainer(StringProducer.class, LongProducer.class, BigDecimalProducer.class));
 
     @Test
     public void testDisposers() {

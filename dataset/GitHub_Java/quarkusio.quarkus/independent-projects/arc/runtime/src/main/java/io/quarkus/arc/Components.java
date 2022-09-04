@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.util.Collection;
 
@@ -24,9 +24,13 @@ public final class Components {
 
     private final Collection<InjectableObserverMethod<?>> observers;
 
-    public Components(Collection<InjectableBean<?>> beans, Collection<InjectableObserverMethod<?>> observers) {
+    private final Collection<InjectableContext> contexts;
+
+    public Components(Collection<InjectableBean<?>> beans, Collection<InjectableObserverMethod<?>> observers,
+            Collection<InjectableContext> contexts) {
         this.beans = beans;
         this.observers = observers;
+        this.contexts = contexts;
     }
 
     public Collection<InjectableBean<?>> getBeans() {
@@ -35,6 +39,10 @@ public final class Components {
 
     public Collection<InjectableObserverMethod<?>> getObservers() {
         return observers;
+    }
+
+    public Collection<InjectableContext> getContexts() {
+        return contexts;
     }
 
 }

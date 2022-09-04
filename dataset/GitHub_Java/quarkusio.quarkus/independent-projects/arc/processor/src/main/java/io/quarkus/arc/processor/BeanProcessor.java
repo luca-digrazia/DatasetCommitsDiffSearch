@@ -70,7 +70,6 @@ public class BeanProcessor {
     private final Collection<DotName> resourceAnnotations;
 
     private final List<AnnotationsTransformer> annotationTransformers;
-    private final List<InjectionPointsTransformer> injectionPointsTransformers;
     private final List<BeanRegistrar> beanRegistrars;
     private final List<ContextRegistrar> contextRegistrars;
     private final List<BeanDeploymentValidator> beanDeploymentValidators;
@@ -86,7 +85,6 @@ public class BeanProcessor {
             ResourceOutput output,
             boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration,
             List<AnnotationsTransformer> annotationTransformers,
-            List<InjectionPointsTransformer> injectionPointsTransformers,
             Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars,
             List<ContextRegistrar> contextRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
             List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate,
@@ -142,7 +140,6 @@ public class BeanProcessor {
         }
 
         this.annotationTransformers = initAndSort(annotationTransformers, buildContext);
-        this.injectionPointsTransformers = initAndSort(injectionPointsTransformers, buildContext);
         this.beanRegistrars = initAndSort(beanRegistrars, buildContext);
         this.contextRegistrars = initAndSort(contextRegistrars, buildContext);
         this.beanDeploymentValidators = initAndSort(beanDeploymentValidators, buildContext);
@@ -151,8 +148,8 @@ public class BeanProcessor {
     public BeanDeployment process() throws IOException {
 
         BeanDeployment beanDeployment = new BeanDeployment(index, additionalBeanDefiningAnnotations, annotationTransformers,
-                injectionPointsTransformers, resourceAnnotations, beanRegistrars, contextRegistrars, buildContext,
-                removeUnusedBeans, unusedExclusions, additionalStereotypes);
+                resourceAnnotations, beanRegistrars, contextRegistrars, buildContext, removeUnusedBeans, unusedExclusions,
+                additionalStereotypes);
         beanDeployment.init();
         beanDeployment.validate(buildContext, beanDeploymentValidators);
 
@@ -249,7 +246,6 @@ public class BeanProcessor {
         private final List<DotName> resourceAnnotations = new ArrayList<>();
 
         private final List<AnnotationsTransformer> annotationTransformers = new ArrayList<>();
-        private final List<InjectionPointsTransformer> injectionPointTransformers = new ArrayList<>();
         private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
         private final List<ContextRegistrar> contextRegistrars = new ArrayList<>();
         private final List<DeploymentEnhancer> deploymentEnhancers = new ArrayList<>();
@@ -305,11 +301,6 @@ public class BeanProcessor {
 
         public Builder addAnnotationTransformer(AnnotationsTransformer transformer) {
             this.annotationTransformers.add(transformer);
-            return this;
-        }
-
-        public Builder addInjectionPointTransformer(InjectionPointsTransformer transformer) {
-            this.injectionPointTransformers.add(transformer);
             return this;
         }
 
@@ -378,9 +369,9 @@ public class BeanProcessor {
 
         public BeanProcessor build() {
             return new BeanProcessor(name, index, additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers, injectionPointTransformers, resourceAnnotations,
-                    beanRegistrars, contextRegistrars, deploymentEnhancers, beanDeploymentValidators,
-                    applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes);
+                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, contextRegistrars,
+                    deploymentEnhancers, beanDeploymentValidators, applicationClassPredicate, removeUnusedBeans,
+                    removalExclusions, additionalStereotypes);
         }
 
     }

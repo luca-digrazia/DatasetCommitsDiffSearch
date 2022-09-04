@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.processor;
+package io.quarkus.arc.processor;
 
 import java.util.function.Predicate;
-
 import org.jboss.jandex.DotName;
 
-public class TruePredicate implements Predicate<DotName>{
+public class TruePredicate implements Predicate<DotName> {
 
     public static TruePredicate INSTANCE = new TruePredicate();
 

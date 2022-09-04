@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
-
 import javax.enterprise.context.ApplicationScoped;
 
 class ApplicationContext extends AbstractSharedContext {

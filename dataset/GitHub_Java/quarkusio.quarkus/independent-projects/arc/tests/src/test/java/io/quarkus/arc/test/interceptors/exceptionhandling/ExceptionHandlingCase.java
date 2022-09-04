@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.interceptors.exceptionhandling;
+package io.quarkus.arc.test.interceptors.exceptionhandling;
 
 public enum ExceptionHandlingCase {
-    DECLARED_EXCEPTION,
-    RUNTIME_EXCEPTION,
-    OTHER_EXCEPTIONS;
+    DECLARED_EXCEPTION, RUNTIME_EXCEPTION, OTHER_EXCEPTIONS;
 }

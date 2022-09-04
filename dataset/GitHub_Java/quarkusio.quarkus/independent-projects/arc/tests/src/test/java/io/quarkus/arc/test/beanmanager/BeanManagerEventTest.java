@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc.test.beanmanager;
+package io.quarkus.arc.test.beanmanager;
 
 import static org.junit.Assert.assertEquals;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.test.ArcTestContainer;
 import java.util.concurrent.atomic.AtomicReference;
-
 import javax.enterprise.context.Dependent;
 import javax.enterprise.event.Observes;
 import javax.enterprise.inject.spi.BeanManager;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
