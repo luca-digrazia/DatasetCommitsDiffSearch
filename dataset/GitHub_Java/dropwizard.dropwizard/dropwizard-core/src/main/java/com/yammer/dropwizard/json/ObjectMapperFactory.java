@@ -339,7 +339,9 @@ public class ObjectMapperFactory implements Cloneable {
         return build(new JsonFactory());
     }
 
-    public ObjectMapperFactory copy() {
+    @Override
+    @SuppressWarnings("CloneDoesntCallSuperClone")
+    public ObjectMapperFactory clone() throws CloneNotSupportedException {
         final ObjectMapperFactory factory = new ObjectMapperFactory();
         factory.modules.addAll(modules);
         factory.mapperFeatures.putAll(mapperFeatures);
