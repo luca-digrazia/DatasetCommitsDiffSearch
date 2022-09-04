@@ -19,13 +19,13 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
+import org.androidannotations.process.ElementValidation;
 import org.androidannotations.rest.spring.annotations.Head;
 import org.androidannotations.rest.spring.holder.RestHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JExpr;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 
 public class HeadHandler extends RestMethodHandler {
 
@@ -39,7 +39,7 @@ public class HeadHandler extends RestMethodHandler {
 
 		restSpringValidatorHelper.hasHttpHeadersReturnType((ExecutableElement) element, validation);
 
-		restSpringValidatorHelper.doesNotHaveRequestEntityAnnotatedParameters((ExecutableElement) element, validation);
+		restSpringValidatorHelper.urlVariableNamesExistInParametersAndHasNoOneMoreParameter((ExecutableElement) element, validation);
 	}
 
 	@Override
@@ -49,12 +49,12 @@ public class HeadHandler extends RestMethodHandler {
 	}
 
 	@Override
-	protected IJExpression getResponseClass(Element element, RestHolder holder) {
+	protected JExpression getResponseClass(Element element, RestHolder holder) {
 		return restAnnotationHelper.nullCastedToNarrowedClass(holder);
 	}
 
 	@Override
-	protected IJExpression addResultCallMethod(IJExpression exchangeCall, AbstractJClass methodReturnClass) {
+	protected JExpression addResultCallMethod(JExpression exchangeCall, JClass methodReturnClass) {
 		return JExpr.invoke(exchangeCall, "getHeaders");
 	}
 }

@@ -16,11 +16,12 @@
 package org.androidannotations.rest.spring.helper;
 
 import static java.util.Arrays.asList;
+
 import static org.androidannotations.rest.spring.helper.RestSpringClasses.CLIENT_HTTP_REQUEST_FACTORY;
 import static org.androidannotations.rest.spring.helper.RestSpringClasses.CLIENT_HTTP_REQUEST_INTERCEPTOR;
 import static org.androidannotations.rest.spring.helper.RestSpringClasses.HTTP_MESSAGE_CONVERTER;
-import static org.androidannotations.rest.spring.helper.RestSpringClasses.REST_CLIENT_EXCEPTION;
 import static org.androidannotations.rest.spring.helper.RestSpringClasses.REST_TEMPLATE;
+import static org.androidannotations.rest.spring.helper.RestSpringClasses.REST_CLIENT_EXCEPTION;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -41,11 +42,11 @@ import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
 import org.androidannotations.annotations.EBean;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.TargetAnnotationHelper;
 import org.androidannotations.helper.ValidatorHelper;
+import org.androidannotations.process.ElementValidation;
 import org.androidannotations.rest.spring.annotations.Delete;
 import org.androidannotations.rest.spring.annotations.Get;
 import org.androidannotations.rest.spring.annotations.Head;
@@ -302,42 +303,34 @@ public class RestSpringValidatorHelper extends ValidatorHelper {
 		}
 	}
 
-	public void validateRestSimpleParameter(Element element, String requiredClass, String parameterName, ElementValidation validation) {
-		TypeMirror requiredType = annotationHelper.typeElementFromQualifiedName(requiredClass).asType();
-		DeclaredType paramterType = annotationHelper.extractAnnotationClassParameter(element, annotationHelper.getTarget(), parameterName);
-		if (paramterType != null) {
-			if (annotationHelper.isSubtype(paramterType, requiredType)) {
-				Element parameterElement = paramterType.asElement();
-				if (parameterElement.getKind().isClass()) {
-					if (!annotationHelper.isAbstract(parameterElement)) {
-						if (parameterElement.getAnnotation(EBean.class) != null) {
+	public void validateRequestFactory(Element element, ElementValidation valid) {
+		TypeMirror clientHttpRequestFactoryType = annotationHelper.typeElementFromQualifiedName(CLIENT_HTTP_REQUEST_FACTORY).asType();
+		DeclaredType requestFactory = annotationHelper.extractAnnotationClassParameter(element, annotationHelper.getTarget(), "requestFactory");
+		if (requestFactory != null) {
+			if (annotationHelper.isSubtype(requestFactory, clientHttpRequestFactoryType)) {
+				Element requestFactoryElement = requestFactory.asElement();
+				if (requestFactoryElement.getKind().isClass()) {
+					if (!annotationHelper.isAbstract(requestFactoryElement)) {
+						if (requestFactoryElement.getAnnotation(EBean.class) != null) {
 							return;
 						}
-						List<ExecutableElement> constructors = ElementFilter.constructorsIn(parameterElement.getEnclosedElements());
+						List<ExecutableElement> constructors = ElementFilter.constructorsIn(requestFactoryElement.getEnclosedElements());
 						for (ExecutableElement constructor : constructors) {
 							if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
 								return;
 							}
 						}
-						validation.addError(element, "The " + parameterName + " class must have a public no argument constructor or must be annotated with @EBean");
+						valid.addError("The requestFactory class must have a public no argument constructor or must be annotated with @EBean");
 					} else {
-						validation.addError(element, "The " + parameterName + " class must not be abstract");
+						valid.addError("The requestFactory class must not be abstract");
 					}
 				} else {
-					validation.addError(element, "The " + parameterName + " class must be a class");
+					valid.addError("The requestFactory class must be a class");
 				}
 			} else {
-				validation.addError(element, "The " + parameterName + " class must be a subtype of " + requiredClass);
+				valid.addError("The requestFactory class must be a subtype of " + CLIENT_HTTP_REQUEST_FACTORY);
 			}
 		}
-	}
-
-	public void validateRequestFactory(Element element, ElementValidation validation) {
-		validateRestSimpleParameter(element, CLIENT_HTTP_REQUEST_FACTORY, "requestFactory", validation);
-	}
-
-	public void validateResponseErrorHandler(Element element, ElementValidation validation) {
-		validateRestSimpleParameter(element, RestSpringClasses.RESPONSE_ERROR_HANDLER, "responseErrorHandler", validation);
 	}
 
 	public void throwsOnlyRestClientException(ExecutableElement element, ElementValidation valid) {

@@ -19,12 +19,12 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
+import org.androidannotations.process.ElementValidation;
 import org.androidannotations.rest.spring.annotations.Options;
 import org.androidannotations.rest.spring.holder.RestHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpression;
 
 public class OptionsHandler extends RestMethodHandler {
 
@@ -38,7 +38,7 @@ public class OptionsHandler extends RestMethodHandler {
 
 		restSpringValidatorHelper.hasSetOfHttpMethodReturnType((ExecutableElement) element, validation);
 
-		restSpringValidatorHelper.doesNotHaveRequestEntityAnnotatedParameters((ExecutableElement) element, validation);
+		restSpringValidatorHelper.urlVariableNamesExistInParametersAndHasNoOneMoreParameter((ExecutableElement) element, validation);
 	}
 
 	@Override
@@ -48,12 +48,12 @@ public class OptionsHandler extends RestMethodHandler {
 	}
 
 	@Override
-	protected IJExpression getResponseClass(Element element, RestHolder holder) {
+	protected JExpression getResponseClass(Element element, RestHolder holder) {
 		return restAnnotationHelper.nullCastedToNarrowedClass(holder);
 	}
 
 	@Override
-	protected IJExpression addResultCallMethod(IJExpression exchangeCall, AbstractJClass methodReturnClass) {
+	protected JExpression addResultCallMethod(JExpression exchangeCall, JClass methodReturnClass) {
 		return exchangeCall.invoke("getHeaders").invoke("getAllow");
 	}
 }
