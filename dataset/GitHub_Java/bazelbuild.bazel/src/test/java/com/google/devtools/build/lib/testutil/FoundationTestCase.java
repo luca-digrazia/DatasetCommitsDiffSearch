@@ -140,7 +140,6 @@ public abstract class FoundationTestCase {
 
   protected void writeBuildFileForJavaToolchain() throws Exception  {
     scratch.file("java/com/google/test/turbine_canary_deploy.jar");
-    scratch.file("java/com/google/test/turbine_direct_deploy.jar");
     scratch.file("java/com/google/test/tzdata.jar");
     scratch.overwriteFile(
         "java/com/google/test/BUILD",
@@ -158,7 +157,6 @@ public abstract class FoundationTestCase {
         "    javac = [':javac_canary.jar'],",
         "    javabuilder = [':JavaBuilderCanary_deploy.jar'],",
         "    header_compiler = [':turbine_canary_deploy.jar'],",
-        "    header_compiler_direct = [':turbine_direct_deploy.jar'],",
         "    singlejar = ['SingleJar_deploy.jar'],",
         "    ijar = ['ijar'],",
         "    genclass = ['GenClass_deploy.jar'],",

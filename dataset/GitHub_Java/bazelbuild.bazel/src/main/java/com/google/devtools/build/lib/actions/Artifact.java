@@ -285,6 +285,7 @@ public abstract class Artifact
     /** Only used for deserializing artifacts. */
     private static final Interner<DerivedArtifact> INTERNER = BlazeInterners.newWeakInterner();
 
+    private final PathFragment rootRelativePath;
     /**
      * An {@link ActionLookupKey} until {@link #setGeneratingActionKey} is set, at which point it is
      * an {@link ActionLookupData}, whose {@link ActionLookupData#getActionLookupKey} will be the
@@ -309,6 +310,7 @@ public abstract class Artifact
       super(root, execPath, contentBasedPath);
       Preconditions.checkState(
           !root.getExecPath().isEmpty(), "Derived root has no exec path: %s, %s", root, execPath);
+      this.rootRelativePath = execPath.relativeTo(root.getExecPath());
       this.owner = owner;
     }
 
@@ -358,7 +360,7 @@ public abstract class Artifact
 
     @Override
     public PathFragment getRootRelativePath() {
-      return getExecPath().relativeTo(getRoot().getExecPath());
+      return rootRelativePath;
     }
 
     @Override
@@ -503,11 +505,6 @@ public abstract class Artifact
     return contentBasedPath;
   }
 
-  @Override
-  public boolean isSymlink() {
-    return false;
-  }
-
   /**
    * Returns the path of this Artifact relative to this containing Artifact. Since
    * ordinary Artifacts correspond to only one Artifact -- itself -- for ordinary Artifacts,
@@ -628,19 +625,8 @@ public abstract class Artifact
    */
   @VisibleForTesting
   public enum SpecialArtifactType {
-    /** Google-specific legacy type. */
     FILESET,
-
-    /**
-     * A symlink. Not chased, can be dangling. All we care about is the return value of {@code
-     * readlink()}.
-     */
-    UNRESOLVED_SYMLINK,
-
-    /** A subtree containing multiple files and directories. */
     TREE,
-
-    /** Special artifact type for workspace status information. */
     CONSTANT_METADATA,
   }
 
@@ -689,11 +675,6 @@ public abstract class Artifact
     @Override
     public boolean isTreeArtifact() {
       return type == SpecialArtifactType.TREE;
-    }
-
-    @Override
-    public boolean isSymlink() {
-      return type == SpecialArtifactType.UNRESOLVED_SYMLINK;
     }
 
     @Override

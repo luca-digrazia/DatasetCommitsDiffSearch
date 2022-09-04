@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration
 import com.google.devtools.build.lib.packages.util.BazelMockCcSupport;
 import com.google.devtools.build.lib.packages.util.BazelMockPythonSupport;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
-import com.google.devtools.build.lib.packages.util.MockPlatformSupport;
 import com.google.devtools.build.lib.packages.util.MockPythonSupport;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
@@ -258,7 +257,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create(
         "/bazel_tools_workspace/tools/launcher/BUILD",
         "package(default_visibility=['//visibility:public'])",
-        "load('@bazel_tools//third_party/cc_rules/macros:defs.bzl', 'cc_binary')",
         "cc_binary(name='launcher', srcs=['launcher_main.cc'])");
 
     config.create(
@@ -284,7 +282,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create("/bazel_tools_workspace/objcproto/empty.cc");
     config.create("/bazel_tools_workspace/objcproto/well_known_type.proto");
 
-    MockPlatformSupport.setup(config);
     ccSupport().setup(config);
     pySupport().setup(config);
   }
@@ -307,7 +304,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "android_sdk(",
         "    name = 'sdk',",
         "    aapt = ':static_aapt_tool',",
-        "    aapt2 = ':static_aapt2_tool',",
         "    adb = ':static_adb_tool',",
         "    aidl = ':static_aidl_tool',",
         "    android_jar = ':android_runtime_jar',",
