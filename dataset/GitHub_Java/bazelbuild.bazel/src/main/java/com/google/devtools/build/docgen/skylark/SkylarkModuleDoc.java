@@ -15,7 +15,6 @@ package com.google.devtools.build.docgen.skylark;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -26,12 +25,10 @@ import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
-import javax.annotation.Nullable;
 
 /**
- * A class representing documentation for a Skylark built-in object with its {@link SkylarkModule}
- * annotation and with the {@link SkylarkCallable} methods and {@link SkylarkSignature} fields it
- * documents.
+ * A class representing a Skylark built-in object with its {@link SkylarkSignature} annotation
+ * and the {@link SkylarkCallable} methods it might have.
  */
 public final class SkylarkModuleDoc extends SkylarkDoc {
   private final SkylarkModule module;
@@ -40,7 +37,6 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
   private final Multimap<String, SkylarkJavaMethodDoc> javaMethods;
   private TreeMap<String, SkylarkMethodDoc> methodMap;
   private final String title;
-  @Nullable private SkylarkJavaMethodDoc javaConstructor;
 
   public SkylarkModuleDoc(SkylarkModule module, Class<?> classObject) {
     this.module = Preconditions.checkNotNull(
@@ -76,12 +72,6 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
 
   public Class<?> getClassObject() {
     return classObject;
-  }
-
-  public void setConstructor(SkylarkJavaMethodDoc method) {
-    Preconditions.checkState(javaConstructor == null);
-    javaConstructor = method;
-    methodMap.put(method.getName(), method);
   }
 
   public void addMethod(SkylarkBuiltinMethodDoc method) {
@@ -124,11 +114,7 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
   }
 
   public Collection<SkylarkJavaMethodDoc> getJavaMethods() {
-    ImmutableList.Builder<SkylarkJavaMethodDoc> returnedMethods = ImmutableList.builder();
-    if (javaConstructor != null) {
-      returnedMethods.add(javaConstructor);
-    }
-    return returnedMethods.addAll(javaMethods.values()).build();
+    return javaMethods.values();
   }
 
   public Collection<SkylarkMethodDoc> getMethods() {
