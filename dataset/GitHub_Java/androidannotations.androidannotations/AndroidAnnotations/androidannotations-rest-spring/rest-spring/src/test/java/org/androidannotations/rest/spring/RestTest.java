@@ -107,9 +107,8 @@ public class RestTest extends AAProcessorTestHelper {
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Path(\"pathParamConflict\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/conflictWithPathParam\")", result);
 		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/duplicateField\")", result);
-		assertCompilationErrorOn(ClientWithWrongFields.class, "@Post(\"/fieldAndPartOnSameMethod\")", result);
 
-		assertCompilationErrorCount(11, result);
+		assertCompilationErrorCount(10, result);
 	}
 
 	@Test

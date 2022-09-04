@@ -24,7 +24,7 @@ import org.springframework.http.converter.FormHttpMessageConverter;
 @Rest(converters = FormHttpMessageConverter.class)
 public interface FieldPathParamOnSameArgument {
 
-	@Post("/fieldPathParamOnSameArgument/{string}")
+	@Post("/fieldPathParamOnSameArgument")
 	void postParamPathParamOnSameArgument(@Field @Path int string);
 
 }

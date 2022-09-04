@@ -16,7 +16,6 @@
 package org.androidannotations.rest.spring;
 
 import org.androidannotations.rest.spring.annotations.Field;
-import org.androidannotations.rest.spring.annotations.Part;
 import org.androidannotations.rest.spring.annotations.Path;
 import org.androidannotations.rest.spring.annotations.Post;
 import org.androidannotations.rest.spring.annotations.Rest;
@@ -41,7 +40,4 @@ public interface ClientWithWrongFields {
 	void fieldAndEntity(@Field int v1, String entity);
 
 	void missingPostAnnotation(@Field("missingPost") int v1);
-
-	@Post("/fieldAndPartOnSameMethod")
-	void fieldAndPartOnSameMethod(@Field String field, @Part String part);
 }
