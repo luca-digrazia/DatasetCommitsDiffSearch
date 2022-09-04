@@ -1,5 +1,6 @@
 package io.dropwizard.hibernate;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.db.ManagedDataSource;
 import io.dropwizard.lifecycle.Managed;
 import org.hibernate.SessionFactory;
@@ -13,8 +14,14 @@ public class SessionFactoryManager implements Managed {
         this.dataSource = dataSource;
     }
 
+    @VisibleForTesting
+    ManagedDataSource getDataSource() {
+        return dataSource;
+    }
+
     @Override
     public void start() throws Exception {
+        dataSource.start();
     }
 
     @Override

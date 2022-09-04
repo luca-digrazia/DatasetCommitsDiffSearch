@@ -7,7 +7,6 @@ import com.fasterxml.jackson.datatype.hibernate4.Hibernate4Module;
 import com.google.common.collect.ImmutableList;
 import io.dropwizard.Configuration;
 import io.dropwizard.db.DataSourceFactory;
-import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
@@ -40,8 +39,6 @@ public class HibernateBundleTest {
     public void setUp() throws Exception {
         when(environment.healthChecks()).thenReturn(healthChecks);
         when(environment.jersey()).thenReturn(jerseyEnvironment);
-        when(jerseyEnvironment.getResourceConfig()).thenReturn(new DropwizardResourceConfig());
-
 
         when(factory.build(eq(bundle),
                            any(Environment.class),
