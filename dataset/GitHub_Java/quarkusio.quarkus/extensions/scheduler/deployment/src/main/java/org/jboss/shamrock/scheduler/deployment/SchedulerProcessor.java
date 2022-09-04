@@ -20,7 +20,6 @@ import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -55,13 +54,10 @@ import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
 import org.jboss.shamrock.arc.deployment.AnnotationsTransformerBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanDeploymentValidatorBuildItem;
-import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
-import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem;
-import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
+import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
+import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.scheduler.api.Scheduled;
@@ -190,20 +186,12 @@ public class SchedulerProcessor {
             }
         });
     }
-    
-    @BuildStep
-    public List<UnremovableBeanBuildItem> unremovableBeans() {
-        return Arrays.asList(new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULED_NAME)),
-                new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULEDS_NAME)));
-    }
 
     @BuildStep
     @Record(STATIC_INIT)
     public void build(SchedulerDeploymentTemplate template, BeanContainerBuildItem beanContainer, List<ScheduledBusinessMethodItem> scheduledBusinessMethods,
-            BuildProducer<GeneratedClassBuildItem> generatedResource, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<FeatureBuildItem> feature) {
+            BuildProducer<GeneratedClassBuildItem> generatedResource, BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
 
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.SCHEDULER));
         List<Map<String, Object>> scheduleConfigurations = new ArrayList<>();
         ProcessorClassOutput processorClassOutput = new ProcessorClassOutput(generatedResource);
 
