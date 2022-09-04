@@ -1,6 +1,7 @@
 package org.jboss.shamrock.maven.it;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Files;
 import org.apache.commons.io.FileUtils;
 import org.apache.maven.shared.invoker.MavenInvocationException;
 import org.jboss.shamrock.maven.it.verifier.MavenProcessInvocationResult;
