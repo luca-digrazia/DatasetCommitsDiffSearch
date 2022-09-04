@@ -1,6 +1,5 @@
 package org.graylog.plugins.pipelineprocessor.processors;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
@@ -8,6 +7,9 @@ import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
+
+import com.codahale.metrics.MetricRegistry;
+
 import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.codegen.PipelineClassloader;
@@ -24,11 +26,6 @@ import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import javax.tools.ToolProvider;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,6 +33,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nonnull;
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.inject.Singleton;
+import javax.tools.ToolProvider;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -213,11 +216,6 @@ public class ConfigurationStateUpdater {
     public void handlePipelineConnectionChanges(PipelineConnectionsChangedEvent event) {
         log.debug("Pipeline stream connection changed: {}", event);
         scheduler.schedule(() -> serverEventBus.post(reloadAndSave()), 0, TimeUnit.SECONDS);
-    }
-
-    @Subscribe
-    public void handlePipelineStateChange(PipelineInterpreter.State event) {
-        log.debug("Pipeline interpreter state got updated");
     }
 
     @VisibleForTesting
