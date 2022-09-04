@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
 import com.google.devtools.build.lib.repository.RepositoryFailedEvent;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -68,22 +69,24 @@ import javax.annotation.Nullable;
  */
 public final class RepositoryDelegatorFunction implements SkyFunction {
   public static final Precomputed<Map<RepositoryName, PathFragment>> REPOSITORY_OVERRIDES =
-      new Precomputed<>("repository_overrides");
+      new Precomputed<>(PrecomputedValue.Key.create("repository_overrides"));
 
   public static final Precomputed<String> DEPENDENCY_FOR_UNCONDITIONAL_FETCHING =
-      new Precomputed<>("dependency_for_unconditional_repository_fetching");
+      new Precomputed<>(
+          PrecomputedValue.Key.create("dependency_for_unconditional_repository_fetching"));
 
   public static final Precomputed<String> DEPENDENCY_FOR_UNCONDITIONAL_CONFIGURING =
-      new Precomputed<>("dependency_for_unconditional_configuring");
+      new Precomputed<>(PrecomputedValue.Key.create("dependency_for_unconditional_configuring"));
 
   public static final Precomputed<Optional<RootedPath>> RESOLVED_FILE_FOR_VERIFICATION =
-      new Precomputed<>("resolved_file_for_external_repository_verification");
+      new Precomputed<>(
+          PrecomputedValue.Key.create("resolved_file_for_external_repository_verification"));
 
   public static final Precomputed<Set<String>> OUTPUT_VERIFICATION_REPOSITORY_RULES =
-      new Precomputed<>("output_verification_repository_rules");
+      new Precomputed<>(PrecomputedValue.Key.create("output_verification_repository_rules"));
 
   public static final Precomputed<Optional<RootedPath>> RESOLVED_FILE_INSTEAD_OF_WORKSPACE =
-      new Precomputed<>("resolved_file_instead_of_workspace");
+      new Precomputed<>(PrecomputedValue.Key.create("resolved_file_instead_of_workspace"));
 
   public static final String DONT_FETCH_UNCONDITIONALLY = "";
 
