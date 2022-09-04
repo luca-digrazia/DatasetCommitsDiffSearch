@@ -20,7 +20,6 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -34,19 +33,15 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ObjcProviderTest {
 
-  private static ObjcProvider.Builder objcProviderBuilder() {
-    return new ObjcProvider.Builder(SkylarkSemantics.DEFAULT_SEMANTICS);
-  }
-
   @Test
   public void emptyProvider() {
-    ObjcProvider empty = objcProviderBuilder().build();
+    ObjcProvider empty = new ObjcProvider.Builder().build();
     assertThat(empty.get(ObjcProvider.SDK_DYLIB)).isEmpty();
   }
 
   @Test
   public void onlyPropagatesProvider() {
-    ObjcProvider onlyPropagates = objcProviderBuilder()
+    ObjcProvider onlyPropagates = new ObjcProvider.Builder()
         .add(ObjcProvider.SDK_DYLIB, "foo")
         .build();
     assertThat(onlyPropagates.get(ObjcProvider.SDK_DYLIB)).containsExactly("foo");
@@ -54,10 +49,10 @@ public class ObjcProviderTest {
 
   @Test
   public void onlyNonPropagatesProvider() {
-    ObjcProvider dep = objcProviderBuilder()
+    ObjcProvider dep = new ObjcProvider.Builder()
         .add(ObjcProvider.SDK_DYLIB, "foo")
         .build();
-    ObjcProvider notPropagates = objcProviderBuilder()
+    ObjcProvider notPropagates = new ObjcProvider.Builder()
         .addTransitiveWithoutPropagating(ImmutableList.of(dep))
         .build();
     assertThat(notPropagates.get(ObjcProvider.SDK_DYLIB)).containsExactly("foo");
@@ -65,10 +60,10 @@ public class ObjcProviderTest {
 
   @Test
   public void propagatesAndNonPropagatesProvider() {
-    ObjcProvider dep = objcProviderBuilder()
+    ObjcProvider dep = new ObjcProvider.Builder()
         .add(ObjcProvider.SDK_DYLIB, "foo")
         .build();
-    ObjcProvider provider = objcProviderBuilder()
+    ObjcProvider provider = new ObjcProvider.Builder()
         .addTransitiveWithoutPropagating(ImmutableList.of(dep))
         .add(ObjcProvider.SDK_DYLIB, "bar")
         .build();
@@ -77,14 +72,14 @@ public class ObjcProviderTest {
 
   @Test
   public void doesNotPropagate() {
-    ObjcProvider dep = objcProviderBuilder()
+    ObjcProvider dep = new ObjcProvider.Builder()
         .add(ObjcProvider.SDK_DYLIB, "foo")
         .build();
-    ObjcProvider provider = objcProviderBuilder()
+    ObjcProvider provider = new ObjcProvider.Builder()
         .addTransitiveWithoutPropagating(ImmutableList.of(dep))
         .add(ObjcProvider.SDK_DYLIB, "bar")
         .build();
-    ObjcProvider depender = objcProviderBuilder()
+    ObjcProvider depender = new ObjcProvider.Builder()
         .addTransitiveAndPropagate(provider)
         .build();
     assertThat(depender.get(ObjcProvider.SDK_DYLIB)).containsExactly("bar");
@@ -96,17 +91,17 @@ public class ObjcProviderTest {
     PathFragment propagatedInclude = PathFragment.create("propagated_path");
 
     ObjcProvider strictDep =
-        objcProviderBuilder()
+        new ObjcProvider.Builder()
             .addForDirectDependents(ObjcProvider.INCLUDE, strictInclude)
             .build();
     ObjcProvider propagatedDep =
-        objcProviderBuilder().add(ObjcProvider.INCLUDE, propagatedInclude).build();
+        new ObjcProvider.Builder().add(ObjcProvider.INCLUDE, propagatedInclude).build();
 
     ObjcProvider provider =
-        objcProviderBuilder()
+        new ObjcProvider.Builder()
             .addTransitiveAndPropagate(ImmutableList.of(strictDep, propagatedDep))
             .build();
-    ObjcProvider depender = objcProviderBuilder().addTransitiveAndPropagate(provider).build();
+    ObjcProvider depender = new ObjcProvider.Builder().addTransitiveAndPropagate(provider).build();
 
     assertThat(provider.get(ObjcProvider.INCLUDE))
         .containsExactly(strictInclude, propagatedInclude);
@@ -119,17 +114,17 @@ public class ObjcProviderTest {
     PathFragment propagatedInclude = PathFragment.create("propagated_path");
 
     ObjcProvider strictDep =
-        objcProviderBuilder()
+        new ObjcProvider.Builder()
             .addForDirectDependents(ObjcProvider.INCLUDE, strictInclude)
             .build();
     ObjcProvider propagatedDep =
-        objcProviderBuilder().add(ObjcProvider.INCLUDE, propagatedInclude).build();
+        new ObjcProvider.Builder().add(ObjcProvider.INCLUDE, propagatedInclude).build();
 
     ObjcProvider provider =
-        objcProviderBuilder()
+        new ObjcProvider.Builder()
             .addTransitiveAndPropagate(ImmutableList.of(strictDep, propagatedDep))
             .build();
-    ObjcProvider depender = objcProviderBuilder().addTransitiveAndPropagate(provider).build();
+    ObjcProvider depender = new ObjcProvider.Builder().addTransitiveAndPropagate(provider).build();
 
     assertThat(provider.include().toCollection())
         .containsExactly(strictInclude.toString(), propagatedInclude.toString());
