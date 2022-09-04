@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
@@ -133,10 +132,10 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         .setIntermediateArtifacts(intermediateArtifacts)
         .setConfiguration(ruleContext.getConfiguration());
     CcLibraryHelper helper;
-
+    
     if (compilationArtifacts.getArchive().isPresent()) {
       Artifact objList = intermediateArtifacts.archiveObjList();
-
+  
       // TODO(b/30783125): Signal the need for this action in the CROSSTOOL.
       registerObjFilelistAction(getObjFiles(compilationArtifacts, intermediateArtifacts), objList);
   
@@ -184,7 +183,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .setLibraryIdentifier(libraryIdentifier)
             .addVariablesExtension(extension)
-            .setFeatureConfiguration(getFeatureConfiguration(ruleContext, buildConfiguration))
+            .setFeatureConfiguration(getFeatureConfiguration(ruleContext))
             .build();
     ruleContext.registerAction(fullyLinkAction);
 
@@ -250,7 +249,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .setLinkType(linkType)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .addVariablesExtension(extension)
-            .setFeatureConfiguration(getFeatureConfiguration(ruleContext, buildConfiguration))
+            .setFeatureConfiguration(getFeatureConfiguration(ruleContext))
             .build();
     ruleContext.registerAction(executableLinkAction);    
     
@@ -273,11 +272,10 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                     objcProvider,
                     includeProcessing,
                     ruleContext.getFragment(ObjcConfiguration.class)),
-                getFeatureConfiguration(ruleContext, buildConfiguration),
+                getFeatureConfiguration(ruleContext),
                 CcLibraryHelper.SourceCategory.CC_AND_OBJC,
                 ccToolchain,
-                fdoSupport,
-                buildConfiguration)
+                fdoSupport)
             .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
             .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
             .addSources(privateHdrs)
@@ -296,7 +294,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))
             .setCppModuleMap(intermediateArtifacts.moduleMap())
             .setPropagateModuleMapToCompileAction(false)
-            .setNeverLink(true)
             .addVariableExtension(extension);
 
     Artifact pchHdr = null;
@@ -309,8 +306,11 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
     return result;
   }
 
-  private static FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext,
-      BuildConfiguration configuration) {
+  private static FeatureConfiguration getFeatureConfiguration(RuleContext ruleContext) {
+    CcToolchainProvider toolchain =
+        ruleContext
+            .getPrerequisite(":cc_toolchain", Mode.TARGET)
+            .getProvider(CcToolchainProvider.class);
 
     ImmutableList.Builder<String> activatedCrosstoolSelectables =
         ImmutableList.<String>builder()
@@ -341,10 +341,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       activatedCrosstoolSelectables.add("pch");
     }
 
-    return configuration
-        .getFragment(CppConfiguration.class)
-        .getFeatures()
-        .getFeatureConfiguration(activatedCrosstoolSelectables.build());
+    return toolchain.getFeatures().getFeatureConfiguration(activatedCrosstoolSelectables.build());
   }
 
   private static ImmutableList<Artifact> getObjFiles(

@@ -578,11 +578,10 @@ public class CppHelper {
     }
   }
 
-  static Artifact getCompileOutputArtifact(RuleContext ruleContext, String outputName,
-      BuildConfiguration config) {
+  static Artifact getCompileOutputArtifact(RuleContext ruleContext, String outputName) {
     PathFragment objectDir = getObjDirectory(ruleContext.getLabel());
     return ruleContext.getDerivedArtifact(objectDir.getRelative(outputName),
-        config.getBinDirectory(ruleContext.getRule().getRepository()));
+        ruleContext.getConfiguration().getBinDirectory(ruleContext.getRule().getRepository()));
   }
 
   /**

@@ -54,7 +54,6 @@ import javax.annotation.Nullable;
 public final class LinkCommandLine extends CommandLine {
   private final String actionName;
   private final String toolPath;
-  private final boolean codeCoverageEnabled;
   private final CppConfiguration cppConfiguration;
   private final ActionOwner owner;
   private final CcToolchainFeatures.Variables variables;
@@ -102,7 +101,6 @@ public final class LinkCommandLine extends CommandLine {
 
     this.actionName = actionName;
     this.toolPath = toolPath;
-    this.codeCoverageEnabled = configuration.isCodeCoverageEnabled();
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
     this.variables = variables;
     this.featureConfiguration = featureConfiguration;
@@ -574,7 +572,6 @@ public final class LinkCommandLine extends CommandLine {
       }
 
       optionList.add("-DGPLATFORM=\"" + cppConfiguration + "\"");
-      optionList.add("-DBUILD_COVERAGE_ENABLED=" + (codeCoverageEnabled ? "1" : "0"));
 
       // Needed to find headers included from linkstamps.
       optionList.add("-I.");
