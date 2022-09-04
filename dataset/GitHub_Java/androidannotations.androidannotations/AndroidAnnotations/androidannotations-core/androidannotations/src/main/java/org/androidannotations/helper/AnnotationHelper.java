@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,6 +24,15 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import com.sun.codemodel.JFieldRef;
+import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.annotations.OnActivityResult;
+import org.androidannotations.annotations.OptionsItem;
+import org.androidannotations.annotations.ResId;
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
+import org.androidannotations.rclass.IRInnerClass;
+import org.androidannotations.rclass.RInnerClass;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
@@ -39,18 +48,7 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
-import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.annotations.EditorAction;
-import org.androidannotations.annotations.OnActivityResult;
-import org.androidannotations.annotations.OptionsItem;
-import org.androidannotations.annotations.ResId;
 import org.androidannotations.annotations.SeekBarTouchStop;
-import org.androidannotations.internal.rclass.RInnerClass;
-import org.androidannotations.logger.Logger;
-import org.androidannotations.logger.LoggerFactory;
-import org.androidannotations.rclass.IRInnerClass;
-
-import com.helger.jcodemodel.JFieldRef;
 
 public class AnnotationHelper {
 
@@ -94,15 +92,6 @@ public class AnnotationHelper {
 	 */
 	public TypeElement typeElementFromQualifiedName(String qualifiedName) {
 		return getElementUtils().getTypeElement(qualifiedName);
-	}
-
-	public boolean isAnnotatedWith(Element element, String qualifiedName) {
-		for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
-			if (annotationMirror.getAnnotationType().toString().equals(qualifiedName)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	public String generatedClassQualifiedNameFromQualifiedName(String qualifiedName) {
@@ -366,9 +355,6 @@ public class AnnotationHelper {
 		if (SeekBarTouchStop.class.getName().equals(annotationName)) {
 			return "SeekBarTouchStopped";
 		}
-		if (EditorAction.class.getName().equals(annotationName)) {
-			return EditorAction.class.getSimpleName();
-		}
 		String annotationSimpleName = annotationName.substring(annotationName.lastIndexOf('.') + 1);
 		if (annotationSimpleName.endsWith("e")) {
 			return annotationSimpleName + "d";
@@ -456,4 +442,5 @@ public class AnnotationHelper {
 		}
 		return false;
 	}
+
 }

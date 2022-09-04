@@ -22,62 +22,155 @@ import java.util.Set;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 
-import org.androidannotations.handler.AnnotationHandler;
-import org.androidannotations.handler.GeneratingAnnotationHandler;
-import org.androidannotations.helper.AndroidManifest;
-import org.androidannotations.holder.GeneratedClassHolder;
-import org.androidannotations.internal.model.AnnotationElements;
-import org.androidannotations.internal.process.ProcessHolder;
-import org.androidannotations.plugin.AndroidAnnotationsPlugin;
-import org.androidannotations.rclass.IRClass;
-
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
+import org.androidannotations.handler.AnnotationHandler;
+import org.androidannotations.handler.AnnotationHandlers;
+import org.androidannotations.handler.GeneratingAnnotationHandler;
+import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.holder.GeneratedClassHolder;
+import org.androidannotations.model.AndroidSystemServices;
+import org.androidannotations.model.AnnotationElements;
+import org.androidannotations.plugin.AndroidAnnotationsPlugin;
+import org.androidannotations.process.Option;
+import org.androidannotations.process.Options;
+import org.androidannotations.process.ProcessHolder;
+import org.androidannotations.rclass.IRClass;
 
-public interface AndroidAnnotationsEnvironment {
+public class AndroidAnnotationsEnvironment {
 
-	ProcessingEnvironment getProcessingEnvironment();
+	private final ProcessingEnvironment processingEnvironment;
+	private final Options options;
+	private final AnnotationHandlers annotationHandlers;
 
-	Set<String> getSupportedOptions();
+	private List<AndroidAnnotationsPlugin> plugins;
 
-	String getOptionValue(Option option);
+	private IRClass rClass;
+	private AndroidSystemServices androidSystemServices;
+	private AndroidManifest androidManifest;
 
-	String getOptionValue(String optionKey);
+	private AnnotationElements validatedElements;
 
-	boolean getOptionBooleanValue(Option option);
+	private ProcessHolder processHolder;
 
-	boolean getOptionBooleanValue(String optionKey);
+	AndroidAnnotationsEnvironment(ProcessingEnvironment processingEnvironment) {
+		this.processingEnvironment = processingEnvironment;
+		options = new Options(processingEnvironment);
+		annotationHandlers = new AnnotationHandlers();
+		androidSystemServices = new AndroidSystemServices(this);
+	}
 
-	Set<String> getSupportedAnnotationTypes();
+	public void setPlugins(List<AndroidAnnotationsPlugin> plugins) {
+		this.plugins = plugins;
+		for (AndroidAnnotationsPlugin plugin : plugins) {
+			options.addAllSupportedOptions(plugin.getSupportedOptions());
+			plugin.addHandlers(annotationHandlers, this);
+		}
+	}
 
-	List<AnnotationHandler<? extends GeneratedClassHolder>> getHandlers();
+	public void setAndroidEnvironment(IRClass rClass, AndroidManifest androidManifest) {
+		this.rClass = rClass;
+		this.androidManifest = androidManifest;
+	}
 
-	List<AnnotationHandler<? extends GeneratedClassHolder>> getDecoratingHandlers();
+	public void setValidatedElements(AnnotationElements validatedElements) {
+		this.validatedElements = validatedElements;
+	}
 
-	List<GeneratingAnnotationHandler<? extends GeneratedClassHolder>> getGeneratingHandlers();
+	public void setProcessHolder(ProcessHolder processHolder) {
+		this.processHolder = processHolder;
+	}
 
-	IRClass getRClass();
+	public ProcessingEnvironment getProcessingEnvironment() {
+		return processingEnvironment;
+	}
 
-	AndroidManifest getAndroidManifest();
+	public Set<String> getSupportedOptions() {
+		return options.getSupportedOptions();
+	}
 
-	AnnotationElements getValidatedElements();
+	public String getOptionValue(Option option) {
+		return options.get(option);
+	}
 
-	JCodeModel getCodeModel();
+	public String getOptionValue(String optionKey) {
+		return options.get(optionKey);
+	}
 
-	JClass getJClass(String fullyQualifiedName);
+	public boolean getOptionBooleanValue(Option option) {
+		return options.getBoolean(option);
+	}
 
-	JClass getJClass(Class<?> clazz);
+	public boolean getOptionBooleanValue(String optionKey) {
+		return options.getBoolean(optionKey);
+	}
 
-	JDefinedClass getDefinedClass(String fullyQualifiedName);
+	public Set<String> getSupportedAnnotationTypes() {
+		return annotationHandlers.getSupportedAnnotationTypes();
+	}
 
-	GeneratedClassHolder getGeneratedClassHolder(Element element);
+	public List<AnnotationHandler<? extends GeneratedClassHolder>> getHandlers() {
+		return annotationHandlers.get();
+	}
 
-	ProcessHolder.Classes getClasses();
+	public List<AnnotationHandler<? extends GeneratedClassHolder>> getDecoratingHandlers() {
+		return annotationHandlers.getDecorating();
+	}
 
-	List<Class<? extends Annotation>> getGeneratingAnnotations();
+	public List<GeneratingAnnotationHandler<? extends GeneratedClassHolder>> getGeneratingHandlers() {
+		return annotationHandlers.getGenerating();
+	}
 
-	boolean isAndroidAnnotation(String annotationQualifiedName);
+	public IRClass getRClass() {
+		return rClass;
+	}
 
-	List<AndroidAnnotationsPlugin> getPlugins();
+	public AndroidSystemServices getAndroidSystemServices() {
+		return androidSystemServices;
+	}
+
+	public AndroidManifest getAndroidManifest() {
+		return androidManifest;
+	}
+
+	public AnnotationElements getValidatedElements() {
+		return validatedElements;
+	}
+
+	public JCodeModel getCodeModel() {
+		return processHolder.codeModel();
+	}
+
+	public JClass getJClass(String fullyQualifiedName) {
+		return processHolder.refClass(fullyQualifiedName);
+	}
+
+	public JClass getJClass(Class<?> clazz) {
+		return processHolder.refClass(clazz);
+	}
+
+	public JDefinedClass getDefinedClass(String fullyQualifiedName) {
+		return processHolder.definedClass(fullyQualifiedName);
+	}
+
+	public GeneratedClassHolder getGeneratedClassHolder(Element element) {
+		return processHolder.getGeneratedClassHolder(element);
+	}
+
+	public ProcessHolder.Classes getClasses() {
+		return processHolder.classes();
+	}
+
+	public List<Class<? extends Annotation>> getGeneratingAnnotations() {
+		return annotationHandlers.getGeneratingAnnotations();
+	}
+
+	public boolean isAndroidAnnotation(String annotationQualifiedName) {
+		return getSupportedAnnotationTypes().contains(annotationQualifiedName);
+	}
+
+	public List<AndroidAnnotationsPlugin> getPlugins() {
+		return plugins;
+	}
 }
