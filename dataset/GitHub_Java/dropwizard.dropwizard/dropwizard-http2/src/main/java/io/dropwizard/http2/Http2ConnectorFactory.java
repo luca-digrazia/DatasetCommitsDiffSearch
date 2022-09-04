@@ -8,12 +8,7 @@ import io.dropwizard.jetty.HttpsConnectorFactory;
 import io.dropwizard.jetty.Jetty93InstrumentedConnectionFactory;
 import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
 import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.HttpConfiguration;
-import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.NegotiatingServerConnectionFactory;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.ThreadPool;
@@ -40,7 +35,7 @@ import javax.validation.constraints.Min;
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code initialStreamRecvWindow}</td>
+ *         <td>{@code initialStreamSendWindow}</td>
  *         <td>65535</td>
  *         <td>
  *             The initial flow control window size for a new stream. Larger values may allow greater throughput,
@@ -69,7 +64,7 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
 
     @Min(1)
     @Max(Integer.MAX_VALUE)
-    private int initialStreamRecvWindow = 65535;
+    private int initialStreamSendWindow = 65535;
 
     @JsonProperty
     public int getMaxConcurrentStreams() {
@@ -82,13 +77,13 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
     }
 
     @JsonProperty
-    public int getInitialStreamRecvWindow() {
-        return initialStreamRecvWindow;
+    public int getInitialStreamSendWindow() {
+        return initialStreamSendWindow;
     }
 
     @JsonProperty
-    public void setInitialStreamRecvWindow(int initialStreamRecvWindow) {
-        this.initialStreamRecvWindow = initialStreamRecvWindow;
+    public void setInitialStreamSendWindow(int initialStreamSendWindow) {
+        this.initialStreamSendWindow = initialStreamSendWindow;
     }
 
     @Override
@@ -98,18 +93,19 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
         setSupportedProtocols(ImmutableList.of("TLSv1.2"));
         setSupportedCipherSuites(ImmutableList.of("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"));
 
+        logSupportedParameters();
+
         // Setup connection factories
         final HttpConfiguration httpConfig = buildHttpConfiguration();
         final HttpConnectionFactory http1 = buildHttpConnectionFactory(httpConfig);
         final HTTP2ServerConnectionFactory http2 = new HTTP2ServerConnectionFactory(httpConfig);
         http2.setMaxConcurrentStreams(maxConcurrentStreams);
-        http2.setInitialStreamRecvWindow(initialStreamRecvWindow);
+        http2.setInitialStreamRecvWindow(initialStreamSendWindow);
 
         final NegotiatingServerConnectionFactory alpn = new ALPNServerConnectionFactory(H2, H2_17);
         alpn.setDefaultProtocol(HTTP_1_1); // Speak HTTP 1.1 over TLS if negotiation fails
 
         final SslContextFactory sslContextFactory = buildSslContextFactory();
-        sslContextFactory.addLifeCycleListener(logSslInfoOnStart(sslContextFactory));
         server.addBean(sslContextFactory);
 
         // We should use ALPN as a negotiation protocol. Old clients that don't support it will be served
