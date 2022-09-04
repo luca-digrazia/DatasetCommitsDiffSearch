@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.jboss.jandex.ClassInfo;
@@ -103,13 +104,25 @@ public class SimpleGeneratorTest {
         try {
             engine.parse("{this.getList(5,5)}").render(new MyService());
             fail();
-        } catch (ClassCastException ClassCastException) {
+        } catch (IllegalStateException e) {
+            assertClassCastException(e);
         }
         try {
             engine.parse("{service.getDummy(5,resultNotFound)}").data("service", new MyService()).render();
             fail();
-        } catch (ClassCastException ClassCastException) {
+        } catch (IllegalStateException e) {
+            assertClassCastException(e);
         }
+    }
+
+    private void assertClassCastException(Exception e) {
+        if (e.getCause() instanceof ExecutionException) {
+            ExecutionException ex = (ExecutionException) e.getCause();
+            if (ex.getCause() instanceof ClassCastException) {
+                return;
+            }
+        }
+        fail("Unexpected exception thrown: ", e);
     }
 
     private ValueResolver newResolver(String className)

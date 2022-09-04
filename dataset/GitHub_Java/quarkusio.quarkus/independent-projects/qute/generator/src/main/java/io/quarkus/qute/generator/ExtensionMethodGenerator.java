@@ -45,9 +45,6 @@ public class ExtensionMethodGenerator {
 
     public static final String SUFFIX = "_Extension" + ValueResolverGenerator.SUFFIX;
 
-    private static final String MATCH_NAME = "matchName";
-    private static final String PRIORITY = "priority";
-
     private final Set<String> generatedTypes;
     private final ClassOutput classOutput;
 
@@ -72,25 +69,25 @@ public class ExtensionMethodGenerator {
         }
     }
 
-    public void generate(MethodInfo method, String matchName, Integer priority) {
+    public void generate(MethodInfo method, String matchName) {
 
         // Validate the method first
         validate(method);
-        ClassInfo declaringClass = method.declaringClass();
-        AnnotationInstance extensionAnnotation = method.annotation(TEMPLATE_EXTENSION);
 
-        if (matchName == null && extensionAnnotation != null) {
-            // No explicit name defined, try annotation
-            AnnotationValue matchNameValue = extensionAnnotation.value(MATCH_NAME);
-            if (matchNameValue != null) {
-                matchName = matchNameValue.asString();
+        if (matchName == null) {
+            AnnotationInstance extensionAnnotation = method.annotation(TEMPLATE_EXTENSION);
+            if (extensionAnnotation != null) {
+                AnnotationValue matchNameValue = extensionAnnotation.value("matchName");
+                if (matchNameValue != null) {
+                    matchName = matchNameValue.asString();
+                }
             }
         }
-        if (matchName == null || matchName.equals(TemplateExtension.METHOD_NAME)) {
+
+        if (matchName == null) {
             matchName = method.name();
-        }
-        if (matchName.equals(TemplateExtension.ANY)) {
-            // Special constant used - the second parameter must be a string
+        } else if (matchName.equals(TemplateExtension.ANY)) {
+            // The second parameter must be a string
             if (method.parameters().size() < 2 || !method.parameters().get(1).name().equals(STRING)) {
                 throw new IllegalStateException(
                         "Template extension method matching multiple names must declare at least two parameters and the second parameter must be string: "
@@ -98,17 +95,7 @@ public class ExtensionMethodGenerator {
             }
         }
 
-        if (priority == null && extensionAnnotation != null) {
-            // No explicit priority set, try annotation
-            AnnotationValue priorityValue = extensionAnnotation.value(PRIORITY);
-            if (priorityValue != null) {
-                priority = priorityValue.asInt();
-            }
-        }
-        if (priority == null) {
-            priority = TemplateExtension.DEFAULT_PRIORITY;
-        }
-
+        ClassInfo declaringClass = method.declaringClass();
         String baseName;
         if (declaringClass.enclosingClass() != null) {
             baseName = simpleName(declaringClass.enclosingClass()) + ValueResolverGenerator.NESTED_SEPARATOR
@@ -125,17 +112,17 @@ public class ExtensionMethodGenerator {
         ClassCreator valueResolver = ClassCreator.builder().classOutput(classOutput).className(generatedName)
                 .interfaces(ValueResolver.class).build();
 
-        implementGetPriority(valueResolver, priority);
+        implementGetPriority(valueResolver);
         implementAppliesTo(valueResolver, method, matchName);
         implementResolve(valueResolver, declaringClass, method, matchName);
 
         valueResolver.close();
     }
 
-    private void implementGetPriority(ClassCreator valueResolver, int priority) {
+    private void implementGetPriority(ClassCreator valueResolver) {
         MethodCreator getPriority = valueResolver.getMethodCreator("getPriority", int.class)
                 .setModifiers(ACC_PUBLIC);
-        getPriority.returnValue(getPriority.load(priority));
+        getPriority.returnValue(getPriority.load(5));
     }
 
     private void implementResolve(ClassCreator valueResolver, ClassInfo declaringClass, MethodInfo method, String matchName) {
