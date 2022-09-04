@@ -394,8 +394,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             return null;
           }
         }
-        addDiscoveredInputs(
-            state.inputArtifactData, state.expandedArtifacts, state.discoveredInputs, env);
+        addDiscoveredInputs(state.inputArtifactData, state.discoveredInputs, env);
         if (env.valuesMissing()) {
           return null;
         }
@@ -412,8 +411,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           state.discoveredInputsStage2 = action.discoverInputsStage2(env);
         }
         if (state.discoveredInputsStage2 != null) {
-          addDiscoveredInputs(
-              state.inputArtifactData, state.expandedArtifacts, state.discoveredInputsStage2, env);
+          addDiscoveredInputs(state.inputArtifactData, state.discoveredInputsStage2, env);
           if (env.valuesMissing()) {
             return null;
           }
@@ -424,10 +422,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       }
 
       actionExecutionContext =
-          skyframeActionExecutor.getContext(
-              perActionFileCache,
-              metadataHandler,
-              Collections.unmodifiableMap(state.expandedArtifacts));
+          skyframeActionExecutor.getContext(perActionFileCache,
+              metadataHandler, state.expandedArtifacts);
       if (!state.hasExecutedAction()) {
         state.value = skyframeActionExecutor.executeAction(action,
             metadataHandler, actionStartTime, actionExecutionContext);
@@ -487,7 +483,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
 
   private static void addDiscoveredInputs(
       Map<Artifact, FileArtifactValue> inputData,
-      Map<Artifact, Collection<Artifact>> expandedArtifacts,
       Iterable<Artifact> discoveredInputs,
       Environment env)
       throws InterruptedException {
@@ -502,16 +497,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         env.getValues(newlyDiscoveredInputsToSkyKeys(discoveredInputs, inputData.keySet()));
     if (!env.valuesMissing()) {
       for (Entry<SkyKey, SkyValue> entry : nonMandatoryDiscovered.entrySet()) {
-        Artifact input = ArtifactSkyKey.artifact(entry.getKey());
-        if (entry.getValue() instanceof TreeArtifactValue) {
-          TreeArtifactValue treeValue = (TreeArtifactValue) entry.getValue();
-          expandedArtifacts.put(input, ImmutableSet.<Artifact>copyOf(treeValue.getChildren()));
-          inputData.putAll(treeValue.getChildValues());
-
-          inputData.put(input, treeValue.getSelfData());
-        } else {
-          inputData.put(input, (FileArtifactValue) entry.getValue());
-        }
+        inputData.put(
+            ArtifactSkyKey.artifact(entry.getKey()), (FileArtifactValue) entry.getValue());
       }
     }
   }
@@ -656,7 +643,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       throw new ActionExecutionException(missingCount + " input file(s) do not exist", action,
           rootCauses.build(), /*catastrophe=*/false);
     }
-    return Pair.of(inputArtifactData, expandedArtifacts);
+    return Pair.of(inputArtifactData, Collections.unmodifiableMap(expandedArtifacts));
   }
 
   private static Iterable<Artifact> filterKnownInputs(
