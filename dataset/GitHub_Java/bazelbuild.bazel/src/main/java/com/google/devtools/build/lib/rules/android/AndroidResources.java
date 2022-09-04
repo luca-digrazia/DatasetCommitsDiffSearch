@@ -351,14 +351,13 @@ public class AndroidResources {
    * Filters this object, assuming it contains the resources of the current target.
    *
    * <p>If this object contains the resources from a dependency of this target, use {@link
-   * #maybeFilter(RuleErrorConsumer, ResourceFilter, boolean)} instead.
+   * #maybeFilter(ResourceFilter, boolean)} instead.
    *
    * @return a filtered {@link AndroidResources} object. If no filtering was done, this object will
    *     be returned.
    */
-  public AndroidResources filterLocalResources(
-      RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter) throws RuleErrorException {
-    return maybeFilter(errorConsumer, resourceFilter, /* isDependency = */ false).orElse(this);
+  public AndroidResources filterLocalResources(ResourceFilter resourceFilter) {
+    return maybeFilter(resourceFilter, /* isDependency = */ false).orElse(this);
   }
 
   /**
@@ -369,8 +368,7 @@ public class AndroidResources {
    *     filtered.
    */
   public Optional<AndroidResources> maybeFilter(
-      RuleErrorConsumer errorConsumer, ResourceFilter resourceFilter, boolean isDependency)
-      throws RuleErrorException {
+      ResourceFilter resourceFilter, boolean isDependency) {
     Optional<ImmutableList<Artifact>> filtered =
         resourceFilter.maybeFilter(resources, /* isDependency= */ isDependency);
 
@@ -379,10 +377,18 @@ public class AndroidResources {
       return Optional.empty();
     }
 
-    return Optional.of(
-        new AndroidResources(
-            filtered.get(),
-            getResourceRoots(errorConsumer, filtered.get(), DEFAULT_RESOURCES_ATTR)));
+    // If the resources were filtered, also filter the resource roots
+    ImmutableList.Builder<PathFragment> filteredResourcesRootsBuilder = ImmutableList.builder();
+    for (PathFragment resourceRoot : resourceRoots) {
+      for (Artifact resource : filtered.get()) {
+        if (resource.getRootRelativePath().startsWith(resourceRoot)) {
+          filteredResourcesRootsBuilder.add(resourceRoot);
+          break;
+        }
+      }
+    }
+
+    return Optional.of(new AndroidResources(filtered.get(), filteredResourcesRootsBuilder.build()));
   }
 
   public ParsedAndroidResources parse(
