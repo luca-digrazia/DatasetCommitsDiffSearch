@@ -56,7 +56,6 @@ public class Deflector { // extends Ablenkblech
     private final String indexPrefix;
     private final String deflectorName;
     private final Indices indices;
-    private final Configuration configuration;
 
     @Inject
     public Deflector(final SystemJobManager systemJobManager,
@@ -65,7 +64,6 @@ public class Deflector { // extends Ablenkblech
                      final RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory,
                      final OptimizeIndexJob.Factory optimizeIndexJobFactory,
                      final Indices indices) {
-        this.configuration = configuration;
         indexPrefix = configuration.getElasticSearchIndexPrefix();
 
         this.systemJobManager = systemJobManager;
@@ -134,9 +132,6 @@ public class Deflector { // extends Ablenkblech
             LOG.error("Could not properly create new target <{}>", newTarget);
         }
 
-        if (!configuration.)
-        updateIndexRanges();
-
         LOG.info("Done!");
 
         // Point deflector to new index.
@@ -157,15 +152,15 @@ public class Deflector { // extends Ablenkblech
             indices.setReadOnly(oldTarget);
             activity.setMessage("Cycled deflector from <" + oldTarget + "> to <" + newTarget + ">");
 
-            if (!configuration.isDisableIndexOptimization()) {
-                try {
-                    systemJobManager.submit(optimizeIndexJobFactory.create(this, oldTarget));
-                } catch (SystemJobConcurrencyException e) {
-                    // The concurrency limit is very high. This should never happen.
-                    LOG.error("Cannot optimize index <" + oldTarget + ">.", e);
-                }
+            try {
+                systemJobManager.submit(optimizeIndexJobFactory.create(oldTarget));
+            } catch (SystemJobConcurrencyException e) {
+                // The concurrency limit is very high. This should never happen.
+                LOG.error("Cannot optimize index <" + oldTarget + ">.", e);
             }
         }
+
+        updateIndexRanges();
 
         LOG.info("Done!");
 

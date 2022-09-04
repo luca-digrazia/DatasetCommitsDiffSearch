@@ -37,9 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class RebuildIndexRangesJob extends SystemJob {
     public interface Factory {
         public RebuildIndexRangesJob create(Deflector deflector);
@@ -114,14 +111,18 @@ public class RebuildIndexRangesJob extends SystemJob {
             try {
                 ranges.add(calculateRange(index));
             } catch (EmptyIndexException e) {
-                // if the empty index happens to be the current deflector target, do not skip the index range.
-                // newly created indices have a high likelihood of being empty).
+                LOG.info("Index [{}] is empty, inserting dummy index range.", index);
+                Map<String, Object> emptyIndexRange = Maps.newHashMap();
+                emptyIndexRange.put("index", index);
+
                 if (deflector.getCurrentActualTargetIndex().equals(index)) {
-                    LOG.info("Index [{}] is empty but it is the current deflector target. Inserting dummy index range.", index);
-                    ranges.add(getDeflectorIndexRange(index));
+                    emptyIndexRange.put("start", Tools.getUTCTimestamp());
                 } else {
-                    LOG.info("Index [{}] is empty. Not calculating ranges.", index);
+                    emptyIndexRange.put("start", 0);
+                    emptyIndexRange.put("calculated_at", Tools.getUTCTimestamp());
                 }
+
+                ranges.add(emptyIndexRange);
             } catch (Exception e) {
                 LOG.info("Could not calculate range of index [" + index + "]. Skipping.", e);
             } finally {
@@ -135,14 +136,7 @@ public class RebuildIndexRangesJob extends SystemJob {
         info("Done calculating index ranges for " + indices.length + " indices. Took " + sw.stop().elapsed(TimeUnit.MILLISECONDS) + "ms.");
     }
 
-    protected Map<String, Object> getDeflectorIndexRange(String index) {
-        Map<String, Object> deflectorIndexRange = Maps.newHashMap();
-        deflectorIndexRange.put("index", index);
-        deflectorIndexRange.put("start", Tools.getUTCTimestamp());
-        return deflectorIndexRange;
-    }
-
-    protected Map<String, Object> calculateRange(String index) throws EmptyIndexException {
+    private Map<String, Object> calculateRange(String index) throws EmptyIndexException {
         Map<String, Object> range = Maps.newHashMap();
 
         Stopwatch x = Stopwatch.createStarted();
@@ -172,7 +166,7 @@ public class RebuildIndexRangesJob extends SystemJob {
         }
     }
 
-    protected void info(String what) {
+    private void info(String what) {
         LOG.info(what);
         activityWriter.write(new Activity(what, RebuildIndexRangesJob.class));
     }
