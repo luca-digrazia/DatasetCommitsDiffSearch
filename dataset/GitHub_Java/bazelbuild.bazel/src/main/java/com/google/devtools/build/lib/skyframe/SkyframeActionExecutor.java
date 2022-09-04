@@ -805,7 +805,9 @@ public final class SkyframeActionExecutor {
 
   /** Returns a continuation to run the specified action in a profiler task. */
   private ActionContinuationOrResult runFully(
-      Action action, ActionExecutionContext actionExecutionContext) {
+      Action action,
+      ActionExecutionContext actionExecutionContext,
+      ExtendedEventHandler eventHandler) {
     return new ActionContinuationOrResult() {
       @Override
       public ListenableFuture<?> getFuture() {
@@ -815,7 +817,19 @@ public final class SkyframeActionExecutor {
       @Override
       public ActionContinuationOrResult execute()
           throws ActionExecutionException, InterruptedException {
-        return ActionContinuationOrResult.of(action.execute(actionExecutionContext));
+        // ActionExecutionExceptions that occur as the thread is interrupted are assumed to be a
+        // result of that, so we throw InterruptedException instead.
+        try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION_EXECUTE, action.describe())) {
+          return ActionContinuationOrResult.of(action.execute(actionExecutionContext));
+        } catch (ActionExecutionException e) {
+          throw processAndGetExceptionToThrow(
+              eventHandler,
+              actionExecutionContext.getInputPath(action.getPrimaryOutput()),
+              action,
+              e,
+              actionExecutionContext.getFileOutErr(),
+              ErrorTiming.AFTER_EXECUTION);
+        }
       }
     };
   }
@@ -914,6 +928,9 @@ public final class SkyframeActionExecutor {
         // implemented for SpawnAction (and subclasses), and will need to be extended for all other
         // action types.
         if (useAsyncExecution) {
+          // TODO(ulfjack): This implicitly drops the ACTION_EXECUTE profiler segment that otherwise
+          // wraps the Action.execute call. That one is already excluded from the Json profile, so
+          // maybe we should just remove it.
           // TODO(ulfjack): This causes problems in that REMOTE_EXECUTION segments now heavily
           // overlap in the Json profile, which the renderer isn't able to handle. We should move
           // those to some sort of 'virtual thread' to visualize the work that's happening on other
@@ -922,7 +939,8 @@ public final class SkyframeActionExecutor {
               actionExecutionContext.getEventHandler(), begin(action, actionExecutionContext));
         }
 
-        return continueAction(env.getListener(), runFully(action, actionExecutionContext));
+        return continueAction(
+            env.getListener(), runFully(action, actionExecutionContext, env.getListener()));
       }
     }
 
@@ -960,14 +978,7 @@ public final class SkyframeActionExecutor {
         return ActionStepOrResult.of(e);
       } catch (ActionExecutionException e) {
         notifyActionCompletion(eventHandler, /*postActionCompletionEvent=*/ true);
-        return ActionStepOrResult.of(
-            processAndGetExceptionToThrow(
-                eventHandler,
-                actionExecutionContext.getInputPath(action.getPrimaryOutput()),
-                action,
-                e,
-                actionExecutionContext.getFileOutErr(),
-                ErrorTiming.AFTER_EXECUTION));
+        return ActionStepOrResult.of(e);
       } catch (InterruptedException e) {
         notifyActionCompletion(eventHandler, /*postActionCompletionEvent=*/ true);
         return ActionStepOrResult.of(e);

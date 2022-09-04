@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLines;
@@ -103,6 +104,11 @@ public final class ExtraAction extends SpawnAction {
   }
 
   @Override
+  protected boolean mayExecuteAsync() {
+    return false;
+  }
+
+  @Override
   public boolean discoversInputs() {
     return shadowedAction.discoversInputs();
   }
@@ -149,16 +155,34 @@ public final class ExtraAction extends SpawnAction {
     return shadowedAction.getAllowedDerivedInputs();
   }
 
+  /**
+   * @InheritDoc
+   *
+   * <p>This method calls in to {@link AbstractAction#getInputFilesForExtraAction} and {@link
+   * Action#getExtraActionInfo} of the action being shadowed from the thread executing this
+   * ExtraAction. It assumes these methods are safe to call from a different thread than the thread
+   * responsible for the execution of the action being shadowed.
+   */
   @Override
-  protected void afterExecute(ActionExecutionContext actionExecutionContext) throws IOException {
+  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
+    // PHASE 2: execution of extra_action.
+    ActionResult actionResult = super.execute(actionExecutionContext);
+
     // PHASE 3: create dummy output.
     // If the user didn't specify output, we need to create dummy output
     // to make blaze schedule this action.
     if (createDummyOutput) {
       for (Artifact output : getOutputs()) {
-        FileSystemUtils.touchFile(actionExecutionContext.getInputPath(output));
+        try {
+          FileSystemUtils.touchFile(actionExecutionContext.getInputPath(output));
+        } catch (IOException e) {
+          throw new ActionExecutionException(e.getMessage(), e, this, false);
+        }
       }
     }
+
+    return actionResult;
   }
 
   /**
