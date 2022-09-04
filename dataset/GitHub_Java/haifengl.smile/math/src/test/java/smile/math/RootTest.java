@@ -50,6 +50,9 @@ public class RootTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of find method, of class Root.
+     */
     @Test
     public void testBrent() {
         System.out.println("Brent");
@@ -57,6 +60,9 @@ public class RootTest {
         assertEquals(-3, result, 1E-7);
     }
 
+    /**
+     * Test of find method, of class Root.
+     */
     @Test
     public void testNewton() {
         System.out.println("Newton");
