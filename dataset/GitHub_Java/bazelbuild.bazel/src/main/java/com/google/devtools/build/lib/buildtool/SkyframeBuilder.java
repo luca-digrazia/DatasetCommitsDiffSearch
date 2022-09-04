@@ -107,7 +107,9 @@ public class SkyframeBuilder implements Builder {
       @Nullable Range<Long> lastExecutionTimeRange,
       TopLevelArtifactContext topLevelArtifactContext)
       throws BuildFailedException, AbruptExitException, TestExecException, InterruptedException {
-    skyframeExecutor.detectModifiedOutputFiles(modifiedOutputFiles, lastExecutionTimeRange);
+    try (SilentCloseable c = Profiler.instance().profile("detectModifiedOutputFiles")) {
+      skyframeExecutor.detectModifiedOutputFiles(modifiedOutputFiles, lastExecutionTimeRange);
+    }
     try (SilentCloseable c = Profiler.instance().profile("configureActionExecutor")) {
       skyframeExecutor.configureActionExecutor(fileCache, actionInputPrefetcher);
     }
