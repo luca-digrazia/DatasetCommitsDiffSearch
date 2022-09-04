@@ -27,6 +27,7 @@ import com.google.devtools.build.buildjar.javac.JavacOptions;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule.StrictJavaDeps;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.StrictJavaDepsPlugin;
+import com.google.devtools.build.java.turbine.javac.ZipOutputFileManager.OutputFileObject;
 import com.google.turbine.options.TurbineOptions;
 import com.google.turbine.options.TurbineOptionsParser;
 import com.sun.tools.javac.util.Context;
@@ -50,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.zip.ZipOutputStream;
+import javax.tools.StandardLocation;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -175,14 +177,15 @@ public class JavacTurbine implements AutoCloseable {
 
     if (sources.isEmpty()) {
       // accept compilations with an empty source list for compatibility with JavaBuilder
-      emitClassJar(Paths.get(turbineOptions.outputFile()), ImmutableMap.of());
+      emitClassJar(
+          Paths.get(turbineOptions.outputFile()), ImmutableMap.<String, OutputFileObject>of());
       dependencyModule.emitDependencyInformation(/*classpath=*/ "", /*successful=*/ true);
       return Result.OK_WITH_REDUCED_CLASSPATH;
     }
 
     Result result = Result.ERROR;
-    JavacTurbineCompileResult compileResult = null;
-    List<String> actualClasspath = ImmutableList.of();
+    JavacTurbineCompileResult compileResult;
+    List<String> actualClasspath;
 
     List<String> originalClasspath = turbineOptions.classPath();
     List<String> compressedClasspath =
@@ -190,7 +193,7 @@ public class JavacTurbine implements AutoCloseable {
 
     requestBuilder.setStrictDepsPlugin(new StrictJavaDepsPlugin(dependencyModule));
 
-    if (turbineOptions.shouldReduceClassPath()) {
+    {
       // compile with reduced classpath
       actualClasspath = compressedClasspath;
       requestBuilder.setClassPath(asPaths(actualClasspath));
@@ -201,8 +204,7 @@ public class JavacTurbine implements AutoCloseable {
       }
     }
 
-    if (compileResult == null
-        || (!compileResult.success() && hasRecognizedError(compileResult.output()))) {
+    if (!compileResult.success() && hasRecognizedError(compileResult.output())) {
       // fall back to transitive classpath
       actualClasspath = originalClasspath;
       requestBuilder.setClassPath(asPaths(actualClasspath));
@@ -263,14 +265,17 @@ public class JavacTurbine implements AutoCloseable {
   }
 
   /** Write the class output from a successful compilation to the output jar. */
-  private static void emitClassJar(Path outputJar, ImmutableMap<String, byte[]> files)
+  private static void emitClassJar(Path outputJar, ImmutableMap<String, OutputFileObject> files)
       throws IOException {
     try (OutputStream fos = Files.newOutputStream(outputJar);
         ZipOutputStream zipOut =
             new ZipOutputStream(new BufferedOutputStream(fos, ZIPFILE_BUFFER_SIZE))) {
-      for (Map.Entry<String, byte[]> entry : files.entrySet()) {
+      for (Map.Entry<String, OutputFileObject> entry : files.entrySet()) {
+        if (entry.getValue().location != StandardLocation.CLASS_OUTPUT) {
+          continue;
+        }
         String name = entry.getKey();
-        byte[] bytes = entry.getValue();
+        byte[] bytes = entry.getValue().asBytes();
         if (bytes == null) {
           continue;
         }

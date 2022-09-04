@@ -17,7 +17,6 @@ package com.google.devtools.build.java.turbine.javac;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.StrictJavaDepsPlugin;
 import java.nio.file.Path;
 import javax.annotation.Nullable;
@@ -28,29 +27,23 @@ class JavacTurbineCompileRequest {
   private final ImmutableList<Path> sources;
   private final ImmutableList<Path> classPath;
   private final ImmutableList<Path> bootClassPath;
-  private final ImmutableSet<String> builtinProcessors;
   private final ImmutableList<Path> processorClassPath;
   private final ImmutableList<String> javacOptions;
   @Nullable private final StrictJavaDepsPlugin strictJavaDepsPlugin;
-  private final JavacTransitive transitivePlugin;
 
   JavacTurbineCompileRequest(
       ImmutableList<Path> sources,
       ImmutableList<Path> classPath,
       ImmutableList<Path> bootClassPath,
-      ImmutableSet<String> builtinProcessors,
       ImmutableList<Path> processorClassPath,
       ImmutableList<String> javacOptions,
-      @Nullable StrictJavaDepsPlugin strictJavaDepsPlugin,
-      JavacTransitive transitivePlugin) {
+      @Nullable StrictJavaDepsPlugin strictJavaDepsPlugin) {
     this.sources = checkNotNull(sources);
     this.classPath = checkNotNull(classPath);
     this.bootClassPath = checkNotNull(bootClassPath);
-    this.builtinProcessors = checkNotNull(builtinProcessors);
     this.processorClassPath = checkNotNull(processorClassPath);
     this.javacOptions = checkNotNull(javacOptions);
     this.strictJavaDepsPlugin = strictJavaDepsPlugin;
-    this.transitivePlugin = checkNotNull(transitivePlugin);
   }
 
   /** The sources to compile. */
@@ -66,10 +59,6 @@ class JavacTurbineCompileRequest {
   /** The boot class path; corresponds to javac -bootclasspath. */
   ImmutableList<Path> bootClassPath() {
     return bootClassPath;
-  }
-
-  ImmutableSet<String> builtinProcessors() {
-    return builtinProcessors;
   }
 
   /** The class path to search for processors; corresponds to javac -processorpath. */
@@ -90,10 +79,6 @@ class JavacTurbineCompileRequest {
     return strictJavaDepsPlugin;
   }
 
-  JavacTransitive transitivePlugin() {
-    return transitivePlugin;
-  }
-
   static JavacTurbineCompileRequest.Builder builder() {
     return new Builder();
   }
@@ -102,24 +87,15 @@ class JavacTurbineCompileRequest {
     private ImmutableList<Path> sources;
     private ImmutableList<Path> classPath;
     private ImmutableList<Path> bootClassPath;
-    private ImmutableSet<String> builtinProcessors;
     private ImmutableList<Path> processorClassPath;
     private ImmutableList<String> javacOptions;
     @Nullable private StrictJavaDepsPlugin strictDepsPlugin;
-    private JavacTransitive transitivePlugin;
 
     private Builder() {}
 
     JavacTurbineCompileRequest build() {
       return new JavacTurbineCompileRequest(
-          sources,
-          classPath,
-          bootClassPath,
-          builtinProcessors,
-          processorClassPath,
-          javacOptions,
-          strictDepsPlugin,
-          transitivePlugin);
+          sources, classPath, bootClassPath, processorClassPath, javacOptions, strictDepsPlugin);
     }
 
     Builder setSources(ImmutableList<Path> sources) {
@@ -137,11 +113,6 @@ class JavacTurbineCompileRequest {
       return this;
     }
 
-    Builder setBuiltinProcessors(ImmutableSet<String> builtinProcessors) {
-      this.builtinProcessors = builtinProcessors;
-      return this;
-    }
-
     Builder setProcessorClassPath(ImmutableList<Path> processorClassPath) {
       this.processorClassPath = processorClassPath;
       return this;
@@ -154,11 +125,6 @@ class JavacTurbineCompileRequest {
 
     Builder setStrictDepsPlugin(@Nullable StrictJavaDepsPlugin strictDepsPlugin) {
       this.strictDepsPlugin = strictDepsPlugin;
-      return this;
-    }
-
-    Builder setTransitivePlugin(JavacTransitive transitivePlugin) {
-      this.transitivePlugin = transitivePlugin;
       return this;
     }
   }
