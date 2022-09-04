@@ -1,45 +1,54 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.security;
 
 import com.google.common.collect.Lists;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Indexes;
+import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.util.Collection;
 import java.util.List;
 
+@Singleton
 public class MongoDBSessionServiceImpl extends PersistedServiceImpl implements MongoDBSessionService {
     @Inject
     public MongoDBSessionServiceImpl(MongoConnection mongoConnection) {
         super(mongoConnection);
+
+        final MongoDatabase database = mongoConnection.getMongoDatabase();
+        final MongoCollection<Document> sessions = database.getCollection(MongoDbSession.COLLECTION_NAME);
+        sessions.createIndex(Indexes.ascending(MongoDbSession.FIELD_SESSION_ID));
     }
 
     @Override
+    @Nullable
     public MongoDbSession load(String sessionId) {
         DBObject query = new BasicDBObject();
-        query.put("session_id", sessionId);
+        query.put(MongoDbSession.FIELD_SESSION_ID, sessionId);
 
         DBObject result = findOne(MongoDbSession.class, query);
         if (result == null) {

@@ -109,7 +109,7 @@ public class MongoDbSession extends PersistedImpl {
     public long getTimeout() {
         final Object timeout = fields.get("timeout");
         if (timeout == null) return 0;
-        return ((Number) timeout).longValue();
+        return (Long) timeout;
     }
 
     public Date getStartTimestamp() {
