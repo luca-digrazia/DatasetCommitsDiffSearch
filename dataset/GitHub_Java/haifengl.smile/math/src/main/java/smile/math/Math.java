@@ -903,130 +903,6 @@ public class Math {
         random.get().permutate(x);
     }
 
-    /** Combines the arguments to form a vector. */
-    public static int[] c(int... x) {
-        return x;
-    }
-
-    /** Combines the arguments to form a vector. */
-    public static float[] c(float... x) {
-        return x;
-    }
-
-    /** Combines the arguments to form a vector. */
-    public static double[] c(double... x) {
-        return x;
-    }
-
-    /** Combines the arguments to form a vector. */
-    public static String[] c(String... x) {
-        return x;
-    }
-
-    /** Merges multiple vectors into one. */
-    public static int[] c(int[]... x) {
-        int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
-        int[] y = new int[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (int xi : x[i]) {
-                y[k++] = xi;
-            }
-        }
-        return y;
-    }
-
-    /** Merges multiple vectors into one. */
-    public static float[] c(float[]... x) {
-        int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
-        float[] y = new float[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (float xi : x[i]) {
-                y[k++] = xi;
-            }
-        }
-        return y;
-    }
-
-    /** Merges multiple vectors into one. */
-    public static double[] c(double[]... x) {
-        int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
-        double[] y = new double[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (double xi : x[i]) {
-                y[k++] = xi;
-            }
-        }
-        return y;
-    }
-
-    /** Merges multiple vectors into one. */
-    public static String[] c(String[]... x) {
-        int n = 0;
-        for (int i = 0; i < x.length; i++) {
-            n += x.length;
-        }
-
-        String[] y = new String[n];
-        for (int i = 0, k = 0; i < x.length; i++) {
-            for (String xi : x[i]) {
-                y[k++] = xi;
-            }
-        }
-        return y;
-    }
-
-    /** Take a sequence of vector arguments and combine by columns. */
-    public static int[] cbind(int[]... x) {
-        return c(x);
-    }
-
-    /** Take a sequence of vector arguments and combine by columns. */
-    public static float[] cbind(float[]... x) {
-        return c(x);
-    }
-
-    /** Take a sequence of vector arguments and combine by columns. */
-    public static double[] cbind(double[]... x) {
-        return c(x);
-    }
-
-    /** Take a sequence of vector arguments and combine by columns. */
-    public static String[] cbind(String[]... x) {
-        return c(x);
-    }
-
-    /** Take a sequence of vector arguments and combine by rows. */
-    public static int[][] rbind(int[]... x) {
-        return x;
-    }
-
-    /** Take a sequence of vector arguments and combine by rows. */
-    public static float[][] rbind(float[]... x) {
-        return x;
-    }
-
-    /** Take a sequence of vector arguments and combine by rows. */
-    public static double[][] rbind(double[]... x) {
-        return x;
-    }
-
-    /** Take a sequence of vector arguments and combine by rows. */
-    public static String[][] rbind(String[]... x) {
-        return x;
-    }
-
     /**
      * Returns a slice of data for given indices.
      */
@@ -1101,67 +977,67 @@ public class Math {
      */
     public static boolean contains(double[][] polygon, double x, double y) {
         if (polygon.length <= 2) {
-            return false;
-        }
-
-        int hits = 0;
+	    return false;
+	}
+        
+	int hits = 0;
 
         int n = polygon.length;
-        double lastx = polygon[n - 1][0];
-        double lasty = polygon[n - 1][1];
-        double curx, cury;
+	double lastx = polygon[n - 1][0];
+	double lasty = polygon[n - 1][1];
+	double curx, cury;
 
-        // Walk the edges of the polygon
-        for (int i = 0; i < n; lastx = curx, lasty = cury, i++) {
-            curx = polygon[i][0];
-            cury = polygon[i][1];
+	// Walk the edges of the polygon
+	for (int i = 0; i < n; lastx = curx, lasty = cury, i++) {
+	    curx = polygon[i][0];
+	    cury = polygon[i][1];
 
-            if (cury == lasty) {
-                continue;
-            }
+	    if (cury == lasty) {
+		continue;
+	    }
 
-            double leftx;
-            if (curx < lastx) {
-                if (x >= lastx) {
-                    continue;
-                }
-                leftx = curx;
-            } else {
-                if (x >= curx) {
-                    continue;
-                }
-                leftx = lastx;
-            }
+	    double leftx;
+	    if (curx < lastx) {
+		if (x >= lastx) {
+		    continue;
+		}
+		leftx = curx;
+	    } else {
+		if (x >= curx) {
+		    continue;
+		}
+		leftx = lastx;
+	    }
 
-            double test1, test2;
-            if (cury < lasty) {
-                if (y < cury || y >= lasty) {
-                    continue;
-                }
-                if (x < leftx) {
-                    hits++;
-                    continue;
-                }
-                test1 = x - curx;
-                test2 = y - cury;
-            } else {
-                if (y < lasty || y >= cury) {
-                    continue;
-                }
-                if (x < leftx) {
-                    hits++;
-                    continue;
-                }
-                test1 = x - lastx;
-                test2 = y - lasty;
-            }
+	    double test1, test2;
+	    if (cury < lasty) {
+		if (y < cury || y >= lasty) {
+		    continue;
+		}
+		if (x < leftx) {
+		    hits++;
+		    continue;
+		}
+		test1 = x - curx;
+		test2 = y - cury;
+	    } else {
+		if (y < lasty || y >= cury) {
+		    continue;
+		}
+		if (x < leftx) {
+		    hits++;
+		    continue;
+		}
+		test1 = x - lastx;
+		test2 = y - lasty;
+	    }
 
-            if (test1 < (test2 / (lasty - cury) * (lastx - curx))) {
-                hits++;
-            }
-        }
+	    if (test1 < (test2 / (lasty - cury) * (lastx - curx))) {
+		hits++;
+	    }
+	}
 
-        return ((hits & 1) != 0);
+	return ((hits & 1) != 0);
     }
 
     /**
@@ -2087,25 +1963,31 @@ public class Math {
         int nprocs;
         int pid;
         boolean half;
-        boolean squared;
 
-        PdistTask(double[][] x, double[][] dist, int nprocs, int pid, boolean squared, boolean half) {
+        PdistTask(double[][] x, double[][] dist, int nprocs, int pid, boolean half) {
             this.x = x;
             this.dist = dist;
             this.nprocs = nprocs;
             this.pid = pid;
-            this.squared = squared;
             this.half = half;
         }
 
         @Override
         public Void call() {
             int n = x.length;
-            for (int i = pid; i < n; i += nprocs) {
-                for (int j = 0; j < i; j++) {
-                    double d = squared ? squaredDistance(x[i], x[j]) : distance(x[i], x[j]);
-                    dist[i][j] = d;
-                    if (!half) dist[j][i] = d;
+            if (half) {
+                for (int i = pid; i < n; i += nprocs) {
+                    for (int j = 0; j < i; j++) {
+                        dist[i][j] = distance(x[i], x[j]);
+                    }
+                }
+            } else {
+                for (int i = pid; i < n; i += nprocs) {
+                    for (int j = 0; j < i; j++) {
+                        double d = distance(x[i], x[j]);
+                        dist[i][j] = d;
+                        dist[j][i] = d;
+                    }
                 }
             }
             return null;
@@ -2120,7 +2002,7 @@ public class Math {
         int n = x.length;
 
         double[][] dist = new double[n][n];
-        pdist(x, dist, false, false);
+        pdist(x, dist);
 
         return dist;
     }
@@ -2128,11 +2010,9 @@ public class Math {
     /**
      * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
-     * @param squared If true, compute the squared Euclidean distance.
-     * @param half If true, only the lower half of dist will be referenced.
      * @param dist The distance matrix.
      */
-    public static void pdist(double[][] x, double[][] dist, boolean squared, boolean half) {
+    public static void pdist(double[][] x, double[][] dist) {
         int n = x.length;
 
         if (n < 100) {
@@ -2147,7 +2027,50 @@ public class Math {
             int nprocs = Runtime.getRuntime().availableProcessors();
             List<PdistTask> tasks = new ArrayList<>();
             for (int i = 0; i < nprocs; i++) {
-                PdistTask task = new PdistTask(x, dist, nprocs, i, squared, half);
+                PdistTask task = new PdistTask(x, dist, nprocs, i, false);
+                tasks.add(task);
+            }
+            ForkJoinPool.commonPool().invokeAll(tasks);
+        }
+    }
+
+    /**
+     * Pairwise distance between pairs of objects. Only the lower half is stored to save space.
+     * @param x Rows of x correspond to observations, and columns correspond to variables.
+     * @return the lower half of pairwise distance matrix.
+     */
+    public static double[][] proximity(double[][] x) {
+        int n = x.length;
+
+        double[][] dist = new double[n][];
+        for (int i = 0; i < n; i++) {
+            dist[i] = new double[i + 1];
+        }
+
+        proximity(x, dist);
+
+        return dist;
+    }
+
+    /**
+     * Pairwise distance between pairs of objects. Only the lower half is stored to save space.
+     * @param x Rows of x correspond to observations, and columns correspond to variables.
+     * @param dist The distance matrix. Only the lower half of pairwise distance matrix is referred.
+     */
+    public static void proximity(double[][] x, double[][] dist) {
+        int n = x.length;
+
+        if (n < 100) {
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < i; j++) {
+                    dist[i][j] = distance(x[i], x[j]);
+                }
+            }
+        } else {
+            int nprocs = Runtime.getRuntime().availableProcessors();
+            List<PdistTask> tasks = new ArrayList<>();
+            for (int i = 0; i < nprocs; i++) {
+                PdistTask task = new PdistTask(x, dist, nprocs, i, true);
                 tasks.add(task);
             }
             ForkJoinPool.commonPool().invokeAll(tasks);
@@ -2537,81 +2460,6 @@ public class Math {
         }
 
         return p;
-    }
-    
-    /**
-     * Matrix multiplication between mxk matrix a and kxn matrix b.
-     */
-    public static double[][] dot(int[][] a, int[][] b) {
-        if (a[0].length != b.length) {
-            throw new IllegalArgumentException("Matrices don't match for matrix multiplication.");
-        }
-
-        int m = a.length;
-        int k = a[0].length;
-        int n = b[0].length;
-        double[][] c = new double[a.length][b[0].length];
-        for (int i = 0; i < m; i++) {
-            for (int j=0; j<n; j++){
-                double s = 0;
-                for (int l=0; l<k; l++){
-                    s+=a[i][l]*b[l][j];
-                }
-                c[i][j]=s;
-            }
-        }
-
-        return c;
-    }
-
-    /**
-     * Matrix multiplication between mxk matrix a and kxn matrix b.
-     */
-    public static double[][] dot(float[][] a, float[][] b) {
-        if (a[0].length != b.length) {
-            throw new IllegalArgumentException("Matrices don't match for matrix multiplication.");
-        }
-
-        int m = a.length;
-        int k = a[0].length;
-        int n = b[0].length;
-        double[][] c = new double[a.length][b[0].length];
-        for (int i = 0; i < m; i++) {
-            for (int j=0; j<n; j++){
-                double s = 0;
-                for (int l=0; l<k; l++){
-                    s+=a[i][l]*b[l][j];
-                }
-                c[i][j]=s;
-            }
-        }
-
-        return c;
-    }
-
-    /**
-     * Matrix multiplication between mxk matrix a and kxn matrix b.
-     */
-    public static double[][] dot(double[][] a, double[][] b) {
-        if (a[0].length != b.length) {
-            throw new IllegalArgumentException("Matrices don't match for matrix multiplication.");
-        }
-
-        int m = a.length;
-        int k = a[0].length;
-        int n = b[0].length;
-        double[][] c = new double[a.length][b[0].length];
-        for (int i = 0; i < m; i++) {
-            for (int j=0; j<n; j++){
-                double s = 0;
-                for (int l=0; l<k; l++){
-                    s+=a[i][l]*b[l][j];
-                }
-                c[i][j]=s;
-            }
-        }
-
-        return c;
     }
 
     /**
@@ -3180,18 +3028,18 @@ public class Math {
     }
 
     /**
-     * Scales each column of a matrix to range [0, 1].
+     * Rescales each column of a matrix to range [0, 1].
      */
-    public static void scale(double[][] x) {
-        scale(x, 0.0, 1.0);
+    public static java.util.function.Function<double[], double[]> rescale(double[][] x) {
+        return rescale(x, 0.0, 1.0);
     }
 
     /**
-     * Scales each column of a matrix to range [lo, hi].
+     * Rescales each column of a matrix to range [lo, hi].
      * @param lo lower limit of range
      * @param hi upper limit of range
      */
-    public static void scale(double[][] x, double lo, double hi) {
+    public static java.util.function.Function<double[], double[]> rescale(double[][] x, double lo, double hi) {
         int n = x.length;
         int p = x[0].length;
 
@@ -3210,12 +3058,31 @@ public class Math {
                 }
             }
         }
+
+        return (double[] xi) -> {
+            if (xi.length != p)
+                throw new IllegalArgumentException(String.format("array size: %d, expected: %d", xi.length, p));
+
+            double l = hi - lo;
+            double[] y = new double[p];
+            for (int j = 0; j < p; j++) {
+                double scale = max[j] - min[j];
+                if (!Math.isZero(scale)) {
+                    y[j] = (xi[j] - min[j]) / scale;
+                } else {
+                    y[j] = 0.5;
+                }
+                y[j] = lo + l * y[j];
+            }
+
+            return y;
+        };
     }
 
     /**
      * Standardizes each column of a matrix to 0 mean and unit variance.
      */
-    public static void standardize(double[][] x) {
+    public static java.util.function.Function<double[], double[]> standardize(double[][] x) {
         int n = x.length;
         int p = x[0].length;
 
@@ -3239,25 +3106,34 @@ public class Math {
                 }
             }
         }
-    }
 
-    /**
-     * Unitizes each column of a matrix to unit length (L_2 norm).
-     */
-    public static void normalize(double[][] x) {
-        normalize(x, false);
+        return (double[] xi) -> {
+            if (xi.length != p)
+                throw new IllegalArgumentException(String.format("array size: %d, expected: %d", xi.length, p));
+
+            double[] y = new double[p];
+            for (int j = 0; j < p; j++) {
+                if (!Math.isZero(scale[j])) {
+                    y[j] = (xi[j] - center[j]) / scale[j];
+                } else {
+                    y[j] = 0.0;
+                }
+            }
+
+            return y;
+        };
     }
 
     /**
      * Unitizes each column of a matrix to unit length (L_2 norm).
      * @param centerizing If true, centerize each column to 0 mean.
      */
-    public static void normalize(double[][] x, boolean centerizing) {
+    public static java.util.function.Function<double[], double[]> normalize(double[][] x, boolean centerizing) {
         int n = x.length;
         int p = x[0].length;
 
+        double[] center = colMeans(x);
         if (centerizing) {
-            double[] center = colMeans(x);
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < p; j++) {
                     x[i][j] = x[i][j] - center[j];
@@ -3280,6 +3156,24 @@ public class Math {
                 }
             }
         }
+
+        return (double[] xi) -> {
+            if (xi.length != p)
+                throw new IllegalArgumentException(String.format("array size: %d, expected: %d", xi.length, p));
+
+            double[] y = new double[p];
+            for (int j = 0; j < p; j++) {
+                if (centerizing) y[j] = xi[j] - center[j];
+
+                if (!Math.isZero(scale[j])) {
+                    y[j] /= scale[j];
+                } else {
+                    y[j] = 0.0;
+                }
+            }
+
+            return y;
+        };
     }
 
     /**
