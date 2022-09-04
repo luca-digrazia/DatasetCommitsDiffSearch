@@ -17,7 +17,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
-import com.google.common.base.Supplier;
 import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
@@ -28,15 +27,15 @@ import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Actions;
-import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.AspectCollection;
 import com.google.devtools.build.lib.analysis.AspectCollection.AspectDeps;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
@@ -144,17 +143,14 @@ final class ConfiguredTargetFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
   private final Semaphore cpuBoundSemaphore;
-  private final Supplier<Boolean> removeActionsAfterEvaluation;
 
   ConfiguredTargetFunction(
       BuildViewProvider buildViewProvider,
       RuleClassProvider ruleClassProvider,
-      Semaphore cpuBoundSemaphore,
-      Supplier<Boolean> removeActionsAfterEvaluation) {
+      Semaphore cpuBoundSemaphore) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
     this.cpuBoundSemaphore = cpuBoundSemaphore;
-    this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
   }
 
   private static boolean useDynamicConfigurations(BuildConfiguration config) {
@@ -1070,7 +1066,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     boolean failed = false;
     Iterable<SkyKey> depKeys = Iterables.transform(deps, TO_KEYS);
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> depValuesOrExceptions =
-            env.getValuesOrThrow(depKeys, ConfiguredValueCreationException.class);
+        env.getValuesOrThrow(depKeys, ConfiguredValueCreationException.class);
     Map<SkyKey, ConfiguredTarget> result =
         Maps.newHashMapWithExpectedSize(depValuesOrExceptions.size());
     for (Map.Entry<SkyKey, ValueOrException<ConfiguredValueCreationException>> entry
@@ -1116,11 +1112,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
       NestedSetBuilder<Package> transitivePackages)
       throws ConfiguredTargetFunctionException, InterruptedException {
     StoredEventHandler events = new StoredEventHandler();
-    BuildConfiguration ownerConfig =
-        ConfiguredTargetFactory.getArtifactOwnerConfiguration(env, configuration);
-    if (env.valuesMissing()) {
-      return null;
-    }
+    BuildConfiguration ownerConfig = (configuration == null)
+        ? null : configuration.getArtifactOwnerConfiguration();
     CachingAnalysisEnvironment analysisEnvironment = view.createAnalysisEnvironment(
         new ConfiguredTargetKey(target.getLabel(), ownerConfig), false,
         events, env, configuration);
@@ -1148,7 +1141,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     analysisEnvironment.disable(target);
     Preconditions.checkNotNull(configuredTarget, target);
 
-    GeneratingActions generatingActions;
+    ImmutableMap<Artifact, ActionAnalysisMetadata> generatingActions;
     // Check for conflicting actions within this configured target (that indicates a bug in the
     // rule implementation).
     try {
@@ -1158,10 +1151,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
       throw new ConfiguredTargetFunctionException(e);
     }
     return new ConfiguredTargetValue(
-        configuredTarget,
-        generatingActions,
-        transitivePackages.build(),
-        removeActionsAfterEvaluation.get());
+        configuredTarget, generatingActions, transitivePackages.build());
   }
 
   /**

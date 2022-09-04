@@ -14,11 +14,9 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
@@ -89,15 +87,10 @@ import javax.annotation.Nullable;
 public final class AspectFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
-  private final Supplier<Boolean> removeActionsAfterEvaluation;
 
-  AspectFunction(
-      BuildViewProvider buildViewProvider,
-      RuleClassProvider ruleClassProvider,
-      Supplier<Boolean> removeActionsAfterEvaluation) {
+  public AspectFunction(BuildViewProvider buildViewProvider, RuleClassProvider ruleClassProvider) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
-    this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
   }
 
   /**
@@ -231,21 +224,15 @@ public final class AspectFunction implements SkyFunction {
     if (!key.getBaseKeys().isEmpty()) {
       // We transitively collect all required aspects to reduce the number of restarts.
       // Semantically it is enough to just request key.getBaseKeys().
-      ImmutableList.Builder<SkyKey> aspectPathSkyKeysBuilder = ImmutableList.builder();
-      ImmutableMap<AspectDescriptor, SkyKey> aspectKeys =
-          getSkyKeysForAspectsAndCollectAspectPath(key.getBaseKeys(), aspectPathSkyKeysBuilder);
+      ImmutableMap<AspectDescriptor, SkyKey> aspectKeys = getSkyKeysForAspects(key.getBaseKeys());
 
       Map<SkyKey, SkyValue> values = env.getValues(aspectKeys.values());
       if (env.valuesMissing()) {
         return null;
       }
-      ImmutableList<SkyKey> aspectPathSkyKeys = aspectPathSkyKeysBuilder.build();
-      for (SkyKey aspectPathSkyKey : aspectPathSkyKeys) {
-        aspectPathBuilder.add(((AspectValue) values.get(aspectPathSkyKey)).getAspect());
-      }
       try {
-        associatedTarget = getBaseTarget(
-            associatedTarget, key.getBaseKeys(), values);
+        associatedTarget = getBaseTargetAndCollectPath(
+            associatedTarget, key.getBaseKeys(), values, aspectPathBuilder);
       } catch (DuplicateException e) {
         env.getListener().handle(
             Event.error(associatedTarget.getTarget().getLocation(), e.getMessage()));
@@ -337,12 +324,15 @@ public final class AspectFunction implements SkyFunction {
    * Merges aspects defined by {@code aspectKeys} into the {@code target} using
    * previously computed {@code values}.
    *
+   * Also populates {@code aspectPath}.
+   *
    * @return A {@link ConfiguredTarget} that is a result of a merge.
    * @throws DuplicateException if there is a duplicate provider provided by aspects.
    */
-  private ConfiguredTarget getBaseTarget(ConfiguredTarget target,
+  private ConfiguredTarget getBaseTargetAndCollectPath(ConfiguredTarget target,
       ImmutableList<AspectKey> aspectKeys,
-      Map<SkyKey, SkyValue> values)
+      Map<SkyKey, SkyValue> values,
+      ImmutableList.Builder<Aspect> aspectPath)
       throws DuplicateException {
     ArrayList<ConfiguredAspect> aspectValues = new ArrayList<>();
     for (AspectKey aspectKey : aspectKeys) {
@@ -350,6 +340,7 @@ public final class AspectFunction implements SkyFunction {
       AspectValue aspectValue = (AspectValue) values.get(skyAspectKey);
       ConfiguredAspect configuredAspect = aspectValue.getConfiguredAspect();
       aspectValues.add(configuredAspect);
+      aspectPath.add(aspectValue.getAspect());
     }
     return MergedConfiguredTarget.of(target, aspectValues);
   }
@@ -357,41 +348,32 @@ public final class AspectFunction implements SkyFunction {
   /**
    *  Collect all SkyKeys that are needed for a given list of AspectKeys,
    *  including transitive dependencies.
-   *
-   *  Also collects all propagating aspects in correct order.
    */
-  private ImmutableMap<AspectDescriptor, SkyKey> getSkyKeysForAspectsAndCollectAspectPath(
-      ImmutableList<AspectKey> keys,
-      ImmutableList.Builder<SkyKey> aspectPathBuilder) {
+  private ImmutableMap<AspectDescriptor, SkyKey> getSkyKeysForAspects(
+      ImmutableList<AspectKey> keys) {
     HashMap<AspectDescriptor, SkyKey> result = new HashMap<>();
     for (AspectKey key : keys) {
-      buildSkyKeys(key, result, aspectPathBuilder);
+      buildSkyKeys(key, result);
     }
     return ImmutableMap.copyOf(result);
   }
 
-  private void buildSkyKeys(AspectKey key, HashMap<AspectDescriptor, SkyKey> result,
-      ImmutableList.Builder<SkyKey> aspectPathBuilder) {
+  private void buildSkyKeys(AspectKey key, HashMap<AspectDescriptor, SkyKey> result) {
     if (result.containsKey(key.getAspectDescriptor())) {
       return;
     }
     ImmutableList<AspectKey> baseKeys = key.getBaseKeys();
-    SkyKey skyKey = key.getSkyKey();
-    result.put(key.getAspectDescriptor(), skyKey);
+    result.put(key.getAspectDescriptor(), key.getSkyKey());
     for (AspectKey baseKey : baseKeys) {
-      buildSkyKeys(baseKey, result, aspectPathBuilder);
+      buildSkyKeys(baseKey, result);
     }
-    // Post-order list of aspect SkyKeys gives the order of propagating aspects:
-    // the aspect comes after all aspects it transitively sees.
-    aspectPathBuilder.add(skyKey);
   }
-  private SkyValue createAliasAspect(
+  private static SkyValue createAliasAspect(
       Environment env,
       Target originalTarget,
       Aspect aspect,
       AspectKey originalKey,
-      ConfiguredTarget configuredTarget)
-      throws InterruptedException {
+      ConfiguredTarget configuredTarget) throws InterruptedException {
     ImmutableList<Label> aliasChain = configuredTarget.getProvider(AliasProvider.class)
         .getAliasChain();
     // Find the next alias in the chain: either the next alias (if there are two) or the name of
@@ -419,8 +401,7 @@ public final class AspectFunction implements SkyFunction {
         originalTarget.getLocation(),
         ConfiguredAspect.forAlias(real.getConfiguredAspect()),
         ImmutableList.<ActionAnalysisMetadata>of(),
-        transitivePackages,
-        removeActionsAfterEvaluation.get());
+        transitivePackages);
   }
 
   @Nullable
@@ -485,8 +466,7 @@ public final class AspectFunction implements SkyFunction {
         associatedTarget.getTarget().getLocation(),
         configuredAspect,
         ImmutableList.copyOf(analysisEnvironment.getRegisteredActions()),
-        transitivePackages.build(),
-        removeActionsAfterEvaluation.get());
+        transitivePackages.build());
   }
 
   @Override
