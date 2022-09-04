@@ -44,7 +44,9 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
 
   @Override
   public void createSymlinks(
-      SymlinkTreeAction action, ActionExecutionContext actionExecutionContext)
+      SymlinkTreeAction action,
+      ActionExecutionContext actionExecutionContext,
+      boolean enableRunfiles)
       throws ActionExecutionException, InterruptedException {
     actionExecutionContext.getEventHandler().post(new RunningActionEvent(action, "local"));
     try (AutoProfiler p =
@@ -57,30 +59,27 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
               actionExecutionContext.getInputPath(action.getOutputManifest()),
               action.isFilesetTree(),
               action.getOutputManifest().getExecPath().getParentDirectory());
-        } else if (!action.enableRunfiles()) {
-          createSymlinkTreeHelper(action, actionExecutionContext).copyManifest();
         } else {
           Map<String, String> resolvedEnv = new LinkedHashMap<>();
           action.getEnvironment().resolve(resolvedEnv, actionExecutionContext.getClientEnv());
-          createSymlinkTreeHelper(action, actionExecutionContext)
-              .createSymlinksUsingCommand(
-                  actionExecutionContext.getExecRoot(),
-                  binTools,
-                  resolvedEnv,
-                  actionExecutionContext.getFileOutErr());
+          SymlinkTreeHelper helper =
+              new SymlinkTreeHelper(
+                  actionExecutionContext.getInputPath(action.getInputManifest()),
+                  actionExecutionContext
+                      .getInputPath(action.getOutputManifest())
+                      .getParentDirectory(),
+                  action.isFilesetTree());
+          helper.createSymlinks(
+              actionExecutionContext.getExecRoot(),
+              actionExecutionContext.getFileOutErr(),
+              binTools,
+              resolvedEnv,
+              enableRunfiles);
         }
       } catch (ExecException e) {
         throw e.toActionExecutionException(
             action.getProgressMessage(), actionExecutionContext.getVerboseFailures(), action);
       }
     }
-  }
-
-  private static SymlinkTreeHelper createSymlinkTreeHelper(
-      SymlinkTreeAction action, ActionExecutionContext actionExecutionContext) {
-    return new SymlinkTreeHelper(
-        actionExecutionContext.getInputPath(action.getInputManifest()),
-        actionExecutionContext.getInputPath(action.getOutputManifest()).getParentDirectory(),
-        action.isFilesetTree());
   }
 }

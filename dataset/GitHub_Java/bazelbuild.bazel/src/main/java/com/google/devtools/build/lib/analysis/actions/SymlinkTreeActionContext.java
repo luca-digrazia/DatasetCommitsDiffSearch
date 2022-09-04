@@ -22,7 +22,12 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
  */
 public interface SymlinkTreeActionContext extends ActionContext {
 
-  /** Creates the symlink tree. */
-  void createSymlinks(SymlinkTreeAction action, ActionExecutionContext actionExecutionContext)
+  /**
+   * Creates the symlink tree.
+   */
+  void createSymlinks(
+      SymlinkTreeAction action,
+      ActionExecutionContext actionExecutionContext,
+      boolean enableRunfiles)
       throws ActionExecutionException, InterruptedException;
 }
