@@ -821,8 +821,8 @@ public class CreateExtensionMojo extends AbstractMojo {
             return project.getBasedir() == null ? basedir.toPath().resolve(artifactIdBase)
                     : project.getBasedir().toPath().resolve(artifactIdBase);
         }
-        return useCurrentDirectory ? basedir.toPath()
-                : new File(basedir, artifactIdBase).toPath();
+        return useCurrentDirectory ? new File(basedir, artifactIdBase).toPath()
+                : basedir.toPath();
     }
 
     private Path getExtensionRuntimeBaseDir() {
