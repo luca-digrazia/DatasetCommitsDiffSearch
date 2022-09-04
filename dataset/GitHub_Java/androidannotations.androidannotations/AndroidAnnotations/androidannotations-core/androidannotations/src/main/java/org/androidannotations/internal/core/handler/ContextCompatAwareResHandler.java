@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -47,8 +47,6 @@ abstract class ContextCompatAwareResHandler extends AbstractResHandler {
 	protected IJExpression getInstanceInvocation(EComponentHolder holder, JFieldRef idRef, IJAssignmentTarget fieldRef, JBlock targetBlock) {
 		if (hasTargetMethodInContextCompat()) {
 			return getClasses().CONTEXT_COMPAT.staticInvoke(androidRes.getResourceMethodName()).arg(holder.getContextRef()).arg(idRef);
-		} else if (hasTargetMethodInAndroidxContextCompat()) {
-			return getClasses().ANDROIDX_CONTEXT_COMPAT.staticInvoke(androidRes.getResourceMethodName()).arg(holder.getContextRef()).arg(idRef);
 		} else if (shouldUseContextMethod()) {
 			return holder.getContextRef().invoke(androidRes.getResourceMethodName()).arg(idRef);
 		} else if (!shouldUseContextMethod() && hasTargetMethodInContext()) {
@@ -70,12 +68,6 @@ abstract class ContextCompatAwareResHandler extends AbstractResHandler {
 
 	private boolean hasTargetMethodInContextCompat() {
 		TypeElement contextCompat = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT_COMPAT);
-
-		return hasTargetMethod(contextCompat, androidRes.getResourceMethodName());
-	}
-
-	private boolean hasTargetMethodInAndroidxContextCompat() {
-		TypeElement contextCompat = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_CONTEXT_COMPAT);
 
 		return hasTargetMethod(contextCompat, androidRes.getResourceMethodName());
 	}
