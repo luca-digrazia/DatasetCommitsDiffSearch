@@ -20,6 +20,7 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -73,22 +74,31 @@ public class ProtoSourceFileExcludeList {
 
   /** Filters the listed protos from the given protos. */
   public Iterable<Artifact> filter(Iterable<Artifact> protoFiles) {
-    return Streams.stream(protoFiles).filter(f -> !isBlacklisted(f)).collect(toImmutableSet());
+    return Streams.stream(protoFiles).filter(f -> !isExcluded(f)).collect(toImmutableSet());
   }
 
   /**
    * Checks the proto sources for mixing excluded and non-excluded protos in one single
    * proto_library rule. Registers an attribute error if proto mixing is detected.
    *
-   * @param protoFiles the protos to filter.
+   * @param protoSources the protos to filter.
    * @param topLevelProtoRuleName the name of the top-level rule that generates the protos.
    * @return whether the proto sources are clean without mixing.
    */
+  public boolean checkSrcs(ImmutableList<ProtoSource> protoSources, String topLevelProtoRuleName) {
+    ImmutableList.Builder<Artifact> protoFiles = ImmutableList.builder();
+    for (ProtoSource protoSource : protoSources) {
+      protoFiles.add(protoSource.getOriginalSourceFile());
+    }
+    return checkSrcs(protoFiles.build(), topLevelProtoRuleName);
+  }
+
+  @Deprecated
   public boolean checkSrcs(Iterable<Artifact> protoFiles, String topLevelProtoRuleName) {
     List<Artifact> excluded = new ArrayList<>();
     List<Artifact> nonExcluded = new ArrayList<>();
     for (Artifact protoFile : protoFiles) {
-      if (isBlacklisted(protoFile)) {
+      if (isExcluded(protoFile)) {
         excluded.add(protoFile);
       } else {
         nonExcluded.add(protoFile);
@@ -108,7 +118,7 @@ public class ProtoSourceFileExcludeList {
   }
 
   /** Returns whether the given proto file is excluded. */
-  public boolean isBlacklisted(Artifact protoFile) {
+  public boolean isExcluded(Artifact protoFile) {
     return noGenerateProtoFilePaths.contains(protoFile.getExecPath());
   }
 
