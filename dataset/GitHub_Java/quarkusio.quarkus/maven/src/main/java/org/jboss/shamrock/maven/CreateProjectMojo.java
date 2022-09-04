@@ -17,6 +17,8 @@
 
 package org.jboss.shamrock.maven;
 
+import org.apache.maven.artifact.repository.ArtifactRepository;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.*;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
@@ -26,8 +28,10 @@ import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
+import org.fusesource.jansi.Ansi;
 import org.jboss.shamrock.maven.components.Prompter;
 import org.jboss.shamrock.maven.components.SetupTemplates;
+import org.jboss.shamrock.maven.components.dependencies.Extensions;
 import org.jboss.shamrock.maven.utilities.MojoUtils;
 
 import java.io.File;
@@ -36,7 +40,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 
-import static org.jboss.shamrock.maven.components.dependencies.Extensions.addExtensions;
+import static org.fusesource.jansi.Ansi.ansi;
 import static org.jboss.shamrock.maven.utilities.MojoUtils.configuration;
 import static org.jboss.shamrock.maven.utilities.MojoUtils.plugin;
 
@@ -50,9 +54,7 @@ public class CreateProjectMojo extends AbstractMojo {
     public static final String VERSION_PROP = "shamrock-version";
     public static final String PLUGIN_VERSION_PROPERTY_NAME = "shamrock.version";
     public static final String PLUGIN_VERSION_PROPERTY = "${" + PLUGIN_VERSION_PROPERTY_NAME + "}";
-    public static final String PLUGIN_GROUPID = "org.jboss.shamrock";
-    public static final String PLUGIN_ARTIFACTID = "shamrock-maven-plugin";
-    public static final String PLUGIN_KEY = PLUGIN_GROUPID + ":" + PLUGIN_ARTIFACTID;
+    public static final String PLUGIN_KEY = MavenConstants.PLUGIN_GROUPID + ":" + MavenConstants.PLUGIN_ARTIFACTID;
 
     /**
      * The Maven project which will define and configure the shamrock-maven-plugin
@@ -78,9 +80,6 @@ public class CreateProjectMojo extends AbstractMojo {
     @Parameter(property = "className")
     private String className;
 
-    @Parameter(property = "root", defaultValue = "/app")
-    private String root;
-
     @Parameter(property = "extensions")
     private List<String> extensions;
 
@@ -90,9 +89,23 @@ public class CreateProjectMojo extends AbstractMojo {
     @Component
     private SetupTemplates templates;
 
+    @Component
+    private Extensions ext;
+
+    /**
+     * Remote repositories used for the project.
+     */
+    @Parameter(defaultValue = "${project.remoteArtifactRepositories}", required = true, readonly = true)
+    private List<ArtifactRepository> repositories;
+
+    /**
+     * The current build session instance. This is used for plugin manager API calls.
+     */
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    private MavenSession session;
+
     @Override
     public void execute() throws MojoExecutionException {
-        getLog().info("Executing...");
         File pomFile = project.getFile();
 
         Model model;
@@ -105,25 +118,53 @@ public class CreateProjectMojo extends AbstractMojo {
         model = project.getOriginalModel().clone();
 
         createDirectories();
-        templates.generate(project, root, path, className, getLog());
+        templates.generate(project, path, className, getLog());
         Optional<Plugin> maybe = MojoUtils.hasPlugin(project, PLUGIN_KEY);
         if (maybe.isPresent()) {
+            printUserInstructions(pomFile);
             return;
         }
 
         // The plugin is not configured, add it.
         addVersionProperty(model);
+        addBom(model);
         addMainPluginConfig(model);
-        addExtensions(model, extensions, getLog());
+        ext.addExtensions(model, extensions, session, repositories, getLog());
         addNativeProfile(model);
         save(pomFile, model);
+    }
+
+    private void addBom(Model model) {
+        Dependency bom = new Dependency();
+        bom.setArtifactId(MojoUtils.get("bom-artifactId"));
+        bom.setGroupId(MavenConstants.PLUGIN_GROUPID);
+        bom.setVersion("${shamrock.version}");
+        bom.setType("pom");
+        bom.setScope("import");
+
+        DependencyManagement dm = model.getDependencyManagement();
+        if (dm == null) {
+            dm = new DependencyManagement();
+        }
+        dm.addDependency(bom);
+        model.setDependencyManagement(dm);
+    }
+
+    private void printUserInstructions(File pomFile) {
+        getLog().info("");
+        getLog().info("========================================================================================");
+        getLog().info(ansi().a("Your new application has been created in ").bold().a(pomFile.getAbsolutePath()).boldOff().toString());
+        getLog().info(ansi().a("Navigate into this directory and launch your application with ").bold().fg(Ansi.Color.CYAN).a("mvn compile shamrock:dev").reset().toString());
+        getLog().info(ansi().a("Your application will be accessible on ").bold().fg(Ansi.Color.CYAN).a("http://localhost:8080").reset().toString());
+        getLog().info("========================================================================================");
+        getLog().info("");
     }
 
     private void addNativeProfile(Model model) {
         Profile profile = new Profile();
         profile.setId("native");
         BuildBase buildBase = new BuildBase();
-        Plugin plg = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
+        Plugin plg = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
         PluginExecution exec = new PluginExecution();
         exec.addGoal("native-image");
         MojoUtils.Element element = new MojoUtils.Element("enableHttpUrlHandler", "true");
@@ -135,13 +176,13 @@ public class CreateProjectMojo extends AbstractMojo {
     }
 
     private void addMainPluginConfig(Model model) {
-        Plugin plugin = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
+        Plugin plugin = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
         if (isParentPom(model)) {
             addPluginManagementSection(model, plugin);
             //strip the shamrockVersion off
-            plugin = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID);
+            plugin = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID);
         } else {
-            plugin = plugin(PLUGIN_GROUPID, PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
+            plugin = plugin(MavenConstants.PLUGIN_GROUPID, MavenConstants.PLUGIN_ARTIFACTID, PLUGIN_VERSION_PROPERTY);
         }
         PluginExecution pluginExec = new PluginExecution();
         pluginExec.addGoal("build");
@@ -152,7 +193,7 @@ public class CreateProjectMojo extends AbstractMojo {
 
     private void addVersionProperty(Model model) {
         //Set  a property at maven project level for Shamrock maven plugin versions
-        shamrockVersion = shamrockVersion == null ? MojoUtils.getVersion(VERSION_PROP) : shamrockVersion;
+        shamrockVersion = shamrockVersion == null ? MojoUtils.get(VERSION_PROP) : shamrockVersion;
         model.getProperties().putIfAbsent(PLUGIN_VERSION_PROPERTY_NAME, shamrockVersion);
     }
 
@@ -199,7 +240,7 @@ public class CreateProjectMojo extends AbstractMojo {
                 // Ask for maven version if not set
                 if (shamrockVersion == null) {
                     shamrockVersion = prompter.promptWithDefaultValue("Set the Shamrock version",
-                            MojoUtils.getVersion(VERSION_PROP));
+                            MojoUtils.get(VERSION_PROP));
                 }
 
                 if (className == null) {
@@ -209,14 +250,6 @@ public class CreateProjectMojo extends AbstractMojo {
 
                     if (className != null && className.endsWith(JAVA_EXTENSION)) {
                         className = className.substring(0, className.length() - JAVA_EXTENSION.length());
-                    }
-                }
-
-                if (root == null) {
-                    root = prompter.promptWithDefaultValue("Set the application root ",
-                            "/app");
-                    if (!root.startsWith("/")) {
-                        root = "/" + root;
                     }
                 }
 
@@ -247,13 +280,17 @@ public class CreateProjectMojo extends AbstractMojo {
             context.put("mProjectGroupId", projectGroupId);
             context.put("mProjectArtifactId", projectArtifactId);
             context.put("mProjectVersion", projectVersion);
-            context.put("shamrockVersion", shamrockVersion != null ? shamrockVersion : MojoUtils.getVersion(VERSION_PROP));
+            context.put("shamrockVersion", shamrockVersion != null ? shamrockVersion : MojoUtils.get(VERSION_PROP));
+            context.put("restAssuredVersion", MojoUtils.get("restAssuredVersion"));
+            context.put("docRoot", MojoUtils.get("doc-root"));
 
             context.put("className", className);
-            context.put("root", root);
             context.put("path", path);
 
             templates.createNewProjectPomFile(context, pomFile);
+            templates.createIndexPage(context, project.getBasedir(), getLog());
+            templates.createDockerFile(context, project.getBasedir(), getLog());
+            templates.createConfiguration(project.getBasedir(), getLog());
 
             //The project should be recreated and set with right model
             MavenXpp3Reader xpp3Reader = new MavenXpp3Reader();
@@ -268,10 +305,11 @@ public class CreateProjectMojo extends AbstractMojo {
         project.setPomFile(pomFile);
         project.setOriginalModel(model); // the current model is the original model as well
 
-        addExtensions(model, extensions, getLog());
+        ext.addExtensions(model, extensions, session, repositories, getLog());
         save(pomFile, model);
         return pomFile;
     }
+
 
     private void save(File pomFile, Model model) throws MojoExecutionException {
         MavenXpp3Writer xpp3Writer = new MavenXpp3Writer();
@@ -307,5 +345,6 @@ public class CreateProjectMojo extends AbstractMojo {
     private boolean isParentPom(Model model) {
         return "pom".equals(model.getPackaging());
     }
+
 
 }

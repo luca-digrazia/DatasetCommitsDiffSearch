@@ -24,9 +24,6 @@ import java.net.InetAddress;
 import java.net.JarURLConnection;
 import java.net.Socket;
 import java.net.URL;
-import java.net.URI;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -47,7 +44,6 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.jboss.shamrock.dev.DevModeMain;
-import org.jboss.shamrock.maven.utilities.MojoUtils;
 
 /**
  * The dev mojo, that runs a shamrock app in a forked process
@@ -116,8 +112,8 @@ public class DevMojo extends AbstractMojo {
 
         boolean found = false;
         for(Plugin i : project.getBuildPlugins()) {
-            if(i.getGroupId().equals(MojoUtils.getPluginGroupId())
-                    && i.getArtifactId().equals(MojoUtils.getPluginArtifactId())) {
+            if(i.getGroupId().equals(MavenConstants.PLUGIN_GROUPID)
+                    && i.getArtifactId().equals(MavenConstants.PLUGIN_ARTIFACTID)) {
                 for(PluginExecution p : i.getExecutions()) {
                     if(p.getGoals().contains("build")) {
                         found = true;
@@ -127,9 +123,7 @@ public class DevMojo extends AbstractMojo {
             }
         }
         if(!found) {
-            getLog().warn("The shamrock-maven-plugin build goal was not configured for this project, " +
-                    "skipping shamrock:dev as this is assumed to be a support library. If you want to run shamrock dev" +
-                    " on this project make sure the shamrock-maven-plugin is configured with a build goal.");
+            getLog().warn("The shamrock-maven-plugin build goal was not configured for this project, skipping shamrock:dev as this is assumed to be a support library. If you want to run shamrock dev on this project make sure the shamrock-maven-plugin is configured with a build goal.");
             return;
         }
 
@@ -158,13 +152,10 @@ public class DevMojo extends AbstractMojo {
                 args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=n");
             } else if (debug.toLowerCase().equals("true")) {
                 args.add("-Xdebug");
-                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=y,suspend=y");
+                args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=y");
             } else if (!debug.toLowerCase().equals("false")) {
                 try {
                     int port = Integer.parseInt(debug);
-                    if (port <= 0) {
-                        throw new MojoFailureException("The specified debug port must be greater than 0");
-                    }
                     args.add("-Xdebug");
                     args.add("-Xrunjdwp:transport=dt_socket,address=" + port + ",server=y,suspend=y");
                 } catch (NumberFormatException e) {
@@ -196,14 +187,14 @@ public class DevMojo extends AbstractMojo {
             //this stuff does not change
             StringBuilder classPath = new StringBuilder();
             for (Artifact artifact : project.getArtifacts()) {
-                classPath.append(artifact.getFile().toPath().toAbsolutePath().toUri().toURL().toString());
+                classPath.append(artifact.getFile().getAbsolutePath());
                 classPath.append(" ");
             }
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
             File wiringClassesDirectory = new File(buildDir, "wiring-classes");
             wiringClassesDirectory.mkdirs();
 
-            classPath.append(wiringClassesDirectory.toPath().toAbsolutePath().toUri().toURL().toString()).append("/");
+            classPath.append(wiringClassesDirectory.getAbsolutePath()).append("/");
             classPath.append(' ');
 
             if (fakereplace) {
@@ -234,21 +225,8 @@ public class DevMojo extends AbstractMojo {
             //we also want to add the maven plugin jar to the class path
             //this allows us to just directly use classes, without messing around copying them
             //to the runner jar
-            URL classFile = DevModeMain.class.getClassLoader().getResource(DevModeMain.class.getName().replace('.', File.separatorChar) + ".class");
-            Path path;
-            if (classFile.getProtocol().equals("jar")) {
-                String jarPath = classFile.getPath().substring(0, classFile.getPath().lastIndexOf('!'));
-                path = Paths.get(new URI(jarPath));
-            } else if (classFile.getProtocol().equals("file")) {
-                String filePath = classFile.getPath().substring(0, classFile.getPath().lastIndexOf(DevModeMain.class.getName().replace('.', '/')));
-                path = Paths.get(new URI(classFile.getProtocol(), classFile.getHost(), filePath, null));
-            } else {
-                throw new MojoFailureException("Unsupported DevModeMain artifact URL:" + classFile);
-            }
-            classPath.append(path.toAbsolutePath().toUri().toURL().toString());
-            if (classFile.getProtocol().equals("file")) {
-                classPath.append('/');
-            }
+            URL classFile = getClass().getClassLoader().getResource(DevModeMain.class.getName().replace('.', '/') + ".class");
+            classPath.append(((JarURLConnection) classFile.openConnection()).getJarFileURL().getFile());
 
             //now we need to build a temporary jar to actually run
 

@@ -1,10 +1,27 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.shamrock.deployment.recording;
 
 import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.function.Function;
 
-import org.jboss.shamrock.runtime.InjectionInstance;
+import org.jboss.shamrock.runtime.ObjectSubstitution;
+import org.jboss.shamrock.runtime.RuntimeValue;
 
 /**
  * An injectable utility class that contains methods that can be needed for dealing with templates
@@ -40,4 +57,16 @@ public interface RecorderContext {
      * @return A Class instance that can be passed to a recording proxy
      */
     Class<?> classProxy(String name);
+
+
+    /**
+     * Creates a RuntimeValue object that represents an object created via the default constructor.
+     * <p>
+     * This object can be passed into templates, but must not be used directly at deployment time
+     *
+     * @param name The name of the class
+     * @param <T>  The type of the class
+     * @return The class instance proxy
+     */
+    <T> RuntimeValue<T> newInstance(String name);
 }
