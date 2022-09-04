@@ -187,7 +187,7 @@ public class EsIndexRangeService implements IndexRangeService {
     public SortedSet<IndexRange> find(DateTime begin, DateTime end) {
         final ImmutableSortedSet.Builder<IndexRange> indexRanges = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
         for (IndexRange indexRange : findAll()) {
-            if (indexRange.begin().getMillis() <= end.getMillis() && indexRange.end().getMillis() >= begin.getMillis()) {
+            if (indexRange.begin().getMillis() >= begin.getMillis() && indexRange.end().getMillis() <= end.getMillis()) {
                 indexRanges.add(indexRange);
             }
         }
@@ -272,42 +272,32 @@ public class EsIndexRangeService implements IndexRangeService {
         }
 
         final String indexName = indexRange.indexName();
+        final boolean readOnly = indices.isReadOnly(indexName);
 
-        IndexRange oldIndexRange = null;
-        try {
-            oldIndexRange = get(indexName);
-        } catch (NotFoundException ignored) {
+        if (readOnly) {
+            indices.setReadWrite(indexName);
         }
 
-        if (indexRange.equals(oldIndexRange)) {
-            LOG.debug("Index range is already up-to-date, skipping: {}", indexRange);
+        final IndexRequest request = client.prepareIndex()
+                .setIndex(indexName)
+                .setType(IndexMapping.TYPE_INDEX_RANGE)
+                .setId(indexName)
+                .setSource(source)
+                .request();
+        final IndexResponse response = client.index(request).actionGet();
+
+        if (readOnly) {
+            indices.setReadOnly(indexName);
+        }
+
+        if (response.isCreated()) {
+            LOG.debug("Successfully saved index range: {}", indexRange);
         } else {
-            final boolean readOnly = indices.isReadOnly(indexName);
-            if (readOnly) {
-                indices.setReadWrite(indexName);
-            }
-
-            final IndexRequest request = client.prepareIndex()
-                    .setIndex(indexName)
-                    .setType(IndexMapping.TYPE_INDEX_RANGE)
-                    .setId(indexName)
-                    .setSource(source)
-                    .request();
-            final IndexResponse response = client.index(request).actionGet();
-
-            if (readOnly) {
-                indices.setReadOnly(indexName);
-            }
-
-            if (response.isCreated()) {
-                LOG.debug("Successfully saved index range: {}", indexRange);
-            } else {
-                LOG.debug("Successfully updated index range: {}", indexRange);
-            }
-
-            cache.put(indexName, indexRange);
-            clusterEventBus.post(IndexRangeUpdatedEvent.create(indexName));
+            LOG.debug("Successfully updated index range: {}", indexRange);
         }
+
+        cache.put(indexName, indexRange);
+        clusterEventBus.post(IndexRangeUpdatedEvent.create(indexName));
     }
 
     @Subscribe
