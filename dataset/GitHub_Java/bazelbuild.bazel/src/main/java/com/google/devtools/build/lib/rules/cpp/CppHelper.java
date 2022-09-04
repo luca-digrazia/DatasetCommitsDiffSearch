@@ -585,16 +585,8 @@ public class CppHelper {
 
   private static Artifact getIncludesOutput(RuleContext ruleContext, Artifact src) {
     Preconditions.checkArgument(!src.isSourceArtifact(), src);
-    PathFragment pkgPath = ruleContext.getLabel().getPackageFragment();
-    PathFragment fileName = src.getRootRelativePath();
-    if (fileName.startsWith(pkgPath)) {
-      // In most cases actions grep the includes of files that they create and that are located
-      // within their own package. In this case, don't duplicate the package path underneath the
-      // actions genfiles directory.
-      fileName = fileName.relativeTo(pkgPath);
-    }
     return ruleContext.getGenfilesArtifact(
-        fileName.replaceName(src.getFilename() + GREPPED_INCLUDES_SUFFIX));
+        src.getRootRelativePath().replaceName(src.getFilename() + GREPPED_INCLUDES_SUFFIX));
   }
 
   /**
@@ -1037,9 +1029,7 @@ public class CppHelper {
       Artifact defParser,
       ImmutableList<Artifact> objectFiles,
       String dllName) {
-    Artifact defFile = ruleContext.getBinArtifact(
-        ruleContext.getLabel().getName()
-            + ".gen" + Iterables.getOnlyElement(CppFileTypes.WINDOWS_DEF_FILE.getExtensions()));
+    Artifact defFile = ruleContext.getBinArtifact(ruleContext.getLabel().getName() + ".def");
     CustomCommandLine.Builder argv = new CustomCommandLine.Builder();
     for (Artifact objectFile : objectFiles) {
       argv.addDynamicString(objectFile.getExecPathString());
