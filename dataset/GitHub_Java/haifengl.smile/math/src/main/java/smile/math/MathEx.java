@@ -2720,13 +2720,13 @@ public class MathEx {
      * which are the indices of nonzero elements in ascending order.
      */
     public static int dot(int[] x, int[] y) {
-        int sum = 0;
+        int dot = 0;
 
         for (int p1 = 0, p2 = 0; p1 < x.length && p2 < y.length; ) {
             int i1 = x[p1];
             int i2 = y[p2];
             if (i1 == i2) {
-                sum++;
+                dot++;
                 p1++;
                 p2++;
             } else if (i1 > i2) {
@@ -2736,7 +2736,7 @@ public class MathEx {
             }
         }
 
-        return sum;
+        return dot;
     }
 
     /**
@@ -2747,12 +2747,12 @@ public class MathEx {
             throw new IllegalArgumentException("Arrays have different length.");
         }
 
-        float sum = 0.0F;
+        float p = 0.0F;
         for (int i = 0; i < x.length; i++) {
-            sum += x[i] * y[i];
+            p += x[i] * y[i];
         }
 
-        return sum;
+        return p;
     }
 
     /**
@@ -2763,12 +2763,12 @@ public class MathEx {
             throw new IllegalArgumentException("Arrays have different length.");
         }
 
-        double sum = 0.0;
+        double p = 0.0;
         for (int i = 0; i < x.length; i++) {
-            sum += x[i] * y[i];
+            p += x[i] * y[i];
         }
 
-        return sum;
+        return p;
     }
 
     /**
@@ -2780,10 +2780,10 @@ public class MathEx {
         SparseArray.Entry e1 = it1.hasNext() ? it1.next() : null;
         SparseArray.Entry e2 = it2.hasNext() ? it2.next() : null;
 
-        double sum = 0.0;
+        double s = 0.0;
         while (e1 != null && e2 != null) {
             if (e1.i == e2.i) {
-                sum += e1.x * e2.x;
+                s += e1.x * e2.x;
                 e1 = it1.hasNext() ? it1.next() : null;
                 e2 = it2.hasNext() ? it2.next() : null;
             } else if (e1.i > e2.i) {
@@ -2793,7 +2793,7 @@ public class MathEx {
             }
         }
         
-        return sum;
+        return s;
     }
 
     /**
