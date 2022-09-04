@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.NullPointerTester;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomAr
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -198,38 +196,48 @@ public class CustomCommandLineTest {
         CustomCommandLine.builder()
             .add((CharSequence) null)
             .add((Label) null)
-            .add("foo", (Artifact) null)
+            .add("foo", null)
             .add("foo", ImmutableList.of())
-            .add((ImmutableList<String>) null)
+            .add((Iterable<String>) null)
             .add(ImmutableList.<String>of())
             .addExecPath("foo", null)
-            .addExecPaths("foo", (NestedSet<Artifact>) null)
+            .addExecPaths("foo", (Iterable<Artifact>) null)
             .addExecPaths("foo", ImmutableList.<Artifact>of())
-            .addExecPaths((NestedSet) null)
+            .addExecPaths(null)
             .addExecPaths(ImmutableList.of())
             .addPlaceholderTreeArtifactExecPath("foo", null)
             .addJoinStrings("foo", "bar", null)
             .addJoinStrings("foo", "bar", ImmutableList.of())
-            .addJoinValues("foo", "bar", (NestedSet) null, String::toString)
+            .addJoinValues("foo", "bar", null, String::toString)
             .addJoinValues("foo", "bar", ImmutableList.of(), String::toString)
-            .addJoinExecPaths("foo", "bar", (NestedSet) null)
+            .addJoinExecPaths("foo", "bar", null)
             .addJoinExecPaths("foo", "bar", ImmutableList.of())
             .addPath(null)
             .addPlaceholderTreeArtifactFormattedExecPath("foo", null)
             .addJoinPaths("foo", null)
             .addJoinPaths("foo", ImmutableList.of())
-            .addBeforeEachPath("foo", (NestedSet) null)
+            .addBeforeEachPath("foo", null)
             .addBeforeEachPath("foo", ImmutableList.of())
             .addBeforeEach("foo", null)
             .addBeforeEach("foo", ImmutableList.of())
-            .addBeforeEachExecPath("foo", (NestedSet) null)
+            .addBeforeEachExecPath("foo", null)
             .addBeforeEachExecPath("foo", ImmutableList.of())
-            .addFormatEach("%s", (NestedSet) null)
+            .addFormatEach("%s", null)
             .addFormatEach("%s", ImmutableList.of())
             .add((CustomArgv) null)
             .add((CustomMultiArgv) null)
             .build();
     assertThat(cl.arguments()).isEmpty();
+
+    assertThat(
+            CustomCommandLine.builder()
+                .addPaths("foo")
+                .addPaths("bar", (PathFragment[]) null)
+                .addPaths("baz", new PathFragment[0])
+                .build()
+                .arguments())
+        .containsExactly("foo", "baz")
+        .inOrder();
 
     CustomCommandLine.Builder obj = CustomCommandLine.builder();
     Class<CustomCommandLine.Builder> clazz = CustomCommandLine.Builder.class;
@@ -239,9 +247,9 @@ public class CustomCommandLineTest {
             .setDefault(String.class, "foo")
             .setDefault(PathFragment[].class, new PathFragment[] {PathFragment.create("foo")});
 
-    npt.testMethod(obj, clazz.getMethod("add", String.class, Object.class));
+    npt.testMethod(obj, clazz.getMethod("add", String.class, Iterable.class));
     npt.testMethod(obj, clazz.getMethod("addExecPath", String.class, Artifact.class));
-    npt.testMethod(obj, clazz.getMethod("addExecPaths", String.class, ImmutableCollection.class));
+    npt.testMethod(obj, clazz.getMethod("addExecPaths", String.class, Iterable.class));
     npt.testMethod(
         obj, clazz.getMethod("addPlaceholderTreeArtifactExecPath", String.class, Artifact.class));
     npt.testMethod(
@@ -249,37 +257,29 @@ public class CustomCommandLineTest {
         clazz.getMethod(
             "addPlaceholderTreeArtifactFormattedExecPath", String.class, Artifact.class));
     npt.testMethod(obj, clazz.getMethod("addParamFile", String.class, Artifact.class));
-    npt.testMethod(obj, clazz.getMethod("addPaths", String.class, PathFragment.class));
+    npt.testMethod(obj, clazz.getMethod("addPaths", String.class, PathFragment[].class));
     npt.testMethod(
         obj, clazz.getMethod("addJoinExpandedTreeArtifactExecPath", String.class, Artifact.class));
     npt.testMethod(obj, clazz.getMethod("addExpandedTreeArtifactExecPaths", Artifact.class));
 
     npt.setDefault(Iterable.class, ImmutableList.of("foo"));
     npt.testMethod(
-        obj,
-        clazz.getMethod("addJoinStrings", String.class, String.class, ImmutableCollection.class));
+        obj, clazz.getMethod("addJoinStrings", String.class, String.class, Iterable.class));
     npt.testMethod(
         obj,
         clazz.getMethod(
-            "addJoinValues",
-            String.class,
-            String.class,
-            ImmutableCollection.class,
-            Function.class));
-    npt.testMethod(obj, clazz.getMethod("addBeforeEach", String.class, ImmutableCollection.class));
-    npt.testMethod(obj, clazz.getMethod("addFormatEach", String.class, ImmutableCollection.class));
+            "addJoinValues", String.class, String.class, Iterable.class, Function.class));
+    npt.testMethod(obj, clazz.getMethod("addBeforeEach", String.class, Iterable.class));
+    npt.testMethod(obj, clazz.getMethod("addFormatEach", String.class, Iterable.class));
 
     npt.setDefault(Iterable.class, ImmutableList.of(artifact1));
     npt.testMethod(
-        obj,
-        clazz.getMethod("addJoinExecPaths", String.class, String.class, ImmutableCollection.class));
-    npt.testMethod(
-        obj, clazz.getMethod("addBeforeEachExecPath", String.class, ImmutableCollection.class));
+        obj, clazz.getMethod("addJoinExecPaths", String.class, String.class, Iterable.class));
+    npt.testMethod(obj, clazz.getMethod("addBeforeEachExecPath", String.class, Iterable.class));
 
     npt.setDefault(Iterable.class, ImmutableList.of(PathFragment.create("foo")));
-    npt.testMethod(obj, clazz.getMethod("addJoinPaths", String.class, ImmutableCollection.class));
-    npt.testMethod(
-        obj, clazz.getMethod("addBeforeEachPath", String.class, ImmutableCollection.class));
+    npt.testMethod(obj, clazz.getMethod("addJoinPaths", String.class, Iterable.class));
+    npt.testMethod(obj, clazz.getMethod("addBeforeEachPath", String.class, Iterable.class));
 
     npt.setDefault(Artifact.class, treeArtifact);
     npt.testMethod(
