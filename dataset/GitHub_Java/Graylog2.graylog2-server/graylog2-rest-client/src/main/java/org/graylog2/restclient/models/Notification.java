@@ -19,7 +19,6 @@ package org.graylog2.restclient.models;
 import org.graylog2.restclient.models.api.responses.system.NotificationSummaryResponse;
 import org.joda.time.DateTime;
 
-import java.util.Locale;
 import java.util.Map;
 
 public class Notification {
@@ -46,7 +45,7 @@ public class Notification {
         GENERIC;
 
         public static Type fromString(String name) {
-            return valueOf(name.toUpperCase(Locale.ENGLISH));
+            return valueOf(name.toUpperCase());
         }
     }
 
@@ -61,9 +60,9 @@ public class Notification {
     private final Map<String, Object> details;
 
     public Notification(NotificationSummaryResponse x) {
-        this.type = Type.valueOf(x.type.toUpperCase(Locale.ENGLISH));
+        this.type = Type.valueOf(x.type.toUpperCase());
         this.timestamp = DateTime.parse(x.timestamp);
-        this.severity = Severity.valueOf(x.severity.toUpperCase(Locale.ENGLISH));
+        this.severity = Severity.valueOf(x.severity.toUpperCase());
         this.nodeId = x.node_id;
         this.details = x.details;
     }

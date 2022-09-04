@@ -97,7 +97,7 @@ public class IndexRangesMigrationPeriodical extends Periodical {
 
     @Override
     public boolean isDaemon() {
-        return true;
+        return false;
     }
 
     @Override
