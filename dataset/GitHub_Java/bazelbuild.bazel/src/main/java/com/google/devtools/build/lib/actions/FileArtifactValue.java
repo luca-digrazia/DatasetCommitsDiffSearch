@@ -20,12 +20,12 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.hash.HashFunction;
 import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.BigIntegerFingerprint;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.vfs.DigestUtils;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -558,7 +558,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     private final String actionId;
 
     public RemoteFileArtifactValue(byte[] digest, long size, int locationIndex, String actionId) {
-      this.digest = Preconditions.checkNotNull(digest, actionId);
+      this.digest = digest;
       this.size = size;
       this.locationIndex = locationIndex;
       this.actionId = actionId;
