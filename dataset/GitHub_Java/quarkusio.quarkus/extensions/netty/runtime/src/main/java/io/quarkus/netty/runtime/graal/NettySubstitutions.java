@@ -12,6 +12,7 @@ import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManagerFactory;
 
 import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
@@ -340,9 +341,8 @@ final class Holder_io_netty_util_concurrent_ScheduledFutureTask {
 
 @TargetClass(className = "io.netty.util.concurrent.ScheduledFutureTask")
 final class Target_io_netty_util_concurrent_ScheduledFutureTask {
-
-    // The START_TIME field is kept but not used.
-    // All the accesses to it have been replaced with Holder_io_netty_util_concurrent_ScheduledFutureTask
+    @Delete
+    public static long START_TIME = 0;
 
     @Substitute
     static long initialNanoTime() {
