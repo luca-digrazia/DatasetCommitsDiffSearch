@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 
 /** Options for remote execution and distributed caching. */
@@ -236,24 +235,6 @@ public final class RemoteOptions extends OptionsBase {
   public String experimentalRemoteGrpcLog;
 
   @Option(
-      name = "incompatible_remote_symlinks",
-      defaultValue = "false",
-      category = "remote",
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, Bazel will represent symlinks in action outputs "
-              + "in the remote caching/execution protocol as such. The "
-              + "current behavior is for remote caches/executors to follow "
-              + "symlinks and represent them as files. See #6631 for details.")
-  public boolean incompatibleRemoteSymlinks;
-
-  @Deprecated
-  @Option(
       name = "remote_allow_symlink_upload",
       defaultValue = "true",
       category = "remote",
@@ -261,13 +242,9 @@ public final class RemoteOptions extends OptionsBase {
       effectTags = {OptionEffectTag.EXECUTION},
       help =
           "If true, upload action symlink outputs to the remote cache. "
+              + "The remote cache currently doesn't support symlinks, "
+              + "so symlink outputs are converted into regular files. "
               + "If this option is not enabled, "
               + "cachable actions that output symlinks will fail.")
   public boolean allowSymlinkUpload;
-
-  // The below options are not configurable by users, only tests.
-  // This is part of the effort to reduce the overall number of flags.
-
-  /** The maximum size of an outbound message sent via a gRPC channel. */
-  public int maxOutboundMessageSize = 1024 * 1024;
 }
