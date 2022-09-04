@@ -34,7 +34,7 @@ public class MultiNdjsonSupport {
     }
 
     public static void subscribeString(Multi<String> multi, RoutingContext rc) {
-        write(multi.map(s -> Buffer.buffer("\"" + s + "\"\n")), rc);
+        write(multi.map(s -> Buffer.buffer("\"" + s + "\"")), rc);
     }
 
     public static void subscribeObject(Multi<Object> multi, RoutingContext rc) {
