@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
@@ -78,7 +77,7 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
 
     BuildOptions targetOptions = defaultBuildOptions.applyDiff(options.getOptionsDiff());
     BuildOptions hostOptions =
-        targetOptions.get(CoreOptions.class).useDistinctHostConfiguration
+        targetOptions.get(BuildConfiguration.Options.class).useDistinctHostConfiguration
             ? HostTransition.INSTANCE.patch(targetOptions)
             : targetOptions;
 
@@ -197,7 +196,7 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     ImmutableList.Builder<BuildOptions> multiCpuOptions = ImmutableList.builder();
     for (String cpu : multiCpu) {
       BuildOptions clonedOptions = buildOptions.clone();
-      clonedOptions.get(CoreOptions.class).cpu = cpu;
+      clonedOptions.get(BuildConfiguration.Options.class).cpu = cpu;
       multiCpuOptions.add(clonedOptions);
     }
     return multiCpuOptions.build();
@@ -257,7 +256,8 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
    * targets and their transitive dependencies.
    */
   private static boolean useUntrimmedConfigs(BuildOptions options) {
-    return options.get(CoreOptions.class).configsMode == CoreOptions.ConfigsMode.NOTRIM;
+    return options.get(BuildConfiguration.Options.class).configsMode
+        == BuildConfiguration.Options.ConfigsMode.NOTRIM;
   }
 
   // Keep in sync with {@link SkyframeExecutor#getConfigurations}.
