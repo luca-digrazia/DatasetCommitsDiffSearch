@@ -1,17 +1,20 @@
 package io.quarkus.runtime.configuration;
 
+import java.io.Serializable;
 import java.util.Map;
 import java.util.Set;
 
-import io.smallrye.config.ConfigSourceMap;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.wildfly.common.Assert;
 import org.wildfly.common.annotation.NotNull;
 
+import io.smallrye.config.ConfigSourceMap;
+
 /**
  * A base class for configuration sources which delegate to other configuration sources.
  */
-public abstract class AbstractDelegatingConfigSource implements ConfigSource {
+public abstract class AbstractDelegatingConfigSource implements ConfigSource, Serializable {
+    private static final long serialVersionUID = -6636734120743034580L;
     protected final ConfigSource delegate;
     private Map<String, String> propertiesMap;
 
@@ -46,5 +49,9 @@ public abstract class AbstractDelegatingConfigSource implements ConfigSource {
 
     public String getName() {
         return delegate.getName();
+    }
+
+    public int getOrdinal() {
+        return delegate.getOrdinal();
     }
 }
