@@ -141,13 +141,6 @@ public class ElasticNet implements Regression<double[]>, Serializable {
     public double[] coefficients() {
         return w;
     }
-    
-    /**
-     * Returns the intercept.
-     */
-    public double intercept() {
-        return b;
-    }
 
     /**
      * @return the reduced {@link LASSO} model
