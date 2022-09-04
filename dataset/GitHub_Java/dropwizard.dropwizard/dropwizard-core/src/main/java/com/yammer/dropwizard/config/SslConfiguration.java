@@ -1,8 +1,9 @@
 package com.yammer.dropwizard.config;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import org.codehaus.jackson.annotate.JsonProperty;
+
+import java.util.List;
 
 public class SslConfiguration {
     @JsonProperty
@@ -15,7 +16,7 @@ public class SslConfiguration {
     protected String keyManagerPassword = null;
 
     @JsonProperty
-    protected ImmutableList<String> includeProtocols = null;
+    protected List<String> includeProtocols = null;
 
     public Optional<String> getKeyStorePath() {
         return Optional.fromNullable(keyStorePath);
@@ -29,7 +30,7 @@ public class SslConfiguration {
         return Optional.fromNullable(keyManagerPassword);
     }
 
-    public Optional<ImmutableList<String>> getIncludeProtocols() {
+    public Optional<List<String>> getIncludeProtocols() {
         return Optional.fromNullable(includeProtocols);
     }
 }
