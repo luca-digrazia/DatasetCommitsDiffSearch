@@ -32,13 +32,13 @@ import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.graylog2.activities.Activity;
+import org.graylog2.communicator.methods.TwilioCommunicator;
 import org.graylog2.filters.BlacklistFilter;
 import org.graylog2.filters.CounterUpdateFilter;
 import org.graylog2.filters.RewriteFilter;
 import org.graylog2.filters.StreamMatcherFilter;
 import org.graylog2.filters.TokenizerFilter;
 import org.graylog2.initializers.*;
-import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
 import org.graylog2.inputs.syslog.SyslogTCPInput;
@@ -136,7 +136,12 @@ public final class Main {
             LOG.info("Running in local mode");
             server.setLocalMode(true);
         }
-
+        
+        // Register communicator methods.
+        if (configuration.isEnableCommunicationMethodTwilio()) {
+            server.registerCommunicatorMethod(TwilioCommunicator.class);
+        }
+        
         // Register initializers.
         server.registerInitializer(new ServerValueWriterInitializer(server, configuration));
         server.registerInitializer(new DroolsInitializer(server, configuration));
@@ -149,9 +154,6 @@ public final class Main {
         if (configuration.performRetention() && commandLineArguments.performRetention()) {
             server.registerInitializer(new IndexRetentionInitializer(server));
         }
-        if (configuration.isAmqpEnabled()) {
-            server.registerInitializer(new AMQPSyncInitializer(server));
-        }
         
         // Register inputs.
         if (configuration.isUseGELF()) {
@@ -162,8 +164,6 @@ public final class Main {
         if (configuration.isSyslogUdpEnabled()) { server.registerInput(new SyslogUDPInput()); }
         if (configuration.isSyslogTcpEnabled()) { server.registerInput(new SyslogTCPInput()); }
 
-        if (configuration.isAmqpEnabled()) { server.registerInput(new AMQPInput()); }
-        
         // Register message filters.
         server.registerFilter(new RewriteFilter());
         server.registerFilter(new BlacklistFilter());
