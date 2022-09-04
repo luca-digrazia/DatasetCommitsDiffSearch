@@ -243,7 +243,6 @@ public class BeanGenerator extends AbstractGenerator {
         if (bean.isDefaultBean()) {
             implementIsDefaultBean(bean, beanCreator);
         }
-        implementGetKind(beanCreator, InjectableBean.Kind.SYNTHETIC);
 
         beanCreator.close();
         return classOutput.getResources();
@@ -426,7 +425,6 @@ public class BeanGenerator extends AbstractGenerator {
         if (bean.isDefaultBean()) {
             implementIsDefaultBean(bean, beanCreator);
         }
-        implementGetKind(beanCreator, InjectableBean.Kind.PRODUCER_METHOD);
 
         beanCreator.close();
         return classOutput.getResources();
@@ -510,7 +508,6 @@ public class BeanGenerator extends AbstractGenerator {
         if (bean.isDefaultBean()) {
             implementIsDefaultBean(bean, beanCreator);
         }
-        implementGetKind(beanCreator, InjectableBean.Kind.PRODUCER_FIELD);
 
         beanCreator.close();
         return classOutput.getResources();
@@ -656,13 +653,8 @@ public class BeanGenerator extends AbstractGenerator {
         // Bean types
         ResultHandle typesHandle = constructor.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
         for (org.jboss.jandex.Type type : bean.getTypes()) {
-            ResultHandle typeHandle;
-            try {
-                typeHandle = Types.getTypeHandle(constructor, type, tccl);
-            } catch (IllegalArgumentException e) {
-                throw new IllegalStateException("Unable to construct the type handle for " + bean + ": " + e.getMessage());
-            }
-            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, typesHandle, typeHandle);
+            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, typesHandle,
+                    Types.getTypeHandle(constructor, type, tccl));
         }
         ResultHandle unmodifiableTypesHandle = constructor.invokeStaticMethod(MethodDescriptors.COLLECTIONS_UNMODIFIABLE_SET,
                 typesHandle);
@@ -1631,12 +1623,6 @@ public class BeanGenerator extends AbstractGenerator {
                     .setModifiers(ACC_PUBLIC);
             getName.returnValue(getName.load(bean.getName()));
         }
-    }
-
-    protected void implementGetKind(ClassCreator beanCreator, InjectableBean.Kind kind) {
-        MethodCreator getScope = beanCreator.getMethodCreator("getKind", InjectableBean.Kind.class).setModifiers(ACC_PUBLIC);
-        getScope.returnValue(getScope
-                .readStaticField(FieldDescriptor.of(InjectableBean.Kind.class, kind.toString(), InjectableBean.Kind.class)));
     }
 
     protected void implementSupplierGet(ClassCreator beanCreator) {

@@ -139,7 +139,7 @@ public class InjectionPointMetadataTest {
     static class Controller {
 
         @FooAnnotation
-        @Deprecated // This annotations should be ignored
+        @Deprecated // This annotations should be ingnored
         @Inject
         Controlled controlled;
 

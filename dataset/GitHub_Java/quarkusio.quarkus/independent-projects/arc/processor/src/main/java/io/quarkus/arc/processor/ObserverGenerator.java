@@ -33,8 +33,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -105,10 +103,7 @@ public class ObserverGenerator extends AbstractGenerator {
 
         StringBuilder sigBuilder = new StringBuilder();
         if (observer.isSynthetic()) {
-            // If a unique id is not specified then the signature is not unique but the best effort
-            if (observer.getId() != null) {
-                sigBuilder.append(observer.getId());
-            }
+            // This is not unique but best effort
             sigBuilder.append(observer.getObservedType().toString()).append(observer.getQualifiers().toString())
                     .append(observer.isAsync()).append(observer.getPriority()).append(observer.getTransactionPhase());
         } else {
@@ -139,22 +134,7 @@ public class ObserverGenerator extends AbstractGenerator {
             targetPackage = DotNames.packageName(observer.getObserverMethod().declaringClass().name());
         }
         String generatedName = generatedNameFromTarget(targetPackage, baseName.toString(), "");
-
-        Optional<Entry<ObserverInfo, String>> generatedClass = observerToGeneratedName.entrySet().stream()
-                .filter(e -> e.getValue().equals(generatedName)).findAny();
-
         observerToGeneratedName.put(observer, generatedName);
-        if (generatedClass.isPresent()) {
-            if (observer.isSynthetic()) {
-                throw new IllegalStateException(
-                        "A synthetic observer with the generated class name " + generatedName + " already exists for "
-                                + generatedClass.get().getKey());
-            } else {
-                // Inherited observer methods share the same generated class
-                return Collections.emptyList();
-            }
-        }
-
         if (existingClasses.contains(generatedName)) {
             return Collections.emptyList();
         }
@@ -200,7 +180,6 @@ public class ObserverGenerator extends AbstractGenerator {
         if (observer.isAsync()) {
             implementIsAsync(observerCreator);
         }
-        implementGetDeclaringBeanIdentifier(observerCreator, observer.getDeclaringBean());
 
         observerCreator.close();
         return classOutput.getResources();
@@ -252,14 +231,6 @@ public class ObserverGenerator extends AbstractGenerator {
     protected void implementIsAsync(ClassCreator observerCreator) {
         MethodCreator isAsync = observerCreator.getMethodCreator("isAsync", boolean.class).setModifiers(ACC_PUBLIC);
         isAsync.returnValue(isAsync.load(true));
-    }
-
-    protected void implementGetDeclaringBeanIdentifier(ClassCreator observerCreator, BeanInfo declaringBean) {
-        MethodCreator getDeclaringBeanIdentifier = observerCreator.getMethodCreator("getDeclaringBeanIdentifier", String.class)
-                .setModifiers(ACC_PUBLIC);
-        getDeclaringBeanIdentifier
-                .returnValue(declaringBean != null ? getDeclaringBeanIdentifier.load(declaringBean.getIdentifier())
-                        : getDeclaringBeanIdentifier.loadNull());
     }
 
     protected void implementNotify(ObserverInfo observer, ClassCreator observerCreator,
