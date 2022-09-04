@@ -48,8 +48,7 @@ public final class ResourceDependencies {
    *
    * @deprecated We are migrating towards storing each type of Artifact in a different NestedSet.
    *     This should allow greater efficiency since we don't need to unroll this NestedSet to get a
-   *     particular input. TODO(b/67996945): Complete this migration (or better yet, remove
-   *     transitive dependencies entirely).
+   *     particular input. TODO (b/67996945): Complete this migration.
    */
   @Deprecated private final NestedSet<ValidatedAndroidResources> transitiveResourceContainers;
 
@@ -59,17 +58,15 @@ public final class ResourceDependencies {
    * providing them as "direct" dependencies to maintain merge order, this uses a NestedSet to
    * properly maintain ordering and ease of merging.
    *
-   * <p>Unlike {@link transitiveResourceContainers} above, this isn't deprecated, since there isn't
-   * much to unroll.
+   * @deprecated Similarly to {@link #transitiveResourceContainers}, we are moving away from storing
+   *     ResourceContainer objects here. TODO (b/67996945): Complete this migration.
    */
-  private final NestedSet<ValidatedAndroidResources> directResourceContainers;
+  @Deprecated private final NestedSet<ValidatedAndroidResources> directResourceContainers;
 
   /**
    * Transitive resource files for this target.
    *
-   * <p>We keep them separate from the {@code transitiveAssets} so that we can filter them. Note
-   * that these uses of "transitive" are different from the ones above---the ones below include
-   * direct dependencies.
+   * <p>We keep them separate from the {@code transitiveAssets} so that we can filter them.
    */
   private final NestedSet<Artifact> transitiveResources;
 
@@ -338,6 +335,11 @@ public final class ResourceDependencies {
     return transitiveResourceContainers;
   }
 
+  /**
+   * @deprecated Rather than accessing the ResourceContainers, use other methods in this class to
+   *     get the specific Artifacts you need instead.
+   */
+  @Deprecated
   public NestedSet<ValidatedAndroidResources> getDirectResourceContainers() {
     return directResourceContainers;
   }

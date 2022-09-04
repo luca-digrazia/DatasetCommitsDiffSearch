@@ -1229,16 +1229,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment
   }
 
   @Override
-  public boolean apkSigningMethodV1() {
-    return apkSigningMethod.signV1();
-  }
-
-  @Override
-  public boolean apkSigningMethodV2() {
-    return apkSigningMethod.signV2();
-  }
-
-  @Override
   public boolean useSingleJarApkBuilder() {
     return useSingleJarApkBuilder;
   }

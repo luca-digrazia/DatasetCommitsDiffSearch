@@ -41,6 +41,8 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -108,7 +110,7 @@ public class Artifact
     implements FileType.HasFileType,
         ActionInput,
         FileApi,
-        Comparable<Artifact>,
+        Comparable<Object>,
         CommandLineItem,
         SkyKey {
 
@@ -138,14 +140,7 @@ public class Artifact
         } else if (b == null) {
           return 1;
         } else {
-          int result = a.rootRelativePath.compareTo(b.rootRelativePath);
-          if (result == 0) {
-            // Use the full exec path as a fallback if the root-relative paths are the same, thus
-            // avoiding problems when ImmutableSortedMaps are switched from EXEC_PATH_COMPARATOR.
-            return a.execPath.compareTo(b.execPath);
-          } else {
-            return result;
-          }
+          return a.rootRelativePath.compareTo(b.rootRelativePath);
         }
       };
 
@@ -164,8 +159,11 @@ public class Artifact
   public static final SkyFunctionName ARTIFACT = SkyFunctionName.createHermetic("ARTIFACT");
 
   @Override
-  public int compareTo(Artifact o) {
-    return EXEC_PATH_COMPARATOR.compare(this, o);
+  public int compareTo(Object o) {
+    if (o instanceof Artifact) {
+      return EXEC_PATH_COMPARATOR.compare(this, (Artifact) o);
+    }
+    throw new ComparisonException("Cannot compare artifact with " + EvalUtils.getDataTypeName(o));
   }
 
   /** An object that can expand middleman and tree artifacts. */

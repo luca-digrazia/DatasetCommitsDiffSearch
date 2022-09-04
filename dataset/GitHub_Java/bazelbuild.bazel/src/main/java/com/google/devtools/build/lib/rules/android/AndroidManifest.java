@@ -261,10 +261,6 @@ public class AndroidManifest {
       RuleErrorConsumer errorConsumer,
       AndroidConfiguration androidConfig,
       @Nullable String mergerString) {
-    if (androidConfig.getManifestMerger() == AndroidManifestMerger.FORCE_ANDROID) {
-      return false;
-    }
-
     AndroidManifestMerger merger = AndroidManifestMerger.fromString(mergerString);
     if (merger == null) {
       merger = androidConfig.getManifestMerger();
