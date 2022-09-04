@@ -1,7 +1,24 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.deployment.logging;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import org.jboss.logmanager.EmbeddedConfigurator;
@@ -10,6 +27,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.ConfigurationCustomConverterBuildItem;
 import io.quarkus.deployment.builditem.LogCategoryBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
@@ -17,9 +35,12 @@ import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildIte
 import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.runtime.logging.InitialConfigurator;
+import io.quarkus.runtime.logging.LevelConverter;
 import io.quarkus.runtime.logging.LogConfig;
-import io.quarkus.runtime.logging.LoggingSetupRecorder;
+import io.quarkus.runtime.logging.LoggingSetupTemplate;
 
+/**
+ */
 public final class LoggingResourceProcessor {
 
     @BuildStep
@@ -72,14 +93,22 @@ public final class LoggingResourceProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    void setupLoggingRuntimeInit(LoggingSetupRecorder recorder, LogConfig log) {
-        recorder.initializeLogging(log);
+    void setupLoggingRuntimeInit(LoggingSetupTemplate setupTemplate, LogConfig log) {
+        setupTemplate.initializeLogging(log);
     }
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void setupLoggingStaticInit(LoggingSetupRecorder recorder) {
-        recorder.initializeLoggingForImageBuild();
+    void setupLoggingStaticInit(LoggingSetupTemplate setupTemplate) {
+        setupTemplate.initializeLoggingForImageBuild();
+    }
+
+    @BuildStep
+    ConfigurationCustomConverterBuildItem setUpLevelConverter() {
+        return new ConfigurationCustomConverterBuildItem(
+                200,
+                Level.class,
+                LevelConverter.class);
     }
 
     // This is specifically to help out with presentations, to allow an env var to always override this value
