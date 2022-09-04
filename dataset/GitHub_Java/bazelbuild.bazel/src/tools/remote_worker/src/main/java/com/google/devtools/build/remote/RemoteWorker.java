@@ -15,12 +15,8 @@
 package com.google.devtools.build.remote;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.exec.SpawnResult.Status;
 import com.google.devtools.build.lib.remote.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.CasServiceGrpc.CasServiceImplBase;
-import com.google.devtools.build.lib.remote.ChannelOptions;
-import com.google.devtools.build.lib.remote.Chunker;
 import com.google.devtools.build.lib.remote.ContentDigests;
 import com.google.devtools.build.lib.remote.ContentDigests.ActionKey;
 import com.google.devtools.build.lib.remote.ExecuteServiceGrpc.ExecuteServiceImplBase;
@@ -57,7 +53,6 @@ import com.google.devtools.build.lib.remote.SimpleBlobStoreFactory;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
-import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.shell.TimeoutKillableObserver;
 import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.OS;
@@ -67,8 +62,8 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.util.Durations;
 import io.grpc.Server;
@@ -96,25 +91,16 @@ import java.util.logging.Logger;
 public class RemoteWorker {
   private static final Logger LOG = Logger.getLogger(RemoteWorker.class.getName());
   private static final boolean LOG_FINER = LOG.isLoggable(Level.FINER);
-
-  private static final int LOCAL_EXEC_ERROR = -1;
-  private static final int SIGALRM_EXIT_CODE = /*SIGNAL_BASE=*/128 + /*SIGALRM=*/14;
-
   private final CasServiceImplBase casServer;
   private final ExecuteServiceImplBase execServer;
   private final ExecutionCacheServiceImplBase execCacheServer;
   private final SimpleBlobStoreActionCache cache;
   private final RemoteWorkerOptions workerOptions;
-  private final RemoteOptions remoteOptions;
 
-  public RemoteWorker(
-      RemoteWorkerOptions workerOptions,
-      RemoteOptions remoteOptions,
-      SimpleBlobStoreActionCache cache)
+  public RemoteWorker(RemoteWorkerOptions workerOptions, SimpleBlobStoreActionCache cache)
       throws IOException {
     this.cache = cache;
     this.workerOptions = workerOptions;
-    this.remoteOptions = remoteOptions;
     if (workerOptions.workPath != null) {
       Path workPath = getFileSystem().getPath(workerOptions.workPath);
       FileSystemUtils.createDirectoryAndParents(workPath);
@@ -129,14 +115,13 @@ public class RemoteWorker {
   public Server startServer() throws IOException {
     NettyServerBuilder b =
         NettyServerBuilder.forPort(workerOptions.listenPort)
-            .maxMessageSize(ChannelOptions.create(Options.getDefaults(AuthAndTLSOptions.class),
-                remoteOptions.grpcMaxChunkSizeBytes).maxMessageSize())
             .addService(casServer)
             .addService(execCacheServer);
     if (execServer != null) {
       b.addService(execServer);
     } else {
-      System.out.println("*** Execution disabled, only serving cache requests.");
+      System.out.println(
+          "*** Execution disabled, only serving cache requests.");
     }
     Server server = b.build();
     System.out.println(
@@ -214,23 +199,17 @@ public class RemoteWorker {
       }
       status.setSucceeded(true);
       try {
-        // This still relies on the total blob size to be small enough to fit in memory
-        // simultaneously! TODO(olaola): refactor to fix this if the need arises.
-        Chunker.Builder b = new Chunker.Builder().chunkSize(remoteOptions.grpcMaxChunkSizeBytes);
         for (ContentDigest digest : request.getDigestList()) {
-          b.addInput(cache.downloadBlob(digest));
-        }
-        Chunker c = b.build();
-        while (c.hasNext()) {
-          reply.setData(c.next());
+          reply.setData(
+              BlobChunk.newBuilder()
+                  .setDigest(digest)
+                  .setData(ByteString.copyFrom(cache.downloadBlob(digest)))
+                  .build());
           responseObserver.onNext(reply.build());
           if (reply.hasStatus()) {
             reply.clearStatus(); // Only send status on first chunk.
           }
         }
-      } catch (IOException e) {
-        // This cannot happen, as we are chunking in-memory blobs.
-        throw new RuntimeException("Internal error: " + e);
       } catch (CacheNotFoundException e) {
         // This can only happen if an item gets evicted right after we check.
         reply.clearData();
@@ -483,11 +462,67 @@ public class RemoteWorker {
         throws IOException, InterruptedException, IllegalArgumentException {
       ByteArrayOutputStream stdout = new ByteArrayOutputStream();
       ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-      RemoteProtocol.Command command;
       try {
-        command =
+        RemoteProtocol.Command command =
             RemoteProtocol.Command.parseFrom(cache.downloadBlob(action.getCommandDigest()));
         cache.downloadTree(action.getInputRootDigest(), execRoot);
+
+        List<Path> outputs = new ArrayList<>(action.getOutputPathList().size());
+        for (String output : action.getOutputPathList()) {
+          Path file = execRoot.getRelative(output);
+          if (file.exists()) {
+            throw new FileAlreadyExistsException("Output file already exists: " + file);
+          }
+          FileSystemUtils.createDirectoryAndParents(file.getParentDirectory());
+          outputs.add(file);
+        }
+
+        // TODO(olaola): time out after specified server-side deadline.
+        Command cmd =
+            getCommand(
+                action,
+                command.getArgvList().toArray(new String[] {}),
+                getEnvironmentVariables(command),
+                execRoot.getPathString());
+        cmd.execute(Command.NO_INPUT, Command.NO_OBSERVER, stdout, stderr, true);
+
+        // Execute throws a CommandException on non-zero return values, so action has succeeded.
+        ImmutableList<ContentDigest> outErrDigests =
+            cache.uploadBlobs(ImmutableList.of(stdout.toByteArray(), stderr.toByteArray()));
+        ActionResult.Builder result =
+            ActionResult.newBuilder()
+                .setReturnCode(0)
+                .setStdoutDigest(outErrDigests.get(0))
+                .setStderrDigest(outErrDigests.get(1));
+        cache.uploadAllResults(execRoot, outputs, result);
+        cache.setCachedActionResult(ContentDigests.computeActionKey(action), result.build());
+        return ExecuteReply.newBuilder()
+            .setResult(result)
+            .setStatus(ExecutionStatus.newBuilder().setExecuted(true).setSucceeded(true))
+            .build();
+      } catch (CommandException e) {
+        ImmutableList<ContentDigest> outErrDigests =
+            cache.uploadBlobs(ImmutableList.of(stdout.toByteArray(), stderr.toByteArray()));
+        final int returnCode =
+            e instanceof AbnormalTerminationException
+                ? ((AbnormalTerminationException) e)
+                    .getResult()
+                    .getTerminationStatus()
+                    .getExitCode()
+                : -1;
+        return ExecuteReply.newBuilder()
+            .setResult(
+                ActionResult.newBuilder()
+                    .setReturnCode(returnCode)
+                    .setStdoutDigest(outErrDigests.get(0))
+                    .setStderrDigest(outErrDigests.get(1)))
+            .setStatus(
+                ExecutionStatus.newBuilder()
+                    .setExecuted(true)
+                    .setSucceeded(false)
+                    .setError(ExecutionStatus.ErrorCode.EXEC_FAILED)
+                    .setErrorDetail(e.toString()))
+            .build();
       } catch (CacheNotFoundException e) {
         LOG.warning("Cache miss on " + ContentDigests.toString(e.getMissingDigest()));
         return ExecuteReply.newBuilder()
@@ -508,77 +543,6 @@ public class RemoteWorker {
                     .setErrorDetail(e.toString()))
             .build();
       }
-
-      List<Path> outputs = new ArrayList<>(action.getOutputPathList().size());
-      for (String output : action.getOutputPathList()) {
-        Path file = execRoot.getRelative(output);
-        if (file.exists()) {
-          throw new FileAlreadyExistsException("Output file already exists: " + file);
-        }
-        FileSystemUtils.createDirectoryAndParents(file.getParentDirectory());
-        outputs.add(file);
-      }
-
-      // TODO(ulfjack): This is basically a copy of LocalSpawnRunner. Ideally, we'd use that
-      // implementation instead of copying it.
-      // TODO(ulfjack): Timeout is specified in ExecuteRequest, but not passed in yet.
-      int timeoutSeconds = 60 * 15;
-      Command cmd =
-          getCommand(
-              action,
-              command.getArgvList().toArray(new String[] {}),
-              getEnvironmentVariables(command),
-              execRoot.getPathString());
-
-      long startTime = System.currentTimeMillis();
-      CommandResult cmdResult;
-      try {
-        cmdResult = cmd.execute(Command.NO_INPUT, Command.NO_OBSERVER, stdout, stderr, true);
-      } catch (AbnormalTerminationException e) {
-        cmdResult = e.getResult();
-      } catch (CommandException e) {
-        // At the time this comment was written, this must be a ExecFailedException encapsulating an
-        // IOException from the underlying Subprocess.Factory.
-        LOG.warning("Execution failed for " + command.getArgvList());
-        return ExecuteReply.newBuilder()
-            .setResult(
-                ActionResult.newBuilder()
-                    .setReturnCode(LOCAL_EXEC_ERROR))
-            .setStatus(
-                ExecutionStatus.newBuilder()
-                    .setExecuted(false)
-                    .setSucceeded(false)
-                    .setError(ExecutionStatus.ErrorCode.EXEC_FAILED)
-                    .setErrorDetail(e.toString()))
-            .build();
-      }
-      long wallTime = System.currentTimeMillis() - startTime;
-      boolean wasTimeout = cmdResult.getTerminationStatus().timedout()
-          || wasTimeout(timeoutSeconds, wallTime);
-      Status status = wasTimeout ? Status.TIMEOUT : Status.SUCCESS;
-      int exitCode = status == Status.TIMEOUT
-          ? SIGALRM_EXIT_CODE
-          : cmdResult.getTerminationStatus().getRawExitCode();
-
-      ImmutableList<ContentDigest> outErrDigests =
-          cache.uploadBlobs(ImmutableList.of(stdout.toByteArray(), stderr.toByteArray()));
-      ContentDigest stdoutDigest = outErrDigests.get(0);
-      ContentDigest stderrDigest = outErrDigests.get(1);
-      ActionResult.Builder actionResult =
-          ActionResult.newBuilder()
-              .setReturnCode(exitCode)
-              .setStdoutDigest(stdoutDigest)
-              .setStderrDigest(stderrDigest);
-      cache.uploadAllResults(execRoot, outputs, actionResult);
-      cache.setCachedActionResult(ContentDigests.computeActionKey(action), actionResult.build());
-      return ExecuteReply.newBuilder()
-          .setResult(actionResult)
-          .setStatus(ExecutionStatus.newBuilder().setExecuted(true).setSucceeded(true))
-          .build();
-    }
-
-    private boolean wasTimeout(int timeoutSeconds, long wallTimeMillis) {
-      return timeoutSeconds > 0 && wallTimeMillis / 1000.0 > timeoutSeconds;
     }
 
     @Override
@@ -609,7 +573,6 @@ public class RemoteWorker {
           LOG.warning("Preserving work directory " + tempRoot.toString() + ".");
         }
       } catch (IOException | InterruptedException e) {
-        LOG.log(Level.SEVERE, "Failure", e);
         ExecuteReply.Builder reply = ExecuteReply.newBuilder();
         reply.getStatusBuilder().setSucceeded(false).setErrorDetail(e.toString());
         responseObserver.onNext(reply.build());
@@ -641,8 +604,7 @@ public class RemoteWorker {
                 new ConcurrentHashMap<String, byte[]>());
 
     RemoteWorker worker =
-        new RemoteWorker(
-            remoteWorkerOptions, remoteOptions, new SimpleBlobStoreActionCache(blobStore));
+        new RemoteWorker(remoteWorkerOptions, new SimpleBlobStoreActionCache(blobStore));
     final Server server = worker.startServer();
 
     final Path pidFile;
