@@ -1,5 +1,6 @@
 package com.yammer.dropwizard.setup;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.yammer.dropwizard.jetty.JettyManaged;
 import com.yammer.dropwizard.lifecycle.ExecutorServiceManager;
@@ -26,7 +27,7 @@ public class LifecycleEnvironment {
         lifeCycle.addLifeCycleListener(new AbstractLifeCycle.AbstractLifeCycleListener() {
             @Override
             public void lifeCycleStarting(LifeCycle event) {
-                logManagedObjects();
+
             }
         });
     }
@@ -50,14 +51,6 @@ public class LifecycleEnvironment {
      */
     public void manage(LifeCycle managed) {
         lifeCycle.addBean(checkNotNull(managed));
-    }
-
-    public ExecutorServiceBuilder executorService(String nameFormat) {
-        return new ExecutorServiceBuilder(lifeCycle, nameFormat);
-    }
-
-    public ScheduledExecutorServiceBuilder scheduledExecutorService(String nameFormat) {
-        return new ScheduledExecutorServiceBuilder(lifeCycle, nameFormat);
     }
 
     /**
@@ -136,6 +129,10 @@ public class LifecycleEnvironment {
     }
 
     private void logManagedObjects() {
-        LOGGER.debug("managed objects = {}", lifeCycle.getBeans());
+        final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
+        for (Object bean : lifeCycle.getBeans()) {
+            builder.add(bean.toString());
+        }
+        LOGGER.debug("managed objects = {}", builder.build());
     }
 }

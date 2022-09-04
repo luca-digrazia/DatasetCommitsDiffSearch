@@ -4,8 +4,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.dropwizard.tasks.TaskServlet;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -25,19 +23,20 @@ public class TaskServletTest {
         when(clearCache.getName()).thenReturn("clear-cache");
     }
 
-    private final TaskServlet servlet = new TaskServlet(ImmutableList.of(gc, clearCache));
+    private final TaskServlet servlet = new TaskServlet();
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final HttpServletResponse response = mock(HttpServletResponse.class);
 
     @Before
     public void setUp() throws Exception {
-        Logger.getRootLogger().setLevel(Level.OFF);
+        servlet.add(gc);
+        servlet.add(clearCache);
     }
 
     @Test
     public void returnsA404WhenNotFound() throws Exception {
         when(request.getMethod()).thenReturn("POST");
-        when(request.getRequestURI()).thenReturn("/test");
+        when(request.getPathInfo()).thenReturn("/test");
 
         servlet.service(request, response);
 
@@ -45,12 +44,12 @@ public class TaskServletTest {
     }
 
     @Test
-    public void runsATestWhenFound() throws Exception {
+    public void runsATaskWhenFound() throws Exception {
         final PrintWriter output = mock(PrintWriter.class);
 
         when(request.getMethod()).thenReturn("POST");
-        when(request.getRequestURI()).thenReturn("/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
+        when(request.getPathInfo()).thenReturn("/gc");
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.<String>of()));
         when(response.getWriter()).thenReturn(output);
 
         servlet.service(request, response);
@@ -63,7 +62,7 @@ public class TaskServletTest {
         final PrintWriter output = mock(PrintWriter.class);
 
         when(request.getMethod()).thenReturn("POST");
-        when(request.getRequestURI()).thenReturn("/gc");
+        when(request.getPathInfo()).thenReturn("/gc");
         when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of("runs")));
         when(request.getParameterValues("runs")).thenReturn(new String[]{"1"});
         when(response.getWriter()).thenReturn(output);
@@ -77,8 +76,11 @@ public class TaskServletTest {
     @SuppressWarnings("unchecked")
     public void returnsA500OnExceptions() throws Exception {
         when(request.getMethod()).thenReturn("POST");
-        when(request.getRequestURI()).thenReturn("/gc");
-        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.of()));
+        when(request.getPathInfo()).thenReturn("/gc");
+        when(request.getParameterNames()).thenReturn(Collections.enumeration(ImmutableList.<String>of()));
+
+        final PrintWriter output = mock(PrintWriter.class);
+        when(response.getWriter()).thenReturn(output);
 
         final RuntimeException ex = new RuntimeException("whoops");
         
@@ -86,6 +88,6 @@ public class TaskServletTest {
         
         servlet.service(request, response);
 
-        verify(response).sendError(500);
+        verify(response).setStatus(500);
     }
 }
