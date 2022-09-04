@@ -39,10 +39,4 @@ public class JibConfig {
      */
     @ConfigItem
     public Map<String, String> environmentVariables;
-
-    /**
-     * Custom labels to add to the generated image
-     */
-    @ConfigItem
-    Map<String, String> labels;
 }
