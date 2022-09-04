@@ -462,7 +462,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
     scratch.file(
         "test/BUILD",
-        "load('//test:empty.bzl', 'empty_action_rule')",
+        "load('/test/empty', 'empty_action_rule')",
         "empty_action_rule(name = 'my_empty_action',",
         "                srcs = ['foo.in', 'other_foo.in'])",
         "action_listener(name = 'listener',",
@@ -670,10 +670,9 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
    * usually write those files using UTF-8 encoding. Currently, the string-valued 'substitutions'
    * parameter of the template_action function contains a hack that assumes its input is a UTF-8
    * encoded string which has been ingested as Latin 1. The hack converts the string to its
-   * "correct" UTF-8 value. Once {@link
-   * com.google.devtools.build.lib.syntax.ParserInputSource#create(byte[],
-   * com.google.devtools.build.lib.vfs.PathFragment)} parses files using UTF-8 and the hack for the
-   * substituations parameter is removed, this test will fail.
+   * "correct" UTF-8 value. Once {@link com.google.devtools.build.lib.syntax.ParserInputSource#create(com.google.devtools.build.lib.vfs.Path)}
+   * parses files using UTF-8 and the hack for the substituations parameter is removed, this test
+   * will fail.
    */
   @Test
   public void testCreateTemplateActionWithWrongEncoding() throws Exception {
@@ -1186,7 +1185,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
       getConfiguredTarget("//test:my_rule");
       fail();
     } catch (AssertionError expected) {
-      assertThat(expected).hasMessageThat().contains("Invalid field for default provider: foo");
+      assertThat(expected).hasMessageThat().contains("Invalid key for default provider: foo");
     }
   }
 
@@ -1563,10 +1562,11 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testDefinedMakeVariable() throws Exception {
-    useConfiguration("--define=FOO=bar");
     SkylarkRuleContext ctx = createRuleContext("//foo:baz");
-    String foo = (String) evalRuleContextCode(ctx, "ruleContext.var['FOO']");
-    assertThat(foo).isEqualTo("bar");
+    String java = (String) evalRuleContextCode(ctx, "ruleContext.var['JAVA']");
+    // Get the last path segment
+    java = java.substring(java.lastIndexOf('/'));
+    assertThat(java).isEqualTo("/java" + OsUtils.executableExtension());
   }
 
   @Test
@@ -1672,7 +1672,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         ")");
     scratch.file(
         "test/BUILD",
-        "load('//test:glob.bzl', 'glob_rule')",
+        "load('/test/glob', 'glob_rule')",
         "glob_rule(name = 'my_glob',",
         "  srcs = ['foo.bar', 'other_foo.bar'])");
     reporter.removeHandler(failFastHandler);
@@ -1719,7 +1719,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     scratch.file("test/b.bar", "b");
     scratch.file(
         "test/BUILD",
-        "load('//test:glob.bzl', 'glob_rule')",
+        "load('/test/glob', 'glob_rule')",
         "glob_rule(name = 'my_glob', srcs = glob(['*.bar']))");
     ConfiguredTarget ct = getConfiguredTarget("//test:my_glob");
     assertThat(ct).isNotNull();
@@ -1741,7 +1741,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     );
     scratch.file(
         "test/BUILD",
-        "load('//test:rule.bzl', 'silly_rule')",
+        "load('/test/rule', 'silly_rule')",
         "silly_rule(name = 'silly')");
     thrown.handleAssertionErrors(); // Compatibility with JUnit 4.11
     thrown.expect(AssertionError.class);
@@ -1986,33 +1986,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testLazyArgMapFnReturnsWrongArgumentCount() throws Exception {
-    SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    evalRuleContextCode(
-        ruleContext,
-        "args = ruleContext.actions.args()",
-        "def bad_fn(args): return [0]",
-        "args.add([1, 2], map_fn=bad_fn)",
-        "ruleContext.actions.run(",
-        "  inputs = depset(ruleContext.files.srcs),",
-        "  outputs = ruleContext.files.srcs,",
-        "  arguments = [args],",
-        "  executable = ruleContext.files.tools[0],",
-        ")");
-    SpawnAction action =
-        (SpawnAction)
-            Iterables.getOnlyElement(
-                ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
-    try {
-      action.getArguments();
-      fail();
-    } catch (CommandLineExpansionException e) {
-      assertThat(e.getMessage())
-          .contains("map_fn must return a list of the same length as the input");
-    }
-  }
-
-  @Test
   public void createShellWithLazyArgs() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
@@ -2042,7 +2015,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testLazyArgsObjectImmutability() throws Exception {
     scratch.file(
         "test/BUILD",
-        "load('//test:rules.bzl', 'main_rule', 'dep_rule')",
+        "load('/test/rules', 'main_rule', 'dep_rule')",
         "dep_rule(name = 'dep')",
         "main_rule(name = 'main', deps = [':dep'])");
     scratch.file(

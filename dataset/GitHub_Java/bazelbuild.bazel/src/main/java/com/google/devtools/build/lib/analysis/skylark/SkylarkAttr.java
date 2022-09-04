@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.skylark;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -57,6 +56,7 @@ import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -189,8 +189,7 @@ public final class SkylarkAttr implements SkylarkValue {
       if (defaultValue instanceof UserDefinedFunction) {
         // Computed attribute. Non label type attributes already caused a type check error.
         SkylarkCallbackFunction callback =
-            new SkylarkCallbackFunction(
-                (UserDefinedFunction) defaultValue, ast, env.getSemantics());
+            new SkylarkCallbackFunction((UserDefinedFunction) defaultValue, ast, env);
         // SkylarkComputedDefaultTemplate needs to know the names of all attributes that it depends
         // on. However, this method does not know anything about other attributes.
         // We solve this problem by asking the SkylarkCallbackFunction for the parameter names used

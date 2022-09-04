@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -157,14 +156,9 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       if (prerequisiteTarget instanceof Rule) {
         Rule prerequisiteRule = (Rule) prerequisiteTarget;
         String thisDeprecation =
-            NonconfigurableAttributeMapper.of(rule).has("deprecation", Type.STRING)
-                ? NonconfigurableAttributeMapper.of(rule).get("deprecation", Type.STRING)
-                : null;
+            NonconfigurableAttributeMapper.of(rule).get("deprecation", Type.STRING);
         String thatDeprecation =
-            NonconfigurableAttributeMapper.of(prerequisiteRule).has("deprecation", Type.STRING)
-                ? NonconfigurableAttributeMapper.of(prerequisiteRule)
-                    .get("deprecation", Type.STRING)
-                : null;
+            NonconfigurableAttributeMapper.of(prerequisiteRule).get("deprecation", Type.STRING);
         if (shouldEmitDeprecationWarningFor(
             thisDeprecation, thisPackage, thatDeprecation, thatPackage, forAspect)) {
           errors.ruleWarning("target '" + rule.getLabel() +  "' depends on deprecated target '"
@@ -219,7 +213,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private final Map<Class<? extends RuleDefinition>, RuleClass> ruleMap = new HashMap<>();
     private final Digraph<Class<? extends RuleDefinition>> dependencyGraph =
         new Digraph<>();
-    private ImmutableMap.Builder<Transition, Transition> dynamicTransitionMaps
+    private ImmutableMap.Builder<Attribute.Transition, Attribute.Transition> dynamicTransitionMaps
         = ImmutableMap.builder();
     private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private PrerequisiteValidator prerequisiteValidator;
@@ -239,14 +233,12 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder addWorkspaceFilePrefix(String contents) {
+    public void addWorkspaceFilePrefix(String contents) {
       defaultWorkspaceFilePrefix.append(contents);
-      return this;
     }
 
-    public Builder addWorkspaceFileSuffix(String contents) {
+    public void addWorkspaceFileSuffix(String contents) {
       defaultWorkspaceFileSuffix.append(contents);
-      return this;
     }
 
     public Builder setPrelude(String preludeLabelString) {
@@ -336,7 +328,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    public Builder addDynamicTransitionMaps(Map<Transition, Transition> maps) {
+    public Builder addDynamicTransitionMaps(Map<Attribute.Transition, Attribute.Transition> maps) {
       dynamicTransitionMaps.putAll(maps);
       return this;
     }

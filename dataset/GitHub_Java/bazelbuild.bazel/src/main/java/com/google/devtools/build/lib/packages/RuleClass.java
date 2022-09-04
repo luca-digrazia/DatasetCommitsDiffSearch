@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -53,6 +52,7 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -486,7 +486,6 @@ public class RuleClass {
 
     private final Map<String, Attribute> attributes = new LinkedHashMap<>();
     private final Set<Label> requiredToolchains = new HashSet<>();
-    private boolean supportsPlatforms = true;
 
     /**
      * Constructs a new {@code RuleClassBuilder} using all attributes from all
@@ -518,7 +517,6 @@ public class RuleClass {
         supportsConstraintChecking = parent.supportsConstraintChecking;
 
         addRequiredToolchains(parent.getRequiredToolchains());
-        supportsPlatforms = parent.supportsPlatforms;
 
         for (Attribute attribute : parent.getAttributes()) {
           String attrName = attribute.getName();
@@ -601,7 +599,6 @@ public class RuleClass {
           configurationFragmentPolicy.build(),
           supportsConstraintChecking,
           requiredToolchains,
-          supportsPlatforms,
           attributes.values().toArray(new Attribute[0]));
     }
 
@@ -1013,11 +1010,6 @@ public class RuleClass {
       return this;
     }
 
-    public Builder supportsPlatforms(boolean flag) {
-      this.supportsPlatforms = flag;
-      return this;
-    }
-
     /**
      * Returns an Attribute.Builder object which contains a replica of the
      * same attribute in the parent rule if exists.
@@ -1140,7 +1132,6 @@ public class RuleClass {
   private final boolean supportsConstraintChecking;
 
   private final ImmutableSet<Label> requiredToolchains;
-  private final boolean supportsPlatforms;
 
   /**
    * Constructs an instance of RuleClass whose name is 'name', attributes are 'attributes'. The
@@ -1190,7 +1181,6 @@ public class RuleClass {
       ConfigurationFragmentPolicy configurationFragmentPolicy,
       boolean supportsConstraintChecking,
       Set<Label> requiredToolchains,
-      boolean supportsPlatforms,
       Attribute... attributes) {
     this.name = name;
     this.key = key;
@@ -1221,7 +1211,6 @@ public class RuleClass {
     this.configurationFragmentPolicy = configurationFragmentPolicy;
     this.supportsConstraintChecking = supportsConstraintChecking;
     this.requiredToolchains = ImmutableSet.copyOf(requiredToolchains);
-    this.supportsPlatforms = supportsPlatforms;
 
     // Create the index and collect non-configurable attributes.
     int index = 0;
@@ -2040,10 +2029,6 @@ public class RuleClass {
 
   public ImmutableSet<Label> getRequiredToolchains() {
     return requiredToolchains;
-  }
-
-  public boolean supportsPlatforms() {
-    return supportsPlatforms;
   }
 
   public static boolean isThirdPartyPackage(PackageIdentifier packageIdentifier) {

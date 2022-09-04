@@ -14,10 +14,10 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.AspectCollection.AspectCycleOnPathException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -49,6 +49,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -575,31 +576,24 @@ public abstract class DependencyResolver {
   }
 
   /**
-   * Collects into {@code filteredAspectPath} aspects from {@code aspectPath} that propagate along
-   * {@code attributeAndOwner} and apply to a given {@code target}.
+   * Collects into {@code filteredAspectPath}
+   * aspects from {@code aspectPath} that propagate along {@code attribute}
+   * and apply to a given {@code target}.
    *
-   * <p>The last aspect in {@code aspectPath} is (potentially) visible and recorded in {@code
-   * visibleAspects}.
+   * The last aspect in {@code aspectPath} is (potentially) visible and recorded
+   * in {@code visibleAspects}.
    */
-  private static void collectPropagatingAspects(
-      Iterable<Aspect> aspectPath,
-      AttributeAndOwner attributeAndOwner,
-      Rule target,
+  private static void collectPropagatingAspects(Iterable<Aspect> aspectPath,
+      Attribute attribute, Rule target,
       ImmutableList.Builder<Aspect> filteredAspectPath,
       ImmutableSet.Builder<AspectDescriptor> visibleAspects) {
 
     Aspect lastAspect = null;
     for (Aspect aspect : aspectPath) {
-      if (aspect.getAspectClass().equals(attributeAndOwner.ownerAspect)) {
-        // Do not propagate over the aspect's own attributes.
-        continue;
-      }
       lastAspect = aspect;
-      if (aspect.getDefinition().propagateAlong(attributeAndOwner.attribute)
-          && aspect
-              .getDefinition()
-              .getRequiredProviders()
-              .isSatisfiedBy(target.getRuleClassObject().getAdvertisedProviders())) {
+      if (aspect.getDefinition().propagateAlong(attribute)
+          && aspect.getDefinition().getRequiredProviders()
+                  .isSatisfiedBy(target.getRuleClassObject().getAdvertisedProviders())) {
         filteredAspectPath.add(aspect);
       } else {
         lastAspect = null;
@@ -688,24 +682,22 @@ public abstract class DependencyResolver {
       this.rootCauses = rootCauses;
       this.outgoingEdges = outgoingEdges;
 
-      this.attributes =
-          getAttributes(
-              rule,
-              // These are attributes that the application of `aspects` "path"
-              // to the rule will see. Application of path is really the
-              // application of the last aspect in the path, so we only let it see
-              // it's own attributes.
-              aspects);
+      this.attributes = getAttributes(rule,
+          // These are attributes that the application of `aspects` "path"
+          // to the rule will see. Application of path is really the
+          // application of the last aspect in the path, so we only let it see
+          // it's own attributes.
+          Iterables.getLast(aspects, null));
     }
 
     /** Returns the attributes that should be visited for this rule/aspect combination. */
-    private List<AttributeAndOwner> getAttributes(Rule rule, Iterable<Aspect> aspects) {
+    private List<AttributeAndOwner> getAttributes(Rule rule, @Nullable Aspect aspect) {
       ImmutableList.Builder<AttributeAndOwner> result = ImmutableList.builder();
       List<Attribute> ruleDefs = rule.getRuleClassObject().getAttributes();
       for (Attribute attribute : ruleDefs) {
         result.add(new AttributeAndOwner(attribute));
       }
-      for (Aspect aspect : aspects) {
+      if (aspect != null) {
         for (Attribute attribute : aspect.getDefinition().getAttributes().values()) {
           result.add(new AttributeAndOwner(attribute, aspect.getAspectClass()));
         }
@@ -762,21 +754,25 @@ public abstract class DependencyResolver {
         return AspectCollection.EMPTY;
       }
 
+      if (attributeAndOwner.ownerAspect != null) {
+        // Do not propagate aspects along aspect attributes.
+        return AspectCollection.EMPTY;
+      }
 
       ImmutableList.Builder<Aspect> filteredAspectPath = ImmutableList.builder();
       ImmutableSet.Builder<AspectDescriptor> visibleAspects = ImmutableSet.builder();
 
-      if (attributeAndOwner.ownerAspect == null) {
-        collectOriginatingAspects(
-            rule, attributeAndOwner.attribute, (Rule) target, filteredAspectPath, visibleAspects);
-      }
+      Attribute attribute = attributeAndOwner.attribute;
+      collectOriginatingAspects(rule, attribute, (Rule) target,
+          filteredAspectPath, visibleAspects);
 
-      collectPropagatingAspects(
-          aspects, attributeAndOwner, (Rule) target, filteredAspectPath, visibleAspects);
+      collectPropagatingAspects(aspects,
+          attribute,
+          (Rule) target, filteredAspectPath, visibleAspects);
       try {
         return AspectCollection.create(filteredAspectPath.build(), visibleAspects.build());
       } catch (AspectCycleOnPathException e) {
-        throw new InconsistentAspectOrderException(rule, attributeAndOwner.attribute, target, e);
+        throw new InconsistentAspectOrderException(rule, attribute, target, e);
       }
     }
   }
