@@ -14,7 +14,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -277,25 +276,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         //verify that this was an instrumentation based reload
         Assertions.assertEquals(secondUUid, DevModeTestUtils.getHttpResponse("/app/uuid"));
-
-        // verify that add + change results in full reload
-        // add a new class
-        Files.write(Paths.get(testDir.toString(), "src/main/java/org/acme/AnotherClass.java"),
-                "package org.acme;\nclass ItDoesntMatter{}".getBytes());
-
-        // change back to hello
-        source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
-        filter(source, Collections.singletonMap("return \"" + uuid + "\";", "return \"hello\";"));
-
-        // Wait until we get "hello"
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("hello"));
-
-        //verify that this was not instrumentation based reload
-        Assertions.assertNotEquals(secondUUid, DevModeTestUtils.getHttpResponse("/app/uuid"));
-        secondUUid = DevModeTestUtils.getHttpResponse("/app/uuid");
-
     }
 
     @Test
@@ -419,24 +399,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         assertTrue(extDepWarnings.contains(
                 "[WARNING] [io.quarkus.bootstrap.devmode.DependenciesFilter] Local Quarkus extension dependency org.acme:acme-common-transitive will not be hot-reloadable"));
         assertEquals(3, extDepWarnings.size());
-    }
-
-    @Test
-    public void testRestClientCustomHeadersExtension() throws MavenInvocationException, IOException {
-        testDir = getTargetDir("projects/rest-client-custom-headers-extension");
-        runAndCheck();
-
-        final List<String> extDepWarnings = Files
-                .readAllLines(testDir.toPath().resolve("build-rest-client-custom-headers-extension.log"))
-                .stream()
-                .filter(s -> s.startsWith(
-                        "[WARNING] [io.quarkus.bootstrap.devmode.DependenciesFilter] Local Quarkus extension dependency "))
-                .collect(Collectors.toList());
-        assertTrue(extDepWarnings
-                .contains(
-                        "[WARNING] [io.quarkus.bootstrap.devmode.DependenciesFilter] Local Quarkus extension dependency org.acme:rest-client-custom-headers will not be hot-reloadable"));
-
-        assertThat(DevModeTestUtils.getHttpResponse("/app/frontend")).isEqualTo("CustomValue1 CustomValue2");
     }
 
     @Test
