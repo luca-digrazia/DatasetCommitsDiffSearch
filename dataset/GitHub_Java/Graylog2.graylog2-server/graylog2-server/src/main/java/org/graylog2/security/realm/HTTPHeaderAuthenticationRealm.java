@@ -1,18 +1,18 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.security.realm;
 
@@ -30,6 +30,7 @@ import org.graylog.security.authservice.AuthServiceResult;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.security.headerauth.HTTPHeaderAuthConfig;
 import org.graylog2.shared.security.HttpHeadersToken;
+import org.graylog2.shared.security.ShiroSecurityContext;
 import org.graylog2.utilities.IpSubnet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,7 @@ public class HTTPHeaderAuthenticationRealm extends AuthenticatingRealm {
     private static final Joiner JOINER = Joiner.on(", ");
 
     public static final String NAME = "http-header-authentication";
+    public static final String SESSION_AUTH_HEADER = "http-header-auth-user";
 
     private final ClusterConfigService clusterConfigService;
     private final AuthServiceAuthenticator authServiceAuthenticator;
@@ -117,6 +119,9 @@ public class HTTPHeaderAuthenticationRealm extends AuthenticatingRealm {
             if (result.isSuccess()) {
                 LOG.debug("Successfully authenticated username <{}> for user profile <{}> with backend <{}/{}/{}>",
                         result.username(), result.userProfileId(), result.backendTitle(), result.backendType(), result.backendId());
+                // Setting this, will let the SessionResource know, that when a non-existing session is validated, it
+                // should in fact create a session.
+                ShiroSecurityContext.requestSessionCreation(true);
                 return toAuthenticationInfo(result);
             } else {
                 LOG.warn("Failed to authenticate username <{}> from trusted HTTP header <{}> via proxy <{}>",

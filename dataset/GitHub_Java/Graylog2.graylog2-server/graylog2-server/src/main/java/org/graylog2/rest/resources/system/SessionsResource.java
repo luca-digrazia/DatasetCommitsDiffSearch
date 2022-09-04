@@ -188,7 +188,7 @@ public class SessionsResource extends RestResource {
                 session.setAttribute(HTTPHeaderAuthenticationRealm.SESSION_AUTH_HEADER, usernameHeader.get());
             }
 
-            LOG.debug("Create session for <{}>", user.getName());
+            LOG.debug("Session created {}", session.getId());
             session.touch();
             // save subject in session, otherwise we can't get the username back in subsequent requests.
             ((DefaultSecurityManager) SecurityUtils.getSecurityManager()).getSubjectDAO().save(subject);
