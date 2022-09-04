@@ -70,37 +70,11 @@ public class HibernateValidatorFunctionalityTest {
     }
 
     @Test
-    public void testRestEndPointGenericMethodValidation() {
-        RestAssured.when()
-                .get("/hibernate-validator/test/rest-end-point-generic-method-validation/9999999/")
-                .then()
-                .statusCode(400)
-                .body(containsString("numeric value out of bounds"));
-
-        RestAssured.when()
-                .get("/hibernate-validator/test/rest-end-point-generic-method-validation/42/")
-                .then()
-                .body(is("42"));
-    }
-
-    @Test
     public void testNoProduces() {
         RestAssured.when()
                 .get("/hibernate-validator/test/no-produces/plop/")
                 .then()
                 .statusCode(400)
                 .body(containsString("numeric value out of bounds"));
-    }
-
-    @Test
-    public void testInjection() throws Exception {
-        StringBuilder expected = new StringBuilder();
-        expected.append("passed").append("\n");
-        expected.append("failed: value (InjectedConstraintValidatorConstraint violation)");
-
-        RestAssured.when()
-                .get("/hibernate-validator/test/injection")
-                .then()
-                .body(is(expected.toString()));
     }
 }

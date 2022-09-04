@@ -25,12 +25,9 @@ import javax.ws.rs.core.Response;
 import org.hibernate.validator.constraints.Length;
 
 import io.quarkus.it.hibernate.validator.custom.MyOtherBean;
-import io.quarkus.it.hibernate.validator.injection.InjectedConstraintValidatorConstraint;
-import io.quarkus.it.hibernate.validator.injection.MyService;
 
 @Path("/hibernate-validator/test")
-public class HibernateValidatorTestResource
-        implements HibernateValidatorTestResourceGenericInterface<Integer> {
+public class HibernateValidatorTestResource {
 
     @Inject
     Validator validator;
@@ -106,30 +103,9 @@ public class HibernateValidatorTestResource
     }
 
     @GET
-    @Path("/rest-end-point-generic-method-validation/{id}")
-    @Produces(MediaType.TEXT_PLAIN)
-    @Override
-    public Integer testRestEndpointGenericMethodValidation(@Digits(integer = 5, fraction = 0) @PathParam("id") Integer id) {
-        return id;
-    }
-
-    @GET
     @Path("/no-produces/{id}/")
     public Response noProduces(@Digits(integer = 5, fraction = 0) @PathParam("id") String id) {
         return Response.accepted().build();
-    }
-
-    @GET
-    @Path("/injection")
-    @Produces(MediaType.TEXT_PLAIN)
-    public String testInjection() {
-        ResultBuilder result = new ResultBuilder();
-
-        result.append(formatViolations(validator.validate(new BeanWithInjectedConstraintValidatorConstraint(MyService.VALID))));
-
-        result.append(formatViolations(validator.validate(new BeanWithInjectedConstraintValidatorConstraint("Invalid value"))));
-
-        return result.build();
     }
 
     private String formatViolations(Set<? extends ConstraintViolation<?>> violations) {
@@ -208,20 +184,6 @@ public class HibernateValidatorTestResource
 
         public void setCategorizedEmails(Map<String, List<String>> categorizedEmails) {
             this.categorizedEmails = categorizedEmails;
-        }
-    }
-
-    public static class BeanWithInjectedConstraintValidatorConstraint {
-
-        @InjectedConstraintValidatorConstraint
-        private String value;
-
-        public BeanWithInjectedConstraintValidatorConstraint(String value) {
-            this.value = value;
-        }
-
-        public String getValue() {
-            return value;
         }
     }
 
