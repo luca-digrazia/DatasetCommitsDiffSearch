@@ -78,7 +78,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.LittleEndianDataInputStream;
 import com.google.devtools.build.android.FullyQualifiedName.Factory;
-import com.google.devtools.build.android.aapt2.CompiledResources;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.Header;
 import com.google.devtools.build.android.xml.ResourcesAttribute.AttributeType;
@@ -89,7 +88,6 @@ import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -103,11 +101,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /** Deserializes {@link DataKey}, {@link DataValue} entries from compiled resource files. */
@@ -252,7 +248,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     Preconditions.checkArgument(alignedSize <= Integer.MAX_VALUE);
 
     byte[] tableBytes = new byte[(int) alignedSize];
-    resourceTableStream.readFully(tableBytes, 0, (int) alignedSize);
+    resourceTableStream.read(tableBytes, 0, (int) alignedSize);
     ResourceTable resourceTable = ResourceTable.parseFrom(tableBytes);
 
     readPackages(consumers, resourceTable);
@@ -578,14 +574,11 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
   }
 
   private void readAttributesFile(
-      InputStream resourceFileStream,
-      FileSystem fileSystem,
-      BiConsumer<DataKey, DataResource> combine,
-      BiConsumer<DataKey, DataResource> overwrite)
+      InputStream resourceFileStream, FileSystem fileSystem, KeyValueConsumers consumers)
       throws IOException {
 
     Header header = Header.parseDelimitedFrom(resourceFileStream);
-    List<FullyQualifiedName> fullyQualifiedNames = new ArrayList<>();
+    List<DataKey> fullyQualifiedNames = new ArrayList<>();
     for (int i = 0; i < header.getEntryCount(); i++) {
       SerializeFormat.DataKey protoKey =
           SerializeFormat.DataKey.parseDelimitedFrom(resourceFileStream);
@@ -594,7 +587,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
 
     DataSourceTable sourceTable = DataSourceTable.read(resourceFileStream, fileSystem, header);
 
-    for (FullyQualifiedName fullyQualifiedName : fullyQualifiedNames) {
+    for (DataKey fullyQualifiedName : fullyQualifiedNames) {
       SerializeFormat.DataValue protoValue =
           SerializeFormat.DataValue.parseDelimitedFrom(resourceFileStream);
       DataSource source = sourceTable.sourceFromId(protoValue.getSourceId());
@@ -602,36 +595,10 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
       AttributeType attributeType = AttributeType.valueOf(protoValue.getXmlValue().getValueType());
 
       if (attributeType.isCombining()) {
-        combine.accept(fullyQualifiedName, dataResourceXml);
+        consumers.combiningConsumer.accept(fullyQualifiedName, dataResourceXml);
       } else {
-        overwrite.accept(fullyQualifiedName, dataResourceXml);
+        consumers.overwritingConsumer.accept(fullyQualifiedName, dataResourceXml);
       }
-    }
-  }
-
-  public Map<DataKey, DataResource> readAttributes(CompiledResources resources) {
-    try (ZipInputStream zipStream = new ZipInputStream(Files.newInputStream(resources.getZip()))) {
-      Map<DataKey, DataResource> attributes = new HashMap<>();
-      for (ZipEntry entry = zipStream.getNextEntry();
-          entry != null;
-          entry = zipStream.getNextEntry()) {
-        if (entry.getName().endsWith(".attributes")) {
-          readAttributesFile(
-              zipStream,
-              FileSystems.getDefault(),
-              (key, value) ->
-                  attributes.put(
-                      key,
-                      attributes.containsKey(key) ? attributes.get(key).combineWith(value) : value),
-              (key, value) ->
-                  attributes.put(
-                      key,
-                      attributes.containsKey(key) ? attributes.get(key).overwrite(value) : value));
-        }
-      }
-      return attributes;
-    } catch (IOException e) {
-      throw new DeserializationException(e);
     }
   }
 
@@ -673,11 +640,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
           Factory fqnFactory = Factory.fromDirectoryName(dirNameAndQualifiers);
 
           if (fileZipPath.endsWith(".attributes")) {
-            readAttributesFile(
-                resourceFileStream,
-                inPath.getFileSystem(),
-                consumers.combiningConsumer,
-                consumers.overwritingConsumer);
+            readAttributesFile(resourceFileStream, inPath.getFileSystem(), consumers);
           } else {
             LittleEndianDataInputStream dataInputStream =
                 new LittleEndianDataInputStream(resourceFileStream);
@@ -736,14 +699,14 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
               ((characterCount & 0x7F) << 8) | (byteBuffer.get(stringOffset + 1) & 0xFF);
         }
 
-        stringOffset += (characterCount >= 0x80 ? 2 : 1);
+        stringOffset += (characterCount >= (0x80) ? 2 : 1);
 
         int length = byteBuffer.get(stringOffset) & 0xFF;
         if ((length & 0x80) != 0) {
           length = ((length & 0x7F) << 8) | (byteBuffer.get(stringOffset + 1) & 0xFF);
         }
 
-        stringOffset += (length >= 0x80 ? 2 : 1);
+        stringOffset += (length >= (0x80) ? 2 : 1);
 
         strings.add(new String(bytes, stringOffset, length, "UTF8"));
       } else {
@@ -753,14 +716,14 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
               ((characterCount & 0x7FFF) << 16) | (byteBuffer.get(stringOffset + 2) & 0xFFFF);
         }
 
-        stringOffset += 2 * (characterCount >= 0x8000 ? 2 : 1);
+        stringOffset += 2 * (characterCount >= (0x8000) ? 2 : 1);
 
         int length = byteBuffer.get(stringOffset) & 0xFFFF;
         if ((length & 0x8000) != 0) {
           length = ((length & 0x7FFF) << 16) | (byteBuffer.get(stringOffset + 2) & 0xFFFF);
         }
 
-        stringOffset += 2 * (length >= 0x8000 ? 2 : 1);
+        stringOffset += 2 * (length >= (0x8000) ? 2 : 1);
 
         strings.add(new String(bytes, stringOffset, length, "UTF16"));
       }
