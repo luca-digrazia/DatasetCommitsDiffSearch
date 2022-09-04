@@ -117,6 +117,7 @@ public class RestPermissions implements PluginPermissions {
     public static final String BUNDLE_EXPORT = "bundle:export";
     public static final String JOURNAL_READ = "journal:read";
     public static final String JOURNAL_EDIT = "journal:edit";
+    public static final String COLLECTORS_READ = "collectors:read";
     public static final String ROLES_CREATE = "roles:create";
     public static final String ROLES_READ = "roles:read";
     public static final String ROLES_EDIT = "roles:edit";
@@ -210,6 +211,7 @@ public class RestPermissions implements PluginPermissions {
             .add(create(BUNDLE_EXPORT, ""))
             .add(create(JOURNAL_READ, ""))
             .add(create(JOURNAL_EDIT, ""))
+            .add(create(COLLECTORS_READ, ""))
             .add(create(ROLES_CREATE, ""))
             .add(create(ROLES_READ, ""))
             .add(create(ROLES_EDIT, ""))
@@ -235,8 +237,7 @@ public class RestPermissions implements PluginPermissions {
             THROUGHPUT_READ,
             SAVEDSEARCHES_CREATE,
             SAVEDSEARCHES_EDIT,
-            SAVEDSEARCHES_READ,
-            CLUSTER_CONFIG_ENTRY_READ
+            SAVEDSEARCHES_READ
     ).build();
 
     protected static final Set<Permission> READER_BASE_PERMISSIONS = PERMISSIONS.stream()
