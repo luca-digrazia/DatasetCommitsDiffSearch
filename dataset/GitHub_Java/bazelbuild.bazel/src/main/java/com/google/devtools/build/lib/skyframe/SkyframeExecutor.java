@@ -427,7 +427,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.BUILD_CONFIGURATION,
         new BuildConfigurationFunction(directories, ruleClassProvider));
     map.put(SkyFunctions.CONFIGURATION_COLLECTION, new ConfigurationCollectionFunction(
-        ruleClassProvider));
+        null, ruleClassProvider));
     map.put(SkyFunctions.CONFIGURATION_FRAGMENT, new ConfigurationFragmentFunction(
         configurationFragments, ruleClassProvider));
     map.put(SkyFunctions.WORKSPACE_NAME, new WorkspaceNameFunction());
@@ -1746,16 +1746,17 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   @Override
   public EvaluationResult<SkyValue> prepareAndGet(
-      Set<SkyKey> roots, int numThreads, ExtendedEventHandler eventHandler)
+      SkyKey universeKey, int numThreads, ExtendedEventHandler eventHandler)
       throws InterruptedException {
     EvaluationResult<SkyValue> evaluationResult =
-        buildDriver.evaluate(roots, true, numThreads, eventHandler);
+        buildDriver.evaluate(ImmutableList.of(universeKey), true, numThreads, eventHandler);
+    Preconditions.checkNotNull(evaluationResult.getWalkableGraph(), universeKey);
     return evaluationResult;
   }
 
   @Override
-  public boolean isUpToDate(Set<SkyKey> roots) {
-    return buildDriver.alreadyEvaluated(roots);
+  public boolean isUpToDate(SkyKey universeKey) {
+    return buildDriver.alreadyEvaluated(ImmutableList.of(universeKey));
   }
 
   /**

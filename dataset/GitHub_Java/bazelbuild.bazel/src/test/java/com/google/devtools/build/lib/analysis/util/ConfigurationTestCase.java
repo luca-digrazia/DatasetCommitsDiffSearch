@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -56,6 +56,7 @@ import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +66,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /**
- * Testing framework for tests which create configuration collections.
+ * Testing framework for tests which check ConfigurationFactory.
  */
 @RunWith(JUnit4.class)
 public abstract class ConfigurationTestCase extends FoundationTestCase {
@@ -88,7 +89,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
   protected Path workspace;
   protected AnalysisMock analysisMock;
   protected SequencedSkyframeExecutor skyframeExecutor;
-  protected List<ConfigurationFragmentFactory> configurationFragmentFactories;
+  protected ConfigurationFactory configurationFactory;
   protected ImmutableList<Class<? extends FragmentOptions>> buildOptionClasses;
 
   @Before
@@ -146,7 +147,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     mockToolsConfig = new MockToolsConfig(rootDirectory);
     analysisMock.setupMockClient(mockToolsConfig);
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
-    configurationFragmentFactories = analysisMock.getDefaultConfigurationFragmentFactories();
+    configurationFactory = analysisMock.createConfigurationFactory();
     buildOptionClasses = ruleClassProvider.getConfigurationOptions();
   }
 
@@ -179,9 +180,9 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
         parser.getOptions(TestOptions.class).multiCpus);
 
     skyframeExecutor.handleDiffs(reporter);
-    BuildConfigurationCollection collection = skyframeExecutor.createConfigurations(
-        reporter, configurationFragmentFactories, BuildOptions.of(buildOptionClasses, parser),
-        multiCpu, false);
+    BuildConfigurationCollection collection = skyframeExecutor.createConfigurations(reporter,
+        configurationFactory.getFactories(), BuildOptions.of(buildOptionClasses, parser), multiCpu,
+        false);
     return collection;
   }
 
@@ -195,8 +196,9 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
   public void assertConfigurationsHaveUniqueOutputDirectories(
       BuildConfigurationCollection configCollection) throws Exception {
+    Collection<BuildConfiguration> allConfigs = configCollection.getAllConfigurations();
     Map<Root, BuildConfiguration> outputPaths = new HashMap<>();
-    for (BuildConfiguration config : configCollection.getTargetConfigurations()) {
+    for (BuildConfiguration config : allConfigs) {
       if (config.isActionsEnabled()) {
         BuildConfiguration otherConfig = outputPaths.get(
             config.getOutputDirectory(RepositoryName.MAIN));
