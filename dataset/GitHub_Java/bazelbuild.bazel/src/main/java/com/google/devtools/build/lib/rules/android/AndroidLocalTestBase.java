@@ -88,7 +88,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     final ResourceApk resourceApk;
     final Artifact unprocessedManifest;
 
-    if (AndroidResources.decoupleDataProcessing(ruleContext)) {
+    if (AndroidCommon.getAndroidConfig(ruleContext).decoupleDataProcessing()) {
       StampedAndroidManifest manifest =
           StampedAndroidManifest.from(ruleContext, androidSemantics).mergeWithDeps(ruleContext);
       unprocessedManifest = manifest.getManifest();

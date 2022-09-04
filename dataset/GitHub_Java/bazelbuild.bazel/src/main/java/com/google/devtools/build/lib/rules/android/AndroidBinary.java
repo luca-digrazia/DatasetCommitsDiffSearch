@@ -189,7 +189,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     final ApplicationManifest applicationManifest;
     final ResourceApk resourceApk;
 
-    if (AndroidResources.decoupleDataProcessing(ruleContext)) {
+    if (AndroidCommon.getAndroidConfig(ruleContext).decoupleDataProcessing()) {
       StampedAndroidManifest manifest =
           AndroidManifest.from(ruleContext, androidSemantics).mergeWithDeps(ruleContext);
       applicationManifest =
