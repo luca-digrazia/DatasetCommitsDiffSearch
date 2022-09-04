@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProviderImpl;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -109,17 +110,17 @@ public final class CcCommon {
 
   public static final ImmutableSet<String> ALL_COMPILE_ACTIONS =
       ImmutableSet.of(
-          CppActionNames.C_COMPILE,
-          CppActionNames.CPP_COMPILE,
-          CppActionNames.CPP_HEADER_PARSING,
-          CppActionNames.CPP_HEADER_PREPROCESSING,
-          CppActionNames.CPP_MODULE_COMPILE,
-          CppActionNames.CPP_MODULE_CODEGEN,
-          CppActionNames.ASSEMBLE,
-          CppActionNames.PREPROCESS_ASSEMBLE,
-          CppActionNames.CLIF_MATCH,
-          CppActionNames.LINKSTAMP_COMPILE,
-          CppActionNames.CC_FLAGS_MAKE_VARIABLE);
+          CppCompileAction.C_COMPILE,
+          CppCompileAction.CPP_COMPILE,
+          CppCompileAction.CPP_HEADER_PARSING,
+          CppCompileAction.CPP_HEADER_PREPROCESSING,
+          CppCompileAction.CPP_MODULE_COMPILE,
+          CppCompileAction.CPP_MODULE_CODEGEN,
+          CppCompileAction.ASSEMBLE,
+          CppCompileAction.PREPROCESS_ASSEMBLE,
+          CppCompileAction.CLIF_MATCH,
+          CppCompileAction.LINKSTAMP_COMPILE,
+          CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME);
 
   public static final ImmutableSet<String> ALL_LINK_ACTIONS =
       ImmutableSet.of(
@@ -131,7 +132,7 @@ public final class CcCommon {
       ImmutableSet.of(Link.LinkTargetType.STATIC_LIBRARY.getActionName());
 
   public static final ImmutableSet<String> ALL_OTHER_ACTIONS =
-      ImmutableSet.of(CppActionNames.STRIP);
+      ImmutableSet.of(CppCompileAction.STRIP_ACTION_NAME);
 
   /** Action configs we request to enable. */
   public static final ImmutableSet<String> DEFAULT_ACTION_CONFIGS =
@@ -245,7 +246,7 @@ public final class CcCommon {
     if (ourLinkopts != null) {
       boolean allowDashStatic =
           !cppConfiguration.forceIgnoreDashStatic()
-              && (cppConfiguration.getDynamicModeFlag() != DynamicMode.FULLY);
+              && (CppHelper.getDynamicMode(cppConfiguration, ccToolchain) != DynamicMode.FULLY);
       if (!allowDashStatic) {
         ourLinkopts = Iterables.filter(ourLinkopts, (v) -> !"-static".equals(v));
       }
@@ -300,12 +301,25 @@ public final class CcCommon {
       deps.add(CppHelper.mallocForTarget(ruleContext));
     }
 
-    return DwoArtifactsCollector.transitiveCollector(
-        compilationOutputs,
-        deps.build(),
-        generateDwo,
-        ltoBackendArtifactsUsePic,
-        ltoBackendArtifacts);
+    return compilationOutputs == null // Possible in LIPO collection mode (see initializationHook).
+        ? DwoArtifactsCollector.emptyCollector()
+        : DwoArtifactsCollector.transitiveCollector(
+            compilationOutputs,
+            deps.build(),
+            generateDwo,
+            ltoBackendArtifactsUsePic,
+            ltoBackendArtifacts);
+  }
+
+  public TransitiveLipoInfoProvider collectTransitiveLipoLabels(CcCompilationOutputs outputs) {
+    if (fdoSupport.getFdoSupport().getFdoRoot() == null
+        || !cppConfiguration.isLipoContextCollector()) {
+      return TransitiveLipoInfoProvider.EMPTY;
+    }
+
+    NestedSetBuilder<IncludeScannable> scannableBuilder = NestedSetBuilder.stableOrder();
+    CppHelper.addTransitiveLipoInfoForCommonAttributes(ruleContext, outputs, scannableBuilder);
+    return new TransitiveLipoInfoProvider(scannableBuilder.build());
   }
 
   /**
@@ -715,14 +729,13 @@ public final class CcCommon {
    */
   public InstrumentedFilesProvider getInstrumentedFilesProvider(Iterable<Artifact> files,
       boolean withBaselineCoverage) {
-    return InstrumentedFilesCollector.collect(
-        ruleContext,
-        CppRuleClasses.INSTRUMENTATION_SPEC,
-        CC_METADATA_COLLECTOR,
-        files,
-        CppHelper.getGcovFilesIfNeeded(ruleContext, ccToolchain),
-        CppHelper.getCoverageEnvironmentIfNeeded(ruleContext, ccToolchain),
-        withBaselineCoverage);
+    return cppConfiguration.isLipoContextCollector()
+        ? InstrumentedFilesProviderImpl.EMPTY
+        : InstrumentedFilesCollector.collect(
+            ruleContext, CppRuleClasses.INSTRUMENTATION_SPEC, CC_METADATA_COLLECTOR, files,
+            CppHelper.getGcovFilesIfNeeded(ruleContext, ccToolchain),
+            CppHelper.getCoverageEnvironmentIfNeeded(ruleContext, ccToolchain),
+            withBaselineCoverage);
   }
 
   public static ImmutableList<String> getCoverageFeatures(CcToolchainProvider toolchain) {
@@ -907,6 +920,16 @@ public final class CcCommon {
     if (cppConfiguration.getFdoPrefetchHintsLabel() != null) {
       allRequestedFeaturesBuilder.add(CppRuleClasses.FDO_PREFETCH_HINTS);
     }
+    if (cppConfiguration.isLipoOptimizationOrInstrumentation()) {
+      // Map LIPO to ThinLTO for LLVM builds.
+      if (toolchain.isLLVMCompiler() && fdoMode != FdoMode.OFF) {
+        if (!allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
+          allFeatures.add(CppRuleClasses.THIN_LTO);
+        }
+      } else {
+        allFeatures.add(CppRuleClasses.LIPO);
+      }
+    }
 
     for (String feature : allFeatures.build()) {
       if (!allUnsupportedFeatures.contains(feature)) {
@@ -948,7 +971,8 @@ public final class CcCommon {
         (CcToolchainProvider) toolchain.get(ToolchainInfo.PROVIDER);
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, toolchainProvider);
-    if (!featureConfiguration.actionIsConfigured(CppActionNames.CC_FLAGS_MAKE_VARIABLE)) {
+    if (!featureConfiguration.actionIsConfigured(
+        CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME)) {
       return null;
     }
 
@@ -957,7 +981,7 @@ public final class CcCommon {
         Joiner.on(" ")
             .join(
                 featureConfiguration.getCommandLine(
-                    CppActionNames.CC_FLAGS_MAKE_VARIABLE, buildVariables));
+                    CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME, buildVariables));
     String oldCcFlags = "";
     TemplateVariableInfo templateVariableInfo =
         toolchain.get(TemplateVariableInfo.PROVIDER);

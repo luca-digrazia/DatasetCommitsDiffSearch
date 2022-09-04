@@ -200,8 +200,7 @@ public class CppHelper {
     List<String> result = new ArrayList<>();
     Expander expander = ruleContext.getExpander().withDataExecLocations();
     for (String value : values) {
-      if (ruleContext.getFragment(CppConfiguration.class).getExpandLinkoptsLabels()
-          && isLinkoptLabel(value)) {
+      if (isLinkoptLabel(value)) {
         if (!expandLabel(ruleContext, result, value)) {
           ruleContext.attributeError(attrName, "could not resolve label '" + value + "'");
         }
@@ -903,13 +902,14 @@ public class CppHelper {
       return;
     }
 
-    if (!featureConfiguration.actionIsConfigured(CppActionNames.STRIP)) {
+    if (!featureConfiguration.actionIsConfigured(CppCompileAction.STRIP_ACTION_NAME)) {
       context.ruleError("Expected action_config for 'strip' to be configured.");
       return;
     }
 
     Tool stripTool =
-        Preconditions.checkNotNull(featureConfiguration.getToolForAction(CppActionNames.STRIP));
+        Preconditions.checkNotNull(
+            featureConfiguration.getToolForAction(CppCompileAction.STRIP_ACTION_NAME));
     CcToolchainVariables variables =
         new CcToolchainVariables.Builder(toolchain.getBuildVariables())
             .addStringVariable(
@@ -919,7 +919,8 @@ public class CppHelper {
             .addStringVariable(CcCommon.INPUT_FILE_VARIABLE_NAME, input.getExecPathString())
             .build();
     ImmutableList<String> commandLine =
-        ImmutableList.copyOf(featureConfiguration.getCommandLine(CppActionNames.STRIP, variables));
+        ImmutableList.copyOf(
+            featureConfiguration.getCommandLine(CppCompileAction.STRIP_ACTION_NAME, variables));
     ImmutableMap.Builder<String, String> executionInfoBuilder = ImmutableMap.builder();
     for (String executionRequirement : stripTool.getExecutionRequirements()) {
       executionInfoBuilder.put(executionRequirement, "");
