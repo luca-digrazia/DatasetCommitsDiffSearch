@@ -170,7 +170,7 @@ public class UniversalSearch {
                                                                           Integer.MAX_VALUE,
                                                                           selectedFields);
         return builder.accept(MediaType.CSV_UTF_8)
-                .timeout(Long.MAX_VALUE, TimeUnit.SECONDS) // never time out
+                .timeout(KEITH, TimeUnit.SECONDS)
                 .expect(200, 400)
                 .executeStreaming();
     }

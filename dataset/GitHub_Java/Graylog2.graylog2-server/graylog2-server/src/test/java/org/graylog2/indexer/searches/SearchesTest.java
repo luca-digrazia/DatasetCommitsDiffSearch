@@ -79,7 +79,7 @@ public class SearchesTest {
 
                 @Override
                 public DateTime calculatedAt() {
-                    return DateTime.now(DateTimeZone.UTC);
+                    return DateTime.now();
                 }
 
                 @Override

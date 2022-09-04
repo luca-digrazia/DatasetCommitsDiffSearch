@@ -421,7 +421,6 @@ public class Searches {
 
         final Filter f = r.getAggregations().get(AGG_FILTER);
         return new FieldStatsResult(
-                f,
                 (ExtendedStats) f.getAggregations().get(AGG_EXTENDED_STATS),
                 (Cardinality) f.getAggregations().get(AGG_CARDINALITY),
                 r.getHits(),
