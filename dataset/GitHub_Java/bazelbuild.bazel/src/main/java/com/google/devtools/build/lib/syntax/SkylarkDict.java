@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -59,16 +58,8 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
     return mutability;
   }
 
-  private SkylarkDict(@Nullable Mutability mutability) {
-    this.mutability = mutability == null ? Mutability.IMMUTABLE : mutability;
-  }
-
   private SkylarkDict(@Nullable Environment env) {
-    this.mutability = env == null ? Mutability.IMMUTABLE : env.mutability();
-  }
-
-  private static <K, V> SkylarkDict<K, V> of(@Nullable Mutability mutability) {
-    return new SkylarkDict<>(mutability);
+    mutability = env == null ? Mutability.IMMUTABLE : env.mutability();
   }
 
   /** @return a dict mutable in given environment only */
@@ -85,14 +76,6 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
   public static <K, V> SkylarkDict<K, V> of(
       @Nullable Environment env, K k1, V v1, K k2, V v2) {
     return SkylarkDict.<K, V>of(env).putUnsafe(k1, v1).putUnsafe(k2, v2);
-  }
-
-  // TODO(bazel-team): Make other methods that take in mutabilities instead of environments, make
-  // this method public.
-  @VisibleForTesting
-  static <K, V> SkylarkDict<K, V> copyOf(
-      @Nullable Mutability mutability, Map<? extends K, ? extends V> m) {
-    return SkylarkDict.<K, V>of(mutability).putAllUnsafe(m);
   }
 
   /** @return a dict mutable in given environment only, with contents copied from given map */
@@ -265,7 +248,7 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
     return result;
   }
 
-  private static final SkylarkDict<?, ?> EMPTY = of((Mutability) null);
+  private static final SkylarkDict<?, ?> EMPTY = of(null);
 
   // Safe because the empty singleton is immutable.
   @SuppressWarnings("unchecked")

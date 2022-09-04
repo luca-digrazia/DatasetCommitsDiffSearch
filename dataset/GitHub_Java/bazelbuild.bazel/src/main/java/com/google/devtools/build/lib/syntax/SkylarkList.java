@@ -343,8 +343,12 @@ public abstract class SkylarkList<E> extends MutableCollection<E>
      * <p>Other immutable empty list objects can exist, e.g. lists that were once mutable but whose
      * environments were then frozen. This instance is for empty lists that were always frozen from
      * the beginning.
+     *
+     * @deprecated Prefer {@link #empty()} instead, since that includes a cast for the element type.
+     *     This field will be made private in the near future.
      */
-    private static final MutableList<?> EMPTY =
+    @Deprecated
+    public static final MutableList<?> EMPTY =
         new MutableList<>(ImmutableList.of(), Mutability.IMMUTABLE);
 
     /** Returns an empty frozen list, cast to have an arbitrary content type. */
