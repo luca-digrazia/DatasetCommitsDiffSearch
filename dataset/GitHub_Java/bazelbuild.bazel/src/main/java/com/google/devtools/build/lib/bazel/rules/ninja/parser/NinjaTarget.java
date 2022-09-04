@@ -293,11 +293,6 @@ public final class NinjaTarget {
   }
 
   @Override
-  public String toString() {
-    return prettyPrint();
-  }
-
-  @Override
   public int hashCode() {
     return Long.hashCode(offset);
   }

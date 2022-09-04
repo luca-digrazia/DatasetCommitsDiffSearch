@@ -92,8 +92,7 @@ class NinjaGraphArtifactsHelper {
               pathRelativeToWorkingDirectory));
     }
     // If the path was declared as output symlink, create a symlink artifact.
-    // symlink_outputs are always declared as relative to working directory.
-    if (symlinkOutputs.contains(pathRelativeToWorkingDirectory)) {
+    if (symlinkOutputs.contains(execPath.relativeTo(outputRootPath))) {
       return ruleContext
           .getAnalysisEnvironment()
           .getSymlinkArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
@@ -105,18 +104,21 @@ class NinjaGraphArtifactsHelper {
     return derivedOutputRoot;
   }
 
-  Artifact getInputArtifact(PathFragment pathRelativeToWorkingDirectory)
-      throws GenericParsingException {
-    if (symlinkPathToArtifact.containsKey(pathRelativeToWorkingDirectory)) {
-      return symlinkPathToArtifact.get(pathRelativeToWorkingDirectory);
+  Artifact getInputArtifact(PathFragment workingDirectoryPath) throws GenericParsingException {
+    if (symlinkPathToArtifact.containsKey(workingDirectoryPath)) {
+      return symlinkPathToArtifact.get(workingDirectoryPath);
     }
 
-    PathFragment execPath = workingDirectory.getRelative(pathRelativeToWorkingDirectory);
+    PathFragment execPath = workingDirectory.getRelative(workingDirectoryPath);
     if (execPath.startsWith(outputRootPath)) {
-      // This is in the output root, so it's an output artifact created from another Ninja action,
-      // not a source artifact. This can be a regular DerivedArtifact or symlink SpecialArtifact,
-      // depending on the set of symlinkOutputs threaded from Ninja.
-      return createOutputArtifact(pathRelativeToWorkingDirectory);
+      // In the output directory, so it is either marked as a symlink_output from Ninja, or
+      // it is a derived artifact.
+      if (symlinkOutputs.contains(execPath.relativeTo(outputRootPath))) {
+        return ruleContext
+            .getAnalysisEnvironment()
+            .getSymlinkArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
+      }
+      return ruleContext.getDerivedArtifact(execPath.relativeTo(outputRootPath), derivedOutputRoot);
     }
 
     if (!execPath.startsWith(ruleContext.getPackageDirectory())) {
