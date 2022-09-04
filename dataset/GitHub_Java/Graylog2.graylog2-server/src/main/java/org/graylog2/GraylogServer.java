@@ -14,7 +14,6 @@ import org.graylog2.indexer.EmbeddedElasticSearchClient;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.initializers.Initializer;
 import org.graylog2.inputs.MessageInput;
-import org.graylog2.inputs.gelf.GELFChunkManager;
 import org.graylog2.messagequeue.MessageQueueFlusher;
 import org.graylog2.streams.StreamCache;
 
@@ -27,7 +26,6 @@ public class GraylogServer implements Runnable {
     private final Configuration configuration;
     private RulesEngine rulesEngine;
     private ServerValue serverValues;
-    private GELFChunkManager gelfChunkManager = new GELFChunkManager();
 
     private static final int SCHEDULED_THREADS_POOL_SIZE = 15;
     private ScheduledExecutorService scheduler;
@@ -74,7 +72,6 @@ public class GraylogServer implements Runnable {
 
         // initiate the mongodb connection, this might fail but it will retry to establish the connection
         mongoConnection.connect();
-        gelfChunkManager.run();
         BlacklistCache.initialize(this);
         StreamCache.initialize(this);
 
@@ -154,10 +151,6 @@ public class GraylogServer implements Runnable {
 
     public ServerValue getServerValues() {
         return serverValues;
-    }
-
-    public GELFChunkManager getGELFChunkManager() {
-        return this.gelfChunkManager;
     }
 
 }
