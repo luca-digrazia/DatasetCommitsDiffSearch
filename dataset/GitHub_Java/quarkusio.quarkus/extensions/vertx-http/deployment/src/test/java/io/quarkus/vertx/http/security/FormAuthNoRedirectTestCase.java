@@ -32,8 +32,7 @@ public class FormAuthNoRedirectTestCase {
         @Override
         public JavaArchive get() {
             return ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(TestIdentityProvider.class, TestIdentityController.class, TestTrustedIdentityProvider.class,
-                            PathHandler.class)
+                    .addClasses(TestIdentityProvider.class, TestTrustedIdentityProvider.class, PathHandler.class)
                     .addAsResource(new StringAsset(APP_PROPS), "application.properties");
         }
     });
