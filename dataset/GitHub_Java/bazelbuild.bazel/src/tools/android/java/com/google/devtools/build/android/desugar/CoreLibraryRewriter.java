@@ -15,6 +15,7 @@ package com.google.devtools.build.android.desugar;
 
 import java.io.IOException;
 import java.io.InputStream;
+import javax.annotation.Nullable;
 import org.objectweb.asm.Attribute;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -36,10 +37,10 @@ class CoreLibraryRewriter {
    * with a ClassRemapper that prefixes class names of core library classes if prefix is not empty.
    */
   public ClassReader reader(InputStream content) throws IOException {
-    if (prefix.length() != 0) {
-      return new PrefixingClassReader(content);
-    } else {
+    if (prefix.isEmpty()) {
       return new ClassReader(content);
+    } else {
+      return new PrefixingClassReader(content, prefix);
     }
   }
 
@@ -51,7 +52,7 @@ class CoreLibraryRewriter {
     return new UnprefixingClassWriter(flags);
   }
 
-  private static boolean shouldPrefix(String typeName) {
+  static boolean shouldPrefix(String typeName) {
     return (typeName.startsWith("java/") || typeName.startsWith("sun/")) && !except(typeName);
   }
 
@@ -85,28 +86,25 @@ class CoreLibraryRewriter {
     return false;
   }
 
-  /** Prefixes core library class names with prefix */
-  public String prefix(String typeName) {
-    if (prefix.length() >  0 && shouldPrefix(typeName)) {
-      return prefix + typeName;
-    }
-    return typeName;
+  public String getPrefix() {
+    return prefix;
   }
 
   /** Removes prefix from class names */
   public String unprefix(String typeName) {
-    if (prefix.length() == 0 || !typeName.startsWith(prefix)) {
+    if (prefix.isEmpty() || !typeName.startsWith(prefix)) {
       return typeName;
     }
     return typeName.substring(prefix.length());
   }
 
-  /**
-   * ClassReader that prefixes core library class names as they are read
-   */
-  private class PrefixingClassReader extends ClassReader {
-    PrefixingClassReader(InputStream content) throws IOException {
+  /** ClassReader that prefixes core library class names as they are read */
+  private static class PrefixingClassReader extends ClassReader {
+    private final String prefix;
+
+    PrefixingClassReader(InputStream content, String prefix) throws IOException {
       super(content);
+      this.prefix = prefix;
     }
 
     @Override
@@ -122,6 +120,34 @@ class CoreLibraryRewriter {
               });
       super.accept(cv, attrs, flags);
     }
+
+    @Override
+    public String getClassName() {
+      return prefix(super.getClassName());
+    }
+
+    @Override
+    public String getSuperName() {
+      String result = super.getSuperName();
+      return result != null ? prefix(result) : null;
+    }
+
+    @Override
+    public String[] getInterfaces() {
+      String[] result = super.getInterfaces();
+      for (int i = 0, len = result.length; i < len; ++i) {
+        result[i] = prefix(result[i]);
+      }
+      return result;
+    }
+
+    /** Prefixes core library class names with prefix. */
+    private String prefix(String typeName) {
+      if (shouldPrefix(typeName)) {
+        return prefix + typeName;
+      }
+      return typeName;
+    }
   }
 
   /**
@@ -131,14 +157,16 @@ class CoreLibraryRewriter {
   public class UnprefixingClassWriter extends ClassVisitor {
     private final ClassWriter writer;
 
+    private String finalClassName;
+
     UnprefixingClassWriter(int flags) {
-      super(Opcodes.ASM5);
+      super(Opcodes.ASM6);
       this.writer = new ClassWriter(flags);
       this.cv = this.writer;
-      if (prefix.length() != 0) {
+      if (!prefix.isEmpty()) {
         this.cv =
             new ClassRemapper(
-                this.cv,
+                this.writer,
                 new Remapper() {
                   @Override
                   public String map(String typeName) {
@@ -148,8 +176,26 @@ class CoreLibraryRewriter {
       }
     }
 
+    /** Returns the (unprefixed) name of the class once written. */
+    @Nullable
+    String getClassName() {
+      return finalClassName;
+    }
+
     byte[] toByteArray() {
       return writer.toByteArray();
+    }
+
+    @Override
+    public void visit(
+        int version,
+        int access,
+        String name,
+        String signature,
+        String superName,
+        String[] interfaces) {
+      finalClassName = unprefix(name);
+      super.visit(version, access, name, signature, superName, interfaces);
     }
   }
 }
