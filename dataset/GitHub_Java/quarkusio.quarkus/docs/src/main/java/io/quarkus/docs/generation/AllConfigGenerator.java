@@ -21,11 +21,12 @@ import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResult;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 
-import io.quarkus.annotation.processor.generate_doc.ConfigDocGeneratedOutput;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocItem;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocItemScanner;
 import io.quarkus.annotation.processor.generate_doc.ConfigDocSection;
@@ -36,7 +37,8 @@ import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.docs.generation.ExtensionJson.Extension;
 
 public class AllConfigGenerator {
-    public static void main(String[] args) throws AppModelResolverException, IOException {
+    public static void main(String[] args)
+            throws AppModelResolverException, JsonParseException, JsonMappingException, IOException {
         if (args.length != 2) {
             // exit 1 will break Maven
             throw new IllegalArgumentException("Usage: <version> <extension.json>");
@@ -55,7 +57,7 @@ public class AllConfigGenerator {
                 .enable(JsonParser.Feature.ALLOW_COMMENTS)
                 .enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS)
                 .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
-        MavenArtifactResolver resolver = MavenArtifactResolver.builder().setWorkspaceDiscovery(false).build();
+        MavenArtifactResolver resolver = MavenArtifactResolver.builder().build();
 
         // let's read it (and ignore the fields we don't need)
         ExtensionJson extensionJson = mapper.readValue(jsonFile, ExtensionJson.class);
@@ -73,7 +75,7 @@ public class AllConfigGenerator {
             extensionsByGav.put(extension.groupId + ":" + extension.artifactId, extension);
         }
 
-        // examine all the extension jars
+        // examine all the extension jars 
         List<ArtifactRequest> deploymentRequests = new ArrayList<>(extensionJson.extensions.size());
         for (ArtifactResult result : resolver.resolve(requests)) {
             Artifact artifact = result.getArtifact();
@@ -163,10 +165,9 @@ public class AllConfigGenerator {
         for (Map.Entry<String, List<ConfigDocItem>> entry : sortedConfigItemsByExtension.entrySet()) {
             final List<ConfigDocItem> configDocItems = entry.getValue();
             // sort the items
-            DocGeneratorUtil.sort(configDocItems);
+            ConfigDocWriter.sort(configDocItems);
             // insert a header
             ConfigDocSection header = new ConfigDocSection();
-            header.setShowSection(true);
             header.setSectionDetailsTitle(entry.getKey());
             header.setAnchorPrefix(artifactIdsByName.get(entry.getKey()));
             header.setName(artifactIdsByName.get(entry.getKey()));
@@ -176,30 +177,19 @@ public class AllConfigGenerator {
         }
 
         // write our docs
-        ConfigDocGeneratedOutput allConfigGeneratedOutput = new ConfigDocGeneratedOutput("quarkus-all-config.adoc", true,
-                allItems,
-                false);
-        configDocWriter.writeAllExtensionConfigDocumentation(allConfigGeneratedOutput);
+        configDocWriter.writeAllExtensionConfigDocumentation(allItems);
     }
 
     private static String guessExtensionNameFromDocumentationFileName(String docFileName) {
         // sanitise
-        if (docFileName.startsWith("quarkus-")) {
+        if (docFileName.startsWith("quarkus-"))
             docFileName = docFileName.substring(8);
-        }
-
-        if (docFileName.endsWith(".adoc")) {
+        if (docFileName.endsWith(".adoc"))
             docFileName = docFileName.substring(0, docFileName.length() - 5);
-        }
-
-        if (docFileName.endsWith("-config")) {
+        if (docFileName.endsWith("-config"))
             docFileName = docFileName.substring(0, docFileName.length() - 7);
-        }
-
-        if (docFileName.endsWith("-configuration")) {
+        if (docFileName.endsWith("-configuration"))
             docFileName = docFileName.substring(0, docFileName.length() - 14);
-        }
-
         docFileName = docFileName.replace('-', ' ');
         return capitalize(docFileName);
     }
