@@ -87,7 +87,6 @@ import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -212,28 +211,26 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     // over individual targets in scope immediately. However, creating a composite NestedSet first
     // saves us from iterating over the same sub-NestedSets multiple times.
     NestedSetBuilder<Label> validTargets = NestedSetBuilder.stableOrder();
-    Set<PackageIdentifier> successfulPackageNames = new LinkedHashSet<>();
+    NestedSetBuilder<PackageIdentifier> successfulPackageNames = NestedSetBuilder.stableOrder();
     for (Target target : scope) {
       SkyKey key = TransitiveTargetValue.key(target.getLabel());
       TransitiveTargetValue transNode = (TransitiveTargetValue) env.getValue(key);
       if (transNode == null) {
         return null;
       }
-      if (transNode.getTransitiveRootCauses() != null) {
+      if (!transNode.getTransitiveUnsuccessfulPackages().isEmpty()) {
         // This should only happen if the unsuccessful package was loaded in a non-selected
         // path, as otherwise this configured target would have failed earlier. See b/34132681.
         throw new BrokenQueryScopeException(
             "errors were encountered while computing transitive closure of the scope.");
       }
       validTargets.addTransitive(transNode.getTransitiveTargets());
-      for (Label transitiveLabel : transNode.getTransitiveTargets()) {
-        successfulPackageNames.add(transitiveLabel.getPackageIdentifier());
-      }
+      successfulPackageNames.addTransitive(transNode.getTransitiveSuccessfulPackages());
     }
 
     // Construct the package id to package map for all successful packages.
     ImmutableMap.Builder<PackageIdentifier, Package> packageMapBuilder = ImmutableMap.builder();
-    for (PackageIdentifier pkgId : successfulPackageNames) {
+    for (PackageIdentifier pkgId : successfulPackageNames.build()) {
       PackageValue pkg = (PackageValue) env.getValue(PackageValue.key(pkgId));
       Preconditions.checkNotNull(pkg, "package %s not preloaded", pkgId);
       Preconditions.checkState(
