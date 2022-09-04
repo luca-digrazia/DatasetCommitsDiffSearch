@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.TestStrategy.TestOutputFormat;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -542,11 +541,6 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
                     /*forciblyRunRemotely=*/ false,
                     /*catastrophe=*/ false);
               } else {
-                String testName =
-                    OS.getCurrent() == OS.WINDOWS
-                        ? "standalone/failing_test.exe"
-                        : "standalone/failing_test";
-                assertThat(spawn.getEnvironment()).containsEntry("TEST_BINARY", testName);
                 return ImmutableList.of(xmlGeneratorSpawnResult);
               }
             });
