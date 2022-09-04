@@ -8,7 +8,6 @@ import org.graylog.plugins.enterprise.search.QueryMetadata;
 import org.graylog.plugins.enterprise.search.QueryResult;
 import org.graylog.plugins.enterprise.search.Search;
 import org.graylog.plugins.enterprise.search.SearchJob;
-import org.graylog.plugins.enterprise.search.elasticsearch.QueryMetadataDecorator;
 import org.graylog.plugins.enterprise.search.errors.QueryError;
 import org.graylog.plugins.enterprise.search.errors.SearchError;
 import org.graylog.plugins.enterprise.search.errors.SearchException;
@@ -32,16 +31,13 @@ public class QueryEngine {
     private static final Logger LOG = LoggerFactory.getLogger(QueryEngine.class);
 
     private final Map<String, QueryBackend<? extends GeneratedQueryContext>> queryBackends;
-    private final Set<QueryMetadataDecorator> queryMetadataDecorators;
 
     // TODO proper thread pool with tunable settings
     private final Executor queryPool = Executors.newFixedThreadPool(4, new ThreadFactoryBuilder().setNameFormat("query-engine-%d").build());
 
     @Inject
-    public QueryEngine(Map<String, QueryBackend<? extends GeneratedQueryContext>> queryBackends,
-                       Set<QueryMetadataDecorator> queryMetadataDecorators) {
+    public QueryEngine(Map<String, QueryBackend<? extends GeneratedQueryContext>> queryBackends) {
         this.queryBackends = queryBackends;
-        this.queryMetadataDecorators = queryMetadataDecorators;
     }
 
     private static Set<QueryResult> allOfResults(Set<CompletableFuture<QueryResult>> futures) {
@@ -62,12 +58,7 @@ public class QueryEngine {
     public QueryMetadata parse(Search search, Query query) {
         final BackendQuery backendQuery = query.query();
         final QueryBackend queryBackend = queryBackends.get(backendQuery.type());
-        final QueryMetadata parsedMetadata = queryBackend.parse(search.parameters(), query);
-
-        return this.queryMetadataDecorators.stream()
-                .reduce((decorator1, decorator2) -> (s, q, metadata) -> decorator1.decorate(s, q, decorator2.decorate(s, q, metadata)))
-                .map(decorator -> decorator.decorate(search, query, parsedMetadata))
-                .orElse(parsedMetadata);
+        return queryBackend.parse(search.parameters(), query);
     }
 
     public SearchJob execute(SearchJob searchJob) {
