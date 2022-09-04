@@ -5,8 +5,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -21,8 +22,6 @@ import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.SecurityIdentityAugmentor;
 import io.quarkus.security.identity.request.AnonymousAuthenticationRequest;
 import io.quarkus.security.identity.request.AuthenticationRequest;
-import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.subscription.UniEmitter;
 
 /**
  * A manager that can be used to get a specific type of identity provider.
@@ -36,37 +35,31 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
 
     private final AuthenticationRequestContext blockingRequestContext = new AuthenticationRequestContext() {
         @Override
-        public Uni<SecurityIdentity> runBlocking(Supplier<SecurityIdentity> function) {
-            return Uni.createFrom().deferred(new Supplier<Uni<SecurityIdentity>>() {
-                @Override
-                public Uni<SecurityIdentity> get() {
-                    if (BlockingOperationControl.isBlockingAllowed()) {
-                        try {
-                            SecurityIdentity result = function.get();
-                            return Uni.createFrom().item(result);
-                        } catch (Throwable t) {
-                            return Uni.createFrom().failure(t);
-                        }
-                    } else {
-                        return Uni.createFrom().emitter(new Consumer<UniEmitter<? super SecurityIdentity>>() {
-                            @Override
-                            public void accept(UniEmitter<? super SecurityIdentity> uniEmitter) {
-                                blockingExecutor.execute(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        try {
-                                            uniEmitter.complete(function.get());
-                                        } catch (Throwable t) {
-                                            uniEmitter.fail(t);
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    }
-                }
-            });
+        public CompletionStage<SecurityIdentity> runBlocking(Supplier<SecurityIdentity> function) {
 
+            if (BlockingOperationControl.isBlockingAllowed()) {
+                CompletableFuture<SecurityIdentity> ret = new CompletableFuture<>();
+                try {
+                    SecurityIdentity result = function.get();
+                    ret.complete(result);
+                } catch (Throwable t) {
+                    ret.completeExceptionally(t);
+                }
+                return ret;
+            } else {
+                CompletableFuture<SecurityIdentity> cf = new CompletableFuture<>();
+                blockingExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            cf.complete(function.get());
+                        } catch (Throwable t) {
+                            cf.completeExceptionally(t);
+                        }
+                    }
+                });
+                return cf;
+            }
         }
     };
 
@@ -85,29 +78,15 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
      * @param request The authentication request
      * @return The first identity provider that was registered with this type
      */
-    public Uni<SecurityIdentity> authenticate(AuthenticationRequest request) {
+    public CompletionStage<SecurityIdentity> authenticate(AuthenticationRequest request) {
         List<IdentityProvider> providers = this.providers.get(request.getClass());
         if (providers == null) {
-            return Uni.createFrom().failure(new IllegalArgumentException(
+            CompletableFuture<SecurityIdentity> cf = new CompletableFuture<>();
+            cf.completeExceptionally(new IllegalArgumentException(
                     "No IdentityProviders were registered to handle AuthenticationRequest " + request));
-        }
-        if (providers.size() == 1) {
-            return handleSingleProvider(providers.get(0), request);
+            return cf;
         }
         return handleProvider(0, (List) providers, request, blockingRequestContext);
-    }
-
-    private Uni<SecurityIdentity> handleSingleProvider(IdentityProvider identityProvider, AuthenticationRequest request) {
-        if (augmenters.isEmpty()) {
-            return identityProvider.authenticate(request, blockingRequestContext);
-        }
-        Uni<SecurityIdentity> authenticated = identityProvider.authenticate(request, blockingRequestContext);
-        return authenticated.flatMap(new Function<SecurityIdentity, Uni<? extends SecurityIdentity>>() {
-            @Override
-            public Uni<? extends SecurityIdentity> apply(SecurityIdentity securityIdentity) {
-                return handleIdentityFromProvider(0, securityIdentity, blockingRequestContext);
-            }
-        });
     }
 
     /**
@@ -125,45 +104,48 @@ public class QuarkusIdentityProviderManagerImpl implements IdentityProviderManag
             throw new IllegalArgumentException(
                     "No IdentityProviders were registered to handle AuthenticationRequest " + request);
         }
-        return (SecurityIdentity) handleProvider(0, (List) providers, request, blockingRequestContext).await().indefinitely();
+        return (SecurityIdentity) handleProvider(0, (List) providers, request, blockingRequestContext).toCompletableFuture()
+                .join();
     }
 
-    private <T extends AuthenticationRequest> Uni<SecurityIdentity> handleProvider(int pos,
+    private <T extends AuthenticationRequest> CompletionStage<SecurityIdentity> handleProvider(int pos,
             List<IdentityProvider<T>> providers, T request, AuthenticationRequestContext context) {
         if (pos == providers.size()) {
             //we failed to authentication
-            log.debug("Authentication failed as providers would authenticate the request");
-            return Uni.createFrom().failure(new AuthenticationFailedException());
+            log.debugf("Authentication failed as providers would authenticate the request");
+            CompletableFuture<SecurityIdentity> cf = new CompletableFuture<>();
+            cf.completeExceptionally(new AuthenticationFailedException());
+            return cf;
         }
         IdentityProvider<T> current = providers.get(pos);
-        Uni<SecurityIdentity> cs = current.authenticate(request, context)
-                .onItem().produceUni(new Function<SecurityIdentity, Uni<SecurityIdentity>>() {
+        CompletionStage<SecurityIdentity> cs = current.authenticate(request, context)
+                .thenCompose(new Function<SecurityIdentity, CompletionStage<SecurityIdentity>>() {
                     @Override
-                    public Uni<SecurityIdentity> apply(SecurityIdentity securityIdentity) {
-                        if (securityIdentity != null) {
-                            return Uni.createFrom().item(securityIdentity);
+                    public CompletionStage<SecurityIdentity> apply(SecurityIdentity identity) {
+                        if (identity != null) {
+                            return CompletableFuture.completedFuture(identity);
                         }
                         return handleProvider(pos + 1, providers, request, context);
                     }
                 });
-        return cs.flatMap(new Function<SecurityIdentity, Uni<? extends SecurityIdentity>>() {
+        return cs.thenCompose(new Function<SecurityIdentity, CompletionStage<SecurityIdentity>>() {
             @Override
-            public Uni<? extends SecurityIdentity> apply(SecurityIdentity securityIdentity) {
-                return handleIdentityFromProvider(0, securityIdentity, context);
+            public CompletionStage<SecurityIdentity> apply(SecurityIdentity identity) {
+                return handleIdentityFromProvider(0, identity, context);
             }
         });
     }
 
-    private Uni<SecurityIdentity> handleIdentityFromProvider(int pos, SecurityIdentity identity,
+    private CompletionStage<SecurityIdentity> handleIdentityFromProvider(int pos, SecurityIdentity identity,
             AuthenticationRequestContext context) {
         if (pos == augmenters.size()) {
-            return Uni.createFrom().item(identity);
+            return CompletableFuture.completedFuture(identity);
         }
         SecurityIdentityAugmentor a = augmenters.get(pos);
-        return a.augment(identity, context).flatMap(new Function<SecurityIdentity, Uni<? extends SecurityIdentity>>() {
+        return a.augment(identity, context).thenCompose(new Function<SecurityIdentity, CompletionStage<SecurityIdentity>>() {
             @Override
-            public Uni<SecurityIdentity> apply(SecurityIdentity securityIdentity) {
-                return handleIdentityFromProvider(pos + 1, securityIdentity, context);
+            public CompletionStage<SecurityIdentity> apply(SecurityIdentity identity) {
+                return handleIdentityFromProvider(pos + 1, identity, context);
             }
         });
     }
