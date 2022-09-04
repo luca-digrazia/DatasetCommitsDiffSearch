@@ -773,23 +773,14 @@ public class ParallelEvaluatorTest {
 
   @Test
   public void errorBubblesToParentsOfTopLevelValue() throws Exception {
+    graph = new InMemoryGraphImpl();
     SkyKey parentKey = GraphTester.toSkyKey("parent");
-    SkyKey errorKey = GraphTester.toSkyKey("error");
-    CountDownLatch latch = new CountDownLatch(1);
-    graph =
-        new NotifyingHelper.NotifyingProcessableGraph(
-            new InMemoryGraphImpl(),
-            (key, type, order, context) -> {
-              if (key.equals(errorKey)
-                  && parentKey.equals(context)
-                  && type == EventType.ADD_REVERSE_DEP
-                  && order == Order.AFTER) {
-                latch.countDown();
-              }
-            });
+    final SkyKey errorKey = GraphTester.toSkyKey("error");
+    final CountDownLatch latch = new CountDownLatch(1);
     tester.getOrCreate(errorKey).setBuilder(new ChainedFunction(null, /*waitToFinish=*/latch, null,
         false, /*value=*/null, ImmutableList.<SkyKey>of()));
-    tester.getOrCreate(parentKey).addDependency(errorKey).setComputedValue(CONCATENATE);
+    tester.getOrCreate(parentKey).setBuilder(new ChainedFunction(/*notifyStart=*/latch, null, null,
+        false, new StringValue("unused"), ImmutableList.of(errorKey)));
     EvaluationResult<StringValue> result = eval( /*keepGoing=*/false,
         ImmutableList.of(parentKey, errorKey));
     assertWithMessage(result.toString()).that(result.errorMap().size()).isEqualTo(2);
