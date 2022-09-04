@@ -27,18 +27,13 @@ import java.util.regex.Pattern;
 /** Handles creation of CppCompileAction used to compile linkstamp sources. */
 public class CppLinkstampCompileHelper {
 
-  /**
-   * Creates {@link CppCompileAction} to compile linkstamp source
-   *
-   * @param inputsForInvalidation: see {@link CppCompileAction#inputsForInvalidation}
-   */
+  /** Creates {@link CppCompileAction} to compile linkstamp source */
   public static CppCompileAction createLinkstampCompileAction(
       RuleContext ruleContext,
       Artifact sourceFile,
       Artifact outputFile,
       Iterable<Artifact> compilationInputs,
       Iterable<Artifact> nonCodeInputs,
-      Iterable<Artifact> inputsForInvalidation,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<String> additionalLinkstampDefines,
       CcToolchainProvider ccToolchainProvider,
@@ -71,7 +66,6 @@ public class CppLinkstampCompileHelper {
             .setSourceFile(sourceFile)
             .setSemantics(semantics)
             .setOutputs(outputFile, null)
-            .setInputsForInvalidation(inputsForInvalidation)
             .setBuiltinIncludeFiles(buildInfoHeaderArtifacts)
             .addMandatoryInputs(nonCodeInputs)
             .setCppConfiguration(cppConfiguration)

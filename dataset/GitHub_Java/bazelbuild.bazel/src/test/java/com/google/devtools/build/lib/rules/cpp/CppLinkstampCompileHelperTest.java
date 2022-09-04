@@ -190,12 +190,12 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
         "x/BUILD",
         "cc_binary(",
         "  name = 'foo',",
-        "  deps = ['bar'],",
+        "  deps = ['a'],",
         "  srcs = [ 'main.cc' ],",
         ")",
         "cc_library(",
-        "  name = 'bar',",
-        "  srcs = [ 'bar.cc' ],",
+        "  name = 'a',",
+        "  srcs = [ 'a.cc' ],",
         "  linkstamp = 'ls.cc',",
         ")");
 
@@ -217,14 +217,11 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
     Artifact mainObject =
         ActionsTestUtil.getFirstArtifactEndingWith(
             generatingAction.getInputs(), usePic ? "main.pic.o" : "main.o");
-    Artifact bar =
-        ImmutableList.copyOf(generatingAction.getInputs())
-            .stream()
-            .filter(a -> a.getExecPath().getBaseName().contains("bar"))
-            .findFirst()
-            .get();
+    Artifact aObject =
+        ActionsTestUtil.getFirstArtifactEndingWith(
+            generatingAction.getInputs(), usePic ? "a.pic.o" : "a.o");
     ImmutableList<Artifact> linkstampInputs =
         ImmutableList.copyOf(linkstampCompileAction.getInputs());
-    assertThat(linkstampInputs).containsAllOf(mainObject, bar);
+    assertThat(linkstampInputs).containsAllOf(mainObject, aObject);
   }
 }
