@@ -20,6 +20,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Optional;
 import io.netty.buffer.ByteBuf;
 import org.graylog.plugins.netflow.utils.ByteBufUtils;
+import org.graylog.plugins.netflow.utils.Protocol;
 import org.graylog.plugins.netflow.utils.UUIDs;
 import org.graylog2.plugin.Message;
 import org.joda.time.DateTime;
@@ -40,7 +41,9 @@ public class NetFlowV5 implements NetFlow {
     private static final String MF_ID = "nf_id";
     private static final String MF_FLOW_PACKET_ID = "nf_flow_packet_id";
     private static final String MF_TOS = "nf_tos";
+    private static final String MF_SRC = "nf_src";
     private static final String MF_SRC_ADDRESS = "nf_src_address";
+    private static final String MF_DST = "nf_dst";
     private static final String MF_DST_ADDRESS = "nf_dst_address";
     private static final String MF_NEXT_HOP = "nf_next_hop";
     private static final String MF_SRC_PORT = "nf_src_port";
@@ -48,6 +51,7 @@ public class NetFlowV5 implements NetFlow {
     private static final String MF_SRC_MASK = "nf_src_mask";
     private static final String MF_DST_MASK = "nf_dst_mask";
     private static final String MF_PROTO = "nf_proto";
+    private static final String MF_PROTO_NAME = "nf_proto_name";
     private static final String MF_TCP_FLAGS = "nf_tcp_flags";
     private static final String MF_START = "nf_start";
     private static final String MF_STOP = "nf_stop";
@@ -206,16 +210,22 @@ public class NetFlowV5 implements NetFlow {
         message.addField(MF_ID, uuid.toString());
         message.addField(MF_FLOW_PACKET_ID, fpId.toString());
         message.addField(MF_TOS, tos);
-        message.addField(MF_SRC_ADDRESS, srcAddress.getHostAddress()); // TODO Check if this does a DNS lookup!
-        message.addField(MF_DST_ADDRESS, dstAddress.getHostAddress()); // TODO Check if this does a DNS lookup!
+        message.addField(MF_SRC, srcAddress.getHostAddress() + ":" + srcPort);
+        message.addField(MF_SRC_ADDRESS, srcAddress.getHostAddress());
+        message.addField(MF_DST, dstAddress.getHostAddress() + ":" + dstPort);
+        message.addField(MF_DST_ADDRESS, dstAddress.getHostAddress());
         if (nextHop.isPresent()) {
-            message.addField(MF_NEXT_HOP, nextHop.get().getHostAddress()); // TODO Check if this does a DNS lookup!
+            message.addField(MF_NEXT_HOP, nextHop.get().getHostAddress());
         }
         message.addField(MF_SRC_PORT, srcPort);
         message.addField(MF_DST_PORT, dstPort);
         message.addField(MF_SRC_MASK, srcMask);
         message.addField(MF_DST_MASK, dstMask);
         message.addField(MF_PROTO, proto);
+        final Protocol protocol = Protocol.getByNumber(proto);
+        if (protocol != null) {
+            message.addField(MF_PROTO_NAME, protocol.getAlias());
+        }
         message.addField(MF_TCP_FLAGS, tcpflags);
         if (start.isPresent()) {
             message.addField(MF_START, start.get());

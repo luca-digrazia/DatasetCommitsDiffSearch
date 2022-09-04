@@ -30,6 +30,7 @@ import static org.joda.time.DateTimeZone.UTC;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class NetFlowV5PacketTest {
     @Test
@@ -54,14 +55,17 @@ public class NetFlowV5PacketTest {
         assertNotNull(message1.getField("nf_flow_packet_id"));
         assertNotEquals(message1.getField("nf_id"), message1.getField("nf_flow_packet_id"));
         assertEquals(0, message1.getField("nf_tos"));
+        assertEquals("10.0.2.2:54435", message1.getField("nf_src"));
         assertEquals("10.0.2.2", message1.getField("nf_src_address"));
+        assertEquals("10.0.2.15:22", message1.getField("nf_dst"));
         assertEquals("10.0.2.15", message1.getField("nf_dst_address"));
-        assertEquals("0.0.0.0", message1.getField("nf_next_hop"));
+        assertNull(message1.getField("nf_next_hop"));
         assertEquals(54435, message1.getField("nf_src_port"));
         assertEquals(22, message1.getField("nf_dst_port"));
         assertEquals(0, message1.getField("nf_src_mask"));
         assertEquals(0, message1.getField("nf_dst_mask"));
         assertEquals(6, message1.getField("nf_proto"));
+        assertEquals("TCP", message1.getField("nf_proto_name"));
         assertEquals(16, message1.getField("nf_tcp_flags"));
         assertEquals(new DateTime("2015-06-21T13:40:51.914+02:00", UTC), message1.getField("nf_start"));
         assertEquals(new DateTime("2015-05-02T18:38:07.196Z", UTC), message1.getField("nf_stop"));
@@ -74,14 +78,17 @@ public class NetFlowV5PacketTest {
         assertNotNull(message2.getField("nf_flow_packet_id"));
         assertNotEquals(message2.getField("nf_id"), message2.getField("nf_flow_packet_id"));
         assertEquals(0, message2.getField("nf_tos"));
+        assertEquals("10.0.2.15:22", message2.getField("nf_src"));
         assertEquals("10.0.2.15", message2.getField("nf_src_address"));
+        assertEquals("10.0.2.2:54435", message2.getField("nf_dst"));
         assertEquals("10.0.2.2", message2.getField("nf_dst_address"));
-        assertEquals("0.0.0.0", message2.getField("nf_next_hop"));
+        assertNull(message2.getField("nf_next_hop"));
         assertEquals(22, message2.getField("nf_src_port"));
         assertEquals(54435, message2.getField("nf_dst_port"));
         assertEquals(0, message2.getField("nf_src_mask"));
         assertEquals(0, message2.getField("nf_dst_mask"));
         assertEquals(6, message2.getField("nf_proto"));
+        assertEquals("TCP", message2.getField("nf_proto_name"));
         assertEquals(24, message2.getField("nf_tcp_flags"));
         assertEquals(new DateTime("2015-06-21T13:40:51.914+02:00", UTC), message2.getField("nf_start"));
         assertEquals(new DateTime("2015-05-02T18:38:07.196Z", UTC), message2.getField("nf_stop"));
