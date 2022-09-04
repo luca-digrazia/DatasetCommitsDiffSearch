@@ -64,8 +64,7 @@ public abstract class ReactiveDatasourceHealthCheck implements HealthCheck {
                                 });
                     });
                 } else {
-                    log.warn("Vert.x context unavailable to perform healthcheck of reactive datasource `" + dataSourceName
-                            + "`. This is unlikely to work correctly.");
+                    log.debug("Vert.x context not found for health check");
                     pgPool.query(healthCheckSQL)
                             .execute(ar -> {
                                 checkFailure(ar, builder, dataSourceName);
