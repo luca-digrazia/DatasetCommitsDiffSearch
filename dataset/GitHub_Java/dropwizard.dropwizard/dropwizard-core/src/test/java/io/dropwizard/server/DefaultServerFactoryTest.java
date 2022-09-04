@@ -1,9 +1,9 @@
 package io.dropwizard.server;
 
 import com.codahale.metrics.MetricRegistry;
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.CharStreams;
+import com.google.common.io.Resources;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
@@ -15,15 +15,13 @@ import io.dropwizard.logging.FileAppenderFactory;
 import io.dropwizard.logging.SyslogAppenderFactory;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.setup.ExceptionMapperBinder;
-import io.dropwizard.util.CharStreams;
-import io.dropwizard.util.Resources;
 import io.dropwizard.validation.BaseValidator;
 import org.eclipse.jetty.server.AbstractNetworkConnector;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.NetworkConnector;
 import org.eclipse.jetty.server.Server;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -41,8 +39,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.Assert.assertEquals;
 
 public class DefaultServerFactoryTest {
     private Environment environment = new Environment("test", Jackson.newObjectMapper(),
@@ -50,7 +47,7 @@ public class DefaultServerFactoryTest {
             ClassLoader.getSystemClassLoader());
     private DefaultServerFactory http;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
 
         final ObjectMapper objectMapper = Jackson.newObjectMapper();
@@ -179,7 +176,6 @@ public class DefaultServerFactoryTest {
             URL url = new URL("http://localhost:" + port + "/app/test");
             URLConnection connection = url.openConnection();
             connection.connect();
-
             return CharStreams.toString(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
         });
 
@@ -220,20 +216,6 @@ public class DefaultServerFactoryTest {
 
         assertEquals(http.getAdminContextPath(), environment.getAdminContext().getContextPath());
         assertEquals(http.getApplicationContextPath(), environment.getApplicationContext().getContextPath());
-    }
-
-    @Test
-    public void testDeserializeWithoutJsonAutoDetect() {
-        final ObjectMapper objectMapper = Jackson.newObjectMapper()
-            .setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
-
-        assertThatCode(() -> new YamlConfigurationFactory<>(
-            DefaultServerFactory.class,
-            BaseValidator.newValidator(),
-            objectMapper,
-            "dw"
-            ).build(new File(Resources.getResource("yaml/server.yml").toURI()))
-        ).doesNotThrowAnyException();
     }
 
     @Path("/test")
