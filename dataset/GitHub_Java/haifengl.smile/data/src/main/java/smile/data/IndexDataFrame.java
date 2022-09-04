@@ -94,52 +94,52 @@ public class IndexDataFrame implements DataFrame {
 
     @Override
     public <T> Vector<T> vector(int i) {
-        return df.<T>vector(i).get(index);
+        return df.vector(i);
     }
 
     @Override
     public BooleanVector booleanVector(int i) {
-        return df.booleanVector(i).get(index);
+        return df.booleanVector(i);
     }
 
     @Override
     public CharVector charVector(int i) {
-        return df.charVector(i).get(index);
+        return df.charVector(i);
     }
 
     @Override
     public ByteVector byteVector(int i) {
-        return df.byteVector(i).get(index);
+        return df.byteVector(i);
     }
 
     @Override
     public ShortVector shortVector(int i) {
-        return df.shortVector(i).get(index);
+        return df.shortVector(i);
     }
 
     @Override
     public IntVector intVector(int i) {
-        return df.intVector(i).get(index);
+        return df.intVector(i);
     }
 
     @Override
     public LongVector longVector(int i) {
-        return df.longVector(i).get(index);
+        return df.longVector(i);
     }
 
     @Override
     public FloatVector floatVector(int i) {
-        return df.floatVector(i).get(index);
+        return df.floatVector(i);
     }
 
     @Override
     public DoubleVector doubleVector(int i) {
-        return df.doubleVector(i).get(index);
+        return df.doubleVector(i);
     }
 
     @Override
     public StringVector stringVector(int i) {
-        return df.stringVector(i).get(index);
+        return df.stringVector(i);
     }
 
     @Override
