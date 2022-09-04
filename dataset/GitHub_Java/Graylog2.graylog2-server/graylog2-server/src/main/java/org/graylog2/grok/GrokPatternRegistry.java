@@ -16,13 +16,13 @@
  */
 package org.graylog2.grok;
 
+import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import oi.thekraken.grok.api.Grok;
-import org.graylog2.events.ClusterEventBus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +37,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.cache.CacheLoader.asyncReloading;
 
 @Singleton
@@ -45,40 +44,52 @@ public class GrokPatternRegistry {
     private static final Logger log = LoggerFactory.getLogger(GrokPatternRegistry.class);
 
     private final GrokPatternService grokPatternService;
-    private final ScheduledExecutorService daemonExecutor;
 
     private final AtomicReference<Set<GrokPattern>> patterns = new AtomicReference<>(Collections.emptySet());
     private final LoadingCache<String, Grok> grokCache;
+    private final LoadingCache<String, Grok> grokCacheNamedOnly;
 
     @Inject
-    public GrokPatternRegistry(@ClusterEventBus EventBus clusterBus,
+    public GrokPatternRegistry(EventBus serverEventBus,
                                GrokPatternService grokPatternService,
                                @Named("daemonScheduler") ScheduledExecutorService daemonExecutor) {
         this.grokPatternService = grokPatternService;
-        this.daemonExecutor = daemonExecutor;
 
         grokCache = CacheBuilder.newBuilder()
                 .expireAfterAccess(1, TimeUnit.MINUTES) // prevent from hanging on to memory forever
-                .build(asyncReloading(new GrokReloader(), daemonExecutor));
+                .build(asyncReloading(new GrokReloader(false), daemonExecutor));
+
+        grokCacheNamedOnly = CacheBuilder.newBuilder()
+                .expireAfterAccess(1, TimeUnit.MINUTES) // prevent from hanging on to memory forever
+                .build(asyncReloading(new GrokReloader(true), daemonExecutor));
 
         // trigger initial loading
         reload();
 
-        clusterBus.register(this);
+        serverEventBus.register(this);
     }
 
     @Subscribe
     public void grokPatternsChanged(GrokPatternsChangedEvent event) {
         // for now we simply reload everything and don't care what exactly has changed
-        daemonExecutor.execute(this::reload);
+        reload();
     }
 
     public Grok cachedGrokForPattern(String pattern) {
+        return cachedGrokForPattern(pattern, false);
+    }
+
+    public Grok cachedGrokForPattern(String pattern, boolean namedCapturesOnly) {
         try {
-            return grokCache.get(pattern);
+            if (namedCapturesOnly) {
+                return grokCacheNamedOnly.get(pattern);
+            } else {
+                return grokCache.get(pattern);
+            }
         } catch (ExecutionException e) {
-            log.error("Unable to load grok pattern " + pattern + " into cache", e);
-            throw new RuntimeException(e);
+            final Throwable rootCause = Throwables.getRootCause(e);
+            log.error("Unable to load grok pattern {} into cache", pattern, rootCause);
+            throw new RuntimeException(rootCause);
         }
     }
 
@@ -86,6 +97,7 @@ public class GrokPatternRegistry {
         final Set<GrokPattern> grokPatterns = grokPatternService.loadAll();
         patterns.set(grokPatterns);
         grokCache.invalidateAll();
+        grokCacheNamedOnly.invalidateAll();
     }
 
     public Set<GrokPattern> patterns() {
@@ -93,15 +105,19 @@ public class GrokPatternRegistry {
     }
 
     private class GrokReloader extends CacheLoader<String, Grok> {
+        private final boolean namedCapturesOnly;
+
+        GrokReloader(boolean namedCapturesOnly) {
+            this.namedCapturesOnly = namedCapturesOnly;
+        }
+
         @Override
         public Grok load(@Nonnull String pattern) throws Exception {
             final Grok grok = new Grok();
             for (GrokPattern grokPattern : patterns()) {
-                if (!isNullOrEmpty(grokPattern.name) || isNullOrEmpty(grokPattern.pattern)) {
-                    grok.addPattern(grokPattern.name, grokPattern.pattern);
-                }
+                grok.addPattern(grokPattern.name, grokPattern.pattern);
             }
-            grok.compile(pattern);
+            grok.compile(pattern, namedCapturesOnly);
             return grok;
         }
     }
