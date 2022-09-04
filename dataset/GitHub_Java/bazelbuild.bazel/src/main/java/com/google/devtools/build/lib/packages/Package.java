@@ -35,9 +35,7 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AttributeMap.AcceptsLabelAttribute;
 import com.google.devtools.build.lib.packages.License.DistributionType;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.util.SpellChecker;
@@ -70,7 +68,8 @@ import javax.annotation.Nullable;
  */
 @SuppressWarnings("JavaLangClash")
 public class Package {
-  public static final ObjectCodec<Package> CODEC = new PackageCodec();
+  public static final InjectingObjectCodec<Package, PackageCodecDependencies> CODEC =
+      new PackageCodec();
 
   /**
    * Common superclass for all name-conflict exceptions.
@@ -1576,7 +1575,8 @@ public class Package {
   }
 
   /** Package codec implementation. */
-  private static final class PackageCodec implements ObjectCodec<Package> {
+  private static final class PackageCodec
+      implements InjectingObjectCodec<Package, PackageCodecDependencies> {
     @Override
     public Class<Package> getEncodedClass() {
       return Package.class;
@@ -1584,22 +1584,22 @@ public class Package {
 
     @Override
     public void serialize(
-        SerializationContext context,
+        PackageCodecDependencies codecDeps,
+        com.google.devtools.build.lib.skyframe.serialization.SerializationContext context,
         Package input,
         CodedOutputStream codedOut)
         throws IOException, SerializationException {
-      PackageCodecDependencies codecDeps = context.getDependency(PackageCodecDependencies.class);
-      codecDeps.getPackageSerializer().serialize(context, input, codedOut);
+      codecDeps.getPackageSerializer().serialize(input, codedOut);
     }
 
     @Override
     public Package deserialize(
-        DeserializationContext context,
+        PackageCodecDependencies codecDeps,
+        com.google.devtools.build.lib.skyframe.serialization.DeserializationContext context,
         CodedInputStream codedIn)
         throws SerializationException, IOException {
-      PackageCodecDependencies codecDeps = context.getDependency(PackageCodecDependencies.class);
       try {
-        return codecDeps.getPackageDeserializer().deserialize(context, codedIn);
+        return codecDeps.getPackageDeserializer().deserialize(codedIn);
       } catch (PackageDeserializationException e) {
         throw new SerializationException("Failed to deserialize Package", e);
       } catch (InterruptedException e) {

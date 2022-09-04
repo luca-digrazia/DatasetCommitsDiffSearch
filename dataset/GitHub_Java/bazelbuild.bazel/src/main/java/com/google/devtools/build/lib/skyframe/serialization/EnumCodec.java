@@ -14,41 +14,48 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 
-/** Adapts an InjectingObjectCodec to an ObjectCodec. */
-public class InjectingObjectCodecAdapter<T, D> implements ObjectCodec<T> {
+/** Codec for an enum. */
+public class EnumCodec<T extends Enum<T>> implements ObjectCodec<T> {
 
-  private final InjectingObjectCodec<T, D> codec;
-  private final D dependency;
+  private final Class<T> enumClass;
 
   /**
-   * Creates an ObjectCodec from an InjectingObjectCodec.
-   *
-   * @param codec underlying codec to delegate to
-   * @param dependency object forwarded to {@code codec.deserialize}
+   * A cached copy of T.values(), to avoid allocating an array upon every deserialization operation.
    */
-  public InjectingObjectCodecAdapter(InjectingObjectCodec<T, D> codec, D dependency) {
-    this.codec = codec;
-    this.dependency = dependency;
+  private final ImmutableList<T> values;
+
+  public EnumCodec(Class<T> enumClass) {
+    this.enumClass = enumClass;
+    this.values = ImmutableList.copyOf(enumClass.getEnumConstants());
   }
 
   @Override
   public Class<T> getEncodedClass() {
-    return codec.getEncodedClass();
+    return enumClass;
   }
 
   @Override
-  public void serialize(SerializationContext context, T obj, CodedOutputStream codedOut)
-      throws SerializationException, IOException {
-    codec.serialize(dependency, context, obj, codedOut);
+  public void serialize(SerializationContext context, T value, CodedOutputStream codedOut)
+      throws IOException {
+    Preconditions.checkNotNull(value, "Enum value for %s is null", enumClass);
+    codedOut.writeEnumNoTag(value.ordinal());
   }
 
   @Override
   public T deserialize(DeserializationContext context, CodedInputStream codedIn)
       throws SerializationException, IOException {
-    return codec.deserialize(dependency, context, codedIn);
+    int ordinal = codedIn.readEnum();
+    try {
+      return values.get(ordinal);
+    } catch (ArrayIndexOutOfBoundsException e) {
+      throw new SerializationException(
+          "Invalid ordinal for " + enumClass.getName() + " enum: " + ordinal, e);
+    }
   }
 }

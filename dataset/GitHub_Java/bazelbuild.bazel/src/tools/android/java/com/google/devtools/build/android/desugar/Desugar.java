@@ -271,18 +271,6 @@ class Desugar {
     )
     public List<String> emulateCoreLibraryInterfaces;
 
-    /** Members that we will retarget to the given new owner. */
-    @Option(
-      name = "retarget_core_library_member",
-      defaultValue = "", // ignored
-      allowMultiple = true,
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Method invocations to retarget, given as \"class/Name#member->new/class/Name\".  "
-          + "The new owner is blindly assumed to exist."
-    )
-    public List<String> retargetCoreLibraryMembers;
-
     /** Set to work around b/62623509 with JaCoCo versions prior to 0.7.9. */
     // TODO(kmb): Remove when Android Studio doesn't need it anymore (see b/37116789)
     @Option(
@@ -400,8 +388,7 @@ class Desugar {
                   rewriter,
                   loader,
                   ImmutableList.copyOf(options.rewriteCoreLibraryPrefixes),
-                  ImmutableList.copyOf(options.emulateCoreLibraryInterfaces),
-                  options.retargetCoreLibraryMembers);
+                  ImmutableList.copyOf(options.emulateCoreLibraryInterfaces));
 
       desugarClassesInInput(
           inputFiles,
@@ -710,7 +697,6 @@ class Desugar {
                 interfaceCache,
                 depsCollector,
                 bootclasspathReader,
-                loader,
                 store,
                 options.legacyJacocoFix);
       }
@@ -790,7 +776,6 @@ class Desugar {
                   interfaceCache,
                   depsCollector,
                   bootclasspathReader,
-                  loader,
                   store,
                   options.legacyJacocoFix);
         }

@@ -54,6 +54,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
@@ -65,6 +66,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.RegexFilter;
+import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
@@ -120,7 +122,8 @@ import javax.annotation.Nullable;
           + "depend on it and not targets that it depends on."
 )
 public class BuildConfiguration implements BuildConfigurationInterface {
-  public static final ObjectCodec<BuildConfiguration> CODEC = new BuildConfigurationCodec();
+  public static final InjectingObjectCodec<BuildConfiguration, FileSystemProvider> CODEC =
+      new BuildConfigurationCodec();
 
   /**
    * Sorts fragments by class name. This produces a stable order which, e.g., facilitates consistent
@@ -139,9 +142,10 @@ public class BuildConfiguration implements BuildConfigurationInterface {
    * declare {@link ImmutableList} signatures on their interfaces vs. {@link List}). This is because
    * fragment instances may be shared across configurations.
    */
-  @AutoCodec(strategy = AutoCodec.Strategy.POLYMORPHIC)
+  @AutoCodec(strategy = AutoCodec.Strategy.POLYMORPHIC, dependency = FileSystemProvider.class)
   public abstract static class Fragment {
-    public static final ObjectCodec<Fragment> CODEC = new BuildConfiguration_Fragment_AutoCodec();
+    public static final InjectingObjectCodec<Fragment, FileSystemProvider> CODEC =
+        new BuildConfiguration_Fragment_AutoCodec();
 
     /**
      * Validates the options for this Fragment. Issues warnings for the
@@ -381,6 +385,53 @@ public class BuildConfiguration implements BuildConfigurationInterface {
     @Override
     public String getTypeDescription() {
       return "An option for a plugin";
+    }
+  }
+
+  /** TODO(bazel-team): document this */
+  public static class RunsPerTestConverter extends PerLabelOptions.PerLabelOptionsConverter {
+    @Override
+    public PerLabelOptions convert(String input) throws OptionsParsingException {
+      try {
+        return parseAsInteger(input);
+      } catch (NumberFormatException ignored) {
+        return parseAsRegex(input);
+      }
+    }
+
+    private PerLabelOptions parseAsInteger(String input)
+        throws NumberFormatException, OptionsParsingException {
+      int numericValue = Integer.parseInt(input);
+      if (numericValue <= 0) {
+        throw new OptionsParsingException("'" + input + "' should be >= 1");
+      } else {
+        RegexFilter catchAll = new RegexFilter(Collections.singletonList(".*"),
+            Collections.<String>emptyList());
+        return new PerLabelOptions(catchAll, Collections.singletonList(input));
+      }
+    }
+
+    private PerLabelOptions parseAsRegex(String input) throws OptionsParsingException {
+      PerLabelOptions testRegexps = super.convert(input);
+      if (testRegexps.getOptions().size() != 1) {
+        throw new OptionsParsingException(
+            "'" + input + "' has multiple runs for a single pattern");
+      }
+      String runsPerTest = Iterables.getOnlyElement(testRegexps.getOptions());
+      try {
+        int numericRunsPerTest = Integer.parseInt(runsPerTest);
+        if (numericRunsPerTest <= 0) {
+          throw new OptionsParsingException("'" + input + "' has a value < 1");
+        }
+      } catch (NumberFormatException e) {
+        throw new OptionsParsingException("'" + input + "' has a non-numeric value", e);
+      }
+      return testRegexps;
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "a positive integer or test_regex@runs. This flag may be passed more than once";
     }
   }
 
@@ -2131,7 +2182,8 @@ public class BuildConfiguration implements BuildConfigurationInterface {
     return GenericBuildEvent.protoChaining(this).setConfiguration(builder.build()).build();
   }
 
-  private static class BuildConfigurationCodec implements ObjectCodec<BuildConfiguration> {
+  private static class BuildConfigurationCodec
+      implements InjectingObjectCodec<BuildConfiguration, FileSystemProvider> {
     @Override
     public Class<BuildConfiguration> getEncodedClass() {
       return BuildConfiguration.class;
@@ -2139,28 +2191,31 @@ public class BuildConfiguration implements BuildConfigurationInterface {
 
     @Override
     public void serialize(
+        FileSystemProvider fsProvider,
         SerializationContext context,
         BuildConfiguration obj,
         CodedOutputStream codedOut)
         throws SerializationException, IOException {
-      BlazeDirectories.CODEC.serialize(context, obj.directories, codedOut);
+      BlazeDirectories.CODEC.serialize(fsProvider, context, obj.directories, codedOut);
       codedOut.writeInt32NoTag(obj.fragments.size());
       for (Fragment fragment : obj.fragments.values()) {
-        Fragment.CODEC.serialize(context, fragment, codedOut);
+        Fragment.CODEC.serialize(fsProvider, context, fragment, codedOut);
       }
       BuildOptions.CODEC.serialize(context, obj.buildOptions, codedOut);
       StringCodecs.asciiOptimized().serialize(context, obj.repositoryName, codedOut);
     }
 
     @Override
-    public BuildConfiguration deserialize(DeserializationContext context, CodedInputStream codedIn)
+    public BuildConfiguration deserialize(
+        FileSystemProvider fsProvider, DeserializationContext context, CodedInputStream codedIn)
         throws SerializationException, IOException {
-      BlazeDirectories blazeDirectories = BlazeDirectories.CODEC.deserialize(context, codedIn);
+      BlazeDirectories blazeDirectories =
+          BlazeDirectories.CODEC.deserialize(fsProvider, context, codedIn);
       int length = codedIn.readInt32();
       ImmutableSortedMap.Builder<Class<? extends Fragment>, Fragment> builder =
           new ImmutableSortedMap.Builder<>(lexicalFragmentSorter);
       for (int i = 0; i < length; ++i) {
-        Fragment fragment = Fragment.CODEC.deserialize(context, codedIn);
+        Fragment fragment = Fragment.CODEC.deserialize(fsProvider, context, codedIn);
         builder.put(fragment.getClass(), fragment);
       }
       BuildOptions options = BuildOptions.CODEC.deserialize(context, codedIn);
