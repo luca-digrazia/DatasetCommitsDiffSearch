@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
+import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -424,7 +425,7 @@ public final class SandboxModule extends BlazeModule {
     return new LocalSpawnRunner(
         env.getExecRoot(),
         localExecutionOptions,
-        env.getLocalResourceManager(),
+        ResourceManager.instance(),
         LocalEnvProvider.forCurrentOs(env.getClientEnv()),
         env.getBlazeWorkspace().getBinTools());
   }

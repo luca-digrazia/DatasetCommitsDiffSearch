@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import javax.annotation.Nullable;
 
 /** Implements detour-based sandboxed spawn. */
 public class WindowsSandboxedSpawn implements SandboxedSpawn {
@@ -47,13 +46,6 @@ public class WindowsSandboxedSpawn implements SandboxedSpawn {
   @Override
   public ImmutableMap<String, String> getEnvironment() {
     return environment;
-  }
-
-  @Override
-  @Nullable
-  public Path getStatisticsPath() {
-    // On Windows, Bazel currently does not support per-process statistics.
-    return null;
   }
 
   @Override

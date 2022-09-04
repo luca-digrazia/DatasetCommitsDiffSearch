@@ -71,8 +71,7 @@ public final class WindowsSandboxUtil {
     }
     String outErr = outErrBytes.toString().replaceFirst("\n$", "");
 
-    process.waitForUninterruptibly();
-    int exitCode = process.exitValue();
+    int exitCode = SandboxHelpers.waitForProcess(process);
     if (exitCode == 0) {
       // TODO(rongjiecomputer): Validate the version number and ensure we support it. Would be nice
       // to reuse
