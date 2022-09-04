@@ -11,7 +11,6 @@ import com.sun.jersey.client.apache4.config.ApacheHttpClient4Config;
 import com.sun.jersey.client.apache4.config.DefaultApacheHttpClient4Config;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.jersey.JacksonMessageBodyProvider;
-import com.yammer.dropwizard.validation.Validator;
 import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.scheme.SchemeRegistry;
 
@@ -198,7 +197,7 @@ public class JerseyClientBuilder {
     private ApacheHttpClient4Config buildConfig(ObjectMapper objectMapper) {
         final ApacheHttpClient4Config config = new DefaultApacheHttpClient4Config();
         config.getSingletons().addAll(singletons);
-        config.getSingletons().add(new JacksonMessageBodyProvider(objectMapper, new Validator()));
+        config.getSingletons().add(new JacksonMessageBodyProvider(objectMapper));
         config.getClasses().addAll(providers);
         config.getFeatures().putAll(features);
         config.getProperties().putAll(properties);
