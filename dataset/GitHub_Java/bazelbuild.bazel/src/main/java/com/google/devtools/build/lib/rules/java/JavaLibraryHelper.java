@@ -193,11 +193,7 @@ public final class JavaLibraryHelper {
             jacocoInstrumental);
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(output, artifactsBuilder);
     helper.createCompileAction(
-        output,
-        null /* manifestProtoOutput */,
-        null /* gensrcOutputJar */,
-        outputDepsProto,
-        null /* outputMetadata */);
+        output, null /* manifestProtoOutput */, null /* gensrcOutputJar */, outputDepsProto);
     Artifact iJar = helper.createCompileTimeJarAction(output, artifactsBuilder);
 
     artifactsBuilder.addRuntimeJar(output);
@@ -231,14 +227,11 @@ public final class JavaLibraryHelper {
             .addTransitiveArgs(directArgs, BOTH)
             .addTransitiveDependencies(deps, true /* recursive */)
             .build();
-    Artifact compileTimeDepArtifact = artifacts.getCompileTimeDependencyArtifact();
-    NestedSet<Artifact> compileTimeJavaDepArtifacts = compileTimeDepArtifact != null 
-        ? NestedSetBuilder.create(Order.STABLE_ORDER, compileTimeDepArtifact)
-        : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
+
     return JavaCompilationArgsProvider.create(
         isReportedAsStrict ? directArgs : transitiveArgs,
         transitiveArgs,
-        compileTimeJavaDepArtifacts,
+        NestedSetBuilder.create(Order.STABLE_ORDER, artifacts.getCompileTimeDependencyArtifact()),
         NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER));
   }
 
@@ -257,7 +250,6 @@ public final class JavaLibraryHelper {
             .build();
     attributes.addCompileTimeClassPathEntries(args.getCompileTimeJars());
     attributes.addRuntimeClassPathEntries(args.getRuntimeJars());
-    attributes.addInstrumentationMetadataEntries(args.getInstrumentationMetadata());
   }
 
   private NestedSet<Artifact> getNonRecursiveCompileTimeJarsFromDeps() {
