@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages.util;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import java.io.IOException;
@@ -27,73 +26,13 @@ public class MockPlatformSupport {
     mockToolsConfig.create(
         platformsPath + "/BUILD",
         "package(default_visibility=['//visibility:public'])",
-        "constraint_setting(name = 'cpu')",
-        "constraint_value(",
-        "    name = 'x86_32',",
-        "    constraint_setting = ':cpu',",
-        ")",
-        "constraint_value(",
-        "    name = 'x86_64',",
-        "    constraint_setting = ':cpu',",
-        ")",
-        "constraint_value(",
-        "    name = 'ppc',",
-        "    constraint_setting = ':cpu',",
-        ")",
-        "constraint_value(",
-        "    name = 'arm',",
-        "    constraint_setting = ':cpu',",
-        ")",
-        "constraint_setting(name = 'os')",
-        "constraint_value(",
-        "    name = 'osx',",
-        "    constraint_setting = ':os',",
-        ")",
-        "constraint_value(",
-        "    name = 'ios',",
-        "    constraint_setting = ':os',",
-        ")",
-        "constraint_value(",
-        "    name = 'android',",
-        "    constraint_setting = ':os',",
-        ")",
-        "constraint_value(",
-        "    name = 'linux',",
-        "    constraint_setting = ':os',",
-        ")",
-        "constraint_value(",
-        "    name = 'windows',",
-        "    constraint_setting = ':os',",
-        ")",
         "platform(",
         "   name = 'target_platform',",
         "   target_platform = True,",
-        "    cpu_constraints = [",
-        "        ':x86_32',",
-        "        ':x86_64',",
-        "        ':ppc',",
-        "        ':arm',",
-        "    ],",
-        "    os_constraints = [",
-        "        ':osx',",
-        "        ':linux',",
-        "        ':windows',",
-        "    ],",
         ")",
         "platform(",
         "   name = 'host_platform',",
         "   host_platform = True,",
-        "    cpu_constraints = [",
-        "        ':x86_32',",
-        "        ':x86_64',",
-        "        ':ppc',",
-        "        ':arm',",
-        "    ],",
-        "    os_constraints = [",
-        "        ':osx',",
-        "        ':linux',",
-        "        ':windows',",
-        "    ],",
         ")");
   }
 
@@ -111,10 +50,10 @@ public class MockPlatformSupport {
         ")",
         "toolchain(",
         "   name = 'toolchain_cc-compiler-piii',",
-        "   toolchain_type = '" + TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_type',",
-        "   toolchain = '"
-            + crosstoolLabel.getRelativeWithRemapping("cc-compiler-piii", ImmutableMap.of())
-            + "',",
+        "   toolchain_type = '"
+            + TestConstants.TOOLS_REPOSITORY
+            + "//tools/cpp:toolchain_category',",
+        "   toolchain = '" + crosstoolLabel.getRelative("cc-compiler-piii") + "',",
         "   target_compatible_with = [':mock_value'],",
         ")");
   }
