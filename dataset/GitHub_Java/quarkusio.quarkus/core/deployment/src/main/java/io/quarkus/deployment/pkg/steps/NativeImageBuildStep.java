@@ -182,10 +182,8 @@ public class NativeImageBuildStep {
             throw new RuntimeException("Failed to get GraalVM version", e);
         }
 
-        boolean isMandrel = false;
         if (graalVMVersion.isPresent()) {
             checkGraalVMVersion(graalVMVersion.get());
-            isMandrel = graalVMVersion.get().contains("Mandrel");
         } else {
             log.error("Unable to get GraalVM version from the native-image binary.");
         }
@@ -308,7 +306,7 @@ public class NativeImageBuildStep {
                         + " Please consider removing this configuration key as it is ignored (JNI is always enabled) and it"
                         + " will be removed in a future Quarkus version.");
             }
-            if (!nativeConfig.enableServer && !SystemUtils.IS_OS_WINDOWS && !isMandrel) {
+            if (!nativeConfig.enableServer && !SystemUtils.IS_OS_WINDOWS) {
                 command.add("--no-server");
             }
             if (nativeConfig.enableVmInspection) {
