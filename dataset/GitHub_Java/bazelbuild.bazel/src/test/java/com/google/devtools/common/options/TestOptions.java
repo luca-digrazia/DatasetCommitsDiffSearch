@@ -16,8 +16,6 @@ package com.google.devtools.common.options;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.common.options.InvocationPolicyEnforcerTestBase.ToListConverter;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeSet;
 
 /** Options for testing. */
 public class TestOptions extends OptionsBase {
@@ -28,13 +26,7 @@ public class TestOptions extends OptionsBase {
 
   public static final String TEST_STRING_DEFAULT = "test string default";
 
-  @Option(
-    name = "test_string",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = TEST_STRING_DEFAULT,
-    help = "a string-valued option to test simple option operations"
-  )
+  @Option(name = "test_string", defaultValue = TEST_STRING_DEFAULT)
   public String testString;
 
   /*
@@ -42,12 +34,9 @@ public class TestOptions extends OptionsBase {
    */
 
   @Option(
-    name = "test_multiple_string",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "", // default value is ignored when allowMultiple=true.
-    allowMultiple = true,
-    help = "a repeatable string-valued flag with its own unhelpful help text"
+      name = "test_multiple_string",
+      defaultValue = "", // default value is ignored when allowMultiple=true.
+      allowMultiple = true
   )
   public List<String> testMultipleString;
 
@@ -56,15 +45,10 @@ public class TestOptions extends OptionsBase {
    */
 
   @Option(
-    name = "test_list_converters",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "",
-    allowMultiple = true,
-    converter = ToListConverter.class,
-    help =
-        "a repeatable flag that accepts lists, but doesn't want to have lists of lists "
-            + "as a final type"
+      name = "test_list_converters",
+      defaultValue = "",
+      allowMultiple = true,
+      converter = ToListConverter.class
   )
   public List<String> testListConverters;
 
@@ -78,19 +62,16 @@ public class TestOptions extends OptionsBase {
   public static final String EXPANDED_D_TEST_EXPANSION = "bar";
 
   @Option(
-    name = "test_expansion",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansion = {
-      "--noexpanded_a",
-      "--expanded_b=false",
-      "--expanded_c",
-      "42",
-      "--expanded_d",
-      "bar"
-    },
-    help = "this expands to an alphabet soup."
+      name = "test_expansion",
+      defaultValue = "null",
+      expansion = {
+          "--noexpanded_a",
+          "--expanded_b=false",
+          "--expanded_c",
+          "42",
+          "--expanded_d",
+          "bar"
+      }
   )
   public Void testExpansion;
 
@@ -100,81 +81,53 @@ public class TestOptions extends OptionsBase {
   public static final String EXPANDED_D_TEST_RECURSIVE_EXPANSION = "baz";
 
   @Option(
-    name = "test_recursive_expansion_top_level",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansion = {
-      "--test_recursive_expansion_middle1",
-      "--test_recursive_expansion_middle2",
-    },
-    help = "Lets the children do all the work."
+      name = "test_recursive_expansion_top_level",
+      defaultValue = "null",
+      expansion = {
+          "--test_recursive_expansion_middle1",
+          "--test_recursive_expansion_middle2",
+      }
   )
   public Void testRecursiveExpansionTopLevel;
 
   @Option(
-    name = "test_recursive_expansion_middle1",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansion = {
-      "--expanded_a=false",
-      "--expanded_c=56",
-    }
+      name = "test_recursive_expansion_middle1",
+      defaultValue = "null",
+      expansion = {
+          "--expanded_a=false",
+          "--expanded_c=56",
+      }
   )
   public Void testRecursiveExpansionMiddle1;
 
   @Option(
-    name = "test_recursive_expansion_middle2",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansion = {
-      "--expanded_b=false",
-      "--expanded_d=baz",
-    }
+      name = "test_recursive_expansion_middle2",
+      defaultValue = "null",
+      expansion = {
+          "--expanded_b=false",
+          "--expanded_d=baz",
+      }
   )
   public Void testRecursiveExpansionMiddle2;
 
   public static final boolean EXPANDED_A_DEFAULT = true;
 
-  @Option(
-    name = "expanded_a",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "true"
-  )
+  @Option(name = "expanded_a", defaultValue = "true")
   public boolean expandedA;
 
   public static final boolean EXPANDED_B_DEFAULT = true;
 
-  @Option(
-    name = "expanded_b",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "true"
-  )
+  @Option(name = "expanded_b", defaultValue = "true")
   public boolean expandedB;
 
   public static final int EXPANDED_C_DEFAULT = 12;
 
-  @Option(
-    name = "expanded_c",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "12",
-    help = "an int-value'd flag used to test expansion logic"
-  )
+  @Option(name = "expanded_c", defaultValue = "12")
   public int expandedC;
 
   public static final String EXPANDED_D_DEFAULT = "foo";
 
-  @Option(
-    name = "expanded_d",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "foo"
-  )
+  @Option(name = "expanded_d", defaultValue = "foo")
   public String expandedD;
 
   /*
@@ -184,18 +137,15 @@ public class TestOptions extends OptionsBase {
   public static final String EXPANDED_MULTIPLE_1 = "expandedFirstValue";
   public static final String EXPANDED_MULTIPLE_2 = "expandedSecondValue";
 
-  @Option(
-    name = "test_expansion_to_repeatable",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansion = {
-      "--test_multiple_string=expandedFirstValue",
-      "--test_multiple_string=expandedSecondValue"
-    },
-    help = "Go forth and multiply, they said."
+  @Option(name = "test_expansion_to_repeatable",
+      defaultValue = "null",
+      expansion = {
+          "--test_multiple_string=expandedFirstValue",
+          "--test_multiple_string=expandedSecondValue"
+      }
   )
   public Void testExpansionToRepeatable;
+
 
   /*
    * Implicit requirement flags
@@ -205,43 +155,29 @@ public class TestOptions extends OptionsBase {
   public static final String IMPLICIT_REQUIREMENT_A_REQUIRED = "implicit requirement, required";
 
   @Option(
-    name = "test_implicit_requirement",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = TEST_IMPLICIT_REQUIREMENT_DEFAULT,
-    implicitRequirements = {"--implicit_requirement_a=" + IMPLICIT_REQUIREMENT_A_REQUIRED},
-    help = "this option really needs that other one, isolation of purpose has failed."
+      name = "test_implicit_requirement",
+      defaultValue = TEST_IMPLICIT_REQUIREMENT_DEFAULT,
+      implicitRequirements = {"--implicit_requirement_a=" + IMPLICIT_REQUIREMENT_A_REQUIRED}
   )
   public String testImplicitRequirement;
 
   public static final String IMPLICIT_REQUIREMENT_A_DEFAULT = "implicit requirement, unrequired";
 
-  @Option(
-    name = "implicit_requirement_a",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = IMPLICIT_REQUIREMENT_A_DEFAULT
-  )
+  @Option(name = "implicit_requirement_a", defaultValue = IMPLICIT_REQUIREMENT_A_DEFAULT)
   public String implicitRequirementA;
 
   public static final String TEST_RECURSIVE_IMPLICIT_REQUIREMENT_DEFAULT = "recursive implicit";
   public static final String TEST_IMPLICIT_REQUIREMENT_REQUIRED = "intermediate, required";
 
   @Option(
-    name = "test_recursive_implicit_requirement",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = TEST_RECURSIVE_IMPLICIT_REQUIREMENT_DEFAULT,
-    implicitRequirements = {"--test_implicit_requirement=" + TEST_IMPLICIT_REQUIREMENT_REQUIRED}
+      name = "test_recursive_implicit_requirement",
+      defaultValue = TEST_RECURSIVE_IMPLICIT_REQUIREMENT_DEFAULT,
+      implicitRequirements = {"--test_implicit_requirement=" + TEST_IMPLICIT_REQUIREMENT_REQUIRED}
   )
   public String testRecursiveImplicitRequirement;
 
   public static final String TEST_EXPANSION_FUNCTION_ACCEPTED_VALUE = "valueA";
   public static final String EXPANDED_D_EXPANSION_FUNCTION_VALUE = "expanded valueA";
-
-  /*
-   * Expansion function flags
-   */
 
   /** Used for testing an expansion flag that requires a value. */
   public static class TestExpansionFunction implements ExpansionFunction {
@@ -262,10 +198,7 @@ public class TestOptions extends OptionsBase {
   @Option(
     name = "test_expansion_function",
     defaultValue = "null",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    expansionFunction = TestExpansionFunction.class,
-    help = "this is for testing expansion-by-function functionality."
+    expansionFunction = TestExpansionFunction.class
   )
   public Void testExpansionFunction;
 
@@ -282,84 +215,7 @@ public class TestOptions extends OptionsBase {
   @Option(
     name = "test_void_expansion_function",
     defaultValue = "null",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
     expansionFunction = TestVoidExpansionFunction.class
   )
   public Void testVoidExpansionFunction;
-
-  // Interestingly, the class needs to be public, or else the default constructor ends up not
-  // being public and the expander can't be instantiated.
-  /**
-   * Defines an expansion function that looks at other options defined with it and expands to
-   * options that match a pattern.
-   */
-  public static class ExpansionDependsOnOtherOptionDefinitions implements ExpansionFunction {
-    @Override
-    public ImmutableList<String> getExpansion(ExpansionContext context) {
-      TreeSet<String> flags = new TreeSet<>();
-      for (Map.Entry<String, ?> entry : context.getOptionsData().getAllOptionDefinitions()) {
-        if (entry.getKey().startsWith("specialexp_")) {
-          flags.add("--" + entry.getKey());
-        }
-      }
-      return ImmutableList.copyOf(flags);
-    }
-  }
-
-  @Option(
-    name = "prefix_expansion",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansionFunction = ExpansionDependsOnOtherOptionDefinitions.class,
-    help = "Expands to all options with a specific prefix."
-  )
-  public Void specialExp;
-
-  /**
-   * Defines an expansion function that adapts its expansion to the value assigned to the original
-   * expansion option.
-   */
-  public static class ExpansionDependsOnFlagValue implements ExpansionFunction {
-    @Override
-    public ImmutableList<String> getExpansion(ExpansionContext context)
-        throws OptionsParsingException {
-      String value = context.getUnparsedValue();
-      if (value == null) {
-        throw new ExpansionNeedsValueException("Expansion value not set.");
-      }
-      if (value.equals("foo_bar")) {
-        return ImmutableList.<String>of("--specialexp_foo", "--specialexp_bar");
-      }
-
-      throw new OptionsParsingException("Unexpected expansion argument: " + value);
-    }
-  }
-
-  @Option(
-    name = "dynamicexp",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    expansionFunction = ExpansionDependsOnFlagValue.class,
-    help = "Expands depending on the value provided."
-  )
-  public Void variableExpansion;
-
-  @Option(
-    name = "specialexp_foo",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "false"
-  )
-  public boolean specialExpFoo;
-
-  @Option(
-    name = "specialexp_bar",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "false"
-  )
-  public boolean specialExpBar;
 }

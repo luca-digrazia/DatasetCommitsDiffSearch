@@ -14,6 +14,8 @@
 
 package com.google.devtools.common.options;
 
+import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -25,6 +27,7 @@ import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.devtools.common.options.OptionsParser.OptionDescription;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParser.OptionValueDescription;
 import com.google.devtools.common.options.OptionsParser.UnparsedOptionValueDescription;
 import java.lang.reflect.Constructor;
@@ -38,7 +41,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -474,14 +476,13 @@ class OptionsParserImpl {
 
       if (option.wrapperOption()) {
         if (value.startsWith("-")) {
-          String sourceMessage =  "Unwrapped from wrapper option --" + originalName;
-          List<String> unparsed =
-              parse(
-                  priority,
-                  o -> sourceMessage,
-                  null, // implicitDependent
-                  null, // expandedFrom
-                  ImmutableList.of(value));
+
+          List<String> unparsed = parse(
+              priority,
+              Functions.constant("Unwrapped from wrapper option --" + originalName),
+              null, // implicitDependent
+              null, // expandedFrom
+              ImmutableList.of(value));
 
           if (!unparsed.isEmpty()) {
             throw new OptionsParsingException(
@@ -526,11 +527,12 @@ class OptionsParserImpl {
       if (OptionsData.isExpansionOption(field.getAnnotation(Option.class))) {
         ImmutableList<String> expansion = optionsData.getEvaluatedExpansion(field, value);
 
-        String sourceMessage = "expanded from option --"
-            + originalName
-            + " from "
-            + sourceFunction.apply(originalName);
-        Function<Object, String> expansionSourceFunction = o -> sourceMessage;
+        Function<Object, String> expansionSourceFunction =
+            Functions.constant(
+                "expanded from option --"
+                    + originalName
+                    + " from "
+                    + sourceFunction.apply(originalName));
         maybeAddDeprecationWarning(field);
         List<String> unparsed =
             parse(priority, expansionSourceFunction, null, originalName, expansion);
@@ -581,13 +583,12 @@ class OptionsParserImpl {
     // TODO(bazel-team): this should happen when the option is encountered.
     if (!implicitRequirements.isEmpty()) {
       for (Map.Entry<String, List<String>> entry : implicitRequirements.entrySet()) {
-        String sourceMessage =
-            "implicit requirement of option --"
-                + entry.getKey()
-                + " from "
-                + sourceFunction.apply(entry.getKey());
         Function<Object, String> requirementSourceFunction =
-            o -> sourceMessage;
+            Functions.constant(
+                "implicit requirement of option --"
+                    + entry.getKey()
+                    + " from "
+                    + sourceFunction.apply(entry.getKey()));
 
         List<String> unparsed = parse(priority, requirementSourceFunction, entry.getKey(), null,
             entry.getValue());
@@ -669,7 +670,7 @@ class OptionsParserImpl {
     Option option = field == null ? null : field.getAnnotation(Option.class);
 
     if (option == null
-        || ImmutableList.copyOf(option.metadataTags()).contains(OptionMetadataTag.INTERNAL)) {
+        || option.optionUsageRestrictions() == OptionUsageRestrictions.INTERNAL) {
       // This also covers internal options, which are treated as if they did not exist.
       throw new OptionsParsingException("Unrecognized option: " + arg, arg);
     }

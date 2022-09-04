@@ -38,61 +38,38 @@ public class OptionsTest {
 
   public static class HttpOptions extends OptionsBase {
 
-    @Option(
-      name = "host",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "www.google.com",
-      help = "The URL at which the server will be running."
-    )
+    @Option(name = "host",
+            defaultValue = "www.google.com",
+            help = "The URL at which the server will be running.")
     public String host;
 
-    @Option(
-      name = "port",
-      abbrev = 'p',
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "80",
-      help = "The port at which the server will be running."
-    )
+    @Option(name = "port",
+            abbrev = 'p',
+            defaultValue = "80",
+            help = "The port at which the server will be running.")
     public int port;
 
-    @Option(
-      name = "debug",
-      abbrev = 'd',
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false",
-      help = "debug"
-    )
+    @Option(name = "debug",
+            abbrev = 'd',
+            defaultValue = "false",
+            help = "debug")
     public boolean isDebugging;
 
-    @Option(
-      name = "tristate",
-      abbrev = 't',
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "auto",
-      help = "tri-state option returning auto by default"
-    )
+    @Option(name = "tristate",
+        abbrev = 't',
+        defaultValue = "auto",
+        help = "tri-state option returning auto by default")
     public TriState triState;
 
-    @Option(
-      name = "special",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null",
-      expansion = {"--host=special.google.com", "--port=8080"}
-    )
+    @Option(name = "special",
+            defaultValue = "null",
+            expansion = { "--host=special.google.com", "--port=8080"})
     public Void special;
 
     // Interestingly, the class needs to be public, or else the default constructor ends up not
     // being public and the expander can't be instantiated.
-    /**
-     * Defines an expansion function that looks at other options defined with it and expands to
-     * options that match a pattern.
-     */
-    public static class ExpansionDependsOnOtherOptionDefinitions implements ExpansionFunction {
+    /** SpecialExpansion */
+    public static class SpecialExpansion implements ExpansionFunction {
       @Override
       public ImmutableList<String> getExpansion(ExpansionContext context) {
         TreeSet<String> flags = new TreeSet<>();
@@ -105,11 +82,8 @@ public class OptionsTest {
       }
     }
 
-    /**
-     * Defines an expansion function that adapts its expansion to the value assigned to the original
-     * expansion option.
-     */
-    public static class ExpansionDependsOnFlagValue implements ExpansionFunction {
+    /** VariableExpansion */
+    public static class VariableExpansion implements ExpansionFunction {
       @Override
       public ImmutableList<String> getExpansion(ExpansionContext context)
           throws OptionsParsingException {
@@ -125,38 +99,16 @@ public class OptionsTest {
       }
     }
 
-    @Option(
-      name = "specialexp_foo",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false"
-    )
+    @Option(name = "specialexp_foo", defaultValue = "false")
     public boolean specialExpFoo;
 
-    @Option(
-      name = "specialexp_bar",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false"
-    )
+    @Option(name = "specialexp_bar", defaultValue = "false")
     public boolean specialExpBar;
 
-    @Option(
-      name = "specialexp",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null",
-      expansionFunction = ExpansionDependsOnOtherOptionDefinitions.class
-    )
+    @Option(name = "specialexp", defaultValue = "null", expansionFunction = SpecialExpansion.class)
     public Void specialExp;
 
-    @Option(
-      name = "dynamicexp",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null",
-      expansionFunction = ExpansionDependsOnFlagValue.class
-    )
+    @Option(name = "dynamicexp", defaultValue = "null", expansionFunction = VariableExpansion.class)
     public Void variableExpansion;
   }
 
@@ -427,29 +379,21 @@ public class OptionsTest {
     String usage = Options.getUsage(HttpOptions.class);
     assertThat(usage)
         .contains("  --special\n    Expands to: --host=special.google.com --port=8080");
-    // Expect that the usage text contains the expansion appropriate to the options bases that were
-    // loaded into the options parser.
-    assertThat(usage).contains("  --specialexp\n    Expands to: --specialexp_bar --specialexp_foo");
+    // Expansion functions aren't evaluated since we're just grabbing the usage for an OptionsBase
+    // subclass and not for a completed parser. The completed case is covered in OptionsParserTest.
+    assertThat(usage).contains("  --specialexp\n    Expands to unknown options.");
   }
 
   public static class NullTestOptions extends OptionsBase {
-    @Option(
-      name = "host",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null",
-      help = "The URL at which the server will be running."
-    )
+    @Option(name = "host",
+            defaultValue = "null",
+            help = "The URL at which the server will be running.")
     public String host;
 
-    @Option(
-      name = "none",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null",
-      expansion = {"--host=www.google.com"},
-      help = "An expanded option."
-    )
+    @Option(name = "none",
+        defaultValue = "null",
+        expansion = {"--host=www.google.com"},
+        help = "An expanded option.")
     public Void none;
   }
 
@@ -486,14 +430,11 @@ public class OptionsTest {
 
   public static class UsesCustomConverter extends OptionsBase {
 
-    @Option(
-      name = "url",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "http://www.google.com/",
-      converter = MyURLConverter.class
-    )
+    @Option(name = "url",
+            defaultValue = "http://www.google.com/",
+            converter = MyURLConverter.class)
     public URL url;
+
   }
 
   @Test
@@ -537,12 +478,7 @@ public class OptionsTest {
   }
 
   public static class J extends OptionsBase {
-    @Option(
-      name = "j",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null"
-    )
+    @Option(name = "j", defaultValue = "null")
     public String string;
   }
   @Test
@@ -552,12 +488,7 @@ public class OptionsTest {
   }
 
   public static class K extends OptionsBase {
-    @Option(
-      name = "1",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null"
-    )
+    @Option(name = "1", defaultValue = "null")
     public int int1;
   }
   @Test

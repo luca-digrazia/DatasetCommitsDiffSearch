@@ -14,6 +14,8 @@
 
 package com.google.devtools.common.options;
 
+import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -32,7 +34,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -452,21 +453,17 @@ public class OptionsParser implements OptionsProvider {
       return field.getType().equals(boolean.class);
     }
 
-    private OptionDocumentationCategory documentationCategory() {
-      return field.getAnnotation(Option.class).documentationCategory();
-    }
-
-    private ImmutableList<OptionMetadataTag> metadataTags() {
-      return ImmutableList.copyOf(field.getAnnotation(Option.class).metadataTags());
+    private OptionUsageRestrictions optionUsageRestrictions() {
+      return field.getAnnotation(Option.class).optionUsageRestrictions();
     }
 
     public boolean isDocumented() {
-      return documentationCategory() != OptionDocumentationCategory.UNDOCUMENTED && !isHidden();
+      return optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED;
     }
 
     public boolean isHidden() {
-      ImmutableList<OptionMetadataTag> tags = metadataTags();
-      return tags.contains(OptionMetadataTag.HIDDEN) || tags.contains(OptionMetadataTag.INTERNAL);
+      return optionUsageRestrictions() == OptionUsageRestrictions.HIDDEN
+          || optionUsageRestrictions() == OptionUsageRestrictions.INTERNAL;
     }
 
     boolean isExpansion() {
@@ -520,6 +517,22 @@ public class OptionsParser implements OptionsProvider {
   public enum HelpVerbosity { LONG, MEDIUM, SHORT }
 
   /**
+   * The restrictions on an option. Only documented options are output as part of the help and are
+   * intended for general user use. Undocumented options can be used by any user but aren't
+   * advertised and in practice should be used by bazel developers or early adopters helping to test
+   * a feature.
+   *
+   * <p>We use HIDDEN so that options that form the protocol between the client and the server are
+   * not logged. These are flags, but should never be set by a user.
+   *
+   * <p>Options which are INTERNAL are not recognized by the parser at all, and so cannot be used as
+   * flags.
+   */
+  public enum OptionUsageRestrictions {
+    DOCUMENTED, UNDOCUMENTED, HIDDEN, INTERNAL
+  }
+
+  /**
    * Returns a description of all the options this parser can digest. In addition to {@link Option}
    * annotations, this method also interprets {@link OptionsUsage} annotations which give an
    * intuitive short description for the options. Options of the same category (see {@link
@@ -547,7 +560,7 @@ public class OptionsParser implements OptionsProvider {
         Option option = optionField.getAnnotation(Option.class);
         String category = option.category();
         if (!category.equals(prevCategory)
-            && option.documentationCategory() != OptionDocumentationCategory.UNDOCUMENTED) {
+            && option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
           String description = categoryDescriptions.get(category);
           if (description == null) {
             description = "Options category '" + category + "'";
@@ -556,7 +569,7 @@ public class OptionsParser implements OptionsProvider {
           prevCategory = category;
         }
 
-        if (option.documentationCategory() != OptionDocumentationCategory.UNDOCUMENTED) {
+        if (option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
           OptionsUsage.getUsage(optionField, desc, helpVerbosity, impl.getOptionsData());
         }
       }
@@ -590,7 +603,7 @@ public class OptionsParser implements OptionsProvider {
         Option option = optionField.getAnnotation(Option.class);
         String category = option.category();
         if (!category.equals(prevCategory)
-            && option.documentationCategory() != OptionDocumentationCategory.UNDOCUMENTED) {
+            && option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
           String description = categoryDescriptions.get(category);
           if (description == null) {
             description = "Options category '" + category + "'";
@@ -603,7 +616,7 @@ public class OptionsParser implements OptionsProvider {
           prevCategory = category;
         }
 
-        if (option.documentationCategory() != OptionDocumentationCategory.UNDOCUMENTED) {
+        if (option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
           OptionsUsage.getUsageHtml(optionField, desc, escaper, impl.getOptionsData());
         }
       }
@@ -637,7 +650,7 @@ public class OptionsParser implements OptionsProvider {
     });
     for (Field optionField : allFields) {
       Option option = optionField.getAnnotation(Option.class);
-      if (option.documentationCategory() != OptionDocumentationCategory.UNDOCUMENTED) {
+      if (option.optionUsageRestrictions() == OptionUsageRestrictions.DOCUMENTED) {
         OptionsUsage.getCompletion(optionField, desc);
       }
     }
@@ -709,7 +722,7 @@ public class OptionsParser implements OptionsProvider {
    */
   public void parse(OptionPriority priority, String source,
       List<String> args) throws OptionsParsingException {
-    parseWithSourceFunction(priority, o -> source, args);
+    parseWithSourceFunction(priority, Functions.constant(source), args);
   }
 
   /**
@@ -798,7 +811,7 @@ public class OptionsParser implements OptionsProvider {
 
   /**
    * Returns whether the given options class uses only the core types listed in {@link
-   * UsesOnlyCoreTypes#CORE_TYPES}. These are guaranteed to be deeply immutable and serializable.
+   * OptionsBase#coreTypes}. These are guaranteed to be deeply immutable and serializable.
    */
   public static boolean getUsesOnlyCoreTypes(Class<? extends OptionsBase> optionsClass) {
     OptionsData data = OptionsParser.getOptionsDataInternal(optionsClass);

@@ -26,11 +26,11 @@ import com.google.devtools.common.options.ExpansionFunction;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
+import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -444,12 +444,11 @@ public class AllIncompatibleChangesExpansionTest {
     @Option(
       name = "incompatible_bad",
       category = "incompatible changes",
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE, OptionMetadataTag.DEPRECATED},
+      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.NO_OP},
       defaultValue = "false",
       help = "nohelp",
-      deprecationWarning = "wrapper options are deprecated, including this one.",
       wrapperOption = true
     )
     public boolean bad;

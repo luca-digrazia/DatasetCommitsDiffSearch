@@ -26,15 +26,13 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public final class ExpansionContext {
   private final IsolatedOptionsData optionsData;
-  private final OptionDefinition optionDefinition;
+  private final Field field;
   @Nullable private final String unparsedValue;
 
   public ExpansionContext(
-      IsolatedOptionsData optionsData,
-      OptionDefinition optionDefinition,
-      @Nullable String unparsedValue) {
+      IsolatedOptionsData optionsData, Field field, @Nullable String unparsedValue) {
     this.optionsData = optionsData;
-    this.optionDefinition = optionDefinition;
+    this.field = field;
     this.unparsedValue = unparsedValue;
   }
 
@@ -44,8 +42,8 @@ public final class ExpansionContext {
   }
 
   /** {@link Field} object for option that is being expanded. */
-  public OptionDefinition getOptionDefinition() {
-    return optionDefinition;
+  public Field getField() {
+    return field;
   }
 
   /** Argument given to this flag during options parsing. Will be null if no argument was given. */
