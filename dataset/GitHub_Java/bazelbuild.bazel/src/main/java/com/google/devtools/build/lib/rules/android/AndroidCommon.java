@@ -615,6 +615,7 @@ public class AndroidCommon {
 
     JavaCompilationArtifacts javaArtifacts = javaArtifactsBuilder.build();
     javaCommon.setJavaCompilationArtifacts(javaArtifacts);
+    javaCommon.setJavaCompilationArtifacts(javaArtifacts);
 
     javaCommon.setClassPathFragment(
         new ClasspathConfiguredFragment(
