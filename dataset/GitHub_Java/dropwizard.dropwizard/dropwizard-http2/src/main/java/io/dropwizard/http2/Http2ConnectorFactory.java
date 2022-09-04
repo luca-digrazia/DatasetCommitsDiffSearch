@@ -3,7 +3,6 @@ package io.dropwizard.http2;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.google.common.collect.ImmutableList;
 import io.dropwizard.jetty.HttpsConnectorFactory;
 import io.dropwizard.jetty.Jetty93InstrumentedConnectionFactory;
 import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
@@ -51,13 +50,6 @@ import javax.validation.constraints.Min;
 @JsonTypeName("http2")
 public class Http2ConnectorFactory extends HttpsConnectorFactory {
 
-    /**
-     * Supported protocols
-     */
-    private static final String H2 = "h2";
-    private static final String H2_17 = "h2-17";
-    private static final String HTTP_1_1 = "http/1.1";
-
     @Min(100)
     @Max(Integer.MAX_VALUE)
     private int maxConcurrentStreams = 1024;
@@ -86,13 +78,15 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
         this.initialStreamSendWindow = initialStreamSendWindow;
     }
 
+    /**
+     * Supported protocols
+     */
+    private static final String H2 = "h2";
+    private static final String H2_17 = "h2-17";
+    private static final String HTTP_1_1 = "http/1.1";
+
     @Override
     public Connector build(Server server, MetricRegistry metrics, String name, ThreadPool threadPool) {
-        // HTTP/2 requires that a server MUST support TLSv1.2 and TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 cipher
-        // See http://http2.github.io/http2-spec/index.html#rfc.section.9.2.2
-        setSupportedProtocols(ImmutableList.of("TLSv1.2"));
-        setSupportedCipherSuites(ImmutableList.of("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"));
-
         logSupportedParameters();
 
         // Setup connection factories

@@ -49,7 +49,7 @@ import javax.validation.constraints.Min;
  * For more configuration parameters, see {@link HttpsConnectorFactory}.
  * @see HttpConnectorFactory
  */
-@JsonTypeName("h2c")
+@JsonTypeName("http2c")
 public class Http2CConnectorFactory extends HttpConnectorFactory {
 
     @Min(100)
@@ -88,7 +88,7 @@ public class Http2CConnectorFactory extends HttpConnectorFactory {
         final HttpConnectionFactory http11 = buildHttpConnectionFactory(httpConfig);
         final HTTP2ServerConnectionFactory http2c = new HTTP2CServerConnectionFactory(httpConfig);
         http2c.setMaxConcurrentStreams(maxConcurrentStreams);
-        http2c.setInitialStreamRecvWindow(initialStreamSendWindow);
+        http2c.setInitialStreamSendWindow(initialStreamSendWindow);
 
         // The server connector should use HTTP/1.1 by default. It affords to the server to stay compatible
         // with old clients. New clients which want to use HTTP/2, however, will make an HTTP/1.1 OPTIONS
