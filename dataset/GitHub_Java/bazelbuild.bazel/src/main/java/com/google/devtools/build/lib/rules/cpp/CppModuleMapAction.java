@@ -89,10 +89,7 @@ public final class CppModuleMapAction extends AbstractFileWriteAction {
             .addAll(Iterables.filter(publicHeaders, Artifact::isTreeArtifact))
             .build(),
         cppModuleMap.getArtifact(),
-        // In theory, module maps should not be executable but, in practice, we don't care. As
-        // 'executable' is the default (see ActionMetadataHandler.setPathReadOnlyAndExecutable()),
-        // we want to avoid the extra file operation of making this file non-executable.
-        /*makeExecutable=*/ true);
+        /*makeExecutable=*/ false);
     this.cppModuleMap = cppModuleMap;
     this.moduleMapHomeIsCwd = moduleMapHomeIsCwd;
     this.privateHeaders = ImmutableList.copyOf(privateHeaders);
