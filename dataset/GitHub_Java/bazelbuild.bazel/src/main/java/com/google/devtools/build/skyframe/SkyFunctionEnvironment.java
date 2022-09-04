@@ -905,7 +905,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         .evaluated(
             skyKey,
             evaluationState == EvaluationState.BUILT ? value : null,
-            evaluationState == EvaluationState.BUILT ? errorInfo : null,
             EvaluationSuccessStateSupplier.fromSkyValue(valueWithMetadata),
             evaluationState);
 
