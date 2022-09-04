@@ -89,6 +89,7 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
@@ -102,11 +103,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import javax.annotation.Nullable;
 
 /**
@@ -191,7 +192,9 @@ public class ExecutionTool {
     actionContextRegistryBuilder.register(DynamicStrategyRegistry.class, spawnStrategyRegistry);
     actionContextRegistryBuilder.register(RemoteLocalFallbackRegistry.class, spawnStrategyRegistry);
 
-    this.actionContextRegistry = actionContextRegistryBuilder.build();
+    ModuleActionContextRegistry moduleActionContextRegistry = actionContextRegistryBuilder.build();
+
+    this.actionContextRegistry = moduleActionContextRegistry;
     this.spawnStrategyRegistry = spawnStrategyRegistry;
   }
 
@@ -212,7 +215,6 @@ public class ExecutionTool {
         env.getExecRoot(),
         getReporter(),
         runtime.getClock(),
-        runtime.getBugReporter(),
         request,
         actionContextRegistry,
         spawnStrategyRegistry);
@@ -333,7 +335,7 @@ public class ExecutionTool {
               actionGraph,
               // If this supplier is ever consumed by more than one ActionContextProvider, it can be
               // pulled out of the loop and made a memoizing supplier.
-              () -> TopLevelArtifactHelper.findAllTopLevelArtifacts(analysisResult));
+              () -> TopLevelArtifactHelper.makeTopLevelArtifactsToOwnerLabels(analysisResult));
         }
       }
       skyframeExecutor.drainChangedFiles();
@@ -344,10 +346,12 @@ public class ExecutionTool {
 
       Profiler.instance().markPhase(ProfilePhase.EXECUTE);
       boolean shouldTrustRemoteArtifacts =
-          env.getOutputService() != null && env.getOutputService().shouldTrustRemoteArtifacts();
+          env.getOutputService() == null
+              ? false
+              : env.getOutputService().shouldTrustRemoteArtifacts();
       builder.buildArtifacts(
           env.getReporter(),
-          analysisResult.getArtifactsToBuild(),
+          analysisResult.getTopLevelArtifactsToOwnerLabels().getArtifacts(),
           analysisResult.getParallelTests(),
           analysisResult.getExclusiveTests(),
           analysisResult.getTargetsToBuild(),
@@ -593,7 +597,7 @@ public class ExecutionTool {
         buildRequestOptions.useTopLevelTargetsForSymlinks()
             ? analysisResult.getTargetsToBuild().stream()
                 .map(ConfiguredTarget::getConfigurationKey)
-                .filter(Objects::nonNull)
+                .filter(configuration -> configuration != null)
                 .distinct()
                 .map((key) -> executor.getConfiguration(reporter, key))
                 .collect(toImmutableSet())
@@ -708,7 +712,7 @@ public class ExecutionTool {
    *
    * @param configuredTargets The configured targets whose artifacts are to be built.
    */
-  private static Collection<ConfiguredTarget> determineSuccessfulTargets(
+  private Collection<ConfiguredTarget> determineSuccessfulTargets(
       Collection<ConfiguredTarget> configuredTargets, Set<ConfiguredTargetKey> builtTargets) {
     // Maintain the ordering by copying builtTargets into a LinkedHashSet in the same iteration
     // order as configuredTargets.
@@ -736,6 +740,10 @@ public class ExecutionTool {
     try {
       return env.getPersistentActionCache();
     } catch (IOException e) {
+      // TODO(bazel-team): (2010) Ideally we should just remove all cache data and reinitialize
+      // caches.
+      LoggingUtil.logToRemote(
+          Level.WARNING, "Failed to initialize action cache: " + e.getMessage(), e);
       String message =
           String.format(
               "Couldn't create action cache: %s. If error persists, use 'bazel clean'.",
@@ -782,8 +790,7 @@ public class ExecutionTool {
             ? modifiedOutputFiles
             : ModifiedFileSet.NOTHING_MODIFIED,
         env.getFileCache(),
-        prefetcher,
-        env.getRuntime().getBugReporter());
+        prefetcher);
   }
 
   @VisibleForTesting
