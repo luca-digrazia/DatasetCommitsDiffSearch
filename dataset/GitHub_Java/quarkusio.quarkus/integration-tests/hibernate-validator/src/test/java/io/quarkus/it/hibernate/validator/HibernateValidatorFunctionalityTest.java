@@ -105,25 +105,13 @@ public class HibernateValidatorFunctionalityTest {
     }
 
     @Test
-    public void testInheritedImplementsConstraints() {
+    public void testInheritedConstraints() {
         StringBuilder expected = new StringBuilder();
         expected.append("passed").append("\n")
                 .append("failed: echoZipCode.arg0 (size must be between 5 and 5)");
 
         RestAssured.when()
-                .get("/hibernate-validator/test/test-inherited-implements-constraints")
-                .then()
-                .body(is(expected.toString()));
-    }
-
-    @Test
-    public void testInheritedExtendsConstraints() {
-        StringBuilder expected = new StringBuilder();
-        expected.append("passed").append("\n");
-        expected.append("failed: greeting.arg0 (must not be null)");
-
-        RestAssured.when()
-                .get("/hibernate-validator/test/test-inherited-extends-constraints")
+                .get("/hibernate-validator/test/test-inherited-constraints")
                 .then()
                 .body(is(expected.toString()));
     }
