@@ -23,15 +23,14 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.DynamicStrategyRegistry;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
-import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy.StopConcurrentSpawns;
+import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
+import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext.StopConcurrentSpawns;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.exec.ExecutionPolicy;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -63,7 +62,7 @@ import javax.annotation.Nullable;
  * save 0.5s of time, when it then takes us 5 seconds to upload the results to remote executors for
  * another action that's scheduled to run there.
  */
-public class DynamicSpawnStrategy implements SpawnStrategy {
+public class DynamicSpawnStrategy implements SpawnActionContext {
 
   private static final Logger logger = Logger.getLogger(DynamicSpawnStrategy.class.getName());
 
@@ -328,17 +327,17 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
   }
 
   @Override
-  public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+  public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
     DynamicStrategyRegistry dynamicStrategyRegistry =
         actionContextRegistry.getContext(DynamicStrategyRegistry.class);
-    for (SandboxedSpawnStrategy strategy :
+    for (SandboxedSpawnActionContext strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
       if (strategy.canExec(spawn, actionContextRegistry)) {
         return true;
       }
     }
-    for (SandboxedSpawnStrategy strategy :
+    for (SandboxedSpawnActionContext strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
       if (strategy.canExec(spawn, actionContextRegistry)) {
@@ -349,10 +348,10 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
   }
 
   @Override
-  public void usedContext(ActionContext.ActionContextRegistry actionExecutionRegistry) {
-    actionExecutionRegistry
+  public void usedContext(ActionContextRegistry actionExecutionContext) {
+    actionExecutionContext
         .getContext(DynamicStrategyRegistry.class)
-        .notifyUsedDynamic(actionExecutionRegistry);
+        .notifyUsedDynamic(actionExecutionContext);
   }
 
   private static FileOutErr getSuffixedFileOutErr(FileOutErr fileOutErr, String suffix) {
@@ -372,7 +371,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     DynamicStrategyRegistry dynamicStrategyRegistry =
         actionExecutionContext.getContext(DynamicStrategyRegistry.class);
 
-    for (SandboxedSpawnStrategy strategy :
+    for (SandboxedSpawnActionContext strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.LOCAL)) {
       return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);
@@ -389,7 +388,7 @@ public class DynamicSpawnStrategy implements SpawnStrategy {
     DynamicStrategyRegistry dynamicStrategyRegistry =
         actionExecutionContext.getContext(DynamicStrategyRegistry.class);
 
-    for (SandboxedSpawnStrategy strategy :
+    for (SandboxedSpawnActionContext strategy :
         dynamicStrategyRegistry.getDynamicSpawnActionContexts(
             spawn, DynamicStrategyRegistry.DynamicMode.REMOTE)) {
       return strategy.exec(spawn, actionExecutionContext, stopConcurrentSpawns);

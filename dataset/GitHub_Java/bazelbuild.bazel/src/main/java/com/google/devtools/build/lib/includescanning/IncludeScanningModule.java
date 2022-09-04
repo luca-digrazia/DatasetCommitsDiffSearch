@@ -33,15 +33,12 @@ import com.google.devtools.build.lib.analysis.ArtifactsToOwnerLabels;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
-import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
+import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
-import com.google.devtools.build.lib.exec.ExecutorLifecycleListener;
-import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
 import com.google.devtools.build.lib.includescanning.IncludeParser.Inclusion;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeExtractionContext;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeScanningContext;
-import com.google.devtools.build.lib.rules.cpp.IncludeScanner;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import com.google.devtools.build.lib.rules.cpp.SwigIncludeScanningContext;
 import com.google.devtools.build.lib.runtime.BlazeModule;
@@ -77,7 +74,6 @@ public class IncludeScanningModule extends BlazeModule {
   private final MutableSupplier<SpawnIncludeScanner> spawnIncludeScannerSupplier =
       new MutableSupplier<>();
   private final MutableSupplier<ArtifactFactory> artifactFactory = new MutableSupplier<>();
-  private IncludeScannerLifecycleManager lifecycleManager;
 
   protected PathFragment getIncludeHintsFilename() {
     return INCLUDE_HINTS_FILENAME;
@@ -85,22 +81,13 @@ public class IncludeScanningModule extends BlazeModule {
 
   @Override
   @ThreadHostile
-  public void registerActionContexts(
-      ModuleActionContextRegistry.Builder registryBuilder,
-      CommandEnvironment env,
-      BuildRequest buildRequest) {
-    registryBuilder
-        .register(CppIncludeExtractionContext.class, new CppIncludeExtractionContextImpl(env))
-        .register(SwigIncludeScanningContext.class, lifecycleManager.getSwigActionContext())
-        .register(CppIncludeScanningContext.class, lifecycleManager.getCppActionContext());
-  }
-
-  @Override
-  public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder)
-      throws ExecutorInitException {
-    lifecycleManager =
-        new IncludeScannerLifecycleManager(env, request, spawnIncludeScannerSupplier);
-    builder.addExecutorLifecycleListener(lifecycleManager);
+  public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
+    builder.addActionContextProvider(
+        new IncludeScanningActionContextProvider(env, request, spawnIncludeScannerSupplier));
+    builder
+        .addStrategyByContext(CppIncludeExtractionContext.class, "")
+        .addStrategyByContext(SwigIncludeScanningContext.class, "")
+        .addStrategyByContext(CppIncludeScanningContext.class, "");
   }
 
   @Override
@@ -119,7 +106,6 @@ public class IncludeScanningModule extends BlazeModule {
   public void afterCommand() {
     spawnIncludeScannerSupplier.set(null);
     artifactFactory.set(null);
-    lifecycleManager = null;
   }
 
   @Override
@@ -227,12 +213,9 @@ public class IncludeScanningModule extends BlazeModule {
   }
 
   /**
-   * Lifecycle manager for the include scanner. Maintains a {@linkplain
-   * IncludeScanner.IncludeScannerSupplier supplier} which can be used to access the (potentially
-   * shared) scanners and exposes {@linkplain #getSwigActionContext() action} {@linkplain
-   * #getCppActionContext() contexts} based on them.
+   * Factory for execution strategies related to include scanning.
    */
-  private static class IncludeScannerLifecycleManager implements ExecutorLifecycleListener {
+  public static class IncludeScanningActionContextProvider extends ActionContextProvider {
     private final CommandEnvironment env;
     private final BuildRequest buildRequest;
 
@@ -241,7 +224,7 @@ public class IncludeScanningModule extends BlazeModule {
     private IncludeScannerSupplierImpl includeScannerSupplier;
     private ExecutorService includePool;
 
-    public IncludeScannerLifecycleManager(
+    public IncludeScanningActionContextProvider(
         CommandEnvironment env,
         BuildRequest buildRequest,
         MutableSupplier<SpawnIncludeScanner> spawnScannerSupplier) {
@@ -258,13 +241,19 @@ public class IncludeScanningModule extends BlazeModule {
       env.getEventBus().register(this);
     }
 
-    private CppIncludeScanningContextImpl getCppActionContext() {
-      return new CppIncludeScanningContextImpl(() -> includeScannerSupplier);
-    }
-
-    private SwigIncludeScanningContextImpl getSwigActionContext() {
-      return new SwigIncludeScanningContextImpl(
-          env, spawnScannerSupplier, () -> includePool, useAsyncIncludeScanner);
+    @Override
+    public void registerActionContexts(ActionContextCollector collector) {
+      collector
+          .forType(CppIncludeExtractionContext.class)
+          .registerContext(new CppIncludeExtractionContextImpl(env));
+      collector
+          .forType(SwigIncludeScanningContext.class)
+          .registerContext(
+              new SwigIncludeScanningContextImpl(
+                  env, spawnScannerSupplier, () -> includePool, useAsyncIncludeScanner));
+      collector
+          .forType(CppIncludeScanningContext.class)
+          .registerContext(new CppIncludeScanningContextImpl(() -> includeScannerSupplier));
     }
 
     @Override
@@ -287,20 +276,13 @@ public class IncludeScanningModule extends BlazeModule {
     }
 
     @Override
-    public void executionPhaseEnding() {}
-
-    @Override
-    public void executorCreated() {
+    public void executorCreated() throws ExecutorInitException {
       IncludeScanningOptions options = buildRequest.getOptions(IncludeScanningOptions.class);
       int threads = options.includeScanningParallelism;
       if (threads > 0) {
         log.info(
             String.format("Include scanning configured to use a pool with %d threads", threads));
-        if (options.useAsyncIncludeScanner) {
-          includePool = NamedForkJoinPool.newNamedPool("Include scanner", threads);
-        } else {
-          includePool = ExecutorUtil.newSlackPool(threads, "Include scanner");
-        }
+        includePool = ExecutorUtil.newSlackPool(threads, "Include scanner");
       } else {
         log.info("Include scanning configured to use a direct executor");
         includePool = MoreExecutors.newDirectExecutorService();
