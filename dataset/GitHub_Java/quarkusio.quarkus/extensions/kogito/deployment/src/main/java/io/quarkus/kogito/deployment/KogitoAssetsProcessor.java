@@ -56,53 +56,40 @@ public class KogitoAssetsProcessor {
             return;
         }
 
-        Path targetClassesPath = root.getArchiveLocation();
-        Path projectPath = targetClassesPath.toString().endsWith("target" + File.separator + "classes")
-                ? targetClassesPath.getParent().getParent()
-                : targetClassesPath;
-
         boolean generateRuleUnits = true;
         boolean generateProcesses = true;
 
-        ApplicationGenerator appGen = createApplicationGenerator(projectPath, launchMode.getLaunchMode(), generateRuleUnits,
+        ApplicationGenerator appGen = createApplicationGenerator(root, launchMode.getLaunchMode(), generateRuleUnits,
                 generateProcesses, combinedIndexBuildItem);
         Collection<GeneratedFile> generatedFiles = appGen.generate();
 
         if (!generatedFiles.isEmpty()) {
             MemoryFileSystem trgMfs = new MemoryFileSystem();
-            CompilationResult result = compile(root, trgMfs, generatedFiles, generatedBeans, launchMode.getLaunchMode(),
-                    targetClassesPath);
-            register(trgMfs, generatedBeans, launchMode.getLaunchMode(), result, targetClassesPath);
+            CompilationResult result = compile(root, trgMfs, generatedFiles, generatedBeans, launchMode.getLaunchMode());
+            register(trgMfs, generatedBeans, launchMode.getLaunchMode(), result);
         }
     }
 
     private CompilationResult compile(ArchiveRootBuildItem root, MemoryFileSystem trgMfs,
             Collection<GeneratedFile> generatedFiles,
-            BuildProducer<GeneratedBeanBuildItem> generatedBeans, LaunchMode launchMode, Path projectPath)
+            BuildProducer<GeneratedBeanBuildItem> generatedBeans, LaunchMode launchMode)
             throws IOException {
 
         JavaCompiler javaCompiler = JavaParserCompiler.getCompiler();
         JavaCompilerSettings compilerSettings = javaCompiler.createDefaultSettings();
-        compilerSettings.addClasspath(root.getArchiveLocation().toString());
+        compilerSettings.addClasspath(root.getPath().toString());
 
         MemoryFileSystem srcMfs = new MemoryFileSystem();
 
         String[] sources = new String[generatedFiles.size()];
         int index = 0;
         for (GeneratedFile entry : generatedFiles) {
-            String generatedClassFile = entry.relativePath().replace("src/main/java/", "");
-            String fileName = toRuntimeSource(toClassName(generatedClassFile));
+            String fileName = toRuntimeSource(toClassName(entry.relativePath()));
             sources[index++] = fileName;
 
             srcMfs.write(fileName, entry.contents());
 
-            String location = generatedClassesDir;
-            if (launchMode == LaunchMode.DEVELOPMENT) {
-                location = Paths.get(projectPath.toString()).toString();
-            }
-
-            writeGeneratedFile(entry, location);
-
+            writeGeneratedFile(entry);
         }
 
         return javaCompiler.compile(sources, srcMfs, trgMfs,
@@ -110,7 +97,7 @@ public class KogitoAssetsProcessor {
     }
 
     private void register(MemoryFileSystem trgMfs, BuildProducer<GeneratedBeanBuildItem> generatedBeans, LaunchMode launchMode,
-            CompilationResult result, Path projectPath) throws IOException {
+            CompilationResult result) throws IOException {
         if (result.getErrors().length > 0) {
             StringBuilder errorInfo = new StringBuilder();
             Arrays.stream(result.getErrors()).forEach(cp -> errorInfo.append(cp.toString()));
@@ -123,33 +110,27 @@ public class KogitoAssetsProcessor {
             generatedBeans.produce(new GeneratedBeanBuildItem(className, data));
 
             if (launchMode == LaunchMode.DEVELOPMENT) {
-                Path path = writeFile(fileName, data);
-
-                String sourceFile = path.toString().replaceFirst("\\.class", ".java");
-                if (sourceFile.contains("$")) {
-                    sourceFile = sourceFile.substring(0, sourceFile.indexOf("$")) + ".java";
-                }
-                KogitoCompilationProvider.classToSource.put(Paths.get(projectPath.toString(), path.toString()),
-                        Paths.get(projectPath.toString(), sourceFile));
+                writeFile(fileName, data);
             }
         }
     }
 
-    private Path writeFile(String fileName, byte[] data) throws IOException {
+    private void writeFile(String fileName, byte[] data) throws IOException {
         Path path = Paths.get(fileName);
         if (!Files.exists(path.getParent())) {
             Files.createDirectories(path.getParent());
         }
         Files.write(path, data);
-
-        return path;
     }
 
-    private ApplicationGenerator createApplicationGenerator(Path projectPath, LaunchMode launchMode,
+    private ApplicationGenerator createApplicationGenerator(ArchiveRootBuildItem root, LaunchMode launchMode,
             boolean generateRuleUnits, boolean generateProcesses, CombinedIndexBuildItem combinedIndexBuildItem)
             throws IOException {
+        Path targetClassesPath = root.getArchiveLocation();
+        Path projectPath = targetClassesPath.toString().endsWith("target" + File.separator + "classes")
+                ? targetClassesPath.getParent().getParent()
+                : targetClassesPath;
 
-        Path srcPath = projectPath.resolve("src");
         String appPackageName = "org.kie.kogito.app";
 
         ApplicationGenerator appGen = new ApplicationGenerator(appPackageName, new File(projectPath.toFile(), "target"))
@@ -157,35 +138,29 @@ public class KogitoAssetsProcessor {
 
         if (generateRuleUnits) {
             Path moduleXmlPath = projectPath.resolve("src/main/resources").resolve(KieModuleModelImpl.KMODULE_JAR_PATH);
-            KieModuleModel kieModuleModel = null;
-            if (Files.exists(moduleXmlPath)) {
-                kieModuleModel = KieModuleModelImpl.fromXML(
-                        new ByteArrayInputStream(
-                                Files.readAllBytes(moduleXmlPath)));
-            } else {
-                kieModuleModel = KieModuleModelImpl.fromXML(
-                        "<kmodule xmlns=\"http://www.drools.org/xsd/kmodule\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"/>");
-            }
+            KieModuleModel kieModuleModel = KieModuleModelImpl.fromXML(
+                    new ByteArrayInputStream(
+                            Files.readAllBytes(moduleXmlPath)));
 
-            appGen.withGenerator(IncrementalRuleCodegen.ofPath(srcPath))
-                    .withRuleEventListenersConfig(customRuleEventListenerConfigExists(appPackageName,
+            appGen.withGenerator(IncrementalRuleCodegen.ofPath(projectPath))
+                    .withRuleEventListenersConfig(customRuleEventListenerConfigExists(projectPath, appPackageName,
                             combinedIndexBuildItem.getIndex()))
                     .withKModule(kieModuleModel)
                     .withClassLoader(Thread.currentThread().getContextClassLoader());
         }
 
         if (generateProcesses) {
-            appGen.withGenerator(ProcessCodegen.ofPath(srcPath))
+            appGen.withGenerator(ProcessCodegen.ofPath(projectPath))
                     .withWorkItemHandlerConfig(
-                            customWorkItemConfigExists(appPackageName, combinedIndexBuildItem.getIndex()))
+                            customWorkItemConfigExists(projectPath, appPackageName, combinedIndexBuildItem.getIndex()))
                     .withProcessEventListenerConfig(
-                            customProcessListenerConfigExists(appPackageName, combinedIndexBuildItem.getIndex()));
+                            customProcessListenerConfigExists(projectPath, appPackageName, combinedIndexBuildItem.getIndex()));
         }
 
         return appGen;
     }
 
-    private String customWorkItemConfigExists(String appPackageName, IndexView index) {
+    private String customWorkItemConfigExists(Path projectPath, String appPackageName, IndexView index) {
         String workItemHandlerConfigClass = ProcessCodegen.defaultWorkItemHandlerConfigClass(appPackageName);
 
         ClassInfo workItemHandlerConfigClassInfo = index
@@ -194,7 +169,7 @@ public class KogitoAssetsProcessor {
         return workItemHandlerConfigClassInfo != null ? workItemHandlerConfigClass : null;
     }
 
-    private String customProcessListenerConfigExists(String appPackageName, IndexView index) {
+    private String customProcessListenerConfigExists(Path projectPath, String appPackageName, IndexView index) {
         String processEventListenerClass = ProcessCodegen.defaultProcessListenerConfigClass(appPackageName);
         ClassInfo processEventListenerClassInfo = index
                 .getClassByName(createDotName(processEventListenerClass));
@@ -202,7 +177,7 @@ public class KogitoAssetsProcessor {
         return processEventListenerClassInfo != null ? processEventListenerClass : null;
     }
 
-    private String customRuleEventListenerConfigExists(String appPackageName, IndexView index) {
+    private String customRuleEventListenerConfigExists(Path projectPath, String appPackageName, IndexView index) {
         String ruleEventListenerConfiglass = RuleCodegen.defaultRuleEventListenerConfigClass(appPackageName);
         ClassInfo ruleEventListenerConfiglassInfo = index
                 .getClassByName(createDotName(ruleEventListenerConfiglass));
@@ -226,18 +201,18 @@ public class KogitoAssetsProcessor {
         return sourceName.replace('/', '.');
     }
 
-    private void writeGeneratedFile(GeneratedFile f, String location) throws IOException {
-        if (location == null) {
+    private void writeGeneratedFile(GeneratedFile f) throws IOException {
+        if (generatedClassesDir == null) {
             return;
         }
-        String generatedClassFile = f.relativePath().replace("src/main/java", "");
+
         Files.write(
-                pathOf(location, generatedClassFile),
+                pathOf(f.relativePath()),
                 f.contents());
     }
 
-    private Path pathOf(String location, String end) {
-        Path path = Paths.get(location, end);
+    private Path pathOf(String end) {
+        Path path = Paths.get(generatedClassesDir, end);
         path.getParent().toFile().mkdirs();
         return path;
     }
