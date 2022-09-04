@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.searchbox.client.http.JestHttpClient;
 import io.searchbox.core.MultiSearch;
+import org.graylog.plugins.enterprise.search.Parameter;
 import org.graylog.plugins.enterprise.search.Query;
 import org.graylog.plugins.enterprise.search.Search;
 import org.graylog.plugins.enterprise.search.SearchJob;
@@ -15,6 +16,8 @@ import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.ESMessage
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.ESSearchTypeHandler;
 import org.graylog.plugins.enterprise.search.filter.AndFilter;
 import org.graylog.plugins.enterprise.search.filter.StreamFilter;
+import org.graylog.plugins.enterprise.search.params.QueryReferenceBinding;
+import org.graylog.plugins.enterprise.search.params.ValueBinding;
 import org.graylog.plugins.enterprise.search.searchtypes.DateHistogram;
 import org.graylog.plugins.enterprise.search.searchtypes.MessageList;
 import org.graylog2.indexer.ranges.IndexRange;
@@ -60,6 +63,10 @@ public class ElasticsearchBackendUsingCorrectIndicesTest extends ElasticsearchBa
             MessageList.NAME, ESMessageList::new,
             DateHistogram.NAME, ESDateHistogram::new
     );
+    private static Map<String, Provider<Parameter.BindingHandler>> bindingHandlers = ImmutableMap.of(
+            ValueBinding.NAME, ValueBinding.Handler::new,
+            QueryReferenceBinding.NAME, () -> new QueryReferenceBinding.Handler(new ObjectMapper())
+    );
     private static final QueryStringParser queryStringParser = new QueryStringParser();
 
     @Rule
@@ -86,7 +93,7 @@ public class ElasticsearchBackendUsingCorrectIndicesTest extends ElasticsearchBa
     public void setupSUT() throws Exception {
         when(jestClient.execute(any(), any())).thenReturn(resultFor(resourceFile("successfulResponseWithSingleQuery.json")));
 
-        this.backend = new ElasticsearchBackend(handlers, queryStringParser, jestClient, indexRangeService, streamService, new ESQueryDecorators.Fake());
+        this.backend = new ElasticsearchBackend(handlers, bindingHandlers, queryStringParser, jestClient, indexRangeService, streamService);
     }
 
     @Before

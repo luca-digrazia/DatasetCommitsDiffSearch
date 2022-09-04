@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -12,6 +11,7 @@ import io.swagger.annotations.ApiParam;
 import one.util.streamex.StreamEx;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.elasticsearch.common.util.set.Sets;
 import org.graylog.plugins.enterprise.audit.EnterpriseAuditEventTypes;
 import org.graylog.plugins.enterprise.search.Filter;
 import org.graylog.plugins.enterprise.search.Parameter;
@@ -111,7 +111,8 @@ public class SearchResource extends RestResource implements PluginRestResource {
     @ApiOperation(value = "Retrieve a search query")
     @Path("{id}")
     public Search getSearch(@ApiParam(name = "id") @PathParam("id") String searchId) {
-        return searchDbService.getForUser(searchId, getCurrentUser(), viewId -> isPermitted(EnterpriseSearchRestPermissions.VIEW_READ, viewId))
+        final String username = getCurrentUser() != null ? getCurrentUser().getName() : null;
+        return searchDbService.getForUser(searchId, username, viewId -> isPermitted(EnterpriseSearchRestPermissions.VIEW_READ, viewId))
                 .orElseThrow(() -> new NotFoundException("No such search " + searchId));
     }
 

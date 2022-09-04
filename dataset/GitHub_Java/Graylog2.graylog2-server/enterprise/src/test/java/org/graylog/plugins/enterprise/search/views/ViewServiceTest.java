@@ -2,11 +2,12 @@ package org.graylog.plugins.enterprise.search.views;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.graylog.plugins.database.MongoConnectionRule;
-import org.graylog.plugins.enterprise.database.PaginatedList;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.cluster.ClusterConfigServiceImpl;
+import org.graylog2.database.PaginatedList;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.search.SearchQueryField;
@@ -17,6 +18,8 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
+
+import java.util.Collections;
 
 import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,9 +66,14 @@ public class ViewServiceTest {
                 .title("View 1")
                 .summary("This is a nice view")
                 .description("This contains lots of descriptions for the view.")
+                .searchId("abc123")
+                .properties(ImmutableSet.of("read-only"))
+                .state(Collections.emptyMap())
                 .build();
         final ViewDTO dto2 = ViewDTO.builder()
                 .title("View 2")
+                .searchId("abc123")
+                .state(Collections.emptyMap())
                 .build();
 
         final ViewDTO savedDto1 = dbService.save(dto1);
@@ -74,13 +82,13 @@ public class ViewServiceTest {
 
         assertThat(savedDto1)
                 .satisfies(this::hasValidId)
-                .extracting("title", "summary", "description")
-                .containsExactly("View 1", "This is a nice view", "This contains lots of descriptions for the view.");
+                .extracting("title", "summary", "description", "searchId", "properties")
+                .containsExactly("View 1", "This is a nice view", "This contains lots of descriptions for the view.", "abc123", ImmutableSet.of("read-only"));
 
         assertThat(savedDto2)
                 .satisfies(this::hasValidId)
-                .extracting("title", "summary", "description")
-                .containsExactly("View 2", "", "");
+                .extracting("title", "summary", "description", "searchId", "properties")
+                .containsExactly("View 2", "", "", "abc123", ImmutableSet.of());
 
         assertThat(dbService.get(savedDto1.id()))
                 .isPresent()
@@ -101,26 +109,45 @@ public class ViewServiceTest {
                 .put("summary", SearchQueryField.create(ViewDTO.FIELD_DESCRIPTION))
                 .build();
 
-        dbService.save(ViewDTO.builder().title("View A").build());
-        dbService.save(ViewDTO.builder().title("View B").build());
-        dbService.save(ViewDTO.builder().title("View C").build());
-        dbService.save(ViewDTO.builder().title("View D").build());
-        dbService.save(ViewDTO.builder().title("View E").build());
+        dbService.save(ViewDTO.builder().title("View A").searchId("abc123").state(Collections.emptyMap()).build());
+        dbService.save(ViewDTO.builder().title("View B").searchId("abc123").state(Collections.emptyMap()).build());
+        dbService.save(ViewDTO.builder().title("View C").searchId("abc123").state(Collections.emptyMap()).build());
+        dbService.save(ViewDTO.builder().title("View D").searchId("abc123").state(Collections.emptyMap()).build());
+        dbService.save(ViewDTO.builder().title("View E").searchId("abc123").state(Collections.emptyMap()).build());
 
         final SearchQueryParser queryParser = new SearchQueryParser(ViewDTO.FIELD_TITLE, searchFieldMapping);
 
-        final PaginatedList<ViewDTO> result = dbService.searchPaginated(queryParser.parse("A B D"), "desc", "title", 1, 10);
+        final PaginatedList<ViewDTO> result1 = dbService.searchPaginated(
+                queryParser.parse("A B D"),
+                view -> true, "desc",
+                "title",
+                1,
+                5
+        );
 
-        assertThat(result)
+        assertThat(result1)
                 .hasSize(3)
                 .extracting("title")
                 .containsExactly("View D", "View B", "View A");
+
+        final PaginatedList<ViewDTO> result2 = dbService.searchPaginated(
+                queryParser.parse("A B D"),
+                view -> view.title().contains("B") || view.title().contains("D"), "desc",
+                "title",
+                1,
+                5
+        );
+
+        assertThat(result2)
+                .hasSize(2)
+                .extracting("title")
+                .containsExactly("View D", "View B");
     }
 
     @Test
     public void saveAndGetDefault() {
-        dbService.save(ViewDTO.builder().title("View A").build());
-        final ViewDTO savedView2 = dbService.save(ViewDTO.builder().title("View B").build());
+        dbService.save(ViewDTO.builder().title("View A").searchId("abc123").state(Collections.emptyMap()).build());
+        final ViewDTO savedView2 = dbService.save(ViewDTO.builder().title("View B").searchId("abc123").state(Collections.emptyMap()).build());
 
         dbService.saveDefault(savedView2);
 
@@ -130,7 +157,7 @@ public class ViewServiceTest {
                 .extracting("id", "title")
                 .containsExactly(savedView2.id(), "View B");
 
-        assertThatThrownBy(() -> dbService.saveDefault(ViewDTO.builder().title("err").build()))
+        assertThatThrownBy(() -> dbService.saveDefault(ViewDTO.builder().title("err").searchId("abc123").state(Collections.emptyMap()).build()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

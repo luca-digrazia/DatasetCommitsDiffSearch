@@ -1,9 +1,11 @@
 package org.graylog.plugins.enterprise.search.elasticsearch;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.searchbox.client.http.JestHttpClient;
 import io.searchbox.core.MultiSearch;
 import io.searchbox.core.search.aggregation.Aggregation;
+import org.graylog.plugins.enterprise.search.Parameter;
 import org.graylog.plugins.enterprise.search.Query;
 import org.graylog.plugins.enterprise.search.QueryResult;
 import org.graylog.plugins.enterprise.search.Search;
@@ -15,6 +17,7 @@ import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.pivot.ESP
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.pivot.ESPivotSeriesSpecHandler;
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.pivot.series.ESAverageHandler;
 import org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.pivot.series.ESMaxHandler;
+import org.graylog.plugins.enterprise.search.params.ValueBinding;
 import org.graylog.plugins.enterprise.search.searchtypes.pivot.BucketSpec;
 import org.graylog.plugins.enterprise.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.enterprise.search.searchtypes.pivot.SeriesSpec;
@@ -45,36 +48,39 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchBackendTestBase {
-    protected static final QueryStringParser queryStringParser = new QueryStringParser();
+    private static final QueryStringParser queryStringParser = new QueryStringParser();
 
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
 
-    ElasticsearchBackend elasticsearchBackend;
+    protected ElasticsearchBackend elasticsearchBackend;
+    private Map<String, Provider<Parameter.BindingHandler>> bindingHandlers;
+    private Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticSearchTypeHandlers;
 
     @Mock
     protected JestHttpClient jestClient;
     @Mock
-    protected IndexRangeService indexRangeService;
+    private IndexRangeService indexRangeService;
     @Mock
-    protected StreamService streamService;
+    private StreamService streamService;
 
     @Captor
     protected ArgumentCaptor<MultiSearch> clientRequestCaptor;
 
     @Before
-    public void setUpSUT() {
-        Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> elasticSearchTypeHandlers = new HashMap<>();
+    public void setUpSUT() throws Exception {
+        this.bindingHandlers = ImmutableMap.of("value", ValueBinding.Handler::new);
+        this.elasticSearchTypeHandlers = new HashMap<>();
         final Map<String, ESPivotBucketSpecHandler<? extends BucketSpec, ? extends Aggregation>> bucketHandlers = Collections.emptyMap();
         final Map<String, ESPivotSeriesSpecHandler<? extends SeriesSpec, ? extends Aggregation>> seriesHandlers = new HashMap<>();
         seriesHandlers.put(Average.NAME, new ESAverageHandler());
         seriesHandlers.put(Max.NAME, new ESMaxHandler());
-        elasticSearchTypeHandlers.put(Pivot.NAME, () -> new ESPivot(bucketHandlers, seriesHandlers));
+        this.elasticSearchTypeHandlers.put(Pivot.NAME, () -> new ESPivot(bucketHandlers, seriesHandlers));
 
-        this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers, queryStringParser, jestClient, indexRangeService, streamService, new ESQueryDecorators.Fake());
+        this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers, bindingHandlers, queryStringParser, jestClient, indexRangeService, streamService);
     }
 
-    SearchJob searchJobForQuery(Query query) {
+    protected SearchJob searchJobForQuery(Query query) {
         final Search search = Search.builder()
                 .id("search1")
                 .queries(ImmutableSet.of(query))
@@ -82,7 +88,7 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
         return new SearchJob("job1", search, "admin");
     }
 
-    TimeRange timeRangeForTest() {
+    protected TimeRange timeRangeForTest() {
         try {
             return AbsoluteRange.create("2018-08-23 10:02:00.247", "2018-08-23 10:07:00.252");
         } catch (InvalidRangeParametersException ignored) {
@@ -90,7 +96,7 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
         return null;
     }
 
-    String run(SearchJob searchJob, Query query, ESGeneratedQueryContext queryContext, Set<QueryResult> predecessorResults) throws IOException {
+    protected String run(SearchJob searchJob, Query query, ESGeneratedQueryContext queryContext, Set<QueryResult> predecessorResults) throws IOException {
         this.elasticsearchBackend.doRun(searchJob, query, queryContext, predecessorResults);
 
         verify(jestClient, times(1)).execute(clientRequestCaptor.capture(), any());

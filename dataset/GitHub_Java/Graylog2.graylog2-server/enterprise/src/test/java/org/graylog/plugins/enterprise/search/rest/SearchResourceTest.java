@@ -63,6 +63,9 @@ public class SearchResourceTest {
     private Subject subject;
 
     @Mock
+    private Query query;
+
+    @Mock
     private User currentUser;
 
     private SearchResource searchResource;
@@ -71,7 +74,7 @@ public class SearchResourceTest {
         private final Subject subject;
 
         SearchTestResource(Subject subject, QueryEngine queryEngine, SearchDbService searchDbService, SearchJobService searchJobService, ObjectMapper objectMapper, StreamService streamService) {
-            super(queryEngine, searchDbService, searchJobService, objectMapper, streamService, Collections.emptyMap());
+            super(queryEngine, searchDbService, searchJobService, objectMapper, streamService);
             this.subject = subject;
         }
 
@@ -115,7 +118,7 @@ public class SearchResourceTest {
     @Test
     public void getSearchAllowsAccessToSearchReturnedByService() {
         final String searchId = "deadbeef";
-        when(searchDbService.getForUser(eq(searchId), any(), any())).thenReturn(Optional.of(search));
+        when(searchDbService.getForUser(eq(searchId), eq("admin"), any())).thenReturn(Optional.of(search));
 
         final Search returnedSearch = this.searchResource.getSearch(searchId);
 
@@ -125,7 +128,7 @@ public class SearchResourceTest {
     @Test
     public void getSearchThrowsNotFoundExceptionIfNoSearchReturnedByService() {
         final String searchId = "deadbeef";
-        when(searchDbService.getForUser(eq(searchId), any(), any())).thenReturn(Optional.empty());
+        when(searchDbService.getForUser(eq(searchId), eq("admin"), any())).thenReturn(Optional.empty());
 
         try {
             this.searchResource.getSearch(searchId);
@@ -150,7 +153,7 @@ public class SearchResourceTest {
         when(search.queries()).thenReturn(queries);
         when(search.applyExecutionState(any(), any())).thenReturn(search);
         when(currentUser.getName()).thenReturn(username);
-        when(searchDbService.getForUser(eq(searchId), any(), any())).thenReturn(Optional.of(search));
+        when(searchDbService.getForUser(eq(searchId), eq(username), any())).thenReturn(Optional.of(search));
         when(subject.isPermitted(RestPermissions.STREAMS_READ + ":streamId")).thenReturn(true);
         when(searchJobService.create(any(), any())).thenReturn(searchJob);
         when(queryEngine.execute(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -195,7 +198,7 @@ public class SearchResourceTest {
         when(search.queries()).thenReturn(queries);
         when(search.applyExecutionState(any(), any())).thenReturn(search);
         when(currentUser.getName()).thenReturn(username);
-        when(searchDbService.getForUser(eq(searchId), any(), any())).thenReturn(Optional.of(search));
+        when(searchDbService.getForUser(eq(searchId), eq(username), any())).thenReturn(Optional.of(search));
         when(subject.isPermitted(RestPermissions.STREAMS_READ + ":streamId")).thenReturn(true);
         when(searchJobService.create(any(), any())).thenReturn(searchJob);
         when(queryEngine.execute(any())).thenAnswer(invocation -> invocation.getArgument(0));
