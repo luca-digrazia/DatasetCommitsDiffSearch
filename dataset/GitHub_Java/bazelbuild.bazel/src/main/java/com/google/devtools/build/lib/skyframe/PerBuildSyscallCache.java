@@ -82,7 +82,7 @@ public class PerBuildSyscallCache implements UnixGlob.FilesystemCalls {
       }
       CacheBuilder<Object, Object> readdirCacheBuilder = CacheBuilder.newBuilder();
       if (maxReaddirs != UNSET) {
-        readdirCacheBuilder = readdirCacheBuilder.maximumSize(maxReaddirs);
+        readdirCacheBuilder = readdirCacheBuilder.maximumSize(maxStats);
       }
       if (concurrencyLevel != UNSET) {
         statCacheBuilder = statCacheBuilder.concurrencyLevel(concurrencyLevel);
