@@ -85,7 +85,8 @@ public class TransactionalProcessor implements ElementProcessor {
 
 		JBlock catchBody = catchBlock.body();
 
-		JInvocation errorInvoke = catchBody.staticInvoke(holder.classes().LOG, "e");
+		JClass logClass = holder.refClass("android.util.Log");
+		JInvocation errorInvoke = catchBody.staticInvoke(logClass, "e");
 
 		errorInvoke.arg(holder.eBean.name());
 		errorInvoke.arg("Error in transaction");
