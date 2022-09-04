@@ -1,10 +1,6 @@
 package io.quarkus.maven;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
 
@@ -82,7 +78,6 @@ public class BuildMojo extends AbstractMojo {
      * The directory for compiled classes.
      */
     @Parameter(readonly = true, required = true, defaultValue = "${project.build.outputDirectory}")
-    @Deprecated
     private File outputDirectory;
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -170,7 +165,7 @@ public class BuildMojo extends AbstractMojo {
                     projectArtifact.getClassifier(), projectArtifact.getArtifactHandler().getExtension(),
                     projectArtifact.getVersion());
 
-            CuratedApplication curatedApplication = QuarkusBootstrap.builder()
+            CuratedApplication curatedApplication = QuarkusBootstrap.builder(outputDirectory.toPath())
                     .setAppArtifact(appArtifact)
                     .setProjectRoot(project.getBasedir().toPath())
                     .setMavenArtifactResolver(resolver)
@@ -187,16 +182,7 @@ public class BuildMojo extends AbstractMojo {
             Artifact original = project.getArtifact();
             if (result.getJar() != null) {
                 if (result.getJar().isUberJar() && result.getJar().getOriginalArtifact() != null) {
-                    final Path standardJar = curatedApplication.getAppModel().getAppArtifact().getPaths().getSinglePath();
-                    if (Files.exists(standardJar)) {
-                        try {
-                            Files.deleteIfExists(result.getJar().getOriginalArtifact());
-                            Files.move(standardJar, result.getJar().getOriginalArtifact());
-                        } catch (IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                        original.setFile(result.getJar().getOriginalArtifact().toFile());
-                    }
+                    original.setFile(result.getJar().getOriginalArtifact().toFile());
                 }
                 if (result.getJar().isUberJar()) {
                     projectHelper.attachArtifact(project, result.getJar().getPath().toFile(), "runner");
