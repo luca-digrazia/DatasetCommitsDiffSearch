@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,7 +14,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.utilities;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -24,13 +21,15 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.datatype.joda.JodaModule;
+import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Lists;
+import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
@@ -39,28 +38,28 @@ import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.streams.StreamService;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-/**
- * @author Bernd Ahlers <bernd@torch.sh>
- */
 public class MessageToJsonSerializer {
-    private final Logger LOG = LoggerFactory.getLogger(MessageToJsonSerializer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MessageToJsonSerializer.class);
 
     private final ObjectMapper mapper;
     private final SimpleModule simpleModule;
     private final StreamService streamService;
     private final InputService inputService;
     private final LoadingCache<String, Stream> streamCache;
-    private final LoadingCache<String, MessageInput> messageInputCache;
+    private final LoadingCache<String, Optional<MessageInput>> messageInputCache;
 
     private static class SerializeBean {
         private final Message message;
@@ -143,12 +142,13 @@ public class MessageToJsonSerializer {
     }
 
     @Inject
-    public MessageToJsonSerializer(final StreamService streamService, final InputService inputService) {
-        this.mapper = new ObjectMapper();
+    public MessageToJsonSerializer(final ObjectMapper globalMapper, final StreamService streamService, final InputService inputService) {
+        // Make sure to copy the mapper so we can customize it later without affecting the injected one.
+        this.mapper = globalMapper.copy();
         this.streamService = streamService;
         this.inputService = inputService;
         this.streamCache = CacheBuilder.newBuilder()
-                .expireAfterWrite(1, TimeUnit.SECONDS)
+                .expireAfterAccess(1, TimeUnit.SECONDS)
                 .build(
                         new CacheLoader<String, Stream>() {
                             @Override
@@ -160,23 +160,17 @@ public class MessageToJsonSerializer {
                         }
                 );
         this.messageInputCache = CacheBuilder.newBuilder()
-                .expireAfterWrite(1, TimeUnit.SECONDS)
+                .expireAfterAccess(1, TimeUnit.SECONDS)
                 .build(
-                        new CacheLoader<String, MessageInput>() {
+                        new CacheLoader<String, Optional<MessageInput>>() {
                             @Override
-                            public MessageInput load(String key) throws Exception {
+                            public Optional<MessageInput> load(String key) throws Exception {
                                 LOG.debug("Loading message input {}", key);
-                                final Input input = inputService.find(key);
-
-                                if (input != null) {
-                                    try {
-                                        // TODO This might create lots of MessageInput instances. Can we avoid this?
-                                        return inputService.getMessageInput(input);
-                                    } catch (NoSuchInputTypeException e) {
-                                        return null;
-                                    }
-                                } else {
-                                    return null;
+                                try {
+                                    final Input input = inputService.find(key);
+                                    return Optional.fromNullable(inputService.buildMessageInput(input));
+                                } catch (NotFoundException | NoSuchInputTypeException e) {
+                                    return Optional.absent();
                                 }
                             }
                         }
@@ -186,9 +180,8 @@ public class MessageToJsonSerializer {
                 addSerializer(new NodeIdSerializer());
             }
         };
-        mapper.registerModule(simpleModule);
-        // Ensure proper timestamp serialization.
-        mapper.registerModule(new JodaModule());
+        this.mapper.registerModule(simpleModule);
+        this.mapper.enable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     public byte[] serializeToBytes(Message message) throws JsonProcessingException {
@@ -201,7 +194,12 @@ public class MessageToJsonSerializer {
 
     public Message deserialize(byte[] bytes) throws IOException {
         final DeserializeBean bean = mapper.readValue(bytes, DeserializeBean.class);
-        final Message message = new Message(bean.getFields());
+        final Map<String, Object> fields = bean.getFields();
+        final Message message = new Message(
+                (String) fields.remove("message"),
+                (String) fields.remove("source"),
+                new DateTime((long) fields.remove("timestamp"), DateTimeZone.UTC)
+        );
         final List<Stream> streamList = Lists.newArrayList();
 
         for (String id : bean.getStreams()) {
@@ -213,8 +211,13 @@ public class MessageToJsonSerializer {
         }
 
         message.setStreams(streamList);
+        message.addFields(fields);
 
-        final MessageInput input = getMessageInput(bean.getSourceInput());
+        final MessageInput input;
+        if (bean.getSourceInput() != null)
+            input = getMessageInput(bean.getSourceInput());
+        else
+            input = null;
 
         if (input != null) {
             message.setSourceInput(input);
@@ -224,7 +227,7 @@ public class MessageToJsonSerializer {
     }
 
     public Message deserialize(String string) throws IOException {
-        return deserialize(string.getBytes());
+        return deserialize(string.getBytes(StandardCharsets.UTF_8));
     }
 
     private Stream getStream(String id) {
@@ -238,7 +241,8 @@ public class MessageToJsonSerializer {
 
     private MessageInput getMessageInput(String id) {
         try {
-            return messageInputCache.get(id);
+            final Optional<MessageInput> cacheResult = messageInputCache.get(id);
+            return cacheResult.orNull();
         } catch (ExecutionException e) {
             LOG.error("Message input cache error", e);
             return null;
