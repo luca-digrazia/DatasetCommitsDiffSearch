@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.exec;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -50,8 +51,8 @@ import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData.Builder;
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Runs TestRunnerAction actions. */
 @ExecutionStrategy(
@@ -66,6 +67,7 @@ public class StandaloneTestStrategy extends TestStrategy {
   private static final ImmutableMap<String, String> ENV_VARS =
       ImmutableMap.<String, String>builder()
           .put("TZ", "UTC")
+          .put("USER", TestPolicy.SYSTEM_USER_NAME)
           .put("TEST_SRCDIR", TestPolicy.RUNFILES_DIR)
           // TODO(lberki): Remove JAVA_RUNFILES and PYTHON_RUNFILES.
           .put("JAVA_RUNFILES", TestPolicy.RUNFILES_DIR)
@@ -86,7 +88,7 @@ public class StandaloneTestStrategy extends TestStrategy {
   }
 
   @Override
-  public List<SpawnResult> exec(
+  public Set<SpawnResult> exec(
       TestRunnerAction action, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     Path execRoot = actionExecutionContext.getExecRoot();
@@ -198,7 +200,7 @@ public class StandaloneTestStrategy extends TestStrategy {
       finalizeTest(actionExecutionContext, action, dataBuilder.build());
 
       // TODO(b/62588075): Should we accumulate SpawnResults across test attempts instead of only
-      // returning the last list?
+      // returning the last set?
       return standaloneTestResult.spawnResults();
     } catch (IOException e) {
       actionExecutionContext.getEventHandler().handle(Event.error("Caught I/O exception: " + e));
@@ -241,12 +243,12 @@ public class StandaloneTestStrategy extends TestStrategy {
 
       // e.g. test.dir/file
       PathFragment relativeToTestDirectory = testOutputPath.relativeTo(testRoot);
-
+      
       // e.g. attempt_1.dir/file
       String destinationPathFragmentStr =
           relativeToTestDirectory.getSafePathString().replaceFirst("test", attemptPrefix);
       PathFragment destinationPathFragment = PathFragment.create(destinationPathFragmentStr);
-
+      
       // e.g. /attemptsDir/attempt_1.dir/file
       Path destinationPath = attemptsDir.getRelative(destinationPathFragment);
       destinationPath.getParentDirectory().createDirectory();
@@ -315,10 +317,6 @@ public class StandaloneTestStrategy extends TestStrategy {
       StandaloneTestResult standaloneTestResult =
           executeTest(action, spawn, actionExecutionContext.withFileOutErr(fileOutErr));
       appendStderr(fileOutErr.getOutputPath(), fileOutErr.getErrorPath());
-      if (!fileOutErr.hasRecordedOutput()) {
-        // Touch the output file so that test.log can get created.
-        FileSystemUtils.touchFile(fileOutErr.getOutputPath());
-      }
       return standaloneTestResult;
     }
   }
@@ -350,7 +348,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     long startTime = actionExecutionContext.getClock().currentTimeMillis();
     SpawnActionContext spawnActionContext =
         actionExecutionContext.getSpawnActionContext(action.getMnemonic());
-    List<SpawnResult> spawnResults = ImmutableList.of();
+    Set<SpawnResult> spawnResults = ImmutableSet.of();
     try {
       try {
         if (executionOptions.testOutput.equals(TestOutputFormat.STREAMED)) {
@@ -373,7 +371,6 @@ public class StandaloneTestStrategy extends TestStrategy {
             .setTestPassed(false)
             .setStatus(e.hasTimedOut() ? BlazeTestStatus.TIMEOUT : BlazeTestStatus.FAILED)
             .addFailedLogs(testLogPath.getPathString());
-        spawnResults = ImmutableList.of(e.getSpawnResult());
       } finally {
         long duration = actionExecutionContext.getClock().currentTimeMillis() - startTime;
         builder.setStartTimeMillisEpoch(startTime);

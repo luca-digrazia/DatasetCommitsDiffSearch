@@ -246,8 +246,6 @@ public class CppCompileAction extends AbstractAction
 
   private ImmutableList<Artifact> resolvedInputs = ImmutableList.<Artifact>of();
 
-  private PathFragment gccToolPath;
-
   /**
    * Creates a new action to compile C/C++ source files.
    *
@@ -369,7 +367,6 @@ public class CppCompileAction extends AbstractAction
     this.additionalIncludeScannables = ImmutableList.copyOf(additionalIncludeScannables);
     this.builtInIncludeDirectories =
         ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories());
-    this.gccToolPath = cppProvider.getToolPathFragment(Tool.GCC);
   }
 
   /**
@@ -764,7 +761,7 @@ public class CppCompileAction extends AbstractAction
   @Override
   public ExtraActionInfo.Builder getExtraActionInfo() {
     CppCompileInfo.Builder info = CppCompileInfo.newBuilder();
-    info.setTool(gccToolPath.getPathString());
+    info.setTool(cppConfiguration.getToolPathFragment(Tool.GCC).getPathString());
     for (String option : getCompilerOptions()) {
       info.addCompilerOption(option);
     }
