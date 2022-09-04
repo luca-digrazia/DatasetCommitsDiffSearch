@@ -172,7 +172,6 @@ public class UndertowBuildStep {
             undertowProducer.accept(new DefaultRouteBuildItem(ut));
         } else {
             routeProducer.produce(new RouteBuildItem(servletContextPathBuildItem.getServletContextPath() + "/*", ut, false));
-            routeProducer.produce(new RouteBuildItem(servletContextPathBuildItem.getServletContextPath(), ut, false));
         }
         return new ServiceStartBuildItem("undertow");
     }
@@ -221,7 +220,7 @@ public class UndertowBuildStep {
      * look for Servlet container initializers
      *
      */
-    @BuildStep
+    @BuildStep(loadsApplicationClasses = true)
     public List<ServletContainerInitializerBuildItem> servletContainerInitializer(
             ApplicationArchivesBuildItem archives,
             CombinedIndexBuildItem combinedIndexBuildItem,
