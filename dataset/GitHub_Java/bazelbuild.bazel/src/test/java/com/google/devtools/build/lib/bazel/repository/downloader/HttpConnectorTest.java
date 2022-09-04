@@ -355,30 +355,7 @@ public class HttpConnectorTest {
   }
 
   @Test
-  public void pathRedirect_301() throws Exception {
-    redirectToDifferentPath_works("301");
-  }
-
-  @Test
-  public void serverRedirect_301() throws Exception {
-    redirectToDifferentServer_works("301");
-  }
-
-  /*
-   * Also tests behavior for 302 and 307 codes.
-   */
-  @Test
-  public void pathRedirect_303() throws Exception {
-    redirectToDifferentPath_works("303");
-  }
-
-  @Test
-  public void serverRedirects_303() throws Exception {
-    redirectToDifferentServer_works("303");
-  }
-
-  public void redirectToDifferentPath_works(String code) throws Exception {
-    String redirectCode = "HTTP/1.1 " + code + " Redirect";
+  public void redirectToDifferentPath_works() throws Exception {
     final Map<String, String> headers1 = new ConcurrentHashMap<>();
     final Map<String, String> headers2 = new ConcurrentHashMap<>();
     try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName(null))) {
@@ -392,7 +369,7 @@ public class HttpConnectorTest {
                     readHttpRequest(socket.getInputStream(), headers1);
                     sendLines(
                         socket,
-                        redirectCode,
+                        "HTTP/1.1 301 Redirect",
                         "Date: Fri, 31 Dec 1999 23:59:59 GMT",
                         "Connection: close",
                         "Location: /doodle.tar.gz",
@@ -429,8 +406,8 @@ public class HttpConnectorTest {
     assertThat(headers2).containsEntry("x-request-uri", "/doodle.tar.gz");
   }
 
-  public void redirectToDifferentServer_works(String code) throws Exception {
-    String redirectCode = "HTTP/1.1 " + code + " Redirect";
+  @Test
+  public void redirectToDifferentServer_works() throws Exception {
     try (ServerSocket server1 = new ServerSocket(0, 1, InetAddress.getByName(null));
         ServerSocket server2 = new ServerSocket(0, 1, InetAddress.getByName(null))) {
       @SuppressWarnings("unused")
@@ -443,7 +420,7 @@ public class HttpConnectorTest {
                     readHttpRequest(socket.getInputStream());
                     sendLines(
                         socket,
-                        redirectCode,
+                        "HTTP/1.1 301 Redirect",
                         "Date: Fri, 31 Dec 1999 23:59:59 GMT",
                         "Connection: close",
                         String.format(
