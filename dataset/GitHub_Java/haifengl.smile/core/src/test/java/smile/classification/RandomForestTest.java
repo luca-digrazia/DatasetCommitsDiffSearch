@@ -101,7 +101,7 @@ public class RandomForestTest {
 
         double[] importance = model.importance();
         for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.format("%-15s %.4f%n", model.schema().get().fieldName(i), importance[i]);
         }
 
         int[] prediction = LOOCV.classification(WeatherNominal.data, x -> RandomForest.fit(WeatherNominal.formula, x, 100, 2, SplitRule.GINI, 100, 5, 1.0, Optional.empty(), Optional.of(Arrays.stream(seeds))));
@@ -120,7 +120,7 @@ public class RandomForestTest {
 
         double[] importance = model.importance();
         for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.format("%-15s %.4f%n", model.schema().get().fieldName(i), importance[i]);
         }
 
         int[] prediction = LOOCV.classification(Iris.data, x -> RandomForest.fit(Iris.formula, x, 100, 3, SplitRule.GINI, 100, 5, 1.0, Optional.empty(), Optional.of(Arrays.stream(seeds))));
@@ -161,7 +161,7 @@ public class RandomForestTest {
 
         double[] importance = model.importance();
         for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.format("%-15s %.4f%n", model.schema().get().fieldName(i), importance[i]);
         }
 
         int[] prediction = Validation.test(model, Segment.test);
@@ -185,7 +185,7 @@ public class RandomForestTest {
 
         double[] importance = model.importance();
         for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+            System.out.format("%-15s %.4f%n", model.schema().get().fieldName(i), importance[i]);
         }
 
         int[] prediction = Validation.test(model, USPS.test);
@@ -199,44 +199,5 @@ public class RandomForestTest {
         for (int i = 0; i < test.length; i++) {
             System.out.format("Accuracy with %3d trees: %.4f%n", i+1, Accuracy.apply(USPS.testy, test[i]));
         }
-    }
-
-    @Test
-    public void testPrune() {
-        System.out.println("USPS");
-
-        // Overfitting with very large maxNodes and small nodeSize
-        RandomForest model = RandomForest.fit(USPS.formula, USPS.train, 200, 16, SplitRule.GINI, 2000, 1, 1.0, Optional.empty(), Optional.of(Arrays.stream(seeds)));
-
-        double[] importance = model.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
-        }
-
-        int[] prediction = Validation.test(model, USPS.test);
-        int error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error = " + error);
-        assertEquals(118, error);
-
-        RandomForest lean = model.prune(USPS.test);
-
-        importance = lean.importance();
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", lean.schema().fieldName(i), importance[i]);
-        }
-
-        // The old model should not be modified.
-        prediction = Validation.test(model, USPS.test);
-        error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error of old model after pruning = " + error);
-        assertEquals(118, error);
-
-        prediction = Validation.test(lean, USPS.test);
-        error = Error.apply(USPS.testy, prediction);
-
-        System.out.println("Error of pruned model after pruning = " + error);
-        assertEquals(86, error);
     }
 }

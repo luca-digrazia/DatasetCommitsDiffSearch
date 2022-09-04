@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.base.cart;
 
@@ -22,11 +22,7 @@ import java.util.Comparator;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
-/**
- * The data about of a potential split for a leaf node.
- *
- * @author Haifeng Li
- */
+/** The data about of a potential split for a leaf node. */
 public abstract class Split {
     public static Comparator<Split> comparator = (x, y) -> Double.compare(x.score, y.score);
 
@@ -81,9 +77,6 @@ public abstract class Split {
      */
     boolean[] unsplittable;
 
-    /** The depth of node in the tree. */
-    int depth = 1;
-
     /** Constructor. */
     public Split(LeafNode leaf, int feature, double score, int lo, int hi, int trueCount, int falseCount) {
         this.leaf = leaf;
@@ -114,8 +107,7 @@ public abstract class Split {
                 "lo: " + lo,
                 "hi: " + hi,
                 "true: " + trueCount,
-                "false: " + falseCount,
-                "depth: " + depth
+                "false: " + falseCount
         };
 
         return Arrays.stream(fields).collect(Collectors.joining(",\n", "{\n", "\n}"));
