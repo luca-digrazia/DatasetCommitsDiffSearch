@@ -46,7 +46,6 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.BeanParam;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
 import javax.ws.rs.NotFoundException;
@@ -54,10 +53,8 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Collections;
 import java.util.List;
 
 import static java.util.Objects.requireNonNull;
@@ -94,9 +91,7 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
     @ApiOperation(value = "Return shares for a user")
     @Path("user/{username}")
     public PaginatedResponse<EntityDescriptor> get(@ApiParam(name = "pagination parameters") @BeanParam PaginationParameters paginationParameters,
-                                                   @ApiParam(name = "username", required = true) @PathParam("username") @NotBlank String username,
-                                                   @ApiParam(name = "capability") @QueryParam("capability") @DefaultValue("all") String capabilityFilter,
-                                                   @ApiParam(name = "entity_type") @QueryParam("entity_type") @DefaultValue("all") String entityTypeFilter) {
+                                                   @ApiParam(name = "username", required = true) @PathParam("username") @NotBlank String username) {
         if (!isPermitted(USERS_EDIT, username)) {
             throw new ForbiddenException("Couldn't access user " + username);
         }
@@ -106,9 +101,7 @@ public class EntitySharesResource extends RestResourceWithOwnerCheck {
             throw new NotFoundException("Couldn't find user " + username);
         }
 
-        final GranteeSharesService.SharesResponse response = granteeSharesService.getPaginatedSharesFor(grnRegistry.ofUser(user), paginationParameters, capabilityFilter, entityTypeFilter);
-
-        return PaginatedResponse.create("entities", response.paginatedEntities(), Collections.singletonMap("grantee_capabilities", response.capabilities()));
+        return granteeSharesService.getPaginatedSharesFor(grnRegistry.ofUser(user), paginationParameters);
     }
 
     @POST
