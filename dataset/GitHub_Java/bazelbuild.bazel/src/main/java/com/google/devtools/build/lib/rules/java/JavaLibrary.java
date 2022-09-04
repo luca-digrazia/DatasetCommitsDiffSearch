@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -188,7 +189,10 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
 
-    semantics.addProviders(ruleContext, common, genSourceJar, builder);
+    semantics.addProviders(
+        ruleContext, common, ImmutableList.<String>of(), classJar, srcJar,
+        genClassJar, genSourceJar, ImmutableMap.<Artifact, Artifact>of(),
+        filesBuilder, builder);
     if (generatedExtensionRegistryProvider != null) {
       builder.add(GeneratedExtensionRegistryProvider.class, generatedExtensionRegistryProvider);
     }
@@ -223,13 +227,13 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         // TODO(bazel-team): this should only happen for java_plugin
         .addProvider(JavaPluginInfoProvider.class, pluginInfoProvider)
-        .setRuntimeJars(javaArtifacts.getRuntimeJars())
         .setNeverlink(neverLink)
         .build();
 
     builder
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
+        .addProvider(new JavaRuntimeJarProvider(javaArtifacts.getRuntimeJars()))
         .addProvider(
             RunfilesProvider.simple(
                 JavaCommon.getRunfiles(ruleContext, semantics, javaArtifacts, neverLink)))

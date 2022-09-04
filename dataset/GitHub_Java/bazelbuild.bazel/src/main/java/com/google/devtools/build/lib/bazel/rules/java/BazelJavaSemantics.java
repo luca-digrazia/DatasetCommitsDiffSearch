@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.ComputedSubstitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.bazel.rules.BazelConfiguration;
@@ -754,7 +755,7 @@ public class BazelJavaSemantics implements JavaSemantics {
 
   @Override
   public CustomCommandLine buildSingleJarCommandLine(
-      String toolchainIdentifier,
+      BuildConfiguration configuration,
       Artifact output,
       String mainClass,
       ImmutableList<String> manifestLines,
