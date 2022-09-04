@@ -2,7 +2,6 @@ package io.quarkus.hibernate.orm.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
-import static io.quarkus.hibernate.orm.deployment.HibernateConfigUtil.firstPresent;
 import static org.hibernate.cfg.AvailableSettings.JPA_SHARED_CACHE_MODE;
 import static org.hibernate.cfg.AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES;
 import static org.hibernate.cfg.AvailableSettings.USE_QUERY_CACHE;
@@ -253,14 +252,15 @@ public final class HibernateOrmProcessor {
             List<JdbcDataSourceBuildItem> jdbcDataSources,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchModeBuildItem launchMode,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem jpaEntities,
+            List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             Capabilities capabilities,
             BuildProducer<SystemPropertyBuildItem> systemProperties,
             BuildProducer<NativeImageResourceBuildItem> nativeImageResources,
             BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentWatchedFiles,
             BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptors) {
 
-        if (!hasEntities(jpaModel)) {
+        if (!hasEntities(jpaEntities, nonJpaModelBuildItems)) {
             // we can bail out early as there are no entities
             return;
         }
@@ -279,7 +279,7 @@ public final class HibernateOrmProcessor {
 
         if (impliedPU.shouldGenerateImpliedBlockingPersistenceUnit()) {
             handleHibernateORMWithNoPersistenceXml(hibernateOrmConfig, index, persistenceXmlDescriptors,
-                    jdbcDataSources, applicationArchivesBuildItem, launchMode.getLaunchMode(), jpaModel, capabilities,
+                    jdbcDataSources, applicationArchivesBuildItem, launchMode.getLaunchMode(), jpaEntities, capabilities,
                     systemProperties, nativeImageResources, hotDeploymentWatchedFiles, persistenceUnitDescriptors);
         }
     }
@@ -302,11 +302,16 @@ public final class HibernateOrmProcessor {
     @BuildStep
     public void defineJpaEntities(
             JpaModelIndexBuildItem indexBuildItem,
-            BuildProducer<JpaModelBuildItem> domainObjectsProducer,
+            BuildProducer<JpaEntitiesBuildItem> domainObjectsProducer,
             List<IgnorableNonIndexedClasses> ignorableNonIndexedClassesBuildItems,
+            List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<UnremovableBeanBuildItem> unremovableBean,
             List<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptors) throws Exception {
+
+        Set<String> nonJpaModelClasses = nonJpaModelBuildItems.stream()
+                .map(NonJpaModelBuildItem::getClassName)
+                .collect(Collectors.toSet());
 
         Set<String> ignorableNonIndexedClasses = Collections.emptySet();
         if (!ignorableNonIndexedClassesBuildItems.isEmpty()) {
@@ -318,19 +323,19 @@ public final class HibernateOrmProcessor {
 
         JpaJandexScavenger scavenger = new JpaJandexScavenger(reflectiveClass, persistenceXmlDescriptors,
                 indexBuildItem.getIndex(),
-                ignorableNonIndexedClasses);
-        final JpaModelBuildItem domainObjects = scavenger.discoverModelAndRegisterForReflection();
+                nonJpaModelClasses, ignorableNonIndexedClasses);
+        final JpaEntitiesBuildItem domainObjects = scavenger.discoverModelAndRegisterForReflection();
         domainObjectsProducer.produce(domainObjects);
     }
 
     @BuildStep
     public ProxyDefinitionsBuildItem pregenProxies(
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem domainObjects,
             JpaModelIndexBuildItem indexBuildItem,
             List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
             LiveReloadBuildItem liveReloadBuildItem) {
-        Set<String> managedClassAndPackageNames = new HashSet<>(jpaModel.getEntityClassNames());
+        Set<String> managedClassAndPackageNames = new HashSet<>(domainObjects.getEntityClassNames());
         for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
             // Note: getManagedClassNames() can also return *package* names
             // See the source code of Hibernate ORM for proof:
@@ -348,7 +353,8 @@ public final class HibernateOrmProcessor {
     @Record(STATIC_INIT)
     public void build(RecorderContext recorderContext, HibernateOrmRecorder recorder,
             Capabilities capabilities,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem domainObjects,
+            List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             List<HibernateOrmIntegrationStaticConfiguredBuildItem> integrationBuildItems,
             ProxyDefinitionsBuildItem proxyDefinitions,
@@ -357,7 +363,7 @@ public final class HibernateOrmProcessor {
 
         feature.produce(new FeatureBuildItem(Feature.HIBERNATE_ORM));
 
-        final boolean enableORM = hasEntities(jpaModel);
+        final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
         final boolean hibernateReactivePresent = capabilities.isPresent(Capability.HIBERNATE_REACTIVE);
         //The Hibernate Reactive extension is able to handle registration of PersistenceProviders for both reactive and
         //traditional blocking Hibernate, by depending on this module and delegating to this code.
@@ -373,9 +379,9 @@ public final class HibernateOrmProcessor {
             return;
         }
 
-        recorder.enlistPersistenceUnit(jpaModel.getEntityClassNames());
+        recorder.enlistPersistenceUnit(domainObjects.getEntityClassNames());
 
-        final QuarkusScanner scanner = buildQuarkusScanner(jpaModel);
+        final QuarkusScanner scanner = buildQuarkusScanner(domainObjects);
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         // inspect service files for additional integrators
@@ -408,9 +414,9 @@ public final class HibernateOrmProcessor {
     @BuildStep
     void handleNativeImageImportSql(BuildProducer<NativeImageResourceBuildItem> resources,
             List<PersistenceUnitDescriptorBuildItem> descriptors,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             LaunchModeBuildItem launchMode) {
-        if (!hasEntities(jpaModel)) {
+        if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
         for (PersistenceUnitDescriptorBuildItem i : descriptors) {
@@ -429,8 +435,8 @@ public final class HibernateOrmProcessor {
             Capabilities capabilities,
             CombinedIndexBuildItem combinedIndex,
             List<PersistenceUnitDescriptorBuildItem> descriptors,
-            JpaModelBuildItem jpaModel) {
-        if (!hasEntities(jpaModel)) {
+            JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
+        if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
 
@@ -453,20 +459,20 @@ public final class HibernateOrmProcessor {
 
     @Consume(InterceptedStaticMethodsTransformersRegisteredBuildItem.class)
     @BuildStep
-    public HibernateEnhancersRegisteredBuildItem enhancerDomainObjects(JpaModelBuildItem jpaModel,
+    public HibernateEnhancersRegisteredBuildItem enhancerDomainObjects(JpaEntitiesBuildItem domainObjects,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
             BuildProducer<GeneratedClassBuildItem> additionalClasses) {
         // Modify the bytecode of all entities to enable lazy-loading, dirty checking, etc..
-        enhanceEntities(jpaModel, transformers, additionalJpaModelBuildItems, additionalClasses);
+        enhanceEntities(domainObjects, transformers, additionalJpaModelBuildItems, additionalClasses);
         // this allows others to register their enhancers after Hibernate, so they run before ours
         return new HibernateEnhancersRegisteredBuildItem();
     }
 
     @BuildStep
-    public HibernateModelClassCandidatesForFieldAccessBuildItem candidatesForFieldAccess(JpaModelBuildItem jpaModel) {
+    public HibernateModelClassCandidatesForFieldAccessBuildItem candidatesForFieldAccess(JpaEntitiesBuildItem domainObjects) {
         // Ask Panache to replace direct access to public fields with calls to accessors for all model classes.
-        return new HibernateModelClassCandidatesForFieldAccessBuildItem(jpaModel.getAllModelClassNames());
+        return new HibernateModelClassCandidatesForFieldAccessBuildItem(domainObjects.getAllModelClassNames());
     }
 
     @BuildStep
@@ -476,8 +482,8 @@ public final class HibernateOrmProcessor {
             BuildProducer<BeanContainerListenerBuildItem> buildProducer,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
             List<PersistenceUnitDescriptorBuildItem> descriptors,
-            JpaModelBuildItem jpaModel) throws Exception {
-        if (!hasEntities(jpaModel)) {
+            JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) throws Exception {
+        if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
 
@@ -520,10 +526,10 @@ public final class HibernateOrmProcessor {
     @Record(RUNTIME_INIT)
     public ServiceStartBuildItem startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
             List<JdbcDataSourceBuildItem> dataSourcesConfigured,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem,
             List<PersistenceProviderSetUpBuildItem> persistenceProviderSetUp) throws Exception {
-        if (hasEntities(jpaModel)) {
+        if (hasEntities(jpaEntities, nonJpaModels)) {
             recorder.startAllPersistenceUnits(beanContainer.getValue());
         }
 
@@ -612,8 +618,8 @@ public final class HibernateOrmProcessor {
         }
     }
 
-    private boolean hasEntities(JpaModelBuildItem jpaModel) {
-        return !jpaModel.getEntityClassNames().isEmpty();
+    private boolean hasEntities(JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
+        return !jpaEntities.getEntityClassNames().isEmpty() || !nonJpaModels.isEmpty();
     }
 
     private void handleHibernateORMWithNoPersistenceXml(
@@ -623,7 +629,7 @@ public final class HibernateOrmProcessor {
             List<JdbcDataSourceBuildItem> jdbcDataSources,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchMode launchMode,
-            JpaModelBuildItem jpaModel,
+            JpaEntitiesBuildItem jpaEntities,
             Capabilities capabilities,
             BuildProducer<SystemPropertyBuildItem> systemProperties,
             BuildProducer<NativeImageResourceBuildItem> nativeImageResources,
@@ -648,7 +654,7 @@ public final class HibernateOrmProcessor {
                 || hibernateOrmConfig.defaultPersistenceUnit.isAnyPropertySet();
 
         Map<String, Set<String>> modelClassesAndPackagesPerPersistencesUnits = getModelClassesAndPackagesPerPersistenceUnits(
-                hibernateOrmConfig, jpaModel, index.getIndex(), enableDefaultPersistenceUnit);
+                hibernateOrmConfig, jpaEntities, index.getIndex(), enableDefaultPersistenceUnit);
         Set<String> modelClassesAndPackagesForDefaultPersistenceUnit = modelClassesAndPackagesPerPersistencesUnits
                 .getOrDefault(PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME, Collections.emptySet());
 
@@ -806,12 +812,10 @@ public final class HibernateOrmProcessor {
         }
 
         // Query
-        int batchSize = firstPresent(persistenceUnitConfig.fetch.batchSize, persistenceUnitConfig.batchFetchSize)
-                .orElse(16);
-        if (batchSize > 0) {
-            descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_BATCH_FETCH_SIZE,
-                    Integer.toString(batchSize));
-            descriptor.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
+        if (persistenceUnitConfig.fetch.batchSize > 0) {
+            setBatchFetchSize(descriptor, persistenceUnitConfig.fetch.batchSize);
+        } else if (persistenceUnitConfig.batchFetchSize > 0) {
+            setBatchFetchSize(descriptor, persistenceUnitConfig.batchFetchSize);
         }
 
         if (persistenceUnitConfig.fetch.maxDepth.isPresent()) {
@@ -860,9 +864,11 @@ public final class HibernateOrmProcessor {
                         "Unable to find file referenced in '" + HIBERNATE_ORM_CONFIG_PREFIX + "sql-load-script="
                                 + persistenceUnitConfig.sqlLoadScript.get() + "'. Remove property or add file to your path.");
             }
-            // in dev mode we want to make sure that we watch for changes to file even if it doesn't currently exist
-            // as a user could still add it after performing the initial configuration
-            hotDeploymentWatchedFiles.produce(new HotDeploymentWatchedFileBuildItem(importFile.get()));
+            if (launchMode == LaunchMode.DEVELOPMENT) {
+                // in dev mode we want to make sure that we watch for changes to file even if it doesn't currently exist
+                // as a user could still add it after performing the initial configuration
+                hotDeploymentWatchedFiles.produce(new HotDeploymentWatchedFileBuildItem(importFile.get()));
+            }
         } else {
             //Disable implicit loading of the default import script (import.sql)
             descriptor.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES, "");
@@ -911,12 +917,18 @@ public final class HibernateOrmProcessor {
         descriptor.getProperties().setProperty(AvailableSettings.MAX_FETCH_DEPTH, String.valueOf(maxFetchDepth.getAsInt()));
     }
 
-    private void enhanceEntities(final JpaModelBuildItem jpaModel,
+    private static void setBatchFetchSize(ParsedPersistenceXmlDescriptor descriptor, int batchFetchSize) {
+        descriptor.getProperties().setProperty(AvailableSettings.DEFAULT_BATCH_FETCH_SIZE,
+                Integer.toString(batchFetchSize));
+        descriptor.getProperties().setProperty(AvailableSettings.BATCH_FETCH_STYLE, BatchFetchStyle.PADDED.toString());
+    }
+
+    private void enhanceEntities(final JpaEntitiesBuildItem domainObjects,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             List<AdditionalJpaModelBuildItem> additionalJpaModelBuildItems,
             BuildProducer<GeneratedClassBuildItem> additionalClasses) {
         HibernateEntityEnhancer hibernateEntityEnhancer = new HibernateEntityEnhancer();
-        for (String i : jpaModel.getAllModelClassNames()) {
+        for (String i : domainObjects.getAllModelClassNames()) {
             transformers.produce(new BytecodeTransformerBuildItem(true, i, hibernateEntityEnhancer, true));
         }
         for (AdditionalJpaModelBuildItem additionalJpaModel : additionalJpaModelBuildItems) {
@@ -932,12 +944,12 @@ public final class HibernateOrmProcessor {
     }
 
     private static Map<String, Set<String>> getModelClassesAndPackagesPerPersistenceUnits(HibernateOrmConfig hibernateOrmConfig,
-            JpaModelBuildItem jpaModel, IndexView index, boolean enableDefaultPersistenceUnit) {
+            JpaEntitiesBuildItem jpaEntities, IndexView index, boolean enableDefaultPersistenceUnit) {
         if (hibernateOrmConfig.persistenceUnits.isEmpty()) {
             // no named persistence units, all the entities will be associated with the default one
             // so we don't need to split them
-            Set<String> allModelClassesAndPackages = new HashSet<>(jpaModel.getAllModelClassNames());
-            allModelClassesAndPackages.addAll(jpaModel.getAllModelPackageNames());
+            Set<String> allModelClassesAndPackages = new HashSet<>(jpaEntities.getAllModelClassNames());
+            allModelClassesAndPackages.addAll(jpaEntities.getAllModelPackageNames());
             return Collections.singletonMap(PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME, allModelClassesAndPackages);
         }
 
@@ -1006,9 +1018,9 @@ public final class HibernateOrmProcessor {
 
         Set<String> modelClassesWithPersistenceUnitAnnotations = new TreeSet<>();
 
-        for (String modelClassName : jpaModel.getAllModelClassNames()) {
+        for (String modelClassName : jpaEntities.getAllModelClassNames()) {
             ClassInfo modelClassInfo = index.getClassByName(DotName.createSimple(modelClassName));
-            Set<String> relatedModelClassNames = getRelatedModelClassNames(index, jpaModel.getAllModelClassNames(),
+            Set<String> relatedModelClassNames = getRelatedModelClassNames(index, jpaEntities.getAllModelClassNames(),
                     modelClassInfo);
 
             if (modelClassInfo != null && (modelClassInfo.classAnnotation(ClassNames.QUARKUS_PERSISTENCE_UNIT) != null
@@ -1041,7 +1053,7 @@ public final class HibernateOrmProcessor {
 
         Set<String> affectedModelClasses = modelClassesAndPackagesPerPersistenceUnits.values().stream().flatMap(Set::stream)
                 .collect(Collectors.toSet());
-        Set<String> unaffectedModelClasses = jpaModel.getAllModelClassNames().stream()
+        Set<String> unaffectedModelClasses = jpaEntities.getAllModelClassNames().stream()
                 .filter(c -> !affectedModelClasses.contains(c))
                 .collect(Collectors.toCollection(TreeSet::new));
         if (!unaffectedModelClasses.isEmpty()) {
@@ -1049,7 +1061,7 @@ public final class HibernateOrmProcessor {
                     String.join("\n\t- ", unaffectedModelClasses));
         }
 
-        for (String modelPackageName : jpaModel.getAllModelPackageNames()) {
+        for (String modelPackageName : jpaEntities.getAllModelPackageNames()) {
             Set<String> persistenceUnitNames = packageRules.get(modelPackageName);
             if (persistenceUnitNames == null) {
                 continue;
@@ -1145,19 +1157,19 @@ public final class HibernateOrmProcessor {
      * Set up the scanner, as this scanning has already been done we need to just tell it about the classes we
      * have discovered. This scanner is bytecode serializable and is passed directly into the recorder
      *
-     * @param jpaModel the previously discovered JPA model (domain objects, ...)
+     * @param domainObjects the previously discovered domain objects
      * @return a new QuarkusScanner with all domainObjects registered
      */
-    public static QuarkusScanner buildQuarkusScanner(JpaModelBuildItem jpaModel) {
+    public static QuarkusScanner buildQuarkusScanner(JpaEntitiesBuildItem domainObjects) {
         QuarkusScanner scanner = new QuarkusScanner();
         Set<PackageDescriptor> packageDescriptors = new HashSet<>();
-        for (String packageName : jpaModel.getAllModelPackageNames()) {
+        for (String packageName : domainObjects.getAllModelPackageNames()) {
             QuarkusScanner.PackageDescriptorImpl desc = new QuarkusScanner.PackageDescriptorImpl(packageName);
             packageDescriptors.add(desc);
         }
         scanner.setPackageDescriptors(packageDescriptors);
         Set<ClassDescriptor> classDescriptors = new HashSet<>();
-        for (String className : jpaModel.getEntityClassNames()) {
+        for (String className : domainObjects.getEntityClassNames()) {
             QuarkusScanner.ClassDescriptorImpl desc = new QuarkusScanner.ClassDescriptorImpl(className,
                     ClassDescriptor.Categorization.MODEL);
             classDescriptors.add(desc);
