@@ -140,7 +140,7 @@ public class VertxInputStream extends InputStream {
     @Override
     public void close() throws IOException {
         if (closed) {
-            return;
+            throw new IOException("Stream is closed");
         }
         closed = true;
         try {

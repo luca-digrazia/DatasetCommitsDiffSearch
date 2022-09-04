@@ -24,7 +24,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.resteasy.reactive.common.core.BlockingNotAllowedException;
 import org.jboss.resteasy.reactive.common.model.ResourceContextResolver;
 import org.jboss.resteasy.reactive.common.model.ResourceExceptionMapper;
 import org.jboss.resteasy.reactive.common.model.ResourceInterceptors;
@@ -102,7 +101,6 @@ public class ResteasyReactiveScanningProcessor {
         ExceptionMapping exceptions = ResteasyReactiveExceptionMappingScanner
                 .scanForExceptionMappers(combinedIndexBuildItem.getComputingIndex(), applicationResultBuildItem.getResult());
         exceptions.addBlockingProblem(BlockingOperationNotAllowedException.class);
-        exceptions.addBlockingProblem(BlockingNotAllowedException.class);
         for (Map.Entry<Class<? extends Throwable>, ResourceExceptionMapper<? extends Throwable>> i : exceptions.getMappers()
                 .entrySet()) {
             beanBuilder.addBeanClass(i.getValue().getClassName());

@@ -194,7 +194,9 @@ public class InvocationBuilderImpl implements Invocation.Builder {
 
     private <T> T unwrap(CompletableFuture<T> c) {
         if (Context.isOnEventLoopThread()) {
-            throw new BlockingNotAllowedException();
+            throw new BlockingNotAllowedException("Blocking REST client call made from the event loop. " +
+                    "If the code is executed from a RESTEasy Reactive resource, either annotate the resource method " +
+                    "with `@Blocking` or use non-blocking client calls.");
         }
         try {
             return c.get(readTimeoutMs, TimeUnit.MILLISECONDS);
