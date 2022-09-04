@@ -19,9 +19,6 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.security.authenticator.DefaultLogin;
 import org.apache.kafka.common.security.authenticator.SaslClientCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerRefreshingLogin;
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClient;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ByteBufferDeserializer;
@@ -92,8 +89,6 @@ public class KafkaProcessor {
             FloatDeserializer.class
     };
 
-    static final DotName OBJECT_MAPPER = DotName.createSimple("com.fasterxml.jackson.databind.ObjectMapper");
-
     @BuildStep
     void contributeClassesToIndex(BuildProducer<AdditionalIndexedClassesBuildItem> additionalIndexedClasses,
             BuildProducer<IndexDependencyBuildItem> indexDependency) {
@@ -111,7 +106,7 @@ public class KafkaProcessor {
     @BuildStep
     public void build(CombinedIndexBuildItem indexBuildItem, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<NativeImageProxyDefinitionBuildItem> proxies,
-            Capabilities capabilities, BuildProducer<UnremovableBeanBuildItem> beans) {
+            Capabilities capabilities) {
         final Set<DotName> toRegister = new HashSet<>();
 
         collectImplementors(toRegister, indexBuildItem, Serializer.class);
@@ -122,12 +117,6 @@ public class KafkaProcessor {
         collectImplementors(toRegister, indexBuildItem, ConsumerPartitionAssignor.class);
         collectImplementors(toRegister, indexBuildItem, ConsumerInterceptor.class);
         collectImplementors(toRegister, indexBuildItem, ProducerInterceptor.class);
-
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
-                OAuthBearerSaslClient.class,
-                OAuthBearerSaslClient.OAuthBearerSaslClientFactory.class,
-                OAuthBearerToken.class,
-                OAuthBearerRefreshingLogin.class));
 
         for (Class<?> i : BUILT_INS) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, i.getName()));
@@ -143,9 +132,6 @@ public class KafkaProcessor {
                     new ReflectiveClassBuildItem(false, false, ObjectMapperSerializer.class, ObjectMapperDeserializer.class));
             collectSubclasses(toRegister, indexBuildItem, ObjectMapperSerializer.class);
             collectSubclasses(toRegister, indexBuildItem, ObjectMapperDeserializer.class);
-
-            // Make the `io.quarkus.jackson.runtime.ObjectMapperProducer` bean cannot be removed.
-            beans.produce(UnremovableBeanBuildItem.beanTypes(OBJECT_MAPPER));
         }
 
         for (DotName s : toRegister) {
@@ -239,28 +225,6 @@ public class KafkaProcessor {
             } catch (ClassNotFoundException e) {
                 //ignore, opentracing contrib kafka is not in the classpath
             }
-        }
-
-        try {
-            Class.forName("io.strimzi.kafka.oauth.client.JaasClientOauthLoginCallbackHandler", false,
-                    Thread.currentThread().getContextClassLoader());
-
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, true,
-                    "io.strimzi.kafka.oauth.client.JaasClientOauthLoginCallbackHandler"));
-
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, true,
-                    "org.keycloak.jose.jws.JWSHeader",
-                    "org.keycloak.representations.AccessToken",
-                    "org.keycloak.representations.AccessToken$Access",
-                    "org.keycloak.representations.AccessTokenResponse",
-                    "org.keycloak.representations.IDToken",
-                    "org.keycloak.representations.JsonWebToken",
-                    "org.keycloak.jose.jwk.JSONWebKeySet",
-                    "org.keycloak.jose.jwk.JWK",
-                    "org.keycloak.json.StringOrArrayDeserializer",
-                    "org.keycloak.json.StringListMapDeserializer"));
-        } catch (ClassNotFoundException e) {
-            //ignore, Strimzi OAuth Client is not on the classpath
         }
 
     }

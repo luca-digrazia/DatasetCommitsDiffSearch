@@ -128,8 +128,7 @@ public class OpenshiftProcessor {
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
         Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
-        result.addAll(KubernetesCommonHelper.createDecorators(project, OPENSHIFT, name, config,
-                metricsConfiguration,
+        result.addAll(KubernetesCommonHelper.createDecorators(project, OPENSHIFT, name, config, metricsConfiguration,
                 annotations, labels, command,
                 ports, livenessPath, readinessPath, roles, roleBindings));
 
@@ -189,7 +188,7 @@ public class OpenshiftProcessor {
         // Probe port handling
         Integer port = ports.stream().filter(p -> HTTP_PORT.equals(p.getName())).map(KubernetesPortBuildItem::getPort)
                 .findFirst().orElse(DEFAULT_HTTP_PORT);
-        result.add(new DecoratorBuildItem(OPENSHIFT, new ApplyHttpGetActionPortDecorator(name, name, port)));
+        result.add(new DecoratorBuildItem(OPENSHIFT, new ApplyHttpGetActionPortDecorator(port)));
 
         // Hanlde non-s2i
         if (!capabilities.isPresent(Capability.CONTAINER_IMAGE_S2I)
