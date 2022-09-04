@@ -17,8 +17,6 @@
 package org.graylog2;
 
 import com.github.joschi.jadconfig.Parameter;
-import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.ValidatorMethod;
 import com.github.joschi.jadconfig.converters.TrimmedStringSetConverter;
 import com.github.joschi.jadconfig.util.Duration;
 import com.github.joschi.jadconfig.validators.DirectoryPathReadableValidator;
@@ -26,7 +24,7 @@ import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
 import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
-import com.github.joschi.jadconfig.validators.URIAbsoluteValidator;
+import org.graylog2.configuration.WebListenUriValidator;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.utilities.IPSubnetConverter;
 import org.jboss.netty.handler.ipfilter.IpSubnet;
@@ -53,11 +51,11 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "password_secret", required = true, validator = StringNotBlankValidator.class)
     private String passwordSecret;
 
-    @Parameter(value = "rest_listen_uri", required = true, validator = URIAbsoluteValidator.class)
+    @Parameter(value = "rest_listen_uri", required = true)
     private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_PORT + "/");
 
-    @Parameter(value = "web_listen_uri", required = true, validator = URIAbsoluteValidator.class)
-    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/web");
+    @Parameter(value = "web_listen_uri", required = true, validator = WebListenUriValidator.class)
+    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/");
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 500;
@@ -101,11 +99,11 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "allow_highlighting")
     private boolean allowHighlighting = false;
 
+    @Parameter(value = "enable_metrics_collection")
+    private boolean metricsCollectionEnabled = false;
+
     @Parameter(value = "lb_recognition_period_seconds", validator = PositiveIntegerValidator.class)
     private int loadBalancerRecognitionPeriodSeconds = 3;
-
-    @Parameter(value = "lb_throttle_threshold_percentage", validator = PositiveIntegerValidator.class)
-    private int loadBalancerThrottleThresholdPercentage = 100;
 
     @Parameter(value = "stream_processing_timeout", validator = PositiveLongValidator.class)
     private long streamProcessingTimeout = 2000;
@@ -201,7 +199,6 @@ public class Configuration extends BaseConfiguration {
         return droolsRulesFile;
     }
 
-    @Override
     public String getNodeIdFile() {
         return nodeIdFile;
     }
@@ -238,6 +235,10 @@ public class Configuration extends BaseConfiguration {
 
     public boolean isAllowHighlighting() {
         return allowHighlighting;
+    }
+
+    public boolean isMetricsCollectionEnabled() {
+        return metricsCollectionEnabled;
     }
 
     public int getLoadBalancerRecognitionPeriodSeconds() {
@@ -312,19 +313,5 @@ public class Configuration extends BaseConfiguration {
         return indexRangesCleanupInterval;
     }
 
-    public Set<IpSubnet> getTrustedProxies() {
-        return trustedProxies;
-    }
-
-    public int getLoadBalancerRequestThrottleJournalUsage() {
-        return loadBalancerThrottleThresholdPercentage;
-    }
-
-    @ValidatorMethod
-    public void validatePasswordSecret() throws ValidationException {
-        final String passwordSecret = getPasswordSecret();
-        if (passwordSecret == null || passwordSecret.length() < 16) {
-            throw new ValidationException("The minimum length for \"password_secret\" is 16 characters.");
-        }
-    }
+    public Set<IpSubnet> getTrustedProxies() { return trustedProxies; }
 }
