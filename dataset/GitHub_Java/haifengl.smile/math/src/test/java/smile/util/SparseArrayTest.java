@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,13 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.util;
 
 import org.junit.*;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 /**
  *
@@ -45,14 +45,11 @@ public class SparseArrayTest {
     public void tearDown() {
     }
 
-    /**
-     * Test of all methods, of class SparseArrayTest.
-     */
     @Test
-    public void testAll() {
+    public void test() {
         System.out.println("SparseArray");
         SparseArray a = new SparseArray();
-        assertEquals(true, a.isEmpty());
+        assertTrue(a.isEmpty());
 
         a.set(1, 0.5);
         a.set(2, 1.0);
@@ -60,20 +57,20 @@ public class SparseArrayTest {
         assertEquals(0.0, a.get(0), 1E-15);
         assertEquals(0.5, a.get(1), 1E-15);
         assertEquals(1.0, a.get(2), 1E-15);
-        assertEquals(false, a.isEmpty());
+        assertFalse(a.isEmpty());
 
         a.remove(1);
         assertEquals(1, a.size());
         assertEquals(0.0, a.get(1), 1E-15);
         assertEquals(1.0, a.get(2), 1E-15);
-        assertEquals(false, a.isEmpty());
+        assertFalse(a.isEmpty());
 
 
         a.remove(1);
         assertEquals(1, a.size());
         assertEquals(0.0, a.get(1), 1E-15);
         assertEquals(1.0, a.get(2), 1E-15);
-        assertEquals(false, a.isEmpty());
+        assertFalse(a.isEmpty());
 
         SparseArray.Entry e = a.stream().findFirst().get();
         assertEquals(1, a.stream().count());
