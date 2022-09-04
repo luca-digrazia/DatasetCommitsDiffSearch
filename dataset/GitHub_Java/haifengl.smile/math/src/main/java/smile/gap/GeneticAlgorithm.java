@@ -119,14 +119,15 @@ import java.util.Arrays;
 public class GeneticAlgorithm <T extends Chromosome> {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GeneticAlgorithm.class);
 
+
     /**
      * Population.
      */
-    private final T[] population;
+    private T[] population;
     /**
      * Selection strategy.
      */
-    private final Selection selection;
+    private Selection selection;
     /**
      * The number of best chromosomes to copy to new population. When creating
      * new population by crossover and mutation, we have a big chance, that we
@@ -135,7 +136,7 @@ public class GeneticAlgorithm <T extends Chromosome> {
      * classical way. Elitism can very rapidly increase performance of GA,
      * because it prevents losing the best found solution.
      */
-    private final int elitism;
+    private int elitism;
     /**
      * The number of iterations of local search in case Lamarckian algorithm.
      */
