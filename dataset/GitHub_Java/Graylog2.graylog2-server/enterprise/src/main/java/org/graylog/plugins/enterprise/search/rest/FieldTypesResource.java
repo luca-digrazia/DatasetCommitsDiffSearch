@@ -3,9 +3,7 @@ package org.graylog.plugins.enterprise.search.rest;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.audit.jersey.NoAuditEvent;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.fieldtypes.FieldTypeDTO;
 import org.graylog2.indexer.fieldtypes.FieldTypeMapper;
@@ -41,7 +39,6 @@ public class FieldTypesResource extends RestResource implements PluginRestResour
     private final StreamService streamService;
     private final FieldTypeMapper fieldTypeMapper;
     private static final FieldTypes.Type UNKNOWN_TYPE = createType("unknown", of());
-    private static final String PROP_COMPOUND_TYPE = "compound";
 
     @Inject
     public FieldTypesResource(IndexFieldTypesService indexFieldTypesService, StreamService streamService, FieldTypeMapper fieldTypeMapper) {
@@ -67,9 +64,7 @@ public class FieldTypesResource extends RestResource implements PluginRestResour
                             .map(mappedFieldTypeDTO -> mappedFieldTypeDTO.type().properties())
                             .reduce((s1, s2) -> Sets.intersection(s1, s2).immutableCopy())
                             .orElse(ImmutableSet.of());
-
-                    final ImmutableSet<String> properties = ImmutableSet.<String>builder().addAll(commonProperties).add(PROP_COMPOUND_TYPE).build();
-                    return MappedFieldTypeDTO.create(fieldName, createType(compoundFieldType, properties));
+                    return MappedFieldTypeDTO.create(fieldName, createType(compoundFieldType, commonProperties));
                 })
                 .collect(Collectors.toSet());
 
@@ -81,7 +76,6 @@ public class FieldTypesResource extends RestResource implements PluginRestResour
     }
 
     @GET
-    @ApiOperation(value = "Retrieve the list of all fields present in the system")
     public Set<MappedFieldTypeDTO> allFieldTypes() {
         if (allowedToReadStream("*")) {
             return mergeCompoundFieldTypes(indexFieldTypesService.findAll()
@@ -104,8 +98,6 @@ public class FieldTypesResource extends RestResource implements PluginRestResour
     }
 
     @POST
-    @ApiOperation(value = "Retrieve the field list of a given set of streams")
-    @NoAuditEvent("This is not changing any data")
     public Set<MappedFieldTypeDTO> byStreams(FieldTypesForStreamsRequest request) {
         request.streams().forEach(s -> checkPermission(RestPermissions.STREAMS_READ, s));
 
