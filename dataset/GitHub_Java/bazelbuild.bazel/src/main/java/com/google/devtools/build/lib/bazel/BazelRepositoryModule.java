@@ -27,12 +27,16 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.bazel.commands.FetchCommand;
 import com.google.devtools.build.lib.bazel.commands.SyncCommand;
-import com.google.devtools.build.lib.bazel.repository.LocalConfigPlatformFunction;
-import com.google.devtools.build.lib.bazel.repository.LocalConfigPlatformRule;
+import com.google.devtools.build.lib.bazel.repository.GitRepositoryFunction;
+import com.google.devtools.build.lib.bazel.repository.HttpArchiveFunction;
+import com.google.devtools.build.lib.bazel.repository.HttpFileFunction;
+import com.google.devtools.build.lib.bazel.repository.HttpJarFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenDownloader;
 import com.google.devtools.build.lib.bazel.repository.MavenJarFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenServerFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenServerRepositoryFunction;
+import com.google.devtools.build.lib.bazel.repository.NewGitRepositoryFunction;
+import com.google.devtools.build.lib.bazel.repository.NewHttpArchiveFunction;
 import com.google.devtools.build.lib.bazel.repository.RepositoryOptions;
 import com.google.devtools.build.lib.bazel.repository.RepositoryOptions.RepositoryOverride;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
@@ -43,8 +47,14 @@ import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryFun
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.GitRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.HttpFileRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -119,12 +129,17 @@ public class BazelRepositoryModule extends BlazeModule {
       HttpDownloader httpDownloader, MavenDownloader mavenDownloader) {
     return ImmutableMap.<String, RepositoryFunction>builder()
         .put(LocalRepositoryRule.NAME, new LocalRepositoryFunction())
+        .put(HttpArchiveRule.NAME, new HttpArchiveFunction(httpDownloader))
+        .put(GitRepositoryRule.NAME, new GitRepositoryFunction(httpDownloader))
+        .put(HttpJarRule.NAME, new HttpJarFunction(httpDownloader))
+        .put(HttpFileRule.NAME, new HttpFileFunction(httpDownloader))
         .put(MavenJarRule.NAME, new MavenJarFunction(mavenDownloader))
+        .put(NewHttpArchiveRule.NAME, new NewHttpArchiveFunction(httpDownloader))
+        .put(NewGitRepositoryRule.NAME, new NewGitRepositoryFunction(httpDownloader))
         .put(NewLocalRepositoryRule.NAME, new NewLocalRepositoryFunction())
         .put(AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction())
         .put(AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction())
         .put(MavenServerRule.NAME, new MavenServerRepositoryFunction())
-        .put(LocalConfigPlatformRule.NAME, new LocalConfigPlatformFunction())
         .build();
   }
 
@@ -217,7 +232,7 @@ public class BazelRepositoryModule extends BlazeModule {
 
   @Override
   public void beforeCommand(CommandEnvironment env) {
-    clientEnvironmentSupplier.set(env.getRepoEnv());
+    clientEnvironmentSupplier.set(env.getActionClientEnv());
     PackageCacheOptions pkgOptions = env.getOptions().getOptions(PackageCacheOptions.class);
     isFetch.set(pkgOptions != null && pkgOptions.fetch);
     resolvedFile = Optional.<RootedPath>absent();
@@ -229,19 +244,16 @@ public class BazelRepositoryModule extends BlazeModule {
       repositoryCache.setHardlink(repoOptions.useHardlinks);
       skylarkRepositoryFunction.setTimeoutScaling(repoOptions.experimentalScaleTimeouts);
       if (repoOptions.experimentalRepositoryCache != null) {
-        // A set but empty path indicates a request to disable the repository cache.
-        if (!repoOptions.experimentalRepositoryCache.isEmpty()) {
-          Path repositoryCachePath;
-          if (repoOptions.experimentalRepositoryCache.isAbsolute()) {
-            repositoryCachePath = filesystem.getPath(repoOptions.experimentalRepositoryCache);
-          } else {
-            repositoryCachePath =
-                env.getBlazeWorkspace()
-                    .getWorkspace()
-                    .getRelative(repoOptions.experimentalRepositoryCache);
-          }
-          repositoryCache.setRepositoryCachePath(repositoryCachePath);
+        Path repositoryCachePath;
+        if (repoOptions.experimentalRepositoryCache.isAbsolute()) {
+          repositoryCachePath = filesystem.getPath(repoOptions.experimentalRepositoryCache);
+        } else {
+          repositoryCachePath =
+              env.getBlazeWorkspace()
+                  .getWorkspace()
+                  .getRelative(repoOptions.experimentalRepositoryCache);
         }
+        repositoryCache.setRepositoryCachePath(repositoryCachePath);
       } else {
         Path repositoryCachePath =
             env.getDirectories()
@@ -273,11 +285,7 @@ public class BazelRepositoryModule extends BlazeModule {
                             ? filesystem.getPath(path)
                             : env.getBlazeWorkspace().getWorkspace().getRelative(path))
                 .collect(Collectors.toList()));
-      } else {
-        httpDownloader.setDistdir(ImmutableList.<Path>of());
       }
-
-      httpDownloader.setTimeoutScaling((float) repoOptions.httpTimeoutScaling);
 
       if (repoOptions.repositoryOverrides != null) {
         ImmutableMap.Builder<RepositoryName, PathFragment> builder = ImmutableMap.builder();
