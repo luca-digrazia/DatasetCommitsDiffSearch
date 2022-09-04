@@ -7,6 +7,10 @@ import com.google.common.io.Resources;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
+import io.dropwizard.jersey.errors.LoggingExceptionMapper;
+import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
+import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.jetty.ServerPushFilterFactory;
@@ -14,7 +18,6 @@ import io.dropwizard.logging.ConsoleAppenderFactory;
 import io.dropwizard.logging.FileAppenderFactory;
 import io.dropwizard.logging.SyslogAppenderFactory;
 import io.dropwizard.setup.Environment;
-import io.dropwizard.setup.ExceptionMapperBinder;
 import io.dropwizard.validation.BaseValidator;
 import org.eclipse.jetty.server.AbstractNetworkConnector;
 import org.eclipse.jetty.server.Connector;
@@ -26,11 +29,13 @@ import org.junit.Test;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.ext.ExceptionMapper;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -109,8 +114,12 @@ public class DefaultServerFactoryTest {
         assertThat(http.getRegisterDefaultExceptionMappers()).isTrue();
 
         http.build(environment);
-        assertThat(environment.jersey().getResourceConfig().getSingletons())
-            .filteredOn(x -> x instanceof ExceptionMapperBinder).hasSize(1);
+        Set<Object> singletons = environment.jersey().getResourceConfig().getSingletons();
+        assertThat(singletons).hasAtLeastOneElementOfType(LoggingExceptionMapper.class);
+        assertThat(singletons).hasAtLeastOneElementOfType(JsonProcessingExceptionMapper.class);
+        assertThat(singletons).hasAtLeastOneElementOfType(EarlyEofExceptionMapper.class);
+        assertThat(singletons).hasAtLeastOneElementOfType(JerseyViolationExceptionMapper.class);
+
     }
 
     @Test
@@ -121,17 +130,22 @@ public class DefaultServerFactoryTest {
                 Validators.newValidator(), new MetricRegistry(),
                 ClassLoader.getSystemClassLoader());
         http.build(environment);
-        assertThat(environment.jersey().getResourceConfig().getSingletons())
-            .filteredOn(x -> x instanceof ExceptionMapperBinder).isEmpty();
+        for (Object singleton : environment.jersey().getResourceConfig().getSingletons()) {
+            assertThat(singleton).isNotInstanceOf(ExceptionMapper.class);
+        }
     }
 
     @Test
     public void defaultsDetailedJsonProcessingExceptionToFalse() throws Exception {
         http.build(environment);
-        assertThat(environment.jersey().getResourceConfig().getSingletons())
-            .filteredOn(x -> x instanceof ExceptionMapperBinder)
-            .hasOnlyOneElementSatisfying(x ->
-                assertThat(((ExceptionMapperBinder) x).isShowDetails()).isFalse());
+        JsonProcessingExceptionMapper exceptionMapper = null;
+        for (Object singleton : environment.jersey().getResourceConfig().getSingletons()) {
+            if (singleton instanceof JsonProcessingExceptionMapper) {
+                exceptionMapper = (JsonProcessingExceptionMapper) singleton;
+            }
+        }
+        assertThat(exceptionMapper).isNotNull();
+        assertThat(exceptionMapper.isShowDetails()).isFalse();
     }
 
     @Test
@@ -139,10 +153,14 @@ public class DefaultServerFactoryTest {
         http.setDetailedJsonProcessingExceptionMapper(true);
 
         http.build(environment);
-        assertThat(environment.jersey().getResourceConfig().getSingletons())
-            .filteredOn(x -> x instanceof ExceptionMapperBinder)
-            .hasOnlyOneElementSatisfying(x ->
-                assertThat(((ExceptionMapperBinder) x).isShowDetails()).isTrue());
+        JsonProcessingExceptionMapper exceptionMapper = null;
+        for (Object singleton : environment.jersey().getResourceConfig().getSingletons()) {
+            if (singleton instanceof JsonProcessingExceptionMapper) {
+                exceptionMapper = (JsonProcessingExceptionMapper) singleton;
+            }
+        }
+        assertThat(exceptionMapper).isNotNull();
+        assertThat(exceptionMapper.isShowDetails()).isTrue();
     }
 
     @Test
@@ -153,11 +171,9 @@ public class DefaultServerFactoryTest {
         environment.jersey().register(new TestResource(requestReceived, shutdownInvoked));
 
         final ScheduledExecutorService executor = Executors.newScheduledThreadPool(3);
-        http.configure(environment);
         final Server server = http.build(environment);
 
         ((AbstractNetworkConnector) server.getConnectors()[0]).setPort(0);
-        ((AbstractNetworkConnector) server.getConnectors()[1]).setPort(0);
 
         ScheduledFuture<Void> cleanup = executor.schedule(() -> {
             if (!server.isStopped()) {
