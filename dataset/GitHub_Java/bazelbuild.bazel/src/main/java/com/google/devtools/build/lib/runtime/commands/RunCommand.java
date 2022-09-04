@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
-import com.google.devtools.build.lib.runtime.BlazeServerStartupOptions;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
@@ -234,7 +233,7 @@ public class RunCommand implements BlazeCommand  {
     }
     List<String> prettyCmdLine = new ArrayList<>();
     constructCommandLine(cmdLine, prettyCmdLine, env, shellExecutable,
-        targetToRun, runUnderTarget, args);
+        targetToRun, runUnderTarget, args, false);
 
     // Add a newline between the blaze output and the binary's output.
     env.getReporter().getOutErr().printErrLn("");
@@ -288,17 +287,26 @@ public class RunCommand implements BlazeCommand  {
 
   private void constructCommandLine(List<String> cmdLine, List<String> prettyCmdLine,
       CommandEnvironment env, PathFragment shellExecutable, ConfiguredTarget targetToRun,
-      ConfiguredTarget runUnderTarget, List<String> args) {
+      ConfiguredTarget runUnderTarget, List<String> args, boolean useRunfilesPath) {
     String productName = env.getRuntime().getProductName();
     Artifact executable = targetToRun.getProvider(FilesToRunProvider.class).getExecutable();
 
-    PathFragment executablePath = executable.getPath().asFragment();
-    PathFragment prettyExecutablePath = OutputDirectoryLinksUtils.getPrettyPath(
-          executable.getPath(),
-          env.getWorkspaceName(),
-          env.getWorkspace(),
-          env.getOptions().getOptions(BuildRequestOptions.class).getSymlinkPrefix(productName),
-          productName);
+    PathFragment executablePath;
+    PathFragment prettyExecutablePath;
+
+    if (useRunfilesPath) {
+      executablePath = executable.getRunfilesPath();
+      prettyExecutablePath = executable.getRunfilesPath();
+    } else {
+      executablePath = executable.getPath().asFragment();
+      prettyExecutablePath =
+          OutputDirectoryLinksUtils.getPrettyPath(
+              executable.getPath(),
+              env.getWorkspaceName(),
+              env.getWorkspace(),
+              env.getOptions().getOptions(BuildRequestOptions.class).getSymlinkPrefix(productName),
+              productName);
+    }
 
     RunUnder runUnder = env.getOptions().getOptions(BuildConfiguration.Options.class).runUnder;
     // Insert the command prefix specified by the "--run_under=<command-prefix>" option
@@ -459,7 +467,6 @@ public class RunCommand implements BlazeCommand  {
 
     Map<String, String> runEnvironment = new TreeMap<>();
     List<String> cmdLine = new ArrayList<>();
-    List<String> prettyCmdLine = new ArrayList<>();
     Path workingDir;
 
     runEnvironment.put("BUILD_WORKSPACE_DIRECTORY", env.getWorkspace().getPathString());
@@ -502,16 +509,16 @@ public class RunCommand implements BlazeCommand  {
       try {
         cmdLine.addAll(TestStrategy.getArgs(testAction));
         cmdLine.addAll(commandLineArgs);
-        prettyCmdLine.addAll(cmdLine);
       } catch (ExecException e) {
         env.getReporter().handle(Event.error(e.getMessage()));
         return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
       }
     } else {
       workingDir = runfilesDir;
+      List<String> prettyCmdLine = new ArrayList<>();
       List<String> args = computeArgs(env, targetToRun, commandLineArgs);
       constructCommandLine(cmdLine, prettyCmdLine, env,
-          shellExecutable, targetToRun, runUnderTarget, args);
+          shellExecutable, targetToRun, runUnderTarget, args, runfilesSupport != null);
     }
 
     if (runOptions.scriptPath != null) {
@@ -525,22 +532,8 @@ public class RunCommand implements BlazeCommand  {
       }
     }
 
-    // We need to do update runEnvironment so that the environment of --batch is not contaminated
-    // with that required for the server. Note that some differences between the environment of
-    // the process being run and the environment of the client are still possible if the environment
-    // variables added for the server were not in the original client environment.
-    //
-    // This is done after writing the script for --script_path so that that is not contaminated
-    // with the original client environment (CommandFailureUtils.describeCommand() puts
-    // runEnvironment into the written script)
-    boolean batchMode = env.getRuntime().getStartupOptionsProvider()
-        .getOptions(BlazeServerStartupOptions.class).batch;
-    if (batchMode) {
-      runEnvironment.putAll(env.getClientEnv());
-    }
-
     env.getReporter().handle(Event.info(
-        null, "Running command line: " + ShellEscaper.escapeJoinAll(prettyCmdLine)));
+        null, "Running command line: " + ShellEscaper.escapeJoinAll(cmdLine)));
 
     ExecRequest.Builder execDescription = ExecRequest.newBuilder()
         .setWorkingDirectory(
