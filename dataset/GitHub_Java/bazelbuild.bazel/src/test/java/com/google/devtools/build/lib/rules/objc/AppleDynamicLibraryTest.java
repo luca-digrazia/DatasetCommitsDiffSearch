@@ -198,9 +198,4 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   public void testAvoidDepsObjects() throws Exception {
     checkAvoidDepsObjects(RULE_TYPE);
   }
-
-  @Test
-  public void testMinimumOsDifferentTargets() throws Exception {
-    checkMinimumOsDifferentTargets(RULE_TYPE, "_lipobin", "_bin");
-  }
 }
