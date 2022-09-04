@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
@@ -36,8 +35,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfigu
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.PackageGroupConfiguredTarget;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -194,7 +191,6 @@ public final class ConfiguredTargetFactory {
   @Nullable
   public final ConfiguredTarget createConfiguredTarget(
       AnalysisEnvironment analysisEnvironment,
-      ActionLookupKey actionLookupKey,
       ArtifactFactory artifactFactory,
       Target target,
       BuildConfiguration config,
@@ -209,7 +205,6 @@ public final class ConfiguredTargetFactory {
         return createRule(
             analysisEnvironment,
             (Rule) target,
-            actionLookupKey,
             config,
             hostConfig,
             prerequisiteMap,
@@ -262,7 +257,6 @@ public final class ConfiguredTargetFactory {
   private ConfiguredTarget createRule(
       AnalysisEnvironment env,
       Rule rule,
-      ActionLookupKey actionLookupKey,
       BuildConfiguration configuration,
       BuildConfiguration hostConfiguration,
       OrderedSetMultimap<Attribute, ConfiguredTargetAndData> prerequisiteMap,
@@ -280,7 +274,6 @@ public final class ConfiguredTargetFactory {
                 hostConfiguration,
                 ruleClassProvider.getPrerequisiteValidator(),
                 rule.getRuleClassObject().getConfigurationFragmentPolicy())
-            .setActionLookupKey(actionLookupKey)
             .setVisibility(convertVisibility(prerequisiteMap, env.getEventHandler(), rule, null))
             .setPrerequisites(prerequisiteMap)
             .setConfigConditions(configConditions)
@@ -289,7 +282,7 @@ public final class ConfiguredTargetFactory {
             .setConstraintSemantics(ruleClassProvider.getConstraintSemantics())
             .build();
     if (ruleContext.hasErrors()) {
-      return erroredConfiguredTarget(ruleContext);
+      return null;
     }
     ConfigurationFragmentPolicy configurationFragmentPolicy =
         rule.getRuleClassObject().getConfigurationFragmentPolicy();
@@ -310,14 +303,12 @@ public final class ConfiguredTargetFactory {
       }
       if (rule.getRuleClassObject().isSkylark()) {
         // TODO(bazel-team): maybe merge with RuleConfiguredTargetBuilder?
-        ConfiguredTarget target = SkylarkRuleConfiguredTargetUtil.buildRule(
+        return SkylarkRuleConfiguredTargetUtil.buildRule(
             ruleContext,
             rule.getRuleClassObject().getAdvertisedProviders(),
             rule.getRuleClassObject().getConfiguredTargetFunction(),
             rule.getLocation(),
             env.getSkylarkSemantics());
-
-        return target != null ? target : erroredConfiguredTarget(ruleContext);
       } else {
         RuleClass.ConfiguredTargetFactory<ConfiguredTarget, RuleContext, ActionConflictException>
             factory =
@@ -330,36 +321,6 @@ public final class ConfiguredTargetFactory {
     } catch (RuleErrorException ruleErrorException) {
       // Returning null in this method is an indication a rule error occurred. Exceptions are not
       // propagated, as this would show a nasty stack trace to users, and only provide info
-      // on one specific failure with poor messaging. By returning null, the caller can
-      // inspect ruleContext for multiple errors and output thorough messaging on each.
-      return erroredConfiguredTarget(ruleContext);
-    }
-  }
-
-  /**
-   * Returns a {@link ConfiguredTarget} which indicates that an analysis error occurred in
-   * processing the target. In most cases, this returns null, which signals to callers that
-   * the target failed to build and thus the build should fail. However, if analysis failures
-   * are allowed in this build, this returns a stub {@link ConfiguredTarget} which contains
-   * information about the failure.
-   */
-  @Nullable
-  private ConfiguredTarget erroredConfiguredTarget(RuleContext ruleContext)
-      throws ActionConflictException {
-    if (ruleContext.getConfiguration().allowAnalysisFailures()) {
-      ImmutableList.Builder<AnalysisFailure> analysisFailures = ImmutableList.builder();
-
-      for (String errorMessage : ruleContext.getSuppressedErrorMessages()) {
-        analysisFailures.add(new AnalysisFailure(ruleContext.getLabel(), errorMessage));
-      }
-      RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-      builder.addNativeDeclaredProvider(
-          AnalysisFailureInfo.forAnalysisFailures(analysisFailures.build()));
-      builder.addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
-      return builder.build();
-    } else {
-      // Returning a null ConfiguredTarget is an indication a rule error occurred. Exceptions are
-      // not propagated, as this would show a nasty stack trace to users, and only provide info
       // on one specific failure with poor messaging. By returning null, the caller can
       // inspect ruleContext for multiple errors and output thorough messaging on each.
       return null;
@@ -404,7 +365,6 @@ public final class ConfiguredTargetFactory {
    */
   public ConfiguredAspect createAspect(
       AnalysisEnvironment env,
-      ActionLookupKey actionLookupKey,
       ConfiguredTargetAndData associatedTarget,
       ImmutableList<Aspect> aspectPath,
       ConfiguredAspectFactory aspectFactory,
@@ -415,6 +375,7 @@ public final class ConfiguredTargetFactory {
       BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration)
       throws AspectFunctionException, InterruptedException {
+
     RuleContext.Builder builder =
         new RuleContext.Builder(
             env,
@@ -429,7 +390,6 @@ public final class ConfiguredTargetFactory {
 
     RuleContext ruleContext =
         builder
-            .setActionLookupKey(actionLookupKey)
             .setVisibility(
                 convertVisibility(
                     prerequisiteMap, env.getEventHandler(), associatedTarget.getTarget(), null))

@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.VisibilityProvider;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupC
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.util.FileType;
-import javax.annotation.Nullable;
 
 /**
  * A ConfiguredTarget for a source FileTarget. (Generated files use a subclass,
@@ -48,8 +47,7 @@ public abstract class FileConfiguredTarget extends AbstractConfiguredTarget
       Label label,
       BuildConfigurationValue.Key configurationKey,
       NestedSet<PackageGroupContents> visibility,
-      Artifact artifact,
-      @Nullable InstrumentedFilesInfo instrumentedFilesInfo) {
+      Artifact artifact) {
     super(label, configurationKey, visibility);
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.create(Order.STABLE_ORDER, artifact);
     FileProvider fileProvider = new FileProvider(filesToBuild);
@@ -61,9 +59,8 @@ public abstract class FileConfiguredTarget extends AbstractConfiguredTarget
             .put(LicensesProvider.class, this)
             .add(fileProvider)
             .add(filesToRunProvider);
-
-    if (instrumentedFilesInfo != null) {
-      builder.put(instrumentedFilesInfo);
+    if (this instanceof InstrumentedFilesProvider) {
+      builder.put(InstrumentedFilesProvider.class, this);
     }
     this.providers = builder.build();
   }
@@ -90,11 +87,11 @@ public abstract class FileConfiguredTarget extends AbstractConfiguredTarget
 
   @Override
   protected InfoInterface rawGetSkylarkProvider(Provider.Key providerKey) {
-    return providers.get(providerKey);
+    return providers.getProvider(providerKey);
   }
 
   @Override
   protected Object rawGetSkylarkProvider(String providerKey) {
-    return providers.get(providerKey);
+    return providers.getProvider(providerKey);
   }
 }

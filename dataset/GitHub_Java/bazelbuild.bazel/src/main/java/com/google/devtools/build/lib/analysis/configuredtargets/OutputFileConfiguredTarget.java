@@ -21,7 +21,8 @@ import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.TargetContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProviderImpl;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -31,10 +32,12 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Instantiator;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.util.Pair;
 
 /** A ConfiguredTarget for an OutputFile. */
 @AutoCodec
-public class OutputFileConfiguredTarget extends FileConfiguredTarget {
+public class OutputFileConfiguredTarget extends FileConfiguredTarget
+    implements InstrumentedFilesProvider {
 
   private final Artifact artifact;
   private final TransitiveInfoCollection generatingRule;
@@ -59,16 +62,9 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget {
       NestedSet<PackageGroupContents> visibility,
       Artifact artifact,
       TransitiveInfoCollection generatingRule) {
-    super(label, configurationKey, visibility, artifact, instrumentedFilesInfo(generatingRule));
+    super(label, configurationKey, visibility, artifact);
     this.artifact = artifact;
     this.generatingRule = Preconditions.checkNotNull(generatingRule);
-  }
-
-  private static InstrumentedFilesInfo instrumentedFilesInfo(
-      TransitiveInfoCollection generatingRule) {
-    Preconditions.checkNotNull(generatingRule);
-    InstrumentedFilesInfo provider = generatingRule.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
-    return provider == null ? InstrumentedFilesInfo.EMPTY : provider;
   }
 
   public TransitiveInfoCollection getGeneratingRule() {
@@ -96,6 +92,43 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget {
   public boolean hasOutputLicenses() {
     return getProvider(LicensesProvider.class, LicensesProviderImpl.EMPTY)
         .hasOutputLicenses();
+  }
+
+
+  @Override
+  public NestedSet<Artifact> getInstrumentedFiles() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getInstrumentedFiles();
+  }
+
+  @Override
+  public NestedSet<Artifact> getInstrumentationMetadataFiles() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getInstrumentationMetadataFiles();
+  }
+
+  @Override
+  public NestedSet<Artifact> getBaselineCoverageInstrumentedFiles() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getBaselineCoverageInstrumentedFiles();
+  }
+
+  @Override
+  public NestedSet<Artifact> getBaselineCoverageArtifacts() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getBaselineCoverageArtifacts();
+  }
+
+  @Override
+  public NestedSet<Artifact> getCoverageSupportFiles() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getCoverageSupportFiles();
+  }
+
+  @Override
+  public NestedSet<Pair<String, String>> getCoverageEnvironment() {
+    return getProvider(InstrumentedFilesProvider.class, InstrumentedFilesProviderImpl.EMPTY)
+        .getCoverageEnvironment();
   }
 
   /**

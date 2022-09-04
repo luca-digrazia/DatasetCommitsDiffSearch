@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 
@@ -123,7 +123,7 @@ public interface AnalysisEnvironment extends ActionRegistry {
    * Returns the options that affect the Skylark interpreter used for evaluating Skylark rule
    * implementation functions.
    */
-  StarlarkSemantics getSkylarkSemantics() throws InterruptedException;
+  SkylarkSemantics getSkylarkSemantics() throws InterruptedException;
 
   /**
    * Returns the Artifact that is used to hold the non-volatile workspace status for the current
@@ -140,10 +140,11 @@ public interface AnalysisEnvironment extends ActionRegistry {
   /**
    * Returns the Artifacts that contain the workspace status for the current build request.
    *
-   * @param stamp whether stamping is enabled
+   * @param ruleContext the rule to use for error reporting.
    * @param config the current build configuration.
    */
-  ImmutableList<Artifact> getBuildInfo(boolean stamp, BuildInfoKey key, BuildConfiguration config)
+  ImmutableList<Artifact> getBuildInfo(
+      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config)
       throws InterruptedException;
 
   /**

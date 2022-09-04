@@ -165,7 +165,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -243,9 +242,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
                 ImmutableMap.<RepositoryName, PathFragment>of()),
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                Optional.<RootedPath>absent()),
-            PrecomputedValue.injected(
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY));
     PackageFactory.BuilderForTesting pkgFactoryBuilder =
@@ -283,7 +279,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(
             outputBase,
-            ImmutableList.of(root),
+            ImmutableList.of(Root.fromPath(rootDirectory)),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
         packageCacheOptions,
         skylarkSemanticsOptions,
@@ -414,9 +410,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                Optional.<RootedPath>absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES,
                 ImmutableSet.<String>of()),
@@ -1212,20 +1205,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         root, owner);
   }
 
-  /** Returns the input {@link Artifact}s to the given {@link Action} with the given exec paths. */
-  protected List<Artifact> getInputs(Action owner, Collection<String> execPaths) {
-    Set<String> expectedPaths = new HashSet<>(execPaths);
-    List<Artifact> result = new ArrayList<>();
-    for (Artifact output : owner.getInputs()) {
-      if (expectedPaths.remove(output.getExecPathString())) {
-        result.add(output);
-      }
-    }
-    assertThat(expectedPaths)
-        .named("expected paths not found in: %s", Artifact.asExecPaths(owner.getInputs()))
-        .isEmpty();
-    return result;
-  }
 
   /**
    * Gets a derived Artifact for testing in the {@link BuildConfiguration#getBinDirectory}. This

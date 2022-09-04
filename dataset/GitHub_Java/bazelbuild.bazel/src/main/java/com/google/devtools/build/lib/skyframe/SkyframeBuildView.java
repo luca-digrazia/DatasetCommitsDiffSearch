@@ -288,8 +288,7 @@ public final class SkyframeBuildView {
       if (someConfiguredTargetEvaluated
           || anyConfiguredTargetDeleted
           || !dirtiedConfiguredTargetKeys.isEmpty()
-          || !largestTopLevelKeySetCheckedForConflicts.containsAll(newKeys)
-          || !skyframeActionExecutor.badActions().isEmpty()) {
+          || !largestTopLevelKeySetCheckedForConflicts.containsAll(newKeys)) {
         largestTopLevelKeySetCheckedForConflicts = newKeys;
         // This operation is somewhat expensive, so we only do it if the graph might have changed in
         // some way -- either we analyzed a new target or we invalidated an old one or are building
