@@ -44,13 +44,14 @@ public class TestSummaryPrinter {
     String getPathStringToPrint(Path path);
   }
 
-  /** Print the cached test log to the given printer. */
+  /**
+   * Print the cached test log to the given printer.
+   */
   public static void printCachedOutput(
       TestSummary summary,
       TestOutputFormat testOutput,
       AnsiTerminalPrinter printer,
-      TestLogPathFormatter testLogPathFormatter,
-      int maxTestOutputBytes) {
+      TestLogPathFormatter testLogPathFormatter) {
 
     String testName = summary.getLabel().toString();
     List<String> allLogs = new ArrayList<>();
@@ -69,7 +70,7 @@ public class TestSummaryPrinter {
     if (TestLogHelper.shouldOutputTestLog(testOutput, false)) {
       for (Path path : summary.getFailedLogs()) {
         try {
-          TestLogHelper.writeTestLog(path, testName, printer.getOutputStream(), maxTestOutputBytes);
+          TestLogHelper.writeTestLog(path, testName, printer.getOutputStream());
         } catch (IOException e) {
           printer.printLn("==================== Could not read test output for " + testName);
           LoggingUtil.logToRemote(Level.WARNING, "Error while reading test log", e);
@@ -81,7 +82,7 @@ public class TestSummaryPrinter {
     if (TestLogHelper.shouldOutputTestLog(testOutput, true)) {
       for (Path path : summary.getPassedLogs()) {
         try {
-          TestLogHelper.writeTestLog(path, testName, printer.getOutputStream(), maxTestOutputBytes);
+          TestLogHelper.writeTestLog(path, testName, printer.getOutputStream());
         } catch (Exception e) {
           printer.printLn("==================== Could not read test output for " + testName);
           LoggingUtil.logToRemote(Level.WARNING, "Error while reading test log", e);
