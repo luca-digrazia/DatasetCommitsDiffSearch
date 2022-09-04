@@ -294,8 +294,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   private final ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile;
 
-  private final boolean shouldUnblockCpuWorkWhenFetchingDeps;
-
   private final BuildOptions defaultBuildOptions;
 
   private PerBuildSyscallCache perBuildSyscallCache;
@@ -318,14 +316,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
-      boolean shouldUnblockCpuWorkWhenFetchingDeps,
       BuildOptions defaultBuildOptions,
       @Nullable PackageProgressReceiver packageProgress) {
     // Strictly speaking, these arguments are not required for initialization, but all current
     // callsites have them at hand, so we might as well set them during construction.
     this.evaluatorSupplier = evaluatorSupplier;
     this.pkgFactory = pkgFactory;
-    this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
     this.pkgFactory.setSyscalls(syscalls);
     this.workspaceStatusActionFactory = workspaceStatusActionFactory;
     this.packageManager = new SkyframePackageManager(
@@ -439,7 +435,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             cpuBoundSemaphore,
             removeActionsAfterEvaluation,
             shouldStoreTransitivePackagesInLoadingAndAnalysis(),
-            shouldUnblockCpuWorkWhenFetchingDeps,
             defaultBuildOptions));
     map.put(
         SkyFunctions.ASPECT,

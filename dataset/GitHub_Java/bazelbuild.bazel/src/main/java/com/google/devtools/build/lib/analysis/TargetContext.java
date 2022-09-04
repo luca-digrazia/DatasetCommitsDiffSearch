@@ -15,9 +15,8 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.base.Objects;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Multimaps;
+import com.google.common.base.Verify;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
@@ -28,7 +27,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -46,13 +44,12 @@ public class TargetContext {
   private final AnalysisEnvironment env;
   private final Target target;
   private final BuildConfiguration configuration;
-
   /**
-   * This only contains prerequisites that are not declared in rule attributes, with the exception
-   * of visibility (i.e., visibility is represented here, even though it is a rule attribute in case
-   * of a rule). Rule attributes are handled by the {@link RuleContext} subclass.
+   * This list only contains prerequisites that are not declared in rule attributes, with the
+   * exception of visibility (i.e., visibility is represented here, even though it is a rule
+   * attribute in case of a rule). Rule attributes are handled by the {@link RuleContext} subclass.
    */
-  private final ListMultimap<Label, ConfiguredTargetAndData> directPrerequisites;
+  private final List<ConfiguredTargetAndData> directPrerequisites;
 
   private final NestedSet<PackageGroupContents> visibility;
 
@@ -70,8 +67,7 @@ public class TargetContext {
     this.env = env;
     this.target = target;
     this.configuration = configuration;
-    this.directPrerequisites =
-        Multimaps.index(directPrerequisites, prereq -> prereq.getTarget().getLabel());
+    this.directPrerequisites = ImmutableList.copyOf(directPrerequisites);
     this.visibility = visibility;
   }
 
@@ -110,27 +106,24 @@ public class TargetContext {
   }
 
   /**
-   * Returns the prerequisite with the given label and configuration, or null if no such
-   * prerequisite exists. If configuration is absent, return the first prerequisite with the given
-   * label.
+   * Returns the prerequisite with the given label and configuration. Throws a RuntimeException if
+   * no such prerequisite exists.
    */
-  @Nullable
-  public TransitiveInfoCollection findDirectPrerequisite(
-      Label label, Optional<BuildConfiguration> config) {
-    if (directPrerequisites.containsKey(label)) {
-      List<ConfiguredTargetAndData> prerequisites = directPrerequisites.get(label);
-      // If the config is present, find the prereq with that configuration. Otherwise, return the
-      // first.
-      if (!config.isPresent()) {
-        if (prerequisites.isEmpty()) {
-          return null;
-        }
-        return Iterables.getFirst(prerequisites, null).getConfiguredTarget();
-      }
-      for (ConfiguredTargetAndData prerequisite : prerequisites) {
-        if (Objects.equal(prerequisite.getConfiguration(), config.get())) {
-          return prerequisite.getConfiguredTarget();
-        }
+  TransitiveInfoCollection findDirectPrerequisite(Label label, BuildConfiguration config) {
+    return Verify.verifyNotNull(maybeFindDirectPrerequisite(label, config),
+        "Could not find prerequisite %s in the expected configuration", label);
+  }
+
+  /**
+   * Returns the prerequisite with the given label and configuration, or null if no such
+   * prerequisite exists.
+   */
+  public TransitiveInfoCollection maybeFindDirectPrerequisite(Label label,
+      BuildConfiguration config) {
+    for (ConfiguredTargetAndData prerequisite : directPrerequisites) {
+      if (prerequisite.getTarget().getLabel().equals(label)
+          && (Objects.equal(prerequisite.getConfiguration(), config))) {
+        return prerequisite.getConfiguredTarget();
       }
     }
     return null;

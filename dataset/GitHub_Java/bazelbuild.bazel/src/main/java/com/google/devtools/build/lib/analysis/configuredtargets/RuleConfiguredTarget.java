@@ -60,7 +60,7 @@ import javax.annotation.Nullable;
  * analyzed rule. For more information about how analysis works, see {@link
  * com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory}.
  */
-@AutoCodec(checkClassExplicitlyAllowed = true)
+@AutoCodec
 public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   private static final String ACTIONS_FIELD_NAME = "actions";
 
