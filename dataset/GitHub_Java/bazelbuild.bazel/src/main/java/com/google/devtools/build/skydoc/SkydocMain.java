@@ -22,9 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
@@ -74,6 +71,7 @@ import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.StringLiteral;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeActionsInfoProvider;
@@ -443,7 +441,7 @@ public class SkydocMain {
 
     moduleDocMap.put(label, getModuleDoc(file));
 
-    Map<String, Module> imports = new HashMap<>();
+    Map<String, Extension> imports = new HashMap<>();
     for (Statement stmt : file.getStatements()) {
       if (stmt instanceof LoadStatement) {
         LoadStatement load = (LoadStatement) stmt;
@@ -458,7 +456,7 @@ public class SkydocMain {
                   providerInfoList,
                   aspectInfoList,
                   moduleDocMap);
-          imports.put(module, importThread.getGlobals());
+          imports.put(module, new Extension(importThread));
         } catch (NoSuchFileException noSuchFileException) {
           throw new StarlarkEvaluationException(
               String.format(
@@ -503,7 +501,7 @@ public class SkydocMain {
   private StarlarkThread evalSkylarkBody(
       StarlarkSemantics semantics,
       StarlarkFile file,
-      Map<String, Module> imports,
+      Map<String, Extension> imports,
       List<RuleInfoWrapper> ruleInfoList,
       List<ProviderInfoWrapper> providerInfoList,
       List<AspectInfoWrapper> aspectInfoList)
@@ -623,24 +621,6 @@ public class SkydocMain {
       envBuilder.put(name, Starlark.NONE);
     }
 
-    // Add dummy declarations that would come from packages.StarlarkLibrary.COMMON
-    // were Skydoc allowed to depend on it. See hack for select below.
-    envBuilder.put(
-        "depset",
-        new StarlarkCallable() {
-          @Override
-          public Object fastcall(StarlarkThread thread, Object[] positional, Object[] named) {
-            // Accept any arguments, return empty Depset.
-            return Depset.of(
-                Depset.ElementType.EMPTY, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
-          }
-
-          @Override
-          public String getName() {
-            return "depset";
-          }
-        });
-
     // Declare a fake implementation of select that just returns the first
     // value in the dict. (This program is forbidden from depending on the real
     // implementation of 'select' in lib.packages, and so the hacks multiply.)
@@ -714,15 +694,15 @@ public class SkydocMain {
   }
 
   private static StarlarkThread createStarlarkThread(
-      StarlarkSemantics semantics, Module globals, Map<String, Module> imports) {
+      StarlarkSemantics semantics,
+      Module globals,
+      Map<String, Extension> imports) {
     // We use the default print handler, which writes to stderr.
-    StarlarkThread thread =
-        StarlarkThread.builder(Mutability.create("Skydoc"))
-            .setSemantics(semantics)
-            .setGlobals(globals)
-            .build();
-    thread.setLoader(imports::get);
-    return thread;
+    return StarlarkThread.builder(Mutability.create("Skydoc"))
+        .setSemantics(semantics)
+        .setGlobals(globals)
+        .setImportedExtensions(imports)
+        .build();
   }
 
   /** Exception thrown when Starlark evaluation fails (due to malformed Starlark). */

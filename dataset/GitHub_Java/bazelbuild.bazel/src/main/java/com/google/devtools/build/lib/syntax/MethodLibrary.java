@@ -18,7 +18,15 @@ import com.google.common.base.Ascii;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet.NestedSetDepthException;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,17 +37,12 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
-import net.starlark.java.annot.StarlarkGlobalLibrary;
-import net.starlark.java.annot.StarlarkMethod;
 
 /** The universal predeclared functions of core Starlark. */
-@StarlarkGlobalLibrary
+@SkylarkGlobalLibrary
 class MethodLibrary {
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "min",
       doc =
           "Returns the smallest one of all given arguments. "
@@ -50,13 +53,13 @@ class MethodLibrary {
       extraPositionals = @Param(name = "args", doc = "The elements to be checked."))
   public Object min(Sequence<?> args) throws EvalException {
     try {
-      return findExtreme(args, EvalUtils.STARLARK_COMPARATOR.reverse());
+      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR.reverse());
     } catch (ComparisonException e) {
       throw new EvalException(null, e);
     }
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "max",
       doc =
           "Returns the largest one of all given arguments. "
@@ -67,7 +70,7 @@ class MethodLibrary {
       extraPositionals = @Param(name = "args", doc = "The elements to be checked."))
   public Object max(Sequence<?> args) throws EvalException {
     try {
-      return findExtreme(args, EvalUtils.STARLARK_COMPARATOR);
+      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR);
     } catch (ComparisonException e) {
       throw new EvalException(null, e);
     }
@@ -86,7 +89,7 @@ class MethodLibrary {
     }
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "all",
       doc =
           "Returns true if all elements evaluate to True or if the collection is empty. "
@@ -104,7 +107,7 @@ class MethodLibrary {
     return !hasElementWithBooleanValue(collection, false);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "any",
       doc =
           "Returns true if at least one element evaluates to True. "
@@ -132,7 +135,7 @@ class MethodLibrary {
     return false;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "sorted",
       doc =
           "Sort a collection. Elements should all belong to the same orderable type, they are "
@@ -163,7 +166,7 @@ class MethodLibrary {
     Object[] array = Starlark.toArray(iterable);
     if (key == Starlark.NONE) {
       try {
-        Arrays.sort(array, EvalUtils.STARLARK_COMPARATOR);
+        Arrays.sort(array, EvalUtils.SKYLARK_COMPARATOR);
       } catch (EvalUtils.ComparisonException e) {
         throw Starlark.errorf("%s", e.getMessage());
       }
@@ -176,7 +179,7 @@ class MethodLibrary {
         @Override
         public int compare(Object x, Object y) {
           try {
-            return EvalUtils.STARLARK_COMPARATOR.compare(callKeyFunc(x), callKeyFunc(y));
+            return EvalUtils.SKYLARK_COMPARATOR.compare(callKeyFunc(x), callKeyFunc(y));
           } catch (InterruptedException | EvalException e) {
             if (this.e == null) {
               this.e = e;
@@ -221,7 +224,7 @@ class MethodLibrary {
     }
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "reversed",
       doc =
           "Returns a list that contains the elements of the original sequence in reversed order."
@@ -240,7 +243,7 @@ class MethodLibrary {
     return StarlarkList.wrap(thread.mutability(), array);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "tuple",
       doc =
           "Returns a tuple with the same elements as the given iterable value."
@@ -255,7 +258,7 @@ class MethodLibrary {
     return Tuple.wrap(Starlark.toArray(x));
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "list",
       doc =
           "Returns a new list with the same elements as the given iterable value."
@@ -268,7 +271,7 @@ class MethodLibrary {
     return StarlarkList.wrap(thread.mutability(), Starlark.toArray(x));
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "len",
       doc =
           "Returns the length of a string, sequence (such as a list or tuple), dict, or other"
@@ -283,41 +286,49 @@ class MethodLibrary {
     return len;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "str",
       doc =
           "Converts any object to string. This is useful for debugging."
               + "<pre class=\"language-python\">str(\"ab\") == \"ab\"\n"
               + "str(8) == \"8\"</pre>",
-      parameters = {@Param(name = "x", doc = "The object to convert.", noneable = true)})
+      parameters = {
+        @Param(
+            name = "x",
+            doc = "The object to convert.",
+            noneable = true)
+      })
   public String str(Object x) throws EvalException {
     try {
       return Starlark.str(x);
-    } catch (RuntimeException ex) {
-      // TODO(adonovan): get rid of this somehow.
-      if (ex.getClass().getSimpleName().equals("NestedSetDepthException")) {
-        throw Starlark.errorf(
-            "depset exceeded maximum depth"
-                + ". This was only discovered when attempting to flatten the depset for str(), as "
-                + "the size of depsets is unknown until flattening. "
-                + "See https://github.com/bazelbuild/bazel/issues/9180 for details and possible "
-                + "solutions.");
-      }
-      throw ex;
+    } catch (NestedSetDepthException exception) {
+      // TODO(adonovan): move into NestedSetDepthException so it becomes throw e.toEvalException().
+      throw Starlark.errorf(
+          "depset exceeded maximum depth %d"
+              + ". This was only discovered when attempting to flatten the depset for str(), as "
+              + "the size of depsets is unknown until flattening. "
+              + "See https://github.com/bazelbuild/bazel/issues/9180 for details and possible "
+              + "solutions.",
+          exception.getDepthLimit());
     }
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "repr",
       doc =
           "Converts any object to a string representation. This is useful for debugging.<br>"
               + "<pre class=\"language-python\">repr(\"ab\") == '\"ab\"'</pre>",
-      parameters = {@Param(name = "x", doc = "The object to convert.", noneable = true)})
+      parameters = {
+        @Param(
+            name = "x",
+            doc = "The object to convert.",
+            noneable = true)
+      })
   public String repr(Object x) {
     return Starlark.repr(x);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "bool",
       doc =
           "Constructor for the bool type. "
@@ -339,7 +350,7 @@ class MethodLibrary {
   private final ImmutableMap<String, Integer> intPrefixes =
       ImmutableMap.of("0b", 2, "0o", 8, "0x", 16);
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "int",
       doc =
           "Returns x as an int value."
@@ -482,7 +493,7 @@ class MethodLibrary {
     return null;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "dict",
       doc =
           "Creates a <a href=\"dict.html\">dictionary</a> from an optional positional "
@@ -510,7 +521,7 @@ class MethodLibrary {
     return Dict.plus(dict, kwargs, thread.mutability());
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "enumerate",
       doc =
           "Returns a list of pairs (two-element tuples), with the index (int) and the item from"
@@ -537,7 +548,7 @@ class MethodLibrary {
     return StarlarkList.wrap(thread.mutability(), array);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "hash",
       doc =
           "Return a hash value for a string. This is computed deterministically using the same "
@@ -552,7 +563,7 @@ class MethodLibrary {
     return value.hashCode();
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "range",
       doc =
           "Creates a list where items go from <code>start</code> to <code>stop</code>, using a "
@@ -604,7 +615,7 @@ class MethodLibrary {
   }
 
   /** Returns true if the object has a field of the given name, otherwise false. */
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "hasattr",
       doc =
           "Returns True if the object <code>x</code> has an attribute or method of the given "
@@ -625,7 +636,7 @@ class MethodLibrary {
     return CallUtils.getMethodNames(thread.getSemantics(), obj.getClass()).contains(name);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "getattr",
       doc =
           "Returns the struct's field of the given name if it exists. If not, it either returns "
@@ -657,12 +668,17 @@ class MethodLibrary {
     return result;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "dir",
       doc =
           "Returns a list of strings: the names of the attributes and "
               + "methods of the parameter object.",
-      parameters = {@Param(name = "x", doc = "The object to check.", noneable = true)},
+      parameters = {
+        @Param(
+            name = "x",
+            doc = "The object to check.",
+            noneable = true)
+      },
       useStarlarkThread = true)
   public StarlarkList<?> dir(Object object, StarlarkThread thread) throws EvalException {
     // Order the fields alphabetically.
@@ -674,7 +690,7 @@ class MethodLibrary {
     return StarlarkList.copyOf(thread.mutability(), fields);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "fail",
       doc =
           "Raises an error that cannot be intercepted. It can be used anywhere, "
@@ -705,7 +721,7 @@ class MethodLibrary {
     throw Starlark.errorf("%s", str);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "print",
       doc =
           "Prints <code>args</code> as debug output. It will be prefixed with the string <code>"
@@ -736,23 +752,20 @@ class MethodLibrary {
       p.append(separator);
       try {
         p.debugPrint(x);
-      } catch (RuntimeException ex) {
-        // TODO(adonovan): get rid of this somehow.
-        if (ex.getClass().getSimpleName().equals("NestedSetDepthException")) {
-          throw Starlark.errorf(
-              "depset exceeded maximum depth. This was only discovered when attempting to"
-                  + " flatten the depset for print(), as the size of depsets is unknown until"
-                  + " flattening. See https://github.com/bazelbuild/bazel/issues/9180 for details"
-                  + " and possible solutions.");
-        }
-        throw ex;
+      } catch (NestedSetDepthException exception) {
+        throw Starlark.errorf(
+            "depset exceeded maximum depth %d. This was only discovered when attempting to flatten"
+                + " the depset for print(), as the size of depsets is unknown until flattening."
+                + " See https://github.com/bazelbuild/bazel/issues/9180 for details and possible "
+                + "solutions.",
+            exception.getDepthLimit());
       }
       separator = sep;
     }
     // As part of the integration test "skylark_flag_test.sh", if the
     // "--internal_skylark_flag_test_canary" flag is enabled, append an extra marker string to
     // the output.
-    if (thread.getSemantics().internalStarlarkFlagTestCanary()) {
+    if (thread.getSemantics().internalSkylarkFlagTestCanary()) {
       p.append("<== Starlark flag test ==>");
     }
 
@@ -760,7 +773,7 @@ class MethodLibrary {
     return Starlark.NONE;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "type",
       doc =
           "Returns the type name of its argument. This is useful for debugging and "
@@ -775,13 +788,202 @@ class MethodLibrary {
               + "<pre class=\"language-python\">"
               + "if type(x) == type([]):  # if x is a list"
               + "</pre>",
-      parameters = {@Param(name = "x", doc = "The object to check type of.", noneable = true)})
+      parameters = {
+        @Param(
+            name = "x",
+            doc = "The object to check type of.",
+            noneable = true)
+      })
   public String type(Object object) {
     // There is no 'type' type in Starlark, so we return a string with the type name.
     return Starlark.type(object);
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
+      name = "depset",
+      doc =
+          "Creates a <a href=\"depset.html\">depset</a>. The <code>direct</code> parameter is a "
+              + "list of direct elements of the depset, and <code>transitive</code> parameter is "
+              + "a list of depsets whose elements become indirect elements of the created depset. "
+              + "The order in which elements are returned when the depset is converted to a list "
+              + "is specified by the <code>order</code> parameter. "
+              + "See the <a href=\"../depsets.md\">Depsets overview</a> for more information. "
+              + ""
+              + "<p>All elements (direct and indirect) of a depset must be of the same type, "
+              + "as obtained by the expression <code>type(x)</code>."
+              + ""
+              + "<p>Because a hash-based set is used to eliminate duplicates during iteration, "
+              + "all elements of a depset should be hashable. However, this invariant is not "
+              + "currently checked consistently in all constructors. Use the "
+              + "--incompatible_always_check_depset_elements flag to enable "
+              + "consistent checking; this will be the default behavior in future releases; "
+              + " see <a href='https://github.com/bazelbuild/bazel/issues/10313'>Issue 10313</a>."
+              + ""
+              + "<p>In addition, elements must currently be immutable, though this restriction "
+              + "will be relaxed in future."
+              + ""
+              + "<p> The order of the created depset should be <i>compatible</i> with the order of "
+              + "its <code>transitive</code> depsets. <code>\"default\"</code> order is compatible "
+              + "with any other order, all other orders are only compatible with themselves."
+              + "<p> Note on backward/forward compatibility. This function currently accepts a "
+              + "positional <code>items</code> parameter. It is deprecated and will be removed "
+              + "in the future, and after its removal <code>direct</code> will become a sole "
+              + "positional parameter of the <code>depset</code> function. Thus, both of the "
+              + "following calls are equivalent and future-proof:<br>"
+              + "<pre class=language-python>"
+              + "depset(['a', 'b'], transitive = [...])\n"
+              + "depset(direct = ['a', 'b'], transitive = [...])\n"
+              + "</pre>",
+      parameters = {
+        @Param(
+            name = "x",
+            type = Object.class,
+            defaultValue = "None",
+            positional = true,
+            named = false,
+            noneable = true,
+            doc =
+                "A positional parameter distinct from other parameters for legacy support. "
+                    + "<p>If <code>--incompatible_disable_depset_inputs</code> is false, this "
+                    + "parameter serves as the value of <code>items</code>.</p> "
+                    + "<p>If <code>--incompatible_disable_depset_inputs</code> is true, this "
+                    + "parameter serves as the value of <code>direct</code>.</p> "
+                    + "<p>See the documentation for these parameters for more details."),
+        // TODO(cparsons): Make 'order' keyword-only.
+        @Param(
+            name = "order",
+            type = String.class,
+            defaultValue = "\"default\"",
+            doc =
+                "The traversal strategy for the new depset. See "
+                    + "<a href=\"depset.html\">here</a> for the possible values.",
+            named = true),
+        @Param(
+            name = "direct",
+            type = Object.class,
+            defaultValue = "None",
+            positional = false,
+            named = true,
+            noneable = true,
+            doc = "A list of <i>direct</i> elements of a depset. "),
+        @Param(
+            name = "transitive",
+            named = true,
+            positional = false,
+            type = Sequence.class,
+            generic1 = Depset.class,
+            noneable = true,
+            doc = "A list of depsets whose elements will become indirect elements of the depset.",
+            defaultValue = "None"),
+        @Param(
+            name = "items",
+            type = Object.class,
+            defaultValue = "[]",
+            positional = false,
+            doc =
+                "Deprecated: Either an iterable whose items become the direct elements of "
+                    + "the new depset, in left-to-right order, or else a depset that becomes "
+                    + "a transitive element of the new depset. In the latter case, "
+                    + "<code>transitive</code> cannot be specified.",
+            disableWithFlag = FlagIdentifier.INCOMPATIBLE_DISABLE_DEPSET_INPUTS,
+            valueWhenDisabled = "[]",
+            named = true),
+      },
+      useStarlarkThread = true)
+  public Depset depset(
+      Object x,
+      String orderString,
+      Object direct,
+      Object transitive,
+      Object items,
+      StarlarkThread thread)
+      throws EvalException {
+    Order order;
+    Depset result;
+    try {
+      order = Order.parse(orderString);
+    } catch (IllegalArgumentException ex) {
+      throw new EvalException(null, ex);
+    }
+
+    StarlarkSemantics semantics = thread.getSemantics();
+    if (semantics.incompatibleDisableDepsetItems()) {
+      if (x != Starlark.NONE) {
+        if (direct != Starlark.NONE) {
+          throw new EvalException(
+              null, "parameter 'direct' cannot be specified both positionally and by keyword");
+        }
+        direct = x;
+      }
+      if (direct instanceof Depset) {
+        throw new EvalException(
+            null,
+            "parameter 'direct' must contain a list of elements, and may no longer accept a"
+                + " depset. The deprecated behavior may be temporarily re-enabled by setting"
+                + " --incompatible_disable_depset_inputs=false");
+      }
+      result =
+          Depset.fromDirectAndTransitive(
+              order,
+              Sequence.noneableCast(direct, Object.class, "direct"),
+              Sequence.noneableCast(transitive, Depset.class, "transitive"),
+              semantics.incompatibleAlwaysCheckDepsetElements());
+    } else {
+      if (x != Starlark.NONE) {
+        if (!isEmptySkylarkList(items)) {
+          throw new EvalException(
+              null, "parameter 'items' cannot be specified both positionally and by keyword");
+        }
+        items = x;
+      }
+      result = legacyDepsetConstructor(items, order, direct, transitive, semantics);
+    }
+
+    if (semantics.debugDepsetDepth()) {
+      // Flatten the underlying nested set. If the set exceeds the depth limit, then this will
+      // throw a NestedSetDepthException.
+      // This is an extremely inefficient check and should be only done in the
+      // "--debug_depset_depth" mode.
+      try {
+        result.toCollection(); // may throw exception
+      } catch (NestedSetDepthException ex) {
+        throw Starlark.errorf("depset exceeded maximum depth %d", ex.getDepthLimit());
+      }
+    }
+    return result;
+  }
+
+  private static Depset legacyDepsetConstructor(
+      Object items, Order order, Object direct, Object transitive, StarlarkSemantics semantics)
+      throws EvalException {
+
+    if (transitive == Starlark.NONE && direct == Starlark.NONE) {
+      // Legacy behavior.
+      return Depset.legacyOf(order, items);
+    }
+
+    if (direct != Starlark.NONE && !isEmptySkylarkList(items)) {
+      throw new EvalException(
+          null, "Do not pass both 'direct' and 'items' argument to depset constructor.");
+    }
+
+    // Non-legacy behavior: either 'transitive' or 'direct' were specified.
+    List<Object> directElements =
+        direct != Starlark.NONE
+            ? Sequence.cast(direct, Object.class, "direct")
+            : Sequence.cast(items, Object.class, "items");
+
+    List<Depset> transitiveList = Sequence.noneableCast(transitive, Depset.class, "transitive");
+
+    return Depset.fromDirectAndTransitive(
+        order, directElements, transitiveList, semantics.incompatibleAlwaysCheckDepsetElements());
+  }
+
+  private static boolean isEmptySkylarkList(Object o) {
+    return o instanceof Sequence && ((Sequence) o).isEmpty();
+  }
+
+  @SkylarkCallable(
       name = "zip",
       doc =
           "Returns a <code>list</code> of <code>tuple</code>s, where the i-th tuple contains "
@@ -820,9 +1022,9 @@ class MethodLibrary {
   }
 
   /** Starlark int type. */
-  @StarlarkBuiltin(
+  @SkylarkModule(
       name = "int",
-      category = StarlarkDocumentationCategory.BUILTIN,
+      category = SkylarkModuleCategory.BUILTIN,
       doc =
           "A type to represent integers. It can represent any number between -2147483648 and "
               + "2147483647 (included). "
@@ -839,9 +1041,9 @@ class MethodLibrary {
   static final class IntModule implements StarlarkValue {} // (documentation only)
 
   /** Starlark bool type. */
-  @StarlarkBuiltin(
+  @SkylarkModule(
       name = "bool",
-      category = StarlarkDocumentationCategory.BUILTIN,
+      category = SkylarkModuleCategory.BUILTIN,
       doc =
           "A type to represent booleans. There are only two possible values: "
               + "<a href=\"globals.html#True\">True</a> and "
