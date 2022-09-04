@@ -755,8 +755,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
               var1, ArtifactRoot.class, "expected first param to be of type 'root'");
       Artifact siblingFile =
           assertTypeForNewFile(var2, Artifact.class, "expected second param to be of type 'File'");
-      PathFragment original =
-          siblingFile.getOutputDirRelativePath(getConfiguration().isSiblingRepositoryLayout());
+      PathFragment original = siblingFile.getRootRelativePath();
       PathFragment fragment = original.replaceName(original.getBaseName() + fileSuffix);
       return ruleContext.getDerivedArtifact(fragment, root);
 
