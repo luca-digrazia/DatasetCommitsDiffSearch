@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
@@ -943,7 +944,7 @@ public final class CcCommon {
         (CcToolchainProvider) toolchain.get(ToolchainInfo.PROVIDER);
 
     // Determine the original value of CC_FLAGS.
-    String originalCcFlags = toolchainProvider.getLegacyCcFlagsMakeVariable();
+    String originalCcFlags = computeCcFlagsFromLegacyMakeVariable(toolchain);
 
     // Ensure that Sysroot is set properly.
     String sysrootCcFlags = computeCcFlagForSysroot(toolchainProvider);
@@ -964,6 +965,17 @@ public final class CcCommon {
 
     ccFlags.addAll(featureConfigCcFlags);
     return Joiner.on(" ").join(ccFlags.build());
+  }
+
+  private static String computeCcFlagsFromLegacyMakeVariable(TransitiveInfoCollection toolchain) {
+    TemplateVariableInfo templateVariableInfo = toolchain.get(TemplateVariableInfo.PROVIDER);
+    if (templateVariableInfo != null) {
+      return templateVariableInfo
+          .getVariables()
+          .getOrDefault(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME, "");
+    }
+
+    return "";
   }
 
   private static boolean containsSysroot(String ccFlags, List<String> moreCcFlags) {
