@@ -52,21 +52,11 @@ public interface QuarkusTestProfile {
     }
 
     /**
-     * If this is returns true then only the test resources returned from {@link #testResources()} will be started,
+     * If this is returns true then only the rest resources returned from {@link #testResources()} will be started,
      * global annotated test resources will be ignored.
      */
     default boolean disableGlobalTestResources() {
         return false;
-    }
-
-    /**
-     * The tags this profile is associated with.
-     * When the {@code quarkus.test.profile.tags} System property is set (its value is a comma separated list of strings)
-     * then Quarkus will only execute tests that are annotated with a {@code @TestProfile} that has at least one of the
-     * supplied (via the aforementioned system property) tags.
-     */
-    default Set<String> tags() {
-        return Collections.emptySet();
     }
 
     final class TestResourceEntry {
