@@ -5,14 +5,9 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheBuilderSpec;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.CacheStats;
-import com.google.common.cache.LoadingCache;
+import com.google.common.cache.*;
 import com.google.common.collect.Sets;
 
-import java.security.Principal;
 import java.util.concurrent.ExecutionException;
 
 import static com.codahale.metrics.MetricRegistry.name;
@@ -24,7 +19,7 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @param <C> the type of credentials the authenticator can authenticate
  * @param <P> the type of principals the authenticator returns
  */
-public class CachingAuthenticator<C, P extends Principal> implements Authenticator<C, P> {
+public class CachingAuthenticator<C, P> implements Authenticator<C, P> {
     private final Authenticator<C, P> underlying;
     private final LoadingCache<C, Optional<P>> cache;
     private final Meter cacheMisses;
@@ -37,9 +32,9 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
      * @param authenticator  the underlying authenticator
      * @param cacheSpec      a {@link CacheBuilderSpec}
      */
-    public CachingAuthenticator(final MetricRegistry metricRegistry,
-                                final Authenticator<C, P> authenticator,
-                                final CacheBuilderSpec cacheSpec) {
+    public CachingAuthenticator(MetricRegistry metricRegistry,
+                                Authenticator<C, P> authenticator,
+                                CacheBuilderSpec cacheSpec) {
         this(metricRegistry, authenticator, CacheBuilder.from(cacheSpec));
     }
 
@@ -50,9 +45,9 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
      * @param authenticator  the underlying authenticator
      * @param builder        a {@link CacheBuilder}
      */
-    public CachingAuthenticator(final MetricRegistry metricRegistry,
-                                final Authenticator<C, P> authenticator,
-                                final CacheBuilder<Object, Object> builder) {
+    public CachingAuthenticator(MetricRegistry metricRegistry,
+                                Authenticator<C, P> authenticator,
+                                CacheBuilder<Object, Object> builder) {
         this.underlying = authenticator;
         this.cacheMisses = metricRegistry.meter(name(authenticator.getClass(), "cache-misses"));
         this.gets = metricRegistry.timer(name(authenticator.getClass(), "gets"));
@@ -60,12 +55,7 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
             @Override
             public Optional<P> load(C key) throws Exception {
                 cacheMisses.mark();
-                final Optional<P> result = underlying.authenticate(key);
-                // only cache present values
-                if (!result.isPresent()) {
-                    throw new AuthenticationException("Failed to load security context into cache");
-                }
-                return result;
+                return underlying.authenticate(key);
             }
         });
     }
@@ -106,9 +96,9 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
      * @param predicate a predicate to filter credentials
      */
     public void invalidateAll(Predicate<? super C> predicate) {
-        cache.invalidateAll(Sets.filter(cache.asMap().keySet(), predicate));
+    	cache.invalidateAll(Sets.filter(cache.asMap().keySet(), predicate));
     }
-
+    
     /**
      * Discards all cached principals.
      */
