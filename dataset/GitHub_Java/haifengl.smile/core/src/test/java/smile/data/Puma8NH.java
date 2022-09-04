@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data;
 
 import smile.data.formula.Formula;
-import smile.io.Read;
+import smile.io.DatasetReader;
 import smile.util.Paths;
 
 /**
@@ -35,9 +35,9 @@ public class Puma8NH {
 
     static {
         try {
-            data = Read.arff(Paths.getTestData("weka/regression/puma8NH.arff"));
+            data = DatasetReader.arff(Paths.getTestData("weka/regression/puma8NH.arff"));
 
-            x = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
+            x = formula.x(data).toArray();
             y = formula.y(data).toDoubleArray();
         } catch (Exception ex) {
             System.err.println("Failed to load 'puma8NH': " + ex);
