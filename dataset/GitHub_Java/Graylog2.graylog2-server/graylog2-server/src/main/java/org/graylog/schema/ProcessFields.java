@@ -16,10 +16,11 @@
  */
 package org.graylog.schema;
 
-public class GeoFields {
-    public static final String GEO_CITY_NAME = "geo_city_name";
-    public static final String GEO_STATE_NAME = "geo_state_name";
-    public static final String GEO_ISO_CODE = "geo_iso_code";
-    public static final String GEO_COUNTRY_NAME = "geo_country_name";
-    public static final String GEO_COORDINATES = "geo_coordinates";
+public class ProcessFields {
+    public static final String PROCESS_COMMAND_LINE = "process_command_line";
+    public static final String PROCESS_ID = "process_id";
+    public static final String PROCESS_INTEGRITY_LEVEL = "process_integrity_level";
+    public static final String PROCESS_NAME = "process_name";
+    public static final String PROCESS_PATH = "process_path";
+    public static final String PROCESS_UID = "process_uid";
 }

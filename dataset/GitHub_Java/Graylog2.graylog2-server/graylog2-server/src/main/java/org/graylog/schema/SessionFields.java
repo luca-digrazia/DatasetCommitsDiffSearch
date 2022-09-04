@@ -16,10 +16,6 @@
  */
 package org.graylog.schema;
 
-public class GeoFields {
-    public static final String GEO_CITY_NAME = "geo_city_name";
-    public static final String GEO_STATE_NAME = "geo_state_name";
-    public static final String GEO_ISO_CODE = "geo_iso_code";
-    public static final String GEO_COUNTRY_NAME = "geo_country_name";
-    public static final String GEO_COORDINATES = "geo_coordinates";
+public class SessionFields {
+    public static final String SESSION_ID = "session_id";
 }

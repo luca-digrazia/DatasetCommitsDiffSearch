@@ -16,10 +16,7 @@
  */
 package org.graylog.schema;
 
-public class GeoFields {
-    public static final String GEO_CITY_NAME = "geo_city_name";
-    public static final String GEO_STATE_NAME = "geo_state_name";
-    public static final String GEO_ISO_CODE = "geo_iso_code";
-    public static final String GEO_COUNTRY_NAME = "geo_country_name";
-    public static final String GEO_COORDINATES = "geo_coordinates";
+public class EmailFields {
+    public static final String EMAIL_MESSAGE_ID = "email_message_id";
+    public static final String EMAIL_SUBJECT = "email_subject";
 }
