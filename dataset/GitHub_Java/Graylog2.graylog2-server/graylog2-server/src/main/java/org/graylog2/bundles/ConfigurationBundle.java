@@ -1,21 +1,22 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.bundles;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.hibernate.validator.constraints.NotBlank;
@@ -24,8 +25,9 @@ import org.mongojack.ObjectId;
 import javax.persistence.Id;
 import javax.validation.constraints.NotNull;
 import java.util.Collections;
-import java.util.List;
+import java.util.Set;
 
+@JsonAutoDetect
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ConfigurationBundle {
     @Id
@@ -42,16 +44,18 @@ public class ConfigurationBundle {
     private String category;
     @JsonProperty
     @NotNull
-    private List<Input> inputs = Collections.emptyList();
+    private Set<Input> inputs = Collections.emptySet();
     @JsonProperty
     @NotNull
-    private List<Stream> streams = Collections.emptyList();
+    private Set<Stream> streams = Collections.emptySet();
     @JsonProperty
     @NotNull
-    private List<Output> outputs = Collections.emptyList();
+    private Set<Output> outputs = Collections.emptySet();
     @JsonProperty
     @NotNull
-    private List<Dashboard> dashboards = Collections.emptyList();
+    private Set<Dashboard> dashboards = Collections.emptySet();
+    @JsonProperty
+    private Set<GrokPattern> grokPatterns = Collections.emptySet();
 
     public String getId() {
         return id;
@@ -85,35 +89,43 @@ public class ConfigurationBundle {
         this.category = category;
     }
 
-    public List<Input> getInputs() {
+    public Set<Input> getInputs() {
         return inputs;
     }
 
-    public void setInputs(List<Input> inputs) {
+    public void setInputs(Set<Input> inputs) {
         this.inputs = inputs;
     }
 
-    public List<Stream> getStreams() {
+    public Set<Stream> getStreams() {
         return streams;
     }
 
-    public void setStreams(List<Stream> streams) {
+    public void setStreams(Set<Stream> streams) {
         this.streams = streams;
     }
 
-    public List<Output> getOutputs() {
+    public Set<Output> getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(List<Output> outputs) {
+    public void setOutputs(Set<Output> outputs) {
         this.outputs = outputs;
     }
 
-    public List<Dashboard> getDashboards() {
+    public Set<Dashboard> getDashboards() {
         return dashboards;
     }
 
-    public void setDashboards(List<Dashboard> dashboards) {
+    public void setDashboards(Set<Dashboard> dashboards) {
         this.dashboards = dashboards;
+    }
+
+    public Set<GrokPattern> getGrokPatterns() {
+        return grokPatterns;
+    }
+
+    public void setGrokPatterns(Set<GrokPattern> grokPatterns) {
+        this.grokPatterns = grokPatterns;
     }
 }
