@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +58,9 @@ public class Eval {
 
   void execIfBranch(IfStatement.ConditionalStatements node)
       throws EvalException, InterruptedException {
-    execStatements(node.getStatements());
+    for (Statement stmt : node.getStatements()) {
+      exec(stmt);
+    }
   }
 
   void execFor(ForStatement node) throws EvalException, InterruptedException {
@@ -71,7 +72,9 @@ public class Eval {
         node.getVariable().assign(it, env, node.getLocation());
 
         try {
-          execStatements(node.getBlock());
+          for (Statement stmt : node.getBlock()) {
+            exec(stmt);
+          }
         } catch (FlowException ex) {
           if (ex == breakException) {
             return;
@@ -95,7 +98,7 @@ public class Eval {
     }
 
     FunctionSignature sig = node.getSignature().getSignature();
-    if (env.getSemantics().incompatibleDisallowKeywordOnlyArgs()
+    if (env.getSemantics().incompatibleDisallowKeywordOnlyArgs
         && sig.getShape().getMandatoryNamedOnly() > 0) {
       throw new EvalException(
           node.getLocation(),
@@ -120,11 +123,13 @@ public class Eval {
         return;
       }
     }
-    execStatements(node.getElseBlock());
+    for (Statement stmt : node.getElseBlock()) {
+      exec(stmt);
+    }
   }
 
   void execLoad(LoadStatement node) throws EvalException, InterruptedException {
-    if (env.getSemantics().incompatibleLoadArgumentIsLabel()) {
+    if (env.getSemantics().incompatibleLoadArgumentIsLabel) {
       String s = node.getImport().getValue();
       if (!s.startsWith("//") && !s.startsWith(":") && !s.startsWith("@")) {
         throw new EvalException(
@@ -209,14 +214,6 @@ public class Eval {
       case RETURN:
         execReturn((ReturnStatement) st);
         break;
-    }
-  }
-
-  private void execStatements(ImmutableList<Statement> statements)
-      throws EvalException, InterruptedException {
-    // Hot code path, good chance of short lists which don't justify the iterator overhead.
-    for (int i = 0; i < statements.size(); i++) {
-      exec(statements.get(i));
     }
   }
 }
