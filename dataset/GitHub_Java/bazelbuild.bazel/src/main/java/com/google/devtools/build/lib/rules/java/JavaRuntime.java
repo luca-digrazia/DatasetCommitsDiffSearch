@@ -44,7 +44,6 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.stableOrder();
     filesBuilder.addTransitive(PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", Mode.TARGET));
     PathFragment javaHome = defaultJavaHome(ruleContext.getLabel());
@@ -63,8 +62,8 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
     }
 
     PathFragment javaBinaryExecPath = javaHome.getRelative(BIN_JAVA);
-    PathFragment javaBinaryRunfilesPath =
-        getRunfilesJavaExecutable(javaHome, ruleContext.getLabel());
+    PathFragment javaBinaryRunfilesPath = getRunfilesJavaExecutable(
+        javaHome, ruleContext.getLabel());
 
     Artifact java = ruleContext.getPrerequisiteArtifact("java", Mode.TARGET);
     if (java != null) {
@@ -104,17 +103,17 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
             javaHomeRunfilesPath,
             javaBinaryRunfilesPath);
 
-    TemplateVariableInfo templateVariableInfo =
-        new TemplateVariableInfo(
-            ImmutableMap.of(
-                "JAVA", javaBinaryExecPath.getPathString(),
-                "JAVABASE", javaHome.getPathString()),
-            ruleContext.getRule().getLocation());
+    TemplateVariableInfo templateVariableInfo = new TemplateVariableInfo(
+        ImmutableMap.of(
+            "JAVA", javaBinaryExecPath.getPathString(),
+            "JAVABASE", javaHome.getPathString()),
+        ruleContext.getRule().getLocation());
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(javaRuntime)
+        .addNativeDeclaredProvider(new JavaRuntimeToolchainInfo(javaRuntime))
         .addNativeDeclaredProvider(templateVariableInfo)
         .build();
   }
@@ -135,10 +134,7 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
     if (javaHome.isAbsolute() || javabase.getPackageIdentifier().getRepository().isMain()) {
       return javaHome.getRelative(BIN_JAVA);
     } else {
-      return javabase
-          .getPackageIdentifier()
-          .getRepository()
-          .getRunfilesPath()
+      return javabase.getPackageIdentifier().getRepository().getRunfilesPath()
           .getRelative(BIN_JAVA);
     }
   }

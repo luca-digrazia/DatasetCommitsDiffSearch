@@ -22,14 +22,15 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for {@code JavaRuntimeInfo} */
+/**
+ * Unit tests for {@code JavaRuntimeInfo}
+ */
 @RunWith(JUnit4.class)
 public class JavaRuntimeInfoTest {
   @Test
   public void equalityIsObjectIdentity() {
     JavaRuntimeInfo a =
         JavaRuntimeInfo.create(
-            /* version = */ "",
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             PathFragment.create(""),
@@ -38,7 +39,6 @@ public class JavaRuntimeInfoTest {
             PathFragment.create(""));
     JavaRuntimeInfo b =
         JavaRuntimeInfo.create(
-            /* version = */ "",
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.emptySet(Order.STABLE_ORDER),
             PathFragment.create(""),
@@ -46,6 +46,9 @@ public class JavaRuntimeInfoTest {
             PathFragment.create(""),
             PathFragment.create(""));
 
-    new EqualsTester().addEqualityGroup(a).addEqualityGroup(b).testEquals();
+    new EqualsTester()
+        .addEqualityGroup(a)
+        .addEqualityGroup(b)
+        .testEquals();
   }
 }
