@@ -9,7 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,7 +18,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 import org.jboss.logging.Logger;
 import org.objectweb.asm.ClassReader;
@@ -65,7 +63,7 @@ public class ClassTransformingBuildStep {
         if (bytecodeTransformerBuildItems.isEmpty()) {
             return new TransformedClassesBuildItem(Collections.emptyMap());
         }
-        final Map<String, List<BytecodeTransformerBuildItem>> bytecodeTransformers = new HashMap<>(
+        final Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = new HashMap<>(
                 bytecodeTransformerBuildItems.size());
         Set<String> noConstScanning = new HashSet<>();
         Map<String, Set<String>> constScanning = new HashMap<>();
@@ -73,7 +71,7 @@ public class ClassTransformingBuildStep {
         Set<String> nonCacheable = new HashSet<>();
         for (BytecodeTransformerBuildItem i : bytecodeTransformerBuildItems) {
             bytecodeTransformers.computeIfAbsent(i.getClassToTransform(), (h) -> new ArrayList<>())
-                    .add(i);
+                    .add(i.getVisitorFunction());
             if (i.getRequireConstPoolEntry() == null || i.getRequireConstPoolEntry().isEmpty()) {
                 noConstScanning.add(i.getClassToTransform());
             } else {
@@ -99,21 +97,14 @@ public class ClassTransformingBuildStep {
         lastTransformers = new BiFunction<String, byte[], byte[]>() {
             @Override
             public byte[] apply(String className, byte[] originalBytes) {
-
-                List<BytecodeTransformerBuildItem> classTransformers = bytecodeTransformers.get(className);
-                if (classTransformers == null) {
+                List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = bytecodeTransformers.get(className);
+                if (visitors == null) {
                     return originalBytes;
                 }
-                List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = classTransformers.stream()
-                        .map(BytecodeTransformerBuildItem::getVisitorFunction).filter(Objects::nonNull)
-                        .collect(Collectors.toList());
-                List<BiFunction<String, byte[], byte[]>> preVisitFunctions = classTransformers.stream()
-                        .map(BytecodeTransformerBuildItem::getInputTransformer).filter(Objects::nonNull)
-                        .collect(Collectors.toList());
                 ClassLoader old = Thread.currentThread().getContextClassLoader();
                 try {
                     Thread.currentThread().setContextClassLoader(transformCl);
-                    String classFileName = className.replace('.', '/') + ".class";
+                    String classFileName = className.replace(".", "/") + ".class";
                     List<ClassPathElement> archives = cl.getElementsWithResource(classFileName);
                     if (!archives.isEmpty()) {
                         ClassPathElement classPathElement = archives.get(0);
@@ -125,7 +116,7 @@ public class ClassTransformingBuildStep {
                                 return originalBytes;
                             }
                         }
-                        byte[] data = transformClass(className, visitors, classData, preVisitFunctions);
+                        byte[] data = transformClass(className, visitors, classData);
                         TransformedClassesBuildItem.TransformedClass transformedClass = new TransformedClassesBuildItem.TransformedClass(
                                 className, data,
                                 classFileName, eager.contains(className));
@@ -139,7 +130,7 @@ public class ClassTransformingBuildStep {
             }
         };
         try {
-            for (Map.Entry<String, List<BytecodeTransformerBuildItem>> entry : bytecodeTransformers
+            for (Map.Entry<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> entry : bytecodeTransformers
                     .entrySet()) {
                 String className = entry.getKey();
                 boolean cacheable = !nonCacheable.contains(className);
@@ -153,7 +144,7 @@ public class ClassTransformingBuildStep {
                         }
                     }
                 }
-                String classFileName = className.replace('.', '/') + ".class";
+                String classFileName = className.replace(".", "/") + ".class";
                 List<ClassPathElement> archives = cl.getElementsWithResource(classFileName);
                 if (!archives.isEmpty()) {
                     ClassPathElement classPathElement = archives.get(0);
@@ -163,12 +154,7 @@ public class ClassTransformingBuildStep {
                                 entry.getKey());
                         continue;
                     }
-                    List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = entry.getValue().stream()
-                            .map(BytecodeTransformerBuildItem::getVisitorFunction).filter(Objects::nonNull)
-                            .collect(Collectors.toList());
-                    List<BiFunction<String, byte[], byte[]>> preVisitFunctions = entry.getValue().stream()
-                            .map(BytecodeTransformerBuildItem::getInputTransformer).filter(Objects::nonNull)
-                            .collect(Collectors.toList());
+                    List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = entry.getValue();
                     transformedToArchive.put(classFileName, jar);
                     transformed.add(executorPool.submit(new Callable<TransformedClassesBuildItem.TransformedClass>() {
                         @Override
@@ -176,14 +162,14 @@ public class ClassTransformingBuildStep {
                             ClassLoader old = Thread.currentThread().getContextClassLoader();
                             try {
                                 Thread.currentThread().setContextClassLoader(transformCl);
-                                Set<String> constValues = constScanning.get(className);
                                 byte[] classData = classPathElement.getResource(classFileName).getData();
+                                Set<String> constValues = constScanning.get(className);
                                 if (constValues != null && !noConstScanning.contains(className)) {
                                     if (!ConstPoolScanner.constPoolEntryPresent(classData, constValues)) {
                                         return null;
                                     }
                                 }
-                                byte[] data = transformClass(className, visitors, classData, preVisitFunctions);
+                                byte[] data = transformClass(className, visitors, classData);
                                 TransformedClassesBuildItem.TransformedClass transformedClass = new TransformedClassesBuildItem.TransformedClass(
                                         className, data,
                                         classFileName, eager.contains(className));
@@ -217,30 +203,22 @@ public class ClassTransformingBuildStep {
     }
 
     private byte[] transformClass(String className, List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors,
-            byte[] classData, List<BiFunction<String, byte[], byte[]>> preVisitFunctions) {
-        for (BiFunction<String, byte[], byte[]> i : preVisitFunctions) {
-            classData = i.apply(className, classData);
+            byte[] classData) {
+        ClassReader cr = new ClassReader(classData);
+        ClassWriter writer = new QuarkusClassWriter(cr,
+                ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        ClassVisitor visitor = writer;
+        for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
+            visitor = i.apply(className, visitor);
         }
-        byte[] data;
-        if (!visitors.isEmpty()) {
-            ClassReader cr = new ClassReader(classData);
-            ClassWriter writer = new QuarkusClassWriter(cr,
-                    ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-            ClassVisitor visitor = writer;
-            for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
-                visitor = i.apply(className, visitor);
-            }
-            cr.accept(visitor, 0);
-            data = writer.toByteArray();
-        } else {
-            data = classData;
-        }
+        cr.accept(visitor, 0);
+        byte[] data = writer.toByteArray();
         if (BootstrapDebug.DEBUG_TRANSFORMED_CLASSES_DIR != null) {
             File debugPath = new File(BootstrapDebug.DEBUG_TRANSFORMED_CLASSES_DIR);
             if (!debugPath.exists()) {
                 debugPath.mkdir();
             }
-            File classFile = new File(debugPath, className.replace('.', '/') + ".class");
+            File classFile = new File(debugPath, className.replace(".", "/") + ".class");
             classFile.getParentFile().mkdirs();
             try (FileOutputStream classWriter = new FileOutputStream(classFile)) {
                 classWriter.write(data);
