@@ -3,9 +3,7 @@ package io.quarkus.vertx.deployment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +17,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
 import io.quarkus.vertx.ConsumeEvent;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.eventbus.ReplyException;
@@ -38,15 +35,12 @@ public class MessageConsumerFailureTest {
 
     @Test
     public void testFailure() throws InterruptedException {
-        verifyFailure("foo", "java.lang.IllegalStateException: Foo is dead", false);
-        verifyFailure("foo-message", "java.lang.NullPointerException", false);
-        verifyFailure("foo-completion-stage", "java.lang.NullPointerException: Something is null", false);
-        verifyFailure("foo-completion-stage-failure", "boom", true);
-        verifyFailure("foo-uni", "java.lang.NullPointerException: Something is null", false);
-        verifyFailure("foo-uni-failure", "boom", true);
+        verifyFailure("foo", "java.lang.IllegalStateException: Foo is dead");
+        verifyFailure("foo-message", "java.lang.NullPointerException");
+        verifyFailure("foo-completion-stage", "java.lang.NullPointerException: Something is null");
     }
 
-    void verifyFailure(String address, String expectedMessage, boolean explicit) throws InterruptedException {
+    void verifyFailure(String address, String expectedMessage) throws InterruptedException {
         BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
         eventBus.request(address, "hello", ar -> {
             try {
@@ -62,11 +56,7 @@ public class MessageConsumerFailureTest {
         Object ret = synchronizer.poll(2, TimeUnit.SECONDS);
         assertTrue(ret instanceof ReplyException);
         ReplyException replyException = (ReplyException) ret;
-        if (!explicit) {
-            assertEquals(ConsumeEvent.FAILURE_CODE, replyException.failureCode());
-        } else {
-            assertEquals(ConsumeEvent.EXPLICIT_FAILURE_CODE, replyException.failureCode());
-        }
+        assertEquals(ConsumeEvent.FAILURE_CODE, replyException.failureCode());
         assertEquals(expectedMessage, replyException.getMessage());
     }
 
@@ -85,23 +75,6 @@ public class MessageConsumerFailureTest {
         @ConsumeEvent("foo-completion-stage")
         CompletionStage<String> failCompletionStage(String message) {
             throw new NullPointerException("Something is null");
-        }
-
-        @ConsumeEvent("foo-completion-stage-failure")
-        CompletionStage<String> failedCompletionStage(String message) {
-            CompletableFuture<String> future = new CompletableFuture<>();
-            future.completeExceptionally(new IOException("boom"));
-            return future;
-        }
-
-        @ConsumeEvent(value = "foo-uni")
-        Uni<String> failUni(String message) {
-            throw new NullPointerException("Something is null");
-        }
-
-        @ConsumeEvent(value = "foo-uni-failure")
-        Uni<String> failedUni(String message) {
-            return Uni.createFrom().failure(new IOException("boom"));
         }
 
     }
