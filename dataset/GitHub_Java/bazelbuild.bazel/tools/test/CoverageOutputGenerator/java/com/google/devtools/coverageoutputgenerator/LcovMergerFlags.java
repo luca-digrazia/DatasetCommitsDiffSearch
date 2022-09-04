@@ -14,32 +14,23 @@
 
 package com.google.devtools.coverageoutputgenerator;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-import com.beust.jcommander.ParameterException;
-import com.beust.jcommander.Parameters;
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
-@Parameters(separators = "= ", optionPrefixes = "--")
-class LcovMergerFlags {
-  private static final Logger logger = Logger.getLogger(LcovMergerFlags.class.getName());
-  private static final int DEFAULT_PARSE_FILE_PARALLELISM = 8;
-
-  @Parameter(names = "--coverage_dir")
-  private String coverageDir;
+@AutoValue
+abstract class LcovMergerFlags {
 
   @Nullable
-  @Parameter(names = {"--reports_file", "--lcovfile_path"})
-  private String reportsFile;
+  abstract String coverageDir();
 
-  @Parameter(names = "--output_file")
-  private String outputFile;
+  @Nullable
+  abstract String reportsFile();
 
-  @Parameter(names = "--filter_sources")
-  private List<String> filterSources;
+  abstract String outputFile();
+
+  abstract List<String> filterSources();
 
   /**
    * The path to a source file manifest. This file contains multiple lines that represent file names
@@ -49,68 +40,61 @@ class LcovMergerFlags {
    * @return
    */
   @Nullable
-  @Parameter(names = "--source_file_manifest")
-  private String sourceFileManifest;
+  abstract String sourceFileManifest();
 
-  @Nullable
-  @Parameter(names = "--sources_to_replace_file")
-  private String sourcesToReplaceFile;
+  /** Parse flags in the form of "--coverage_dir=... -output_file=..." */
+  static LcovMergerFlags parseFlags(String[] args) {
+    ImmutableList.Builder<String> filterSources = new ImmutableList.Builder<>();
+    String coverageDir = null;
+    String reportsFile = null;
+    String outputFile = null;
+    String sourceFileManifest = null;
 
-  @Parameter(names = "--parse_parallelism")
-  private Integer parseParallelism;
+    for (String arg : args) {
+      if (!arg.startsWith("--")) {
+        throw new IllegalArgumentException("Argument (" + arg + ") should start with --");
+      }
+      String[] parts = arg.substring(2).split("=", 2);
+      if (parts.length != 2) {
+        throw new IllegalArgumentException("There should be = in argument (" + arg + ")");
+      }
+      switch (parts[0]) {
+        case "coverage_dir":
+          coverageDir = parts[1];
+          break;
+        case "reports_file":
+          reportsFile = parts[1];
+          break;
+        case "output_file":
+          outputFile = parts[1];
+          break;
+        case "filter_sources":
+          filterSources.add(parts[1]);
+          break;
+        case "source_file_manifest":
+          sourceFileManifest = parts[1];
+          break;
+        default:
+          throw new IllegalArgumentException("Unknown flag " + arg);
+      }
+    }
 
-  public String coverageDir() {
-    return coverageDir;
-  }
-
-  public String outputFile() {
-    return outputFile;
-  }
-
-  public List<String> filterSources() {
-    return filterSources == null ? ImmutableList.of() : filterSources;
-  }
-
-  public String reportsFile() {
-    return reportsFile;
-  }
-
-  public String sourceFileManifest() {
-    return sourceFileManifest;
-  }
-
-  public String sourcesToReplaceFile() {
-    return sourcesToReplaceFile;
+    if (coverageDir == null && reportsFile == null) {
+      throw new IllegalArgumentException(
+          "At least one of --coverage_dir or --reports_file should be specified.");
+    }
+    if (coverageDir != null && reportsFile != null) {
+      throw new IllegalArgumentException(
+          "Only one of --coverage_dir or --reports_file must be specified.");
+    }
+    if (outputFile == null) {
+      throw new IllegalArgumentException("--output_file was not specified.");
+    }
+    return new AutoValue_LcovMergerFlags(
+        coverageDir, reportsFile, outputFile, filterSources.build(), sourceFileManifest);
   }
 
   boolean hasSourceFileManifest() {
-    return sourceFileManifest != null;
-  }
-
-  int parseParallelism() {
-    return parseParallelism == null ? DEFAULT_PARSE_FILE_PARALLELISM : parseParallelism;
-  }
-
-  static LcovMergerFlags parseFlags(String[] args) {
-    LcovMergerFlags flags = new LcovMergerFlags();
-    JCommander jCommander = new JCommander(flags);
-    jCommander.setAllowParameterOverwriting(true);
-    jCommander.setAcceptUnknownOptions(true);
-    try {
-      jCommander.parse(args);
-    } catch (ParameterException e) {
-      throw new IllegalArgumentException("Error parsing args", e);
-    }
-    if (flags.coverageDir == null && flags.reportsFile == null) {
-      throw new IllegalArgumentException(
-          "At least one of coverage_dir or reports_file should be specified.");
-    }
-    if (flags.coverageDir != null && flags.reportsFile != null) {
-      logger.warning("Overriding --coverage_dir value in favor of --reports_file");
-    }
-    if (flags.outputFile == null) {
-      throw new IllegalArgumentException("output_file was not specified.");
-    }
-    return flags;
+    return sourceFileManifest() != null;
   }
 }
