@@ -31,7 +31,6 @@ import io.quarkus.mongodb.panache.binder.NativeQueryBinder;
 import io.quarkus.mongodb.panache.binder.PanacheQlQueryBinder;
 import io.quarkus.mongodb.panache.reactive.ReactivePanacheQuery;
 import io.quarkus.mongodb.panache.reactive.ReactivePanacheUpdate;
-import io.quarkus.mongodb.panache.runtime.MongoOperations;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 import io.quarkus.mongodb.reactive.ReactiveMongoCollection;
 import io.quarkus.mongodb.reactive.ReactiveMongoDatabase;
@@ -44,9 +43,6 @@ public class ReactiveMongoOperations {
     private static final Logger LOGGER = Logger.getLogger(ReactiveMongoOperations.class);
     public static final String ID = "_id";
     public static final String MONGODB_DATABASE = "quarkus.mongodb.database";
-
-    private static volatile String defaultDatabaseName;
-
     //
     // Instance methods
 
@@ -303,20 +299,9 @@ public class ReactiveMongoOperations {
         if (entity != null && !entity.database().isEmpty()) {
             return mongoClient.getDatabase(entity.database());
         }
-        String databaseName = getDefaultDatabaseName();
+        String databaseName = ConfigProvider.getConfig()
+                .getValue(MONGODB_DATABASE, String.class);
         return mongoClient.getDatabase(databaseName);
-    }
-
-    private static String getDefaultDatabaseName() {
-        if (defaultDatabaseName == null) {
-            synchronized (MongoOperations.class) {
-                if (defaultDatabaseName == null) {
-                    defaultDatabaseName = ConfigProvider.getConfig()
-                            .getValue(MONGODB_DATABASE, String.class);
-                }
-            }
-        }
-        return defaultDatabaseName;
     }
 
     private static ReactiveMongoClient mongoClient(MongoEntity entity) {
@@ -336,13 +321,13 @@ public class ReactiveMongoOperations {
 
     public static Uni<Object> findById(Class<?> entityClass, Object id) {
         Uni<Optional> optionalEntity = findByIdOptional(entityClass, id);
-        return optionalEntity.onItem().transform(optional -> optional.orElse(null));
+        return optionalEntity.onItem().apply(optional -> optional.orElse(null));
     }
 
     public static Uni<Optional> findByIdOptional(Class<?> entityClass, Object id) {
         ReactiveMongoCollection collection = mongoCollection(entityClass);
         return collection.find(new Document(ID, id)).collectItems().first()
-                .onItem().transform(Optional::ofNullable);
+                .onItem().apply(Optional::ofNullable);
     }
 
     public static ReactivePanacheQuery<?> find(Class<?> entityClass, String query, Object... params) {
