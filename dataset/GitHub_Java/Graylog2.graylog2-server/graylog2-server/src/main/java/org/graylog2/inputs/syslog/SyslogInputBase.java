@@ -19,53 +19,87 @@
  */
 package org.graylog2.inputs.syslog;
 
+import org.graylog2.Core;
+import org.graylog2.inputs.util.ConnectionCounter;
+import org.graylog2.inputs.util.ThroughputCounter;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.BooleanField;
-import org.graylog2.plugin.configuration.fields.NumberField;
-import org.graylog2.plugin.configuration.fields.TextField;
+import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MisfireException;
+import org.jboss.netty.bootstrap.Bootstrap;
+import org.jboss.netty.channel.Channel;
+
+import java.net.InetSocketAddress;
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class SyslogInputBase {
+public class SyslogInputBase extends MessageInput {
 
     public static final String CK_BIND_ADDRESS = "bind_address";
     public static final String CK_PORT = "port";
     public static final String CK_FORCE_RDNS = "force_rdns";
     public static final String CK_ALLOW_OVERRIDE_DATE = "allow_override_date";
+    public static final String CK_STORE_FULL_MESSAGE = "store_full_message";
+
+    protected Bootstrap bootstrap;
+    protected Channel channel;
+
+    protected final ThroughputCounter throughputCounter;
+    protected final ConnectionCounter connectionCounter;
+
+    protected Core core;
+    protected Configuration config;
+    protected InetSocketAddress socketAddress;
+
+    public SyslogInputBase() {
+        this.throughputCounter = new ThroughputCounter();
+        this.connectionCounter = new ConnectionCounter();
+    }
+
+    @Override
+    public void stop() {
+        if (channel != null && channel.isOpen()) {
+            channel.close();
+        }
+        if (bootstrap != null) {
+            bootstrap.shutdown();
+        }
+    }
+
+    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
+        this.core = (Core) graylogServer;
+        this.config = config;
+
+        if (!checkConfig(config)) {
+            throw new ConfigurationException(config.getSource().toString());
+        }
+
+        this.socketAddress = new InetSocketAddress(
+                config.getString(CK_BIND_ADDRESS),
+                (int) config.getInt(CK_PORT)
+        );
+    }
 
     protected boolean checkConfig(Configuration config) {
         return config.stringIsSet(CK_BIND_ADDRESS)
-                && config.intIsSet(CK_PORT)
-                && config.boolIsSet(CK_FORCE_RDNS)
-                && config.boolIsSet(CK_ALLOW_OVERRIDE_DATE);
+                && config.intIsSet(CK_PORT);
     }
 
     public ConfigurationRequest getRequestedConfiguration() {
         ConfigurationRequest r = new ConfigurationRequest();
 
-        r.addField(
-                new TextField(
-                        CK_BIND_ADDRESS,
-                        "0.0.0.0",
-                        "Address to listen on. For example 0.0.0.0 or 127.0.0.1.",
-                        TextField.Attribute.IS_SOCKET_ADDRESS
-                )
-        );
-
-        r.addField(
-                new NumberField(
-                        CK_PORT,
-                        514,
-                        "Port to listen on.",
-                        NumberField.Attribute.IS_PORT_NUMBER
-                )
-        );
+        r.addField(ConfigurationRequest.Templates.bindAddress(CK_BIND_ADDRESS));
+        r.addField(ConfigurationRequest.Templates.portNumber(CK_PORT));
 
         r.addField(
                 new BooleanField(
                         CK_FORCE_RDNS,
+                        "Force rDNS?",
                         false,
                         "Force rDNS resolution of hostname? Use if hostname cannot be parsed."
                 )
@@ -74,12 +108,47 @@ public class SyslogInputBase {
         r.addField(
                 new BooleanField(
                         CK_ALLOW_OVERRIDE_DATE,
+                        "Allow overriding date?",
                         true,
-                        "Allow to override with current date if date could not be parsed."
+                        "Allow to override with current date if date could not be parsed?"
+                )
+        );
+
+        r.addField(
+                new BooleanField(
+                        CK_STORE_FULL_MESSAGE,
+                        "Store full message?",
+                        false,
+                        "Store the full original syslog message as full_message?"
                 )
         );
 
         return r;
+    }
+
+    @Override
+    public Map<String, Object> getAttributes() {
+        return config.getSource();
+    }
+
+    @Override
+    public boolean isExclusive() {
+        return false;
+    }
+
+    @Override
+    public String getName() {
+        throw new RuntimeException("Must be overridden in syslog input classes.");
+    }
+
+    @Override
+    public void launch() throws MisfireException {
+        throw new RuntimeException("Must be overridden in syslog input classes.");
+    }
+
+    @Override
+    public String linkToDocs() {
+        return "";
     }
 
 }

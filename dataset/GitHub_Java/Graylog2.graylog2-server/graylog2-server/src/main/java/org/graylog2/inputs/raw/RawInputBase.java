@@ -20,6 +20,8 @@
 package org.graylog2.inputs.raw;
 
 import org.graylog2.Core;
+import org.graylog2.inputs.util.ConnectionCounter;
+import org.graylog2.inputs.util.ThroughputCounter;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -28,7 +30,7 @@ import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
-import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
+import org.jboss.netty.bootstrap.Bootstrap;
 import org.jboss.netty.channel.Channel;
 
 import java.net.InetSocketAddress;
@@ -43,12 +45,20 @@ public class RawInputBase extends MessageInput {
     public static final String CK_PORT = "port";
     public static final String CK_OVERRIDE_SOURCE = "override_source";
 
-    protected ConnectionlessBootstrap bootstrap;
+    protected Bootstrap bootstrap;
     protected Channel channel;
+
+    protected final ThroughputCounter throughputCounter;
+    protected final ConnectionCounter connectionCounter;
 
     protected Core core;
     protected Configuration config;
     protected InetSocketAddress socketAddress;
+
+    public RawInputBase() {
+        this.throughputCounter = new ThroughputCounter();
+        this.connectionCounter = new ConnectionCounter();
+    }
 
     @Override
     public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
@@ -118,6 +128,11 @@ public class RawInputBase extends MessageInput {
     @Override
     public void launch() throws MisfireException {
         throw new RuntimeException("Must be overridden in syslog input classes.");
+    }
+
+    @Override
+    public String linkToDocs() {
+        return "";
     }
 
 }

@@ -20,6 +20,8 @@
 package org.graylog2.inputs.gelf;
 
 import org.graylog2.Core;
+import org.graylog2.inputs.util.ConnectionCounter;
+import org.graylog2.inputs.util.ThroughputCounter;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
@@ -43,9 +45,17 @@ public class GELFInputBase extends MessageInput {
     protected Bootstrap bootstrap;
     protected Channel channel;
 
+    protected final ThroughputCounter throughputCounter;
+    protected final ConnectionCounter connectionCounter;
+
     protected Core core;
     protected Configuration config;
     protected InetSocketAddress socketAddress;
+
+    public GELFInputBase() {
+        this.throughputCounter = new ThroughputCounter();
+        this.connectionCounter = new ConnectionCounter();
+    }
 
     @Override
     public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
@@ -73,6 +83,7 @@ public class GELFInputBase extends MessageInput {
             channel.close();
         }
         if (bootstrap != null) {
+            bootstrap.releaseExternalResources();
             bootstrap.shutdown();
         }
     }
@@ -103,6 +114,11 @@ public class GELFInputBase extends MessageInput {
     @Override
     public void launch() throws MisfireException {
         throw new RuntimeException("Must be overridden in GELF input classes.");
+    }
+
+    @Override
+    public String linkToDocs() {
+        return "";
     }
 
 }
