@@ -367,10 +367,10 @@ public class AndroidCommon {
   public static NestedSetBuilder<Artifact> collectTransitiveNativeLibsZips(
       RuleContext ruleContext) {
     NestedSetBuilder<Artifact> transitiveAarNativeLibs = NestedSetBuilder.naiveLinkOrder();
-    Iterable<NativeLibsZipsInfo> infos =
-        getTransitivePrerequisites(ruleContext, Mode.TARGET, NativeLibsZipsInfo.PROVIDER);
-    for (NativeLibsZipsInfo nativeLibsZipsInfo : infos) {
-      transitiveAarNativeLibs.addTransitive(nativeLibsZipsInfo.getAarNativeLibs());
+    Iterable<NativeLibsZipsProvider> providers =
+        getTransitivePrerequisites(ruleContext, Mode.TARGET, NativeLibsZipsProvider.class);
+    for (NativeLibsZipsProvider nativeLibsZipsProvider : providers) {
+      transitiveAarNativeLibs.addTransitive(nativeLibsZipsProvider.getAarNativeLibs());
     }
     return transitiveAarNativeLibs;
   }

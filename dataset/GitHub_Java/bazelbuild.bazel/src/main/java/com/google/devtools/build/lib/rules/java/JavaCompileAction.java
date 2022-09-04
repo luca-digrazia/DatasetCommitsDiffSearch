@@ -68,7 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
 
 /** Action that represents a Java compilation. */
 @ThreadCompatible
@@ -494,7 +493,6 @@ public final class JavaCompileAction extends SpawnAction {
     private NestedSet<Artifact> processorPath = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     private final List<String> processorNames = new ArrayList<>();
     private Label targetLabel;
-    @Nullable private String injectingRuleKind;
 
     /**
      * Creates a Builder from an owner and a build configuration.
@@ -725,9 +723,6 @@ public final class JavaCompileAction extends SpawnAction {
           // {@link JavaLibraryBuildRequest}, so add an extra &at; to escape it.
           result.addPrefixedLabel("@", targetLabel);
         }
-      }
-      if (injectingRuleKind != null) {
-        result.add("--injecting_rule_kind", injectingRuleKind);
       }
 
       if (!classpathEntries.isEmpty()) {
@@ -1003,11 +998,6 @@ public final class JavaCompileAction extends SpawnAction {
 
     public Builder setTargetLabel(Label targetLabel) {
       this.targetLabel = targetLabel;
-      return this;
-    }
-
-    public Builder setInjectingRuleKind(@Nullable String injectingRuleKind) {
-      this.injectingRuleKind = injectingRuleKind;
       return this;
     }
   }
