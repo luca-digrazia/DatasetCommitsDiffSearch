@@ -73,7 +73,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
-import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
@@ -1132,7 +1131,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         ((ConfiguredRuleClassProvider) ruleClassProvider)
             .getDynamicTransitionMapper()
             .map(ConfigurationTransitionProxy.DATA);
-    BuildOptions dataOptions = dataTransition != NoTransition.INSTANCE
+    BuildOptions dataOptions = dataTransition != ConfigurationTransitionProxy.NONE
         ? ((PatchTransition) dataTransition).apply(firstTargetConfig.getOptions())
         : firstTargetConfig.getOptions();
 
@@ -1630,7 +1629,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @Nullable
   public ConfiguredTarget getConfiguredTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
-    return getConfiguredTargetForTesting(eventHandler, label, configuration, NoTransition.INSTANCE);
+    return getConfiguredTargetForTesting(
+        eventHandler, label, configuration, ConfigurationTransitionProxy.NONE);
   }
 
   /**
