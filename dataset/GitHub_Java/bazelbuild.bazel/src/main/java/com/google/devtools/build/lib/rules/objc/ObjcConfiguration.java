@@ -21,8 +21,8 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -68,6 +68,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final boolean enableBinaryStripping;
   private final boolean moduleMapsEnabled;
   @Nullable private final String signingCertName;
+  private final boolean prioritizeStaticLibs;
   private final boolean debugWithGlibcxx;
   @Nullable private final Label extraEntitlements;
   private final boolean deviceDebugEntitlements;
@@ -103,6 +104,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.enableBinaryStripping = objcOptions.enableBinaryStripping;
     this.moduleMapsEnabled = objcOptions.enableModuleMaps;
     this.signingCertName = objcOptions.iosSigningCertName;
+    this.prioritizeStaticLibs = objcOptions.prioritizeStaticLibs;
     this.debugWithGlibcxx = objcOptions.debugWithGlibcxx;
     this.extraEntitlements = objcOptions.extraEntitlements;
     this.deviceDebugEntitlements = objcOptions.deviceDebugEntitlements;
@@ -148,8 +150,8 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       case WATCHOS:
         return watchosSimulatorDevice;
       default:
-        throw new IllegalArgumentException(
-            "ApplePlatform type " + platformType + " does not support " + "simulators.");
+        throw new IllegalArgumentException("Platform type " + platformType + " does not support "
+            + "simulators.");
     }
   }
 
@@ -165,8 +167,8 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       case WATCHOS:
         return watchosSimulatorVersion;
       default:
-        throw new IllegalArgumentException(
-            "ApplePlatform type " + platformType + " does not support " + "simulators.");
+        throw new IllegalArgumentException("Platform type " + platformType + " does not support "
+            + "simulators.");
     }
   }
 
@@ -271,6 +273,14 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       + "certificate was specified.")
   public String getSigningCertName() {
     return this.signingCertName;
+  }
+
+  /**
+   * Returns true if the linker invocation should contain static library includes before framework
+   * and system library includes.
+   */
+  public boolean shouldPrioritizeStaticLibs() {
+    return this.prioritizeStaticLibs;
   }
 
   /**
