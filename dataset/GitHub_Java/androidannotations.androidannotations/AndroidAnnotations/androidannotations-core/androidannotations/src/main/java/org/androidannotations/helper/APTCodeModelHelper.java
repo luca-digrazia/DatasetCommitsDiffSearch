@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -78,8 +78,6 @@ import com.helger.jcodemodel.JVar;
 
 public class APTCodeModelHelper {
 
-	private static final List<String> IGNORED_ANNOTATIONS = Collections.singletonList("kotlin.Metadata");
-
 	private AndroidAnnotationsEnvironment environment;
 
 	public APTCodeModelHelper(AndroidAnnotationsEnvironment environment) {
@@ -129,7 +127,7 @@ public class APTCodeModelHelper {
 		if (bound == null) {
 			bound = wildcardType.getSuperBound();
 			if (bound == null) {
-				return environment.getClasses().OBJECT.wildcardExtends();
+				return environment.getClasses().OBJECT.wildcard();
 			}
 			return typeMirrorToJClass(bound, substitute).wildcardSuper();
 		}
@@ -137,9 +135,9 @@ public class APTCodeModelHelper {
 		TypeMirror extendsBound = wildcardType.getExtendsBound();
 
 		if (extendsBound == null) {
-			return environment.getClasses().OBJECT.wildcardExtends();
+			return environment.getClasses().OBJECT.wildcard();
 		} else {
-			return typeMirrorToJClass(extendsBound, substitute).wildcardExtends();
+			return typeMirrorToJClass(extendsBound, substitute).wildcard();
 		}
 	}
 
@@ -320,7 +318,7 @@ public class APTCodeModelHelper {
 		for (AnnotationMirror annotationMirror : annotationMirrors) {
 			if (annotationMirror.getAnnotationType().asElement().getAnnotation(Inherited.class) == null) {
 				AbstractJClass annotationClass = typeMirrorToJClass(annotationMirror.getAnnotationType());
-				if (!environment.isAndroidAnnotation(annotationClass.fullName()) && !IGNORED_ANNOTATIONS.contains(annotationClass.fullName())) {
+				if (!environment.isAndroidAnnotation(annotationClass.fullName())) {
 					copyAnnotation(annotatable, annotationMirror);
 				}
 			}
