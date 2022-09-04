@@ -17,33 +17,30 @@
 package org.graylog2.rest.resources.system.agent;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.base.Strings;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
 import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
 import org.graylog2.agents.Agent;
-import org.graylog2.agents.AgentImpl;
 import org.graylog2.agents.AgentService;
 import org.graylog2.rest.models.agent.requests.AgentRegistrationRequest;
 import org.graylog2.shared.rest.resources.RestResource;
 
 import javax.inject.Inject;
 import javax.validation.Valid;
-import javax.validation.Validator;
 import javax.validation.constraints.NotNull;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
+import javax.ws.rs.HeaderParam;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
-@Api(value = "System/Agents/Registration", description = "Registration resource for graylog agent nodes.")
-@Path("/system/agents/register")
+@Api(value = "System/Agents/Registration", description = "Registration resource for Graylog agent nodes.")
+@Path("/system/agents/{agentId}")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class AgentRegistrationResource extends RestResource {
@@ -55,16 +52,19 @@ public class AgentRegistrationResource extends RestResource {
         this.agentService = agentService;
     }
 
-    @POST
+    @PUT
     @Timed
-    @ApiOperation(value = "Register - create/update an agent registration",
-            notes = "This is a stateless method which upserts and agent registration")
+    @ApiOperation(value = "Create/update an agent registration",
+            notes = "This is a stateless method which upserts an agent registration")
     @ApiResponses(value = {
             @ApiResponse(code = 400, message = "The supplied request is not valid.")
     })
-    public Response register(@ApiParam(name = "JSON body", required = true)
-                             @Valid @NotNull AgentRegistrationRequest request) {
-        final Agent agent = agentService.fromRequest(request);
+    public Response register(@ApiParam(name = "agentId", value = "The agent id this agent is registering as.", required = true)
+                             @PathParam("agentId") String agentId,
+                             @ApiParam(name = "JSON body", required = true)
+                             @Valid @NotNull AgentRegistrationRequest request,
+                             @HeaderParam(value = "X-Graylog-Agent-Version") String agentVersion) {
+        final Agent agent = agentService.fromRequest(agentId, request, agentVersion);
 
         agentService.save(agent);
 
