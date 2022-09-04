@@ -119,7 +119,7 @@ public class ReflectiveHierarchyStep {
                 type instanceof UnresolvedTypeVariable) {
             return;
         } else if (type instanceof ClassType) {
-            if (reflectiveHierarchyBuildItem.getIgnoreTypePredicate().test(type.name())) {
+            if (reflectiveHierarchyBuildItem.getIgnorePredicate().test(type.name())) {
                 return;
             }
 
@@ -144,7 +144,7 @@ public class ReflectiveHierarchyStep {
                     unindexedClasses, finalFieldsWritable, reflectiveClass);
         } else if (type instanceof ParameterizedType) {
             ParameterizedType parameterizedType = (ParameterizedType) type;
-            if (!reflectiveHierarchyBuildItem.getIgnoreTypePredicate().test(parameterizedType.name())) {
+            if (!reflectiveHierarchyBuildItem.getIgnorePredicate().test(parameterizedType.name())) {
                 addClassTypeHierarchy(combinedIndexBuildItem, reflectiveHierarchyBuildItem, source, parameterizedType.name(),
                         processedReflectiveHierarchies,
                         unindexedClasses, finalFieldsWritable, reflectiveClass);
@@ -165,10 +165,7 @@ public class ReflectiveHierarchyStep {
             Map<DotName, Set<String>> unindexedClasses,
             Predicate<ClassInfo> finalFieldsWritable,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
-        if (name == null) {
-            return;
-        }
-        if (reflectiveHierarchyBuildItem.getIgnoreTypePredicate().test(name)) {
+        if (reflectiveHierarchyBuildItem.getIgnorePredicate().test(name)) {
             return;
         }
 
@@ -202,9 +199,6 @@ public class ReflectiveHierarchyStep {
                 processedReflectiveHierarchies,
                 unindexedClasses, finalFieldsWritable, reflectiveClass);
         for (FieldInfo field : info.fields()) {
-            if (reflectiveHierarchyBuildItem.getIgnoreFieldPredicate().test(field)) {
-                continue;
-            }
             if (Modifier.isStatic(field.flags()) || field.name().startsWith("this$") || field.name().startsWith("val$")) {
                 // skip the static fields (especially loggers)
                 // also skip the outer class elements (unfortunately, we don't have a way to test for synthetic fields in Jandex)
@@ -215,9 +209,6 @@ public class ReflectiveHierarchyStep {
                     unindexedClasses, finalFieldsWritable, reflectiveClass);
         }
         for (MethodInfo method : info.methods()) {
-            if (reflectiveHierarchyBuildItem.getIgnoreMethodPredicate().test(method)) {
-                continue;
-            }
             if (method.parameters().size() > 0 || Modifier.isStatic(method.flags())
                     || method.returnType().kind() == Kind.VOID) {
                 // we will only consider potential getters
