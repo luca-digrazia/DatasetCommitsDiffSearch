@@ -139,6 +139,7 @@ public final class BuildTool {
     env.setupPackageCache(request, DefaultsPackage.getDefaultsPackageContent(buildOptions));
 
     ExecutionTool executionTool = null;
+    BuildConfigurationCollection configurations;
     boolean catastrophe = false;
     try {
       env.getEventBus().post(new BuildStartingEvent(env, request));
@@ -188,9 +189,10 @@ public final class BuildTool {
       env.throwPendingException();
 
       // Configuration creation.
-      // TODO(gregce): Consider dropping this phase and passing on-the-fly target / host configs as
-      // needed. This requires cleaning up the invalidation in SkyframeBuildView.setConfigurations.
-      BuildConfigurationCollection configurations =
+      // TODO(gregce): BuildConfigurationCollection is important for static configs, less so for
+      // dynamic configs. Consider dropping it outright and passing on-the-fly target / host configs
+      // directly when needed (although this could be hard when Skyframe is unavailable).
+      configurations =
           env.getSkyframeExecutor()
               .createConfigurations(
                   env.getReporter(),
