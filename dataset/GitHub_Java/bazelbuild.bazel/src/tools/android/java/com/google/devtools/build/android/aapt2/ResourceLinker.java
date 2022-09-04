@@ -47,9 +47,6 @@ import java.util.stream.Stream;
 
 /** Performs linking of {@link CompiledResources} using aapt2. */
 public class ResourceLinker {
-
-  private boolean debug;
-
   /** Represents errors thrown during linking. */
   public static class LinkError extends Aapt2Exception {
 
@@ -122,11 +119,6 @@ public class ResourceLinker {
 
   public ResourceLinker buildVersion(Revision buildToolsVersion) {
     this.buildToolsVersion = buildToolsVersion;
-    return this;
-  }
-
-  public ResourceLinker debug(boolean debug) {
-    this.debug = debug;
     return this;
   }
 
@@ -318,8 +310,6 @@ public class ResourceLinker {
               .add("--manifest", compiled.getManifest())
               // Enables resource redefinition and merging
               .add("--auto-add-overlay")
-              .when(debug)
-              .thenAdd("--debug-mode")
               .add("--custom-package", customPackage)
               .when(densities.size() == 1)
               .thenAddRepeated("--preferred-density", densities)
