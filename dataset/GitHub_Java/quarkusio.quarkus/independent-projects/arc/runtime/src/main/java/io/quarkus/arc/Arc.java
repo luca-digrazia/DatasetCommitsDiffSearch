@@ -16,15 +16,10 @@ public final class Arc {
 
     public static ArcContainer initialize() {
         if (INITIALIZED.compareAndSet(false, true)) {
-            try {
-                ArcContainerImpl container = new ArcContainerImpl();
-                INSTANCE.set(container);
-                container.init();
-                return container;
-            } catch (Throwable t) {
-                INITIALIZED.set(false);
-                throw new RuntimeException("Failed to initialize Arc", t);
-            }
+            ArcContainerImpl container = new ArcContainerImpl();
+            INSTANCE.set(container);
+            container.init();
+            return container;
         }
         return container();
     }

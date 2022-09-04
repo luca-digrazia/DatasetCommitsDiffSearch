@@ -1,7 +1,6 @@
 package io.quarkus.arc.processor;
 
 import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
-import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
 import io.quarkus.arc.impl.GenericArrayTypeImpl;
 import io.quarkus.arc.impl.ParameterizedTypeImpl;
@@ -50,8 +49,7 @@ final class Types {
 
     static ResultHandle getTypeHandle(BytecodeCreator creator, Type type) {
         if (Kind.CLASS.equals(type.kind())) {
-            String className = type.asClassType().name().toString();
-            return doLoadClass(creator, className);
+            return creator.loadClass(type.asClassType().name().toString());
         } else if (Kind.TYPE_VARIABLE.equals(type.kind())) {
             // E.g. T -> new TypeVariableImpl("T")
             TypeVariable typeVariable = type.asTypeVariable();
@@ -81,7 +79,7 @@ final class Types {
             return creator.newInstance(
                     MethodDescriptor.ofConstructor(ParameterizedTypeImpl.class, java.lang.reflect.Type.class,
                             java.lang.reflect.Type[].class),
-                    doLoadClass(creator, parameterizedType.name().toString()), typeArgsHandle);
+                    creator.loadClass(parameterizedType.name().toString()), typeArgsHandle);
 
         } else if (Kind.ARRAY.equals(type.kind())) {
             Type componentType = type.asArrayType().component();
@@ -128,18 +126,6 @@ final class Types {
         } else {
             throw new IllegalArgumentException("Unsupported bean type: " + type.kind() + ", " + type);
         }
-    }
-
-    private static ResultHandle doLoadClass(BytecodeCreator creator, String className) {
-        //we need to use Class.forName as the class may be package private
-        ResultHandle currentThread = creator
-                .invokeStaticMethod(ofMethod(Thread.class, "currentThread", Thread.class));
-        ResultHandle tccl = creator.invokeVirtualMethod(
-                ofMethod(Thread.class, "getContextClassLoader", ClassLoader.class),
-                currentThread);
-        return creator.invokeStaticMethod(
-                ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class),
-                creator.load(className), creator.load(true), tccl);
     }
 
     static Type getProviderType(ClassInfo classInfo) {

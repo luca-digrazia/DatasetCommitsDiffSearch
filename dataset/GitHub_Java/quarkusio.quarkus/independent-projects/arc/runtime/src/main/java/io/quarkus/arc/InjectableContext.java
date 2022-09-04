@@ -1,7 +1,6 @@
 package io.quarkus.arc;
 
 import java.util.Map;
-import javax.enterprise.context.NormalScope;
 import javax.enterprise.context.spi.AlterableContext;
 
 /**
@@ -21,14 +20,6 @@ public interface InjectableContext extends AlterableContext {
      * @return the current state
      */
     ContextState getState();
-
-    /**
-     * 
-     * @return {@code true} if this context represents a normal scope
-     */
-    default boolean isNormal() {
-        return getScope().isAnnotationPresent(NormalScope.class);
-    }
 
     /**
     *

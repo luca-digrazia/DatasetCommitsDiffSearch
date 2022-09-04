@@ -1,10 +1,10 @@
 package io.quarkus.undertow.runtime;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.SessionScoped;
@@ -17,12 +17,12 @@ import javax.servlet.http.HttpSessionEvent;
 import javax.servlet.http.HttpSessionListener;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.arc.ComputingCache;
 import io.quarkus.arc.ContextInstanceHandle;
-import io.quarkus.arc.ContextInstanceHandleImpl;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.impl.ComputingCache;
+import io.quarkus.arc.impl.ContextInstanceHandleImpl;
 import io.undertow.servlet.handlers.ServletRequestContext;
 
 @WebListener
@@ -65,12 +65,19 @@ public class HttpSessionContext implements InjectableContext, HttpSessionListene
     }
 
     @Override
-    public Collection<ContextInstanceHandle<?>> getAll() {
-        HttpServletRequest httpServletRequest = servletRequest();
-        if (httpServletRequest != null) {
-            return new ArrayList<>(getContextualInstances(httpServletRequest).getPresentValues());
-        }
-        return Collections.emptyList();
+    public ContextState getState() {
+        return new ContextState() {
+
+            @Override
+            public Map<InjectableBean<?>, Object> getContextualInstances() {
+                HttpServletRequest httpServletRequest = servletRequest();
+                if (httpServletRequest != null) {
+                    return HttpSessionContext.this.getContextualInstances(httpServletRequest).getPresentValues().stream()
+                            .collect(Collectors.toMap(ContextInstanceHandle::getBean, ContextInstanceHandle::get));
+                }
+                return Collections.emptyMap();
+            }
+        };
     }
 
     @Override

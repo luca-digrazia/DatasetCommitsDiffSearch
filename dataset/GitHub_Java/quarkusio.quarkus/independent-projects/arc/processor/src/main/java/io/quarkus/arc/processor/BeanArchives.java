@@ -1,5 +1,7 @@
 package io.quarkus.arc.processor;
 
+import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByNameNoLogging;
+
 import io.quarkus.arc.impl.ActivateRequestContextInterceptor;
 import io.quarkus.arc.impl.InjectableRequestContextController;
 import java.io.IOException;
@@ -43,11 +45,11 @@ public final class BeanArchives {
      * @param applicationIndexes
      * @return the final bean archive index
      */
-    public static IndexView buildBeanArchiveIndex(ClassLoader deploymentClassLoader, IndexView... applicationIndexes) {
+    public static IndexView buildBeanArchiveIndex(IndexView... applicationIndexes) {
         List<IndexView> indexes = new ArrayList<>();
         Collections.addAll(indexes, applicationIndexes);
         indexes.add(buildAdditionalIndex());
-        return new IndexWrapper(CompositeIndex.create(indexes), deploymentClassLoader);
+        return new IndexWrapper(CompositeIndex.create(indexes));
     }
 
     private static IndexView buildAdditionalIndex() {
@@ -75,11 +77,9 @@ public final class BeanArchives {
         private final Map<DotName, Optional<ClassInfo>> additionalClasses;
 
         private final IndexView index;
-        private final ClassLoader deploymentClassLoader;
 
-        public IndexWrapper(IndexView index, ClassLoader deploymentClassLoader) {
+        public IndexWrapper(IndexView index) {
             this.index = index;
-            this.deploymentClassLoader = deploymentClassLoader;
             this.additionalClasses = new ConcurrentHashMap<>();
         }
 
@@ -100,7 +100,7 @@ public final class BeanArchives {
 
         @Override
         public ClassInfo getClassByName(DotName className) {
-            ClassInfo classInfo = IndexClassLookupUtils.getClassByName(index, className, false);
+            ClassInfo classInfo = getClassByNameNoLogging(index, className);
             if (classInfo == null) {
                 classInfo = additionalClasses.computeIfAbsent(className, this::computeAdditional).orElse(null);
             }
@@ -226,7 +226,7 @@ public final class BeanArchives {
         private Optional<ClassInfo> computeAdditional(DotName className) {
             LOGGER.debugf("Index: %s", className);
             Indexer indexer = new Indexer();
-            if (BeanArchives.index(indexer, className.toString(), deploymentClassLoader)) {
+            if (BeanArchives.index(indexer, className.toString())) {
                 Index index = indexer.complete();
                 return Optional.of(index.getClassByName(className));
             } else {
@@ -238,11 +238,7 @@ public final class BeanArchives {
     }
 
     static boolean index(Indexer indexer, String className) {
-        return index(indexer, className, BeanArchives.class.getClassLoader());
-    }
-
-    static boolean index(Indexer indexer, String className, ClassLoader classLoader) {
-        try (InputStream stream = classLoader
+        try (InputStream stream = BeanProcessor.class.getClassLoader()
                 .getResourceAsStream(className.replace('.', '/') + ".class")) {
             indexer.index(stream);
             return true;
