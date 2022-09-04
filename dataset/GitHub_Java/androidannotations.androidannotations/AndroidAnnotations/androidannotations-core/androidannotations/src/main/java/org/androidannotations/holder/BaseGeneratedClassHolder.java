@@ -15,9 +15,9 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PUBLIC;
-import static com.helger.jcodemodel.JMod.STATIC;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 import static org.androidannotations.helper.ModelConstants.classSuffix;
 
 import java.util.ArrayList;
@@ -28,22 +28,23 @@ import java.util.Map;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.internal.process.ProcessHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.EClassType;
-import com.helger.jcodemodel.JCodeModel;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JTypeVar;
+import com.sun.codemodel.ClassType;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JTypeVar;
 
 public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 	protected final AndroidAnnotationsEnvironment environment;
 	protected JDefinedClass generatedClass;
-	protected AbstractJClass annotatedClass;
+	protected JClass annotatedClass;
 	protected final TypeElement annotatedElement;
 	protected final APTCodeModelHelper codeModelHelper;
 
@@ -64,22 +65,25 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 			Element enclosingElement = annotatedElement.getEnclosingElement();
 			GeneratedClassHolder enclosingHolder = environment.getGeneratedClassHolder(enclosingElement);
 			String generatedBeanSimpleName = annotatedElement.getSimpleName().toString() + classSuffix();
-			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, EClassType.CLASS);
+			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, ClassType.CLASS);
 		} else {
 			String generatedClassQualifiedName = annotatedComponentQualifiedName + classSuffix();
-			generatedClass = getCodeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, EClassType.CLASS);
+			generatedClass = getCodeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, ClassType.CLASS);
 		}
-		codeModelHelper.generify(generatedClass, annotatedElement);
+		for (TypeParameterElement typeParam : annotatedElement.getTypeParameters()) {
+			JClass bound = codeModelHelper.typeBoundsToJClass(typeParam.getBounds());
+			generatedClass.generify(typeParam.getSimpleName().toString(), bound);
+		}
 		setExtends();
 		codeModelHelper.copyNonAAAnnotations(generatedClass, annotatedElement.getAnnotationMirrors());
 	}
 
-	protected AbstractJClass getAnnotatedClass() {
+	protected JClass getAnnotatedClass() {
 		return annotatedClass;
 	}
 
 	protected void setExtends() {
-		AbstractJClass annotatedComponent = getCodeModel().directClass(annotatedElement.asType().toString());
+		JClass annotatedComponent = getCodeModel().directClass(annotatedElement.asType().toString());
 		generatedClass._extends(annotatedComponent);
 	}
 
@@ -110,16 +114,16 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 		return getEnvironment().getCodeModel();
 	}
 
-	protected AbstractJClass getJClass(String fullyQualifiedClassName) {
+	protected JClass getJClass(String fullyQualifiedClassName) {
 		return getEnvironment().getJClass(fullyQualifiedClassName);
 	}
 
-	protected AbstractJClass getJClass(Class<?> clazz) {
+	protected JClass getJClass(Class<?> clazz) {
 		return getEnvironment().getJClass(clazz);
 	}
 
-	public AbstractJClass narrow(AbstractJClass toNarrow) {
-		List<AbstractJClass> classes = new ArrayList<>();
+	public JClass narrow(JClass toNarrow) {
+		List<JClass> classes = new ArrayList<>();
 		for (JTypeVar type : generatedClass.typeParams()) {
 			classes.add(getCodeModel().directClass(type.name()));
 		}
