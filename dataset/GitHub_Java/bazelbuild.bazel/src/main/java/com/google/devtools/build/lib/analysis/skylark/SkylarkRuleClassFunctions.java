@@ -54,8 +54,8 @@ import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ExecGroup;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist;
-import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.StarlarkImplicitOutputsFunctionWithCallback;
-import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.StarlarkImplicitOutputsFunctionWithMap;
+import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithCallback;
+import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithMap;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.PredicateWithMessage;
@@ -78,9 +78,11 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleFunctionsApi;
+import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Module;
@@ -321,10 +323,10 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
             new StarlarkCallbackHelper(
                 (StarlarkFunction) implicitOutputs, thread.getSemantics(), bazelContext);
         builder.setImplicitOutputsFunction(
-            new StarlarkImplicitOutputsFunctionWithCallback(callback, thread.getCallerLocation()));
+            new SkylarkImplicitOutputsFunctionWithCallback(callback, thread.getCallerLocation()));
       } else {
         builder.setImplicitOutputsFunction(
-            new StarlarkImplicitOutputsFunctionWithMap(
+            new SkylarkImplicitOutputsFunctionWithMap(
                 ImmutableMap.copyOf(
                     Dict.cast(
                         implicitOutputs,
@@ -569,8 +571,8 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
    *
    * <p>Exactly one of {@link #builder} or {@link #ruleClass} is null except inside {@link #export}.
    */
-  public static final class SkylarkRuleFunction
-      implements StarlarkCallable, SkylarkExportable, RuleFunction {
+  public static final class SkylarkRuleFunction extends BaseFunction
+      implements SkylarkExportable, RuleFunction {
     private RuleClass.Builder builder;
 
     private RuleClass ruleClass;
@@ -608,6 +610,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     @Override
     public String getName() {
       return "rule";
+    }
+
+    @Override
+    public FunctionSignature getSignature() {
+      return FunctionSignature.KWARGS; // just for documentation
     }
 
     @Override
@@ -767,16 +774,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     @Override
     public void repr(Printer printer) {
       printer.append("<rule>");
-    }
-
-    @Override
-    public String toString() {
-      return "rule(...)";
-    }
-
-    @Override
-    public boolean isImmutable() {
-      return true;
     }
   }
 

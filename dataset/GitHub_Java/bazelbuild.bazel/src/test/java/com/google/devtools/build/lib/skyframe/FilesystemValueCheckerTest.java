@@ -93,7 +93,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -768,16 +767,14 @@ public class FilesystemValueCheckerTest {
   }
 
   @Test
-  // TODO(b/154337187): Remove the following annotation to re-enable once this test is de-flaked.
-  @Ignore
-  public void testDirtyActions() throws Exception {
+  // TODO(b/154337187): Reenable once this test is de-flaked.
+  public void disabledTestDirtyActions() throws Exception {
     checkDirtyActions(null, false);
   }
 
   @Test
-  // TODO(b/154337187): Remove the following annotation to re-enable once this test is de-flaked.
-  @Ignore
-  public void testDirtyActionsBatchStat() throws Exception {
+  // TODO(b/154337187): Reenable once this test is de-flaked.
+  public void disabledTestDirtyActionsBatchStat() throws Exception {
     checkDirtyActions(
         new BatchStat() {
           @Override
@@ -797,8 +794,6 @@ public class FilesystemValueCheckerTest {
   }
 
   @Test
-  // TODO(b/154337187): Remove the following annotation to re-enable once this test is de-flaked.
-  @Ignore
   public void testDirtyActionsBatchStatWithDigest() throws Exception {
     checkDirtyActions(
         new BatchStat() {
@@ -818,8 +813,6 @@ public class FilesystemValueCheckerTest {
   }
 
   @Test
-  // TODO(b/154337187): Remove the following annotation to re-enable once this test is de-flaked.
-  @Ignore
   public void testDirtyActionsBatchStatFallback() throws Exception {
     checkDirtyActions(
         new BatchStat() {
