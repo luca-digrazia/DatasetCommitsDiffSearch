@@ -2,7 +2,6 @@ package io.quarkus.container.image.openshift.deployment;
 
 import static io.quarkus.container.image.openshift.deployment.OpenshiftUtils.mergeConfig;
 import static io.quarkus.container.util.PathsUtil.findMainSourcesRoot;
-import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.DEFAULT_FAST_JAR_DIRECTORY_NAME;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -253,8 +252,7 @@ public class OpenshiftProcessor {
         //The contextRoot is where inside the tarball we will add the jars. A null value means everything will be added under '/' while "target" means everything will be added under '/target'.
         //For docker kind of builds where we use instructions like: `COPY target/*.jar /deployments` it using '/target' is a requirement.
         //For s2i kind of builds where jars are expected directly in the '/' we have to use null.
-        String outputDirName = out.getOutputDirectory().getFileName().toString();
-        String contextRoot = getContextRoot(outputDirName, packageConfig.isFastJar(), config.buildStrategy);
+        String contextRoot = config.buildStrategy == BuildStrategy.DOCKER ? "target" : null;
         if (packageConfig.isFastJar()) {
             createContainerImage(kubernetesClient, openshiftYml.get(), config, contextRoot, jar.getPath().getParent(),
                     jar.getPath().getParent());
@@ -266,16 +264,6 @@ public class OpenshiftProcessor {
                     jar.getPath());
         }
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
-    }
-
-    private String getContextRoot(String outputDirName, boolean isFastJar, BuildStrategy buildStrategy) {
-        if (buildStrategy != BuildStrategy.DOCKER) {
-            return null;
-        }
-        if (!isFastJar) {
-            return outputDirName;
-        }
-        return outputDirName + "/" + DEFAULT_FAST_JAR_DIRECTORY_NAME;
     }
 
     @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, OpenshiftBuild.class, NativeBuild.class })
