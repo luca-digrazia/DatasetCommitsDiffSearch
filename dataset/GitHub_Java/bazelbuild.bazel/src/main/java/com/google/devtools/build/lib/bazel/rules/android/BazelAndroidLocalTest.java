@@ -19,15 +19,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaSemantics;
 import com.google.devtools.build.lib.rules.android.AndroidLocalTestBase;
-import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
 import com.google.devtools.build.lib.rules.android.AndroidSemantics;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts.Builder;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
@@ -36,7 +34,9 @@ import com.google.devtools.build.lib.util.ShellEscaper;
 /** An implementation for the "android_local_test" rule. */
 public class BazelAndroidLocalTest extends AndroidLocalTestBase {
 
-  Artifact androidAllJarsPropFile;
+  public BazelAndroidLocalTest() {
+    super(BazelAndroidSemantics.INSTANCE);
+  }
 
   @Override
   protected AndroidSemantics createAndroidSemantics() {
@@ -60,54 +60,32 @@ public class BazelAndroidLocalTest extends AndroidLocalTestBase {
         .add("-Drobolectric.offline=true")
         .add(
             "-Drobolectric-deps.properties=" + androidAllJarsPropertiesFile.getRunfilesPathString())
+        .add("-Duse_framework_manifest_parser=true")
+        .add("-Dorg.robolectric.packagesToNotAcquire=com.google.testing.junit.runner.util")
         .build();
   }
 
   @Override
-  protected String getMainClass(
+  protected String addCoverageSupport(
       RuleContext ruleContext,
       JavaSemantics javaSemantics,
       JavaCompilationHelper helper,
       Artifact executable,
       Artifact instrumentationMetadata,
-      Builder javaArtifactsBuilder,
-      JavaTargetAttributes.Builder attributesBuilder)
-      throws InterruptedException, RuleErrorException {
+      JavaCompilationArtifacts.Builder javaArtifactsBuilder,
+      JavaTargetAttributes.Builder attributesBuilder,
+      String mainClass)
+      throws RuleErrorException {
     // coverage does not yet work with android_local_test
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      ruleContext.throwWithRuleError("android_local_test does not yet support coverage");
-    }
-    return "com.google.testing.junit.runner.BazelTestRunner";
-  }
-
-  @Override
-  protected JavaCompilationHelper getJavaCompilationHelperWithDependencies(
-      RuleContext ruleContext,
-      JavaSemantics javaSemantics,
-      JavaCommon javaCommon,
-      JavaTargetAttributes.Builder javaTargetAttributesBuilder) {
-
-    JavaCompilationHelper javaCompilationHelper =
-        new JavaCompilationHelper(
-            ruleContext, javaSemantics, javaCommon.getJavacOpts(), javaTargetAttributesBuilder);
-    javaCompilationHelper.addLibrariesToAttributes(
-        ImmutableList.copyOf(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY)));
-
-    javaCompilationHelper.addLibrariesToAttributes(
-        ImmutableList.of(getAndCheckTestSupport(ruleContext)));
-
-    javaTargetAttributesBuilder.setBootClassPath(
-        ImmutableList.of(AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar()));
-    javaTargetAttributesBuilder.addRuntimeClassPathEntry(
-        AndroidSdkProvider.fromRuleContext(ruleContext).getAndroidJar());
-
-    return javaCompilationHelper;
+    ruleContext.throwWithRuleError("android_local_test does not yet support coverage");
+    return "";
   }
 
   @Override
   protected TransitiveInfoCollection getAndCheckTestSupport(RuleContext ruleContext) {
     // Add the unit test support to the list of dependencies.
-    return Iterables.getOnlyElement(ruleContext.getPrerequisites("$testsupport", Mode.TARGET));
+    return Iterables.getOnlyElement(
+        ruleContext.getPrerequisites("$testsupport", TransitionMode.TARGET));
   }
 
   @Override
@@ -116,19 +94,11 @@ public class BazelAndroidLocalTest extends AndroidLocalTestBase {
   // throw an error.
   protected Artifact getAndroidAllJarsPropertiesFile(RuleContext ruleContext)
       throws RuleErrorException {
-    if (androidAllJarsPropFile == null) {
-      androidAllJarsPropFile = getAndroidAllJarsPropertiesFileHelper(ruleContext);
-    }
-    return androidAllJarsPropFile;
-  }
-
-  private Artifact getAndroidAllJarsPropertiesFileHelper(RuleContext ruleContext)
-      throws RuleErrorException {
     Iterable<RunfilesProvider> runfilesProviders =
-        ruleContext.getPrerequisites("deps", Mode.TARGET, RunfilesProvider.class);
+        ruleContext.getPrerequisites("deps", TransitionMode.TARGET, RunfilesProvider.class);
     for (RunfilesProvider runfilesProvider : runfilesProviders) {
       Runfiles dataRunfiles = runfilesProvider.getDataRunfiles();
-      for (Artifact artifact : dataRunfiles.getAllArtifacts()) {
+      for (Artifact artifact : dataRunfiles.getAllArtifacts().toList()) {
         if (artifact.getFilename().equals("robolectric-deps.properties")) {
           return artifact;
         }

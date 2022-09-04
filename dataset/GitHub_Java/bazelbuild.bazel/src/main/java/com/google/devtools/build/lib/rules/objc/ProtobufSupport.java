@@ -231,15 +231,11 @@ final class ProtobufSupport {
 
     Artifact outputGroupFile =
         ruleContext.getUniqueDirectoryArtifact(
-            "_protos",
-            "output_group",
-            buildConfiguration.getGenfilesDirectory(ruleContext.getRepository()));
+            "_protos", "output_group", buildConfiguration.getGenfilesDirectory());
 
     Artifact skipGroupFile =
         ruleContext.getUniqueDirectoryArtifact(
-            "_protos",
-            "skip_group",
-            buildConfiguration.getGenfilesDirectory(ruleContext.getRepository()));
+            "_protos", "skip_group", buildConfiguration.getGenfilesDirectory());
 
     ruleContext.registerAction(
         FileWriteAction.create(
@@ -295,7 +291,7 @@ final class ProtobufSupport {
   }
 
   private String getGenfilesPathString() {
-    return buildConfiguration.getGenfilesDirectory(ruleContext.getRepository()).getExecPathString();
+    return buildConfiguration.getGenfilesDirectory().getExecPathString();
   }
 
   private PathFragment getWorkspaceRelativeOutputDir() {
@@ -304,10 +300,7 @@ final class ProtobufSupport {
     // of dependers.
     PathFragment rootRelativeOutputDir = ruleContext.getUniqueDirectory(UNIQUE_DIRECTORY_NAME);
 
-    return buildConfiguration
-        .getBinDirectory(ruleContext.getRepository())
-        .getExecPath()
-        .getRelative(rootRelativeOutputDir);
+    return buildConfiguration.getBinDirectory().getExecPath().getRelative(rootRelativeOutputDir);
   }
 
   private List<Artifact> getGeneratedProtoOutputs(
@@ -334,9 +327,8 @@ final class ProtobufSupport {
       if (outputFile != null) {
         builder.add(
             ruleContext.getUniqueDirectoryArtifact(
-                UNIQUE_DIRECTORY_NAME,
-                outputFile,
-                buildConfiguration.getBinDirectory(ruleContext.getRepository())));
+                UNIQUE_DIRECTORY_NAME, outputFile, buildConfiguration.getBinDirectory()));
+
       }
     }
     return builder.build();
@@ -356,7 +348,9 @@ final class ProtobufSupport {
   static Artifact getGeneratedPortableFilter(
       RuleContext ruleContext, BuildConfiguration buildConfiguration) {
     return ruleContext.getUniqueDirectoryArtifact(
-        "_proto_filters", "generated_filter_file.pbascii", ruleContext.getGenfilesDirectory());
+        "_proto_filters",
+        "generated_filter_file.pbascii",
+        buildConfiguration.getGenfilesDirectory());
   }
 
   /**

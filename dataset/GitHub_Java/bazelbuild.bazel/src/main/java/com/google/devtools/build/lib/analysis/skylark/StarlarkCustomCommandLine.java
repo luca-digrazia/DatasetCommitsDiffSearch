@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.analysis.skylark;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
@@ -67,7 +68,7 @@ public class StarlarkCustomCommandLine extends CommandLine {
     private static final Interner<VectorArg> interner = BlazeInterners.newStrongInterner();
 
     private static final int HAS_LOCATION = 1;
-    // Deleted HAS_MAP_ALL = 1 << 1;
+    private static final int HAS_MAP_ALL = 1 << 1;
     private static final int HAS_MAP_EACH = 1 << 2;
     private static final int IS_NESTED_SET = 1 << 3;
     private static final int EXPAND_DIRECTORIES = 1 << 4;
@@ -113,6 +114,7 @@ public class StarlarkCustomCommandLine extends CommandLine {
 
     private static void push(ImmutableList.Builder<Object> arguments, Builder arg) {
       int features = 0;
+      features |= arg.mapAll != null ? HAS_MAP_ALL : 0;
       features |= arg.mapEach != null ? HAS_MAP_EACH : 0;
       features |= arg.nestedSet != null ? IS_NESTED_SET : 0;
       features |= arg.expandDirectories ? EXPAND_DIRECTORIES : 0;
@@ -126,12 +128,19 @@ public class StarlarkCustomCommandLine extends CommandLine {
       features |= arg.terminateWith != null ? HAS_TERMINATE_WITH : 0;
       boolean hasLocation =
           arg.location != null
-              && (features & (HAS_FORMAT_EACH | HAS_FORMAT_JOINED | HAS_MAP_EACH)) != 0;
+              && (features & (HAS_FORMAT_EACH | HAS_FORMAT_JOINED | HAS_MAP_ALL | HAS_MAP_EACH))
+                  != 0;
       features |= hasLocation ? HAS_LOCATION : 0;
+      Preconditions.checkState(
+          (features & (HAS_MAP_ALL | HAS_MAP_EACH)) != (HAS_MAP_ALL | HAS_MAP_EACH),
+          "Cannot use both map_all and map_each");
       VectorArg vectorArg = VectorArg.create(features);
       arguments.add(vectorArg);
       if (hasLocation) {
         arguments.add(arg.location);
+      }
+      if (arg.mapAll != null) {
+        arguments.add(arg.mapAll);
       }
       if (arg.mapEach != null) {
         arguments.add(arg.mapEach);
@@ -176,6 +185,8 @@ public class StarlarkCustomCommandLine extends CommandLine {
       final Location location =
           ((features & HAS_LOCATION) != 0) ? (Location) arguments.get(argi++) : null;
       final List<Object> originalValues;
+      StarlarkCallable mapAll =
+          ((features & HAS_MAP_ALL) != 0) ? (StarlarkCallable) arguments.get(argi++) : null;
       StarlarkCallable mapEach =
           ((features & HAS_MAP_EACH) != 0) ? (StarlarkCallable) arguments.get(argi++) : null;
       if ((features & IS_NESTED_SET) != 0) {
@@ -197,6 +208,33 @@ public class StarlarkCustomCommandLine extends CommandLine {
       if (mapEach != null) {
         stringValues = new ArrayList<>(expandedValues.size());
         applyMapEach(mapEach, expandedValues, stringValues::add, location, starlarkSemantics);
+      } else if (mapAll != null) {
+        Object result = applyMapFn(mapAll, expandedValues, location, starlarkSemantics);
+        if (!(result instanceof List)) {
+          throw new CommandLineExpansionException(
+              errorMessage(
+                  "map_fn must return a list, got " + result.getClass().getSimpleName(),
+                  location,
+                  null));
+        }
+        List<?> resultAsList = (List) result;
+        if (resultAsList.size() != expandedValues.size()) {
+          throw new CommandLineExpansionException(
+              errorMessage(
+                  String.format(
+                      "map_fn must return a list of the same length as the input. "
+                          + "Found list of length %d, expected %d.",
+                      resultAsList.size(), expandedValues.size()),
+                  location,
+                  null));
+        }
+        int count = resultAsList.size();
+        stringValues = new ArrayList<>(count);
+        // map_fn contract doesn't guarantee that the values returned are strings,
+        // so convert here
+        for (int i = 0; i < count; ++i) {
+          stringValues.add(CommandLineItem.expandToCommandLine(resultAsList.get(i)));
+        }
       } else {
         int count = expandedValues.size();
         stringValues = new ArrayList<>(expandedValues.size());
@@ -333,6 +371,9 @@ public class StarlarkCustomCommandLine extends CommandLine {
         Fingerprint fingerprint,
         StarlarkSemantics starlarkSemantics)
         throws CommandLineExpansionException {
+      if ((features & HAS_MAP_ALL) != 0) {
+        return addToFingerprintLegacy(arguments, argi, fingerprint, starlarkSemantics);
+      }
       final Location location =
           ((features & HAS_LOCATION) != 0) ? (Location) arguments.get(argi++) : null;
       StarlarkCallable mapEach =
@@ -408,12 +449,27 @@ public class StarlarkCustomCommandLine extends CommandLine {
       return argi;
     }
 
+    private int addToFingerprintLegacy(
+        List<Object> arguments,
+        int argi,
+        Fingerprint fingerprint,
+        StarlarkSemantics starlarkSemantics)
+        throws CommandLineExpansionException {
+      ImmutableList.Builder<String> builder = ImmutableList.builder();
+      argi = eval(arguments, argi, builder, null, starlarkSemantics);
+      for (String s : builder.build()) {
+        fingerprint.addString(s);
+      }
+      return argi;
+    }
+
     static class Builder {
       @Nullable private final Sequence<?> list;
       @Nullable private final NestedSet<?> nestedSet;
       private Location location;
       public String argName;
       private boolean expandDirectories;
+      private StarlarkCallable mapAll;
       private StarlarkCallable mapEach;
       private String formatEach;
       private String beforeEach;
@@ -445,6 +501,11 @@ public class StarlarkCustomCommandLine extends CommandLine {
 
       Builder setExpandDirectories(boolean expandDirectories) {
         this.expandDirectories = expandDirectories;
+        return this;
+      }
+
+      Builder setMapAll(StarlarkCallable mapAll) {
+        this.mapAll = mapAll;
         return this;
       }
 
@@ -882,7 +943,7 @@ public class StarlarkCustomCommandLine extends CommandLine {
     private final Artifact fileset;
     private final PathFragment execPath;
 
-    FilesetSymlinkFile(Artifact fileset, PathFragment execPath) {
+    public FilesetSymlinkFile(Artifact fileset, PathFragment execPath) {
       this.fileset = fileset;
       this.execPath = execPath;
     }
