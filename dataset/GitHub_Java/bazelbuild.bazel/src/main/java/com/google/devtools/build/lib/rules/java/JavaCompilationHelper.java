@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -72,7 +71,6 @@ public final class JavaCompilationHelper {
   private final ImmutableList<Artifact> additionalJavaBaseInputs;
   private final StrictDepsMode strictJavaDeps;
   private final String fixDepsTool;
-  private NestedSet<Artifact> localClassPathEntries = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
 
   private static final PathFragment JAVAC = PathFragment.create("_javac");
 
@@ -159,9 +157,6 @@ public final class JavaCompilationHelper {
   JavaTargetAttributes getAttributes() {
     if (builtAttributes == null) {
       builtAttributes = attributes.build();
-      if (!localClassPathEntries.isEmpty()) {
-        builtAttributes = builtAttributes.withAdditionalClassPathEntries(localClassPathEntries);
-      }
     }
     return builtAttributes;
   }
@@ -652,17 +647,6 @@ public final class JavaCompilationHelper {
     }
 
     attributes.merge(args);
-  }
-
-  /**
-   * Adds compile-time dependencies that will be included on the classpath, but which will not be
-   * visible to targets that depend on the current compilation.
-   */
-  public void addLocalClassPathEntries(NestedSet<Artifact> localClassPathEntries) {
-    checkState(
-        builtAttributes == null,
-        "addLocalClassPathEntries must be called before the first call to getAttributes()");
-    this.localClassPathEntries = localClassPathEntries;
   }
 
   private void addLibrariesToAttributesInternal(Iterable<? extends TransitiveInfoCollection> deps) {
