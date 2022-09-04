@@ -267,11 +267,7 @@ public class ActionCacheChecker {
     }
     Map<String, String> usedClientEnv = computeUsedClientEnv(action, clientEnv);
     ActionCache.Entry entry =
-        actionCache.newEntry(action.getKey(), usedClientEnv, action.discoversInputs());
-    if (entry == null) {
-      // Action cache is disabled, don't generate digests.
-      return;
-    }
+        new ActionCache.Entry(action.getKey(), usedClientEnv, action.discoversInputs());
     for (Artifact output : action.getOutputs()) {
       // Remove old records from the cache if they used different key.
       String execPath = output.getExecPathString();
@@ -390,17 +386,10 @@ public class ActionCacheChecker {
       // Compute the aggregated middleman digest.
       // Since we never validate action key for middlemen, we should not store
       // it in the cache entry and just use empty string instead.
-      entry = actionCache.newEntry("", ImmutableMap.<String, String>of(), false);
-      if (entry != null) {
-        for (Artifact input : action.getInputs()) {
-          entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));
-        }
+      entry = new ActionCache.Entry("", ImmutableMap.<String, String>of(), false);
+      for (Artifact input : action.getInputs()) {
+        entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));
       }
-    }
-
-    // Action cache is disabled, skip the digest.
-    if (entry == null) {
-      return;
     }
 
     metadataHandler.setDigestForVirtualArtifact(middleman, entry.getFileDigest());
