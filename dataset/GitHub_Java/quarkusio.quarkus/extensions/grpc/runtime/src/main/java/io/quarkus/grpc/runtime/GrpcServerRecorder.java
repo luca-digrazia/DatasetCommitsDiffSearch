@@ -41,8 +41,7 @@ import io.quarkus.grpc.runtime.devmode.GrpcServerReloader;
 import io.quarkus.grpc.runtime.health.GrpcHealthStorage;
 import io.quarkus.grpc.runtime.reflection.ReflectionService;
 import io.quarkus.grpc.runtime.supports.BlockingServerInterceptor;
-import io.quarkus.grpc.runtime.supports.CompressionInterceptor;
-import io.quarkus.grpc.runtime.supports.context.GrpcRequestContextGrpcInterceptor;
+import io.quarkus.grpc.runtime.supports.RequestScopeHandlerInterceptor;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
@@ -66,18 +65,16 @@ public class GrpcServerRecorder {
     private static final AtomicInteger grpcVerticleCount = new AtomicInteger(0);
     private Map<String, List<String>> blockingMethodsPerService = Collections.emptyMap();
 
-    private static volatile DevModeWrapper devModeWrapper;
-
     public void initializeGrpcServer(RuntimeValue<Vertx> vertxSupplier,
             GrpcConfiguration cfg,
             ShutdownContext shutdown,
-            Map<String, List<String>> blockingMethodsPerServiceImplementationClass, LaunchMode launchMode) {
+            Map<String, List<String>> blockingMethodsPerServiceImplementationClass) {
         GrpcContainer grpcContainer = Arc.container().instance(GrpcContainer.class).get();
         if (grpcContainer == null) {
             throw new IllegalStateException("gRPC not initialized, GrpcContainer not found");
         }
         Vertx vertx = vertxSupplier.getValue();
-        if (hasNoServices(grpcContainer.getServices()) && LaunchMode.current() != LaunchMode.DEVELOPMENT) {
+        if (hasNoServices(grpcContainer.getServices())) {
             throw new IllegalStateException(
                     "Unable to find beans exposing the `BindableService` interface - not starting the gRPC server");
         }
@@ -85,29 +82,29 @@ public class GrpcServerRecorder {
         this.blockingMethodsPerService = blockingMethodsPerServiceImplementationClass;
 
         GrpcServerConfiguration configuration = cfg.server;
+        final boolean devMode = ProfileManager.getLaunchMode() == LaunchMode.DEVELOPMENT;
 
-        if (launchMode == LaunchMode.DEVELOPMENT) {
+        if (devMode) {
             // start single server, not in a verticle, regardless of the configuration.instances
             // for reason unknown to me, verticles occasionally get undeployed on dev mode reload
             if (GrpcServerReloader.getServer() == null) {
-                devModeStart(grpcContainer, vertx, configuration, shutdown, launchMode);
+                devModeStart(grpcContainer, vertx, configuration, shutdown);
             } else {
-                devModeReload(grpcContainer, vertx, configuration);
+                devModeReload(grpcContainer);
             }
         } else {
-            prodStart(grpcContainer, vertx, configuration, launchMode);
+            prodStart(grpcContainer, vertx, configuration);
         }
     }
 
-    private void prodStart(GrpcContainer grpcContainer, Vertx vertx, GrpcServerConfiguration configuration,
-            LaunchMode launchMode) {
+    private void prodStart(GrpcContainer grpcContainer, Vertx vertx, GrpcServerConfiguration configuration) {
         CompletableFuture<Void> startResult = new CompletableFuture<>();
 
         vertx.deployVerticle(
                 new Supplier<Verticle>() {
                     @Override
                     public Verticle get() {
-                        return new GrpcServerVerticle(configuration, grpcContainer, launchMode);
+                        return new GrpcServerVerticle(configuration, grpcContainer);
                     }
                 },
                 new DeploymentOptions().setInstances(configuration.instances),
@@ -117,7 +114,7 @@ public class GrpcServerRecorder {
                         if (result.failed()) {
                             startResult.completeExceptionally(result.cause());
                         } else {
-                            GrpcServerRecorder.this.postStartup(grpcContainer, configuration, launchMode == LaunchMode.TEST);
+                            GrpcServerRecorder.this.postStartup(grpcContainer, configuration);
 
                             startResult.complete(null);
                         }
@@ -136,7 +133,7 @@ public class GrpcServerRecorder {
         }
     }
 
-    private void postStartup(GrpcContainer grpcContainer, GrpcServerConfiguration configuration, boolean test) {
+    private void postStartup(GrpcContainer grpcContainer, GrpcServerConfiguration configuration) {
         grpcContainer.getHealthStorage().stream().forEach(new Consumer<GrpcHealthStorage>() { //NOSONAR
             @Override
             public void accept(GrpcHealthStorage storage) {
@@ -154,16 +151,14 @@ public class GrpcServerRecorder {
             }
         });
         LOGGER.infof("gRPC Server started on %s:%d [SSL enabled: %s]",
-                configuration.host, test ? configuration.testPort : configuration.port, !configuration.plainText);
+                configuration.host, configuration.port, !configuration.plainText);
     }
 
     private void devModeStart(GrpcContainer grpcContainer, Vertx vertx, GrpcServerConfiguration configuration,
-            ShutdownContext shutdown, LaunchMode launchMode) {
+            ShutdownContext shutdown) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        devModeWrapper = new DevModeWrapper(Thread.currentThread().getContextClassLoader());
-
-        VertxServer vertxServer = buildServer(vertx, configuration, grpcContainer, launchMode)
+        VertxServer vertxServer = buildServer(vertx, configuration, grpcContainer, true)
                 .start(new Handler<AsyncResult<Void>>() { // NOSONAR
                     @Override
                     public void handle(AsyncResult<Void> ar) {
@@ -171,7 +166,7 @@ public class GrpcServerRecorder {
                             LOGGER.error("Unable to start the gRPC server", ar.cause());
                             future.completeExceptionally(ar.cause());
                         } else {
-                            postStartup(grpcContainer, configuration, false);
+                            postStartup(grpcContainer, configuration);
                             future.complete(true);
                             grpcVerticleCount.incrementAndGet();
                         }
@@ -255,18 +250,19 @@ public class GrpcServerRecorder {
         }
 
         public String getImplementationClassName() {
-            // all grpc services have a io.quarkus.grpc.runtime.supports.context.GrpcRequestContextCdiInterceptor
-            // this means Arc passes a subclass to grpc internals. That's why we take superclass here
-            return service.getClass().getSuperclass().getName();
+            return service.getClass().getName();
         }
     }
 
-    private void devModeReload(GrpcContainer grpcContainer, Vertx vertx, GrpcServerConfiguration configuration) {
-        List<GrpcServiceDefinition> services = collectServiceDefinitions(grpcContainer.getServices());
+    private static void devModeReload(GrpcContainer grpcContainer) {
+        List<GrpcServiceDefinition> svc = collectServiceDefinitions(grpcContainer.getServices());
 
         List<ServerServiceDefinition> definitions = new ArrayList<>();
         Map<String, ServerMethodDefinition<?, ?>> methods = new HashMap<>();
-        for (GrpcServiceDefinition service : services) {
+        for (GrpcServiceDefinition service : svc) {
+            for (ServerMethodDefinition<?, ?> method : service.definition.getMethods()) {
+                methods.put(method.getMethodDescriptor().getFullMethodName(), method);
+            }
             definitions.add(service.definition);
         }
 
@@ -275,20 +271,8 @@ public class GrpcServerRecorder {
         for (ServerMethodDefinition<?, ?> method : reflectionService.getMethods()) {
             methods.put(method.getMethodDescriptor().getFullMethodName(), method);
         }
-        List<ServerServiceDefinition> servicesWithInterceptors = new ArrayList<>();
-        CompressionInterceptor compressionInterceptor = prepareCompressionInterceptor(configuration);
-        for (GrpcServiceDefinition service : services) {
-            servicesWithInterceptors.add(serviceWithInterceptors(vertx, compressionInterceptor, service, true));
-        }
 
-        for (ServerServiceDefinition serviceWithInterceptors : servicesWithInterceptors) {
-            for (ServerMethodDefinition<?, ?> method : serviceWithInterceptors.getMethods()) {
-                methods.put(method.getMethodDescriptor().getFullMethodName(), method);
-            }
-        }
-        devModeWrapper = new DevModeWrapper(Thread.currentThread().getContextClassLoader());
-
-        GrpcServerReloader.reinitialize(servicesWithInterceptors, methods, grpcContainer.getSortedInterceptors());
+        GrpcServerReloader.reinitialize(definitions, methods, grpcContainer.getSortedInterceptors());
     }
 
     public static int getVerticleCount() {
@@ -296,10 +280,9 @@ public class GrpcServerRecorder {
     }
 
     private VertxServer buildServer(Vertx vertx, GrpcServerConfiguration configuration,
-            GrpcContainer grpcContainer, LaunchMode launchMode) {
+            GrpcContainer grpcContainer, boolean devMode) {
         VertxServerBuilder builder = VertxServerBuilder
-                .forAddress(vertx, configuration.host,
-                        launchMode == LaunchMode.TEST ? configuration.testPort : configuration.port);
+                .forAddress(vertx, configuration.host, configuration.port);
 
         AtomicBoolean usePlainText = new AtomicBoolean();
         builder.useSsl(new Handler<HttpServerOptions>() { // NOSONAR
@@ -335,11 +318,25 @@ public class GrpcServerRecorder {
         List<GrpcServiceDefinition> toBeRegistered = collectServiceDefinitions(grpcContainer.getServices());
         List<ServerServiceDefinition> definitions = new ArrayList<>();
 
-        CompressionInterceptor compressionInterceptor = prepareCompressionInterceptor(configuration);
+        RequestScopeHandlerInterceptor requestScopeHandlerInterceptor = new RequestScopeHandlerInterceptor();
 
         for (GrpcServiceDefinition service : toBeRegistered) {
-            builder.addService(
-                    serviceWithInterceptors(vertx, compressionInterceptor, service, launchMode == LaunchMode.DEVELOPMENT));
+            // We only register the blocking interceptor if needed by at least one method of the service.
+            if (blockingMethodsPerService.isEmpty()) {
+                // Fast track - no usage of @Blocking
+                builder.addService(ServerInterceptors.intercept(service.definition, requestScopeHandlerInterceptor));
+            } else {
+                List<String> list = blockingMethodsPerService.get(service.getImplementationClassName());
+                if (list == null) {
+                    // The service does not contain any methods annotated with @Blocking - no need for the itcp
+                    builder.addService(ServerInterceptors.intercept(service.definition, requestScopeHandlerInterceptor));
+                } else {
+                    // Order matter! Request scope must be called first (on the event loop) and so should be last in the list...
+                    builder.addService(
+                            ServerInterceptors.intercept(service.definition, new BlockingServerInterceptor(vertx, list),
+                                    requestScopeHandlerInterceptor));
+                }
+            }
             LOGGER.debugf("Registered gRPC service '%s'", service.definition.getServiceDescriptor().getName());
             definitions.add(service.definition);
         }
@@ -353,7 +350,7 @@ public class GrpcServerRecorder {
             builder.intercept(serverInterceptor);
         }
 
-        if (launchMode == LaunchMode.DEVELOPMENT) {
+        if (devMode) {
             builder.commandDecorator(new Consumer<Runnable>() {
                 @Override
                 public void accept(Runnable command) {
@@ -367,7 +364,7 @@ public class GrpcServerRecorder {
                             new Handler<AsyncResult<Boolean>>() {
                                 @Override
                                 public void handle(AsyncResult<Boolean> result) {
-                                    devModeWrapper.run(command);
+                                    command.run();
                                 }
                             });
                 }
@@ -375,55 +372,20 @@ public class GrpcServerRecorder {
         }
 
         LOGGER.debugf("Starting gRPC Server on %s:%d  [SSL enabled: %s]...",
-                configuration.host, launchMode == LaunchMode.TEST ? configuration.testPort : configuration.port,
-                !usePlainText.get());
+                configuration.host, configuration.port, !usePlainText.get());
 
         return builder.build();
-    }
-
-    /**
-     * Compression interceptor if needed, null otherwise
-     * 
-     * @param configuration gRPC server configuration
-     * @return interceptor or null
-     */
-    private CompressionInterceptor prepareCompressionInterceptor(GrpcServerConfiguration configuration) {
-        CompressionInterceptor compressionInterceptor = null;
-        if (configuration.compression.isPresent()) {
-            compressionInterceptor = new CompressionInterceptor(configuration.compression.get());
-        }
-        return compressionInterceptor;
-    }
-
-    private ServerServiceDefinition serviceWithInterceptors(Vertx vertx, CompressionInterceptor compressionInterceptor,
-            GrpcServiceDefinition service, boolean devMode) {
-        List<ServerInterceptor> interceptors = new ArrayList<>();
-        if (compressionInterceptor != null) {
-            interceptors.add(compressionInterceptor);
-        }
-        // We only register the blocking interceptor if needed by at least one method of the service.
-        if (!blockingMethodsPerService.isEmpty()) {
-            List<String> list = blockingMethodsPerService.get(service.getImplementationClassName());
-            if (list != null) {
-                interceptors.add(new BlockingServerInterceptor(vertx, list, devMode));
-            }
-        }
-        // Order matters! Request scope must be called first (on the event loop) and so should be last in the list...
-        interceptors.add(new GrpcRequestContextGrpcInterceptor());
-        return ServerInterceptors.intercept(service.definition, interceptors);
     }
 
     private class GrpcServerVerticle extends AbstractVerticle {
         private final GrpcServerConfiguration configuration;
         private final GrpcContainer grpcContainer;
-        private final LaunchMode launchMode;
 
         private VertxServer grpcServer;
 
-        GrpcServerVerticle(GrpcServerConfiguration configuration, GrpcContainer grpcContainer, LaunchMode launchMode) {
+        GrpcServerVerticle(GrpcServerConfiguration configuration, GrpcContainer grpcContainer) {
             this.configuration = configuration;
             this.grpcContainer = grpcContainer;
-            this.launchMode = launchMode;
         }
 
         @Override
@@ -433,7 +395,7 @@ public class GrpcServerRecorder {
                         "Unable to find bean exposing the `BindableService` interface - not starting the gRPC server");
                 return;
             }
-            grpcServer = buildServer(getVertx(), configuration, grpcContainer, launchMode)
+            grpcServer = buildServer(getVertx(), configuration, grpcContainer, false)
                     .start(new Handler<AsyncResult<Void>>() { // NOSONAR
                         @Override
                         public void handle(AsyncResult<Void> ar) {
@@ -462,24 +424,6 @@ public class GrpcServerRecorder {
                     }
                 }
             });
-        }
-    }
-
-    private class DevModeWrapper {
-        private final ClassLoader classLoader;
-
-        public DevModeWrapper(ClassLoader contextClassLoader) {
-            classLoader = contextClassLoader;
-        }
-
-        public void run(Runnable command) {
-            ClassLoader originalTccl = Thread.currentThread().getContextClassLoader();
-            Thread.currentThread().setContextClassLoader(classLoader);
-            try {
-                command.run();
-            } finally {
-                Thread.currentThread().setContextClassLoader(originalTccl);
-            }
         }
     }
 }
