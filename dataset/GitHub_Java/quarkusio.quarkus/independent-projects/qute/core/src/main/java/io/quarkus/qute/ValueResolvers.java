@@ -1,15 +1,11 @@
 package io.quarkus.qute;
 
-import static io.quarkus.qute.Booleans.isFalsy;
-
 import io.quarkus.qute.Results.Result;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Function;
 
 /**
  * Common value resolvers.
@@ -29,20 +25,6 @@ public final class ValueResolvers {
             @Override
             public CompletionStage<Object> resolve(EvalContext context) {
                 return CompletableFuture.completedFuture(new RawString(context.getBase().toString()));
-            }
-        };
-    }
-
-    public static ValueResolver listResolver() {
-        return new ValueResolver() {
-
-            public boolean appliesTo(EvalContext context) {
-                return ValueResolver.matchClass(context, List.class);
-            }
-
-            @Override
-            public CompletionStage<Object> resolve(EvalContext context) {
-                return listResolveAsync(context);
             }
         };
     }
@@ -84,17 +66,8 @@ public final class ValueResolvers {
         return new ValueResolver() {
 
             public boolean appliesTo(EvalContext context) {
-                if (context.getParams().size() != 1) {
-                    return false;
-                }
-                switch (context.getName()) {
-                    case "?:":
-                    case "or":
-                    case ":":
-                        return true;
-                    default:
-                        return false;
-                }
+                return context.getParams().size() == 1
+                        && ("?:".equals(context.getName()) || "or".equals(context.getName()) || ":".equals(context.getName()));
             }
 
             @Override
@@ -123,10 +96,10 @@ public final class ValueResolvers {
 
             @Override
             public CompletionStage<Object> resolve(EvalContext context) {
-                if (isFalsy(context.getBase())) {
-                    return Results.NOT_FOUND;
+                if (Boolean.TRUE.equals(context.getBase())) {
+                    return context.evaluate(context.getParams().get(0));
                 }
-                return context.evaluate(context.getParams().get(0));
+                return Results.NOT_FOUND;
             }
 
         };
@@ -177,65 +150,7 @@ public final class ValueResolvers {
             @Override
             public CompletionStage<Object> resolve(EvalContext context) {
                 Mapper mapper = (Mapper) context.getBase();
-                return mapper.getAsync(context.getName());
-            }
-
-        };
-    }
-
-    /**
-     * Performs conditional AND on the base object and the first parameter.
-     * It's a short-circuiting operation - the parameter is only evaluated if needed.
-     * 
-     * @see Booleans#isFalsy(Object)
-     */
-    public static ValueResolver logicalAndResolver() {
-        return new ValueResolver() {
-
-            public boolean appliesTo(EvalContext context) {
-                return context.getBase() != null && context.getParams().size() == 1
-                        && ("&&".equals(context.getName()));
-            }
-
-            @Override
-            public CompletionStage<Object> resolve(EvalContext context) {
-                boolean baseIsFalsy = Booleans.isFalsy(context.getBase());
-                return baseIsFalsy ? CompletableFuture.completedFuture(false)
-                        : context.evaluate(context.getParams().get(0)).thenApply(new Function<Object, Object>() {
-                            @Override
-                            public Object apply(Object booleanParam) {
-                                return !Booleans.isFalsy(booleanParam);
-                            }
-                        });
-            }
-
-        };
-    }
-
-    /**
-     * Performs conditional OR on the base object and the first parameter.
-     * It's a short-circuiting operation - the parameter is only evaluated if needed.
-     * 
-     * @see Booleans#isFalsy(Object)
-     */
-    public static ValueResolver logicalOrResolver() {
-        return new ValueResolver() {
-
-            public boolean appliesTo(EvalContext context) {
-                return context.getBase() != null && context.getParams().size() == 1
-                        && ("||".equals(context.getName()));
-            }
-
-            @Override
-            public CompletionStage<Object> resolve(EvalContext context) {
-                boolean baseIsFalsy = Booleans.isFalsy(context.getBase());
-                return !baseIsFalsy ? CompletableFuture.completedFuture(true)
-                        : context.evaluate(context.getParams().get(0)).thenApply(new Function<Object, Object>() {
-                            @Override
-                            public Object apply(Object booleanParam) {
-                                return !Booleans.isFalsy(booleanParam);
-                            }
-                        });
+                return CompletableFuture.completedFuture(mapper.get(context.getName()));
             }
 
         };
@@ -256,30 +171,6 @@ public final class ValueResolvers {
                     return context.evaluate(context.getParams().get(0)).thenCompose(e -> {
                         return CompletableFuture.completedFuture(collection.contains(e));
                     });
-                }
-            default:
-                return Results.NOT_FOUND;
-        }
-    }
-
-    private static CompletionStage<Object> listResolveAsync(EvalContext context) {
-        List<?> list = (List<?>) context.getBase();
-        switch (context.getName()) {
-            case "get":
-                if (context.getParams().size() == 1) {
-                    return context.evaluate(context.getParams().get(0))
-                            .thenApply(r -> {
-                                try {
-                                    int idx = r instanceof Integer ? (Integer) r : Integer.valueOf(r.toString());
-                                    if (idx >= list.size()) {
-                                        // Be consistent with property resolvers
-                                        return Result.NOT_FOUND;
-                                    }
-                                    return list.get(idx);
-                                } catch (NumberFormatException e) {
-                                    return Result.NOT_FOUND;
-                                }
-                            });
                 }
             default:
                 return Results.NOT_FOUND;
