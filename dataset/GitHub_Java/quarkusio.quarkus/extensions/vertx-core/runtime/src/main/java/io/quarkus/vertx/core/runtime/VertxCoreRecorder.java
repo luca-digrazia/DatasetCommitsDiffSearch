@@ -246,7 +246,8 @@ public class VertxCoreRecorder {
                 }
             }
 
-            File cache = getRandomDirectory(tmp);
+            long random = UUID.randomUUID().getMostSignificantBits();
+            File cache = new File(tmp, Long.toString(random));
             LOGGER.debugf("Vert.x Cache configured to: %s", cache.getAbsolutePath());
             fileCacheDir = cache.getAbsolutePath();
             if (shutdown != null) {
@@ -288,16 +289,6 @@ public class VertxCoreRecorder {
         options.setPreferNativeTransport(conf.preferNativeTransport);
 
         return options;
-    }
-
-    private static File getRandomDirectory(File tmp) {
-        long random = Math.abs(UUID.randomUUID().getMostSignificantBits());
-        File cache = new File(tmp, Long.toString(random));
-        if (cache.isDirectory()) {
-            // Do not reuse an existing directory.
-            return getRandomDirectory(tmp);
-        }
-        return cache;
     }
 
     private static int calculateDefaultIOThreads() {
