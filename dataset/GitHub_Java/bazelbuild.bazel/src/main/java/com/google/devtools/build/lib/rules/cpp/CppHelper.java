@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
@@ -738,7 +739,7 @@ public class CppHelper {
         featureConfiguration.getToolRequirementsForAction(CppActionNames.STRIP)) {
       executionInfoBuilder.put(executionRequirement, "");
     }
-    SpawnAction stripAction =
+    Action[] stripAction =
         new SpawnAction.Builder()
             .addInput(input)
             .addTransitiveInputs(toolchain.getStripFiles())
@@ -1011,14 +1012,15 @@ public class CppHelper {
         && cppConfiguration.getUseInterfaceSharedLibraries();
   }
 
-  public static CcNativeLibraryInfo collectNativeCcLibraries(
+  public static CcNativeLibraryProvider collectNativeCcLibraries(
       List<? extends TransitiveInfoCollection> deps, List<LibraryToLink> libraries) {
     NestedSetBuilder<LibraryToLink> result = NestedSetBuilder.linkOrder();
     result.addAll(libraries);
-    for (CcInfo dep : AnalysisUtils.getProviders(deps, CcInfo.PROVIDER)) {
-      result.addTransitive(dep.getCcNativeLibraryInfo().getTransitiveCcNativeLibraries());
+    for (CcNativeLibraryProvider dep :
+        AnalysisUtils.getProviders(deps, CcNativeLibraryProvider.PROVIDER)) {
+      result.addTransitive(dep.getTransitiveCcNativeLibraries());
     }
-    return new CcNativeLibraryInfo(result.build());
+    return new CcNativeLibraryProvider(result.build());
   }
 
   static boolean useToolchainResolution(RuleContext ruleContext) {
