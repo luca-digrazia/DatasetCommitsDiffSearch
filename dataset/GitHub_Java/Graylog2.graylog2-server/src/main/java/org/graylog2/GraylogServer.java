@@ -60,8 +60,6 @@ public class GraylogServer implements Runnable {
     public static final String GRAYLOG2_VERSION = "0.9.7-dev";
 
     public static final String MASTER_COUNTER_NAME = "master";
-    
-    private int lastReceivedMessageTimestamp = 0;
 
     private EmbeddedElasticSearchClient indexer;
 
@@ -237,14 +235,6 @@ public class GraylogServer implements Runnable {
 
     public HostCounterCache getHostCounterCache() {
         return this.hostCounterCache;
-    }
-    
-    public int getLastReceivedMessageTimestamp() {
-        return this.lastReceivedMessageTimestamp;
-    }
-    
-    public void setLastReceivedMessageTimestamp(int t) {
-        this.lastReceivedMessageTimestamp = t;
     }
 
 }
