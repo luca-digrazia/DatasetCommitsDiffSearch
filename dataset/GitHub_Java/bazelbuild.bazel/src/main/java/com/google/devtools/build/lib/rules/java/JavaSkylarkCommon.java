@@ -182,33 +182,6 @@ public class JavaSkylarkCommon {
         doc = "A list of dependencies. Optional."
       ),
       @Param(
-          name = "exports",
-          positional = false,
-          named = true,
-          type = SkylarkList.class,
-          generic1 = JavaProvider.class,
-          defaultValue = "[]",
-          doc = "A list of exports. Optional."
-      ),
-      @Param(
-          name = "plugins",
-          positional = false,
-          named = true,
-          type = SkylarkList.class,
-          generic1 = JavaProvider.class,
-          defaultValue = "[]",
-          doc = "A list of plugins. Optional."
-      ),
-      @Param(
-          name = "exported_plugins",
-          positional = false,
-          named = true,
-          type = SkylarkList.class,
-          generic1 = JavaProvider.class,
-          defaultValue = "[]",
-          doc = "A list of exported plugins. Optional."
-      ),
-      @Param(
         name = "strict_deps",
         defaultValue = "'ERROR'",
         positional = false,
@@ -258,9 +231,6 @@ public class JavaSkylarkCommon {
       Artifact outputJar,
       SkylarkList<String> javacOpts,
       SkylarkList<JavaProvider> deps,
-      SkylarkList<JavaProvider> exports,
-      SkylarkList<JavaProvider> plugins,
-      SkylarkList<JavaProvider> exportedPlugins,
       String strictDepsMode,
       ConfiguredTarget javaToolchain,
       ConfiguredTarget hostJavabase,
@@ -276,18 +246,11 @@ public class JavaSkylarkCommon {
             .setSourcePathEntries(sourcepathEntries)
             .setJavacOpts(javacOpts);
 
-    List<JavaCompilationArgsProvider> depsCompilationArgsProviders =
+    List<JavaCompilationArgsProvider> compilationArgsProviders =
         JavaProvider.fetchProvidersFromList(deps, JavaCompilationArgsProvider.class);
-    List<JavaCompilationArgsProvider> exportsCompilationArgsProviders =
-        JavaProvider.fetchProvidersFromList(exports, JavaCompilationArgsProvider.class);
-    helper.addAllDeps(depsCompilationArgsProviders);
-    helper.addAllExports(exportsCompilationArgsProviders);
+    helper.addAllDeps(compilationArgsProviders);
     helper.setCompilationStrictDepsMode(getStrictDepsMode(strictDepsMode));
     MiddlemanProvider hostJavabaseProvider = hostJavabase.getProvider(MiddlemanProvider.class);
-
-    helper.addAllPlugins(
-        JavaProvider.fetchProvidersFromList(plugins, JavaPluginInfoProvider.class));
-    helper.addAllPlugins(JavaProvider.fetchProvidersFromList(deps, JavaPluginInfoProvider.class));
 
     NestedSet<Artifact> hostJavabaseArtifacts =
         hostJavabaseProvider == null
@@ -309,21 +272,11 @@ public class JavaSkylarkCommon {
         helper.buildCompilationArgsProvider(artifacts, true);
     Runfiles runfiles = new Runfiles.Builder(skylarkRuleContext.getWorkspaceName()).addArtifacts(
         javaCompilationArgsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()).build();
-
-    JavaPluginInfoProvider transitivePluginsProvider =
-        JavaPluginInfoProvider.merge(Iterables.concat(
-          JavaProvider.getProvidersFromListOfJavaProviders(
-              JavaPluginInfoProvider.class, exportedPlugins),
-          JavaProvider.getProvidersFromListOfJavaProviders(
-              JavaPluginInfoProvider.class, exports)
-        ));
-
     return JavaProvider.Builder.create()
              .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
              .addProvider(JavaSourceJarsProvider.class, createJavaSourceJarsProvider(sourceJars))
              .addProvider(JavaRuleOutputJarsProvider.class, javaRuleOutputJarsProvider)
              .addProvider(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
-             .addProvider(JavaPluginInfoProvider.class, transitivePluginsProvider)
              .build();
   }
 
