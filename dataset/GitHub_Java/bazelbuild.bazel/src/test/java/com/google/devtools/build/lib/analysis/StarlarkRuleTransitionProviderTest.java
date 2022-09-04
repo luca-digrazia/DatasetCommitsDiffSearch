@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.EmptyT
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -46,10 +46,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
   /**
    * A fragment containing flags that exhibit different flag behaviors for easy testing purposes.
    */
-  @RequiresOptions(options = {DummyTestOptions.class})
-  private static class DummyTestFragment extends Fragment {
-    public DummyTestFragment(BuildOptions buildOptions) {}
-  }
+  private static class DummyTestFragment extends Fragment {}
 
   /** Flags that exhibit an variety of flag behaviors. */
   public static class DummyTestOptions extends FragmentOptions {
@@ -92,12 +89,17 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
     @Override
     public Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException {
-      return new DummyTestFragment(buildOptions);
+      return new DummyTestFragment();
     }
 
     @Override
     public Class<? extends Fragment> creates() {
       return DummyTestFragment.class;
+    }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.of(DummyTestOptions.class);
     }
   }
 
