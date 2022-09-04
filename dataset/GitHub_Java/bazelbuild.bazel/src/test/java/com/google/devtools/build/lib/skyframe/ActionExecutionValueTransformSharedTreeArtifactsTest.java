@@ -228,7 +228,8 @@ public class ActionExecutionValueTransformSharedTreeArtifactsTest {
           ArchivedTreeArtifact.create(treeArtifact, DERIVED_PATH_PREFIX);
       createFile(archivedArtifact.getPath());
       builder.setArchivedRepresentation(
-          archivedArtifact, FileArtifactValue.createForTesting(archivedArtifact));
+          ArchivedRepresentation.create(
+              archivedArtifact, FileArtifactValue.createForTesting(archivedArtifact)));
     }
 
     return builder.build();
