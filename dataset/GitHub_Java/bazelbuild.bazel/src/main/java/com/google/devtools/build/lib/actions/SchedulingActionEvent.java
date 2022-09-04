@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.actions;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ProgressLike;
 
 /**
@@ -26,14 +28,21 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler.ProgressLike;
 public class SchedulingActionEvent implements ProgressLike {
 
   private final ActionExecutionMetadata action;
+  private final String strategy;
 
   /** Constructs a new event. */
-  public SchedulingActionEvent(ActionExecutionMetadata action) {
+  public SchedulingActionEvent(ActionExecutionMetadata action, String strategy) {
     this.action = action;
+    this.strategy = checkNotNull(strategy, "Strategy names are not optional");
   }
 
   /** Gets the metadata associated with the action being scheduled. */
   public ActionExecutionMetadata getActionMetadata() {
     return action;
+  }
+
+  /** Gets the name of the strategy on which the action is scheduling. */
+  public String getStrategy() {
+    return strategy;
   }
 }
