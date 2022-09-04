@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.AstParseResult;
+import com.google.devtools.build.lib.packages.AstAfterPreprocessing;
 import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
@@ -44,6 +44,8 @@ import com.google.devtools.build.lib.skyframe.ASTFileLookupFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.ContainingPackageLookupFunction;
+import com.google.devtools.build.lib.skyframe.DirectoryListingFunction;
+import com.google.devtools.build.lib.skyframe.DirectoryListingStateFunction;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.ExternalPackageFunction;
@@ -51,9 +53,10 @@ import com.google.devtools.build.lib.skyframe.FileFunction;
 import com.google.devtools.build.lib.skyframe.FileStateFunction;
 import com.google.devtools.build.lib.skyframe.FileSymlinkCycleUniquenessFunction;
 import com.google.devtools.build.lib.skyframe.FileSymlinkInfiniteExpansionUniquenessFunction;
+import com.google.devtools.build.lib.skyframe.GlobFunction;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
-import com.google.devtools.build.lib.skyframe.PackageFunction.IncrementalityIntent;
+import com.google.devtools.build.lib.skyframe.PackageFunction.CacheEntryWithGlobDeps;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PackageValue;
@@ -338,9 +341,10 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   protected final ImmutableMap<SkyFunctionName, SkyFunction> makeFreshSkyFunctions() {
     AtomicReference<TimestampGranularityMonitor> tsgm =
         new AtomicReference<>(new TimestampGranularityMonitor(BlazeClock.instance()));
-    Cache<PackageIdentifier, PackageFunction.BuilderAndGlobDeps> packageFunctionCache =
+    Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>> packageFunctionCache =
         CacheBuilder.newBuilder().build();
-    Cache<PackageIdentifier, AstParseResult> astCache = CacheBuilder.newBuilder().build();
+    Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache =
+        CacheBuilder.newBuilder().build();
     AtomicReference<PerBuildSyscallCache> syscallCacheRef = new AtomicReference<>(
         PerBuildSyscallCache.newBuilder().setConcurrencyLevel(legacyGlobbingThreads).build());
     PackageFactory pkgFactory =
@@ -366,11 +370,15 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     builder
         .put(SkyFunctions.PRECOMPUTED, new PrecomputedFunction())
         .put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper))
+        .put(
+            SkyFunctions.DIRECTORY_LISTING_STATE,
+            new DirectoryListingStateFunction(externalFilesHelper))
         .put(SkyFunctions.FILE_SYMLINK_CYCLE_UNIQUENESS, new FileSymlinkCycleUniquenessFunction())
         .put(
             SkyFunctions.FILE_SYMLINK_INFINITE_EXPANSION_UNIQUENESS,
             new FileSymlinkInfiniteExpansionUniquenessFunction())
         .put(SkyFunctions.FILE, new FileFunction(pkgLocatorRef))
+        .put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction())
         .put(
             SkyFunctions.PACKAGE_LOOKUP,
             new PackageLookupFunction(
@@ -392,6 +400,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
             SkyFunctions.WORKSPACE_FILE,
             new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories))
         .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
+        .put(SkyFunctions.GLOB, new GlobFunction(/*alwaysUseDirListing=*/ false))
         .put(
             SkyFunctions.PACKAGE,
             new PackageFunction(
@@ -403,9 +412,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
                 /*numPackagesLoaded=*/ new AtomicInteger(0),
                 /*skylarkImportLookupFunctionForInlining=*/ null,
                 /*packageProgress=*/ null,
-                getActionOnIOExceptionReadingBuildFile(),
-                // Tell PackageFunction to optimize for our use-case of no incrementality.
-                IncrementalityIntent.NON_INCREMENTAL))
+                getActionOnIOExceptionReadingBuildFile()))
         .putAll(extraSkyFunctions);
     return builder.build();
   }
