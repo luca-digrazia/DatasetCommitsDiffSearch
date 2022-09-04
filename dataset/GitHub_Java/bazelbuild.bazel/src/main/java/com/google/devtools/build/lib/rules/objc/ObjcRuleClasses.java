@@ -57,6 +57,7 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeCon
 import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap.UmbrellaHeaderStrategy;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
@@ -523,7 +524,8 @@ public class ObjcRuleClasses {
           .add(
               attr(CcToolchain.CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME, LABEL)
                   .value(CppRuleClasses.ccToolchainTypeAttribute(env)))
-          .addRequiredToolchains(ImmutableList.of(CppRuleClasses.ccToolchainTypeAttribute(env)))
+          .addRequiredToolchains(
+              ImmutableList.of(CppHelper.getCcToolchainType(env.getToolsRepository())))
           .build();
     }
 
