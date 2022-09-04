@@ -1,14 +1,15 @@
 package io.quarkus.liquibase;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
+import static io.quarkus.liquibase.runtime.graal.LiquibaseServiceLoader.serviceResourceFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -61,10 +62,8 @@ class LiquibaseProcessor {
         return new CapabilityBuildItem(Capabilities.LIQUIBASE);
     }
 
-    @BuildStep(onlyIf = NativeBuild.class)
-    @Record(STATIC_INIT)
+    @BuildStep(onlyIf = NativeBuild.class, loadsApplicationClasses = true)
     void nativeImageConfiguration(
-            LiquibaseRecorder recorder,
             List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
             BuildProducer<ReflectiveClassBuildItem> reflective,
             BuildProducer<NativeImageResourceBuildItem> resource,
@@ -97,8 +96,6 @@ class LiquibaseProcessor {
                 liquibase.sql.visitor.SqlVisitor.class);
 
         // load the liquibase services
-        Map<String, List<String>> serviceClassesImplementationRegistry = new HashMap<>();
-
         Stream.of(liquibase.diff.compare.DatabaseObjectComparator.class,
                 liquibase.parser.NamespaceDetails.class,
                 liquibase.precondition.Precondition.class,
@@ -111,11 +108,9 @@ class LiquibaseProcessor {
                 liquibase.executor.Executor.class,
                 liquibase.lockservice.LockService.class,
                 liquibase.sqlgenerator.SqlGenerator.class)
-                .forEach(t -> addService(reflective, t, true, serviceClassesImplementationRegistry));
+                .forEach(t -> addService(reflective, generatedResource, resource, t, true));
 
-        addService(reflective, liquibase.license.LicenseService.class, false, serviceClassesImplementationRegistry);
-
-        recorder.setServicesImplementations(serviceClassesImplementationRegistry);
+        addService(reflective, generatedResource, resource, liquibase.license.LicenseService.class, false);
 
         Collection<String> dataSourceNames = jdbcDataSourceBuildItems.stream()
                 .map(i -> i.getName())
@@ -140,7 +135,7 @@ class LiquibaseProcessor {
     }
 
     @Record(STATIC_INIT)
-    @BuildStep
+    @BuildStep(loadsApplicationClasses = true)
     void build(
             LiquibaseRecorder recorder,
             List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems,
@@ -184,26 +179,28 @@ class LiquibaseProcessor {
     /**
      * Search for all implementation of the interface {@code className}.
      * <p>
-     * Each implementation is added to the reflection configuration and recorded
-     * in a map which used to load the implementations of the service in native image.
+     * The service interface is added to the reflection configuration.
+     * Each implementation is added to the reflection configuration and added to a text file
+     * which contains all the implementation classes.
+     * This text file is added to the native resources and is used to load the implementations
+     * of the service.
      */
-    private void addService(BuildProducer<ReflectiveClassBuildItem> reflective, Class<?> className, boolean methods,
-            Map<String, List<String>> serviceClassesImplementationRegistry) {
+    private void addService(BuildProducer<ReflectiveClassBuildItem> reflective,
+            BuildProducer<GeneratedResourceBuildItem> generatedResourceProducer,
+            BuildProducer<NativeImageResourceBuildItem> resourceProducer,
+            Class<?> className, boolean methods) {
 
-        Class<?>[] classImplementations = ServiceLocator.getInstance().findClasses(className);
-
-        if (classImplementations != null && classImplementations.length > 0) {
-            reflective.produce(new ReflectiveClassBuildItem(true, methods, false, classImplementations));
-            List<String> serviceImplementations = new ArrayList<>();
-
-            for (Class<?> classImpl : classImplementations) {
-                serviceImplementations.add(classImpl.getName());
-            }
-
-            serviceClassesImplementationRegistry.put(className.getName(), serviceImplementations);
+        Class<?>[] impl = ServiceLocator.getInstance().findClasses(className);
+        if (impl != null && impl.length > 0) {
+            reflective.produce(new ReflectiveClassBuildItem(true, methods, false, impl));
+            String resourcesList = Arrays.stream(impl)
+                    .map(Class::getName)
+                    .collect(Collectors.joining("\n", "", "\n"));
+            String resourceName = serviceResourceFile(className);
+            generatedResourceProducer.produce(
+                    new GeneratedResourceBuildItem(resourceName, resourcesList.getBytes(StandardCharsets.UTF_8)));
+            resourceProducer.produce(new NativeImageResourceBuildItem(resourceName));
         }
-
-        reflective.produce(new ReflectiveClassBuildItem(false, false, false, className.getName()));
         reflective.produce(new ReflectiveClassBuildItem(false, false, false, className.getName()));
     }
 
