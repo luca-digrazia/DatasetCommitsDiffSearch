@@ -155,24 +155,19 @@ public class RoboActivityBodyInstruction extends AbstractInstruction {
 				"roboguice.activity.event.OnActivityResultEvent", //
 				"roboguice.activity.event.OnContentViewAvailableEvent", //
 				"android.view.ViewGroup.LayoutParams", //
+				"com.google.inject.Inject", //
 				"android.view.View" //
-		);
-		
-		if (listenerClasses.size() > 0) {
-			addImports("com.google.inject.Inject");
-		}
+				);
 	}
 
 	@Override
 	public String generate() {
 
 		StringBuilder sb = new StringBuilder();
-		if (listenerClasses.size() > 0) {
-			int i = 1;
-			for (String listenerClass : listenerClasses) {
-				sb.append(String.format(LISTENER, listenerClass, i));
-				i++;
-			}
+		int i = 1;
+		for (String listenerClass : listenerClasses) {
+			sb.append(String.format(LISTENER, listenerClass, i));
+			i++;
 		}
 		sb.append(CODE);
 
