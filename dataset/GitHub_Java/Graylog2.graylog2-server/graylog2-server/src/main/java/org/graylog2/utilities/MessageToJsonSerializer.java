@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -141,9 +142,8 @@ public class MessageToJsonSerializer {
     }
 
     @Inject
-    public MessageToJsonSerializer(final ObjectMapper globalMapper, final StreamService streamService, final InputService inputService) {
-        // Make sure to copy the mapper so we can customize it later without affecting the injected one.
-        this.mapper = globalMapper.copy();
+    public MessageToJsonSerializer(final StreamService streamService, final InputService inputService) {
+        this.mapper = new ObjectMapper();
         this.streamService = streamService;
         this.inputService = inputService;
         this.streamCache = CacheBuilder.newBuilder()
@@ -179,7 +179,9 @@ public class MessageToJsonSerializer {
                 addSerializer(new NodeIdSerializer());
             }
         };
-        this.mapper.registerModule(simpleModule);
+        mapper.registerModule(simpleModule);
+        // Ensure proper timestamp serialization.
+        mapper.registerModule(new JodaModule());
     }
 
     public byte[] serializeToBytes(Message message) throws JsonProcessingException {
