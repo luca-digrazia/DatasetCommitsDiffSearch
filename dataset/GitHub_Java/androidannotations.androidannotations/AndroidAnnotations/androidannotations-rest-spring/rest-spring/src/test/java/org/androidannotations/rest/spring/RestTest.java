@@ -155,12 +155,4 @@ public class RestTest extends AAProcessorTestHelper {
 		CompileResult result = compileFiles(ClientWithAllInterfaces.class);
 		assertCompilationSuccessful(result);
 	}
-
-	@Test
-	public void patchWithoutSpring2DoesNotCompile() throws IOException {
-		CompileResult result = compileFiles(ClientWithPatch.class);
-
-		assertCompilationErrorOn(ClientWithPatch.class, "@Patch(\"/\")", result);
-		assertCompilationErrorCount(1, result);
-	}
 }
