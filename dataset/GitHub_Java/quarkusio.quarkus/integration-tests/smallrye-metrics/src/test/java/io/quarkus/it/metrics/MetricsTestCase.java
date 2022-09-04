@@ -96,13 +96,6 @@ public class MetricsTestCase {
 
     @Test
     public void testScopes() {
-        RestAssured.when().get("/q/metrics/base").then().statusCode(200);
-        RestAssured.when().get("/q/metrics/vendor").then().statusCode(200);
-        RestAssured.when().get("/q/metrics/application").then().statusCode(200);
-    }
-
-    @Test
-    public void testScopesRedirect() {
         RestAssured.when().get("/metrics/base").then().statusCode(200);
         RestAssured.when().get("/metrics/vendor").then().statusCode(200);
         RestAssured.when().get("/metrics/application").then().statusCode(200);
@@ -122,15 +115,15 @@ public class MetricsTestCase {
 
     @Test
     public void testInvalidScopes() {
-        RestAssured.when().get("/q/metrics/foo").then().statusCode(404)
+        RestAssured.when().get("/metrics/foo").then().statusCode(404)
                 .body(containsString("Scope foo not found"));
-        RestAssured.when().get("/q/metrics/vendor/foo").then().statusCode(404)
+        RestAssured.when().get("/metrics/vendor/foo").then().statusCode(404)
                 .body(containsString("Metric vendor/foo not found"));
     }
 
     @Test
     public void testBaseMetrics() {
-        RestAssured.when().get("/q/metrics/base").then().statusCode(200)
+        RestAssured.when().get("/metrics/base").then().statusCode(200)
                 // the spaces at the end are there on purpose to make sure the metrics are named exactly this way
                 .body(containsString("base_classloader_loadedClasses_total "))
                 .body(containsString("base_cpu_systemLoadAverage "))
@@ -148,7 +141,7 @@ public class MetricsTestCase {
 
     @Test
     public void testVendorMetrics() {
-        RestAssured.when().get("/q/metrics/vendor").then().statusCode(200)
+        RestAssured.when().get("/metrics/vendor").then().statusCode(200)
                 // the spaces at the end are there on purpose to make sure the metrics are named exactly this way
                 .body(containsString("vendor_memory_committedNonHeap_bytes "))
                 .body(containsString("vendor_memory_usedNonHeap_bytes "))
@@ -171,7 +164,7 @@ public class MetricsTestCase {
      */
     @Test
     public void testNoMetricsFromSmallRyeInternalClasses() {
-        RestAssured.when().get("/q/metrics/application").then()
+        RestAssured.when().get("/metrics/application").then()
                 .body(not(containsString("io_smallrye_metrics")));
     }
 
@@ -193,12 +186,12 @@ public class MetricsTestCase {
     }
 
     private void assertMetricExactValue(String name, String val) {
-        RestAssured.when().get("/q/metrics").then()
+        RestAssured.when().get("/metrics").then()
                 .body(containsString(name + " " + val));
     }
 
     private void assertMetricExists(String name) {
-        RestAssured.when().get("/q/metrics").then()
+        RestAssured.when().get("/metrics").then()
                 .body(containsString(name));
     }
 
