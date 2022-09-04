@@ -191,8 +191,10 @@ public class ResourceProcessorBusyBox {
     Options options = optionsParser.getOptions(Options.class);
     try {
       options.tool.call(optionsParser.getResidue().toArray(new String[0]));
-    } catch (MergingException | IOException | Aapt2Exception e) {
+    } catch (MergingException | IOException e) {
       logger.severe(e.getMessage());
+      logSuppressedAndExit(e);
+    } catch (Aapt2Exception e) {
       logSuppressedAndExit(e);
     }
   }
