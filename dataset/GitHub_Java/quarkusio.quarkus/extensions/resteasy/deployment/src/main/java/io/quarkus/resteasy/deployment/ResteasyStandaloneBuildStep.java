@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.jar.JarEntry;
+import java.util.function.Consumer;
 
 import org.jboss.logging.Logger;
 
@@ -89,8 +90,6 @@ public class ResteasyStandaloneBuildStep {
                             if (!file.startsWith("/")) {
                                 file = "/" + file;
                             }
-                            // Windows has a backslash
-                            file = file.replace('\\', '/');
                             knownPaths.add(file);
                         }
                     }
@@ -138,8 +137,6 @@ public class ResteasyStandaloneBuildStep {
                                 if (!file.startsWith("/")) {
                                     file = "/" + file;
                                 }
-                                // Windows has a backslash
-                                file = file.replace('\\', '/');
                                 knownPaths.add(file);
                             }
                         }
