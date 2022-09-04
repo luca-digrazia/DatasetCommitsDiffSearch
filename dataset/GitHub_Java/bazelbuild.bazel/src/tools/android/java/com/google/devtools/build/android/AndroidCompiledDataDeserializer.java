@@ -32,7 +32,6 @@ import com.android.aapt.Resources.ConfigValue;
 import com.android.aapt.Resources.Package;
 import com.android.aapt.Resources.ResourceTable;
 import com.android.aapt.Resources.Value;
-import com.android.aapt.Resources.XmlNode;
 import com.android.ide.common.resources.configuration.CountryCodeQualifier;
 import com.android.ide.common.resources.configuration.DensityQualifier;
 import com.android.ide.common.resources.configuration.FolderConfiguration;
@@ -74,8 +73,6 @@ import com.google.auto.value.AutoValue;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.LittleEndianDataInputStream;
 import com.google.devtools.build.android.aapt2.CompiledResources;
@@ -108,7 +105,6 @@ import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
-import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /** Deserializes {@link DataKey}, {@link DataValue} entries from compiled resource files. */
@@ -125,10 +121,6 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
   private static final int AAPT_CONTAINER_VERSION = 1;
   private static final int AAPT_CONTAINER_ENTRY_RES_TABLE = 0;
   private static final int AAPT_CONTAINER_ENTRY_RES_FILE = 1;
-
-  // aapt2 insists on aligning things to 4-byte boundaries in *.flat files, though there's no actual
-  // performance or maintainability benefit.
-  private static final int AAPT_FLAT_FILE_ALIGNMENT = 4;
 
   private static final ImmutableMap<Configuration.LayoutDirection, LayoutDirection>
       LAYOUT_DIRECTION_MAP =
@@ -242,15 +234,11 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
           .put(640, Density.XXXHIGH)
           .build();
 
-  private final boolean includeFileContentsForValidation;
-
-  public static AndroidCompiledDataDeserializer create(boolean includeFileContentsForValidation) {
-    return new AndroidCompiledDataDeserializer(includeFileContentsForValidation);
+  public static AndroidCompiledDataDeserializer create() {
+    return new AndroidCompiledDataDeserializer();
   }
 
-  private AndroidCompiledDataDeserializer(boolean includeFileContentsForValidation) {
-    this.includeFileContentsForValidation = includeFileContentsForValidation;
-  }
+  private AndroidCompiledDataDeserializer() {}
 
   private static void consumeResourceTable(
       DependencyInfo dependencyInfo, KeyValueConsumers consumers, ResourceTable resourceTable)
@@ -287,11 +275,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
               // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
               DataResource dataResource =
                   resourceValue.getItem().hasFile()
-                      ? DataValueFile.of(
-                          Visibility.UNKNOWN,
-                          dataSource,
-                          /*fingerprint=*/ null,
-                          /*rootXmlNode=*/ null)
+                      ? DataValueFile.of(Visibility.UNKNOWN, dataSource)
                       : DataResourceXml.from(
                           resourceValue,
                           Visibility.UNKNOWN,
@@ -516,11 +500,8 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
    * Forwards compiled resource data files to consumers, extracting any embedded IDs along the way.
    */
   private static void consumeCompiledFile(
-      DependencyInfo dependencyInfo,
-      KeyValueConsumers consumers,
-      CompiledFileWithData compiledFileWithData)
+      DependencyInfo dependencyInfo, KeyValueConsumers consumers, CompiledFile compiledFile)
       throws InvalidProtocolBufferException {
-    CompiledFile compiledFile = compiledFileWithData.compiledFile();
     Path sourcePath = Paths.get(compiledFile.getSourcePath());
     DataSource dataSource = DataSource.of(dependencyInfo, sourcePath);
     ResourceName resourceName = ResourceName.parse(compiledFile.getResourceName());
@@ -532,13 +513,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
             resourceName.entry());
 
     // TODO(b/26297204): use visibility from ResourceTable instead of UNKNOWN
-    consumers.overwritingConsumer.accept(
-        fqn,
-        DataValueFile.of(
-            Visibility.UNKNOWN,
-            dataSource,
-            compiledFileWithData.fingerprint(),
-            compiledFileWithData.rootXmlNode()));
+    consumers.overwritingConsumer.accept(fqn, DataValueFile.of(Visibility.UNKNOWN, dataSource));
 
     for (CompiledFile.Symbol exportedSymbol : compiledFile.getExportedSymbolList()) {
       if (exportedSymbol.getResourceName().startsWith("android:")) {
@@ -638,32 +613,17 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     consumeResourceTable(dependencyInfo, consumers, resourceTable);
   }
 
-  public Map<DataKey, DataResource> read(DependencyInfo dependencyInfo, Path inPath) {
-    Map<DataKey, DataResource> resources = new LinkedHashMap<>();
-    read(
-        dependencyInfo,
-        inPath,
-        KeyValueConsumers.of(
-            resources::put,
-            resources::put,
-            (key, value) -> {
-              throw new IllegalStateException(String.format("Unexpected asset in %s", inPath));
-            }));
-    return resources;
-  }
-
   @Override
   public void read(DependencyInfo dependencyInfo, Path inPath, KeyValueConsumers consumers) {
     Stopwatch timer = Stopwatch.createStarted();
 
     try (ZipFile zipFile = new ZipFile(inPath.toFile())) {
-      ResourceContainer resourceContainer =
-          readResourceContainer(zipFile, includeFileContentsForValidation);
+      ResourceContainer resourceContainer = readResourceContainer(zipFile);
 
       for (ResourceTable resourceTable : resourceContainer.resourceTables()) {
         consumeResourceTable(dependencyInfo, consumers, resourceTable);
       }
-      for (CompiledFileWithData compiledFile : resourceContainer.compiledFiles()) {
+      for (CompiledFile compiledFile : resourceContainer.compiledFiles()) {
         consumeCompiledFile(dependencyInfo, consumers, compiledFile);
       }
 
@@ -692,10 +652,9 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     }
   }
 
-  private static ResourceContainer readResourceContainer(
-      ZipFile zipFile, boolean includeFileContentsForValidation) throws IOException {
+  private static ResourceContainer readResourceContainer(ZipFile zipFile) throws IOException {
     List<ResourceTable> resourceTables = new ArrayList<>();
-    List<CompiledFileWithData> compiledFiles = new ArrayList<>();
+    List<CompiledFile> compiledFiles = new ArrayList<>();
 
     Enumeration<? extends ZipEntry> resourceFiles = zipFile.entries();
     while (resourceFiles.hasMoreElements()) {
@@ -742,30 +701,14 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
             // https://android-review.googlesource.com/c/platform/frameworks/base/+/1161789
             ByteStreams.skipFully(dataInputStream, 8);
             int headerSize = dataInputStream.readInt();
+            @SuppressWarnings("unused")
             long payloadSize = dataInputStream.readLong();
             byte[] headerBytes = readBytesAndSkipPadding(dataInputStream, headerSize);
+            // TODO(b/26297204): verify that XML payloads reference accessible resources
+            // byte[] payloadBytes = readBytesAndSkipPadding(dataInputStream, payloadSize);
 
-            CompiledFile compiledFile =
-                CompiledFile.parseFrom(headerBytes, ExtensionRegistry.getEmptyRegistry());
-
-            HashCode fingerprint;
-            XmlNode rootXmlNode;
-            if (includeFileContentsForValidation) {
-              byte[] payloadBytes = readBytesAndSkipPadding(dataInputStream, (int) payloadSize);
-              fingerprint = Hashing.goodFastHash(/*minimumBits=*/ 64).hashBytes(payloadBytes);
-              rootXmlNode =
-                  compiledFile.getType() == Resources.FileReference.Type.PROTO_XML
-                      ? XmlNode.parseFrom(payloadBytes, ExtensionRegistry.getEmptyRegistry())
-                      : null;
-            } else {
-              ByteStreams.skipFully(
-                  dataInputStream,
-                  ((payloadSize + 1) / AAPT_FLAT_FILE_ALIGNMENT) * AAPT_FLAT_FILE_ALIGNMENT);
-              fingerprint = null;
-              rootXmlNode = null;
-            }
-
-            compiledFiles.add(CompiledFileWithData.create(compiledFile, fingerprint, rootXmlNode));
+            compiledFiles.add(
+                CompiledFile.parseFrom(headerBytes, ExtensionRegistry.getEmptyRegistry()));
           }
 
           break; // TODO(b/146528588): remove this line
@@ -780,9 +723,9 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     byte[] result = new byte[size];
     input.readFully(result);
 
-    long overage = size % AAPT_FLAT_FILE_ALIGNMENT;
+    long overage = size % 4;
     if (overage != 0) {
-      ByteStreams.skipFully(input, AAPT_FLAT_FILE_ALIGNMENT - overage);
+      ByteStreams.skipFully(input, 4 - overage);
     }
     return result;
   }
@@ -845,29 +788,13 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
   abstract static class ResourceContainer {
     abstract ImmutableList<ResourceTable> resourceTables();
 
-    abstract ImmutableList<CompiledFileWithData> compiledFiles();
+    // TODO(b/139418052): include payload bytes (or hashes of) in this
+    abstract ImmutableList<CompiledFile> compiledFiles();
 
     static ResourceContainer create(
-        List<ResourceTable> resourceTables, List<CompiledFileWithData> compiledFiles) {
+        List<ResourceTable> resourceTables, List<CompiledFile> compiledFiles) {
       return new AutoValue_AndroidCompiledDataDeserializer_ResourceContainer(
           ImmutableList.copyOf(resourceTables), ImmutableList.copyOf(compiledFiles));
-    }
-  }
-
-  @AutoValue
-  abstract static class CompiledFileWithData {
-    abstract CompiledFile compiledFile();
-
-    @Nullable
-    abstract HashCode fingerprint();
-
-    @Nullable
-    abstract XmlNode rootXmlNode();
-
-    static CompiledFileWithData create(
-        CompiledFile compiledFile, @Nullable HashCode fingerprint, @Nullable XmlNode xmlNode) {
-      return new AutoValue_AndroidCompiledDataDeserializer_CompiledFileWithData(
-          compiledFile, fingerprint, xmlNode);
     }
   }
 }
