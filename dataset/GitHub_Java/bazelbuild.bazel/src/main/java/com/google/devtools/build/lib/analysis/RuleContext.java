@@ -512,6 +512,7 @@ public final class RuleContext extends TargetContext
   public <T extends Fragment> boolean isLegalFragment(
       Class<T> fragment, ConfigurationTransition transition) {
     return universalFragments.contains(fragment)
+        || fragment == PlatformConfiguration.class
         || configurationFragmentPolicy.isLegalConfigurationFragment(fragment, transition);
   }
 

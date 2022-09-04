@@ -27,7 +27,7 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext.PrerequisiteValidator;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
-import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoKey;
+import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -216,7 +216,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
     /**
      * Adds a configuration fragment factory and all build options required by its fragment.
      *
-     * <p>Note that configuration fragments annotated with a Starlark name must have a unique name;
+     * <p>Note that configuration fragments annotated with a Skylark name must have a unique name;
      * no two different configuration fragments can share the same name.
      */
     public Builder addConfigurationFragment(ConfigurationFragmentFactory factory) {
@@ -858,7 +858,7 @@ public /*final*/ class ConfiguredRuleClassProvider implements RuleClassProvider 
     return fragmentsBuilder.build();
   }
 
-  /** Returns a reserved set of action mnemonics. These cannot be used from a Starlark action. */
+  /** Returns a reserved set of action mnemonics. These cannot be used from a Skylark action. */
   public ImmutableSet<String> getReservedActionMnemonics() {
     return reservedActionMnemonics;
   }
