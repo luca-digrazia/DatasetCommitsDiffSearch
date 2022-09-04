@@ -16,15 +16,12 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multiset;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -35,7 +32,6 @@ public class SpawnStats {
 
   private final ConcurrentHashMultiset<String> runners = ConcurrentHashMultiset.create();
   private final AtomicLong totalWallTimeMillis = new AtomicLong();
-  private final AtomicInteger totalNumberOfActions = new AtomicInteger();
 
   public void countActionResult(ActionResult actionResult) {
     for (SpawnResult r : actionResult.spawnResults()) {
@@ -48,10 +44,6 @@ public class SpawnStats {
     runners.add(runner);
   }
 
-  public void incrementActionCount() {
-    totalNumberOfActions.incrementAndGet();
-  }
-
   public long getTotalWallTimeMillis() {
     return totalWallTimeMillis.get();
   }
@@ -59,30 +51,22 @@ public class SpawnStats {
   /*
    * Returns a human-readable summary of spawns counted.
    */
-  public ImmutableMap<String, Integer> getSummary() {
+  public String getSummary() {
     return getSummary(REPORT_FIRST);
   }
 
   /*
    * Returns a human-readable summary of spawns counted.
    */
-  public ImmutableMap<String, Integer> getSummary(ImmutableList<String> reportFirst) {
-    ImmutableMap.Builder<String, Integer> result = ImmutableMap.builder();
-    int numActionsWithoutInternal = runners.size();
-    int numActionsTotal = totalNumberOfActions.get();
-    result.put("total", numActionsTotal);
+  public String getSummary(ImmutableList<String> reportFirst) {
+    ResultString result = new ResultString();
 
     // First report cache results.
     for (String s : reportFirst) {
       int count = runners.setCount(s, 0);
       if (count > 0) {
-        result.put(s, count);
+        result.add(s, count);
       }
-    }
-
-    // Account for internal actions such as SymlinkTree.
-    if (numActionsWithoutInternal < numActionsTotal) {
-      result.put("internal", numActionsTotal - numActionsWithoutInternal);
     }
 
     // Sort the rest alphabetically
@@ -90,34 +74,40 @@ public class SpawnStats {
     Collections.sort(list, Comparator.comparing(e -> e.getElement()));
 
     for (Multiset.Entry<String> e : list) {
-      result.put(e.getElement(), e.getCount());
+      result.add(e.getElement(), e.getCount());
     }
 
-    return result.build();
+    int total = result.spawnsCount();
+    return total + " process" + (total == 1 ? "" : "es") + result + ".";
   }
 
-  public static String convertSummaryToString(ImmutableMap<String, Integer> spawnSummary) {
-    Integer total = spawnSummary.get("total");
-    if (total == 0) {
-      return "0 processes.";
+  private static class ResultString {
+    StringBuilder result = new StringBuilder();
+    int spawnsCount = 0;
+    int runnersNum = 0;
+
+    public int spawnsCount() {
+      return spawnsCount;
     }
 
-    StringBuilder stringSummary = new StringBuilder();
-    stringSummary.append(total).append(" process");
-    if (total > 1) {
-      stringSummary.append("es");
-    }
-    String separator = ": ";
+    public void add(String name, int count) {
+      spawnsCount += count;
+      runnersNum += 1;
 
-    for (Map.Entry<String, Integer> runnerStats : spawnSummary.entrySet()) {
-      if ("total".equals(runnerStats.getKey())) {
-        continue;
+      if (result.length() > 0) {
+        result.append(", ");
       }
-      stringSummary.append(separator);
-      separator = ", ";
-      stringSummary.append(runnerStats.getValue()).append(' ').append(runnerStats.getKey());
+      result.append(count);
+      result.append(" ");
+      result.append(name);
     }
-    stringSummary.append('.');
-    return stringSummary.toString();
+
+    @Override
+    public String toString() {
+      if (runnersNum == 0) {
+        return "";
+      }
+      return ": " + result;
+    }
   }
 }
