@@ -63,7 +63,7 @@ public class LexerTest {
     Token tok;
     do {
       tok = lexer.nextToken();
-      result.add(tok.copy());
+      result.add(tok);
     } while (tok.kind != TokenKind.EOF);
     return result;
   }
