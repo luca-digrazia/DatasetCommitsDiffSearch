@@ -77,6 +77,7 @@ public final class WorkspaceBuilder {
         skyframeExecutorFactory.create(
             packageFactory,
             directories,
+            binTools,
             workspaceStatusActionFactory,
             ruleClassProvider.getBuildInfoFactories(),
             diffAwarenessFactories.build(),

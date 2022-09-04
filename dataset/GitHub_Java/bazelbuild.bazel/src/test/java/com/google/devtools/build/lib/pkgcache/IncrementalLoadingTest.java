@@ -473,6 +473,7 @@ public class IncrementalLoadingTest {
                   .getPackageFactoryBuilderForTesting(directories)
                   .build(loadingMock.createRuleClassProvider(), fs),
               directories,
+              null, /* BinTools */
               null, /* workspaceStatusActionFactory */
               loadingMock.createRuleClassProvider().getBuildInfoFactories(),
               ImmutableList.of(new ManualDiffAwarenessFactory()),

@@ -92,6 +92,7 @@ public class PackageCacheTest extends FoundationTestCase {
         SequencedSkyframeExecutor.create(
             packageFactoryBuilder.build(ruleClassProvider, scratch.getFileSystem()),
             directories,
+            null, /* BinTools */
             null, /* workspaceStatusActionFactory */
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),

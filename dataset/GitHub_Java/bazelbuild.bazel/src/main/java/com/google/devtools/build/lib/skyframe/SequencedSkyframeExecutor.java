@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.analysis.BuildView.Options;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -113,6 +114,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
       BlazeDirectories directories,
+      BinTools binTools,
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
@@ -127,6 +129,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         evaluatorSupplier,
         pkgFactory,
         directories,
+        binTools,
         workspaceStatusActionFactory,
         buildInfoFactories,
         allowedMissingInputs,
@@ -143,6 +146,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   public static SequencedSkyframeExecutor create(
       PackageFactory pkgFactory,
       BlazeDirectories directories,
+      BinTools binTools,
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
@@ -158,6 +162,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             InMemoryMemoizingEvaluator.SUPPLIER,
             pkgFactory,
             directories,
+            binTools,
             workspaceStatusActionFactory,
             buildInfoFactories,
             diffAwarenessFactories,

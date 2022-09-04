@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -33,6 +34,7 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
   public SkyframeExecutor create(
       PackageFactory pkgFactory,
       BlazeDirectories directories,
+      BinTools binTools,
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
@@ -42,6 +44,7 @@ public class SequencedSkyframeExecutorFactory implements SkyframeExecutorFactory
     return SequencedSkyframeExecutor.create(
         pkgFactory,
         directories,
+        binTools,
         workspaceStatusActionFactory,
         buildInfoFactories,
         diffAwarenessFactories,

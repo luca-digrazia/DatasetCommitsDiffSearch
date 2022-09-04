@@ -622,6 +622,7 @@ public class LoadingPhaseRunnerTest {
           SequencedSkyframeExecutor.create(
               pkgFactory,
               directories,
+              null, /* binTools -- not used */
               null, /* workspaceStatusActionFactory -- not used */
               ruleClassProvider.getBuildInfoFactories(),
               ImmutableList.<DiffAwareness.Factory>of(),

@@ -113,6 +113,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
         SequencedSkyframeExecutor.create(
             packageFactory,
             directories,
+            null, /* BinTools */
             null, /* workspaceStatusActionFactory */
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
