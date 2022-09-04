@@ -218,7 +218,7 @@ public class ConfigDefinition extends CompoundConfigType {
             } else {
                 final LeafConfigType leaf;
                 // it's a plain config property
-                gct.addField(leaf = new ObjectConfigType(field.getName(), gct, consume, mapDefaultValue(defaultValue, fieldClass), fieldClass));
+                gct.addField(leaf = new ObjectConfigType(field.getName(), gct, consume, defaultValue.equals(ConfigItem.NO_DEFAULT) ? "" : defaultValue, fieldClass));
                 container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
             }
         }
@@ -241,23 +241,9 @@ public class ConfigDefinition extends CompoundConfigType {
             throw reportError(containingElement, "Optionals are not allowed as a map value type");
         } else {
             // treat as a plain object, hope for the best
-            // TODO, REVISIT THIS
-            final ObjectConfigType leaf = new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass);
-            //container.getConfigDefinition().getLeafPatterns().addPattern(subKey, leaf);
+            new ObjectConfigType(NO_CONTAINING_NAME, mct, true, "", valueClass);
         }
         return mct;
-    }
-
-    private String mapDefaultValue(String defaultValue, Class<?> fieldClass) {
-        String mappedDefault = defaultValue;
-        if (defaultValue.equals(ConfigItem.NO_DEFAULT)) {
-            if(Number.class.isAssignableFrom(fieldClass)) {
-                mappedDefault = "0";
-            } else {
-                mappedDefault = "";
-            }
-        }
-        return mappedDefault;
     }
 
     private static IllegalArgumentException reportError(AnnotatedElement e, String msg) {
