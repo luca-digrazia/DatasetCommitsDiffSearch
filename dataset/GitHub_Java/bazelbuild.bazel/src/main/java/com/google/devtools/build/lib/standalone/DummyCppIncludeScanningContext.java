@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeScanningContext;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
-import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import javax.annotation.Nullable;
 
 /** A CppIncludeScanningContext that does nothing. */
@@ -32,8 +31,7 @@ class DummyCppIncludeScanningContext implements CppIncludeScanningContext {
   public Iterable<Artifact> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
-      IncludeProcessing includeProcessing,
-      IncludeScanningHeaderData includeScanningHeaderData)
+      IncludeProcessing includeProcessing)
       throws ExecException, InterruptedException, ActionExecutionException {
     return null;
   }
