@@ -16,6 +16,7 @@ package com.google.devtools.build.skyframe;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -36,7 +37,6 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
 /**
@@ -119,13 +119,16 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   }
 
   @Override
-  public void delete(Predicate<SkyKey> deletePredicate) {
+  public void delete(final Predicate<SkyKey> deletePredicate) {
     valuesToDelete.addAll(
         Maps.filterEntries(
                 graph.getAllValues(),
-                input -> {
-                  Preconditions.checkNotNull(input.getKey(), "Null SkyKey in entry: %s", input);
-                  return input.getValue().isDirty() || deletePredicate.test(input.getKey());
+                new Predicate<Map.Entry<SkyKey, ? extends NodeEntry>>() {
+                  @Override
+                  public boolean apply(Map.Entry<SkyKey, ? extends NodeEntry> input) {
+                    Preconditions.checkNotNull(input.getKey(), "Null SkyKey in entry: %s", input);
+                    return input.getValue().isDirty() || deletePredicate.apply(input.getKey());
+                  }
                 })
             .keySet());
   }
@@ -135,14 +138,15 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
     Preconditions.checkArgument(versionAgeLimit >= 0);
     final Version threshold = IntVersion.of(lastGraphVersion.getVal() - versionAgeLimit);
     valuesToDelete.addAll(
-        Sets.filter(
-            progressReceiver.getUnenqueuedDirtyKeys(),
-            skyKey -> {
-              NodeEntry entry = graph.get(null, Reason.OTHER, skyKey);
-              Preconditions.checkNotNull(entry, skyKey);
-              Preconditions.checkState(entry.isDirty(), skyKey);
-              return entry.getVersion().atMost(threshold);
-            }));
+        Sets.filter(progressReceiver.getUnenqueuedDirtyKeys(), new Predicate<SkyKey>() {
+          @Override
+          public boolean apply(SkyKey skyKey) {
+            NodeEntry entry = graph.get(null, Reason.OTHER, skyKey);
+            Preconditions.checkNotNull(entry, skyKey);
+            Preconditions.checkState(entry.isDirty(), skyKey);
+            return entry.getVersion().atMost(threshold);
+          }
+        }));
   }
 
   @Override
@@ -307,7 +311,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   @Override
   @Nullable
   public SkyValue getExistingValue(SkyKey key) {
-    NodeEntry entry = getExistingEntryAtCurrentlyEvaluatingVersion(key);
+    NodeEntry entry = getExistingEntryAtLatestVersion(key);
     try {
       return isDone(entry) ? entry.getValue() : null;
     } catch (InterruptedException e) {
@@ -317,7 +321,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
 
   @Override
   @Nullable public ErrorInfo getExistingErrorForTesting(SkyKey key) {
-    NodeEntry entry = getExistingEntryAtCurrentlyEvaluatingVersion(key);
+    NodeEntry entry = getExistingEntryAtLatestVersion(key);
     try {
       return isDone(entry) ? entry.getErrorInfo() : null;
     } catch (InterruptedException e) {
@@ -327,7 +331,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
 
   @Nullable
   @Override
-  public NodeEntry getExistingEntryAtCurrentlyEvaluatingVersion(SkyKey key) {
+  public NodeEntry getExistingEntryAtLatestVersion(SkyKey key) {
     return graph.get(null, Reason.OTHER, key);
   }
 
@@ -359,9 +363,13 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       out.println("Edge count: " + edges);
     } else {
       Function<SkyKey, String> keyFormatter =
-          key ->
-              String.format(
-                  "%s:%s", key.functionName(), key.argument().toString().replace('\n', '_'));
+          new Function<SkyKey, String>() {
+            @Override
+            public String apply(SkyKey key) {
+              return String.format("%s:%s",
+                  key.functionName(), key.argument().toString().replace('\n', '_'));
+            }
+          };
 
       for (Map.Entry<SkyKey, ? extends NodeEntry> mapPair : graph.getAllValues().entrySet()) {
         SkyKey key = mapPair.getKey();

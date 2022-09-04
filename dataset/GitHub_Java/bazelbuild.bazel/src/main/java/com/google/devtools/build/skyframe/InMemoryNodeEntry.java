@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.KeyToConsolidate.Op;
 import com.google.devtools.build.skyframe.KeyToConsolidate.OpToStoreBare;
-import com.google.errorprone.annotations.ForOverride;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -491,23 +490,13 @@ public class InMemoryNodeEntry implements NodeEntry {
     Preconditions.checkState(keepEdges() == KeepEdgesPolicy.ALL, "Not keeping rdeps: %s", this);
   }
 
-  /**
-   * Creates a {@link DirtyBuildingState} for the case where this node is done and is being marked
-   * dirty.
-   */
-  @ForOverride
-  protected DirtyBuildingState createDirtyBuildingStateForDoneNode(
-      DirtyType dirtyType, GroupedList<SkyKey> directDeps, SkyValue value) {
-    return DirtyBuildingState.create(dirtyType, directDeps, value);
-  }
-
   @Override
   public synchronized MarkedDirtyResult markDirty(DirtyType dirtyType) {
     // Can't process a dirty node without its deps.
     assertKeepDeps();
     if (isDone()) {
       dirtyBuildingState =
-          createDirtyBuildingStateForDoneNode(
+          DirtyBuildingState.create(
               dirtyType, GroupedList.create(getCompressedDirectDepsForDoneEntry()), value);
       value = null;
       directDeps = null;
