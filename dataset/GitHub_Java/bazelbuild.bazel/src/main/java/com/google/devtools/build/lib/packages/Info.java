@@ -55,35 +55,45 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
    *
    * <p>Built-in provider instances may use {@link Location#BUILTIN}.
    */
-  private final Location location;
-
-  /** Formattable string with one {@code '%s'} placeholder for the missing field name. */
-  private final String errorMessageFormatForUnknownField;
-
-  // Ideally we'd use a builder pattern for Info, but that would be cumbersome since it doesn't mix
-  // well with inheritance. Instead, we just use nullable constructor args.
+  private final Location creationLoc;
 
   /**
-   * Constructs an {@link Info}.
-   *
-   * @param provider the provider describing the type of this instance
-   * @param location the Skylark location where this instance is created. If null, defaults to
-   *     {@link Location#BUILTIN}.
-   * @param errorMessageFormatForUnknownField a string format, as for {@link
-   *     Provider#getErrorMessageFormatForUnknownField}. If null, defaults to the format specified
-   *     by the provider. It is preferred to not use this field; instead, create a new subclass of
-   *     {@link NativeProvider}.
+   * Formattable string with one {@code '%s'} placeholder for the missing field name.
    */
-  protected Info(
-      Provider provider,
-      @Nullable Location location,
-      @Nullable String errorMessageFormatForUnknownField) {
-    this.provider = Preconditions.checkNotNull(provider);
-    this.location = location == null ? Location.BUILTIN : location;
+  private final String errorMessageFormatForUnknownField;
+
+  /**
+   * Creates an empty struct with a given location.
+   *
+   * <p>If {@code location} is null, it defaults to {@link Location#BUILTIN}.
+   */
+  public Info(Provider provider, @Nullable Location location) {
+    this.provider = provider;
+    this.creationLoc = location == null ? Location.BUILTIN : location;
+    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForUnknownField();
+  }
+
+  /** Creates a built-in struct (i.e. without a Skylark creation location). */
+  public Info(Provider provider) {
+    this.provider = provider;
+    this.creationLoc = Location.BUILTIN;
+    this.errorMessageFormatForUnknownField = provider.getErrorMessageFormatForUnknownField();
+  }
+
+  /**
+   * Creates a built-in struct (i.e. without creation location) that uses a specific error message
+   * for missing fields.
+   *
+   * <p>Only used in {@link
+   * com.google.devtools.build.lib.packages.NativeProvider.StructConstructor#create(Map, String)}.
+   * If you need to override an error message, the preferred way is to create a new {@link
+   * NativeProvider} subclass.
+   */
+  Info(Provider provider, String errorMessageFormatForUnknownField) {
+    this.provider = provider;
+    this.creationLoc = Location.BUILTIN;
     this.errorMessageFormatForUnknownField =
-        errorMessageFormatForUnknownField == null
-            ? provider.getErrorMessageFormatForUnknownField()
-            : errorMessageFormatForUnknownField;
+        Preconditions.checkNotNull(errorMessageFormatForUnknownField);
   }
 
   /**
@@ -93,7 +103,6 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
    * <p>This preserves the order of the map entries.
    */
   protected static ImmutableMap<String, Object> copyValues(Map<String, Object> values) {
-    Preconditions.checkNotNull(values);
     ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
     for (Map.Entry<String, Object> e : values.entrySet()) {
       builder.put(
@@ -109,7 +118,7 @@ public abstract class Info implements ClassObject, SkylarkValue, Serializable {
    * <p>Builtin provider instances may return {@link Location#BUILTIN}.
    */
   public Location getCreationLoc() {
-    return location;
+    return creationLoc;
   }
 
   public Provider getProvider() {
