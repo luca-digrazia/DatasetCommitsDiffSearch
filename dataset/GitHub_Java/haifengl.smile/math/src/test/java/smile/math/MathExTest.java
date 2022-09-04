@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.math;
 
 import org.junit.After;
@@ -126,11 +124,11 @@ public class MathExTest {
     @Test
     public void testLogFactorial() {
         System.out.println("logFactorial");
-        assertEquals(0.0, MathEx.lfactorial(0), 1E-7);
-        assertEquals(0.0, MathEx.lfactorial(1), 1E-7);
-        assertEquals(Math.log(2.0), MathEx.lfactorial(2), 1E-7);
-        assertEquals(Math.log(6.0), MathEx.lfactorial(3), 1E-7);
-        assertEquals(Math.log(24.0), MathEx.lfactorial(4), 1E-7);
+        assertEquals(0.0, MathEx.logFactorial(0), 1E-7);
+        assertEquals(0.0, MathEx.logFactorial(1), 1E-7);
+        assertEquals(Math.log(2.0), MathEx.logFactorial(2), 1E-7);
+        assertEquals(Math.log(6.0), MathEx.logFactorial(3), 1E-7);
+        assertEquals(Math.log(24.0), MathEx.logFactorial(4), 1E-7);
     }
 
     /**
@@ -152,11 +150,11 @@ public class MathExTest {
     @Test
     public void testLogChoose() {
         System.out.println("logChoose");
-        assertEquals(0.0, MathEx.lchoose(10, 0), 1E-6);
-        assertEquals(2.302585, MathEx.lchoose(10, 1), 1E-6);
-        assertEquals(3.806662, MathEx.lchoose(10, 2), 1E-6);
-        assertEquals(4.787492, MathEx.lchoose(10, 3), 1E-6);
-        assertEquals(5.347108, MathEx.lchoose(10, 4), 1E-6);
+        assertEquals(0.0, MathEx.logChoose(10, 0), 1E-6);
+        assertEquals(2.302585, MathEx.logChoose(10, 1), 1E-6);
+        assertEquals(3.806662, MathEx.logChoose(10, 2), 1E-6);
+        assertEquals(4.787492, MathEx.logChoose(10, 3), 1E-6);
+        assertEquals(5.347108, MathEx.logChoose(10, 4), 1E-6);
     }
 
     /**
@@ -167,7 +165,7 @@ public class MathExTest {
         System.out.println("random");
         double[] prob = {0.473646292, 0.206116725, 0.009308497, 0.227844687, 0.083083799};
         int[] sample = MathEx.random(prob, 300);
-        double[][] hist = Histogram.of(sample, 5);
+        double[][] hist = Histogram.histogram(sample, 5);
         double[] p = new double[5];
         for (int i = 0; i < 5; i++) {
             p[i] = hist[2][i] / 300.0;
@@ -187,7 +185,7 @@ public class MathExTest {
             sample[i] = MathEx.random(prob);
         }
 
-        double[][] hist = Histogram.of(sample, 5);
+        double[][] hist = Histogram.histogram(sample, 5);
         double[] p = new double[5];
         for (int i = 0; i < 5; i++) {
             p[i] = hist[2][i] / 300.0;

@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.math;
 
 import java.util.Arrays;
@@ -44,18 +42,17 @@ import java.util.Arrays;
  *
  * Like the original BFGS, the limited-memory BFGS (L-BFGS) uses an
  * estimation to the inverse Hessian matrix to steer its search
- * through variable space, but where BFGS stores a dense <code>n × n</code>
- * approximation to the inverse Hessian (<code>n</code> being the number of
+ * through variable space, but where BFGS stores a dense n × n
+ * approximation to the inverse Hessian (n being the number of
  * variables in the problem), L-BFGS stores only a few vectors
  * that represent the approximation implicitly. Due to its resulting
  * linear memory requirement, the L-BFGS method is particularly well
  * suited for optimization problems with a large number of variables
- * (e.g., &gt; 1000). Instead of the inverse Hessian <code>H_k</code>, L-BFGS
- * maintains * a history of the past <code>m</code> updates of the position
- * <code>x</code> and gradient <code>∇f(x)</code>, where generally the
- * history size <code>m</code> can be small (often <code>m &lt; 10</code>).
- * These updates are used to implicitly do operations requiring the
- * <code>H_k</code>-vector product.
+ * (e.g., > 1000). Instead of the inverse Hessian H_k, L-BFGS maintains
+ * a history of the past m updates of the position x and gradient ∇f(x),
+ * where generally the history size m can be small (often m < 10). These
+ * updates are used to implicitly do operations requiring the H_k-vector
+ * product.
  *
  * <h2>References</h2>
  * <ol>
@@ -64,8 +61,58 @@ import java.util.Arrays;
  *
  * @author Haifeng Li
  */
-public interface BFGS {
-    org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BFGS.class);
+public class BFGS {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BFGS.class);
+
+    /** The instance with default settings. */
+    private static BFGS instance = new BFGS();
+
+    /**
+     * The desired convergence tolerance.
+     */
+    private double gtol = 1E-5;
+    /**
+     * The maximum number of allowed iterations.
+     */
+    private int maxIter = 500;
+
+    /**
+     * Constructor with gtol = 1E-5 and maxIter = 500.
+     */
+    public BFGS() {
+
+    }
+
+    /** Returns the instance with default settings. */
+    public static BFGS getInstance() {
+        return instance;
+    }
+
+    /**
+     * Sets the convergence requirement on zeroing the gradient.
+     * @return return this object.
+     */
+    public BFGS setGradientTolerance(double gtol) {
+        if (gtol <= 0.0) {
+            throw new IllegalArgumentException("Invalid gradient tolerance: " + gtol);
+        }
+
+        this.gtol = gtol;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of allowed iterations.
+     * @return return this object.
+     */
+    public BFGS setMaxIter(int maxIter) {
+        if (maxIter <= 0) {
+            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
+        }
+
+        this.maxIter = maxIter;
+        return this;
+    }
 
     /**
      * This method solves the unconstrained minimization problem
@@ -83,29 +130,19 @@ public interface BFGS {
      * @param func the function to be minimized.
      *
      * @param m the number of corrections used in the L-BFGS update.
-     *          Values of <code>m</code> less than 3 are not recommended;
-     *          large values of <code>m</code> will result in excessive
-     *          computing time. <code>3 &lt;= m &lt;= 7</code> is recommended.
+     *		Values of <code>m</code> less than 3 are not recommended;
+     *		large values of <code>m</code> will result in excessive
+     *		computing time. <code>3 &lt;= m &lt;= 7</code> is recommended.
      *          A common choice for m is m = 5.
      *
      * @param x on initial entry this must be set by the user to the values
-     *          of the initial estimate of the solution vector. On exit with
-     *          <code>iflag = 0</code>, it contains the values of the variables
-     *          at the best point found (usually a solution).
-     *
-     * @param gtol the convergence tolerance on zeroing the gradient.
-     * @param maxIter the maximum number of iterations.
+     *		of the initial estimate of the solution vector. On exit with
+     *		<code>iflag = 0</code>, it contains the values of the variables
+     *		at the best point found (usually a solution).
      *
      * @return the minimum value of the function.
      */
-    static double minimize(DifferentiableMultivariateFunction func, int m, double[] x, double gtol, int maxIter) {
-        if (gtol <= 0.0) {
-            throw new IllegalArgumentException("Invalid gradient tolerance: " + gtol);
-        }
-
-        if (maxIter <= 0) {
-            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
-        }
+    public double minimize(DifferentiableMultivariateFunction func, int m, double[] x) {
         // Initialize.
         if (m <= 0) {
             throw new IllegalArgumentException("Invalid m: " + m);
@@ -142,7 +179,7 @@ public interface BFGS {
         // Current function value.
         double f = func.g(x, g);
 
-        logger.info(String.format("L-BFGS: initial function value: %.5f", f));
+        logger.info(String.format("L-BFGS: initial function value: %.5g", f));
 
         double sum = 0.0;
         // Initial line search direction.
@@ -175,7 +212,7 @@ public interface BFGS {
             }
 
             if (test < TOLX) {
-                logger.info(String.format("L-BFGS converges on x after %d iterations: %.5f", iter, f));
+                logger.info(String.format("L-BFGS converges on x after %d iterations: %.5g", iter, f));
                 return f;
             }
 
@@ -191,12 +228,12 @@ public interface BFGS {
             }
 
             if (test < gtol) {
-                logger.info(String.format("L-BFGS converges on gradient after %d iterations: %.5f", iter, f));
+                logger.info(String.format("L-BFGS converges on gradient after %d iterations: %.5g", iter, f));
                 return f;
             }
 
-            if (iter % 100 == 0) {
-                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5f", iter, f));
+            if (iter % 10 == 0) {
+                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
             }
 
             double ys = MathEx.dot(y[k], s[k]);
@@ -237,8 +274,7 @@ public interface BFGS {
             }
         }
 
-        logger.warn("L-BFGS reaches the maximum number of iterations: " + maxIter);
-        return f;
+        throw new IllegalStateException("L-BFGS: Too many iterations.");
     }
 
     /**
@@ -251,24 +287,13 @@ public interface BFGS {
      * @param func the function to be minimized.
      *
      * @param x on initial entry this must be set by the user to the values
-     *          of the initial estimate of the solution vector. On exit, it
+     *		of the initial estimate of the solution vector. On exit, it
      *          contains the values of the variables at the best point found
      *          (usually a solution).
      *
-     * @param gtol the convergence tolerance on zeroing the gradient.
-     * @param maxIter the maximum number of iterations.
-     *
      * @return the minimum value of the function.
      */
-    static double minimize(DifferentiableMultivariateFunction func, double[] x, double gtol, int maxIter) {
-        if (gtol <= 0.0) {
-            throw new IllegalArgumentException("Invalid gradient tolerance: " + gtol);
-        }
-
-        if (maxIter <= 0) {
-            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);
-        }
-
+    public double minimize(DifferentiableMultivariateFunction func, double[] x) {
         // The convergence criterion on x values.
         final double TOLX = 4 * MathEx.EPSILON;
         // The scaled maximum step length allowed in line searches.
@@ -287,7 +312,7 @@ public interface BFGS {
         // Calculate starting function value and gradient and initialize the
         // inverse Hessian to the unit matrix.
         double f = func.g(x, g);
-        logger.info(String.format("BFGS: initial function value: %.5f", f));
+        logger.info(String.format("BFGS: initial function value: %.5g", f));
 
         double sum = 0.0;
         for (int i = 0; i < n; i++) {
@@ -303,8 +328,8 @@ public interface BFGS {
             // The new function evaluation occurs in line search.
             f = linesearch(func, x, f, g, xi, xnew, stpmax);
 
-            if (iter % 100 == 0) {
-                logger.info(String.format("BFGS: the function value after %3d iterations: %.5f", iter, f));
+            if (iter % 10 == 0) {
+                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
             }
 
             // update the line direction and current point.
@@ -323,7 +348,7 @@ public interface BFGS {
             }
 
             if (test < TOLX) {
-                logger.info(String.format("BFGS converges on x after %d iterations: %.5f", iter, f));
+                logger.info(String.format("BFGS converges on x after %d iterations: %.5g", iter, f));
                 return f;
             }
 
@@ -342,7 +367,7 @@ public interface BFGS {
             }
 
             if (test < gtol) {
-                logger.info(String.format("BFGS converges on gradient after %d iterations: %.5f", iter, f));
+                logger.info(String.format("BFGS converges on gradient after %d iterations: %.5g", iter, f));
                 return f;
             }
 
@@ -393,9 +418,7 @@ public interface BFGS {
             }
         }
 
-        logger.warn("BFGS reaches the maximum number of iterations: " + maxIter);
-        return f;
-
+        throw new IllegalStateException("BFGS: Too many iterations.");
     }
 
     /**
@@ -434,10 +457,10 @@ public interface BFGS {
      * @param xold on input this contains the base point for the line search.
      *
      * @param fold on input this contains the value of the objective function
-     *             at <code>x</code>.
+     *		at <code>x</code>.
      *
      * @param g on input this contains the gradient of the objective function
-     *          at <code>x</code>.
+     *		at <code>x</code>.
      *
      * @param p the search direction.
      *
@@ -449,7 +472,7 @@ public interface BFGS {
      *
      * @return the new function value.
      */
-    static double linesearch(MultivariateFunction func, double[] xold, double fold, double[] g, double[] p, double[] x, double stpmax) {
+    private double linesearch(MultivariateFunction func, double[] xold, double fold, double[] g, double[] p, double[] x, double stpmax) {
         if (stpmax <= 0) {
             throw new IllegalArgumentException("Invalid upper bound of linear search step: " + stpmax);
         }
