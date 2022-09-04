@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,6 +15,7 @@
  */
 package org.androidannotations.helper;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -26,13 +27,12 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 
-import org.androidannotations.processing.rest.MethodProcessor;
 import org.androidannotations.validation.IsValid;
 
 public class RestAnnotationHelper extends TargetAnnotationHelper {
 
-	public RestAnnotationHelper(ProcessingEnvironment processingEnv, String annotationName) {
-		super(processingEnv, annotationName);
+	public RestAnnotationHelper(ProcessingEnvironment processingEnv, Class<? extends Annotation> target) {
+		super(processingEnv, target);
 	}
 
 	public void urlVariableNamesExistInParameters(ExecutableElement element, Set<String> variableNames, IsValid valid) {
@@ -42,13 +42,6 @@ public class RestAnnotationHelper extends TargetAnnotationHelper {
 		List<String> parametersName = new ArrayList<String>();
 		for (VariableElement parameter : parameters) {
 			parametersName.add(parameter.getSimpleName().toString());
-		}
-
-		String[] cookiesToUrl = MethodProcessor.retrieveRequiredUrlCookieNames(element);
-		if (cookiesToUrl != null) {
-			for (String cookie : cookiesToUrl) {
-				parametersName.add(cookie);
-			}
 		}
 
 		for (String variableName : variableNames) {
