@@ -182,10 +182,7 @@ public class RuleDocumentationAttribute implements Comparable<RuleDocumentationA
     StringBuilder sb = new StringBuilder()
         .append(TYPE_DESC.get(attribute.getType()))
         .append("; " + (attribute.isMandatory() ? "required" : "optional"))
-        .append(!attribute.isConfigurable()
-            ? String.format("; <a href=\"%s#configurable-attributes\">nonconfigurable</a>",
-                RuleDocumentation.COMMON_DEFINITIONS_PAGE)
-            : "")
+        .append(!attribute.isConfigurable() ? "; nonconfigurable" : "")
         .append(getDefaultValue());
     return sb.toString();
   }
