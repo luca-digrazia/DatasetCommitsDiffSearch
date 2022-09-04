@@ -186,13 +186,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             for (ClassPathElement element : providers) {
                 resources.add(element.getResource(name).getUrl());
             }
-        } else if (name.isEmpty()) {
-            for (ClassPathElement i : elements) {
-                ClassPathResource res = i.getResource("");
-                if (res != null) {
-                    resources.add(res.getUrl());
-                }
-            }
         }
         if (!banned) {
             if (resources.isEmpty() || aggregateParentResources) {
@@ -665,10 +658,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             }
             return new QuarkusClassLoader(this);
         }
-    }
-
-    public ClassLoader parent() {
-        return parent;
     }
 
     static final class ClassLoaderState {
