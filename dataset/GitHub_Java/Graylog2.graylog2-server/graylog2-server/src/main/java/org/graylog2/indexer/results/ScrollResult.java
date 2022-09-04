@@ -16,62 +16,40 @@
  */
 package org.graylog2.indexer.results;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
-import io.searchbox.client.JestClient;
-import io.searchbox.client.JestResult;
-import io.searchbox.core.ClearScroll;
-import io.searchbox.core.SearchResult;
-import io.searchbox.core.SearchScroll;
 import org.apache.shiro.crypto.hash.Md5Hash;
+import org.elasticsearch.action.search.ClearScrollResponse;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.client.Client;
+import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.search.SearchHits;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 public class ScrollResult extends IndexQueryResult {
     private static final Logger LOG = LoggerFactory.getLogger(ScrollResult.class);
-    private static final TypeReference<Map<String, Object>> MAP_TYPE_REFERENCE = new TypeReference<Map<String, Object>>() {
-    };
-    private static final String DEFAULT_SCROLL = "1m";
 
-    public interface Factory {
-        ScrollResult create(SearchResult initialResult, @Assisted("query") String query, List<String> fields);
-        ScrollResult create(SearchResult initialResult, @Assisted("query") String query, @Assisted("scroll") String scroll, List<String> fields);
-    }
-
-    private final JestClient jestClient;
-    private final ObjectMapper objectMapper;
-    private SearchResult initialResult;
-    private final String scroll;
+    private final Client client;
     private final List<String> fields;
     private final String queryHash; // used in log output only
     private final long totalHits;
+    private SearchResponse firstResponse;
 
     private String scrollId;
     private int chunkId = 0;
 
-    @AssistedInject
-    public ScrollResult(JestClient jestClient, ObjectMapper objectMapper, @Assisted SearchResult initialResult, @Assisted("query") String query, @Assisted List<String> fields) {
-        this(jestClient, objectMapper, initialResult, query, DEFAULT_SCROLL, fields);
-    }
-
-    @AssistedInject
-    public ScrollResult(JestClient jestClient, ObjectMapper objectMapper, @Assisted SearchResult initialResult, @Assisted("query") String query, @Assisted("scroll") String scroll, @Assisted List<String> fields) {
-        super(query, null, initialResult.getJsonObject().path("took").asLong());
-        this.jestClient = jestClient;
-        this.objectMapper = objectMapper;
-        this.initialResult = initialResult;
-        this.scroll = scroll;
+    public ScrollResult(Client client,
+                        String originalQuery,
+                        BytesReference builtQuery,
+                        SearchResponse response, List<String> fields) {
+        super(originalQuery, builtQuery, response.getTook());
+        this.client = client;
         this.fields = fields;
-        totalHits = initialResult.getTotal();
-        scrollId = getScrollIdFromResult(initialResult);
+        totalHits = response.getHits().totalHits();
+        scrollId = response.getScrollId();
+        firstResponse = response;
 
         final Md5Hash md5Hash = new Md5Hash(getOriginalQuery());
         queryHash = md5Hash.toHex();
@@ -79,44 +57,30 @@ public class ScrollResult extends IndexQueryResult {
         LOG.debug("[{}] Starting scroll request for query {}", queryHash, getOriginalQuery());
     }
 
-    public ScrollChunk nextChunk() throws IOException {
+    public ScrollChunk nextChunk() {
 
-        final JestResult search;
-        final List<ResultMessage> hits;
-        if (initialResult == null) {
-            search = getNextScrollResult();
-            hits = StreamSupport.stream(search.getJsonObject().path("hits").path("hits").spliterator(), false)
-                    .map(hit -> ResultMessage.parseFromSource(hit.path("_id").asText(),
-                            hit.path("_index").asText(),
-                            objectMapper.convertValue(hit.get("_source"), MAP_TYPE_REFERENCE)))
-                    .collect(Collectors.toList());
+        final SearchResponse search;
+        // make sure to return the initial hits, see https://github.com/Graylog2/graylog2-server/issues/2126
+        if (firstResponse == null) {
+            search = client.prepareSearchScroll(scrollId)
+                    .setScroll(TimeValue.timeValueMinutes(1))
+                    .execute()
+                    .actionGet();
         } else {
-            // make sure to return the initial hits, see https://github.com/Graylog2/graylog2-server/issues/2126
-            search = initialResult;
-            hits = initialResult.getHits(Map.class, false).stream()
-                .map(hit -> ResultMessage.parseFromSource(hit.id, hit.index, (Map<String, Object>)hit.source))
-                .collect(Collectors.toList());
-            this.initialResult = null;
+            search = firstResponse;
+            firstResponse = null;
         }
 
-        if (hits.size() == 0) {
+        final SearchHits hits = search.getHits();
+        if (hits.getHits().length == 0) {
             // scroll exhausted
             LOG.debug("[{}] Reached end of scroll results.", queryHash, getOriginalQuery());
             return null;
         }
-        LOG.debug("[{}][{}] New scroll id {}, number of hits in chunk: {}", queryHash, chunkId, getScrollIdFromResult(search), hits.size());
-        scrollId = getScrollIdFromResult(search); // save the id for the next request.
+        LOG.debug("[{}][{}] New scroll id {}, number of hits in chunk: {}", queryHash, chunkId, search.getScrollId(), hits.getHits().length);
+        scrollId = search.getScrollId(); // save the id for the next request.
 
         return new ScrollChunk(hits, fields, chunkId++);
-    }
-
-    private String getScrollIdFromResult(JestResult result) {
-        return result.getJsonObject().path("_scroll_id").asText();
-    }
-
-    private JestResult getNextScrollResult() throws IOException {
-        final SearchScroll.Builder searchBuilder = new SearchScroll.Builder(scrollId, scroll);
-        return jestClient.execute(searchBuilder.build());
     }
 
     public String getQueryHash() {
@@ -127,10 +91,9 @@ public class ScrollResult extends IndexQueryResult {
         return totalHits;
     }
 
-    public void cancel() throws IOException {
-        final ClearScroll.Builder clearScrollBuilder = new ClearScroll.Builder().addScrollId(scrollId);
-        final JestResult result = jestClient.execute(clearScrollBuilder.build());
-        LOG.debug("[{}] clearScroll for query successful: {}", queryHash, result.isSucceeded());
+    public void cancel() {
+        final ClearScrollResponse clearScrollResponse = client.prepareClearScroll().addScrollId(scrollId).execute().actionGet();
+        LOG.debug("[{}] clearScroll for query successful: {}", queryHash, clearScrollResponse.isSucceeded());
     }
 
     public class ScrollChunk {
@@ -139,10 +102,10 @@ public class ScrollResult extends IndexQueryResult {
         private List<String> fields;
         private int chunkNumber;
 
-        ScrollChunk(List<ResultMessage> hits, List<String> fields, int chunkId) {
-            this.resultMessages = hits;
+        public ScrollChunk(SearchHits hits, List<String> fields, int chunkId) {
             this.fields = fields;
             this.chunkNumber = chunkId;
+            resultMessages = buildResults(hits);
         }
 
         public List<String> getFields() {
