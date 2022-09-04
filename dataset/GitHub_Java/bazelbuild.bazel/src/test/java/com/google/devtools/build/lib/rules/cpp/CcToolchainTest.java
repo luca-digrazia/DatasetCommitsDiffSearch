@@ -878,6 +878,44 @@ public class CcToolchainTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testSysroot_fromCrosstool() throws Exception {
+    scratch.file("a/BUILD", "cc_toolchain_alias(name = 'b')");
+    scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header1.h'])");
+    scratch.file("libc1/header1.h", "#define FOO 1");
+
+    getAnalysisMock()
+        .ccSupport()
+        .setupCrosstool(
+            mockToolsConfig,
+            CrosstoolConfig.CToolchain.newBuilder().setDefaultGrteTop("//libc1").buildPartial());
+    useConfiguration("--incompatible_disable_sysroot_from_configuration=false");
+    ConfiguredTarget target = getConfiguredTarget("//a:b");
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
+
+    assertThat(toolchainProvider.getSysroot()).isEqualTo("libc1");
+  }
+
+  @Test
+  public void testSysroot_fromCrosstool_disabled() throws Exception {
+    scratch.file("a/BUILD", "cc_toolchain_alias(name = 'b')");
+    scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header1.h'])");
+    scratch.file("libc1/header1.h", "#define FOO 1");
+
+    getAnalysisMock()
+        .ccSupport()
+        .setupCrosstool(
+            mockToolsConfig,
+            CrosstoolConfig.CToolchain.newBuilder().setDefaultGrteTop("//libc1").buildPartial());
+    useConfiguration("--incompatible_disable_sysroot_from_configuration");
+    ConfiguredTarget target = getConfiguredTarget("//a:b");
+    CcToolchainProvider toolchainProvider =
+        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
+
+    assertThat(toolchainProvider.getSysroot()).isEqualTo("/usr/grte/v1");
+  }
+
+  @Test
   public void testSysroot_fromCcToolchain() throws Exception {
     scratch.file(
         "a/BUILD",
@@ -961,7 +999,6 @@ public class CcToolchainTest extends BuildViewTestCase {
         "      compiler: \"a\"",
         "      abi_version: \"a\"",
         "      abi_libc_version: \"a\"",
-        "      builtin_sysroot: \":empty\"",
         "\"\"\",",
         "    libc_top = '//libc2:everything')");
     scratch.file("libc1/BUILD", "filegroup(name = 'everything', srcs = ['header.h'])");
@@ -976,7 +1013,8 @@ public class CcToolchainTest extends BuildViewTestCase {
         .setupCrosstool(
             mockToolsConfig,
             CrosstoolConfig.CToolchain.newBuilder().setDefaultGrteTop("//libc1").buildPartial());
-    useConfiguration("--cpu=k8", "--grte_top=//libc3");
+    useConfiguration(
+        "--cpu=k8", "--grte_top=//libc3", "--incompatible_disable_sysroot_from_configuration");
     ConfiguredTarget target = getConfiguredTarget("//a:a");
     CcToolchainProvider ccToolchainProvider =
         (CcToolchainProvider) target.get(CcToolchainProvider.PROVIDER);

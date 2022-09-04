@@ -587,7 +587,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
               ruleLabelCanonicalName));
     }
     ImmutableMap<String, Object> skylarkFlagSettings =
-        ruleContext.getConfiguration().getOptions().getStarlarkOptions();
+        ruleContext.getConfiguration().getOptions().getSkylarkOptions();
 
     Type<?> buildSettingType =
         ruleContext.getRule().getRuleClassObject().getBuildSetting().getType();

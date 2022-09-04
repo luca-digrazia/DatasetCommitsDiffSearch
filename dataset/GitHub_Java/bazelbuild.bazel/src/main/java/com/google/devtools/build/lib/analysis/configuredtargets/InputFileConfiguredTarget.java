@@ -22,16 +22,14 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Instantiator;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
-import java.util.Objects;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 
 /**
  * A ConfiguredTarget for an InputFile.
@@ -40,8 +38,7 @@ import java.util.Objects;
  * here and is always set to <b>null</b>.
  */
 @AutoCodec
-@Immutable // (and Starlark-hashable)
-public final class InputFileConfiguredTarget extends FileConfiguredTarget implements StarlarkValue {
+public final class InputFileConfiguredTarget extends FileConfiguredTarget implements SkylarkValue {
   private final SourceArtifact artifact;
   private final NestedSet<TargetLicense> licenses;
 
@@ -52,7 +49,7 @@ public final class InputFileConfiguredTarget extends FileConfiguredTarget implem
       NestedSet<PackageGroupContents> visibility,
       SourceArtifact artifact,
       NestedSet<TargetLicense> licenses) {
-    super(label, null, visibility, artifact, null, null, null);
+    super(label, null, visibility, artifact, null);
     this.artifact = artifact;
     this.licenses = licenses;
   }
@@ -66,7 +63,7 @@ public final class InputFileConfiguredTarget extends FileConfiguredTarget implem
 
   private static NestedSet<TargetLicense> makeLicenses(InputFile inputFile) {
     License license = inputFile.getLicense();
-    return Objects.equals(license, License.NO_LICENSE)
+    return license == License.NO_LICENSE
         ? NestedSetBuilder.emptySet(Order.LINK_ORDER)
         : NestedSetBuilder.create(
             Order.LINK_ORDER, new TargetLicense(inputFile.getLabel(), license));
@@ -98,7 +95,7 @@ public final class InputFileConfiguredTarget extends FileConfiguredTarget implem
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<input file target " + getLabel() + ">");
   }
 

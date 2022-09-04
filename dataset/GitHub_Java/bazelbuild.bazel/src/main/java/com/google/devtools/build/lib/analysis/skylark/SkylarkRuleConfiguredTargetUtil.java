@@ -82,8 +82,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
       ImmutableSet.of("files", "runfiles", "data_runfiles", "default_runfiles", "executable");
 
   /**
-   * Create a Rule Configured Target from the ruleContext and the ruleImplementation. Returns null
-   * if there were errors during target creation.
+   * Create a Rule Configured Target from the ruleContext and the ruleImplementation.
+   * Returns null if there were errors during target creation.
    */
   @Nullable
   public static ConfiguredTarget buildRule(
@@ -91,8 +91,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
       AdvertisedProviderSet advertisedProviders,
       BaseFunction ruleImplementation,
       Location location,
-      SkylarkSemantics skylarkSemantics,
-      String toolsRepository)
+      SkylarkSemantics skylarkSemantics)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     String expectFailure = ruleContext.attributes().get("expect_failure", Type.STRING);
     SkylarkRuleContext skylarkRuleContext = null;
@@ -103,19 +102,10 @@ public final class SkylarkRuleConfiguredTargetUtil {
               .setCallerLabel(ruleContext.getLabel())
               .setSemantics(skylarkSemantics)
               .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
-              .setStarlarkContext(new BazelStarlarkContext(toolsRepository))
               .build(); // NB: loading phase functions are not available: this is analysis already,
       // so we do *not* setLoadingPhase().
 
       RuleClass ruleClass = ruleContext.getRule().getRuleClassObject();
-      if (ruleClass.getRuleClassType().equals(RuleClass.Builder.RuleClassType.WORKSPACE)) {
-        ruleContext.ruleError(
-            "Found reference to a workspace rule in a context where a build"
-                + " rule was expected; probably a reference to a target in that external"
-                + " repository, properly specified as @reponame//path/to/package:target,"
-                + " should have been specified by the requesting rule.");
-        return null;
-      }
       if (ruleClass.hasFunctionTransitionWhitelist()
           && !Whitelist.isAvailable(ruleContext, FunctionSplitTransitionWhitelist.WHITELIST_NAME)) {
           ruleContext.ruleError("Non-whitelisted use of function-base split transition");

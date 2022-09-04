@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -69,13 +68,26 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
         "}",
+        // Stub toolchain to make default cc toolchains happy
+        // TODO(b/113849758): Remove once CppConfiguration doesn't load packages
+        "toolchain {",
+        "  compiler: 'orange'",
+        "  target_cpu: 'banana'",
+        "  toolchain_identifier: 'toolchain-identifier-k8'",
+        "  host_system_name: 'linux'",
+        "  target_system_name: 'linux'",
+        "  abi_version: 'cpu-abi'",
+        "  abi_libc_version: ''",
+        "  target_libc: 'local'",
+        "  builtin_sysroot: 'sysroot'",
+        "}",
         "\"\"\"",
         ")");
 
+    scratch.file("a/BUILD", "cc_binary(name='b', srcs=['b.cc'])");
+
     useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8", "--host_cpu=k8");
-    ConfiguredTarget c =
-        getConfiguredTarget(
-            ruleClassProvider.getToolsRepository() + "//tools/cpp:current_cc_toolchain");
+    ConfiguredTarget c = getConfiguredTarget("//a:b");
     CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
     assertThat(config.getRuleProvidingCcToolchainProvider().toString()).isEqualTo("//cc:suite");
   }
@@ -132,24 +144,27 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         "  target_libc: 'local'",
         "  builtin_sysroot: 'sysroot'",
         "}",
+        // Stub toolchain to make default cc toolchains happy
+        // TODO(b/113849758): Remove once CppConfiguration doesn't load packages
+        "toolchain {",
+        "  compiler: 'orange'",
+        "  target_cpu: 'banana'",
+        "  toolchain_identifier: 'toolchain-identifier-k8'",
+        "  host_system_name: 'linux'",
+        "  target_system_name: 'linux'",
+        "  abi_version: 'cpu-abi'",
+        "  abi_libc_version: ''",
+        "  target_libc: 'local'",
+        "  builtin_sysroot: 'sysroot'",
+        "}",
         "\"\"\"",
         ")");
 
-    useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8", "--host_cpu=k8");
-    ConfiguredTarget c =
-        getConfiguredTarget(
-            ruleClassProvider.getToolsRepository() + "//tools/cpp:current_cc_toolchain");
-    CcToolchainProvider ccToolchainProvider = (CcToolchainProvider) c.get(ToolchainInfo.PROVIDER);
-    assertThat(ccToolchainProvider.getToolchainIdentifier())
-        .isEqualTo("toolchain-identifier-fruitie");
-  }
+    scratch.file("a/BUILD", "cc_binary(name='b', srcs=['b.cc'])");
 
-  @Test
-  public void testInvalidCpu() throws Exception {
-    reporter.removeHandler(failFastHandler);
-    useConfiguration("--cpu=bogus");
-    getConfiguredTarget(
-        ruleClassProvider.getToolsRepository() + "//tools/cpp:current_cc_toolchain");
-    assertContainsEvent("does not contain a toolchain for cpu 'bogus'");
+    useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8", "--host_cpu=k8");
+    ConfiguredTarget c = getConfiguredTarget("//a:b");
+    CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
+    assertThat(config.getToolchainIdentifier()).isEqualTo("toolchain-identifier-fruitie");
   }
 }
