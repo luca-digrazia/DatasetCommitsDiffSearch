@@ -29,25 +29,19 @@ public class LdapRecorder {
      * @return runtime value wrapper for the SecurityRealm
      */
     public RuntimeValue<SecurityRealm> createRealm(LdapSecurityRealmRuntimeConfig runtimeConfig) {
-        LdapSecurityRealmBuilder.IdentityMappingBuilder identityMappingBuilder = LdapSecurityRealmBuilder.builder()
+        LdapSecurityRealmBuilder builder = LdapSecurityRealmBuilder.builder()
                 .setDirContextSupplier(createDirContextSupplier(runtimeConfig.dirContext))
-                .identityMapping();
-
-        if (runtimeConfig.identityMapping.searchRecursive) {
-            identityMappingBuilder.searchRecursive();
-        }
-
-        LdapSecurityRealmBuilder ldapSecurityRealmBuilder = identityMappingBuilder
+                .identityMapping()
                 .map(createAttributeMappings(runtimeConfig.identityMapping))
                 .setRdnIdentifier(runtimeConfig.identityMapping.rdnIdentifier)
                 .setSearchDn(runtimeConfig.identityMapping.searchBaseDn)
                 .build();
 
         if (runtimeConfig.directVerification) {
-            ldapSecurityRealmBuilder.addDirectEvidenceVerification(false);
+            builder.addDirectEvidenceVerification(false);
         }
 
-        return new RuntimeValue<>(ldapSecurityRealmBuilder.build());
+        return new RuntimeValue<>(builder.build());
     }
 
     private ExceptionSupplier<DirContext, NamingException> createDirContextSupplier(DirContextConfig dirContext) {
@@ -55,7 +49,7 @@ public class LdapRecorder {
                 dirContext.url,
                 dirContext.principal.orElse(null),
                 dirContext.password.orElse(null));
-        return () -> dirContextFactory.obtainDirContext(dirContext.referralMode);
+        return () -> dirContextFactory.obtainDirContext(DirContextFactory.ReferralMode.IGNORE);
     }
 
     private AttributeMapping[] createAttributeMappings(IdentityMappingConfig identityMappingConfig) {
