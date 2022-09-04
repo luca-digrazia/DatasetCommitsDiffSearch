@@ -69,7 +69,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -300,10 +299,10 @@ public class Indices implements IndexManagement {
         final Set<String> closedIndices = Sets.newHashSet();
 
         ClusterStateRequest csr = new ClusterStateRequest()
-                .nodes(true)
-                .routingTable(true)
-                .blocks(true)
-                .metaData(false);
+                .nodes(false)
+                .routingTable(false)
+                .blocks(false)
+                .metaData(true);
 
         ClusterState state = c.admin().cluster().state(csr).actionGet().getState();
 
@@ -360,7 +359,7 @@ public class Indices implements IndexManagement {
         // http://www.elasticsearch.org/guide/reference/api/admin-indices-optimize/
         OptimizeRequest or = new OptimizeRequest(index);
 
-        or.maxNumSegments(configuration.getIndexOptimizationMaxNumSegments());
+        or.maxNumSegments(1);
         or.onlyExpungeDeletes(false);
         or.flush(true);
         or.waitForMerge(true); // This makes us block until the operation finished.
