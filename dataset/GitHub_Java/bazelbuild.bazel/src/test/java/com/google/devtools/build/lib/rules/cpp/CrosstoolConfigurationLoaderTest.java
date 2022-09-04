@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Functions;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -35,6 +34,7 @@ import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import java.io.IOException;
@@ -193,11 +193,11 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(ccProvider.getAbiGlibcVersion()).isEqualTo("abi-libc-version");
 
     assertThat(ccProvider.supportsGoldLinker()).isTrue();
-    assertThat(ccProvider.supportsStartEndLib()).isFalse();
-    assertThat(ccProvider.supportsInterfaceSharedObjects()).isFalse();
+    assertThat(toolchain.supportsStartEndLib()).isFalse();
+    assertThat(toolchain.supportsInterfaceSharedObjects()).isFalse();
     assertThat(ccProvider.supportsEmbeddedRuntimes()).isFalse();
     assertThat(ccProvider.toolchainNeedsPic()).isFalse();
-    assertThat(ccProvider.supportsFission()).isTrue();
+    assertThat(toolchain.supportsFission()).isTrue();
 
     assertThat(ccProvider.getBuiltInIncludeDirectories())
         .containsExactly(getToolPath("/system-include-dir"));
@@ -514,7 +514,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(toolchainA.getToolPathFragment(Tool.STRIP))
         .isEqualTo(getToolPath("path/to/strip-A"));
     assertThat(ccProviderA.supportsGoldLinker()).isTrue();
-    assertThat(ccProviderA.supportsStartEndLib()).isTrue();
+    assertThat(toolchainA.supportsStartEndLib()).isTrue();
     assertThat(ccProviderA.supportsEmbeddedRuntimes()).isTrue();
     assertThat(ccProviderA.toolchainNeedsPic()).isTrue();
 
@@ -635,11 +635,11 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(ccProviderC.getAbiGlibcVersion()).isEqualTo("abi-libc-version-C");
     // Don't bother with testing the list of tools again.
     assertThat(ccProviderC.supportsGoldLinker()).isFalse();
-    assertThat(ccProviderC.supportsStartEndLib()).isFalse();
-    assertThat(ccProviderC.supportsInterfaceSharedObjects()).isFalse();
+    assertThat(toolchainC.supportsStartEndLib()).isFalse();
+    assertThat(toolchainC.supportsInterfaceSharedObjects()).isFalse();
     assertThat(ccProviderC.supportsEmbeddedRuntimes()).isFalse();
     assertThat(ccProviderC.toolchainNeedsPic()).isFalse();
-    assertThat(ccProviderC.supportsFission()).isFalse();
+    assertThat(toolchainC.supportsFission()).isFalse();
 
     assertThat(toolchainC.getCompilerOptions(NO_FEATURES)).isEmpty();
     assertThat(toolchainC.getCOptions()).isEmpty();

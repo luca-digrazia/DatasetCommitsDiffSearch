@@ -118,7 +118,6 @@ public final class CppLinkAction extends AbstractAction
 
   private final PathFragment ldExecutable;
   private final String hostSystemName;
-  private final String targetCpu;
 
   private final Iterable<Artifact> mandatoryInputs;
 
@@ -183,7 +182,6 @@ public final class CppLinkAction extends AbstractAction
     this.executionRequirements = executionRequirements;
     this.ldExecutable = toolchain.getToolPathFragment(Tool.LD);
     this.hostSystemName = toolchain.getHostSystemName();
-    this.targetCpu = toolchain.getTargetCpu();
   }
 
   private CppConfiguration getCppConfiguration() {
@@ -192,7 +190,7 @@ public final class CppLinkAction extends AbstractAction
 
   @VisibleForTesting
   public String getTargetCpu() {
-    return targetCpu;
+    return getCppConfiguration().getTargetCpu();
   }
 
   public String getHostSystemName() {
