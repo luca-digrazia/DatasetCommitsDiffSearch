@@ -87,7 +87,7 @@ public class ActivityIntentBuilder extends IntentBuilder {
 
 	@Override
 	protected JClass getSuperClass() {
-		JClass superClass = environment.getJClass(org.androidannotations.api.builder.ActivityIntentBuilder.class);
+		JClass superClass = holder.refClass(org.androidannotations.api.builder.ActivityIntentBuilder.class);
 		return superClass.narrow(builderClass);
 	}
 
