@@ -501,9 +501,9 @@ public class TestRunnerAction extends AbstractAction
     }
   }
 
-  void createEmptyOutputs(ActionExecutionContext context) throws IOException {
+  void createEmptyOutputs() throws IOException {
     for (Artifact output : TestRunnerAction.this.getMandatoryOutputs()) {
-      FileSystemUtils.touchFile(context.getInputPath(output));
+      FileSystemUtils.touchFile(output.getPath());
     }
   }
 
@@ -767,7 +767,7 @@ public class TestRunnerAction extends AbstractAction
       if (testAttemptContinuation == null) {
         testRunnerSpawn.finalizeCancelledTest(ImmutableList.of());
         // We need to create the mandatory output files even if we're not going to run anything.
-        createEmptyOutputs(actionExecutionContext);
+        createEmptyOutputs();
         return ActionContinuationOrResult.of(ActionResult.create(ImmutableList.of()));
       }
       return new RunAttemptsContinuation(
@@ -1031,7 +1031,7 @@ public class TestRunnerAction extends AbstractAction
           if (cancelFuture != null && cancelFuture.isCancelled()) {
             // Clear the interrupt bit.
             Thread.interrupted();
-            createEmptyOutputs(testRunnerSpawn.getActionExecutionContext());
+            createEmptyOutputs();
             testRunnerSpawn.finalizeCancelledTest(failedAttempts);
             return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
           }
@@ -1088,7 +1088,7 @@ public class TestRunnerAction extends AbstractAction
           if (nextContinuation == null) {
             testRunnerSpawn.finalizeCancelledTest(failedAttempts);
             // We need to create the mandatory output files even if we're not going to run anything.
-            createEmptyOutputs(testRunnerSpawn.getActionExecutionContext());
+            createEmptyOutputs();
             return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
           }
 
