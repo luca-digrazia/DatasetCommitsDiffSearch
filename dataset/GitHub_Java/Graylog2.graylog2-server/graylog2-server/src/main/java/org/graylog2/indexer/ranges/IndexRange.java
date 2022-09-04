@@ -25,9 +25,9 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
+import org.graylog2.system.activities.Activity;
 import org.graylog2.database.Persisted;
 import org.graylog2.database.validators.Validator;
-import org.graylog2.system.activities.Activity;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -47,6 +47,11 @@ public class IndexRange extends Persisted {
 
     public IndexRange(Core core, Map<String, Object> fields) {
         super(core, fields);
+    }
+
+    @Override
+    public String getCollectionName() {
+        return COLLECTION;
     }
 
     protected IndexRange(ObjectId id, Core core, Map<String, Object> fields) {
@@ -110,12 +115,13 @@ public class IndexRange extends Persisted {
     }
 
     @Override
-    public String getCollectionName() {
-        return COLLECTION;
+    public ObjectId getId() {
+        return this.id;
     }
 
     @Override
     protected Map<String, Validator> getValidations() {
+        // We don't have any, this is used internally only.
         return Maps.newHashMap();
     }
 
