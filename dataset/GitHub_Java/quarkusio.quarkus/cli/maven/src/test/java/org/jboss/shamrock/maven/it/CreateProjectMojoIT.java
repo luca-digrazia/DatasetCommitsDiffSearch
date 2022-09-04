@@ -3,6 +3,8 @@ package org.jboss.shamrock.maven.it;
 import com.google.common.base.Charsets;
 import com.google.common.io.Files;
 import org.apache.commons.io.FileUtils;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.apache.maven.shared.invoker.*;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import java.io.*;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,7 +51,12 @@ public class CreateProjectMojoIT extends MojoTestBase {
         Properties properties = new Properties();
         properties.put("projectGroupId", "org.acme");
         properties.put("projectArtifactId", "acme");
+        properties.put("projectVersion", "1.0-SNAPSHOT");
         setup(properties);
+
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "acme");
+
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(new File(testDir, "src/main/java")).isDirectory();
         assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).isFile();
@@ -60,8 +68,10 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(new File(testDir, "src/main/docker/Dockerfile")).isFile();
 
         Model model = load(testDir);
-        assertThat(model.getDependencyManagement().getDependencies().stream().anyMatch(d ->
-                d.getArtifactId().equalsIgnoreCase(MojoUtils.SHAMROCK_BOM_ARTIFACT_ID)
+        final DependencyManagement dependencyManagement = model.getDependencyManagement();
+        final List<Dependency> dependencies = dependencyManagement.getDependencies();
+        assertThat(dependencies.stream().anyMatch(d ->
+                d.getArtifactId().equalsIgnoreCase(MojoUtils.getBomArtifactId())
                         && d.getVersion().equalsIgnoreCase("${shamrock.version}")
                         && d.getScope().equalsIgnoreCase("import")
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
@@ -69,6 +79,9 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(model.getDependencies().stream().anyMatch(d ->
                 d.getArtifactId().equalsIgnoreCase("shamrock-jaxrs-deployment")
                         && d.getVersion() == null)).isTrue();
+
+        assertThat(model.getProfiles()).hasSize(1);
+        assertThat(model.getProfiles().get(0).getId()).isEqualTo("native");
     }
 
     private Model load(File directory) {
@@ -87,25 +100,29 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(testDir).isDirectory();
         init(testDir);
         setup(new Properties());
+
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
-                .contains(MojoUtils.SHAMROCK_PLUGIN_ARTIFACT_ID, MojoUtils.SHAMROCK_VERSION_VARIABLE, MojoUtils.SHAMROCK_GROUP_ID);
+                .contains(MojoUtils.getPluginGroupId(), MojoUtils.SHAMROCK_VERSION_PROPERTY, MojoUtils.getPluginGroupId());
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
         assertThat(new File(testDir, "src/main/resources/META-INF/microprofile-config.properties")).exists();
         assertThat(new File(testDir, "src/main/resources/META-INF/resources/index.html")).exists();
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
-            .containsIgnoringCase(MojoUtils.SHAMROCK_BOM_ARTIFACT_ID);
+            .containsIgnoringCase(MojoUtils.getBomArtifactId());
 
         Model model = load(testDir);
         assertThat(model.getDependencyManagement().getDependencies().stream().anyMatch(d ->
-                d.getArtifactId().equalsIgnoreCase(MojoUtils.SHAMROCK_BOM_ARTIFACT_ID)
+                d.getArtifactId().equalsIgnoreCase(MojoUtils.getBomArtifactId())
                         && d.getVersion().equalsIgnoreCase("${shamrock.version}")
                         && d.getScope().equalsIgnoreCase("import")
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
 
         assertThat(model.getDependencies()).isEmpty();
+
+        assertThat(model.getProfiles()).hasSize(1);
+        assertThat(model.getProfiles().get(0).getId()).isEqualTo("native");
     }
 
     @Test
@@ -118,11 +135,14 @@ public class CreateProjectMojoIT extends MojoTestBase {
         properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource.java");
         setup(properties);
+
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "acme");
+
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
-        check(new File(testDir, "src/main/java/org/acme/MyApplication.java"), "package org.acme;");
     }
 
     @Test
@@ -131,8 +151,6 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(testDir).isDirectory();
         init(testDir);
         Properties properties = new Properties();
-        properties.put("projectGroupId", "org.acme");
-        properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource.java");
         setup(properties);
 
@@ -141,7 +159,6 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
-        check(new File(testDir, "src/main/java/org/acme/MyApplication.java"), "package org.acme;");
     }
 
     @Test
@@ -153,21 +170,23 @@ public class CreateProjectMojoIT extends MojoTestBase {
         properties.put("projectGroupId", "org.acme");
         properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource");
-        properties.put("extensions", "web,metrics,missing");
-
+        properties.put("extensions", "jaxrs,smallrye-metrics,missing");
         setup(properties);
+
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "acme");
+
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(new File(testDir, "src/main/java")).isDirectory();
 
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
-        check(new File(testDir, "src/main/java/org/acme/MyApplication.java"), "package org.acme;");
 
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
-                .contains("shamrock-jaxrs-deployment", "shamrock-metrics-deployment").doesNotContain("missing");
+                .contains("shamrock-jaxrs-deployment", "shamrock-smallrye-metrics-deployment").doesNotContain("missing");
 
         Model model = load(testDir);
         assertThat(model.getDependencyManagement().getDependencies().stream().anyMatch(d ->
-                d.getArtifactId().equalsIgnoreCase(MojoUtils.SHAMROCK_BOM_ARTIFACT_ID)
+                d.getArtifactId().equalsIgnoreCase(MojoUtils.getBomArtifactId())
                         && d.getVersion().equalsIgnoreCase("${shamrock.version}")
                         && d.getScope().equalsIgnoreCase("import")
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
@@ -177,7 +196,7 @@ public class CreateProjectMojoIT extends MojoTestBase {
                         && d.getVersion() == null)).isTrue();
 
         assertThat(model.getDependencies().stream().anyMatch(d ->
-                d.getArtifactId().equalsIgnoreCase("shamrock-metrics-deployment")
+                d.getArtifactId().equalsIgnoreCase("shamrock-smallrye-metrics-deployment")
                         && d.getVersion() == null)).isTrue();
     }
 
@@ -192,15 +211,18 @@ public class CreateProjectMojoIT extends MojoTestBase {
         properties.put("className", "org.acme.MyResource");
         properties.put("extensions", "commons-io:commons-io:2.5");
         setup(properties);
+
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "acme");
+
         assertThat(new File(testDir, "pom.xml")).isFile();
         assertThat(new File(testDir, "src/main/java/org/acme/MyResource.java")).isFile();
-        assertThat(new File(testDir, "src/main/java/org/acme/MyApplication.java")).isFile();
         assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
                 .contains("commons-io");
 
         Model model = load(testDir);
         assertThat(model.getDependencyManagement().getDependencies().stream().anyMatch(d ->
-                d.getArtifactId().equalsIgnoreCase(MojoUtils.SHAMROCK_BOM_ARTIFACT_ID)
+                d.getArtifactId().equalsIgnoreCase(MojoUtils.getBomArtifactId())
                         && d.getVersion().equalsIgnoreCase("${shamrock.version}")
                         && d.getScope().equalsIgnoreCase("import")
                         && d.getType().equalsIgnoreCase("pom"))).isTrue();
@@ -221,16 +243,46 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(testDir).isDirectory();
         init(testDir);
         Properties properties = new Properties();
-        properties.put("projectGroupId", "org.acme");
-        properties.put("projectArtifactId", "acme");
         properties.put("className", "org.acme.MyResource");
         properties.put("extensions", "commons-io:commons-io:2.5");
         setup(properties);
-
         check(new File(testDir, "src/main/java/org/acme/MyResource.java"), "package org.acme;");
-        check(new File(testDir, "src/main/java/org/acme/MyApplication.java"), "package org.acme;");
         check(new File(testDir, "pom.xml"), "commons-io");
     }
+
+    /**
+     * Reproducer for https://github.com/jbossas/protean-shamrock/issues/671
+     */
+    @Test
+    public void testThatDefaultPackageAreReplaced() throws Exception {
+        testDir = initEmptyProject("projects/default-package-test");
+        assertThat(testDir).isDirectory();
+        init(testDir);
+        Properties properties = new Properties();
+        properties.put("className", "MyGreatResource");
+        setup(properties);
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "my-shamrock-project");
+        check(new File(testDir, "src/main/java/org/acme/shamrock/sample/MyGreatResource.java"), "package org.acme.shamrock.sample;");
+    }
+
+
+    /**
+     * Reproducer for https://github.com/jbossas/protean-shamrock/issues/673
+     */
+    @Test
+    public void testThatGenerationFailedWhenTheUserPassGAVonExistingPom() throws Exception {
+        testDir = initProject("projects/simple-pom-it","projects/fail-on-gav-and-existing-pom");
+        assertThat(testDir).isDirectory();
+        init(testDir);
+        Properties properties = new Properties();
+        properties.put("projectGroupId", "org.acme");
+        properties.put("className", "MyResource");
+        InvocationResult result = setup(properties);
+        assertThat(result.getExitCode()).isNotZero();
+        assertThat(new File(testDir, "src/main/java/org/acme/MyResource.java")).doesNotExist();
+    }
+
 
     private void check(final File resource, final String contentsToFind) throws IOException {
         assertThat(resource).isFile();
@@ -258,6 +310,8 @@ public class CreateProjectMojoIT extends MojoTestBase {
         setup(properties);
 
         // Run
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "acme");
         running = new RunningInvoker(testDir, false);
         running.execute(Arrays.asList("compile", "shamrock:dev"), Collections.emptyMap());
 
@@ -266,23 +320,23 @@ public class CreateProjectMojoIT extends MojoTestBase {
         assertThat(resp).containsIgnoringCase("ready").containsIgnoringCase("application").containsIgnoringCase("org.acme")
                 .containsIgnoringCase("1.0-SNAPSHOT");
 
-        String greeting = getHttpResponse("/app/hello");
+        String greeting = getHttpResponse("/hello");
         assertThat(greeting).containsIgnoringCase("hello");
     }
 
-    private void setup(Properties params) throws MavenInvocationException, FileNotFoundException {
+    private InvocationResult setup(Properties params) throws MavenInvocationException, FileNotFoundException {
         InvocationRequest request = new DefaultInvocationRequest();
         request.setBatchMode(true);
         request.setGoals(Collections.singletonList(
-            CreateProjectMojo.PLUGIN_KEY + ":" + MojoUtils.SHAMROCK_VERSION + ":create"
+            CreateProjectMojo.PLUGIN_KEY + ":" + MojoUtils.getPluginVersion() + ":create"
         ));
         request.setProperties(params);
         getEnv().forEach(request::addShellEnvironment);
-        File log = new File(testDir.getParentFile(), "build-create-" + testDir.getName() + ".log");
+        File log = new File(testDir, "build-create-" + testDir.getName() + ".log");
         PrintStreamLogger logger = new PrintStreamLogger(new PrintStream(new FileOutputStream(log)),
                 InvokerLogger.DEBUG);
         invoker.setLogger(logger);
-        invoker.execute(request);
+        return invoker.execute(request);
     }
 
 }
