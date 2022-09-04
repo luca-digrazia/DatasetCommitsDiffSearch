@@ -15,6 +15,9 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Sets;
@@ -44,11 +47,11 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(amnesiacBuilder(), hello);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(amnesiacBuilder(), hello);
-    assertThat(button.pressed).isTrue(); // rebuilt
+    assertTrue(button.pressed); // rebuilt
   }
 
   // If we re-use the same builder (even an "amnesiac" builder), it remembers
@@ -68,7 +71,7 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     counter.count = 0;
     buildArtifacts(amnesiacBuilder, hello, hello);
-    assertThat(counter.count).isEqualTo(1); // built only once
+    assertEquals(1, counter.count); // built only once
   }
 
   @Test
@@ -86,7 +89,7 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(cachingBuilder(), hello);
       fail("Expected input file to be missing");
     } catch (BuildFailedException e) {
-      assertThat(e).hasMessageThat().isEqualTo("missing input file '" + hello.getPath() + "'");
+      assertThat(e).hasMessage("missing input file '" + hello.getPath() + "'");
     }
   }
 
@@ -98,17 +101,17 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
 
     inMemoryCache.reset();
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isTrue(); // rebuilt
+    assertTrue(button.pressed); // rebuilt
   }
 
   @Test
@@ -121,31 +124,31 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
 
     BlazeTestUtils.makeEmptyFile(optional.getPath());
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
 
     optional.getPath().delete();
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
   }
 
   @Test
@@ -158,22 +161,22 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
 
     hello.getPath().setWritable(true);
     FileSystemUtils.writeContentAsLatin1(hello.getPath(), "new content");
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // rebuilt
+    assertTrue(button.pressed); // rebuilt
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
   }
 
   @Test
@@ -189,27 +192,27 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
 
     FileSystemUtils.touchFile(hello.getPath());
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // still not rebuilt
+    assertFalse(button.pressed); // still not rebuilt
 
     FileSystemUtils.writeContentAsLatin1(hello.getPath(), "content2");
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isTrue(); // rebuilt
+    assertTrue(button.pressed); // rebuilt
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
   }
 
   @Test
@@ -220,11 +223,11 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isTrue(); // built
+    assertTrue(button.pressed); // built
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
 
     // Changing the *output* file 'hello' causes 'action' to re-execute, to make things consistent
     // again.
@@ -233,11 +236,11 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isTrue(); // rebuilt
+    assertTrue(button.pressed); // rebuilt
 
     button.pressed = false;
     buildArtifacts(cachingBuilder(), hello);
-    assertThat(button.pressed).isFalse(); // not rebuilt
+    assertFalse(button.pressed); // not rebuilt
   }
 
   @Test
@@ -253,31 +256,31 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     button1.pressed = button2.pressed = false;
     buildArtifacts(cachingBuilder(), wazuup);
-    assertThat(button1.pressed).isTrue(); // built wazuup
-    assertThat(button2.pressed).isFalse(); // goodbye not built
+    assertTrue(button1.pressed); // built wazuup
+    assertFalse(button2.pressed); // goodbye not built
 
     button1.pressed = button2.pressed = false;
     buildArtifacts(cachingBuilder(), wazuup);
-    assertThat(button1.pressed).isFalse(); // wazuup not rebuilt
-    assertThat(button2.pressed).isFalse(); // goodbye not built
+    assertFalse(button1.pressed); // wazuup not rebuilt
+    assertFalse(button2.pressed); // goodbye not built
 
     button1.pressed = button2.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button1.pressed).isFalse(); // wazuup not rebuilt
-    assertThat(button2.pressed).isTrue(); // built goodbye
+    assertFalse(button1.pressed); // wazuup not rebuilt
+    assertTrue(button2.pressed); // built goodbye
 
     button1.pressed = button2.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button1.pressed).isFalse(); // wazuup not rebuilt
-    assertThat(button2.pressed).isFalse(); // goodbye not rebuilt
+    assertFalse(button1.pressed); // wazuup not rebuilt
+    assertFalse(button2.pressed); // goodbye not rebuilt
 
     hello.getPath().setWritable(true);
     FileSystemUtils.writeContentAsLatin1(hello.getPath(), "new content");
 
     button1.pressed = button2.pressed = false;
     buildArtifacts(cachingBuilder(), goodbye);
-    assertThat(button1.pressed).isTrue(); // hello rebuilt
-    assertThat(button2.pressed).isTrue(); // goodbye rebuilt
+    assertTrue(button1.pressed); // hello rebuilt
+    assertTrue(button2.pressed); // goodbye rebuilt
   }
 
   @Test
@@ -294,15 +297,15 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
 
     buildArtifacts(cachingBuilder(), anOutputFile, anotherOutputFile);
 
-    assertThat(aButton.pressed).isTrue();
-    assertThat(anotherButton.pressed).isTrue();
+    assertTrue(aButton.pressed);
+    assertTrue(anotherButton.pressed);
 
     aButton.pressed = anotherButton.pressed = false;
 
     buildArtifacts(cachingBuilder(), anOutputFile, anotherOutputFile);
 
-    assertThat(aButton.pressed).isFalse();
-    assertThat(anotherButton.pressed).isFalse();
+    assertFalse(aButton.pressed);
+    assertFalse(anotherButton.pressed);
   }
 
   @Test
@@ -328,7 +331,7 @@ public class TimestampBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(amnesiacBuilder(), out); // fails with ActionExecutionException
       fail();
     } catch (BuildFailedException e) {
-      assertThat(e).hasMessageThat().contains("1 input file(s) do not exist");
+      assertThat(e.getMessage()).contains("1 input file(s) do not exist");
     }
   }
 }

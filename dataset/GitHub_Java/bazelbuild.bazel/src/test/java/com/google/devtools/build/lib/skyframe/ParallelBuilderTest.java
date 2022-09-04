@@ -15,7 +15,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -72,7 +73,8 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ParallelBuilderTest extends TimestampBuilderTestCase {
 
-  private static final Logger logger = Logger.getLogger(ParallelBuilderTest.class.getName());
+  private static final Logger LOG =
+    Logger.getLogger(ParallelBuilderTest.class.getName());
 
   protected ActionCache cache;
 
@@ -192,7 +194,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
 
     buildArtifacts(createBuilder(DEFAULT_NUM_JOBS, true), pear);
     assertThat(recorder.actionExecutedEvents).hasSize(1);
-    assertThat(recorder.actionExecutedEvents.get(0).getAction()).isEqualTo(action);
+    assertEquals(action, recorder.actionExecutedEvents.get(0).getAction());
   }
 
   @Test
@@ -306,7 +308,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
   @Test
   public void testNullBuild() throws Exception {
     // BuildTool.setupLogging(Level.FINEST);
-    logger.fine("Testing null build...");
+    LOG.fine("Testing null build...");
     buildArtifacts();
   }
 
@@ -346,7 +348,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
         List<Counter> counters = buildRandomActionGraph(trial);
 
         // do a clean build
-        logger.fine("Testing clean build... (trial " + trial + ")");
+        LOG.fine("Testing clean build... (trial " + trial + ")");
         Artifact[] buildTargets = chooseRandomBuild();
         buildArtifacts(buildTargets);
         doSanityChecks(buildTargets, counters, BuildKind.Clean);
@@ -357,14 +359,14 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
         // BuildTool creates new instances of the Builder for each build request. It may rely on
         // that fact (that its state will be discarded after each build request) - thus
         // test should use same approach and ensure that a new instance is used each time.
-        logger.fine("Testing incremental build...");
+        LOG.fine("Testing incremental build...");
         buildTargets = chooseRandomBuild();
         buildArtifacts(buildTargets);
         doSanityChecks(buildTargets, counters, BuildKind.Incremental);
         resetCounters(counters);
 
         // do a do-nothing build
-        logger.fine("Testing do-nothing rebuild...");
+        LOG.fine("Testing do-nothing rebuild...");
         buildArtifacts(buildTargets);
         doSanityChecks(buildTargets, counters, BuildKind.Nop);
         //resetCounters(counters);
@@ -431,42 +433,42 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       switch (random.nextInt(4)) {
         case 0:
           // build the final output target
-          logger.fine("Building final output target.");
-          buildTargets = new Artifact[] {artifacts[numArtifacts - 1]};
+          LOG.fine("Building final output target.");
+          buildTargets = new Artifact[] { artifacts[numArtifacts - 1] };
           break;
 
-        case 1:
-          {
-            // build all the targets (in random order);
-            logger.fine("Building all the targets.");
-            List<Artifact> targets = Lists.newArrayList(artifacts);
-            Collections.shuffle(targets, random);
-            buildTargets = targets.toArray(new Artifact[numArtifacts]);
-            break;
-          }
+        case 1: {
+          // build all the targets (in random order);
+          LOG.fine("Building all the targets.");
+          List<Artifact> targets = Lists.newArrayList(artifacts);
+          Collections.shuffle(targets, random);
+          buildTargets = targets.toArray(new Artifact[numArtifacts]);
+          break;
+        }
 
         case 2:
           // build a random target
-          logger.fine("Building a random target.");
-          buildTargets = new Artifact[] {artifacts[random.nextInt(numArtifacts)]};
+          LOG.fine("Building a random target.");
+          buildTargets = new Artifact[] {
+                artifacts[random.nextInt(numArtifacts)]
+              };
           break;
 
-        case 3:
-          {
-            // build a random subset of targets
-            logger.fine("Building a random subset of targets.");
-            List<Artifact> targets = Lists.newArrayList(artifacts);
-            Collections.shuffle(targets, random);
-            List<Artifact> targetSubset = new ArrayList<>();
-            int numTargetsToTest = random.nextInt(numArtifacts);
-            logger.fine("numTargetsToTest = " + numTargetsToTest);
-            Iterator<Artifact> iterator = targets.iterator();
-            for (int i = 0; i < numTargetsToTest; i++) {
-              targetSubset.add(iterator.next());
-            }
-            buildTargets = targetSubset.toArray(new Artifact[numTargetsToTest]);
-            break;
+        case 3: {
+          // build a random subset of targets
+          LOG.fine("Building a random subset of targets.");
+          List<Artifact> targets = Lists.newArrayList(artifacts);
+          Collections.shuffle(targets, random);
+          List<Artifact> targetSubset = new ArrayList<>();
+          int numTargetsToTest = random.nextInt(numArtifacts);
+          LOG.fine("numTargetsToTest = " + numTargetsToTest);
+          Iterator<Artifact> iterator = targets.iterator();
+          for (int i = 0; i < numTargetsToTest; i++) {
+            targetSubset.add(iterator.next());
           }
+          buildTargets = targetSubset.toArray(new Artifact[numTargetsToTest]);
+          break;
+        }
 
         default:
           throw new IllegalStateException();
@@ -478,7 +480,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
         BuildKind kind) {
       // Check that we really did build all the targets.
       for (Artifact file : targets) {
-        assertThat(file.getPath().exists()).isTrue();
+        assertTrue(file.getPath().exists());
       }
       // Check that each action was executed the right number of times
       for (Counter counter : counters) {
@@ -552,15 +554,12 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo, bar);
       fail();
     } catch (BuildFailedException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("TestAction failed due to exception: foo action failed");
+      assertThat(e.getMessage()).contains("TestAction failed due to exception: foo action failed");
       assertContainsEvent("TestAction failed due to exception: foo action failed");
     }
 
-    assertWithMessage("bar action not finished, yet buildArtifacts has completed.")
-        .that(finished[0])
-        .isTrue();
+    assertTrue("bar action not finished, yet buildArtifacts has completed.",
+               finished[0]);
   }
 
   @Test
@@ -578,7 +577,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertThat(e).hasMessageThat().isEqualTo(CYCLE_MSG);
+      assertEquals(CYCLE_MSG, e.getMessage());
     }
   }
 
@@ -591,7 +590,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertThat(e).hasMessageThat().isEqualTo(CYCLE_MSG);
+      assertEquals(CYCLE_MSG, e.getMessage());
     }
   }
 
@@ -613,7 +612,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo1, foo2);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertThat(e).hasMessageThat().isEqualTo(CYCLE_MSG);
+      assertEquals(CYCLE_MSG, e.getMessage());
     }
   }
 
@@ -635,7 +634,7 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
       buildArtifacts(foo);
       fail("Builder failed to detect cyclic action graph");
     } catch (BuildFailedException e) {
-      assertThat(e).hasMessageThat().isEqualTo(CYCLE_MSG);
+      assertEquals(CYCLE_MSG, e.getMessage());
     }
   }
 

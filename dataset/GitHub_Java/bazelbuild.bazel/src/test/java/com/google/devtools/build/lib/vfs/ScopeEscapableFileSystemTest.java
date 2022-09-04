@@ -15,6 +15,12 @@ package com.google.devtools.build.lib.vfs;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -67,18 +73,15 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
       return ans != null ? ans.asFragment() : null;
     }
 
-    @Override
-    public boolean supportsModifications(Path path) {
+    @Override public boolean supportsModifications() {
       return true;
     }
 
-    @Override
-    public boolean supportsSymbolicLinksNatively(Path path) {
+    @Override public boolean supportsSymbolicLinksNatively() {
       return true;
     }
 
-    @Override
-    public boolean supportsHardLinksNatively(Path path) {
+    @Override public boolean supportsHardLinksNatively() {
       return true;
     }
 
@@ -165,20 +168,20 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
   // Checks that the semi-resolved path passed to the delegator matches the expected value.
   private void checkPath(TestDelegator delegator, PathFragment expectedDelegatedPath) {
-    assertThat(delegator.lastPath()).isEqualTo(expectedDelegatedPath);
+    assertEquals(expectedDelegatedPath, delegator.lastPath());
   }
 
   // Asserts that the condition is false and checks that the expected path was delegated.
   private void assertFalseWithPathCheck(boolean result, TestDelegator delegator,
       PathFragment expectedDelegatedPath) {
-    assertThat(result).isFalse();
+    assertFalse(result);
     checkPath(delegator, expectedDelegatedPath);
   }
 
   // Asserts that the condition is true and checks that the expected path was delegated.
   private void assertTrueWithPathCheck(boolean result, TestDelegator delegator,
       PathFragment expectedDelegatedPath) {
-    assertThat(result).isTrue();
+    assertTrue(result);
     checkPath(delegator, expectedDelegatedPath);
   }
 
@@ -310,8 +313,8 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     // We shouldn't follow final-segment links, so they should never invoke the delegator.
     delegator.setState(false);
-    assertThat(fileLink.isSymbolicLink()).isTrue();
-    assertThat(delegator.lastPath()).isNull();
+    assertTrue(fileLink.isSymbolicLink());
+    assertNull(delegator.lastPath());
 
     assertFalseWithPathCheck(dirLink.getRelative("a").isSymbolicLink(), delegator,
         dirLinkTarget.getRelative("a"));
@@ -389,8 +392,8 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     scopedFS().setDelegator(delegator);
 
     delegator.setState(false);
-    assertThat(fileLink.delete()).isTrue();
-    assertThat(delegator.lastPath()).isNull(); // Deleting a link shouldn't require delegation.
+    assertTrue(fileLink.delete());
+    assertNull(delegator.lastPath()); // Deleting a link shouldn't require delegation.
     assertFalseWithPathCheck(dirLink.getRelative("a").delete(), delegator,
         dirLinkTarget.getRelative("a"));
 
@@ -412,16 +415,16 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     final int state1 = 10;
     delegator.setState(state1);
-    assertThat(fileLink.getFileSize()).isEqualTo(state1);
+    assertEquals(state1, fileLink.getFileSize());
     checkPath(delegator, fileLinkTarget);
-    assertThat(dirLink.getRelative("a").getFileSize()).isEqualTo(state1);
+    assertEquals(state1, dirLink.getRelative("a").getFileSize());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
 
     final int state2 = 10;
     delegator.setState(state2);
-    assertThat(fileLink.getFileSize()).isEqualTo(state2);
+    assertEquals(state2, fileLink.getFileSize());
     checkPath(delegator, fileLinkTarget);
-    assertThat(dirLink.getRelative("a").getFileSize()).isEqualTo(state2);
+    assertEquals(state2, dirLink.getRelative("a").getFileSize());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
    }
 
@@ -437,16 +440,16 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     final int state1 = 10;
     delegator.setState(state1);
-    assertThat(fileLink.getLastModifiedTime()).isEqualTo(state1);
+    assertEquals(state1, fileLink.getLastModifiedTime());
     checkPath(delegator, fileLinkTarget);
-    assertThat(dirLink.getRelative("a").getLastModifiedTime()).isEqualTo(state1);
+    assertEquals(state1, dirLink.getRelative("a").getLastModifiedTime());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
 
     final int state2 = 10;
     delegator.setState(state2);
-    assertThat(fileLink.getLastModifiedTime()).isEqualTo(state2);
+    assertEquals(state2, fileLink.getLastModifiedTime());
     checkPath(delegator, fileLinkTarget);
-    assertThat(dirLink.getRelative("a").getLastModifiedTime()).isEqualTo(state2);
+    assertEquals(state2, dirLink.getRelative("a").getLastModifiedTime());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
   }
 
@@ -462,18 +465,18 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(false);
     fileLink.setReadable(true);
-    assertThat(delegator.booleanState()).isTrue();
+    assertTrue(delegator.booleanState());
     checkPath(delegator, fileLinkTarget);
     fileLink.setReadable(false);
-    assertThat(delegator.booleanState()).isFalse();
+    assertFalse(delegator.booleanState());
     checkPath(delegator, fileLinkTarget);
 
     delegator.setState(false);
     dirLink.getRelative("a").setReadable(true);
-    assertThat(delegator.booleanState()).isTrue();
+    assertTrue(delegator.booleanState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
     dirLink.getRelative("a").setReadable(false);
-    assertThat(delegator.booleanState()).isFalse();
+    assertFalse(delegator.booleanState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
   }
 
@@ -489,18 +492,18 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(false);
     fileLink.setWritable(true);
-    assertThat(delegator.booleanState()).isTrue();
+    assertTrue(delegator.booleanState());
     checkPath(delegator, fileLinkTarget);
     fileLink.setWritable(false);
-    assertThat(delegator.booleanState()).isFalse();
+    assertFalse(delegator.booleanState());
     checkPath(delegator, fileLinkTarget);
 
     delegator.setState(false);
     dirLink.getRelative("a").setWritable(true);
-    assertThat(delegator.booleanState()).isTrue();
+    assertTrue(delegator.booleanState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
     dirLink.getRelative("a").setWritable(false);
-    assertThat(delegator.booleanState()).isFalse();
+    assertFalse(delegator.booleanState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
   }
 
@@ -516,18 +519,18 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(false);
     fileLink.setReadable(true);
-    assertThat(delegator.booleanState()).isTrue();
+    assertTrue(delegator.booleanState());
     checkPath(delegator, fileLinkTarget);
     fileLink.setReadable(false);
-    assertThat(delegator.booleanState()).isFalse();
+    assertFalse(delegator.booleanState());
     checkPath(delegator, fileLinkTarget);
 
     delegator.setState(false);
     dirLink.getRelative("a").setReadable(true);
-    assertThat(delegator.booleanState()).isTrue();
+    assertTrue(delegator.booleanState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
     dirLink.getRelative("a").setReadable(false);
-    assertThat(delegator.booleanState()).isFalse();
+    assertFalse(delegator.booleanState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
   }
 
@@ -543,17 +546,17 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(0);
     fileLink.setLastModifiedTime(10);
-    assertThat(delegator.longState()).isEqualTo(10);
+    assertEquals(10, delegator.longState());
     checkPath(delegator, fileLinkTarget);
     fileLink.setLastModifiedTime(15);
-    assertThat(delegator.longState()).isEqualTo(15);
+    assertEquals(15, delegator.longState());
     checkPath(delegator, fileLinkTarget);
 
     dirLink.getRelative("a").setLastModifiedTime(20);
-    assertThat(delegator.longState()).isEqualTo(20);
+    assertEquals(20, delegator.longState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
     dirLink.getRelative("a").setLastModifiedTime(25);
-    assertThat(delegator.longState()).isEqualTo(25);
+    assertEquals(25, delegator.longState());
     checkPath(delegator, dirLinkTarget.getRelative("a"));
   }
 
@@ -571,8 +574,8 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     // Renaming a link should work fine.
     delegator.setState(null);
     fileLink.renameTo(testFS.getPath(SCOPE_ROOT).getRelative("newname"));
-    assertThat(delegator.lastPath()).isNull(); // Renaming a link shouldn't require delegation.
-    assertThat(delegator.objectState()).isNull();
+    assertNull(delegator.lastPath()); // Renaming a link shouldn't require delegation.
+    assertNull(delegator.objectState());
 
     // Renaming an out-of-scope path to an in-scope path should fail due to filesystem mismatch
     // errors.
@@ -587,9 +590,8 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     // Renaming an out-of-scope path to another out-of-scope path can be valid.
     newPath = dirLink.getRelative("b");
     dirLink.getRelative("a").renameTo(newPath);
-    assertThat(delegator.lastPath()).isEqualTo(dirLinkTarget.getRelative("a"));
-    assertThat(((Path) delegator.objectState()).asFragment())
-        .isEqualTo(dirLinkTarget.getRelative("b"));
+    assertEquals(dirLinkTarget.getRelative("a"), delegator.lastPath());
+    assertEquals(dirLinkTarget.getRelative("b"), ((Path) delegator.objectState()).asFragment());
   }
 
   @Test
@@ -605,8 +607,8 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     PathFragment newLinkTarget = PathFragment.create("/something/else");
     dirLink.getRelative("a").createSymbolicLink(newLinkTarget);
-    assertThat(delegator.lastPath()).isEqualTo(dirLinkTarget.getRelative("a"));
-    assertThat(delegator.objectState()).isSameAs(newLinkTarget);
+    assertEquals(dirLinkTarget.getRelative("a"), delegator.lastPath());
+    assertSame(newLinkTarget, delegator.objectState());
   }
 
   @Test
@@ -623,13 +625,13 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     // Since we're not following the link, this shouldn't invoke delegation.
     delegator.setState(PathFragment.create("whatever"));
     PathFragment p = fileLink.readSymbolicLink();
-    assertThat(delegator.lastPath()).isNull();
-    assertThat(p).isNotSameAs(delegator.objectState());
+    assertNull(delegator.lastPath());
+    assertNotSame(delegator.objectState(), p);
 
     // This should.
     p = dirLink.getRelative("a").readSymbolicLink();
-    assertThat(delegator.lastPath()).isEqualTo(dirLinkTarget.getRelative("a"));
-    assertThat(p).isSameAs(delegator.objectState());
+    assertEquals(dirLinkTarget.getRelative("a"), delegator.lastPath());
+    assertSame(delegator.objectState(), p);
   }
 
   @Test
@@ -644,13 +646,13 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(new ByteArrayInputStream("blah".getBytes(UTF_8)));
     InputStream is = fileLink.getInputStream();
-    assertThat(delegator.lastPath()).isEqualTo(fileLinkTarget);
-    assertThat(is).isSameAs(delegator.objectState());
+    assertEquals(fileLinkTarget, delegator.lastPath());
+    assertSame(delegator.objectState(), is);
 
     delegator.setState(new ByteArrayInputStream("blah2".getBytes(UTF_8)));
     is = dirLink.getInputStream();
-    assertThat(delegator.lastPath()).isEqualTo(dirLinkTarget);
-    assertThat(is).isSameAs(delegator.objectState());
+    assertEquals(dirLinkTarget, delegator.lastPath());
+    assertSame(delegator.objectState(), is);
   }
 
   @Test
@@ -666,13 +668,13 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(new ByteArrayOutputStream());
     OutputStream os = fileLink.getOutputStream();
-    assertThat(delegator.lastPath()).isEqualTo(fileLinkTarget);
-    assertThat(os).isSameAs(delegator.objectState());
+    assertEquals(fileLinkTarget, delegator.lastPath());
+    assertSame(delegator.objectState(), os);
 
     delegator.setState(new ByteArrayOutputStream());
     os = dirLink.getOutputStream();
-    assertThat(delegator.lastPath()).isEqualTo(dirLinkTarget);
-    assertThat(os).isSameAs(delegator.objectState());
+    assertEquals(dirLinkTarget, delegator.lastPath());
+    assertSame(delegator.objectState(), os);
   }
 
   @Test
@@ -688,9 +690,9 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
 
     delegator.setState(testFS.getPath("/anything"));
     Collection<Path> entries = dirLink.getDirectoryEntries();
-    assertThat(delegator.lastPath()).isEqualTo(dirLinkTarget);
+    assertEquals(dirLinkTarget, delegator.lastPath());
     assertThat(entries).hasSize(1);
-    assertThat(entries.iterator().next()).isSameAs(delegator.objectState());
+    assertSame(delegator.objectState(), entries.iterator().next());
   }
 
   /**
@@ -705,7 +707,7 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     Path l = testFS.getPath(SCOPE_ROOT.getRelative(link));
     testFS.createSymbolicLink(l, PathFragment.create(target));
     l.exists();
-    assertThat(d.lastPath()).isNull();
+    assertNull(d.lastPath());
   }
 
   /**
@@ -717,7 +719,7 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     Path l = testFS.getPath(SCOPE_ROOT.getRelative(link));
     testFS.createSymbolicLink(l, PathFragment.create(target));
     l.exists();
-    assertThat(d.lastPath().getPathString()).isEqualTo(expectedPath);
+    assertEquals(expectedPath, d.lastPath().getPathString());
   }
 
   /**
@@ -762,13 +764,13 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     Path iDirLink = testFS.getPath(SCOPE_ROOT.getRelative("ilinkdir"));
     testFS.createSymbolicLink(iDirLink, SCOPE_ROOT.getRelative("dir"));
     iDirLink.getRelative("file").exists();
-    assertThat(d.lastPath()).isNull();
+    assertNull(d.lastPath());
 
     // Out-of-scope symlink that's not the final segment in a query.
     Path oDirLink = testFS.getPath(SCOPE_ROOT.getRelative("olinkdir"));
     testFS.createSymbolicLink(oDirLink, PathFragment.create("/some/other/dir"));
     oDirLink.getRelative("file").exists();
-    assertThat(d.lastPath().getPathString()).isEqualTo("/some/other/dir/file");
+    assertEquals("/some/other/dir/file", d.lastPath().getPathString());
   }
 
   /**
@@ -807,12 +809,12 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     Path iDirLink = testFS.getPath(SCOPE_ROOT.getRelative("dir/dir2/ilinkdir"));
     testFS.createSymbolicLink(iDirLink, PathFragment.create("../../dir"));
     iDirLink.getRelative("file").exists();
-    assertThat(d.lastPath()).isNull();
+    assertNull(d.lastPath());
 
     // Out-of-scope symlink that's not the final segment in a query.
     Path oDirLink = testFS.getPath(SCOPE_ROOT.getRelative("dir/dir2/olinkdir"));
     testFS.createSymbolicLink(oDirLink, PathFragment.create("../../../other/dir"));
     oDirLink.getRelative("file").exists();
-    assertThat(d.lastPath().getPathString()).isEqualTo(chopScopeRoot(1) + "/other/dir/file");
+    assertEquals(chopScopeRoot(1) + "/other/dir/file", d.lastPath().getPathString());
   }
 }

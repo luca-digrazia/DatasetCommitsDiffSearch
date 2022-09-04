@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.bazel.repository.downloader;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
@@ -61,134 +62,43 @@ public class ProxyHelperTest {
   }
 
   @Test
-  public void testCreateIfNeededNoProxyLowerCase() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "no_proxy",
-                "something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.example.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
-  }
-
-  @Test
-  public void testCreateIfNeededNoProxyUpperCase() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "NO_PROXY",
-                "something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.example.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
-  }
-
-  @Test
-  public void testCreateIfNeededMultipleNoProxyLowerCase() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "no_proxy",
-                "something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.example.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
-  }
-
-  @Test
-  public void testCreateIfNeededMultipleNoProxyUpperCase() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "NO_PROXY",
-                "something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.example.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
-  }
-
-  @Test
-  public void testCreateIfNeededNoProxyNoMatchSubstring() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "NO_PROXY",
-                "something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.not-example.com"));
-    assertThat(proxy.toString()).endsWith("my.example.com:443");
-  }
-
-  @Test
-  public void testCreateIfNeededNoProxyMatchSubdomainInNoProxy() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "NO_PROXY",
-                ".something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.my.something.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
-  }
-
-  @Test
-  public void testCreateIfNeededNoProxyMatchSubdomainInURL() throws Exception {
-    ProxyHelper helper =
-        new ProxyHelper(
-            ImmutableMap.of(
-                "NO_PROXY",
-                "something.com,example.com,localhost",
-                "HTTPS_PROXY",
-                "https://my.example.com"));
-    Proxy proxy = helper.createProxyIfNeeded(new URL("https://www.my.subdomain.something.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
-  }
-
-  @Test
   public void testNoProxy() throws Exception {
     // Empty address.
     Proxy proxy = ProxyHelper.createProxy(null);
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
+    assertEquals(Proxy.NO_PROXY, proxy);
     proxy = ProxyHelper.createProxy("");
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
+    assertEquals(Proxy.NO_PROXY, proxy);
     Map<String, String> env = ImmutableMap.of();
     ProxyHelper helper = new ProxyHelper(env);
     proxy = helper.createProxyIfNeeded(new URL("https://www.something.com"));
-    assertThat(proxy).isEqualTo(Proxy.NO_PROXY);
+    assertEquals(Proxy.NO_PROXY, proxy);
   }
 
   @Test
   public void testProxyDefaultPort() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://my.example.com");
-    assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
+    assertEquals(Proxy.Type.HTTP, proxy.type());
     assertThat(proxy.toString()).endsWith(":80");
-    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("http.proxyPort")).isEqualTo("80");
+    assertEquals("my.example.com", System.getProperty("http.proxyHost"));
+    assertEquals("80", System.getProperty("http.proxyPort"));
 
     proxy = ProxyHelper.createProxy("https://my.example.com");
     assertThat(proxy.toString()).endsWith(":443");
-    assertThat(System.getProperty("https.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("https.proxyPort")).isEqualTo("443");
+    assertEquals("my.example.com", System.getProperty("https.proxyHost"));
+    assertEquals("443", System.getProperty("https.proxyPort"));
   }
 
   @Test
   public void testProxyExplicitPort() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://my.example.com:12345");
     assertThat(proxy.toString()).endsWith(":12345");
-    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("http.proxyPort")).isEqualTo("12345");
+    assertEquals("my.example.com", System.getProperty("http.proxyHost"));
+    assertEquals("12345", System.getProperty("http.proxyPort"));
 
     proxy = ProxyHelper.createProxy("https://my.example.com:12345");
     assertThat(proxy.toString()).endsWith(":12345");
-    assertThat(System.getProperty("https.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("https.proxyPort")).isEqualTo("12345");
+    assertEquals("my.example.com", System.getProperty("https.proxyHost"));
+    assertEquals("12345", System.getProperty("https.proxyPort"));
   }
 
   @Test
@@ -197,7 +107,7 @@ public class ProxyHelperTest {
       ProxyHelper.createProxy("my.example.com");
       fail("Expected protocol error");
     } catch (IOException e) {
-      assertThat(e).hasMessageThat().contains("Proxy address my.example.com is not a valid URL");
+      assertThat(e.getMessage()).contains("Proxy address my.example.com is not a valid URL");
     }
   }
 
@@ -207,9 +117,7 @@ public class ProxyHelperTest {
       ProxyHelper.createProxy("my.example.com:12345");
       fail("Expected protocol error");
     } catch (IOException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("Proxy address my.example.com:12345 is not a valid URL");
+      assertThat(e.getMessage()).contains("Proxy address my.example.com:12345 is not a valid URL");
     }
   }
 
@@ -219,8 +127,7 @@ public class ProxyHelperTest {
       ProxyHelper.createProxy("http://my.example.com:foo");
       fail("Should have thrown an error for invalid port");
     } catch (IOException e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .contains("Proxy address http://my.example.com:foo is not a valid URL");
     }
   }
@@ -228,30 +135,30 @@ public class ProxyHelperTest {
   @Test
   public void testProxyAuth() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://foo:barbaz@my.example.com");
-    assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
+    assertEquals(Proxy.Type.HTTP, proxy.type());
     assertThat(proxy.toString()).endsWith(":80");
-    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("http.proxyPort")).isEqualTo("80");
-    assertThat(System.getProperty("http.proxyUser")).isEqualTo("foo");
-    assertThat(System.getProperty("http.proxyPassword")).isEqualTo("barbaz");
+    assertEquals("my.example.com", System.getProperty("http.proxyHost"));
+    assertEquals("80", System.getProperty("http.proxyPort"));
+    assertEquals("foo", System.getProperty("http.proxyUser"));
+    assertEquals("barbaz", System.getProperty("http.proxyPassword"));
 
     proxy = ProxyHelper.createProxy("https://biz:bat@my.example.com");
     assertThat(proxy.toString()).endsWith(":443");
-    assertThat(System.getProperty("https.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("https.proxyPort")).isEqualTo("443");
-    assertThat(System.getProperty("https.proxyUser")).isEqualTo("biz");
-    assertThat(System.getProperty("https.proxyPassword")).isEqualTo("bat");
+    assertEquals("my.example.com", System.getProperty("https.proxyHost"));
+    assertEquals("443", System.getProperty("https.proxyPort"));
+    assertEquals("biz", System.getProperty("https.proxyUser"));
+    assertEquals("bat", System.getProperty("https.proxyPassword"));
   }
 
   @Test
   public void testEncodedProxyAuth() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://foo:b%40rb%40z@my.example.com");
-    assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
+    assertEquals(Proxy.Type.HTTP, proxy.type());
     assertThat(proxy.toString()).endsWith(":80");
-    assertThat(System.getProperty("http.proxyHost")).isEqualTo("my.example.com");
-    assertThat(System.getProperty("http.proxyPort")).isEqualTo("80");
-    assertThat(System.getProperty("http.proxyUser")).isEqualTo("foo");
-    assertThat(System.getProperty("http.proxyPassword")).isEqualTo("b@rb@z");
+    assertEquals("my.example.com", System.getProperty("http.proxyHost"));
+    assertEquals("80", System.getProperty("http.proxyPort"));
+    assertEquals("foo", System.getProperty("http.proxyUser"));
+    assertEquals("b@rb@z", System.getProperty("http.proxyPassword"));
   }
 
   @Test
@@ -260,27 +167,27 @@ public class ProxyHelperTest {
       ProxyHelper.createProxy("http://foo@my.example.com");
       fail("Should have thrown an error for invalid auth");
     } catch (IOException e) {
-      assertThat(e).hasMessageThat().contains("No password given for proxy");
+      assertThat(e.getMessage()).contains("No password given for proxy");
     }
   }
 
   @Test
   public void testNoProxyAuth() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://localhost:3128/");
-    assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
+    assertEquals(Proxy.Type.HTTP, proxy.type());
     assertThat(proxy.toString()).endsWith(":3128");
-    assertThat(System.getProperty("http.proxyHost")).isEqualTo("localhost");
-    assertThat(System.getProperty("http.proxyPort")).isEqualTo("3128");
+    assertEquals("localhost", System.getProperty("http.proxyHost"));
+    assertEquals("3128", System.getProperty("http.proxyPort"));
   }
 
   @Test
   public void testTrailingSlash() throws Exception {
     Proxy proxy = ProxyHelper.createProxy("http://foo:bar@example.com:8000/");
-    assertThat(proxy.type()).isEqualTo(Proxy.Type.HTTP);
+    assertEquals(Proxy.Type.HTTP, proxy.type());
     assertThat(proxy.toString()).endsWith(":8000");
-    assertThat(System.getProperty("http.proxyHost")).isEqualTo("example.com");
-    assertThat(System.getProperty("http.proxyPort")).isEqualTo("8000");
-    assertThat(System.getProperty("http.proxyUser")).isEqualTo("foo");
-    assertThat(System.getProperty("http.proxyPassword")).isEqualTo("bar");
+    assertEquals("example.com", System.getProperty("http.proxyHost"));
+    assertEquals("8000", System.getProperty("http.proxyPort"));
+    assertEquals("foo", System.getProperty("http.proxyUser"));
+    assertEquals("bar", System.getProperty("http.proxyPassword"));
   }
 }

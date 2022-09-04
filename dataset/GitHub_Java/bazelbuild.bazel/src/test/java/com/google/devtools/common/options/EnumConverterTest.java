@@ -14,9 +14,11 @@
 
 package com.google.devtools.common.options;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.common.options.OptionsParser.newOptionsParser;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.fail;
 
 import java.util.List;
 import org.junit.Test;
@@ -44,14 +46,15 @@ public class EnumConverterTest {
   @Test
   public void converterForEnumWithTwoValues() throws Exception {
     CompilationModeConverter converter = new CompilationModeConverter();
-    assertThat(converter.convert("dbg")).isEqualTo(CompilationMode.DBG);
-    assertThat(converter.convert("opt")).isEqualTo(CompilationMode.OPT);
-    OptionsParsingException e =
-        assertThrows(OptionsParsingException.class, () -> converter.convert("none"));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo("Not a valid compilation mode: 'none' (should be dbg or opt)");
-    assertThat(converter.getTypeDescription()).isEqualTo("dbg or opt");
+    assertEquals(CompilationMode.DBG, converter.convert("dbg"));
+    assertEquals(CompilationMode.OPT, converter.convert("opt"));
+    try {
+      converter.convert("none");
+      fail();
+    } catch(OptionsParsingException e) {
+      assertEquals("Not a valid compilation mode: 'none' (should be dbg or opt)", e.getMessage());
+    }
+    assertEquals("dbg or opt", converter.getTypeDescription());
   }
 
   private enum Fruit {
@@ -69,13 +72,14 @@ public class EnumConverterTest {
   public void typeDescriptionForEnumWithThreeValues() throws Exception {
     FruitConverter converter = new FruitConverter();
     // We always use lowercase in the user-visible messages:
-    assertThat(converter.getTypeDescription()).isEqualTo("apple, banana or cherry");
+    assertEquals("apple, banana or cherry",
+                 converter.getTypeDescription());
   }
 
   @Test
   public void converterIsCaseInsensitive() throws Exception {
     FruitConverter converter = new FruitConverter();
-    assertThat(converter.convert("bAnANa")).isSameAs(Fruit.Banana);
+    assertSame(Fruit.Banana, converter.convert("bAnANa"));
   }
 
   // Regression test: lists of enum using a subclass of EnumConverter don't work
@@ -90,14 +94,10 @@ public class EnumConverterTest {
   }
 
   public static class EnumListTestOptions extends OptionsBase {
-    @Option(
-      name = "goo",
-      allowMultiple = true,
-      converter = AlphabetEnumConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "null"
-    )
+    @Option(name = "goo",
+            allowMultiple = true,
+            converter = AlphabetEnumConverter.class,
+            defaultValue = "null")
     public List<AlphabetEnum> goo;
   }
 
@@ -106,10 +106,10 @@ public class EnumConverterTest {
     OptionsParser parser = newOptionsParser(EnumListTestOptions.class);
     parser.parse("--goo=ALPHA", "--goo=BRAVO");
     EnumListTestOptions options = parser.getOptions(EnumListTestOptions.class);
-    assertThat(options.goo).isNotNull();
-    assertThat(options.goo).hasSize(2);
-    assertThat(options.goo.get(0)).isEqualTo(AlphabetEnum.ALPHA);
-    assertThat(options.goo.get(1)).isEqualTo(AlphabetEnum.BRAVO);
+    assertNotNull(options.goo);
+    assertEquals(2, options.goo.size());
+    assertEquals(AlphabetEnum.ALPHA, options.goo.get(0));
+    assertEquals(AlphabetEnum.BRAVO, options.goo.get(1));
   }
 
 }

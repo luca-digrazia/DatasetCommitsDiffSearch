@@ -15,20 +15,25 @@
 package com.google.devtools.build.lib.skylark;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests for SkylarkFileset and SkylarkFileType.
  */
+@RunWith(JUnit4.class)
 public class SkylarkFileHelperTest extends SkylarkTestCase {
 
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
+  @Before
+  public final void createBuildFile() throws Exception  {
     scratch.file(
         "foo/BUILD",
         "genrule(name = 'foo',",
@@ -39,13 +44,15 @@ public class SkylarkFileHelperTest extends SkylarkTestCase {
   }
 
   @SuppressWarnings("unchecked")
+  @Test
   public void testFilterPasses() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
         evalRuleContextCode(ruleContext, "FileType(['.img']).filter(ruleContext.files.srcs)");
-    assertEquals(ActionsTestUtil.baseNamesOf((Iterable<Artifact>) result), "b.img");
+    assertEquals("b.img", ActionsTestUtil.baseNamesOf((Iterable<Artifact>) result));
   }
 
+  @Test
   public void testFilterFiltersFilesOut() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result =
@@ -53,12 +60,14 @@ public class SkylarkFileHelperTest extends SkylarkTestCase {
     assertThat(((Iterable<?>) result)).isEmpty();
   }
 
+  @Test
   public void testArtifactPath() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     String result = (String) evalRuleContextCode(ruleContext, "ruleContext.files.tools[0].path");
     assertEquals("foo/t.exe", result);
   }
 
+  @Test
   public void testArtifactShortPath() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     String result =

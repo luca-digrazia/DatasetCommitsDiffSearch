@@ -13,7 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.events;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,13 +36,13 @@ public class EventCollectorTest extends EventTestTemplate {
     EventCollector collector = new EventCollector(EventKind.ALL_EVENTS, events);
     collector.handle(event);
     Event onlyEvent = events.iterator().next();
-    assertThat(onlyEvent.getMessage()).isEqualTo(event.getMessage());
-    assertThat(onlyEvent.getLocation()).isSameInstanceAs(location);
-    assertThat(onlyEvent.getKind()).isEqualTo(event.getKind());
-    assertThat(onlyEvent.getLocation().getStartOffset())
-        .isEqualTo(event.getLocation().getStartOffset());
-    assertThat(collector.count()).isEqualTo(1);
-    assertThat(events).hasSize(1);
+    assertEquals(event.getMessage(), onlyEvent.getMessage());
+    assertSame(location, onlyEvent.getLocation());
+    assertEquals(event.getKind(), onlyEvent.getKind());
+    assertEquals(event.getLocation().getStartOffset(),
+        onlyEvent.getLocation().getStartOffset());
+    assertEquals(1, collector.count());
+    assertEquals(1, events.size());
   }
 
   @Test
@@ -49,11 +51,11 @@ public class EventCollectorTest extends EventTestTemplate {
     collector.handle(event);
     Iterator<Event> collectedEventIt = collector.iterator();
     Event onlyEvent = collectedEventIt.next();
-    assertThat(onlyEvent.getMessage()).isEqualTo(event.getMessage());
-    assertThat(onlyEvent.getLocation()).isSameInstanceAs(location);
-    assertThat(onlyEvent.getKind()).isEqualTo(event.getKind());
-    assertThat(onlyEvent.getLocation().getStartOffset())
-        .isEqualTo(event.getLocation().getStartOffset());
-    assertThat(collectedEventIt.hasNext()).isFalse();
+    assertEquals(event.getMessage(), onlyEvent.getMessage());
+    assertSame(location, onlyEvent.getLocation());
+    assertEquals(event.getKind(), onlyEvent.getKind());
+    assertEquals(event.getLocation().getStartOffset(),
+        onlyEvent.getLocation().getStartOffset());
+    assertFalse(collectedEventIt.hasNext());
   }
 }

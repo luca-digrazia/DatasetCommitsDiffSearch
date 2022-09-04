@@ -15,11 +15,13 @@ package com.google.devtools.build.lib.profiler;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.profiler.Profiler.ProfiledTaskKinds;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.BlazeClock;
@@ -48,29 +50,22 @@ public class ProfilerTest extends FoundationTestCase {
 
   private Path cacheDir;
   private Profiler profiler = Profiler.instance();
-  private ManualClock clock;
 
   @Before
   public final void createCacheDirectory() throws Exception {
     cacheDir = scratch.dir("/tmp");
   }
 
-  @Before
-  public final void setManualClock() {
-    clock = new ManualClock();
-    BlazeClock.setClock(clock);
-  }
-
   @Test
   public void testProfilerActivation() throws Exception {
     Path cacheFile = cacheDir.getRelative("profile1.dat");
-    assertThat(profiler.isActive()).isFalse();
+    assertFalse(profiler.isActive());
     profiler.start(ProfiledTaskKinds.ALL, cacheFile.getOutputStream(), "basic test", false,
         BlazeClock.instance(), BlazeClock.instance().nanoTime());
-    assertThat(profiler.isActive()).isTrue();
+    assertTrue(profiler.isActive());
 
     profiler.stop();
-    assertThat(profiler.isActive()).isFalse();
+    assertFalse(profiler.isActive());
   }
 
   @Test
@@ -86,14 +81,14 @@ public class ProfilerTest extends FoundationTestCase {
     info.calculateStats();
 
     ProfileInfo.Task task = info.allTasksById.get(0);
-    assertThat(task.id).isEqualTo(1);
-    assertThat(task.type).isEqualTo(ProfilerTask.ACTION);
-    assertThat(task.getDescription()).isEqualTo("action task");
+    assertEquals(1, task.id);
+    assertEquals(ProfilerTask.ACTION, task.type);
+    assertEquals("action task", task.getDescription());
 
     task = info.allTasksById.get(1);
-    assertThat(task.id).isEqualTo(2);
-    assertThat(task.type).isEqualTo(ProfilerTask.TEST);
-    assertThat(task.getDescription()).isEqualTo("event");
+    assertEquals(2, task.id);
+    assertEquals(ProfilerTask.TEST, task.type);
+    assertEquals("event", task.getDescription());
   }
 
   @Test
@@ -101,16 +96,16 @@ public class ProfilerTest extends FoundationTestCase {
     Path cacheFile = cacheDir.getRelative("profile1.dat");
     profiler.start(ProfiledTaskKinds.ALL, cacheFile.getOutputStream(), "basic test", false,
         BlazeClock.instance(), BlazeClock.instance().nanoTime());
-    profiler.logSimpleTask(BlazeClock.instance().nanoTime(),
+    profiler.logSimpleTask(getTestClock().nanoTime(),
                            ProfilerTask.PHASE, "profiler start");
     profiler.startTask(ProfilerTask.ACTION, "complex task");
     profiler.logEvent(ProfilerTask.PHASE, "event1");
     profiler.startTask(ProfilerTask.ACTION_CHECK, "complex subtask");
     // next task takes less than 10 ms and should be only aggregated
-    profiler.logSimpleTask(BlazeClock.instance().nanoTime(),
+    profiler.logSimpleTask(getTestClock().nanoTime(),
                            ProfilerTask.VFS_STAT, "stat1");
-    long startTime = BlazeClock.instance().nanoTime();
-    clock.advanceMillis(20);
+    long startTime = getTestClock().nanoTime();
+    Thread.sleep(20);
     // this one will take at least 20 ms and should be present
     profiler.logSimpleTask(startTime, ProfilerTask.VFS_STAT, "stat2");
     profiler.completeTask(ProfilerTask.ACTION_CHECK);
@@ -127,7 +122,7 @@ public class ProfilerTest extends FoundationTestCase {
     assertThat(info.allTasksById).hasSize(6); // only 5 tasks + finalization should be recorded
 
     ProfileInfo.Task task = info.allTasksById.get(0);
-    assertThat(task.stats.isEmpty()).isTrue();
+    assertTrue(task.stats.isEmpty());
 
     task = info.allTasksById.get(1);
     int count = 0;
@@ -136,21 +131,21 @@ public class ProfilerTest extends FoundationTestCase {
         count++;
       }
     }
-    assertThat(count).isEqualTo(2); // only children are GENERIC and ACTION_CHECK
-    assertThat(ProfilerTask.TASK_COUNT).isEqualTo(task.aggregatedStats.toArray().length);
-    assertThat(task.aggregatedStats.getAttr(ProfilerTask.VFS_STAT).count).isEqualTo(2);
+    assertEquals(2, count); // only children are GENERIC and ACTION_CHECK
+    assertEquals(task.aggregatedStats.toArray().length, ProfilerTask.TASK_COUNT);
+    assertEquals(2, task.aggregatedStats.getAttr(ProfilerTask.VFS_STAT).count);
 
     task = info.allTasksById.get(2);
     assertThat(task.durationNanos).isEqualTo(0);
 
     task = info.allTasksById.get(3);
-    assertThat(task.stats.getAttr(ProfilerTask.VFS_STAT).count).isEqualTo(2);
-    assertThat(task.subtasks).hasLength(1);
-    assertThat(task.subtasks[0].getDescription()).isEqualTo("stat2");
+    assertEquals(2, task.stats.getAttr(ProfilerTask.VFS_STAT).count);
+    assertEquals(1, task.subtasks.length);
+    assertEquals("stat2", task.subtasks[0].getDescription());
     // assert that startTime grows with id
     long time = -1;
     for (ProfileInfo.Task t : info.allTasksById) {
-      assertThat(t.startTime).isAtLeast(time);
+      assertTrue(t.startTime >= time);
       time = t.startTime;
     }
   }
@@ -162,8 +157,7 @@ public class ProfilerTest extends FoundationTestCase {
         BlazeClock.instance(), BlazeClock.instance().nanoTime());
     profiler.startTask(ProfilerTask.ACTION, "action task");
     // Next task takes less than 10 ms but should be recorded anyway.
-    clock.advanceMillis(1);
-    profiler.logSimpleTask(BlazeClock.instance().nanoTime(), ProfilerTask.VFS_STAT, "stat1");
+    profiler.logSimpleTask(getTestClock().nanoTime(), ProfilerTask.VFS_STAT, "stat1");
     profiler.completeTask(ProfilerTask.ACTION);
     profiler.stop();
     ProfileInfo info = ProfileInfo.loadProfile(cacheFile);
@@ -171,7 +165,7 @@ public class ProfilerTest extends FoundationTestCase {
     assertThat(info.allTasksById).hasSize(3); // 2 tasks + finalization should be recorded
 
     ProfileInfo.Task task = info.allTasksById.get(1);
-    assertThat(task.type).isEqualTo(ProfilerTask.VFS_STAT);
+    assertEquals(ProfilerTask.VFS_STAT, task.type);
 
     // Check that task would have been dropped if profiler was not configured to record everything.
     assertThat(task.durationNanos).isLessThan(ProfilerTask.VFS_STAT.minDuration);
@@ -186,8 +180,8 @@ public class ProfilerTest extends FoundationTestCase {
     profiler.logSimpleTask(10000, 20000, ProfilerTask.VFS_STAT, "stat");
     profiler.logSimpleTask(20000, 30000, ProfilerTask.REMOTE_EXECUTION, "remote execution");
 
-    assertThat(profiler.isProfiling(ProfilerTask.VFS_STAT)).isTrue();
-    assertThat(profiler.isProfiling(ProfilerTask.REMOTE_EXECUTION)).isFalse();
+    assertTrue(profiler.isProfiling(ProfilerTask.VFS_STAT));
+    assertFalse(profiler.isProfiling(ProfilerTask.REMOTE_EXECUTION));
 
     profiler.stop();
 
@@ -196,7 +190,7 @@ public class ProfilerTest extends FoundationTestCase {
     assertThat(info.allTasksById).hasSize(1); // only VFS_STAT task should be recorded
 
     ProfileInfo.Task task = info.allTasksById.get(0);
-    assertThat(task.type).isEqualTo(ProfilerTask.VFS_STAT);
+    assertEquals(ProfilerTask.VFS_STAT, task.type);
   }
 
   @Test
@@ -207,8 +201,8 @@ public class ProfilerTest extends FoundationTestCase {
         BlazeClock.instance(), BlazeClock.instance().nanoTime());
     profiler.logSimpleTask(10000, 20000, ProfilerTask.VFS_STAT, "stat");
 
-    assertThat(ProfilerTask.VFS_STAT.collectsSlowestInstances()).isTrue();
-    assertThat(profiler.isProfiling(ProfilerTask.VFS_STAT)).isFalse();
+    assertTrue(ProfilerTask.VFS_STAT.collectsSlowestInstances());
+    assertFalse(profiler.isProfiling(ProfilerTask.VFS_STAT));
 
     profiler.stop();
 
@@ -270,23 +264,23 @@ public class ProfilerTest extends FoundationTestCase {
     ProfileInfo info = ProfileInfo.loadProfile(cacheFile);
     info.calculateStats();
     info.analyzeRelationships();
-    assertThat(info.allTasksById).hasSize(4 + 10000 + 10000); // total number of tasks
-    assertThat(info.tasksByThread).hasSize(3); // total number of threads
+    assertEquals(4 + 10000 + 10000, info.allTasksById.size()); // total number of tasks
+    assertEquals(3, info.tasksByThread.size()); // total number of threads
     // while main thread had 3 tasks, 2 of them were nested, so tasksByThread
     // would contain only one "main task" task
-    assertThat(info.tasksByThread.get(id)).hasLength(2);
+    assertEquals(2, info.tasksByThread.get(id).length);
     ProfileInfo.Task mainTask = info.tasksByThread.get(id)[0];
-    assertThat(mainTask.getDescription()).isEqualTo("main task");
-    assertThat(mainTask.subtasks).hasLength(2);
+    assertEquals("main task", mainTask.getDescription());
+    assertEquals(2, mainTask.subtasks.length);
     // other threads had 10000 independent recorded tasks each
-    assertThat(info.tasksByThread.get(id1)).hasLength(10000);
-    assertThat(info.tasksByThread.get(id2)).hasLength(10000);
+    assertEquals(10000, info.tasksByThread.get(id1).length);
+    assertEquals(10000, info.tasksByThread.get(id2).length);
     int startId = mainTask.subtasks[0].id; // id of "starting threads"
     int endId = mainTask.subtasks[1].id; // id of "joining"
-    assertThat(startId).isLessThan(info.tasksByThread.get(id1)[0].id);
-    assertThat(startId).isLessThan(info.tasksByThread.get(id2)[0].id);
-    assertThat(endId).isGreaterThan(info.tasksByThread.get(id1)[9999].id);
-    assertThat(endId).isGreaterThan(info.tasksByThread.get(id2)[9999].id);
+    assertTrue(startId < info.tasksByThread.get(id1)[0].id);
+    assertTrue(startId < info.tasksByThread.get(id2)[0].id);
+    assertTrue(endId > info.tasksByThread.get(id1)[9999].id);
+    assertTrue(endId > info.tasksByThread.get(id2)[9999].id);
   }
 
   @Test
@@ -305,7 +299,7 @@ public class ProfilerTest extends FoundationTestCase {
     profiler.markPhase(ProfilePhase.LOAD);
     thread1.start();
     thread1.join();
-    clock.advanceMillis(1);
+    Thread.sleep(1);
     profiler.markPhase(ProfilePhase.ANALYZE);
     Thread thread2 = new Thread() {
       @Override public void run() {
@@ -323,7 +317,7 @@ public class ProfilerTest extends FoundationTestCase {
     thread2.start();
     thread2.join();
     profiler.logEvent(ProfilerTask.TEST, "last task");
-    clock.advanceMillis(1);
+    Thread.sleep(1);
     profiler.stop();
 
     ProfileInfo info = ProfileInfo.loadProfile(cacheFile);
@@ -354,7 +348,6 @@ public class ProfilerTest extends FoundationTestCase {
         BlazeClock.instance(), BlazeClock.instance().nanoTime());
     for (int i = 0; i < 100; i++) {
       profiler.startTask(ProfilerTask.TEST, "outer task " + i);
-      clock.advanceMillis(1);
       profiler.logEvent(ProfilerTask.TEST, "inner task " + i);
       profiler.completeTask(ProfilerTask.TEST);
     }
@@ -362,19 +355,19 @@ public class ProfilerTest extends FoundationTestCase {
 
     ProfileInfo info = ProfileInfo.loadProfile(cacheFile);
     info.calculateStats();
-    assertThat(info.isCorruptedOrIncomplete()).isFalse();
+    assertFalse(info.isCorruptedOrIncomplete());
 
     Path corruptedFile = cacheDir.getRelative("profile5bad.dat");
     FileSystemUtils.writeContent(
         corruptedFile, Arrays.copyOf(FileSystemUtils.readContent(cacheFile), 2000));
     info = ProfileInfo.loadProfile(corruptedFile);
     info.calculateStats();
-    assertThat(info.isCorruptedOrIncomplete()).isTrue();
+    assertTrue(info.isCorruptedOrIncomplete());
     // Since root tasks will appear after nested tasks in the profile file and
-    // we have exactly one nested task for each root task, the following will always
-    // be true for our corrupted file:
+    // we have exactly one nested task for each root task, then following will be
+    // always true for our corrupted file:
     // 0 <= number_of_all_tasks - 2*number_of_root_tasks <= 1
-    assertThat(info.allTasksById.size() / 2).isEqualTo(info.rootTasksById.size());
+    assertEquals(info.rootTasksById.size(), info.allTasksById.size() / 2);
   }
 
   @Test
@@ -393,19 +386,19 @@ public class ProfilerTest extends FoundationTestCase {
     // Validate our test profile.
     ProfileInfo info = ProfileInfo.loadProfile(dataFile);
     info.calculateStats();
-    assertThat(info.isCorruptedOrIncomplete()).isFalse();
-    assertThat(info.getStatsForType(ProfilerTask.TEST, info.rootTasksById).count).isEqualTo(2);
-    assertThat(info.getStatsForType(ProfilerTask.UNKNOWN, info.rootTasksById).count).isEqualTo(0);
+    assertFalse(info.isCorruptedOrIncomplete());
+    assertEquals(2, info.getStatsForType(ProfilerTask.TEST, info.rootTasksById).count);
+    assertEquals(0, info.getStatsForType(ProfilerTask.UNKNOWN, info.rootTasksById).count);
 
     // Now replace "TEST" type with something unsupported - e.g. "XXXX".
     InputStream in = new InflaterInputStream(dataFile.getInputStream(), new Inflater(false), 65536);
     byte[] buffer = new byte[60000];
     int len = in.read(buffer);
     in.close();
-    assertThat(len).isLessThan(buffer.length); // Validate that file was completely decoded.
+    assertTrue(len < buffer.length); // Validate that file was completely decoded.
     String content = new String(buffer, ISO_8859_1);
     int infoIndex = content.indexOf("TEST");
-    assertThat(infoIndex).isGreaterThan(0);
+    assertTrue(infoIndex > 0);
     content = content.substring(0, infoIndex) + "XXXX" + content.substring(infoIndex + 4);
     OutputStream out = new DeflaterOutputStream(dataFile.getOutputStream(),
         new Deflater(Deflater.BEST_SPEED, false), 65536);
@@ -415,11 +408,11 @@ public class ProfilerTest extends FoundationTestCase {
     // Validate that XXXX records were classified as UNKNOWN.
     info = ProfileInfo.loadProfile(dataFile);
     info.calculateStats();
-    assertThat(info.isCorruptedOrIncomplete()).isFalse();
-    assertThat(info.getStatsForType(ProfilerTask.TEST, info.rootTasksById).count).isEqualTo(0);
-    assertThat(info.getStatsForType(ProfilerTask.SCANNER, info.rootTasksById).count).isEqualTo(1);
-    assertThat(info.getStatsForType(ProfilerTask.EXCEPTION, info.rootTasksById).count).isEqualTo(1);
-    assertThat(info.getStatsForType(ProfilerTask.UNKNOWN, info.rootTasksById).count).isEqualTo(2);
+    assertFalse(info.isCorruptedOrIncomplete());
+    assertEquals(0, info.getStatsForType(ProfilerTask.TEST, info.rootTasksById).count);
+    assertEquals(1, info.getStatsForType(ProfilerTask.SCANNER, info.rootTasksById).count);
+    assertEquals(1, info.getStatsForType(ProfilerTask.EXCEPTION, info.rootTasksById).count);
+    assertEquals(2, info.getStatsForType(ProfilerTask.UNKNOWN, info.rootTasksById).count);
   }
 
   @Test
@@ -443,4 +436,9 @@ public class ProfilerTest extends FoundationTestCase {
     profiler.logSimpleTask(badClock.nanoTime(), ProfilerTask.TEST, "some task");
     profiler.stop();
   }
+
+  private Clock getTestClock() {
+    return BlazeClock.instance();
+  }
+
 }
