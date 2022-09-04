@@ -211,33 +211,14 @@ public class GroupedListTest {
   }
 
   @Test
-  public void createCompressedSingleton() {
-    GroupedList<String> groupedList = new GroupedList<>();
-    groupedList.appendGroup(ImmutableList.of("a"));
-    assertThat(GroupedList.createCompressedSingleton("a")).isEqualTo(groupedList.compress());
-  }
-
-  @Test
-  public void createCompressedWithTwoGroups() {
+  public void createCompressed() {
     GroupedList<String> groupedList = new GroupedList<>();
     groupedList.appendGroup(ImmutableList.of("a"));
     groupedList.appendGroup(ImmutableList.of("b", "c"));
-    assertThat(GroupedList.createCompressedWithTwoGroups("a", ImmutableList.of("b", "c")))
+    assertThat(GroupedList.createCompressedWithTwoGroupes("a", ImmutableList.of("b", "c")))
         .isEqualTo(groupedList.compress());
     groupedList.remove(ImmutableSet.of("b"));
-    assertThat(GroupedList.createCompressedWithTwoGroups("a", ImmutableList.of("c")))
-        .isEqualTo(groupedList.compress());
-  }
-
-  @Test
-  public void createCompressedWithThreeGroups() {
-    GroupedList<String> groupedList = new GroupedList<>();
-    groupedList.appendGroup(ImmutableList.of("a"));
-    groupedList.appendGroup(ImmutableList.of("b", "c"));
-    groupedList.appendGroup(ImmutableList.of("d", "e", "f"));
-    assertThat(
-            GroupedList.createCompressedWithThreeGroups(
-                "a", ImmutableList.of("b", "c"), ImmutableList.of("d", "e", "f")))
+    assertThat(GroupedList.createCompressedWithTwoGroupes("a", ImmutableList.of("c")))
         .isEqualTo(groupedList.compress());
   }
 
