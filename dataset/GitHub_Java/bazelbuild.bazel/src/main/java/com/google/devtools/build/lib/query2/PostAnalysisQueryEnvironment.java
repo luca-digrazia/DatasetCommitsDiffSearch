@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
+
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -69,6 +70,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -237,8 +239,8 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     for (T target : targets) {
       targetsByKey.put(getSkyKey(target), target);
     }
-    Map<SkyKey, ImmutableList<ClassifiedDependency<T>>> directDeps =
-        targetifyValues(targetsByKey, graph.getDirectDeps(targetsByKey.keySet()));
+    Map<SkyKey, Collection<T>> directDeps =
+        targetifyValues(graph.getDirectDeps(targetsByKey.keySet()));
     if (targetsByKey.size() != directDeps.size()) {
       Iterable<ConfiguredTargetKey> missingTargets =
           Sets.difference(targetsByKey.keySet(), directDeps.keySet()).stream()
@@ -247,7 +249,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
       eventHandler.handle(Event.warn("Targets were missing from graph: " + missingTargets));
     }
     ThreadSafeMutableSet<T> result = createThreadSafeMutableSet();
-    for (Map.Entry<SkyKey, ImmutableList<ClassifiedDependency<T>>> entry : directDeps.entrySet()) {
+    for (Map.Entry<SkyKey, Collection<T>> entry : directDeps.entrySet()) {
       result.addAll(filterFwdDeps(targetsByKey.get(entry.getKey()), entry.getValue()));
     }
     return result;
@@ -259,10 +261,9 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     return getFwdDeps(targets);
   }
 
-  private ImmutableList<T> filterFwdDeps(
-      T configTarget, ImmutableList<ClassifiedDependency<T>> rawFwdDeps) {
+  private Collection<T> filterFwdDeps(T configTarget, Collection<T> rawFwdDeps) {
     if (settings.isEmpty()) {
-      return getDependencies(rawFwdDeps);
+      return rawFwdDeps;
     }
     return getAllowedDeps(configTarget, rawFwdDeps);
   }
@@ -274,8 +275,8 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
     for (T target : targets) {
       targetsByKey.put(getSkyKey(target), target);
     }
-    Map<SkyKey, ImmutableList<ClassifiedDependency<T>>> reverseDepsByKey =
-        targetifyValues(targetsByKey, graph.getReverseDeps(targetsByKey.keySet()));
+    Map<SkyKey, Collection<T>> reverseDepsByKey =
+        targetifyValues(graph.getReverseDeps(targetsByKey.keySet()));
     if (targetsByKey.size() != reverseDepsByKey.size()) {
       Iterable<ConfiguredTargetKey> missingTargets =
           Sets.difference(targetsByKey.keySet(), reverseDepsByKey.keySet()).stream()
@@ -283,27 +284,23 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
               .collect(Collectors.toList());
       eventHandler.handle(Event.warn("Targets were missing from graph: " + missingTargets));
     }
-    Map<T, ImmutableList<ClassifiedDependency<T>>> reverseDepsByCT = new HashMap<>();
-    for (Map.Entry<SkyKey, ImmutableList<ClassifiedDependency<T>>> entry :
-        reverseDepsByKey.entrySet()) {
+    Map<T, Collection<T>> reverseDepsByCT = new HashMap<>();
+    for (Map.Entry<SkyKey, Collection<T>> entry : reverseDepsByKey.entrySet()) {
       reverseDepsByCT.put(targetsByKey.get(entry.getKey()), entry.getValue());
     }
     return reverseDepsByCT.isEmpty() ? Collections.emptyList() : filterReverseDeps(reverseDepsByCT);
   }
 
-  private Collection<T> filterReverseDeps(
-      Map<T, ImmutableList<ClassifiedDependency<T>>> rawReverseDeps) {
+  private Collection<T> filterReverseDeps(Map<T, Collection<T>> rawReverseDeps) {
     Set<T> result = CompactHashSet.create();
-    for (Map.Entry<T, ImmutableList<ClassifiedDependency<T>>> targetAndRdeps :
-        rawReverseDeps.entrySet()) {
-      ImmutableList.Builder<ClassifiedDependency<T>> ruleDeps = ImmutableList.builder();
-      for (ClassifiedDependency<T> parent : targetAndRdeps.getValue()) {
-        T dependency = parent.dependency;
-        if (parent.dependency instanceof RuleConfiguredTarget
+    for (Map.Entry<T, Collection<T>> targetAndRdeps : rawReverseDeps.entrySet()) {
+      ImmutableSet.Builder<T> ruleDeps = ImmutableSet.builder();
+      for (T parent : targetAndRdeps.getValue()) {
+        if (parent instanceof RuleConfiguredTarget
             && dependencyFilter != DependencyFilter.ALL_DEPS) {
           ruleDeps.add(parent);
         } else {
-          result.add(dependency);
+          result.add(parent);
         }
       }
       result.addAll(getAllowedDeps(targetAndRdeps.getKey(), ruleDeps.build()));
@@ -315,7 +312,7 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
    * @param target source target
    * @param deps next level of deps to filter
    */
-  private ImmutableList<T> getAllowedDeps(T target, Collection<ClassifiedDependency<T>> deps) {
+  protected Collection<T> getAllowedDeps(T target, Collection<T> deps) {
     // It's possible to query on a target that's configured in the host configuration. In those
     // cases if --notool_deps is turned on, we only allow reachable targets that are ALSO in the
     // host config. This is somewhat counterintuitive and subject to change in the future but seems
@@ -327,8 +324,8 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
             deps.stream()
                 .filter(
                     dep ->
-                        getConfiguration(dep.dependency) != null
-                            && getConfiguration(dep.dependency).isToolConfiguration())
+                        getConfiguration(dep) != null
+                            && getConfiguration(dep).isToolConfiguration())
                 .collect(Collectors.toList());
       } else {
         deps =
@@ -339,86 +336,51 @@ public abstract class PostAnalysisQueryEnvironment<T> extends AbstractBlazeQuery
                         // they can also appear on host-configured attributes like genrule#tools.
                         // While this may not be strictly correct, it's better to overapproximate
                         // than underapproximate the results.
-                        getConfiguration(dep.dependency) == null
-                            || !getConfiguration(dep.dependency).isToolConfiguration())
+                        getConfiguration(dep) == null
+                            || !getConfiguration(dep).isToolConfiguration())
                 .collect(Collectors.toList());
       }
     }
     if (settings.contains(Setting.NO_IMPLICIT_DEPS)) {
       RuleConfiguredTarget ruleConfiguredTarget = getRuleConfiguredTarget(target);
       if (ruleConfiguredTarget != null) {
-        deps = deps.stream().filter(dep -> !dep.implicit).collect(Collectors.toList());
+        Set<ConfiguredTargetKey> implicitDeps = ruleConfiguredTarget.getImplicitDeps();
+        deps =
+            deps.stream()
+                .filter(
+                    dep ->
+                        !implicitDeps.contains(
+                            ConfiguredTargetKey.of(getCorrectLabel(dep), getConfiguration(dep))))
+                .collect(Collectors.toList());
       }
     }
-    return getDependencies(deps);
+    return deps;
   }
 
   protected abstract RuleConfiguredTarget getRuleConfiguredTarget(T target);
 
-  /**
-   * Returns targetified dependencies wrapped as {@link ClassifiedDependency} objects which include
-   * information on if the target is an implicit or explicit dependency.
-   *
-   * @param parent Parent target that knows about its attribute-attached implicit deps. If this is
-   *     null, that is a signal from the caller that all dependencies should be considered implicit.
-   * @param dependencies dependencies to targetify
-   */
-  private ImmutableList<ClassifiedDependency<T>> targetifyValues(
-      @Nullable T parent, Iterable<SkyKey> dependencies) throws InterruptedException {
-    Collection<ConfiguredTargetKey> implicitDeps = null;
-    if (parent != null) {
-      RuleConfiguredTarget ruleConfiguredTarget = getRuleConfiguredTarget(parent);
-      if (ruleConfiguredTarget != null) {
-        implicitDeps = ruleConfiguredTarget.getImplicitDeps();
-      }
-    }
-
-    ImmutableList.Builder<ClassifiedDependency<T>> values = ImmutableList.builder();
+  protected Collection<T> targetifyValues(Iterable<SkyKey> dependencies)
+      throws InterruptedException {
+    Collection<T> values = new ArrayList<>();
     for (SkyKey key : dependencies) {
       if (key.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {
-        T dependency = getValueFromKey(key);
-        boolean implicit =
-            implicitDeps == null
-                || implicitDeps.contains(
-                    ConfiguredTargetKey.of(
-                        getCorrectLabel(dependency), getConfiguration(dependency)));
-        values.add(new ClassifiedDependency<>(dependency, implicit));
+        values.add(getValueFromKey(key));
       } else if (key.functionName().equals(SkyFunctions.TOOLCHAIN_RESOLUTION)) {
         // Also fetch these dependencies.
-        values.addAll(targetifyValues(null, graph.getDirectDeps(key)));
+        Collection<T> toolchainDeps = targetifyValues(graph.getDirectDeps(key));
+        values.addAll(toolchainDeps);
       }
     }
-    return values.build();
+    return values;
   }
 
-  private Map<SkyKey, ImmutableList<ClassifiedDependency<T>>> targetifyValues(
-      Map<SkyKey, T> fromTargetsByKey, Map<SkyKey, ? extends Iterable<SkyKey>> input)
-      throws InterruptedException {
-    Map<SkyKey, ImmutableList<ClassifiedDependency<T>>> result = new HashMap<>();
+  protected Map<SkyKey, Collection<T>> targetifyValues(
+      Map<SkyKey, ? extends Iterable<SkyKey>> input) throws InterruptedException {
+    Map<SkyKey, Collection<T>> result = new HashMap<>();
     for (Map.Entry<SkyKey, ? extends Iterable<SkyKey>> entry : input.entrySet()) {
-      SkyKey fromKey = entry.getKey();
-      result.put(fromKey, targetifyValues(fromTargetsByKey.get(fromKey), entry.getValue()));
+      result.put(entry.getKey(), targetifyValues(entry.getValue()));
     }
     return result;
-  }
-
-  /** A class to store a dependency with some information. */
-  private static class ClassifiedDependency<T> {
-    // True if this dependency is attached implicitly.
-    boolean implicit;
-    T dependency;
-
-    private ClassifiedDependency(T dependency, boolean implicit) {
-      this.implicit = implicit;
-      this.dependency = dependency;
-    }
-  }
-
-  private static <T> ImmutableList<T> getDependencies(
-      Collection<ClassifiedDependency<T>> classifiedDependencies) {
-    return classifiedDependencies.stream()
-        .map(dep -> dep.dependency)
-        .collect(ImmutableList.toImmutableList());
   }
 
   @Nullable
