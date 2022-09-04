@@ -38,13 +38,13 @@ public class Adam implements Optimizer {
      */
     private final TimeFunction learningRate;
     /**
-     * The exponential decay rate for the 1st moment estimates.
+     * The momentum factor.
      */
-    private final TimeFunction beta1;
+    private final TimeFunction momentum;
     /**
-     * The exponential decay rate for the 2nd moment estimates.
+     * The discounting factor for the history/coming gradient.
      */
-    private final TimeFunction beta2;
+    private final double rho;
     /**
      * A small constant for numerical stability.
      */
@@ -52,46 +52,40 @@ public class Adam implements Optimizer {
 
     /**
      * Constructor.
-     */
-    public Adam() {
-        this(TimeFunction.constant(0.001));
-    }
-
-    /**
-     * Constructor.
      * @param learningRate the learning rate.
      */
     public Adam(TimeFunction learningRate) {
-        this(learningRate, TimeFunction.constant(0.9), TimeFunction.constant(0.999));
+        this(learningRate, null, 0.9, 1E-7);
     }
 
     /**
      * Constructor.
      * @param learningRate the learning rate.
-     * @param beta1 the exponential decay rate for the 1st moment estimates.
-     * @param beta2 the exponential decay rate for the 2nd moment estimates.
+     * @param rho the discounting factor for the history/coming gradient.
      */
-    public Adam(TimeFunction learningRate, TimeFunction beta1, TimeFunction beta2) {
-        this(learningRate, beta1, beta2, 1E-8);
+    public Adam(TimeFunction learningRate, double rho) {
+        this(learningRate, null, rho, 1E-7);
     }
 
     /**
      * Constructor.
      * @param learningRate the learning rate.
-     * @param beta1 the exponential decay rate for the 1st moment estimates.
-     * @param beta2 the exponential decay rate for the 2nd moment estimates.
+     * @param momentum the momentum.
+     * @param rho the discounting factor for the history/coming gradient.
      * @param epsilon a small constant for numerical stability.
      */
-    public Adam(TimeFunction learningRate, TimeFunction beta1, TimeFunction beta2, double epsilon) {
+    public Adam(TimeFunction learningRate, TimeFunction momentum, double rho, double epsilon) {
         this.learningRate = learningRate;
-        this.beta1 = beta1;
-        this.beta2 = beta2;
+        this.momentum = momentum;
+        this.rho = rho;
         this.epsilon = epsilon;
     }
 
     @Override
     public String toString() {
-        return String.format("Adam(%s, %s, %s, %f)", learningRate, beta1, beta2, epsilon);
+        return momentum == null ?
+                String.format("RMSProp(%s, %f, %f)", learningRate, rho, epsilon) :
+                String.format("RMSProp(%s, %s, %f, %f)", learningRate, momentum, rho, epsilon);
     }
 
     @Override
@@ -104,7 +98,24 @@ public class Adam implements Optimizer {
         double eta = learningRate.apply(t) / m;
         int n = layer.n;
 
+        if (momentum != null) {
+            double alpha = momentum.apply(t);
+            Matrix weightUpdate = layer.weightUpdate.get();
+            double[] biasUpdate = layer.biasUpdate.get();
 
+            weightUpdate.add(alpha, eta, weightGradient);
+            for (int i = 0; i < n; i++) {
+                biasUpdate[i] = alpha * biasUpdate[i] + eta * biasGradient[i];
+            }
+
+            layer.weight.add(1.0, weightUpdate);
+            MathEx.add(layer.bias, biasUpdate);
+        } else {
+            layer.weight.add(eta, weightGradient);
+            for (int i = 0; i < n; i++) {
+                layer.bias[i] += eta * biasGradient[i];
+            }
+        }
 
         weightGradient.fill(0.0);
         Arrays.fill(biasGradient, 0.0);
