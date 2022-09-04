@@ -14,11 +14,13 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
+import com.google.common.collect.ImmutableList;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
+import com.google.protobuf.UnknownFieldSet;
 import java.io.IOException;
 import java.util.function.Supplier;
 
@@ -53,12 +55,23 @@ public class MessageLiteCodec implements ObjectCodec<MessageLite> {
   @Override
   public MessageLite deserialize(DeserializationContext unusedContext, CodedInputStream codedIn)
       throws IOException, SerializationException {
+    // Don't hold on to full byte array when constructing this proto.
+    codedIn.enableAliasing(false);
     try {
       MessageLite.Builder builder = builderSupplier.get();
       codedIn.readMessage(builder, ExtensionRegistryLite.getEmptyRegistry());
       return builder.build();
     } catch (InvalidProtocolBufferException e) {
       throw new SerializationException("Failed to parse proto of type " + type, e);
+    } finally {
+      codedIn.enableAliasing(true);
+    }
+  }
+
+  private static class MessageLiteCodecRegisterer implements CodecRegisterer<MessageLiteCodec> {
+    @Override
+    public ImmutableList<MessageLiteCodec> getCodecsToRegister() {
+      return ImmutableList.of(new MessageLiteCodec(UnknownFieldSet::newBuilder));
     }
   }
 }
