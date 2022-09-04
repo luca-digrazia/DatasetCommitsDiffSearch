@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
-import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
@@ -52,7 +51,6 @@ import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,7 +82,6 @@ public final class CommandEnvironment {
   private final Thread commandThread;
   private final Command command;
   private final OptionsParsingResult options;
-  private final PathPackageLocator packageLocator;
 
   private String[] crashData;
 
@@ -148,23 +145,9 @@ public final class CommandEnvironment {
 
     // TODO(ulfjack): We don't call beforeCommand() in tests, but rely on workingDirectory being set
     // in setupPackageCache(). This leads to NPE if we don't set it here.
-    Path workspacePath = directories.getWorkspace();
-    this.setWorkingDirectory(workspacePath);
+    this.setWorkingDirectory(directories.getWorkspace());
     this.workspaceName = null;
 
-    // If this command supports --package_path we initialize the package locator scoped
-    // to the command environment
-    if (commandHasPackageOptions(command) && workspacePath != null) {
-      this.packageLocator =
-          workspace
-              .getSkyframeExecutor()
-              .createPackageLocator(
-                  reporter,
-                  options.getOptions(PackageCacheOptions.class).packagePath,
-                  workingDirectory);
-    } else {
-      this.packageLocator = null;
-    }
     workspace.getSkyframeExecutor().setEventBus(eventBus);
 
     ClientOptions clientOptions =
@@ -205,30 +188,6 @@ public final class CommandEnvironment {
     }
   }
 
-  // Returns whether the given command supports --package_path
-  private static boolean commandHasPackageOptions(Command command) {
-    return commandHasPackageOptions(command, new HashSet<>());
-  }
-
-  private static boolean commandHasPackageOptions(Command command, Set<Command> seen) {
-    if (!seen.add(command)) {
-      return false;
-    }
-    for (int i = 0; i < command.options().length; ++i) {
-      if (command.options()[i] == PackageCacheOptions.class) {
-        return true;
-      }
-    }
-    for (int i = 0; i < command.inherits().length; ++i) {
-      Class<? extends BlazeCommand> blazeCommand = command.inherits()[i];
-      Command annotation = blazeCommand.getAnnotation(Command.class);
-      if (commandHasPackageOptions(annotation, seen)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   public BlazeRuntime getRuntime() {
     return runtime;
   }
@@ -239,10 +198,6 @@ public final class CommandEnvironment {
 
   public BlazeDirectories getDirectories() {
     return directories;
-  }
-
-  public PathPackageLocator getPackageLocator() {
-    return packageLocator;
   }
 
   /**
@@ -578,8 +533,9 @@ public final class CommandEnvironment {
         .sync(
             reporter,
             options.getOptions(PackageCacheOptions.class),
-            packageLocator,
             options.getOptions(SkylarkSemanticsOptions.class),
+            getOutputBase(),
+            getWorkingDirectory(),
             defaultsPackageContents,
             getCommandId(),
             clientEnv,

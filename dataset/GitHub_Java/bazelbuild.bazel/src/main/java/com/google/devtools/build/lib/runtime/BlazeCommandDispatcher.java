@@ -271,12 +271,7 @@ public class BlazeCommandDispatcher {
     // the afterCommand call in the finally block below.
     Path profilePath =
         runtime.initProfiler(
-            storedEventHandler,
-            workspace,
-            commonOptions,
-            env.getCommandId(),
-            execStartTimeNanos,
-            waitTimeInMs);
+            storedEventHandler, workspace, commonOptions, env.getCommandId(), execStartTimeNanos);
     if (commonOptions.postProfileStartedEvent) {
       storedEventHandler.post(new ProfilerStartedEvent(profilePath));
     }
