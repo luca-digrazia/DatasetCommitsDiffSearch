@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.starlark.spelling.SpellChecker;
 import com.google.errorprone.annotations.FormatMethod;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.starlark.java.spelling.SpellChecker;
 
 /**
  * The Resolver resolves each identifier in a syntax tree to its binding, and performs other
@@ -298,7 +298,6 @@ public final class Resolver extends NodeVisitor {
         assign(elem);
       }
     } else {
-      // TODO(adonovan): support x.f = y.
       errorf(lhs, "cannot assign to '%s'", lhs);
     }
   }
@@ -340,55 +339,6 @@ public final class Resolver extends NodeVisitor {
     if (block.scope != Scope.LOCAL) {
       errorf(node, "return statements must be inside a function");
     }
-    super.visit(node);
-  }
-
-  @Override
-  public void visit(CallExpression node) {
-    // validate call arguments
-    boolean seenVarargs = false;
-    boolean seenKwargs = false;
-    Set<String> keywords = null;
-    for (Argument arg : node.getArguments()) {
-      if (arg instanceof Argument.Positional) {
-        if (seenVarargs) {
-          errorf(arg, "positional argument may not follow *args");
-        } else if (seenKwargs) {
-          errorf(arg, "positional argument may not follow **kwargs");
-        } else if (keywords != null) {
-          errorf(arg, "positional argument may not follow keyword argument");
-        }
-
-      } else if (arg instanceof Argument.Keyword) {
-        String keyword = ((Argument.Keyword) arg).getName();
-        if (seenVarargs) {
-          errorf(arg, "keyword argument %s may not follow *args", keyword);
-        } else if (seenKwargs) {
-          errorf(arg, "keyword argument %s may not follow **kwargs", keyword);
-        }
-        if (keywords == null) {
-          keywords = new HashSet<>();
-        }
-        if (!keywords.add(keyword)) {
-          errorf(arg, "duplicate keyword argument: %s", keyword);
-        }
-
-      } else if (arg instanceof Argument.Star) {
-        if (seenKwargs) {
-          errorf(arg, "*args may not follow **kwargs");
-        } else if (seenVarargs) {
-          errorf(arg, "multiple *args not allowed");
-        }
-        seenVarargs = true;
-
-      } else if (arg instanceof Argument.StarStar) {
-        if (seenKwargs) {
-          errorf(arg, "multiple **kwargs not allowed");
-        }
-        seenKwargs = true;
-      }
-    }
-
     super.visit(node);
   }
 

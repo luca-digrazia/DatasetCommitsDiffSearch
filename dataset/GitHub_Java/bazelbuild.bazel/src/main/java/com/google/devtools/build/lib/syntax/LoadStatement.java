@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,66 +13,78 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
-import java.util.List;
-
-/**
- * Syntax node for an import statement.
- */
+/** Syntax node for an import statement. */
 public final class LoadStatement extends Statement {
 
-  private final ImmutableList<Ident> symbols;
-  private final PathFragment importPath;
-
   /**
-   * Constructs an import statement.
+   * Binding represents a binding in a load statement. load("...", local = "orig")
+   *
+   * <p>If there's no alias, a single Identifier can be used for both local and orig.
+   * TODO(adonovan): don't do that; be faithful to source.
    */
-  LoadStatement(String path, List<Ident> symbols) {
-    this.symbols = ImmutableList.copyOf(symbols);
-    this.importPath = new PathFragment(path + ".bzl");
-  }
+  public static final class Binding {
+    private final Identifier local;
+    private final Identifier orig;
 
-  public ImmutableList<Ident> getSymbols() {
-    return symbols;
-  }
+    public Identifier getLocalName() {
+      return local;
+    }
 
-  public PathFragment getImportPath() {
-    return importPath;
-  }
+    public Identifier getOriginalName() {
+      return orig;
+    }
 
-  @Override
-  public String toString() {
-    return String.format("load(\"%s\", %s)", importPath, Joiner.on(", ").join(symbols));
-  }
-
-  @Override
-  void exec(Environment env) throws EvalException, InterruptedException {
-    for (Ident i : symbols) {
-      try {
-        if (i.getName().startsWith("_")) {
-          throw new EvalException(getLocation(), "symbol '" + i + "' is private and cannot "
-              + "be imported");
-        }
-        env.importSymbol(getImportPath(), i.getName());
-      } catch (Environment.NoSuchVariableException | Environment.LoadFailedException e) {
-        throw new EvalException(getLocation(), e.getMessage());
-      }
+    Binding(Identifier localName, Identifier originalName) {
+      this.local = localName;
+      this.orig = originalName;
     }
   }
 
+  private final int loadOffset;
+  private final StringLiteral module;
+  private final ImmutableList<Binding> bindings;
+  private final int rparenOffset;
+
+  LoadStatement(
+      FileLocations locs,
+      int loadOffset,
+      StringLiteral module,
+      ImmutableList<Binding> bindings,
+      int rparenOffset) {
+    super(locs);
+    this.loadOffset = loadOffset;
+    this.module = module;
+    this.bindings = bindings;
+    this.rparenOffset = rparenOffset;
+  }
+
+  public ImmutableList<Binding> getBindings() {
+    return bindings;
+  }
+
+  public StringLiteral getImport() {
+    return module;
+  }
+
   @Override
-  public void accept(SyntaxTreeVisitor visitor) {
+  public int getStartOffset() {
+    return loadOffset;
+  }
+
+  @Override
+  public int getEndOffset() {
+    return rparenOffset + 1;
+  }
+
+  @Override
+  public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
-    // TODO(bazel-team): implement semantical check.
-    for (Ident symbol : symbols) {
-      env.update(symbol.getName(), SkylarkType.UNKNOWN, getLocation());
-    }
+  public Kind kind() {
+    return Kind.LOAD;
   }
 }

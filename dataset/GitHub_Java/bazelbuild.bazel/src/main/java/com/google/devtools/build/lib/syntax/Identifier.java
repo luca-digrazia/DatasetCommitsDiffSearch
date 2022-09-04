@@ -55,9 +55,7 @@ public final class Identifier extends Expression {
     return name.startsWith("_");
   }
 
-  /** Returns information about the binding that the identifier denotes. Set by the resolver. */
-  @Nullable
-  public Resolver.Binding getBinding() {
+  Resolver.Binding getBinding() {
     return binding;
   }
 
@@ -102,16 +100,7 @@ public final class Identifier extends Expression {
    *   <li><{@code x[5] = ..} does not bind any names.
    * </ul>
    */
-  // TODO(adonovan): remove this function in due course.
-  // - Resolver makes one pass to discover bindings than another to resolve uses.
-  //   When it works in a single pass, it is more efficient to process bindings in order,
-  //   deferring (rare) forward references until the end of the block.
-  // - Eval calls boundIdentifiers for comprehensions. This can be eliminated when
-  //   recordScope is always enabled and variables are assigned frame slot indices.
-  // - Eval calls boundIdentifiers for the 'export' hack. This can be eliminated
-  //   when we switch to compilation by emitting EXPORT instructions for the necessary
-  //   bindings. (Ideally we would eliminate Bazel's export hack entirely.)
-  public static ImmutableSet<Identifier> boundIdentifiers(Expression expr) {
+  static ImmutableSet<Identifier> boundIdentifiers(Expression expr) {
     if (expr instanceof Identifier) {
       // Common case/fast path - skip the builder.
       return ImmutableSet.of((Identifier) expr);

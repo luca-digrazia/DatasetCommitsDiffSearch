@@ -163,30 +163,23 @@ final class Eval {
   }
 
   private static void execLoad(StarlarkThread.Frame fr, LoadStatement node) throws EvalException {
-    // Has the application defined a behavior for load statements in this thread?
-    StarlarkThread.Loader loader = fr.thread.getLoader();
-    if (loader == null) {
-      throw new EvalException(
-          node.getStartLocation(), "load statements may not be executed in this thread");
-    }
-
-    // Load module.
-    String moduleName = node.getImport().getValue();
-    Module module = loader.load(moduleName);
-    if (module == null) {
-      throw new EvalException(
-          node.getStartLocation(),
-          String.format(
-              "file '%s' was not correctly loaded. "
-                  + "Make sure the 'load' statement appears in the global scope in your file",
-              moduleName));
-    }
-    Map<String, Object> globals = module.getExportedBindings();
-
     for (LoadStatement.Binding binding : node.getBindings()) {
+
+      // Load module.
+      String moduleName = node.getImport().getValue();
+      StarlarkThread.Extension module = fr.thread.getExtension(moduleName);
+      if (module == null) {
+        throw new EvalException(
+            node.getStartLocation(),
+            String.format(
+                "file '%s' was not correctly loaded. "
+                    + "Make sure the 'load' statement appears in the global scope in your file",
+                moduleName));
+      }
+
       // Extract symbol.
       Identifier orig = binding.getOriginalName();
-      Object value = globals.get(orig.getName());
+      Object value = module.getBindings().get(orig.getName());
       if (value == null) {
         throw new EvalException(
             orig.getStartLocation(),
@@ -194,7 +187,7 @@ final class Eval {
                 "file '%s' does not contain symbol '%s'%s",
                 moduleName,
                 orig.getName(),
-                SpellChecker.didYouMean(orig.getName(), globals.keySet())));
+                SpellChecker.didYouMean(orig.getName(), module.getBindings().keySet())));
       }
 
       // Define module-local variable.
@@ -532,17 +525,6 @@ final class Eval {
     fr.thread.checkInterrupt();
 
     Object fn = eval(fr, call.getFunction());
-
-    // Starlark arguments are ordered: positionals < keywords < *args < **kwargs.
-    //
-    // This is stricter than Python2, which doesn't constrain keywords wrt *args,
-    // but this ensures that the effects of evaluation of Starlark arguments occur
-    // in source order.
-    //
-    // Starlark does not support Python3's multiple *args and **kwargs
-    // nor freer ordering, such as f(a, *list, *list, **dict, **dict, b=1).
-    // Supporting it would complicate a compiler, and produce effects out of order.
-    // Also, Python's argument ordering rules are complex and the errors sometimes cryptic.
 
     // StarStar and Star args are guaranteed to be last, if they occur.
     ImmutableList<Argument> arguments = call.getArguments();
