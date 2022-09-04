@@ -13,22 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.testutil;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.packages.Type.LabelClass;
-import com.google.devtools.build.lib.packages.Type.ListType;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Type.LabelClass;
+import com.google.devtools.build.lib.syntax.Type.ListType;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -113,11 +112,11 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
       Predicate<RuleClass> allowedRuleClasses = attribute.getAllowedRuleClassesPredicate();
       if (allowedRuleClasses != Predicates.<RuleClass>alwaysFalse()) {
         // See if there is an applicable rule among the already enqueued rules
-        BuildRuleBuilder referencedRuleBuilder = getFirstApplicableRule(attribute);
+        BuildRuleBuilder referencedRuleBuilder = getFirstApplicableRule(allowedRuleClasses);
         if (referencedRuleBuilder != null) {
           label = ":" + referencedRuleBuilder.ruleName;
         } else {
-          RuleClass referencedRuleClass = getFirstApplicableRuleClass(attribute);
+          RuleClass referencedRuleClass = getFirstApplicableRuleClass(allowedRuleClasses);
           if (referencedRuleClass != null) {
             // Generate a rule with the appropriate ruleClass and a label for it in
             // the original rule
@@ -136,46 +135,25 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
     return this;
   }
 
-  private boolean doesRuleClassMatch(Attribute attribute, RuleClass ruleClass) {
-    // The rule class isn't in the allowed list.
-    if (!attribute.getAllowedRuleClassesPredicate().apply(ruleClass)) {
-      return false;
-    }
-
-    // Does this rule class have the correct providers?
-    if (!attribute.getRequiredProviders().acceptsAny()) {
-      // This attribute requires specific providers, so ignore any rule that claims to have every
-      // provider.
-      if (ruleClass.getAdvertisedProviders().canHaveAnyProvider()) {
-        return false;
-      }
-
-      if (!attribute.getRequiredProviders().isSatisfiedBy(ruleClass.getAdvertisedProviders())) {
-        return false;
-      }
-    }
-
-    // Default to accept if nothing else prevents.
-    return true;
-  }
-
-  private BuildRuleBuilder getFirstApplicableRule(Attribute attribute) {
+  private BuildRuleBuilder getFirstApplicableRule(Predicate<RuleClass> allowedRuleClasses) {
     // There is no direct way to get the set of allowedRuleClasses from the Attribute
     // The Attribute API probably should not be modified for sole testing purposes
-    Optional<BuildRuleBuilder> result =
-        generateRules.entrySet().stream()
-            .filter(entry -> doesRuleClassMatch(attribute, ruleClassMap.get(entry.getKey())))
-            .map(Map.Entry::getValue)
-            .findFirst();
-    return result.orElse(null);
+    for (Map.Entry<String, BuildRuleBuilder> entry : generateRules.entrySet()) {
+      if (allowedRuleClasses.apply(ruleClassMap.get(entry.getKey()))) {
+        return entry.getValue();
+      }
+    }
+    return null;
   }
 
-  private RuleClass getFirstApplicableRuleClass(Attribute attribute) {
-    Optional<RuleClass> result =
-        ruleClassMap.values().stream()
-            .filter(ruleClass -> doesRuleClassMatch(attribute, ruleClass))
-            .findFirst();
-    return result.orElse(null);
+  private RuleClass getFirstApplicableRuleClass(Predicate<RuleClass> allowedRuleClasses) {
+    // See comments in getFirstApplicableRule(Predicate<RuleClass> allowedRuleClasses)
+    for (RuleClass ruleClass : ruleClassMap.values()) {
+      if (allowedRuleClasses.apply(ruleClass)) {
+        return ruleClass;
+      }
+    }
+    return null;
   }
 
   public BuildRuleWithDefaultsBuilder populateStringListAttribute(Attribute attribute) {
