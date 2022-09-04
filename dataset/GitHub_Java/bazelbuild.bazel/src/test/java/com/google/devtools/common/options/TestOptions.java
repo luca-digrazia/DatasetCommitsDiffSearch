@@ -315,12 +315,4 @@ public class TestOptions extends OptionsBase {
     defaultValue = "false"
   )
   public boolean specialExpBar;
-
-  @Option(
-      name = "test_deprecated",
-      defaultValue = "default",
-      deprecationWarning = "Flag for testing deprecation behavior.",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP})
-  public String testDeprecated;
 }

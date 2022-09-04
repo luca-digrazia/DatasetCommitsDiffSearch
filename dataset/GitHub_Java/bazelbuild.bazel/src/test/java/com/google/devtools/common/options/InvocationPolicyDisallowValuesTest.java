@@ -14,7 +14,7 @@
 package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.DisallowValues;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
@@ -75,8 +75,12 @@ public class InvocationPolicyDisallowValuesTest extends InvocationPolicyEnforcer
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testString).isEqualTo(DISALLOWED_VALUE_1);
 
-    // expected, since foo is disallowed.
-    assertThrows(OptionsParsingException.class, () -> enforcer.enforce(parser, BUILD_COMMAND));
+    try {
+      enforcer.enforce(parser, BUILD_COMMAND);
+      fail();
+    } catch (OptionsParsingException e) {
+      // expected, since foo is disallowed.
+    }
   }
 
   @Test
@@ -100,8 +104,12 @@ public class InvocationPolicyDisallowValuesTest extends InvocationPolicyEnforcer
         .containsExactly(UNFILTERED_VALUE, DISALLOWED_VALUE_2)
         .inOrder();
 
-    // expected, since bar is disallowed.
-    assertThrows(OptionsParsingException.class, () -> enforcer.enforce(parser, BUILD_COMMAND));
+    try {
+      enforcer.enforce(parser, BUILD_COMMAND);
+      fail();
+    } catch (OptionsParsingException e) {
+      // expected, since bar is disallowed.
+    }
   }
 
   @Test
@@ -185,9 +193,12 @@ public class InvocationPolicyDisallowValuesTest extends InvocationPolicyEnforcer
 
     InvocationPolicyEnforcer enforcer = createOptionsPolicyEnforcer(invocationPolicyBuilder);
 
-    OptionsParsingException e =
-        assertThrows(OptionsParsingException.class, () -> enforcer.enforce(parser, BUILD_COMMAND));
-    assertThat(e).hasMessageThat().contains("but also specifies to use the default value");
+    try {
+      enforcer.enforce(parser, BUILD_COMMAND);
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessageThat().contains("but also specifies to use the default value");
+    }
   }
   
   @Test
@@ -229,7 +240,12 @@ public class InvocationPolicyDisallowValuesTest extends InvocationPolicyEnforcer
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testString).isEqualTo(TestOptions.TEST_STRING_DEFAULT);
 
-    assertThrows(OptionsParsingException.class, () -> enforcer.enforce(parser, BUILD_COMMAND));
+    try {
+      enforcer.enforce(parser, BUILD_COMMAND);
+      fail();
+    } catch (OptionsParsingException e) {
+      // expected.
+    }
   }
 
   @Test
@@ -247,13 +263,16 @@ public class InvocationPolicyDisallowValuesTest extends InvocationPolicyEnforcer
     TestOptions testOptions = getTestOptions();
     assertThat(testOptions.testListConverters).isEqualTo(Arrays.asList("a", "b", "c"));
 
-    OptionsParsingException e =
-        assertThrows(OptionsParsingException.class, () -> enforcer.enforce(parser, BUILD_COMMAND));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(
-            "Flag value 'a' for option '--test_list_converters' is not allowed by invocation "
-                + "policy");
+    try {
+      enforcer.enforce(parser, BUILD_COMMAND);
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains(
+              "Flag value 'a' for option '--test_list_converters' is not allowed by invocation "
+                  + "policy");
+    }
   }
 
   @Test
