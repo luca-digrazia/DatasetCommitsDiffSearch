@@ -58,12 +58,7 @@ class HeaderCloudEventImpl<T> extends AbstractCloudEvent<T> implements CloudEven
     @Override
     public String specVersion() {
         if (specVersion == null) {
-            String sv = headers.get("ce-specversion");
-            if (sv != null && isKnownSpecVersion(sv)) {
-                this.specVersion = sv;
-            } else {
-                this.specVersion = "1.0";
-            }
+            this.specVersion = headers.get("ce-specversion");
         }
 
         return specVersion;
