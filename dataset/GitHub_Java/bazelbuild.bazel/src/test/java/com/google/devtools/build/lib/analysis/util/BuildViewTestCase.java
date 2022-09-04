@@ -1268,8 +1268,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         result.add(output);
       }
     }
-    assertWithMessage("expected paths not found in: %s", Artifact.asExecPaths(owner.getInputs()))
-        .that(expectedPaths)
+    assertThat(expectedPaths)
+        .named("expected paths not found in: %s", Artifact.asExecPaths(owner.getInputs()))
         .isEmpty();
     return result;
   }
