@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import java.util.Arrays;
@@ -58,10 +58,14 @@ public class BaseFunctionTest extends EvaluationTestCase {
           .isEqualTo(expectedOutput);
 
     } else { // expected to fail with an exception
-      EvalException e = assertThrows(EvalException.class, () -> eval(callExpression));
-      assertWithMessage("Wrong exception for " + callExpression)
-          .that(e.getMessage())
-          .isEqualTo(expectedOutput);
+      try {
+        eval(callExpression);
+        fail();
+      } catch (EvalException e) {
+        assertWithMessage("Wrong exception for " + callExpression)
+            .that(e.getMessage())
+            .isEqualTo(expectedOutput);
+      }
     }
   }
 

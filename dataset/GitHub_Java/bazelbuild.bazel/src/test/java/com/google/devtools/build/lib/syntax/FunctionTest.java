@@ -34,10 +34,11 @@ public class FunctionTest extends EvaluationTestCase {
     eval("def func(a,b,c):",
         "  a = 1",
         "  b = a\n");
-    StarlarkFunction stmt = (StarlarkFunction) lookup("func");
+    UserDefinedFunction stmt = (UserDefinedFunction) lookup("func");
     assertThat(stmt).isNotNull();
     assertThat(stmt.getName()).isEqualTo("func");
-    assertThat(stmt.getSignature().numMandatoryPositionals()).isEqualTo(3);
+    assertThat(stmt.getSignature().getSignature().getShape().getMandatoryPositionals())
+        .isEqualTo(3);
     assertThat(stmt.getStatements()).hasSize(2);
   }
 
@@ -61,19 +62,14 @@ public class FunctionTest extends EvaluationTestCase {
   }
 
   private void createOuterFunction(final List<Object> params) throws Exception {
-    BaseFunction outerFunc =
-        new BaseFunction("outer_func") {
-          @Override
-          public Object call(
-              List<Object> args,
-              Map<String, Object> kwargs,
-              FuncallExpression ast,
-              StarlarkThread thread)
-              throws EvalException, InterruptedException {
-            params.addAll(args);
-            return Runtime.NONE;
-          }
-        };
+    BaseFunction outerFunc = new BaseFunction("outer_func") {
+      @Override
+      public Object call(List<Object> args, Map<String, Object> kwargs, FuncallExpression ast,
+          Environment env) throws EvalException, InterruptedException {
+        params.addAll(args);
+        return Runtime.NONE;
+      }
+    };
     update("outer_func", outerFunc);
   }
 
