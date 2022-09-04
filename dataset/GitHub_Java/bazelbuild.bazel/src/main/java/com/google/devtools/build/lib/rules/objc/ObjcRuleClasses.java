@@ -456,7 +456,10 @@ public class ObjcRuleClasses {
                   // removed in the near future. By adding the new rule names here, the migration
                   // path towards the end state is easier, as it will allow breaking the migration
                   // into smaller chunks.
-                  .allowedRuleClasses("apple_bundle_import", "apple_resource_bundle")
+                  .allowedRuleClasses(
+                      "apple_bundle_import",
+                      "apple_resource_bundle",
+                      "objc_bundle_library")
                   .allowedFileTypes())
           .build();
     }
@@ -478,21 +481,12 @@ public class ObjcRuleClasses {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(
-              attr("$plmerge", LABEL)
-                  .cfg(HostTransition.createFactory())
-                  .exec()
-                  .value(env.getToolsLabel("//tools/objc:plmerge")))
-          .add(
-              attr("$actoolwrapper", LABEL)
-                  .cfg(HostTransition.createFactory())
-                  .exec()
-                  .value(env.getToolsLabel("//tools/objc:actoolwrapper")))
-          .add(
-              attr("$ibtoolwrapper", LABEL)
-                  .cfg(HostTransition.createFactory())
-                  .exec()
-                  .value(env.getToolsLabel("//tools/objc:ibtoolwrapper")))
+          .add(attr("$plmerge", LABEL).cfg(HostTransition.INSTANCE).exec()
+              .value(env.getToolsLabel("//tools/objc:plmerge")))
+          .add(attr("$actoolwrapper", LABEL).cfg(HostTransition.INSTANCE).exec()
+              .value(env.getToolsLabel("//tools/objc:actoolwrapper")))
+          .add(attr("$ibtoolwrapper", LABEL).cfg(HostTransition.INSTANCE).exec()
+              .value(env.getToolsLabel("//tools/objc:ibtoolwrapper")))
           .build();
     }
     @Override
@@ -711,7 +705,7 @@ public class ObjcRuleClasses {
           least one artifact this attribute cannot be #exec(). */
           .add(
               attr(HEADER_SCANNER_ATTRIBUTE, LABEL)
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .value(
                       LabelLateBoundDefault.fromTargetConfiguration(
                           ObjcConfiguration.class,
@@ -746,11 +740,8 @@ public class ObjcRuleClasses {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(
-              attr(LIBTOOL_ATTRIBUTE, LABEL)
-                  .cfg(HostTransition.createFactory())
-                  .exec()
-                  .value(env.getToolsLabel("//tools/objc:libtool")))
+          .add(attr(LIBTOOL_ATTRIBUTE, LABEL).cfg(HostTransition.INSTANCE).exec()
+              .value(env.getToolsLabel("//tools/objc:libtool")))
           .build();
     }
     @Override
@@ -823,7 +814,7 @@ public class ObjcRuleClasses {
           .add(
               attr("$j2objc_dead_code_pruner", LABEL)
                   .allowedFileTypes(FileType.of(".py"))
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .exec()
                   .singleArtifact()
                   .value(env.getToolsLabel("//tools/objc:j2objc_dead_code_pruner")))
@@ -831,13 +822,13 @@ public class ObjcRuleClasses {
           .add(
               attr(PROTO_COMPILER_ATTR, LABEL)
                   .allowedFileTypes(FileType.of(".sh"))
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .singleArtifact()
                   .value(env.getToolsLabel("//tools/objc:protobuf_compiler_wrapper")))
           .add(
               attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
                   .legacyAllowAnyFileType()
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .value(env.getToolsLabel("//tools/objc:protobuf_compiler_support")))
           .add(
               ProtoSourceFileBlacklist.blacklistFilegroupAttribute(
@@ -974,7 +965,7 @@ public class ObjcRuleClasses {
           .add(
               attr("$j2objc_dead_code_pruner", LABEL)
                   .allowedFileTypes(FileType.of(".py"))
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .exec()
                   .singleArtifact()
                   .value(env.getToolsLabel("//tools/objc:j2objc_dead_code_pruner")))
@@ -982,13 +973,13 @@ public class ObjcRuleClasses {
           .add(
               attr(PROTO_COMPILER_ATTR, LABEL)
                   .allowedFileTypes(FileType.of(".sh"))
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .singleArtifact()
                   .value(env.getToolsLabel("//tools/objc:protobuf_compiler_wrapper")))
           .add(
               attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
                   .legacyAllowAnyFileType()
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .value(env.getToolsLabel("//tools/objc:protobuf_compiler_support")))
           .add(
               ProtoSourceFileBlacklist.blacklistFilegroupAttribute(
@@ -1123,7 +1114,7 @@ public class ObjcRuleClasses {
                   .value(ImmutableList.of(TargetDeviceFamily.IPHONE.getNameInRule())))
           .add(
               attr("$momcwrapper", LABEL)
-                  .cfg(HostTransition.createFactory())
+                  .cfg(HostTransition.INSTANCE)
                   .exec()
                   .value(env.getToolsLabel("//tools/objc:momcwrapper")))
           .build();
@@ -1150,11 +1141,8 @@ public class ObjcRuleClasses {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(
-              attr("$xcrunwrapper", LABEL)
-                  .cfg(HostTransition.createFactory())
-                  .exec()
-                  .value(env.getToolsLabel("//tools/objc:xcrunwrapper")))
+          .add(attr("$xcrunwrapper", LABEL).cfg(HostTransition.INSTANCE).exec()
+              .value(env.getToolsLabel("//tools/objc:xcrunwrapper")))
           .build();
     }
     @Override

@@ -37,8 +37,10 @@ import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.List;
 import java.util.Map;
@@ -233,11 +235,12 @@ public class MultiArchBinarySupport {
                     ruleContext,
                     childToolchainConfig,
                     protosToAvoid,
+                    ImmutableList.<ProtoInfo>of(),
                     depProtoProviders,
                     ProtobufSupport.getTransitivePortableProtoFilters(depProtoProviders),
                     childConfigurationsAndToolchains.get(childToolchainConfig))
-                .registerGenerationAction()
-                .registerCompilationAction();
+                .registerGenerationActions()
+                .registerCompilationActions();
         protosObjcProvider = protoSupport.getObjcProvider();
       } else {
         protosObjcProvider = Optional.absent();
@@ -260,7 +263,8 @@ public class MultiArchBinarySupport {
               additionalDepProviders);
       ObjcProvider objcProviderWithDylibSymbols = common.getObjcProvider();
       ObjcProvider objcProvider =
-          objcProviderWithDylibSymbols.subtractSubtrees(dylibObjcProviders, ImmutableList.of());
+          objcProviderWithDylibSymbols.subtractSubtrees(
+              dylibObjcProviders, ImmutableList.<CcLinkingInfo>of());
 
       childInfoBuilder.add(
           DependencySpecificConfiguration.create(
@@ -320,7 +324,9 @@ public class MultiArchBinarySupport {
       Iterable<ObjcProtoProvider> avoidedProviders) {
     NestedSetBuilder<Artifact> avoidArtifacts = NestedSetBuilder.stableOrder();
     for (ObjcProtoProvider avoidProvider : avoidedProviders) {
-      avoidArtifacts.addTransitive(avoidProvider.getProtoFiles());
+      for (NestedSet<Artifact> avoidProviderOutputGroup : avoidProvider.getProtoGroups()) {
+        avoidArtifacts.addTransitive(avoidProviderOutputGroup);
+      }
     }
     return avoidArtifacts.build();
   }
