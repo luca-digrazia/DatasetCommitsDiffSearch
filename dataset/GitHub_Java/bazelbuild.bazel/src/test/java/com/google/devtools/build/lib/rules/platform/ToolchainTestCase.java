@@ -23,9 +23,7 @@ import com.google.devtools.build.lib.analysis.platform.ConstraintSettingInfo;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.DeclaredToolchainInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
-import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.skyframe.RegisteredToolchainsValue;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
@@ -34,7 +32,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 import org.junit.Before;
 
 /** Utility methods for setting up platform and toolchain related tests. */
@@ -47,46 +44,22 @@ public abstract class ToolchainTestCase extends SkylarkTestCase {
   public ConstraintValueInfo linuxConstraint;
   public ConstraintValueInfo macConstraint;
 
-  public Label testToolchainTypeLabel;
-  public ToolchainTypeInfo testToolchainType;
+  public Label testToolchainType;
 
   protected static IterableSubject assertToolchainLabels(
       RegisteredToolchainsValue registeredToolchainsValue) {
-    return assertToolchainLabels(registeredToolchainsValue, null);
-  }
-
-  protected static IterableSubject assertToolchainLabels(
-      RegisteredToolchainsValue registeredToolchainsValue,
-      @Nullable PackageIdentifier packageRoot) {
     assertThat(registeredToolchainsValue).isNotNull();
     ImmutableList<DeclaredToolchainInfo> declaredToolchains =
         registeredToolchainsValue.registeredToolchains();
-    List<Label> labels = collectToolchainLabels(declaredToolchains, packageRoot);
+    List<Label> labels = collectToolchainLabels(declaredToolchains);
     return assertThat(labels);
   }
 
-  protected static List<Label> collectToolchainLabels(
-      List<DeclaredToolchainInfo> toolchains, @Nullable PackageIdentifier packageRoot) {
-    return toolchains.stream()
-        .map(toolchain -> toolchain.toolchainLabel())
-        .filter(label -> filterLabel(packageRoot, label))
+  protected static List<Label> collectToolchainLabels(List<DeclaredToolchainInfo> toolchains) {
+    return toolchains
+        .stream()
+        .map((toolchain -> toolchain.toolchainLabel()))
         .collect(Collectors.toList());
-  }
-
-  protected static boolean filterLabel(@Nullable PackageIdentifier packageRoot, Label label) {
-    if (packageRoot == null) {
-      return true;
-    }
-
-    // Make sure the label is under the packageRoot.
-    if (!label.getPackageIdentifier().getRepository().equals(packageRoot.getRepository())) {
-      return false;
-    }
-
-    return label
-        .getPackageIdentifier()
-        .getPackageFragment()
-        .startsWith(packageRoot.getPackageFragment());
   }
 
   private static String formatConstraints(Collection<String> constraints) {
@@ -176,8 +149,7 @@ public abstract class ToolchainTestCase extends SkylarkTestCase {
         ImmutableList.of("//constraints:linux"),
         "bar");
 
-    testToolchainTypeLabel = makeLabel("//toolchain:test_toolchain");
-    testToolchainType = ToolchainTypeInfo.create(testToolchainTypeLabel);
+    testToolchainType = makeLabel("//toolchain:test_toolchain");
   }
 
   protected EvaluationResult<RegisteredToolchainsValue> requestToolchainsFromSkyframe(
