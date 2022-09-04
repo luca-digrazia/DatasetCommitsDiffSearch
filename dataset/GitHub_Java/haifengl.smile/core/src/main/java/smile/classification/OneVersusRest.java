@@ -154,26 +154,18 @@ public class OneVersusRest<T> extends AbstractClassifier<T> {
      * @param trainer the lambda to train binary classifiers.
      * @return the model.
      */
+    /*
+    @SuppressWarnings("unchecked")
     public static DataFrameClassifier fit(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
         Tuple[] x = data.stream().toArray(Tuple[]::new);
         int[] y = formula.y(data).toIntArray();
         OneVersusRest<Tuple> model = fit(x, y, 1, 0, (Tuple[] rows, int[] labels) -> {
             DataFrame df = DataFrame.of(Arrays.asList(rows));
-            return trainer.apply(formula, df);
+            return (Classifier<Tuple>) trainer.apply(formula, df);
         });
 
         StructType schema = formula.x(data.get(0)).schema();
         return new DataFrameClassifier() {
-            @Override
-            public int numClasses() {
-                return model.numClasses();
-            }
-
-            @Override
-            public int[] classes() {
-                return model.classes();
-            }
-
             @Override
             public int predict(Tuple x) {
                 return model.predict(x);
@@ -190,6 +182,7 @@ public class OneVersusRest<T> extends AbstractClassifier<T> {
             }
         };
     }
+     */
 
     @Override
     public int predict(T x) {
@@ -203,12 +196,7 @@ public class OneVersusRest<T> extends AbstractClassifier<T> {
             }
         }
 
-        return classes.valueOf(y);
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
+        return labels.valueOf(y);
     }
 
     @Override
@@ -222,6 +210,6 @@ public class OneVersusRest<T> extends AbstractClassifier<T> {
         }
 
         MathEx.unitize1(posteriori);
-        return classes.valueOf(MathEx.whichMax(posteriori));
+        return labels.valueOf(MathEx.whichMax(posteriori));
     }
 }

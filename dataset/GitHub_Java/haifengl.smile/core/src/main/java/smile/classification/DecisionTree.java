@@ -101,7 +101,7 @@ import smile.util.IntSet;
  * 
  * @author Haifeng Li
  */
-public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameClassifier {
+public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFrameClassifier {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -113,9 +113,9 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
      */
     private final int k;
     /**
-     * The class labels.
+     * The class label encoder.
      */
-    private IntSet classes;
+    private IntSet labels;
 
     /** The dependent variable. */
     private transient int[] y;
@@ -137,7 +137,7 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
     @Override
     protected Optional<Split> findBestSplit(LeafNode leaf, int j, double impurity, int lo, int hi) {
         DecisionNode node = (DecisionNode) leaf;
-        BaseVector<?, ?, ?> xj = x.column(j);
+        BaseVector xj = x.column(j);
         int[] falseCount = new int[k];
 
         Split split = null;
@@ -337,35 +337,39 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
     public static DecisionTree fit(Formula formula, DataFrame data, SplitRule rule, int maxDepth, int maxNodes, int nodeSize) {
         formula = formula.expand(data.schema());
         DataFrame x = formula.x(data);
-        BaseVector<?, ?, ?> y = formula.y(data);
+        BaseVector y = formula.y(data);
         ClassLabels codec = ClassLabels.fit(y);
 
         DecisionTree tree = new DecisionTree(x, codec.y, y.field(), codec.k, rule, maxDepth, maxNodes, nodeSize, -1, null, null);
         tree.formula = formula;
-        tree.classes = codec.classes;
+        tree.labels = codec.labels;
         return tree;
     }
 
     @Override
     public int numClasses() {
-        return classes.size();
+        return labels.size();
     }
 
     @Override
-    public int[] classes() {
-        return classes.values;
+    public int[] labels() {
+        return labels.values;
+    }
+
+    @Override
+    public NominalScale scale() {
+        String[] values = new String[labels.size()];
+        for (int i = 0; i < labels.size(); i++) {
+            values[i] = String.valueOf(labels.valueOf(i));
+        }
+        return new NominalScale(values);
     }
 
     @Override
     public int predict(Tuple x) {
         DecisionNode leaf = (DecisionNode) root.predict(predictors(x));
         int y = leaf.output();
-        return classes == null ? y : classes.valueOf(y);
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
+        return labels == null ? y : labels.valueOf(y);
     }
 
     /**
@@ -379,7 +383,7 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
         DecisionNode leaf = (DecisionNode) root.predict(predictors(x));
         leaf.posteriori(posteriori);
         int y = leaf.output();
-        return classes == null ? y : classes.valueOf(y);
+        return labels == null ? y : labels.valueOf(y);
     }
 
     /** Returns null if the tree is part of ensemble algorithm. */
@@ -394,11 +398,11 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
     }
 
     /** Private constructor for prune(). */
-    private DecisionTree(Formula formula, StructType schema, StructField response, Node root, int k, SplitRule rule, double[] importance, IntSet classes) {
+    private DecisionTree(Formula formula, StructType schema, StructField response, Node root, int k, SplitRule rule, double[] importance, IntSet labels) {
         super(formula, schema, response, root, importance);
         this.k = k;
         this.rule = rule;
-        this.classes = classes;
+        this.labels = labels;
     }
 
     /**
@@ -407,7 +411,7 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
      * @return a new pruned tree.
      */
     public DecisionTree prune(DataFrame test) {
-        return prune(test, formula, classes);
+        return prune(test, formula, labels);
     }
 
     /**
@@ -415,10 +419,10 @@ public class DecisionTree extends CART implements Classifier<Tuple>, DataFrameCl
      * @param test the test data set to evaluate the errors of nodes.
      * @return a new pruned tree.
      */
-    DecisionTree prune(DataFrame test, Formula formula, IntSet classes) {
+    DecisionTree prune(DataFrame test, Formula formula, IntSet labels) {
         double[] imp = importance.clone();
-        Prune prune = prune(root, test.stream().collect(Collectors.toList()), imp, formula, classes);
-        return new DecisionTree(this.formula, schema, response, prune.node, k, rule, imp, this.classes);
+        Prune prune = prune(root, test.stream().collect(Collectors.toList()), imp, formula, labels);
+        return new DecisionTree(this.formula, schema, response, prune.node, k, rule, imp, this.labels);
     }
 
     /** The result of pruning a subtree. */

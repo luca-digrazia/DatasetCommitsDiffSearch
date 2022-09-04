@@ -18,8 +18,6 @@
 package smile.classification;
 
 import java.util.List;
-import java.util.function.BiFunction;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.formula.Formula;
@@ -38,8 +36,8 @@ public interface DataFrameClassifier extends Classifier<Tuple> {
     Formula formula();
 
     /**
-     * Returns the predictor schema.
-     * @return the predictor schema.
+     * Returns the design matrix schema.
+     * @return the design matrix schema.
      */
     StructType schema();
 
@@ -74,47 +72,5 @@ public interface DataFrameClassifier extends Classifier<Tuple> {
             posteriori.add(prob);
             return predict(xi, prob);
         }).toArray();
-    }
-
-    /**
-     * Fits a vector classifier on data frame.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     * @return the model.
-     */
-    static DataFrameClassifier of(Formula formula, DataFrame data, BiFunction<double[][], int[], Classifier<double[]>> trainer) {
-        DataFrame X = formula.x(data);
-        StructType schema = X.schema();
-        double[][] x = X.toArray(false, CategoricalEncoder.DUMMY);
-        int[] y = formula.y(data).toIntArray();
-        Classifier<double[]> model = trainer.apply(x, y);
-
-        return new DataFrameClassifier() {
-            @Override
-            public Formula formula() {
-                return formula;
-            }
-
-            @Override
-            public StructType schema() {
-                return schema;
-            }
-
-            @Override
-            public int numClasses() {
-                return model.numClasses();
-            }
-
-            @Override
-            public int[] classes() {
-                return model.classes();
-            }
-
-            @Override
-            public int predict(Tuple x) {
-                return model.predict(formula.x(x).toArray());
-            }
-        };
     }
 }

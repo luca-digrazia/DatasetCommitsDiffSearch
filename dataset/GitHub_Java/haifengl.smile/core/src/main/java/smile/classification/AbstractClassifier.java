@@ -17,6 +17,7 @@
 
 package smile.classification;
 
+import smile.data.measure.NominalScale;
 import smile.data.vector.BaseVector;
 import smile.util.IntSet;
 
@@ -31,14 +32,14 @@ public abstract class AbstractClassifier<T> implements Classifier<T> {
     /**
      * The class labels.
      */
-    protected final IntSet classes;
+    protected final IntSet labels;
 
     /**
      * Constructor.
-     * @param classes the class labels.
+     * @param labels the class labels.
      */
-    public AbstractClassifier(IntSet classes) {
-        this.classes = classes;
+    public AbstractClassifier(IntSet labels) {
+        this.labels = labels;
     }
 
     /**
@@ -46,24 +47,33 @@ public abstract class AbstractClassifier<T> implements Classifier<T> {
      * @param y the sample labels.
      */
     public AbstractClassifier(int[] y) {
-        this.classes = ClassLabels.fit(y).classes;
+        this.labels = ClassLabels.fit(y).labels;
     }
 
     /**
      * Constructor.
      * @param y the sample labels.
      */
-    public AbstractClassifier(BaseVector<?, ?, ?> y) {
-        this.classes = ClassLabels.fit(y).classes;
+    public AbstractClassifier(BaseVector y) {
+        this.labels = ClassLabels.fit(y).labels;
     }
 
     @Override
     public int numClasses() {
-        return classes.size();
+        return labels.size();
     }
 
     @Override
-    public int[] classes() {
-        return classes.values;
+    public int[] labels() {
+        return labels.values;
+    }
+
+    @Override
+    public NominalScale scale() {
+        String[] values = new String[labels.size()];
+        for (int i = 0; i < labels.size(); i++) {
+            values[i] = String.valueOf(labels.valueOf(i));
+        }
+        return new NominalScale(values);
     }
 }

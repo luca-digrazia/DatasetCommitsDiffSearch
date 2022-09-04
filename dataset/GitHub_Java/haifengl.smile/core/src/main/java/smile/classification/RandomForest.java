@@ -418,9 +418,9 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
             }
 
             if (noob != 0) {
-                logger.info("Decision tree OOB accuracy: {}", String.format("%.2f%%", 100*metrics.accuracy));
+                logger.info("Random forest tree OOB metrics: {}", metrics);
             } else {
-                logger.error("Decision tree trained without OOB samples.");
+                logger.error("Random forest has a tree trained without OOB samples.");
             }
 
             return new Model(tree, metrics);
@@ -442,7 +442,7 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
                 Accuracy.of(codec.y, vote)
         );
 
-        return new RandomForest(formula, k, models, metrics, importance(models), codec.classes);
+        return new RandomForest(formula, k, models, metrics, importance(models), codec.labels);
     }
 
     /** Calculate the importance of the whole forest. */
@@ -537,7 +537,7 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
 
         // The OOB metrics are still the old one
         // as we don't access to the training data here.
-        return new RandomForest(formula, k, Arrays.copyOf(models, ntrees), metrics, importance(models), classes);
+        return new RandomForest(formula, k, Arrays.copyOf(models, ntrees), metrics, importance(models), labels);
     }
 
     /**
@@ -576,7 +576,7 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
             mergedImportance[i] += other.importance[i];
         }
 
-        return new RandomForest(formula, k, forest, mergedMetrics, mergedImportance, classes);
+        return new RandomForest(formula, k, forest, mergedMetrics, mergedImportance, labels);
     }
 
     @Override
@@ -588,14 +588,9 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
             y[model.tree.predict(xt)]++;
         }
         
-        return classes.valueOf(MathEx.whichMax(y));
+        return labels.valueOf(MathEx.whichMax(y));
     }
-
-    @Override
-    public boolean soft() {
-        return true;
-    }
-
+    
     @Override
     public int predict(Tuple x, double[] posteriori) {
         if (posteriori.length != k) {
@@ -614,7 +609,7 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
         }
 
         MathEx.unitize1(posteriori);
-        return classes.valueOf(MathEx.whichMax(posteriori));
+        return labels.valueOf(MathEx.whichMax(posteriori));
     }
 
     /**
@@ -636,7 +631,7 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
         }
 
         MathEx.unitize1(posteriori);
-        return classes.valueOf(MathEx.whichMax(posteriori));
+        return labels.valueOf(MathEx.whichMax(posteriori));
     }
 
     /**
@@ -672,11 +667,11 @@ public class RandomForest extends AbstractClassifier<Tuple> implements DataFrame
      */
     public RandomForest prune(DataFrame test) {
         Model[] forest = Arrays.stream(models).parallel()
-                .map(model -> new Model(model.tree.prune(test, formula, classes), model.metrics))
+                .map(model -> new Model(model.tree.prune(test, formula, labels), model.metrics))
                 .toArray(Model[]::new);
 
         // The tree weight and OOB metrics are still the old one
         // as we don't access to the training data here.
-        return new RandomForest(formula, k, forest, metrics, importance(forest), classes);
+        return new RandomForest(formula, k, forest, metrics, importance(forest), labels);
     }
 }

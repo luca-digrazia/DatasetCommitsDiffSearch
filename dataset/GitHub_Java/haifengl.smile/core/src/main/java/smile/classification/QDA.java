@@ -18,6 +18,9 @@
 package smile.classification;
 
 import java.util.Properties;
+import smile.data.CategoricalEncoder;
+import smile.data.DataFrame;
+import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.util.IntSet;
@@ -119,6 +122,31 @@ public class QDA extends AbstractClassifier<double[]> {
     }
 
     /**
+     * Learns quadratic discriminant analysis.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @return the model.
+     */
+    public static QDA fit(Formula formula, DataFrame data) {
+        return fit(formula, data, new Properties());
+    }
+
+    /**
+     * Learns quadratic discriminant analysis.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @param prop the hyper-parameters.
+     * @return the model.
+     */
+    public static QDA fit(Formula formula, DataFrame data, Properties prop) {
+        double[][] x = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
+        int[] y = formula.y(data).toIntArray();
+        return fit(x, y, prop);
+    }
+
+    /**
      * Learn quadratic discriminant analysis.
      * @param x training samples.
      * @param y training labels in [0, k), where k is the number of classes.
@@ -199,11 +227,6 @@ public class QDA extends AbstractClassifier<double[]> {
     }
 
     @Override
-    public boolean soft() {
-        return true;
-    }
-
-    @Override
     public int predict(double[] x, double[] posteriori) {
         if (x.length != p) {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
@@ -229,6 +252,6 @@ public class QDA extends AbstractClassifier<double[]> {
             posteriori[i] = logppriori[i] - 0.5 * f;
         }
 
-        return classes.valueOf(MathEx.softmax(posteriori));
+        return labels.valueOf(MathEx.softmax(posteriori));
     }
 }

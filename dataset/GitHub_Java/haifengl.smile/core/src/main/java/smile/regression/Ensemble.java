@@ -33,6 +33,7 @@ public class Ensemble<T> implements Regression<T> {
     /**
      * Returns an ensemble model.
      * @param models the base models.
+     * @return the ensemble model.
      */
     @SafeVarargs
     public Ensemble(Regression<T>... models) {

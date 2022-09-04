@@ -20,6 +20,9 @@ package smile.classification;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.IntStream;
+import smile.data.CategoricalEncoder;
+import smile.data.DataFrame;
+import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.math.DifferentiableMultivariateFunction;
 import smile.math.BFGS;
@@ -75,7 +78,7 @@ import smile.validation.ModelSelection;
  * 
  * @author Haifeng Li
  */
-public abstract class LogisticRegression extends AbstractClassifier<double[]> {
+public abstract class LogisticRegression extends AbstractClassifier<double[]> implements OnlineClassifier<double[]> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -154,7 +157,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
         @Override
         public int predict(double[] x) {
             double f = 1.0 / (1.0 + Math.exp(-dot(x, w)));
-            return classes.valueOf(f < 0.5 ? 0 : 1);
+            return labels.valueOf(f < 0.5 ? 0 : 1);
         }
 
         @Override
@@ -172,7 +175,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
             posteriori[0] = 1.0 - f;
             posteriori[1] = f;
 
-            return classes.valueOf(f < 0.5 ? 0 : 1);
+            return labels.valueOf(f < 0.5 ? 0 : 1);
         }
 
         @Override
@@ -181,7 +184,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
                 throw new IllegalArgumentException("Invalid input vector size: " + x.length);
             }
 
-            y = classes.indexOf(y);
+            y = labels.indexOf(y);
 
             // calculate gradient for incoming data
             double wx = dot(x, w);
@@ -255,7 +258,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
             }
 
             MathEx.softmax(posteriori);
-            return classes.valueOf(MathEx.whichMax(posteriori));
+            return labels.valueOf(MathEx.whichMax(posteriori));
         }
 
         @Override
@@ -264,7 +267,7 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
                 throw new IllegalArgumentException("Invalid input vector size: " + x.length);
             }
 
-            y = classes.indexOf(y);
+            y = labels.indexOf(y);
 
             double[] prob = new double[k];
             for (int j = 0; j < k-1; j++) {
@@ -290,6 +293,32 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
                 }
             }
         }
+    }
+
+    /**
+     * Fits binomial logistic regression.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @return the model.
+     */
+    public static Binomial binomial(Formula formula, DataFrame data) {
+        return binomial(formula, data, new Properties());
+    }
+
+    /**
+     * Fits binomial logistic regression.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @param prop the hyper-parameters.
+     * @return the model.
+     */
+    public static Binomial binomial(Formula formula, DataFrame data, Properties prop) {
+        DataFrame X = formula.x(data);
+        double[][] x = X.toArray(false, CategoricalEncoder.DUMMY);
+        int[] y = formula.y(data).toIntArray();
+        return binomial(x, y, prop);
     }
 
     /**
@@ -358,9 +387,35 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
         double[] w = new double[p + 1];
         double L = -BFGS.minimize(objective, 5, w, tol, maxIter);
 
-        Binomial model = new Binomial(w, L, lambda, codec.classes);
+        Binomial model = new Binomial(w, L, lambda, codec.labels);
         model.setLearningRate(0.1 / x.length);
         return model;
+    }
+
+    /**
+     * Fits multinomial logistic regression.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @return the model.
+     */
+    public static Multinomial multinomial(Formula formula, DataFrame data) {
+        return multinomial(formula, data, new Properties());
+    }
+
+    /**
+     * Fits multinomial logistic regression.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @param prop the hyper-parameters.
+     * @return the model.
+     */
+    public static Multinomial multinomial(Formula formula, DataFrame data, Properties prop) {
+        DataFrame X = formula.x(data);
+        double[][] x = X.toArray(false, CategoricalEncoder.DUMMY);
+        int[] y = formula.y(data).toIntArray();
+        return multinomial(x, y, prop);
     }
 
     /**
@@ -436,9 +491,35 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
             }
         }
 
-        Multinomial model = new Multinomial(W, L, lambda, codec.classes);
+        Multinomial model = new Multinomial(W, L, lambda, codec.labels);
         model.setLearningRate(0.1 / x.length);
         return model;
+    }
+
+    /**
+     * Fits logistic regression.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @return the model.
+     */
+    public static LogisticRegression fit(Formula formula, DataFrame data) {
+        return fit(formula, data, new Properties());
+    }
+
+    /**
+     * Fits logistic regression.
+     *
+     * @param formula a symbolic description of the model to be fitted.
+     * @param data the data frame of the explanatory and response variables.
+     * @param prop the hyper-parameters.
+     * @return the model.
+     */
+    public static LogisticRegression fit(Formula formula, DataFrame data, Properties prop) {
+        DataFrame X = formula.x(data);
+        double[][] x = X.toArray(false, CategoricalEncoder.DUMMY);
+        int[] y = formula.y(data).toIntArray();
+        return fit(x, y, prop);
     }
 
     /**
@@ -767,16 +848,6 @@ public abstract class LogisticRegression extends AbstractClassifier<double[]> {
         }
 
         return dot;
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
-    }
-
-    @Override
-    public boolean online() {
-        return true;
     }
 
     /**

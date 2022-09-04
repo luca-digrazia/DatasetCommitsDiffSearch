@@ -51,7 +51,7 @@ import smile.validation.ModelSelection;
  * 
  * @author Haifeng Li
  */
-public abstract class Maxent extends AbstractClassifier<int[]> {
+public abstract class Maxent extends AbstractClassifier<int[]> implements OnlineClassifier<int[]> {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -128,14 +128,9 @@ public abstract class Maxent extends AbstractClassifier<int[]> {
         }
 
         @Override
-        public double score(int[] x) {
-            return 1.0 / (1.0 + Math.exp(-dot(x, w)));
-        }
-
-        @Override
         public int predict(int[] x) {
             double f = 1.0 / (1.0 + Math.exp(-dot(x, w)));
-            return classes.valueOf(f < 0.5 ? 0 : 1);
+            return labels.valueOf(f < 0.5 ? 0 : 1);
         }
 
         @Override
@@ -147,12 +142,12 @@ public abstract class Maxent extends AbstractClassifier<int[]> {
             double f = 1.0 / (1.0 + Math.exp(-dot(x, w)));
             posteriori[0] = 1.0 - f;
             posteriori[1] = f;
-            return classes.valueOf(f < 0.5 ? 0 : 1);
+            return labels.valueOf(f < 0.5 ? 0 : 1);
         }
 
         @Override
         public void update(int[] x, int y) {
-            y = classes.indexOf(y);
+            y = labels.indexOf(y);
             // calculate gradient for incoming data
             double wx = dot(x, w);
             double err = y - MathEx.sigmoid(wx);
@@ -214,12 +209,12 @@ public abstract class Maxent extends AbstractClassifier<int[]> {
             }
 
             MathEx.softmax(posteriori);
-            return classes.valueOf(MathEx.whichMax(posteriori));
+            return labels.valueOf(MathEx.whichMax(posteriori));
         }
 
         @Override
         public void update(int[] x, int y) {
-            y = classes.indexOf(y);
+            y = labels.indexOf(y);
             double[] prob = new double[k];
             for (int j = 0; j < k-1; j++) {
                 prob[j] = dot(x, w[j]);
@@ -365,7 +360,7 @@ public abstract class Maxent extends AbstractClassifier<int[]> {
         BinomialObjective objective = new BinomialObjective(x, codec.y, p, lambda);
         double[] w = new double[p + 1];
         double L = -BFGS.minimize(objective, 5, w, tol, maxIter);
-        Binomial model = new Binomial(w, L, lambda, codec.classes);
+        Binomial model = new Binomial(w, L, lambda, codec.labels);
         model.setLearningRate(0.1 / x.length);
         return model;
     }
@@ -452,7 +447,7 @@ public abstract class Maxent extends AbstractClassifier<int[]> {
             }
         }
 
-        Multinomial model = new Multinomial(W, L, lambda, codec.classes);
+        Multinomial model = new Multinomial(W, L, lambda, codec.labels);
         model.setLearningRate(0.1 / x.length);
         return model;
     }
@@ -749,16 +744,6 @@ public abstract class Maxent extends AbstractClassifier<int[]> {
      */
     public int dimension() {
         return p;
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
-    }
-
-    @Override
-    public boolean online() {
-        return true;
     }
 
     /**

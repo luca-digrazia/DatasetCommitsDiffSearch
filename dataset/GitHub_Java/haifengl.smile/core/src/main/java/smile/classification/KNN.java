@@ -27,6 +27,7 @@ import smile.neighbor.KDTree;
 import smile.neighbor.KNNSearch;
 import smile.neighbor.LinearSearch;
 import smile.neighbor.Neighbor;
+import smile.util.IntSet;
 
 /**
  * K-nearest neighbor classifier. The k-nearest neighbor algorithm (k-NN) is
@@ -183,10 +184,10 @@ public class KNN<T> extends AbstractClassifier<T> {
             return y[neighbors[0].index];
         }
 
-        int[] count = new int[classes.size()];
+        int[] count = new int[labels.size()];
         for (Neighbor<T,T> neighbor : neighbors) {
             if (neighbor != null) {
-                count[classes.indexOf(y[neighbor.index])]++;
+                count[labels.indexOf(y[neighbor.index])]++;
             }
         }
 
@@ -195,12 +196,7 @@ public class KNN<T> extends AbstractClassifier<T> {
             throw new IllegalStateException("No neighbor found.");
         }
 
-        return classes.valueOf(y);
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
+        return labels.valueOf(y);
     }
 
     @Override
@@ -212,13 +208,13 @@ public class KNN<T> extends AbstractClassifier<T> {
             }
 
             Arrays.fill(posteriori, 0.0);
-            posteriori[classes.indexOf(y[neighbors[0].index])] = 1.0;
+            posteriori[labels.indexOf(y[neighbors[0].index])] = 1.0;
             return y[neighbors[0].index];
         }
 
-        int[] count = new int[classes.size()];
+        int[] count = new int[labels.size()];
         for (int i = 0; i < k; i++) {
-            count[classes.indexOf(y[neighbors[i].index])]++;
+            count[labels.indexOf(y[neighbors[i].index])]++;
         }
 
         int y = MathEx.whichMax(count);
@@ -230,6 +226,6 @@ public class KNN<T> extends AbstractClassifier<T> {
             posteriori[i] = (double) count[i] / k;
         }
 
-        return classes.valueOf(y);
+        return labels.valueOf(y);
     }
 }

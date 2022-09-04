@@ -23,8 +23,6 @@ import smile.math.matrix.Matrix;
 import smile.math.rbf.RadialBasisFunction;
 import smile.util.IntSet;
 
-import java.util.Properties;
-
 /**
  * Radial basis function networks. A radial basis function network is an
  * artificial neural network that uses radial basis functions as activation
@@ -191,20 +189,7 @@ public class RBFNetwork<T> extends AbstractClassifier<T> {
         Matrix.QR qr = G.qr(true);
         qr.solve(b);
 
-        return new RBFNetwork<>(k, rbf, b.submatrix(0, 0, m, k-1), normalized, codec.classes);
-    }
-
-    /**
-     * Fits a RBF network.
-     * @param x training samples.
-     * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model.
-     */
-    public static RBFNetwork<double[]> fit(double[][] x, int[] y, Properties prop) {
-        int neurons = Integer.parseInt(prop.getProperty("smile.rbf.neurons", "30"));
-        boolean normalize = Boolean.parseBoolean(prop.getProperty("smile.rbf.normalize", "false"));
-        return RBFNetwork.fit(x, y, RBF.fit(x, neurons), normalize);
+        return new RBFNetwork<>(k, rbf, b.submatrix(0, 0, m, k-1), normalized, codec.labels);
     }
 
     /**
@@ -227,6 +212,6 @@ public class RBFNetwork<T> extends AbstractClassifier<T> {
         double[] sumw = new double[k];
         w.tv(f, sumw);
 
-        return classes.valueOf(MathEx.whichMax(sumw));
+        return labels.valueOf(MathEx.whichMax(sumw));
     }
 }

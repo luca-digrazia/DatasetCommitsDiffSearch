@@ -23,9 +23,7 @@ import java.util.List;
 import java.util.function.ToDoubleFunction;
 import java.util.function.ToIntFunction;
 import smile.data.Dataset;
-import smile.data.Instance;
 import smile.data.measure.NominalScale;
-import smile.math.MathEx;
 
 /**
  * A classifier assigns an input object into one of a given number of categories.
@@ -56,7 +54,13 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
      * Returns the class labels.
      * @return the class labels.
      */
-    int[] classes();
+    int[] labels();
+
+    /**
+     * Returns the nominal scale of the class labels.
+     * @return the nominal scale of the class labels.
+     */
+    NominalScale scale();
 
     /**
      * Predicts the class label of an instance.
@@ -117,23 +121,6 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
     }
 
     /**
-     * Returns true if this is a soft classifier that can estimate
-     * the posteriori probabilities of classification.
-     *
-     * @return true if soft classifier.
-     */
-    default boolean soft() {
-        try {
-            predict(null, new double[numClasses()]);
-        } catch (UnsupportedOperationException e) {
-            return !e.getMessage().equals("soft classification with a hard classifier");
-        } catch (Exception e) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * Predicts the class label of an instance and also calculate a posteriori
      * probabilities. Classifiers may NOT support this method since not all
      * classification algorithms are able to calculate such a posteriori
@@ -144,7 +131,7 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
      * @return the predicted class label
      */
     default int predict(T x, double[] posteriori) {
-        throw new UnsupportedOperationException("soft classification with a hard classifier");
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -197,127 +184,5 @@ public interface Classifier<T> extends ToIntFunction<T>, ToDoubleFunction<T>, Se
             posteriori.add(prob);
             return predict(xi, prob);
         }).toArray();
-    }
-
-    /**
-     * Returns true if this is an online learner.
-     *
-     * @return true if online learner.
-     */
-    default boolean online() {
-        try {
-            update(null, 0);
-        } catch (UnsupportedOperationException e) {
-            return !e.getMessage().equals("update a batch learner");
-        } catch (Exception e) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Online update the classifier with a new training instance.
-     * In general, this method may be NOT multi-thread safe.
-     *
-     * @param x the training instance.
-     * @param y the training label.
-     */
-    default void update(T x, int y) {
-        throw new UnsupportedOperationException("update a batch learner");
-    }
-
-    /**
-     * Updates the model with a mini-batch of new samples.
-     * @param x the training instances.
-     * @param y the training labels.
-     */
-    default void update(T[] x, int[] y) {
-        if (x.length != y.length) {
-            throw new IllegalArgumentException(String.format("Input vector x of size %d not equal to length %d of y", x.length, y.length));
-        }
-
-        for (int i = 0; i < x.length; i++){
-            update(x[i], y[i]);
-        }
-    }
-
-    /**
-     * Updates the model with a mini-batch of new samples.
-     * @param batch the training instances.
-     */
-    default void update(Dataset<Instance<T>> batch) {
-        batch.stream().forEach(sample -> update(sample.x(), sample.label()));
-    }
-
-    /**
-     * Return an ensemble of multiple base models to obtain better
-     * predictive performance.
-     *
-     * @param models the base models.
-     * @return the ensemble model.
-     */
-    @SafeVarargs
-    static <T> Classifier<T> ensemble(Classifier<T>... models) {
-        return new Classifier<T>() {
-            /** The ensemble is a soft classifier only if all the base models are. */
-            private boolean soft = Arrays.stream(models).allMatch(model -> model.soft());
-
-            /** The ensemble is an online learner only if all the base models are. */
-            private boolean online = Arrays.stream(models).allMatch(model -> model.online());
-
-            @Override
-            public boolean soft() {
-                return soft;
-            }
-
-            @Override
-            public boolean online() {
-                return online;
-            }
-
-            @Override
-            public int numClasses() {
-                return models[0].numClasses();
-            }
-
-            @Override
-            public int[] classes() {
-                return models[0].classes();
-            }
-
-            @Override
-            public int predict(T x) {
-                int[] labels = new int[models.length];
-                for (int i = 0; i < models.length; i++) {
-                    labels[i] = models[i].predict(x);
-                }
-                return MathEx.mode(labels);
-            }
-
-            @Override
-            public int predict(T x, double[] posteriori) {
-                Arrays.fill(posteriori, 0.0);
-                double[] prob = new double[posteriori.length];
-
-                for (Classifier<T> model : models) {
-                    model.predict(x, prob);
-                    for (int i = 0; i < prob.length; i++) {
-                        posteriori[i] += prob[i];
-                    }
-                }
-
-                for (int i = 0; i < posteriori.length; i++) {
-                    posteriori[i] /= models.length;
-                }
-                return MathEx.whichMax(posteriori);
-            }
-
-            @Override
-            public void update(T x, int y) {
-                for (Classifier<T> model : models) {
-                    model.update(x, y);
-                }
-            }
-        };
     }
 }

@@ -169,26 +169,18 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
      * @param trainer the lambda to train binary classifiers.
      * @return the model.
      */
+    /*
+    @SuppressWarnings("unchecked")
     public static DataFrameClassifier fit(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
         Tuple[] x = data.stream().toArray(Tuple[]::new);
         int[] y = formula.y(data).toIntArray();
         OneVersusOne<Tuple> model = fit(x, y, 1, 0, (Tuple[] rows, int[] labels) -> {
             DataFrame df = DataFrame.of(Arrays.asList(rows));
-            return trainer.apply(formula, df);
+            return (Classifier<Tuple>) trainer.apply(formula, df);
         });
 
         StructType schema = formula.x(data.get(0)).schema();
         return new DataFrameClassifier() {
-            @Override
-            public int numClasses() {
-                return model.numClasses();
-            }
-
-            @Override
-            public int[] classes() {
-                return model.classes();
-            }
-
             @Override
             public int predict(Tuple x) {
                 return model.predict(x);
@@ -205,6 +197,7 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
             }
         };
     }
+     */
 
     /** Prediction is based on voting. */
     @Override
@@ -221,12 +214,7 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
             }
         }
 
-        return classes.valueOf(MathEx.whichMax(count));
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
+        return labels.valueOf(MathEx.whichMax(count));
     }
 
     /**
@@ -249,7 +237,7 @@ public class OneVersusOne<T> extends AbstractClassifier<T> {
         }
 
         coupling(r, posteriori);
-        return classes.valueOf(MathEx.whichMax(posteriori));
+        return labels.valueOf(MathEx.whichMax(posteriori));
     }
 
     /**

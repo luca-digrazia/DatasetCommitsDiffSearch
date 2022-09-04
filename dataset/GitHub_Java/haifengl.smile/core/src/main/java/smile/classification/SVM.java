@@ -17,16 +17,16 @@
 
 package smile.classification;
 
-import java.util.Arrays;
-import java.util.Properties;
 import smile.base.svm.KernelMachine;
 import smile.base.svm.LinearKernelMachine;
 import smile.base.svm.LASVM;
-import smile.math.MathEx;
+import smile.data.measure.NominalScale;
 import smile.util.IntSet;
 import smile.util.SparseArray;
 import smile.math.kernel.BinarySparseLinearKernel;
-import smile.math.kernel.*;
+import smile.math.kernel.LinearKernel;
+import smile.math.kernel.MercerKernel;
+import smile.math.kernel.SparseLinearKernel;
 
 /**
  * Support vector machines for classification. The basic support vector machine
@@ -103,8 +103,14 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
     }
 
     @Override
-    public int[] classes() {
+    public int[] labels() {
         return new int[]{-1, +1};
+    }
+
+    @Override
+    public NominalScale scale() {
+        String[] values = {"-1", "+1"};
+        return new NominalScale(values);
     }
 
     @Override
@@ -113,9 +119,9 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
     }
 
     /**
-     * Fits a binary linear SVM.
+     * Fits a binary-class linear SVM.
      * @param x training samples.
-     * @param y training labels of {-1, +1}.
+     * @param y training labels.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
      * @return the model.
@@ -136,9 +142,9 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
     }
 
     /**
-     * Fits a binary linear SVM of binary sparse data.
+     * Fits a binary-class linear SVM of binary sparse data.
      * @param x training samples.
-     * @param y training labels of {-1, +1}.
+     * @param y training labels.
      * @param p the dimension of input vector.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
@@ -160,9 +166,9 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
     }
 
     /**
-     * Fits a binary linear SVM.
+     * Fits a binary-class linear SVM.
      * @param x training samples.
-     * @param y training labels of {-1, +1}.
+     * @param y training labels.
      * @param p the dimension of input vector.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
@@ -184,9 +190,9 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
     }
 
     /**
-     * Fits a binary SVM.
+     * Fits a binary-class SVM.
      * @param x training samples.
-     * @param y training labels of {-1, +1}.
+     * @param y training labels.
      * @param kernel the kernel function.
      * @param C the soft margin penalty parameter.
      * @param tol the tolerance of convergence test.
@@ -196,50 +202,5 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
     public static <T> SVM<T> fit(T[] x, int[] y, MercerKernel<T> kernel, double C, double tol) {
         LASVM<T> lasvm = new LASVM<>(kernel, C, tol);
         return lasvm.fit(x, y).toSVM();
-    }
-
-    /**
-     * Fits a binary or multiclass SVM.
-     * @param x training samples.
-     * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model.
-     */
-    public static Classifier<double[]> fit(double[][] x, int[] y, Properties prop) {
-        MercerKernel<double[]> kernel = MercerKernel.of(prop);
-        double C = Double.parseDouble(prop.getProperty("svm.C", "1.0"));
-        double tol = Double.parseDouble(prop.getProperty("svm.tolerance", "1E-3"));
-
-        int[] classes = MathEx.unique(y);
-        String trainer = prop.getProperty("svm", classes.length == 2 ? "binary" : "ovr").toLowerCase();
-        switch (trainer) {
-            case "ovr":
-                if (kernel instanceof LinearKernel) {
-                    return OneVersusRest.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, C, tol));
-                } else {
-                    return OneVersusRest.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, kernel, C, tol));
-                }
-            case "ovo":
-                if (kernel instanceof LinearKernel) {
-                    return OneVersusOne.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, C, tol));
-                } else {
-                    return OneVersusOne.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, kernel, C, tol));
-                }
-            case "binary":
-                Arrays.sort(classes);
-                if (classes[0] != -1 || classes[1] != +1) {
-                    y = y.clone();
-                    for (int i = 0; i < y.length; i++) {
-                        y[i] = y[i] == classes[0] ? -1 : +1;
-                    }
-                }
-                if (kernel instanceof LinearKernel) {
-                    return SVM.fit(x, y, C, tol);
-                } else {
-                    return SVM.fit(x, y, kernel, C, tol);
-                }
-            default:
-                throw new IllegalArgumentException("Unknown SVM type: " + trainer);
-        }
     }
 }

@@ -19,13 +19,9 @@ package smile.classification;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
-import java.util.stream.Collectors;
-
 import smile.base.mlp.*;
+import smile.data.measure.NominalScale;
 import smile.math.MathEx;
-import smile.math.TimeFunction;
 import smile.util.IntSet;
 
 /**
@@ -109,7 +105,7 @@ import smile.util.IntSet;
  * 
  * @author Haifeng Li
  */
-public class MLP extends MultilayerPerceptron implements Classifier<double[]>, Serializable {
+public class MLP extends MultilayerPerceptron implements OnlineClassifier<double[]>, SoftClassifier<double[]>, Serializable {
     private static final long serialVersionUID = 2L;
 
     /**
@@ -119,7 +115,7 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
     /**
      * The class label encoder.
      */
-    private final IntSet classes;
+    private final IntSet labels;
 
     /**
      * Constructor.
@@ -132,22 +128,22 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
 
         int outSize = output.getOutputSize();
         this.k = outSize == 1 ? 2 : outSize;
-        this.classes = IntSet.of(k);
+        this.labels = IntSet.of(k);
     }
 
     /**
      * Constructor.
      *
-     * @param classes the class labels.
+     * @param labels the class label encoder.
      * @param p the number of variables in input layer.
      * @param builders the builders of layers from bottom to top.
      */
-    public MLP(IntSet classes, int p, LayerBuilder... builders) {
+    public MLP(IntSet labels, int p, LayerBuilder... builders) {
         super(net(p, builders));
 
         int outSize = output.getOutputSize();
         this.k = outSize == 1 ? 2 : outSize;
-        this.classes = classes;
+        this.labels = labels;
     }
 
     /** Builds the layers. */
@@ -165,12 +161,21 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
 
     @Override
     public int numClasses() {
-        return classes.size();
+        return labels.size();
     }
 
     @Override
-    public int[] classes() {
-        return classes.values;
+    public int[] labels() {
+        return labels.values;
+    }
+
+    @Override
+    public NominalScale scale() {
+        String[] values = new String[labels.size()];
+        for (int i = 0; i < labels.size(); i++) {
+            values[i] = String.valueOf(labels.valueOf(i));
+        }
+        return new NominalScale(values);
     }
 
     @Override
@@ -185,7 +190,7 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
             System.arraycopy(output.output(), 0, posteriori, 0, n);
         }
 
-        return classes.valueOf(MathEx.whichMax(posteriori));
+        return labels.valueOf(MathEx.whichMax(posteriori));
     }
 
     @Override
@@ -194,27 +199,17 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
         int n = output.getOutputSize();
 
         if (n == 1 && k == 2) {
-            return classes.valueOf(output.output()[0] > 0.5 ? 1 : 0);
+            return labels.valueOf(output.output()[0] > 0.5 ? 1 : 0);
         } else {
-            return classes.valueOf(MathEx.whichMax(output.output()));
+            return labels.valueOf(MathEx.whichMax(output.output()));
         }
-    }
-
-    @Override
-    public boolean soft() {
-        return true;
-    }
-
-    @Override
-    public boolean online() {
-        return true;
     }
 
     /** Updates the model with a single sample. RMSProp is not applied. */
     @Override
     public void update(double[] x, int y) {
         propagate(x);
-        setTarget(classes.indexOf(y));
+        setTarget(labels.indexOf(y));
         backpropagate(x, true);
         t++;
     }
@@ -224,64 +219,12 @@ public class MLP extends MultilayerPerceptron implements Classifier<double[]>, S
     public void update(double[][] x, int[] y) {
         for (int i = 0; i < x.length; i++) {
             propagate(x[i]);
-            setTarget(classes.indexOf(y[i]));
+            setTarget(labels.indexOf(y[i]));
             backpropagate(x[i], false);
         }
 
         update(x.length);
         t++;
-    }
-
-    /**
-     * Fits a MLP model.
-     * @param x the training dataset.
-     * @param y training labels.
-     * @param prop the hyper-parameters.
-     * @return the model.
-     */
-    public static MLP fit(double[][] x, int[] y, Properties prop) {
-        int p = x[0].length;
-        int k = MathEx.max(y) + 1;
-
-        String activation = prop.getProperty("smile.mlp.activation", "ReLU");
-        List<LayerBuilder> layers = Arrays.stream(prop.getProperty("smile.mlp.layers", "100").split(","))
-                .mapToInt(Integer::parseInt)
-                .mapToObj(nodes -> Layer.builder(activation, nodes))
-                .collect(Collectors.toList());
-        layers.add(Layer.mle(k == 2 ? 1 : k, OutputFunction.SIGMOID));
-        MLP model = new MLP(p, layers.toArray(new LayerBuilder[0]));
-
-        String learningRate = prop.getProperty("smile.mlp.learning_rate", "0.01");
-        model.setLearningRate(TimeFunction.of(learningRate));
-
-        String momentum = prop.getProperty("smile.mlp.momentum");
-        if (momentum != null) {
-            model.setMomentum(TimeFunction.of(momentum));
-        }
-
-        String rho = prop.getProperty("smile.mlp.RMSProp.rho");
-        if (rho != null) {
-            double epsilon = Double.parseDouble(prop.getProperty("smile.mlp.RMSProp.epsilon", "1E-7"));
-            model.setRMSProp(Double.parseDouble(rho), epsilon);
-        }
-
-        int epochs = Integer.parseInt(prop.getProperty("smile.mlp.epochs", "100"));
-        int batch = Integer.parseInt(prop.getProperty("smile.mlp.mini_batch", "256"));
-        double[][] batchx = new double[batch][];
-        int[] batchy = new int[batch];
-        for (int epoch = 1; epoch <= epochs; epoch++) {
-            int[] permutation = MathEx.permutate(x.length);
-            for (int i = 0; i < x.length; i += batch) {
-                for (int j = 0; j < batch; j++) {
-                    int pi = permutation[(i+j) % x.length];
-                    batchx[j] = x[pi];
-                    batchy[j] = y[pi];
-                }
-                model.update(batchx, batchy);
-            }
-        }
-
-        return model;
     }
 
     /** Sets the target vector. */
