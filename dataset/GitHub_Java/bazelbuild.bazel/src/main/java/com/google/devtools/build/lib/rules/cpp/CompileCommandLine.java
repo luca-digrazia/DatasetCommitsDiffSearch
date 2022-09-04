@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -20,7 +21,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -37,17 +37,16 @@ public final class CompileCommandLine {
   private final Artifact sourceFile;
   private final Artifact outputFile;
   private final Label sourceLabel;
+  private final DotdFile dotdFile;
   private final List<String> copts;
   private final Predicate<String> coptsFilter;
   private final Collection<String> features;
   private final FeatureConfiguration featureConfiguration;
-  private final CcToolchainFeatures.Variables variables;
+  @VisibleForTesting public final CcToolchainFeatures.Variables variables;
   private final String actionName;
   private final CppConfiguration cppConfiguration;
-  private final CcToolchainProvider cppProvider;
-  private final DotdFile dotdFile;
 
-  private CompileCommandLine(
+  public CompileCommandLine(
       Artifact sourceFile,
       Artifact outputFile,
       Label sourceLabel,
@@ -58,8 +57,7 @@ public final class CompileCommandLine {
       CppConfiguration cppConfiguration,
       CcToolchainFeatures.Variables variables,
       String actionName,
-      DotdFile dotdFile,
-      CcToolchainProvider cppProvider) {
+      DotdFile dotdFile) {
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
     this.outputFile = Preconditions.checkNotNull(outputFile);
     this.sourceLabel = Preconditions.checkNotNull(sourceLabel);
@@ -71,7 +69,6 @@ public final class CompileCommandLine {
     this.variables = variables;
     this.actionName = actionName;
     this.dotdFile = isGenerateDotdFile(sourceFile) ? Preconditions.checkNotNull(dotdFile) : null;
-    this.cppProvider = cppProvider;
   }
 
   /** Returns true if Dotd file should be generated. */
@@ -162,7 +159,7 @@ public final class CompileCommandLine {
     // the user provided options, otherwise users adding include paths will not pick up their
     // own include paths first.
     if (!isObjcCompile(actionName)) {
-      options.addAll(cppProvider.getUnfilteredCompilerOptions(features));
+      options.addAll(toolchain.getUnfilteredCompilerOptions(features));
     }
 
     // Add the options of --per_file_copt, if the label or the base name of the source file
@@ -205,99 +202,5 @@ public final class CompileCommandLine {
 
   public List<String> getCopts() {
     return copts;
-  }
-
-  public Variables getVariables() {
-    return variables;
-  }
-
-  public static Builder builder(
-      Artifact sourceFile,
-      Artifact outputFile,
-      Label sourceLabel,
-      ImmutableList<String> copts,
-      Predicate<String> coptsFilter,
-      ImmutableList<String> features,
-      String actionName,
-      CppConfiguration cppConfiguration,
-      DotdFile dotdFile,
-      CcToolchainProvider cppProvider) {
-    return new Builder(
-        sourceFile,
-        outputFile,
-        sourceLabel,
-        copts,
-        coptsFilter,
-        features,
-        actionName,
-        cppConfiguration,
-        dotdFile,
-        cppProvider);
-  }
-
-  /** A builder for a {@link CompileCommandLine}. */
-  public static final class Builder {
-    private final Artifact sourceFile;
-    private final Artifact outputFile;
-    private final Label sourceLabel;
-    private final ImmutableList<String> copts;
-    private final Predicate<String> coptsFilter;
-    private final Collection<String> features;
-    private FeatureConfiguration featureConfiguration;
-    private CcToolchainFeatures.Variables variables = Variables.EMPTY;
-    private final String actionName;
-    private final CppConfiguration cppConfiguration;
-    @Nullable private final DotdFile dotdFile;
-    private final CcToolchainProvider ccToolchainProvider;
-
-    public CompileCommandLine build() {
-      return new CompileCommandLine(
-          Preconditions.checkNotNull(sourceFile),
-          Preconditions.checkNotNull(outputFile),
-          Preconditions.checkNotNull(sourceLabel),
-          Preconditions.checkNotNull(copts),
-          Preconditions.checkNotNull(coptsFilter),
-          Preconditions.checkNotNull(features),
-          Preconditions.checkNotNull(featureConfiguration),
-          Preconditions.checkNotNull(cppConfiguration),
-          Preconditions.checkNotNull(variables),
-          Preconditions.checkNotNull(actionName),
-          dotdFile,
-          Preconditions.checkNotNull(ccToolchainProvider));
-    }
-
-    private Builder(
-        Artifact sourceFile,
-        Artifact outputFile,
-        Label sourceLabel,
-        ImmutableList<String> copts,
-        Predicate<String> coptsFilter,
-        Collection<String> features,
-        String actionName,
-        CppConfiguration cppConfiguration,
-        DotdFile dotdFile,
-        CcToolchainProvider ccToolchainProvider) {
-      this.sourceFile = sourceFile;
-      this.outputFile = outputFile;
-      this.sourceLabel = sourceLabel;
-      this.copts = copts;
-      this.coptsFilter = coptsFilter;
-      this.features = features;
-      this.actionName = actionName;
-      this.cppConfiguration = cppConfiguration;
-      this.dotdFile = dotdFile;
-      this.ccToolchainProvider = ccToolchainProvider;
-    }
-
-    /** Sets the feature configuration for this compile action. */
-    public Builder setFeatureConfiguration(FeatureConfiguration featureConfiguration) {
-      this.featureConfiguration = featureConfiguration;
-      return this;
-    }
-
-    public Builder setVariables(Variables variables) {
-      this.variables = variables;
-      return this;
-    }
   }
 }
