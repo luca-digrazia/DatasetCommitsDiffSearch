@@ -19,9 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Interner;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
@@ -165,8 +163,6 @@ public class Parser {
 
   private int errorsCount;
   private boolean recoveryMode;  // stop reporting errors until next statement
-
-  private final Interner<String> stringInterner = BlazeInterners.newStrongInterner();
 
   private Parser(Lexer lexer, EventHandler eventHandler) {
     this.lexer = lexer;
@@ -603,8 +599,7 @@ public class Parser {
     Preconditions.checkState(token.kind == TokenKind.STRING);
     int end = token.right;
     StringLiteral literal =
-        setLocation(
-            new StringLiteral(stringInterner.intern((String) token.value)), token.left, end);
+        setLocation(new StringLiteral((String) token.value), token.left, end);
 
     nextToken();
     if (token.kind == TokenKind.STRING) {
@@ -963,7 +958,7 @@ public class Parser {
       if (expr instanceof StringLiteral && secondary instanceof StringLiteral) {
         StringLiteral left = (StringLiteral) expr;
         StringLiteral right = (StringLiteral) secondary;
-        return new StringLiteral(stringInterner.intern(left.getValue() + right.getValue()));
+        return new StringLiteral(left.getValue() + right.getValue());
       }
     }
     return new BinaryOperatorExpression(operator, expr, secondary);

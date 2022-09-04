@@ -187,6 +187,18 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   }
 
   @Override
+  public void visit(FuncallExpression node) {
+    super.visit(node);
+    try {
+      if (env.getSemantics().incompatibleStricArgumentOrdering()) {
+        Argument.validateFuncallArguments(node.getArguments());
+      }
+    } catch (Argument.ArgumentException e) {
+      throw new ValidationException(e.getLocation(), e.getMessage());
+    }
+  }
+
+  @Override
   public void visit(ReturnStatement node) {
     if (block.scope != Scope.Local) {
       throw new ValidationException(
@@ -389,7 +401,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
    * **kwargs. This creates a better separation between code and data.
    */
   public static boolean checkBuildSyntax(
-      List<Statement> statements, final EventHandler eventHandler, Environment env) {
+      List<Statement> statements, final EventHandler eventHandler) {
     // Wrap the boolean inside an array so that the inner class can modify it.
     final boolean[] success = new boolean[] {true};
     // TODO(laurentlb): Merge with the visitor above when possible (i.e. when BUILD files use it).
@@ -441,9 +453,6 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
                     "*args arguments are not allowed in BUILD files. Pass the arguments in "
                         + "explicitly.");
               }
-            }
-            if (env.getSemantics().incompatibleNoKwargsInBuildFiles()) {
-              super.visit(node);
             }
           }
         };
