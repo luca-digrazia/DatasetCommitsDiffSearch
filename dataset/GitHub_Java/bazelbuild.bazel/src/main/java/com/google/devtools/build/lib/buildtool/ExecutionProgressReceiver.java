@@ -195,23 +195,22 @@ public final class ExecutionProgressReceiver
 
       @Override
       public int waitForNextCompletion(int timeoutMilliseconds) throws InterruptedException {
-        long rest = timeoutMilliseconds;
         synchronized (activityIndicator) {
           int before = completedActions.size();
           long startTime = BlazeClock.instance().currentTimeMillis();
           while (true) {
-            activityIndicator.wait(rest);
+            activityIndicator.wait(timeoutMilliseconds);
 
             int completed = completedActions.size() - before;
             long now = 0;
             if (completed > 0
-                || (startTime + rest)
+                || (startTime + timeoutMilliseconds)
                     <= (now = BlazeClock.instance().currentTimeMillis())) {
               // Some actions completed, or timeout fully elapsed.
               return completed;
             } else {
               // Spurious Wakeup -- no actions completed and there's still time to wait.
-              rest -= now - startTime; // account for elapsed wait time
+              timeoutMilliseconds -= now - startTime; // account for elapsed wait time
               startTime = now;
             }
           }

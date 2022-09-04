@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -176,7 +175,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    public ActionResult execute(ActionExecutionContext actionExecutionContext)
+    public void execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException, InterruptedException {
       executionCounter.incrementAndGet();
 
@@ -198,7 +197,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       } catch (IOException e) {
         throw new ActionExecutionException(e, this, false);
       }
-      return ActionResult.EMPTY;
     }
 
     @Override
@@ -380,7 +378,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null,
         null,
         null,
-        null,
         executor,
         null,
         false,
@@ -405,7 +402,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     builder.buildArtifacts(
         reporter,
         ImmutableSet.of(actionOutput),
-        null,
         null,
         null,
         null,
@@ -758,10 +754,9 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     registerAction(
         new SingleOutputAction(null, genFile1) {
           @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext)
+          public void execute(ActionExecutionContext actionExecutionContext)
               throws ActionExecutionException, InterruptedException {
             writeOutput(null, "gen1");
-            return ActionResult.EMPTY;
           }
         });
 
@@ -773,17 +768,15 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
           }
 
           @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext)
+          public void execute(ActionExecutionContext actionExecutionContext)
               throws ActionExecutionException, InterruptedException {
             writeOutput(readInput(), "gen2");
-            return ActionResult.EMPTY;
           }
         });
 
     builder.buildArtifacts(
         reporter,
         ImmutableSet.of(genFile2),
-        null,
         null,
         null,
         null,

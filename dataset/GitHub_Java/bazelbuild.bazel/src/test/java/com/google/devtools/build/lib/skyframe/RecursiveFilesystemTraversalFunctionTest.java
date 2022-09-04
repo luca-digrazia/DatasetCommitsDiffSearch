@@ -120,8 +120,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         new WorkspaceFileFunction(
             ruleClassProvider,
             analysisMock
-                .getPackageFactoryBuilderForTesting()
-                .build(ruleClassProvider, scratch.getFileSystem()),
+                .getPackageFactoryForTesting()
+                .create(ruleClassProvider, scratch.getFileSystem()),
             directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
@@ -636,8 +636,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
         SkyKey key = rftvSkyKey(traversalRoot);
         EvaluationResult<SkyValue> result = eval(key);
         assertThat(result.hasError()).isTrue();
-        assertThat(result.getError().getException())
-            .hasMessageThat()
+        assertThat(result.getError().getException().getMessage())
             .contains("crosses package boundary into package rooted at");
         break;
       default:
@@ -811,9 +810,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     EvaluationResult<SkyValue> result = eval(key);
     assertThat(result.hasError()).isTrue();
     ErrorInfo error = result.getError(key);
-    assertThat(error.isTransitivelyTransient()).isFalse();
-    assertThat(error.getException())
-        .hasMessageThat()
+    assertThat(error.isTransient()).isFalse();
+    assertThat(error.getException().getMessage())
         .contains("Generated directory a/b/c conflicts with package under the same path.");
   }
 }
