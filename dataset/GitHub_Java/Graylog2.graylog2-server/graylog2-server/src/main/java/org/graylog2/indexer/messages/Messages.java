@@ -19,9 +19,7 @@ package org.graylog2.indexer.messages;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.github.joschi.jadconfig.util.Duration;
-import com.github.rholder.retry.Attempt;
 import com.github.rholder.retry.RetryException;
-import com.github.rholder.retry.RetryListener;
 import com.github.rholder.retry.Retryer;
 import com.github.rholder.retry.RetryerBuilder;
 import com.github.rholder.retry.WaitStrategies;
@@ -47,10 +45,12 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -58,23 +58,15 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 @Singleton
 public class Messages {
     private static final Logger LOG = LoggerFactory.getLogger(Messages.class);
     private static final Duration MAX_WAIT_TIME = Duration.seconds(30L);
     private static final Retryer<BulkResult> BULK_REQUEST_RETRYER = RetryerBuilder.<BulkResult>newBuilder()
-            .retryIfException(t -> t instanceof IOException)
-            .retryIfResult((result) -> result == null || !result.isSucceeded())
+            .retryIfException(t -> t instanceof SocketTimeoutException)
             .withWaitStrategy(WaitStrategies.exponentialWait(MAX_WAIT_TIME.getQuantity(), MAX_WAIT_TIME.getUnit()))
-            .withRetryListener(new RetryListener() {
-                @Override
-                public <V> void onRetry(Attempt<V> attempt) {
-                    if (attempt.hasException()) {
-                        LOG.error("Caught exception during bulk indexing: {}, retrying (attempt #{}).", attempt.getExceptionCause(), attempt.getAttemptNumber());
-                    }
-                }
-            })
             .build();
 
     private final Meter invalidTimestampMeter;
@@ -149,14 +141,15 @@ public class Messages {
 
     private BulkResult runBulkRequest(final Bulk request, int count) {
         try {
-            return BULK_REQUEST_RETRYER.call(() -> client.execute(request));
-        } catch (ExecutionException | RetryException e) {
-            if (e instanceof RetryException) {
-                LOG.error("Could not bulk index {} messages. Giving up after {} attempts.", count, ((RetryException) e).getNumberOfFailedAttempts());
-            } else {
+            return client.execute(request);
+        } catch (IOException timeoutException) {
+            LOG.debug("Bulk indexing request timed out. Retrying.", timeoutException);
+            try {
+                return BULK_REQUEST_RETRYER.call(new BulkRequestCallable(client, request));
+            } catch (ExecutionException | RetryException e) {
                 LOG.error("Couldn't bulk index " + count + " messages.", e);
+                throw new RuntimeException(e);
             }
-            throw new RuntimeException(e);
         }
     }
 
@@ -211,5 +204,20 @@ public class Messages {
 
     public LinkedBlockingQueue<List<IndexFailure>> getIndexFailureQueue() {
         return indexFailureQueue;
+    }
+
+    private static class BulkRequestCallable implements Callable<BulkResult> {
+        private final JestClient client;
+        private final Bulk request;
+
+        BulkRequestCallable(JestClient client, Bulk request) {
+            this.client = checkNotNull(client);
+            this.request = checkNotNull(request);
+        }
+
+        @Override
+        public BulkResult call() throws Exception {
+            return client.execute(request);
+        }
     }
 }
