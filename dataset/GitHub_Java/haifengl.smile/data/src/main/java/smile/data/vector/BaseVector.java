@@ -1,25 +1,27 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.data.vector;
 
 import java.io.Serializable;
 import java.util.stream.BaseStream;
-
+import smile.data.measure.Measure;
 import smile.data.type.DataType;
+import smile.data.type.StructField;
 
 /**
  * Base interface for immutable named vectors, which are sequences of elements supporting
@@ -32,68 +34,181 @@ import smile.data.type.DataType;
  * @author Haifeng Li
  */
 public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializable {
-    /** Return the (optional) name associated with vector. */
+    /**
+     * Returns the (optional) name of vector.
+     * @return the (optional) name of vector.
+     */
     String name();
 
-    /** Returns the element type. */
+    /**
+     * Returns the data type of elements.
+     * @return the data type of elements.
+     */
     DataType type();
 
-    /** Number of elements in the vector. */
+    /**
+     * Returns the (optional) level of measurements. Only valid for number types.
+     * @return the (optional) level of measurements.
+     */
+    default Measure measure() {
+        return null;
+    }
+
+    /**
+     * Returns a struct field corresponding to this vector.
+     * @return the struct field.
+     */
+    default StructField field() {
+        return new StructField(name(), type(), measure());
+    }
+
+    /**
+     * Returns the number of elements in the vector.
+     * @return the number of elements in the vector.
+     */
     int size();
 
     /**
      * Returns the array that backs this vector.
      * This is mostly for smile internal use for high performance.
      * The application developers should not use this method.
+     * @return the array that backs this vector.
      */
     Object array();
 
     /**
+     * Returns a double array of this vector.
+     * @return the double array.
+     */
+    default double[] toDoubleArray() {
+        return toDoubleArray(new double[size()]);
+    }
+
+    /**
+     * Copies the vector value as double to the given array.
+     * @param a the array to copy into.
+     * @return the input array <code>a</code>.
+     */
+    default double[] toDoubleArray(double[] a) {
+        throw new UnsupportedOperationException(name() + ":" + type());
+    }
+
+    /**
+     * Returns an int array of this vector.
+     * @return the int array.
+     */
+    default int[] toIntArray() {
+        return toIntArray(new int[size()]);
+    }
+
+    /**
+     * Copies the vector value as int to the given array.
+     * @param a the array to copy into.
+     * @return the input array <code>a</code>.
+     */
+    default int[] toIntArray(int[] a) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Returns a string array of this vector.
+     * @return the string array.
+     */
+    default String[] toStringArray() {
+        return toStringArray(new String[size()]);
+    }
+
+    /**
+     * Copies the vector value as string to the given array.
+     * @param a the array to copy into.
+     * @return the input array <code>a</code>.
+     */
+    default String[] toStringArray(String[] a) {
+        int n = a.length;
+        for (int i = 0; i < n; i++) {
+            a[i] = field().toString(get(i));
+        }
+        return a;
+    }
+
+    /**
      * Returns the value at position i, which may be null.
+     * @param i the index.
+     * @return the value.
      */
     T get(int i);
 
     /**
+     * Returns a new vector with selected entries.
+     * @param index the index of selected entries.
+     * @return the new vector of selected entries.
+     */
+    BaseVector<T, TS, S> get(int... index);
+
+    /**
      * Returns the byte value at position i.
+     * @param i the index.
+     * @return the value.
      */
     byte getByte(int i);
 
     /**
      * Returns the short value at position i.
+     * @param i the index.
+     * @return the value.
      */
     short getShort(int i);
 
     /**
      * Returns the integer value at position i.
+     * @param i the index.
+     * @return the value.
      */
     int getInt(int i);
 
     /**
      * Returns the long value at position i.
+     * @param i the index.
+     * @return the value.
      */
     long getLong(int i);
 
     /**
      * Returns the float value at position i.
+     * @param i the index.
+     * @return the value.
      */
     float getFloat(int i);
 
     /**
      * Returns the double value at position i.
+     * @param i the index.
+     * @return the value.
      */
     double getDouble(int i);
 
     /**
      * Returns the value at position i, which may be null.
+     * @param i the index.
+     * @return the value.
      */
     default T apply(int i) {
         return get(i);
     }
 
     /**
-     * Returns a (possibly parallel) Stream with this vector as its source.
+     * Returns a new vector with selected entries.
+     * @param index the index of selected entries.
+     * @return the new vector of selected entries.
+     */
+    default BaseVector<T, TS, S> apply(int... index) {
+        return get(index);
+    }
+
+    /**
+     * Returns a stream of vector elements.
      *
-     * @return a (possibly parallel) Stream with this vector as its source.
+     * @return the stream of vector elements.
      */
     S stream();
 }

@@ -42,8 +42,6 @@ public interface CharVector extends BaseVector<Character, Integer, IntStream> {
 
     /**
      * Returns the value at position i.
-     * @param i the index.
-     * @return the value.
      */
     char getChar(int i);
 

@@ -1,22 +1,27 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.data.vector;
 
+import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
+import smile.data.type.DataType;
+import smile.data.type.DataTypes;
+import smile.data.type.StructField;
 
 /**
  * An immutable double vector.
@@ -25,21 +30,88 @@ import java.util.stream.DoubleStream;
  */
 public interface DoubleVector extends BaseVector<Double, Double, DoubleStream> {
     @Override
-    default Class<Double> type() {
-        return double.class;
+    default DataType type() {
+        return DataTypes.DoubleType;
+    }
+
+    @Override
+    double[] array();
+
+    @Override
+    DoubleVector get(int... index);
+
+    @Override
+    default byte getByte(int i) {
+        throw new UnsupportedOperationException("cast double to byte");
+    }
+
+    @Override
+    default short getShort(int i) {
+        throw new UnsupportedOperationException("cast double to short");
+    }
+
+    @Override
+    default int getInt(int i) {
+        throw new UnsupportedOperationException("cast double to int");
+    }
+
+    @Override
+    default long getLong(int i) {
+        throw new UnsupportedOperationException("cast double to long");
+    }
+
+    @Override
+    default float getFloat(int i) {
+        throw new UnsupportedOperationException("cast double to float");
     }
 
     /**
-     * Returns the value at position i.
+     * Returns the string representation of vector.
+     * @param n the number of elements to show.
+     * @return the string representation of vector.
      */
-    double getDouble(int i);
+    default String toString(int n) {
+        String suffix = n >= size() ? "]" : String.format(", ... %,d more]", size() - n);
+        return stream().limit(n).mapToObj(field()::toString).collect(Collectors.joining(", ", "[", suffix));
+    }
 
     /** Creates a named double vector.
      *
      * @param name the name of vector.
      * @param vector the data of vector.
+     * @return the vector.
      */
     static DoubleVector of(String name, double[] vector) {
         return new DoubleVectorImpl(name, vector);
+    }
+
+    /** Creates a named double vector.
+     *
+     * @param name the name of vector.
+     * @param stream the data stream of vector.
+     * @return the vector.
+     */
+    static DoubleVector of(String name, DoubleStream stream) {
+        return new DoubleVectorImpl(name, stream.toArray());
+    }
+
+    /** Creates a named double vector.
+     *
+     * @param field the struct field of vector.
+     * @param vector the data of vector.
+     * @return the vector.
+     */
+    static DoubleVector of(StructField field, double[] vector) {
+        return new DoubleVectorImpl(field, vector);
+    }
+
+    /** Creates a named double vector.
+     *
+     * @param field the struct field of vector.
+     * @param stream the data stream of vector.
+     * @return the vector.
+     */
+    static DoubleVector of(StructField field, DoubleStream stream) {
+        return new DoubleVectorImpl(field, stream.toArray());
     }
 }
