@@ -4,8 +4,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,7 +12,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -131,10 +128,7 @@ public class VertxHttpRecorder {
     private static final Handler<HttpServerRequest> ACTUAL_ROOT = new Handler<HttpServerRequest>() {
         @Override
         public void handle(HttpServerRequest httpServerRequest) {
-            try {
-                // we simply need to know if the URI is valid
-                new URI(httpServerRequest.uri());
-            } catch (URISyntaxException e) {
+            if (httpServerRequest.absoluteURI() == null) {
                 httpServerRequest.response().setStatusCode(400).end();
                 return;
             }
@@ -931,26 +925,17 @@ public class VertxHttpRecorder {
                         }
                         portPropertiesToRestore = new HashMap<>();
                         String portPropertyValue = String.valueOf(actualPort);
-                        //we always set the .port property, even if we are in test mode, so this will always
-                        //reflect the current port
-                        String portPropertyName = "quarkus." + schema + ".port";
+                        String portPropertyName = (launchMode == LaunchMode.TEST ? "quarkus." + schema + ".test-port"
+                                : "quarkus." + schema + ".port");
                         String prevPortPropertyValue = System.setProperty(portPropertyName, portPropertyValue);
-                        if (!Objects.equals(prevPortPropertyValue, portPropertyValue)) {
+                        if (prevPortPropertyValue != null) {
                             portPropertiesToRestore.put(portPropertyName, prevPortPropertyValue);
-                        }
-                        if (launchMode == LaunchMode.TEST) {
-                            //we also set the test-port property in a test
-                            String testPropName = "quarkus." + schema + ".test-port";
-                            String prevTestPropPrevValue = System.setProperty(testPropName, portPropertyValue);
-                            if (!Objects.equals(prevTestPropPrevValue, portPropertyValue)) {
-                                portPropertiesToRestore.put(testPropName, prevTestPropPrevValue);
-                            }
                         }
                         if (launchMode.isDevOrTest()) {
                             // set the profile property as well to make sure we don't have any inconsistencies
                             portPropertyName = propertyWithProfilePrefix(portPropertyName);
                             prevPortPropertyValue = System.setProperty(portPropertyName, portPropertyValue);
-                            if (!Objects.equals(prevPortPropertyValue, portPropertyValue)) {
+                            if (prevPortPropertyValue != null) {
                                 portPropertiesToRestore.put(portPropertyName, prevPortPropertyValue);
                             }
                         }
@@ -985,14 +970,8 @@ public class VertxHttpRecorder {
                     System.clearProperty(propertyWithProfilePrefix(portPropertyName));
                 }
             }
-            if (portPropertiesToRestore != null) {
-                for (Map.Entry<String, String> entry : portPropertiesToRestore.entrySet()) {
-                    if (entry.getValue() == null) {
-                        System.clearProperty(entry.getKey());
-                    } else {
-                        System.setProperty(entry.getKey(), entry.getValue());
-                    }
-                }
+            if (portPropertiesToRestore != null && !portPropertiesToRestore.isEmpty()) {
+                System.getProperties().putAll(portPropertiesToRestore);
             }
 
             final AtomicInteger remainingCount = new AtomicInteger(0);
