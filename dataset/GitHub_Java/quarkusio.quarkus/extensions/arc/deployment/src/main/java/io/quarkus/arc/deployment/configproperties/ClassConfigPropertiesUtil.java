@@ -34,7 +34,7 @@ import io.quarkus.arc.deployment.ConfigPropertyBuildItem;
 import io.quarkus.arc.deployment.configproperties.ConfigPropertiesUtil.ReadOptionalResponse;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.bean.JavaBeanUtil;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.BranchResult;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.ClassCreator;
@@ -45,7 +45,6 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.StartupEvent;
-import io.quarkus.runtime.util.HashUtil;
 
 final class ClassConfigPropertiesUtil {
 
@@ -126,7 +125,6 @@ final class ClassConfigPropertiesUtil {
             ClassCreator producerClassCreator, String prefixStr, ConfigProperties.NamingStrategy namingStrategy,
             boolean failOnMismatchingMember,
             boolean needsQualifier, IndexView applicationIndex,
-            BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods,
             BuildProducer<ConfigPropertyBuildItem> configProperties) {
 
         if (!configPropertiesClassInfo.hasNoArgsConstructor()) {
@@ -180,7 +178,7 @@ final class ClassConfigPropertiesUtil {
             }
 
             ResultHandle configObject = populateConfigObject(classLoader, configPropertiesClassInfo, prefixStr, namingStrategy,
-                    failOnMismatchingMember, methodCreator, applicationIndex, reflectiveMethods, configProperties);
+                    failOnMismatchingMember, methodCreator, applicationIndex, configProperties);
 
             if (needsValidation) {
                 createValidationCodePath(methodCreator, configObject, prefixStr);
@@ -202,7 +200,7 @@ final class ClassConfigPropertiesUtil {
 
     private static boolean isHibernateValidatorInClasspath() {
         try {
-            Class.forName(HIBERNATE_VALIDATOR_IMPL_CLASS, false, Thread.currentThread().getContextClassLoader());
+            Class.forName(HIBERNATE_VALIDATOR_IMPL_CLASS);
             return true;
         } catch (ClassNotFoundException e) {
             return false;
@@ -212,7 +210,6 @@ final class ClassConfigPropertiesUtil {
     private static ResultHandle populateConfigObject(ClassLoader classLoader, ClassInfo configClassInfo, String prefixStr,
             ConfigProperties.NamingStrategy namingStrategy, boolean failOnMismatchingMember, MethodCreator methodCreator,
             IndexView applicationIndex,
-            BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods,
             BuildProducer<ConfigPropertyBuildItem> configProperties) {
         String configObjectClassStr = configClassInfo.name().toString();
         ResultHandle configObject = methodCreator.newInstance(MethodDescriptor.ofConstructor(configObjectClassStr));
@@ -279,22 +276,6 @@ final class ClassConfigPropertiesUtil {
                         populateTypicalProperty(methodCreator, configObject, configPropertyBuildItemCandidates,
                                 currentClassInHierarchy, field, useFieldAccess, fieldType, setter, mpConfig,
                                 getFullConfigName(prefixStr, namingStrategy, field));
-
-                        // we need to register the 'valueOf' method of the enum for reflection because
-                        // that is the method that SmallryeConfig uses for conversion of enums
-                        List<MethodInfo> methods = fieldTypeClassInfo.methods();
-                        for (MethodInfo method : methods) {
-                            if (!method.name().equals("valueOf")) {
-                                continue;
-                            }
-                            if (method.parameters().size() != 1) {
-                                continue;
-                            }
-                            if (method.parameters().get(0).name().equals(DotNames.STRING)) {
-                                reflectiveMethods.produce(new ReflectiveMethodBuildItem(method));
-                                break;
-                            }
-                        }
                     } else {
                         if (!fieldTypeClassInfo.hasNoArgsConstructor()) {
                             throw new IllegalArgumentException(
@@ -310,7 +291,7 @@ final class ClassConfigPropertiesUtil {
                         ResultHandle nestedConfigObject = populateConfigObject(classLoader, fieldTypeClassInfo,
                                 getFullConfigName(prefixStr, namingStrategy, field), namingStrategy, failOnMismatchingMember,
                                 methodCreator,
-                                applicationIndex, reflectiveMethods, configProperties);
+                                applicationIndex, configProperties);
                         createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, nestedConfigObject);
                     }
                 } else {
