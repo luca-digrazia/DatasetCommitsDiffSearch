@@ -667,7 +667,7 @@ public class ObjcRuleClasses {
           .add(
               attr("runtime_deps", LABEL_LIST)
                   .direct_compile_time_input()
-                  .mandatoryProviders(AppleDynamicFrameworkInfo.SKYLARK_CONSTRUCTOR.id())
+                  .allowedRuleClasses("objc_framework")
                   .allowedFileTypes())
           /* <!-- #BLAZE_RULE($objc_compiling_rule).ATTRIBUTE(defines) -->
           Extra <code>-D</code> flags to pass to the compiler. They should be in

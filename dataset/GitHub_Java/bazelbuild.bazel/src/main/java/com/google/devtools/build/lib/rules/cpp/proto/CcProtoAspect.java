@@ -98,12 +98,9 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase,
-      RuleContext ruleContext,
-      AspectParameters parameters,
-      String toolsRepository)
+      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException, ActionConflictException {
-    ProtoInfo protoInfo = checkNotNull(ctadBase.getConfiguredTarget().get(ProtoInfo.PROVIDER));
+    ProtoInfo protoInfo = checkNotNull(ctadBase.getConfiguredTarget().getProvider(ProtoInfo.class));
 
     try {
       ConfiguredAspect.Builder result = new ConfiguredAspect.Builder(this, parameters, ruleContext);
@@ -121,7 +118,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
         new AspectDefinition.Builder(this)
             .propagateAlongAttribute("deps")
             .requiresConfigurationFragments(CppConfiguration.class, ProtoConfiguration.class)
-            .requireSkylarkProviders(ProtoInfo.PROVIDER.id())
+            .requireProviders(ProtoInfo.class)
             .addRequiredToolchains(ccToolchainType)
             .add(
                 attr(PROTO_TOOLCHAIN_ATTR, LABEL)
@@ -206,8 +203,8 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       depsBuilder.addAll(ruleContext.getPrerequisites("deps", TARGET));
       ImmutableList<TransitiveInfoCollection> deps = depsBuilder.build();
       CcLinkingHelper ccLinkingHelper = initializeLinkingHelper(featureConfiguration, deps);
-      if (ccToolchain(ruleContext).supportsInterfaceSharedLibraries(featureConfiguration)) {
-        ccLinkingHelper.emitInterfaceSharedLibraries(true);
+      if (ccToolchain(ruleContext).supportsInterfaceSharedObjects()) {
+        ccLinkingHelper.emitInterfaceSharedObjects(true);
       }
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
       ImmutableList.Builder<LibraryToLinkWrapper> libraryToLinkWrapperBuilder =
@@ -311,7 +308,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       helper.addDeps(deps);
       // TODO(dougk): Configure output artifact with action_config
       // once proto compile action is configurable from the crosstool.
-      if (!toolchain.supportsDynamicLinker(featureConfiguration)) {
+      if (!toolchain.supportsDynamicLinker()) {
         helper.setShouldCreateDynamicLibrary(false);
       }
       return helper;

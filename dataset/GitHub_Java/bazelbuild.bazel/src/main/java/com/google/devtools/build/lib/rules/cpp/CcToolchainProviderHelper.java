@@ -343,15 +343,6 @@ public class CcToolchainProviderHelper {
     return profileArtifact;
   }
 
-  static Pair<FdoInputFile, Artifact> getFdoInputs(
-      RuleContext ruleContext, FdoProfileProvider fdoProfileProvider) {
-    if (fdoProfileProvider == null) {
-      ruleContext.ruleError("--fdo_profile/--xbinary_fdo input needs to be an fdo_profile rule");
-      return null;
-    }
-    return Pair.of(fdoProfileProvider.getInputFile(), fdoProfileProvider.getProtoProfileArtifact());
-  }
-
   static CcToolchainProvider getCcToolchainProvider(
       RuleContext ruleContext,
       CcToolchainAttributesProvider attributes,
@@ -365,7 +356,6 @@ public class CcToolchainProviderHelper {
     FdoInputFile fdoInputFile = null;
     FdoInputFile prefetchHints = null;
     Artifact protoProfileArtifact = null;
-    Pair<FdoInputFile, Artifact> fdoInputs = null;
     if (configuration.getCompilationMode() == CompilationMode.OPT) {
       if (cppConfiguration.getFdoPrefetchHintsLabel() != null) {
         FdoPrefetchHintsProvider provider = attributes.getFdoPrefetch();
@@ -376,24 +366,20 @@ public class CcToolchainProviderHelper {
       } else if (cppConfiguration.getFdoOptimizeLabel() != null) {
         FdoProfileProvider fdoProfileProvider = attributes.getFdoOptimizeProvider();
         if (fdoProfileProvider != null) {
-          fdoInputs = getFdoInputs(ruleContext, fdoProfileProvider);
+          fdoInputFile = fdoProfileProvider.getInputFile();
+          protoProfileArtifact = fdoProfileProvider.getProtoProfileArtifact();
         } else {
           fdoInputFile = fdoInputFileFromArtifacts(ruleContext, attributes);
         }
       } else if (cppConfiguration.getFdoProfileLabel() != null) {
-        fdoInputs = getFdoInputs(ruleContext, attributes.getFdoProfileProvider());
-      } else if (cppConfiguration.getXFdoProfileLabel() != null) {
-        fdoInputs = getFdoInputs(ruleContext, attributes.getXFdoProfileProvider());
+        FdoProfileProvider fdoProvider = attributes.getFdoProfileProvider();
+        fdoInputFile = fdoProvider.getInputFile();
+        protoProfileArtifact = fdoProvider.getProtoProfileArtifact();
       }
     }
 
     if (ruleContext.hasErrors()) {
       return null;
-    }
-
-    if (fdoInputs != null) {
-      fdoInputFile = fdoInputs.getFirst();
-      protoProfileArtifact = fdoInputs.getSecond();
     }
 
     // Is there a toolchain proto available on the target directly?
@@ -444,10 +430,6 @@ public class CcToolchainProviderHelper {
     } else {
       ruleContext.ruleError("invalid extension for FDO profile file.");
       return null;
-    }
-
-    if (fdoMode != FdoMode.XBINARY_FDO && cppConfiguration.getXFdoProfileLabel() != null) {
-      ruleContext.throwWithRuleError("--xbinary_fdo cannot accept profile input other than *.xfdo");
     }
 
     if (fdoMode != FdoMode.OFF && configuration.isCodeCoverageEnabled()) {
