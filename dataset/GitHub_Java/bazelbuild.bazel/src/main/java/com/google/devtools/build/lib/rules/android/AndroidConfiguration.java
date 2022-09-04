@@ -648,15 +648,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean generateRobolectricRClass;
 
-    @Option(
-        name = "experimental_android_throw_on_resource_conflict",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help = "If passed, resource merge conflicts will be treated as errors instead of warnings"
-    )
-    public boolean throwOnResourceConflict;
-
     @Override
     public FragmentOptions getHost(boolean fallback) {
       Options host = (Options) super.getHost(fallback);
@@ -734,7 +725,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean exportsManifestDefault;
   private final AndroidAaptVersion androidAaptVersion;
   private final boolean generateRobolectricRClass;
-  private final boolean throwOnResourceConflict;
   private final boolean useParallelDex2Oat;
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
@@ -770,7 +760,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.exportsManifestDefault = options.exportsManifestDefault;
     this.androidAaptVersion = options.androidAaptVersion;
     this.generateRobolectricRClass = options.generateRobolectricRClass;
-    this.throwOnResourceConflict = options.throwOnResourceConflict;
     this.useParallelDex2Oat = options.useParallelDex2Oat;
 
     if (!dexoptsSupportedInIncrementalDexing.contains("--no-locals")) {
@@ -898,10 +887,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   boolean generateRobolectricRClass() {
     return generateRobolectricRClass;
-  }
-
-  boolean throwOnResourceConflict() {
-    return throwOnResourceConflict;
   }
 
   @Override
