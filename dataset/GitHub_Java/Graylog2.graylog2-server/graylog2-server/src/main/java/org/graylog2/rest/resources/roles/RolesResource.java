@@ -16,14 +16,14 @@
  */
 package org.graylog2.rest.resources.roles;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
@@ -58,7 +58,6 @@ import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
@@ -86,7 +85,7 @@ public class RolesResource extends RestResource {
         final Set<Role> roles = roleService.loadAll();
         Set<RoleResponse> roleResponses = Sets.newHashSet();
         for (Role role : roles) {
-            roleResponses.add(RoleResponse.create(role.getName(), Optional.ofNullable(role.getDescription()), role.getPermissions(), role.isReadOnly()));
+            roleResponses.add(RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions(), role.isReadOnly()));
         }
 
         return RolesResponse.create(roleResponses);
@@ -99,13 +98,13 @@ public class RolesResource extends RestResource {
         checkPermission(RestPermissions.ROLES_READ, name);
 
         final Role role = roleService.load(name);
-        return RoleResponse.create(role.getName(), Optional.ofNullable(role.getDescription()), role.getPermissions(), role.isReadOnly());
+        return RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions(), role.isReadOnly());
     }
 
     @POST
     @RequiresPermissions(RestPermissions.ROLES_CREATE)
     @ApiOperation(value = "Create a new role", notes = "")
-    @AuditEvent(type = AuditEventTypes.ROLE_CREATE)
+    @AuditLog(object = "role", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "JSON body", value = "The new role to create", required = true) @Valid @NotNull RoleResponse roleResponse) {
         if (roleService.exists(roleResponse.name())) {
             throw new BadRequestException("Role " + roleResponse.name() + " already exists.");
@@ -114,7 +113,7 @@ public class RolesResource extends RestResource {
         Role role = new RoleImpl();
         role.setName(roleResponse.name());
         role.setPermissions(roleResponse.permissions());
-        role.setDescription(roleResponse.description().orElse(null));
+        role.setDescription(roleResponse.description().orNull());
 
         try {
             role = roleService.save(role);
@@ -128,7 +127,7 @@ public class RolesResource extends RestResource {
                 .build(role.getName());
 
         return Response.created(uri).entity(RoleResponse.create(role.getName(),
-                                                                Optional.ofNullable(role.getDescription()),
+                                                                Optional.fromNullable(role.getDescription()),
                                                                 role.getPermissions(),
                                                                 role.isReadOnly())).build();
     }
@@ -136,7 +135,7 @@ public class RolesResource extends RestResource {
     @PUT
     @Path("{rolename}")
     @ApiOperation("Update an existing role")
-    @AuditEvent(type = AuditEventTypes.ROLE_UPDATE)
+    @AuditLog(object = "role", captureRequestEntity = true, captureResponseEntity = true)
     public RoleResponse update(
             @ApiParam(name = "rolename", required = true) @PathParam("rolename") String name,
             @ApiParam(name = "JSON Body", value = "The new representation of the role", required = true) RoleResponse role) throws NotFoundException {
@@ -146,21 +145,21 @@ public class RolesResource extends RestResource {
             throw new BadRequestException("Cannot update read only role " + name);
         }
         roleToUpdate.setName(role.name());
-        roleToUpdate.setDescription(role.description().orElse(null));
+        roleToUpdate.setDescription(role.description().orNull());
         roleToUpdate.setPermissions(role.permissions());
         try {
             roleService.save(roleToUpdate);
         } catch (ValidationException e) {
             throw new BadRequestException(e);
         }
-        return RoleResponse.create(roleToUpdate.getName(), Optional.ofNullable(roleToUpdate.getDescription()), roleToUpdate.getPermissions(),
+        return RoleResponse.create(roleToUpdate.getName(), Optional.fromNullable(roleToUpdate.getDescription()), roleToUpdate.getPermissions(),
                                    role.readOnly());
     }
 
     @DELETE
     @Path("{rolename}")
     @ApiOperation(value = "Remove the named role and dissociate any users from it")
-    @AuditEvent(type = AuditEventTypes.ROLE_DELETE)
+    @AuditLog(object = "role")
     public void delete(@ApiParam(name = "rolename", required = true) @PathParam("rolename") String name) throws NotFoundException {
         checkPermission(RestPermissions.ROLES_DELETE, name);
 
@@ -213,7 +212,7 @@ public class RolesResource extends RestResource {
     @PUT
     @Path("{rolename}/members/{username}")
     @ApiOperation("Add a user to a role")
-    @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_UPDATE)
+    @AuditLog(object = "role membership", captureResponseEntity = true)
     public Response addMember(@ApiParam(name = "rolename") @PathParam("rolename") String rolename,
                               @ApiParam(name = "username") @PathParam("username") String username,
                               @ApiParam(name = "JSON Body", value = "Placeholder because PUT requests should have a body. Set to '{}', the content will be ignored.", defaultValue = "{}") String body) throws NotFoundException {
@@ -243,7 +242,7 @@ public class RolesResource extends RestResource {
     @DELETE
     @Path("{rolename}/members/{username}")
     @ApiOperation("Remove a user from a role")
-    @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_DELETE)
+    @AuditLog(object = "role membership")
     public Response removeMember(@ApiParam(name = "rolename") @PathParam("rolename") String rolename,
                                  @ApiParam(name = "username") @PathParam("username") String username) throws NotFoundException {
         checkPermission(RestPermissions.ROLES_EDIT, username);

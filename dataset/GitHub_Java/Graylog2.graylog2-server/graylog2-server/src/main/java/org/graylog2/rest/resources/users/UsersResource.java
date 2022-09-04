@@ -27,8 +27,7 @@ import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.graylog2.audit.AuditEventTypes;
-import org.graylog2.audit.jersey.AuditEvent;
+import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.rest.models.users.requests.ChangePasswordRequest;
@@ -164,7 +163,7 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 400, message = "Missing or invalid user details.")
     })
-    @AuditEvent(type = AuditEventTypes.USER_CREATE)
+    @AuditLog(object = "user")
     public Response create(@ApiParam(name = "JSON body", value = "Must contain username, full_name, email, password and a list of permissions.", required = true)
                            @Valid @NotNull CreateUserRequest cr) throws ValidationException {
         if (userService.load(cr.username()) != null) {
@@ -225,7 +224,7 @@ public class UsersResource extends RestResource {
             @ApiResponse(code = 400, message = "Attempted to modify a read only user account (e.g. built-in or LDAP users)."),
             @ApiResponse(code = 400, message = "Missing or invalid user details.")
     })
-    @AuditEvent(type = AuditEventTypes.USER_UPDATE)
+    @AuditLog(object = "user")
     public void changeUser(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                            @PathParam("username") String username,
                            @ApiParam(name = "JSON body", value = "Updated user information.", required = true)
@@ -291,7 +290,7 @@ public class UsersResource extends RestResource {
     @RequiresPermissions(USERS_EDIT)
     @ApiOperation("Removes a user account.")
     @ApiResponses({@ApiResponse(code = 400, message = "When attempting to remove a read only user (e.g. built-in or LDAP user).")})
-    @AuditEvent(type = AuditEventTypes.USER_DELETE)
+    @AuditLog(object = "user")
     public void deleteUser(@ApiParam(name = "username", value = "The name of the user to delete.", required = true)
                            @PathParam("username") String username) {
         if (userService.delete(username) == 0) {
@@ -306,7 +305,7 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 400, message = "Missing or invalid permission data.")
     })
-    @AuditEvent(type = AuditEventTypes.USER_PERMISSIONS_UPDATE)
+    @AuditLog(object = "user permissions")
     public void editPermissions(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                                 @PathParam("username") String username,
                                 @ApiParam(name = "JSON body", value = "The list of permissions to assign to the user.", required = true)
@@ -326,7 +325,7 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 400, message = "Missing or invalid permission data.")
     })
-    @AuditEvent(type = AuditEventTypes.USER_PREFERENCES_UPDATE)
+    @AuditLog(object = "user preferences")
     public void savePreferences(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                                 @PathParam("username") String username,
                                 @ApiParam(name = "JSON body", value = "The map of preferences to assign to the user.", required = true)
@@ -349,7 +348,7 @@ public class UsersResource extends RestResource {
     @ApiResponses({
             @ApiResponse(code = 500, message = "When saving the user failed.")
     })
-    @AuditEvent(type = AuditEventTypes.USER_PERMISSIONS_DELETE)
+    @AuditLog(object = "user permissions")
     public void deletePermissions(@ApiParam(name = "username", value = "The name of the user to modify.", required = true)
                                   @PathParam("username") String username) throws ValidationException {
         final User user = userService.load(username);
@@ -369,7 +368,7 @@ public class UsersResource extends RestResource {
             @ApiResponse(code = 403, message = "The requesting user has insufficient privileges to update the password for the given user."),
             @ApiResponse(code = 404, message = "User does not exist.")
     })
-    @AuditEvent(type = AuditEventTypes.USER_PASSWORD_UPDATE)
+    @AuditLog(object = "user password")
     public void changePassword(
             @ApiParam(name = "username", value = "The name of the user whose password to change.", required = true)
             @PathParam("username") String username,
@@ -440,7 +439,7 @@ public class UsersResource extends RestResource {
     @Path("{username}/tokens/{name}")
     @RequiresPermissions(RestPermissions.USERS_TOKENCREATE)
     @ApiOperation("Generates a new access token for a user")
-    @AuditEvent(type = AuditEventTypes.USER_ACCESS_TOKEN_CREATE)
+    @AuditLog(object = "user access token")
     public Token generateNewToken(
             @ApiParam(name = "username", required = true) @PathParam("username") String username,
             @ApiParam(name = "name", value = "Descriptive name for this token (e.g. 'cronjob') ", required = true) @PathParam("name") String name,
@@ -455,10 +454,10 @@ public class UsersResource extends RestResource {
     @RequiresPermissions(RestPermissions.USERS_TOKENREMOVE)
     @Path("{username}/tokens/{token}")
     @ApiOperation("Removes a token for a user")
-    @AuditEvent(type = AuditEventTypes.USER_ACCESS_TOKEN_DELETE)
+    @AuditLog(object = "user access token")
     public void revokeToken(
             @ApiParam(name = "username", required = true) @PathParam("username") String username,
-            @ApiParam(name = "token", required = true) @PathParam("token") String token) {
+            @ApiParam(name = "access token", required = true) @PathParam("token") String token) {
         final User user = _tokensCheckAndLoadUser(username);
         final AccessToken accessToken = accessTokenService.load(token);
 
