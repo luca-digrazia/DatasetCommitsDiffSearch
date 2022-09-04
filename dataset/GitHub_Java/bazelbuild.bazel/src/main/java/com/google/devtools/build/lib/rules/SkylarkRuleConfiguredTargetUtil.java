@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
@@ -350,14 +349,21 @@ public final class SkylarkRuleConfiguredTargetUtil {
         SkylarkClassObject insStruct =
             cast("instrumented_files", oldStyleProviders, SkylarkClassObject.class, loc);
         addInstrumentedFiles(insStruct, ruleContext, builder);
-      } else if (oldStyleProviders.getValue(key)
-          instanceof TransitiveInfoProvider.WithLegacySkylarkName) {
-        builder.addProvider((TransitiveInfoProvider) oldStyleProviders.getValue(key));
+      } else if (isNativeDeclaredProviderWithLegacySkylarkName(oldStyleProviders.getValue(key))) {
+        builder.addNativeDeclaredProvider((SkylarkClassObject) oldStyleProviders.getValue(key));
       } else if (!key.equals("providers")) {
         // We handled providers already.
         builder.addSkylarkTransitiveInfo(key, oldStyleProviders.getValue(key), loc);
       }
     }
+  }
+
+  private static boolean isNativeDeclaredProviderWithLegacySkylarkName(Object value) {
+    if (!(value instanceof SkylarkClassObject)) {
+      return false;
+    }
+    return ((SkylarkClassObject) value).getConstructor()
+        instanceof NativeClassObjectConstructor.WithLegacySkylarkName;
   }
 
   /**
@@ -421,15 +427,18 @@ public final class SkylarkRuleConfiguredTargetUtil {
       Runfiles defaultRunfiles)
       throws EvalException {
 
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.<Artifact>stableOrder()
-        .addAll(ruleContext.getOutputArtifacts());
+    // TODO(bazel-team) if both 'files' and 'executable' are provided 'files' override 'executalbe'
+    NestedSetBuilder<Artifact> filesToBuild =
+        NestedSetBuilder.<Artifact>stableOrder().addAll(ruleContext.getOutputArtifacts());
     if (executable != null) {
       filesToBuild.add(executable);
     }
-    if (files != null) {
-      filesToBuild.addTransitive(files.getSet(Artifact.class));
-    }
     builder.setFilesToBuild(filesToBuild.build());
+
+    if (files != null) {
+      // If we specify files_to_build we don't have the executable in it by default.
+      builder.setFilesToBuild(files.getSet(Artifact.class));
+    }
 
     if ((statelessRunfiles != null) && (dataRunfiles != null || defaultRunfiles != null)) {
       throw new EvalException(loc, "Cannot specify the provider 'runfiles' "

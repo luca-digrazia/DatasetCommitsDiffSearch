@@ -30,15 +30,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
@@ -47,6 +44,8 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsProvider.OutputType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.MultiArchBinarySupport.DependencySpecificConfiguration;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -142,7 +141,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             getDylibProtoProviders(ruleContext));
 
     Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
-    ImmutableList.Builder<TransitiveInfoProviderMap> providerCollector = ImmutableList.builder();
     multiArchBinarySupport.registerActions(
         platform,
         getExtraLinkArgs(ruleContext),
@@ -150,8 +148,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         getExtraLinkInputs(ruleContext),
         configToDepsCollectionMap,
         outputArtifact,
-        outputGroupCollector,
-        providerCollector);
+        outputGroupCollector);
 
     NestedSetBuilder<Artifact> filesToBuild =
         NestedSetBuilder.<Artifact>stableOrder().add(outputArtifact);
@@ -215,10 +212,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
       }
     }
 
-    targetBuilder
-        .addNativeDeclaredProvider(builder.build())
-        .addProviderMaps(providerCollector.build())
-        .addOutputGroups(outputGroupCollector);
+    targetBuilder.addNativeDeclaredProvider(builder.build()).addOutputGroups(outputGroupCollector);
 
     InstrumentedFilesProvider instrumentedFilesProvider =
         InstrumentedFilesCollector.forward(ruleContext, "deps", "bundle_loader");

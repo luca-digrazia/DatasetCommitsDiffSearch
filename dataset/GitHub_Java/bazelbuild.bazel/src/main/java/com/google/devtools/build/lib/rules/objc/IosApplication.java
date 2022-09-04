@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,36 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.xcode.common.Platform;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
+import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
+import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition;
 
 /**
  * Implementation for {@code ios_application}.
+ *
+ * @deprecated The native bundling rules have been deprecated. This class will be removed in the
+ *     future.
  */
+@Deprecated
 public class IosApplication extends ReleaseBundlingTargetFactory {
+
+  /**
+   * Transition that when applied to a target generates a configured target for each value in
+   * {@code --ios_multi_cpus}, such that {@code --ios_cpu} is set to a different one of those values
+   * in the configured targets.
+   */
+  public static final SplitTransition<BuildOptions> SPLIT_ARCH_TRANSITION =
+      new SplitArchTransition();
 
   private static final ImmutableSet<Attribute> DEPENDENCY_ATTRIBUTES =
       ImmutableSet.of(
@@ -33,25 +51,37 @@ public class IosApplication extends ReleaseBundlingTargetFactory {
           new Attribute("extensions", Mode.TARGET));
 
   public IosApplication() {
-    super(ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT, XcodeProductType.APPLICATION,
-        ExposeAsNestedBundle.NO, DEPENDENCY_ATTRIBUTES);
+    super(ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT, DEPENDENCY_ATTRIBUTES);
+  }
+  
+  /**
+   * Validates that there is exactly one watch extension for each OS version.
+   */
+  @Override
+  protected void validateAttributes(RuleContext ruleContext) {
+    Iterable<ObjcProvider> extensionProviders = ruleContext.getPrerequisites(
+        "extensions", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR);
+    if (hasMoreThanOneWatchExtension(extensionProviders, Flag.HAS_WATCH1_EXTENSION)
+        || hasMoreThanOneWatchExtension(extensionProviders, Flag.HAS_WATCH2_EXTENSION)) {
+      ruleContext.attributeError("extensions", "An iOS application can contain exactly one "
+          + "watch extension for each watch OS version");
+    }
   }
 
-  @Override
-  protected OptionsProvider optionsProvider(RuleContext ruleContext) {
-    return new OptionsProvider.Builder()
-        .addInfoplists(ruleContext.getPrerequisiteArtifacts("infoplist", Mode.TARGET).list())
-        .addTransitive(
-            Optional.fromNullable(
-                ruleContext.getPrerequisite("options", Mode.TARGET, OptionsProvider.class)))
-        .build();
+  private boolean hasMoreThanOneWatchExtension(
+      Iterable<ObjcProvider> objcProviders, final Flag watchExtensionVersionFlag) {
+    return Streams.stream(objcProviders)
+            .filter(objcProvider -> objcProvider.is(watchExtensionVersionFlag))
+            .count()
+        > 1;
   }
 
   @Override
   protected void configureTarget(RuleConfiguredTargetBuilder target, RuleContext ruleContext,
-      ReleaseBundlingSupport releaseBundlingSupport) {
+      ReleaseBundlingSupport releaseBundlingSupport) throws InterruptedException {
     // If this is an application built for the simulator, make it runnable.
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).getPlatform() == Platform.SIMULATOR) {
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    if (appleConfiguration.getMultiArchPlatform(PlatformType.IOS) == ApplePlatform.IOS_SIMULATOR) {
       Artifact runnerScript = ObjcRuleClasses.intermediateArtifacts(ruleContext).runnerScript();
       Artifact ipaFile = ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA);
       releaseBundlingSupport.registerGenerateRunnerScriptAction(runnerScript, ipaFile);

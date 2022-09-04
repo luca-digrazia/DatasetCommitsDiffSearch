@@ -18,13 +18,14 @@ import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.objc.ObjcCommon.Builder;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -34,12 +35,12 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 public class ObjcFramework implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     CompilationAttributes compilationAttributes =
         CompilationAttributes.Builder.fromRuleContext(ruleContext).build();
 
     ObjcCommon.Builder commonBuilder =
-        new ObjcCommon.Builder(ruleContext)
+        new Builder(ruleContext)
             .addExtraSdkFrameworks(compilationAttributes.sdkFrameworks())
             .addExtraWeakSdkFrameworks(compilationAttributes.weakSdkFrameworks())
             .addExtraSdkDylibs(compilationAttributes.sdkDylibs());
@@ -61,8 +62,8 @@ public class ObjcFramework implements RuleConfiguredTargetFactory {
     ObjcProvider objcProvider = commonBuilder.build().getObjcProvider();
     Iterable<PathFragment> frameworkDirs =
         ObjcCommon.uniqueContainers(frameworkImports, ObjcCommon.FRAMEWORK_CONTAINER_TYPE);
-    AppleDynamicFrameworkInfo frameworkProvider =
-        new AppleDynamicFrameworkInfo((Artifact) null, objcProvider,
+    AppleDynamicFrameworkProvider frameworkProvider =
+        new AppleDynamicFrameworkProvider((Artifact) null, objcProvider,
             NestedSetBuilder.<PathFragment>linkOrder().addAll(frameworkDirs).build(),
             NestedSetBuilder.<Artifact>linkOrder().addAll(frameworkImports).build());
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.emptySet(STABLE_ORDER);

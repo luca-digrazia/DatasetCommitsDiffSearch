@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 
 /**
@@ -30,7 +31,8 @@ import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
  */
 public class ObjcBundle implements RuleConfiguredTargetFactory {
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
+  public ConfiguredTarget create(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
     ObjcCommon common = new ObjcCommon.Builder(ruleContext).build();
 
     ImmutableList<Artifact> bundleImports = ruleContext
@@ -41,12 +43,9 @@ public class ObjcBundle implements RuleConfiguredTargetFactory {
       ruleContext.attributeError("bundle_imports", error);
     }
 
-    return common.configuredTarget(
-        /*filesToBuild=*/NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER),
-        Optional.<XcodeProvider>absent(),
-        Optional.of(common.getObjcProvider()),
-        Optional.<XcTestAppProvider>absent(),
-        Optional.<J2ObjcSrcsProvider>absent(),
-        Optional.<J2ObjcMappingFileProvider>absent());
+    NestedSet<Artifact> filesToBuild = NestedSetBuilder.emptySet(STABLE_ORDER);
+    return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild)
+        .addNativeDeclaredProvider(common.getObjcProvider())
+        .build();
   }
 }

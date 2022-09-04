@@ -18,10 +18,10 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 
 /**
@@ -55,17 +55,12 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     Iterable<ObjcProtoProvider> objcProtoProviders =
         ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.class);
 
-    Iterable<ObjcProvider> additionalDependencies =
-        ruleContext.getPrerequisites(
-            ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR);
-
     ProtobufSupport protoSupport =
         new ProtobufSupport(
                 ruleContext,
                 ruleContext.getConfiguration(),
                 protoProviders,
                 objcProtoProviders,
-                additionalDependencies,
                 getPortableProtoFilters(ruleContext, objcProtoProviders, protoProviders))
             .registerGenerationActions()
             .addFilesToBuild(filesToBuild);

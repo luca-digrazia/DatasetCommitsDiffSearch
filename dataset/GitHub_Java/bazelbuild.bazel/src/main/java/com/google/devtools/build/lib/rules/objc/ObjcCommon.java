@@ -39,6 +39,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKED_BINARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKMAP_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKOPT;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MODULE_MAP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SOURCE;
@@ -46,6 +47,8 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAME
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STORYBOARD;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STRINGS;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.TOP_LEVEL_MODULE_MAP;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.UMBRELLA_HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
@@ -64,12 +67,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
+import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -295,10 +299,10 @@ public final class ObjcCommon {
       return listBuilder;
     }
 
-    private <T extends Info> ImmutableList.Builder<T> addAnyProviders(
+    private <T extends SkylarkClassObject> ImmutableList.Builder<T> addAnyProviders(
         ImmutableList.Builder<T> listBuilder,
         TransitiveInfoCollection collection,
-        NativeProvider<T> providerClass) {
+        NativeClassObjectConstructor<T> providerClass) {
       T provider = collection.get(providerClass);
       if (provider != null) {
         listBuilder.add(provider);
@@ -555,7 +559,13 @@ public final class ObjcCommon {
       }
 
       if (hasModuleMap) {
-        objcProvider.addModuleMap(intermediateArtifacts.moduleMap());
+        CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
+        Optional<Artifact> umbrellaHeader = moduleMap.getUmbrellaHeader();
+        if (umbrellaHeader.isPresent()) {
+          objcProvider.add(UMBRELLA_HEADER, umbrellaHeader.get());
+        }
+        objcProvider.add(MODULE_MAP, moduleMap.getArtifact());
+        objcProvider.add(TOP_LEVEL_MODULE_MAP, moduleMap);
       }
 
       objcProvider

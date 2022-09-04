@@ -26,10 +26,10 @@ import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.rules.SkylarkRuleContext;
+import com.google.devtools.build.lib.rules.java.JavaProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
@@ -429,7 +429,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     Object result = evalRuleContextCode(ruleContext, "ruleContext.attr.srcs");
     // Check for a known provider
     TransitiveInfoCollection tic1 = (TransitiveInfoCollection) ((SkylarkList) result).get(0);
-    assertThat(JavaInfo.getProvider(JavaSourceJarsProvider.class, tic1)).isNotNull();
+    assertThat(JavaProvider.getProvider(JavaSourceJarsProvider.class, tic1)).isNotNull();
     // Check an unimplemented provider too
     assertThat(tic1.get(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME)).isNull();
   }
@@ -498,7 +498,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
   @Test
   public void existingRuleWithSelect() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_descriptive_string_representations=true");
     scratch.file(
         "test/existing_rule.bzl",
         "def macro():",
@@ -511,7 +510,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "macro()",
         "cc_library(name = 'a', srcs = [])");
     getConfiguredTarget("//test:a");
-    assertContainsEvent("select({Label(\"//foo:foo\"): [Label(\"//bar:bar\")]})");
+    assertContainsEvent("selector({\"//foo:foo\": [\"//bar:bar\"]})");
   }
 
   @Test
@@ -643,7 +642,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testGetExecutablePrerequisite() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:androidlib");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.executable._jarjar_bin");
-    assertThat(((Artifact) result).getFilename()).matches("^jarjar_bin(\\.exe){0,1}$");
+    assertThat(((Artifact) result).getFilename()).matches("^jarjar_bin(\\.cmd){0,1}$");
   }
 
   @Test
@@ -660,7 +659,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         (SpawnAction)
             Iterables.getOnlyElement(
                 ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
-    assertThat(action.getCommandFilename()).matches("^.*/jarjar_bin(\\.exe){0,1}$");
+    assertThat(action.getCommandFilename()).matches("^.*/jarjar_bin(\\.cmd){0,1}$");
   }
 
   @Test
@@ -668,6 +667,13 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:bar");
     Iterable<?> result = (Iterable<?>) evalRuleContextCode(ruleContext, "ruleContext.outputs.outs");
     assertThat(((Artifact) Iterables.getOnlyElement(result)).getFilename()).isEqualTo("d.txt");
+  }
+
+  @Test
+  public void testSkylarkRuleContextStr() throws Exception {
+    SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
+    Object result = evalRuleContextCode(ruleContext, "'%s' % ruleContext");
+    assertThat(result).isEqualTo("//foo:foo");
   }
 
   @Test
@@ -1518,8 +1524,9 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//test:testing");
 
     Object provider = evalRuleContextCode(ruleContext, "ruleContext.attr.dep[Actions]");
-    assertThat(provider).isInstanceOf(Info.class);
-    assertThat(((Info) provider).getProvider()).isEqualTo(ActionsProvider.SKYLARK_CONSTRUCTOR);
+    assertThat(provider).isInstanceOf(SkylarkClassObject.class);
+    assertThat(((SkylarkClassObject) provider).getConstructor())
+        .isEqualTo(ActionsProvider.SKYLARK_CONSTRUCTOR);
     update("actions", provider);
 
     Object mapping = eval("actions.by_file");
