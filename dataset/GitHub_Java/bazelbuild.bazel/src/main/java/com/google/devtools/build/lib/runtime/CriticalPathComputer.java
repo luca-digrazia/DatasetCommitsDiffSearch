@@ -329,17 +329,18 @@ public class CriticalPathComputer {
 
   private void finalizeActionStat(
       long startTimeNanos, Action action, CriticalPathComponent component) {
-    long finishTimeNanos = clock.nanoTime();
     for (Artifact input : action.getInputs()) {
-      addArtifactDependency(component, input, finishTimeNanos);
+      addArtifactDependency(component, input);
     }
-    component.finishActionExecution(startTimeNanos, finishTimeNanos);
+
+    component.finishActionExecution(startTimeNanos, clock.nanoTime());
     maxCriticalPath.accumulateAndGet(component, SELECT_LONGER_COMPONENT);
   }
 
-  /** If "input" is a generated artifact, link its critical path to the one we're building. */
-  private void addArtifactDependency(
-      CriticalPathComponent actionStats, Artifact input, long componentFinishNanos) {
+  /**
+   * If "input" is a generated artifact, link its critical path to the one we're building.
+   */
+  private void addArtifactDependency(CriticalPathComponent actionStats, Artifact input) {
     CriticalPathComponent depComponent = outputArtifactToComponent.get(input);
     if (depComponent != null) {
       if (depComponent.isRunning()) {
@@ -347,7 +348,7 @@ public class CriticalPathComputer {
             (Artifact.DerivedArtifact) input, depComponent.getAction(), actionStats);
         return;
       }
-      actionStats.addDepInfo(depComponent, componentFinishNanos);
+      actionStats.addDepInfo(depComponent);
     }
   }
 
