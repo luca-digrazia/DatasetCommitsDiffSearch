@@ -57,7 +57,6 @@ public class QuarkusAugmentor {
     private final AppModel effectiveModel;
     private final String baseName;
     private final Consumer<ConfigBuilder> configCustomizer;
-    private final boolean rebuild;
 
     QuarkusAugmentor(Builder builder) {
         this.classLoader = builder.classLoader;
@@ -74,7 +73,6 @@ public class QuarkusAugmentor {
         this.baseName = builder.baseName;
         this.configCustomizer = builder.configCustomizer;
         this.deploymentClassLoader = builder.deploymentClassLoader;
-        this.rebuild = builder.rebuild;
     }
 
     public BuildResult run() throws Exception {
@@ -142,8 +140,7 @@ public class QuarkusAugmentor {
                     .produce(new ShutdownContextBuildItem())
                     .produce(new RawCommandLineArgumentsBuildItem())
                     .produce(new LaunchModeBuildItem(launchMode))
-                    .produce(new BuildSystemTargetBuildItem(targetDir, baseName, rebuild,
-                            buildSystemProperties == null ? new Properties() : buildSystemProperties))
+                    .produce(new BuildSystemTargetBuildItem(targetDir, baseName))
                     .produce(new DeploymentClassLoaderBuildItem(deploymentClassLoader))
                     .produce(new CurateOutcomeBuildItem(effectiveModel));
             for (PathsCollection i : additionalApplicationArchives) {
@@ -179,7 +176,6 @@ public class QuarkusAugmentor {
 
     public static final class Builder {
 
-        boolean rebuild;
         List<PathsCollection> additionalApplicationArchives = new ArrayList<>();
         Collection<Path> excludedFromIndexing = Collections.emptySet();
         ClassLoader classLoader;
@@ -262,11 +258,6 @@ public class QuarkusAugmentor {
 
         public Builder setBuildSystemProperties(final Properties buildSystemProperties) {
             this.buildSystemProperties = buildSystemProperties;
-            return this;
-        }
-
-        public Builder setRebuild(boolean rebuild) {
-            this.rebuild = rebuild;
             return this;
         }
 

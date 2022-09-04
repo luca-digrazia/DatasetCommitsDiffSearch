@@ -28,8 +28,6 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.deployment.ApplicationArchive;
@@ -45,8 +43,6 @@ import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.deployment.builditem.QuarkusBuildCloseablesBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.runtime.annotations.ConfigDocMapKey;
-import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -65,13 +61,10 @@ public class ApplicationArchiveBuildStep {
     @ConfigRoot(phase = ConfigPhase.BUILD_TIME)
     static final class IndexDependencyConfiguration {
         /**
-         * Artifacts on the classpath that should also be indexed.
-         * <p>
-         * Their classes will be in the index and processed by Quarkus processors.
+         * Artifacts on the class path that should also be indexed, which will allow classes in the index to be
+         * processed by Quarkus processors
          */
         @ConfigItem(name = ConfigItem.PARENT)
-        @ConfigDocSection
-        @ConfigDocMapKey("dependency-name")
         Map<String, IndexDependencyConfig> indexDependency;
     }
 
@@ -109,7 +102,7 @@ public class ApplicationArchiveBuildStep {
                 markerFiles, root, additionalApplicationArchiveBuildItem, indexDependencyBuildItems, indexCache,
                 curateOutcomeBuildItem);
         return new ApplicationArchivesBuildItem(
-                new ApplicationArchiveImpl(appindex.getIndex(), root.getRootDirs(), root.getPaths(), null),
+                new ApplicationArchiveImpl(appindex.getIndex(), root.getRootDirs(), root.getPaths()),
                 applicationArchives);
     }
 
@@ -131,12 +124,12 @@ public class ApplicationArchiveBuildStep {
 
         //get paths that are included via index-dependencies
         addIndexDependencyPaths(indexDependencyBuildItem, classLoader, root, indexedPaths, appArchives, buildCloseables,
-                indexCache, curateOutcomeBuildItem);
+                indexCache);
 
         for (AdditionalApplicationArchiveBuildItem i : additionalApplicationArchives) {
             for (Path apPath : i.getPaths()) {
                 if (!root.getPaths().contains(apPath) && indexedPaths.add(apPath)) {
-                    appArchives.add(createApplicationArchive(buildCloseables, classLoader, indexCache, apPath, null));
+                    appArchives.add(createApplicationArchive(buildCloseables, classLoader, indexCache, apPath));
                 }
             }
         }
@@ -146,44 +139,32 @@ public class ApplicationArchiveBuildStep {
 
     public void addIndexDependencyPaths(List<IndexDependencyBuildItem> indexDependencyBuildItems,
             ClassLoader classLoader, ArchiveRootBuildItem root, Set<Path> indexedDeps, List<ApplicationArchive> appArchives,
-            QuarkusBuildCloseablesBuildItem buildCloseables, IndexCache indexCache,
-            CurateOutcomeBuildItem curateOutcomeBuildItem) {
+            QuarkusBuildCloseablesBuildItem buildCloseables, IndexCache indexCache) {
         if (indexDependencyBuildItems.isEmpty()) {
             return;
         }
-        final List<AppDependency> userDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
-        final Map<AppArtifactKey, AppArtifact> userMap = new HashMap<>(userDeps.size());
-        for (AppDependency dep : userDeps) {
-            userMap.put(dep.getArtifact().getKey(), dep.getArtifact());
-        }
+        ArtifactIndex artifactIndex = new ArtifactIndex(new ClassPathArtifactResolver(classLoader));
         try {
             for (IndexDependencyBuildItem indexDependencyBuildItem : indexDependencyBuildItems) {
-                final AppArtifactKey key = new AppArtifactKey(indexDependencyBuildItem.getGroupId(),
+                String classifier = indexDependencyBuildItem.getClassifier();
+                final Path path = artifactIndex.getPath(indexDependencyBuildItem.getGroupId(),
                         indexDependencyBuildItem.getArtifactId(),
-                        indexDependencyBuildItem.getClassifier(),
-                        "jar");
-                final AppArtifact artifact = userMap.get(key);
-                if (artifact == null) {
-                    throw new RuntimeException(
-                            "Could not resolve artifact " + key + " among the runtime dependencies of the application");
-                }
-                for (Path path : artifact.getPaths()) {
-                    if (!root.isExcludedFromIndexing(path) && !root.getPaths().contains(path) && indexedDeps.add(path)) {
-                        appArchives.add(createApplicationArchive(buildCloseables, classLoader, indexCache, path, key));
-                    }
+                        classifier == null || classifier.isEmpty() ? null : classifier);
+                if (!root.isExcludedFromIndexing(path) && !root.getPaths().contains(path) && indexedDeps.add(path)) {
+                    appArchives.add(createApplicationArchive(buildCloseables, classLoader, indexCache, path));
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     private static ApplicationArchive createApplicationArchive(QuarkusBuildCloseablesBuildItem buildCloseables,
             ClassLoader classLoader,
-            IndexCache indexCache, Path dep, AppArtifactKey artifactKey) throws IOException {
+            IndexCache indexCache, Path dep) throws IOException {
         final FileSystem fs = Files.isDirectory(dep) ? null : buildCloseables.add(FileSystems.newFileSystem(dep, classLoader));
         return new ApplicationArchiveImpl(indexPath(indexCache, dep),
-                fs == null ? dep : fs.getRootDirectories().iterator().next(), fs, fs != null, dep, artifactKey);
+                fs == null ? dep : fs.getRootDirectories().iterator().next(), fs, fs != null, dep);
     }
 
     private static IndexView indexPath(IndexCache indexCache, Path dep) throws IOException {
@@ -237,7 +218,7 @@ public class ApplicationArchiveBuildStep {
                 }
                 appArchives
                         .add(new ApplicationArchiveImpl(indexes.size() == 1 ? indexes.get(0) : CompositeIndex.create(indexes),
-                                rootDirs.build(), artifactPaths, dep.getArtifact().getKey()));
+                                rootDirs.build(), artifactPaths));
             }
         }
     }
@@ -252,6 +233,18 @@ public class ApplicationArchiveBuildStep {
     }
 
     private static Index handleFilePath(Path path) throws IOException {
+        Path existing = path.resolve(JANDEX_INDEX);
+        if (Files.exists(existing)) {
+            try (FileInputStream in = new FileInputStream(existing.toFile())) {
+                IndexReader reader = new IndexReader(in);
+                if (reader.getIndexVersion() < REQUIRED_INDEX_VERSION) {
+                    LOGGER.warnf("Re-indexing %s - at least Jandex 2.1 must be used to index an application dependency", path);
+                    return indexFilePath(path);
+                } else {
+                    return reader.read();
+                }
+            }
+        }
         return indexFilePath(path);
     }
 

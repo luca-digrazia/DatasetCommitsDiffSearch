@@ -47,13 +47,13 @@ import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.bootstrap.app.StartupAction;
 import io.quarkus.bootstrap.model.PathsCollection;
-import io.quarkus.bootstrap.runner.Timing;
 import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.builditem.TestAnnotationBuildItem;
 import io.quarkus.deployment.builditem.TestClassBeanBuildItem;
 import io.quarkus.deployment.builditem.TestClassPredicateBuildItem;
+import io.quarkus.runtime.Timing;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.RestAssuredURLManager;
@@ -65,8 +65,6 @@ import io.quarkus.test.junit.buildchain.TestBuildChainCustomizerProducer;
 import io.quarkus.test.junit.callback.QuarkusTestAfterEachCallback;
 import io.quarkus.test.junit.callback.QuarkusTestBeforeAllCallback;
 import io.quarkus.test.junit.callback.QuarkusTestBeforeEachCallback;
-import io.quarkus.test.junit.internal.DeepClone;
-import io.quarkus.test.junit.internal.XStreamDeepClone;
 
 //todo: share common core with QuarkusUnitTest
 public class QuarkusTestExtension
@@ -88,8 +86,6 @@ public class QuarkusTestExtension
     private static List<Object> beforeAllCallbacks = new ArrayList<>();
     private static List<Object> beforeEachCallbacks = new ArrayList<>();
     private static List<Object> afterEachCallbacks = new ArrayList<>();
-
-    private static DeepClone deepClone;
 
     private ExtensionState doJavaStart(ExtensionContext context) throws Throwable {
         Closeable testResourceManager = null;
@@ -141,7 +137,6 @@ public class QuarkusTestExtension
             AugmentAction augmentAction = curatedApplication.createAugmentor(TestBuildChainFunction.class.getName(), props);
             StartupAction startupAction = augmentAction.createInitialRuntimeApplication();
             Thread.currentThread().setContextClassLoader(startupAction.getClassLoader());
-            populateDeepCloneField(startupAction);
 
             //must be done after the TCCL has been set
             testResourceManager = (Closeable) startupAction.getClassLoader().loadClass(TestResourceManager.class.getName())
@@ -200,16 +195,7 @@ public class QuarkusTestExtension
                 e.addSuppressed(ex);
             }
             throw e;
-        } finally {
-            if (originalCl != null) {
-                Thread.currentThread().setContextClassLoader(originalCl);
-            }
         }
-    }
-
-    // keep it super simple for now, but we might need multiple strategies in the future
-    private void populateDeepCloneField(StartupAction startupAction) {
-        deepClone = new XStreamDeepClone(startupAction.getClassLoader());
     }
 
     private void populateCallbacks(ClassLoader classLoader) throws ClassNotFoundException {
@@ -241,15 +227,10 @@ public class QuarkusTestExtension
                 afterEachCallback.getClass().getMethod("afterEach", Object.class).invoke(afterEachCallback, actualTestInstance);
             }
             boolean nativeImageTest = isNativeTest(context);
-            ClassLoader original = setCCL(runningQuarkusApplication.getClassLoader());
-            try {
-                runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
-                        .getDeclaredMethod("clearURL").invoke(null);
-                runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
-                        .getDeclaredMethod("tearDown", boolean.class).invoke(null, nativeImageTest);
-            } finally {
-                setCCL(original);
-            }
+            runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
+                    .getDeclaredMethod("clearURL").invoke(null);
+            runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
+                    .getDeclaredMethod("tearDown", boolean.class).invoke(null, nativeImageTest);
         }
     }
 
@@ -263,22 +244,17 @@ public class QuarkusTestExtension
             return;
         }
         if (!failedBoot) {
-            ClassLoader original = setCCL(runningQuarkusApplication.getClassLoader());
-            try {
-                pushMockContext();
-                for (Object beforeEachCallback : beforeEachCallbacks) {
-                    beforeEachCallback.getClass().getMethod("beforeEach", Object.class).invoke(beforeEachCallback,
-                            actualTestInstance);
-                }
-                boolean nativeImageTest = isNativeTest(context);
-                if (runningQuarkusApplication != null) {
-                    runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
-                            .getDeclaredMethod("setURL", boolean.class).invoke(null, false);
-                    runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
-                            .getDeclaredMethod("setup", boolean.class).invoke(null, nativeImageTest);
-                }
-            } finally {
-                setCCL(original);
+            pushMockContext();
+            for (Object beforeEachCallback : beforeEachCallbacks) {
+                beforeEachCallback.getClass().getMethod("beforeEach", Object.class).invoke(beforeEachCallback,
+                        actualTestInstance);
+            }
+            boolean nativeImageTest = isNativeTest(context);
+            if (runningQuarkusApplication != null) {
+                runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
+                        .getDeclaredMethod("setURL", boolean.class).invoke(null, false);
+                runningQuarkusApplication.getClassLoader().loadClass(TestScopeManager.class.getName())
+                        .getDeclaredMethod("setup", boolean.class).invoke(null, nativeImageTest);
             }
         } else {
             if (firstException != null) {
@@ -324,6 +300,7 @@ public class QuarkusTestExtension
         ensureStarted(context);
         if (runningQuarkusApplication != null) {
             pushMockContext();
+            setCCL(runningQuarkusApplication.getClassLoader());
         }
     }
 
@@ -393,15 +370,11 @@ public class QuarkusTestExtension
         // We do this here as well, because when @TestInstance(Lifecycle.PER_CLASS) is used on a class,
         // interceptTestClassConstructor is called before beforeAll, meaning that the TCCL will not be set correctly
         // (for any test other than the first) unless this is done
-        old = null;
         if (runningQuarkusApplication != null) {
-            old = setCCL(runningQuarkusApplication.getClassLoader());
+            setCCL(runningQuarkusApplication.getClassLoader());
         }
 
         initTestState(extensionContext, state);
-        if (old != null) {
-            setCCL(old);
-        }
         return result;
     }
 
@@ -494,10 +467,10 @@ public class QuarkusTestExtension
             throws Throwable {
         Method newMethod = null;
 
-        ClassLoader old = setCCL(runningQuarkusApplication.getClassLoader());
         try {
             Class<?> c = Class.forName(extensionContext.getRequiredTestClass().getName(), true,
                     Thread.currentThread().getContextClassLoader());
+            ;
             while (c != Object.class) {
                 if (c.getName().equals(invocationContext.getExecutable().getDeclaringClass().getName())) {
                     try {
@@ -526,12 +499,19 @@ public class QuarkusTestExtension
             }
             newMethod.setAccessible(true);
 
-            // the arguments were not loaded from TCCL so we need to deep clone them into the TCCL
-            // because the test method runs from a class loaded from the TCCL
+            // the arguments were not loaded from TCCL so we need to try and "convert" if possible
+            // most of the time this won't be possible or necessary, but for the widely used enum case we need to do it
+            // this is a total hack, but...
             List<Object> originalArguments = invocationContext.getArguments();
             List<Object> argumentsFromTccl = new ArrayList<>();
             for (Object arg : originalArguments) {
-                argumentsFromTccl.add(deepClone.clone(arg));
+                if (arg != null && arg.getClass().isEnum()) {
+                    argumentsFromTccl.add(Enum.valueOf((Class<Enum>) Class.forName(arg.getClass().getName(), false,
+                            Thread.currentThread().getContextClassLoader()), arg.toString()));
+                } else {
+                    // we can't do anything but hope for the best...
+                    argumentsFromTccl.add(arg);
+                }
             }
 
             return newMethod.invoke(actualTestInstance, argumentsFromTccl.toArray(new Object[0]));
@@ -539,8 +519,6 @@ public class QuarkusTestExtension
             throw e.getCause();
         } catch (IllegalAccessException | ClassNotFoundException e) {
             throw new RuntimeException(e);
-        } finally {
-            setCCL(old);
         }
     }
 

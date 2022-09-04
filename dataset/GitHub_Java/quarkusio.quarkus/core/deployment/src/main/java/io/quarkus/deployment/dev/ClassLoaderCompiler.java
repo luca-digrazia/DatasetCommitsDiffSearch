@@ -146,7 +146,7 @@ public class ClassLoaderCompiler implements Closeable {
                             new CompilationProvider.Context(
                                     i.getName(),
                                     classPathElements,
-                                    i.getProjectDirectory() == null ? null : new File(i.getProjectDirectory()),
+                                    new File(i.getProjectDirectory()),
                                     new File(sourcePath),
                                     new File(i.getClassesPath()),
                                     context.getSourceEncoding(),

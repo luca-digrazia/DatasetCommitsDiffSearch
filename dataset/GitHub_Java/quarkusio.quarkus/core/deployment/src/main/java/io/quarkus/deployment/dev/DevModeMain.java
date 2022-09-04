@@ -158,8 +158,6 @@ public class DevModeMain implements Closeable {
         if (realCloseable != null) {
             realCloseable.close();
         }
-        if (ApplicationStateNotification.getState() == ApplicationStateNotification.State.STARTED) {
-            ApplicationStateNotification.waitForApplicationStop();
-        }
+        ApplicationStateNotification.waitForApplicationStop();
     }
 }

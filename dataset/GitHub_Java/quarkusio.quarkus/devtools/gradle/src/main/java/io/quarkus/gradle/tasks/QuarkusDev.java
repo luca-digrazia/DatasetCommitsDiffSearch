@@ -21,7 +21,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.jar.Attributes;
@@ -32,6 +31,7 @@ import java.util.zip.ZipOutputStream;
 import org.apache.tools.ant.types.Commandline;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.ResolvedArtifact;
@@ -77,8 +77,6 @@ public class QuarkusDev extends QuarkusTask {
 
     private List<String> args = new LinkedList<String>();
 
-    private List<String> compilerArgs = new LinkedList<>();
-
     public QuarkusDev() {
         super("Development mode: enables hot deployment with background compilation");
     }
@@ -111,6 +109,8 @@ public class QuarkusDev extends QuarkusTask {
         this.sourceDir = sourceDir;
     }
 
+    @Option(description = "Set working directory", option = "working-dir")
+    @Deprecated
     @Input
     // @InputDirectory this breaks kotlin projects, the working dir at this stage will be evaluated to 'classes/java/main' instead of 'classes/kotlin/main'
     public String getWorkingDir() {
@@ -121,7 +121,6 @@ public class QuarkusDev extends QuarkusTask {
         }
     }
 
-    @Option(description = "Set working directory", option = "working-dir")
     public void setWorkingDir(String workingDir) {
         this.workingDir = workingDir;
     }
@@ -164,17 +163,6 @@ public class QuarkusDev extends QuarkusTask {
         this.preventnoverify = preventnoverify;
     }
 
-    @Optional
-    @Input
-    public List<String> getCompilerArgs() {
-        return compilerArgs;
-    }
-
-    @Option(description = "Additional parameters to pass to javac when recompiling changed source files", option = "compiler-args")
-    public void setCompilerArgs(List<String> compilerArgs) {
-        this.compilerArgs = compilerArgs;
-    }
-
     @TaskAction
     public void startDev() {
         Project project = getProject();
@@ -189,24 +177,7 @@ public class QuarkusDev extends QuarkusTask {
                     "this should not happen as build should have been executed first. " +
                     "Does the project have any source files?");
         }
-
         DevModeContext context = new DevModeContext();
-        context.setProjectDir(project.getProjectDir());
-        for (Map.Entry<Object, Object> e : System.getProperties().entrySet()) {
-            context.getSystemProperties().put(e.getKey().toString(), (String) e.getValue());
-        }
-        for (Map.Entry<String, ?> e : project.getProperties().entrySet()) {
-            if (e.getValue() instanceof String) {
-                context.getBuildSystemProperties().put(e.getKey(), e.getValue().toString());
-            }
-        }
-
-        //  this is a minor hack to allow ApplicationConfig to be populated with defaults
-        context.getBuildSystemProperties().putIfAbsent("quarkus.application.name", project.getName());
-        if (project.getVersion() != null) {
-            context.getBuildSystemProperties().putIfAbsent("quarkus.application.version", project.getVersion().toString());
-        }
-
         context.setSourceEncoding(getSourceEncoding());
         try {
             List<String> args = new ArrayList<>();
@@ -313,16 +284,7 @@ public class QuarkusDev extends QuarkusTask {
 
             JavaPluginConvention javaPluginConvention = project.getConvention().findPlugin(JavaPluginConvention.class);
             if (javaPluginConvention != null) {
-                context.setSourceJavaVersion(javaPluginConvention.getSourceCompatibility().toString());
                 context.setTargetJvmVersion(javaPluginConvention.getTargetCompatibility().toString());
-            }
-
-            if (getCompilerArgs().isEmpty()) {
-                getJavaCompileTask()
-                        .map(compileTask -> compileTask.getOptions().getCompilerArgs())
-                        .ifPresent(context::setCompilerOptions);
-            } else {
-                context.setCompilerOptions(getCompilerArgs());
             }
 
             // this is the jar file we will use to launch the dev mode main class
@@ -361,10 +323,6 @@ public class QuarkusDev extends QuarkusTask {
 
             extension.outputDirectory().mkdirs();
 
-            if (context.isEnablePreview()) {
-                args.add(DevModeContext.ENABLE_PREVIEW_FLAG);
-            }
-
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
             args.addAll(this.getArgs());
@@ -373,7 +331,7 @@ public class QuarkusDev extends QuarkusTask {
             }
 
             project.exec(action -> {
-                action.commandLine(args).workingDir(getWorkingDir());
+                action.commandLine(args).workingDir(extension().workingDir());
                 action.setStandardInput(System.in)
                         .setErrorOutput(System.out)
                         .setStandardOutput(System.out);
@@ -426,19 +384,10 @@ public class QuarkusDev extends QuarkusTask {
             return;
         }
 
-        String classesDir = QuarkusGradleUtils.getClassesDir(mainSourceSet, project.getBuildDir());
-
-        final String resourcesOutputPath;
-        if (resourcesSrcDir.exists()) {
-            resourcesOutputPath = mainSourceSet.getOutput().getResourcesDir().getAbsolutePath();
-            if (!Files.exists(Paths.get(classesDir))) {
-                // currently classesDir can't be null and is expected to exist
-                classesDir = resourcesOutputPath;
-            }
-        } else {
-            // currently resources dir should exist
-            resourcesOutputPath = classesDir;
-        }
+        final String classesDir = QuarkusGradleUtils.getClassesDir(mainSourceSet, project.getBuildDir());
+        final String resourcesOutputPath = resourcesSrcDir.exists()
+                ? mainSourceSet.getOutput().getResourcesDir().getAbsolutePath()
+                : classesDir;
 
         DevModeContext.ModuleInfo wsModuleInfo = new DevModeContext.ModuleInfo(
                 project.getName(),
@@ -456,14 +405,11 @@ public class QuarkusDev extends QuarkusTask {
     }
 
     private String getSourceEncoding() {
-        return getJavaCompileTask()
-                .map(javaCompile -> javaCompile.getOptions().getEncoding())
-                .orElse(null);
-    }
-
-    private java.util.Optional<JavaCompile> getJavaCompileTask() {
-        return java.util.Optional
-                .ofNullable((JavaCompile) getProject().getTasks().getByName(JavaPlugin.COMPILE_JAVA_TASK_NAME));
+        Task javaCompile = getProject().getTasks().getByName(JavaPlugin.COMPILE_JAVA_TASK_NAME);
+        if (javaCompile != null) {
+            return ((JavaCompile) javaCompile).getOptions().getEncoding();
+        }
+        return null;
     }
 
     private void addGradlePluginDeps(StringBuilder classPathManifest, DevModeContext context) {

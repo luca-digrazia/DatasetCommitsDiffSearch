@@ -19,8 +19,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import org.objectweb.asm.ClassVisitor;
 
 /**
  * The result of the curate step that is done by QuarkusBootstrap.
@@ -53,7 +56,6 @@ public class CuratedApplication implements Serializable, Closeable {
 
     private final QuarkusBootstrap quarkusBootstrap;
     private final CurationResult curationResult;
-
     final AppModel appModel;
 
     CuratedApplication(QuarkusBootstrap quarkusBootstrap, CurationResult curationResult) {
@@ -256,8 +258,6 @@ public class CuratedApplication implements Serializable, Closeable {
             builder.addElement(ClassPathElement.fromPath(root));
         }
 
-        builder.setResettableElement(new MemoryClassPathElement(Collections.emptyMap()));
-
         //additional user class path elements first
         for (AdditionalDependency i : quarkusBootstrap.getAdditionalApplicationArchives()) {
             for (Path root : i.getArchivePath()) {
@@ -268,16 +268,19 @@ public class CuratedApplication implements Serializable, Closeable {
     }
 
     public QuarkusClassLoader createRuntimeClassLoader(QuarkusClassLoader loader,
-            Map<String, byte[]> resources, Map<String, byte[]> transformedClasses) {
+            Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers,
+            Map<String, Predicate<byte[]>> transformerPredicates,
+            ClassLoader deploymentClassLoader, Map<String, byte[]> resources) {
         QuarkusClassLoader.Builder builder = QuarkusClassLoader.builder("Quarkus Runtime ClassLoader",
                 loader, false)
                 .setAggregateParentResources(true);
-        builder.setTransformedClasses(transformedClasses);
+        builder.setTransformerPredicates(transformerPredicates);
+        builder.setTransformerClassLoader(deploymentClassLoader);
 
-        builder.addElement(new MemoryClassPathElement(resources));
         for (Path root : quarkusBootstrap.getApplicationRoot()) {
             builder.addElement(ClassPathElement.fromPath(root));
         }
+        builder.addElement(new MemoryClassPathElement(resources));
 
         for (AdditionalDependency i : getQuarkusBootstrap().getAdditionalApplicationArchives()) {
             if (i.isHotReloadable()) {
@@ -286,6 +289,7 @@ public class CuratedApplication implements Serializable, Closeable {
                 }
             }
         }
+        builder.setBytecodeTransformers(bytecodeTransformers);
         return builder.build();
     }
 

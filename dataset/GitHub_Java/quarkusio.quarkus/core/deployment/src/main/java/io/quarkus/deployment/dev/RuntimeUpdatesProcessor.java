@@ -14,42 +14,31 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.runner.Timing;
-import io.quarkus.deployment.util.FSWatchUtil;
 import io.quarkus.deployment.util.FileUtil;
-import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.dev.spi.HotReplacementContext;
 import io.quarkus.dev.spi.HotReplacementSetup;
+import io.quarkus.runtime.Timing;
 
 public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable {
-
-    private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class);
-
     private static final String CLASS_EXTENSION = ".class";
-    static volatile RuntimeUpdatesProcessor INSTANCE;
+    private static final Logger log = Logger.getLogger(RuntimeUpdatesProcessor.class.getPackage().getName());
 
-    private final Path applicationRoot;
     private final DevModeContext context;
     private final ClassLoaderCompiler compiler;
-    private final DevModeType devModeType;
-    volatile Throwable compileProblem;
 
     // file path -> isRestartNeeded
     private volatile Map<String, Boolean> watchedFilePaths = Collections.emptyMap();
@@ -77,18 +66,12 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     private final List<Runnable> preScanSteps = new CopyOnWriteArrayList<>();
     private final List<Consumer<Set<String>>> noRestartChangesConsumers = new CopyOnWriteArrayList<>();
     private final List<HotReplacementSetup> hotReplacementSetup = new ArrayList<>();
-    private final Consumer<Set<String>> restartCallback;
-    private final BiConsumer<DevModeContext.ModuleInfo, String> copyResourceNotification;
+    private final IsolatedDevModeMain devModeMain;
 
-    public RuntimeUpdatesProcessor(Path applicationRoot, DevModeContext context, ClassLoaderCompiler compiler,
-            DevModeType devModeType, Consumer<Set<String>> restartCallback,
-            BiConsumer<DevModeContext.ModuleInfo, String> copyResourceNotification) {
-        this.applicationRoot = applicationRoot;
+    public RuntimeUpdatesProcessor(DevModeContext context, ClassLoaderCompiler compiler, IsolatedDevModeMain devModeMain) {
         this.context = context;
         this.compiler = compiler;
-        this.devModeType = devModeType;
-        this.restartCallback = restartCallback;
-        this.copyResourceNotification = copyResourceNotification;
+        this.devModeMain = devModeMain;
     }
 
     @Override
@@ -111,8 +94,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
         for (DevModeContext.ModuleInfo i : context.getAllModules()) {
             if (i.getResourcePath() != null) {
                 ret.add(Paths.get(i.getResourcePath()));
-            } else if (i.getResourcesOutputPath() != null) {
-                ret.add(Paths.get(i.getResourcesOutputPath()));
             }
         }
         Collections.reverse(ret); //make sure the actual project is before dependencies
@@ -122,39 +103,13 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     @Override
     public Throwable getDeploymentProblem() {
         //we differentiate between these internally, however for the error reporting they are the same
-        return compileProblem != null ? compileProblem
+        return IsolatedDevModeMain.compileProblem != null ? IsolatedDevModeMain.compileProblem
                 : IsolatedDevModeMain.deploymentProblem;
-    }
-
-    @Override
-    public void setRemoteProblem(Throwable throwable) {
-        compileProblem = throwable;
-    }
-
-    @Override
-    public void updateFile(String file, byte[] data) {
-        if (file.startsWith("/")) {
-            file = file.substring(1);
-        }
-        try {
-            Path resolve = applicationRoot.resolve(file);
-            if (!Files.exists(resolve.getParent())) {
-                Files.createDirectories(resolve.getParent());
-            }
-            Files.write(resolve, data);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     @Override
     public boolean isTest() {
         return context.isTest();
-    }
-
-    @Override
-    public DevModeType getDevModeType() {
-        return devModeType;
     }
 
     @Override
@@ -181,7 +136,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
             restartNeeded = filesChanged.stream().map(watchedFilePaths::get).anyMatch(Boolean.TRUE::equals);
         }
         if (restartNeeded) {
-            restartCallback.accept(filesChanged);
+            devModeMain.restartApp(filesChanged);
             log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
             return true;
         } else if (!filesChanged.isEmpty()) {
@@ -206,36 +161,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     @Override
     public void consumeNoRestartChanges(Consumer<Set<String>> consumer) {
         noRestartChangesConsumers.add(consumer);
-    }
-
-    @Override
-    public Set<String> syncState(Map<String, String> fileHashes) {
-        if (getDevModeType() != DevModeType.REMOTE_SERVER_SIDE) {
-            throw new RuntimeException("Can only sync state on the server side of remote dev mode");
-        }
-        Set<String> ret = new HashSet<>();
-        try {
-            Map<String, String> ourHashes = new HashMap<>(IsolatedRemoteDevModeMain.createHashes(applicationRoot));
-            for (Map.Entry<String, String> i : fileHashes.entrySet()) {
-                String ours = ourHashes.remove(i.getKey());
-                if (!Objects.equals(ours, i.getValue())) {
-                    ret.add(i.getKey());
-                }
-            }
-            for (Map.Entry<String, String> remaining : ourHashes.entrySet()) {
-                String file = remaining.getKey();
-                if (file.endsWith("META-INF/MANIFEST.MF") || file.contains("META-INF/maven")
-                        || !file.contains("/")) {
-                    //we have some filters, for files that we don't want to delete
-                    continue;
-                }
-                log.info("Deleting removed file " + file);
-                Files.deleteIfExists(applicationRoot.resolve(file));
-            }
-            return ret;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     boolean checkForChangedClasses() throws IOException {
@@ -269,9 +194,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                         moduleChangedSourceFilePaths.addAll(changedPaths);
                         compiler.compile(sourcePath, changedSourceFiles.stream()
                                 .collect(groupingBy(this::getFileExtension, Collectors.toSet())));
-                        compileProblem = null;
+                        IsolatedDevModeMain.compileProblem = null;
                     } catch (Exception e) {
-                        compileProblem = e;
+                        IsolatedDevModeMain.compileProblem = e;
                         return false;
                     }
                 }
@@ -285,10 +210,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
 
         this.firstScanDone = true;
         return hasChanges;
-    }
-
-    public Throwable getCompileProblem() {
-        return compileProblem;
     }
 
     private boolean checkForClassFilesChangesInModule(DevModeContext.ModuleInfo module, List<Path> moduleChangedSourceFiles,
@@ -414,13 +335,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                                             Files.createDirectories(target);
                                         } else {
                                             Files.createDirectories(target.getParent());
-                                            ret.add(relative.toString());
                                             byte[] data = Files.readAllBytes(path);
                                             try (FileOutputStream out = new FileOutputStream(target.toFile())) {
                                                 out.write(data);
-                                            }
-                                            if (copyResourceNotification != null) {
-                                                copyResourceNotification.accept(module, relative.toString());
                                             }
                                         }
                                     }
@@ -550,6 +467,5 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     @Override
     public void close() throws IOException {
         compiler.close();
-        FSWatchUtil.shutdown();
     }
 }

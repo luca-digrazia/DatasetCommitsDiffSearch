@@ -31,7 +31,6 @@ import org.junit.jupiter.api.extension.TestInstanceFactory;
 import org.junit.jupiter.api.extension.TestInstanceFactoryContext;
 import org.junit.jupiter.api.extension.TestInstantiationException;
 
-import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.deployment.dev.CompilationProvider;
 import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.DevModeMain;
@@ -71,7 +70,6 @@ public class QuarkusDevModeTest
     private Path deploymentResourcePath;
     private Path projectSourceRoot;
     private Path testLocation;
-    private String[] commandLineArgs = new String[0];
 
     private static final List<CompilationProvider> compilationProviders;
 
@@ -150,7 +148,6 @@ public class QuarkusDevModeTest
             }
 
             DevModeContext context = exportArchive(deploymentDir, projectSourceRoot);
-            context.setArgs(commandLineArgs);
             context.setTest(true);
             context.setAbortOnFailedStart(true);
             context.getBuildSystemProperties().put("quarkus.banner.enabled", "false");
@@ -225,11 +222,9 @@ public class QuarkusDevModeTest
             DevModeContext context = new DevModeContext();
             context.setCacheDir(cache.toFile());
 
-            context.setApplicationRoot(
-                    new DevModeContext.ModuleInfo(AppArtifactKey.fromString("io.quarkus.test:app-under-test"), "default",
-                            deploymentDir.toAbsolutePath().toString(),
-                            Collections.singleton(deploymentSourcePath.toAbsolutePath().toString()),
-                            classes.toAbsolutePath().toString(), deploymentResourcePath.toAbsolutePath().toString()));
+            context.setApplicationRoot(new DevModeContext.ModuleInfo("default", deploymentDir.toAbsolutePath().toString(),
+                    Collections.singleton(deploymentSourcePath.toAbsolutePath().toString()),
+                    classes.toAbsolutePath().toString(), deploymentResourcePath.toAbsolutePath().toString()));
 
             setDevModeRunnerJarFile(context);
             return context;
@@ -327,15 +322,6 @@ public class QuarkusDevModeTest
         sleepForFileChanges(path);
         // since this is a new file addition, even wait for the parent dir's last modified timestamp to change
         sleepForFileChanges(path.getParent());
-    }
-
-    public String[] getCommandLineArgs() {
-        return commandLineArgs;
-    }
-
-    public QuarkusDevModeTest setCommandLineArgs(String[] commandLineArgs) {
-        this.commandLineArgs = commandLineArgs;
-        return this;
     }
 
     void modifyFile(String name, Function<String, String> mutator, Path path) {
