@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.Pair;
@@ -240,14 +239,8 @@ public final class Starlark {
       callable = new BuiltinCallable(fn, desc.getName(), desc);
     }
 
-    Location loc = call != null ? call.getLocation() : null;
-    thread.push(callable, loc, call);
-    try {
-      // TODO(adonovan): unify exception handling here.
-      return callable.callImpl(thread, call, args, ImmutableMap.copyOf(kwargs));
-    } finally {
-      thread.pop();
-    }
+    // TODO(adonovan): do push/pop, profiling, and exception handling here.
+    return callable.callImpl(thread, call, args, ImmutableMap.copyOf(kwargs));
   }
 
   /**

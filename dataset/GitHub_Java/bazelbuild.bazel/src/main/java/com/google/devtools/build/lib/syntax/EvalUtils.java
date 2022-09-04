@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
@@ -116,7 +117,8 @@ public final class EvalUtils {
       // Object.hashCode within a try/catch, and requiring all
       // unhashable Starlark values to throw a particular unchecked exception
       // with a helpful error message.
-      throw Starlark.errorf("unhashable type: '%s'", EvalUtils.getDataTypeName(x));
+      throw new EvalException(
+          null, Starlark.format("unhashable type: '%s'", EvalUtils.getDataTypeName(x)));
     }
   }
 
@@ -413,6 +415,30 @@ public final class EvalUtils {
   }
 
   /**
+   * Build a Dict of kwarg arguments from a list, removing null-s or None-s.
+   *
+   * @param thread the StarlarkThread in which this map can be mutated.
+   * @param init a series of key, value pairs (as consecutive arguments) as in {@code optionMap(k1,
+   *     v1, k2, v2, k3, v3)} where each key is a String, each value is an arbitrary Objet.
+   * @return a {@code Map<String, Object>} that has all the specified entries, where key, value
+   *     pairs appearing earlier have precedence, i.e. {@code k1, v1} may override {@code k3, v3}.
+   *     <p>Ignore any entry where the value is null or None. Keys cannot be null.
+   */
+  @SuppressWarnings("unchecked")
+  public static <K, V> Dict<K, V> optionMap(StarlarkThread thread, Object... init) {
+    ImmutableMap.Builder<K, V> b = new ImmutableMap.Builder<>();
+    Preconditions.checkState(init.length % 2 == 0);
+    for (int i = init.length - 2; i >= 0; i -= 2) {
+      K key = (K) Preconditions.checkNotNull(init[i]);
+      V value = (V) init[i + 1];
+      if (!isNullOrNone(value)) {
+        b.put(key, value);
+      }
+    }
+    return Dict.copyOf(thread.mutability(), b.build());
+  }
+
+  /**
    * Installs a global hook that causes subsequently executed Starlark threads to notify the
    * debugger of important events. Closes any previously set debugger. Call {@code
    * setDebugger(null)} to disable debugging.
@@ -458,14 +484,16 @@ public final class EvalUtils {
     if (object instanceof ClassObject) {
       String customErrorMessage = ((ClassObject) object).getErrorMessageForUnknownField(name);
       if (customErrorMessage != null) {
-        return Starlark.errorf("%s", customErrorMessage);
+        return new EvalException(null, customErrorMessage);
       }
       suffix = SpellChecker.didYouMean(name, ((ClassObject) object).getFieldNames());
     } else {
       suffix = SpellChecker.didYouMean(name, CallUtils.getFieldNames(semantics, object));
     }
-    return Starlark.errorf(
-        "'%s' value has no field or method '%s'%s", getDataTypeName(object), name, suffix);
+    return new EvalException(
+        null,
+        String.format(
+            "'%s' value has no field or method '%s'%s", getDataTypeName(object), name, suffix));
   }
 
   /** Evaluates an eager binary operation, {@code x op y}. (Excludes AND and OR.) */

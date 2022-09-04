@@ -14,16 +14,14 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.EventCollector;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,124 +50,28 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testExecutionStopsAtFirstError() throws Exception {
-    EventCollector printEvents = new EventCollector();
-    StarlarkThread thread = createStarlarkThread(mutability, printEvents);
+    EventCollector printEvents = new EventCollector(); // for print events
+    StarlarkThread thread =
+        StarlarkThread.builder(mutability)
+            .useDefaultSemantics()
+            .setGlobals(
+                Module.createForBuiltins(
+                    Starlark.UNIVERSE)) // for print... this should not be necessary
+            .setEventHandler(printEvents)
+            .build();
     ParserInput input = ParserInput.fromLines("print('hello'); x = 1//0; print('goodbye')");
-
-    assertThrows(EvalException.class, () -> EvalUtils.exec(input, thread));
-
-    // Only expect hello, should have been an error before goodbye.
-    assertThat(printEvents).hasSize(1);
-    assertThat(printEvents.iterator().next().getMessage()).isEqualTo("hello");
-  }
-
-  @Test
-  public void testExecutionNotStartedOnInterrupt() throws Exception {
-    EventCollector printEvents = new EventCollector();
-    StarlarkThread thread = createStarlarkThread(mutability, printEvents);
-    ParserInput input = ParserInput.fromLines("print('hello');");
-
     try {
-      Thread.currentThread().interrupt();
-      assertThrows(InterruptedException.class, () -> EvalUtils.exec(input, thread));
-    } finally {
-      // Reset interrupt bit in case the test failed to do so.
-      Thread.interrupted();
+      EvalUtils.exec(input, thread);
+      throw new AssertionError("execution succeeded unexpectedly");
+    } catch (EvalException ex) {
+      // ok, division by zero
     }
-
-    assertThat(printEvents).isEmpty();
-  }
-
-  @Test
-  public void testForLoopAbortedOnInterrupt() throws Exception {
-    StarlarkThread thread = createStarlarkThread(mutability, NullEventHandler.INSTANCE);
-    InterruptFunction interruptFunction = new InterruptFunction();
-    thread.update("interrupt", interruptFunction);
-
-    ParserInput input =
-        ParserInput.fromLines(
-            "def foo():", // Can't declare for loops at top level, so wrap with a function.
-            "  for i in range(100):",
-            "    interrupt(i == 5)",
-            "foo()");
-
-    try {
-      assertThrows(InterruptedException.class, () -> EvalUtils.exec(input, thread));
-    } finally {
-      // Reset interrupt bit in case the test failed to do so.
-      Thread.interrupted();
+    if (!printEvents.toString().contains("hello")) {
+      throw new AssertionError("first print statement not executed: " + printEvents);
     }
-
-    assertThat(interruptFunction.callCount).isEqualTo(6);
-  }
-
-  @Test
-  public void testForComprehensionAbortedOnInterrupt() throws Exception {
-    StarlarkThread thread = createStarlarkThread(mutability, NullEventHandler.INSTANCE);
-    InterruptFunction interruptFunction = new InterruptFunction();
-    thread.update("interrupt", interruptFunction);
-
-    ParserInput input = ParserInput.fromLines("[interrupt(i == 5) for i in range(100)]");
-
-    try {
-      assertThrows(InterruptedException.class, () -> EvalUtils.exec(input, thread));
-    } finally {
-      // Reset interrupt bit in case the test failed to do so.
-      Thread.interrupted();
+    if (printEvents.toString().contains("goodbye")) {
+      throw new AssertionError("first print statement unexpected executed: " + printEvents);
     }
-
-    assertThat(interruptFunction.callCount).isEqualTo(6);
-  }
-
-  @Test
-  public void testFunctionCallsNotStartedOnInterrupt() throws Exception {
-    StarlarkThread thread = createStarlarkThread(mutability, NullEventHandler.INSTANCE);
-    InterruptFunction interruptFunction = new InterruptFunction();
-    thread.update("interrupt", interruptFunction);
-
-    ParserInput input =
-        ParserInput.fromLines("interrupt(False); interrupt(True); interrupt(False);");
-
-    try {
-      assertThrows(InterruptedException.class, () -> EvalUtils.exec(input, thread));
-    } finally {
-      // Reset interrupt bit in case the test failed to do so.
-      Thread.interrupted();
-    }
-
-    // Third call shouldn't happen.
-    assertThat(interruptFunction.callCount).isEqualTo(2);
-  }
-
-  private static class InterruptFunction implements StarlarkCallable {
-
-    private int callCount = 0;
-
-    @Override
-    public String getName() {
-      return "interrupt";
-    }
-
-    @Override
-    public Object fastcall(
-        StarlarkThread thread, FuncallExpression ast, Object[] positional, Object[] named) {
-      callCount++;
-      if (positional.length > 0 && Starlark.truth(positional[0])) {
-        Thread.currentThread().interrupt();
-      }
-      return Starlark.NONE;
-    }
-  }
-
-  private static StarlarkThread createStarlarkThread(
-      Mutability mutability, EventHandler eventHandler) {
-    return StarlarkThread.builder(mutability)
-        .useDefaultSemantics()
-        .setGlobals(
-            Module.createForBuiltins(
-                Starlark.UNIVERSE)) // for print... this should not be necessary
-        .setEventHandler(eventHandler)
-        .build();
   }
 
   @Test
@@ -231,18 +133,21 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testSumFunction() throws Exception {
-    StarlarkCallable sum =
-        new StarlarkCallable() {
+    BaseFunction sum =
+        new BaseFunction(FunctionSignature.ANY) {
           @Override
           public String getName() {
             return "sum";
           }
 
           @Override
-          public Object fastcall(
-              StarlarkThread thread, FuncallExpression call, Object[] positional, Object[] named) {
+          public Object callImpl(
+              StarlarkThread thread,
+              FuncallExpression ast,
+              List<Object> args,
+              Map<String, Object> kwargs) {
             int sum = 0;
-            for (Object arg : positional) {
+            for (Object arg : args) {
               sum += (Integer) arg;
             }
             return sum;
@@ -273,21 +178,22 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testKeywordArgs() throws Exception {
+
     // This function returns the map of keyword arguments passed to it.
-    StarlarkCallable kwargs =
-        new StarlarkCallable() {
+    BaseFunction kwargs =
+        new BaseFunction(FunctionSignature.KWARGS) {
           @Override
           public String getName() {
             return "kwargs";
           }
 
           @Override
-          public Object call(
+          public Object callImpl(
               StarlarkThread thread,
               FuncallExpression call,
-              Tuple<Object> args,
-              Dict<String, Object> kwargs) {
-            return kwargs;
+              List<Object> args,
+              Map<String, Object> kwargs) {
+            return Dict.copyOf(thread.mutability(), kwargs);
           }
         };
 
@@ -815,11 +721,8 @@ public class EvaluationTest extends EvaluationTestCase {
 
   @Test
   public void testDictKeysDuplicateKeyArgs() throws Exception {
-    // TODO(adonovan): when the duplication is literal, this should be caught by a static check.
-    newTest()
-        .testIfExactError(
-            "duplicate argument 'arg' in call to 'keys'",
-            "{'a': 1}.keys(arg='abc', arg='def', k=1, k=2)");
+    newTest().testIfExactError("duplicate keywords 'arg', 'k' in call to {\"a\": 1}.keys",
+        "{'a': 1}.keys(arg='abc', arg='def', k=1, k=2)");
   }
 
   @Test

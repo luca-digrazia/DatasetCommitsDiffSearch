@@ -174,11 +174,13 @@ class MethodLibrary {
             defaultValue = "False",
             positional = false)
       },
+      useLocation = true,
       useStarlarkThread = true)
   public StarlarkList<?> sorted(
       Object iterable,
       final Object key,
       Boolean reverse,
+      final Location loc,
       final StarlarkThread thread)
       throws EvalException, InterruptedException {
     Object[] array = Starlark.toArray(iterable);
@@ -186,7 +188,7 @@ class MethodLibrary {
       try {
         Arrays.sort(array, EvalUtils.SKYLARK_COMPARATOR);
       } catch (EvalUtils.ComparisonException e) {
-        throw Starlark.errorf("%s", e.getMessage());
+        throw new EvalException(loc, e);
       }
     } else if (key instanceof StarlarkCallable) {
       final StarlarkCallable keyfn = (StarlarkCallable) key;
@@ -217,7 +219,7 @@ class MethodLibrary {
       try {
         Arrays.sort(array, comp);
       } catch (EvalUtils.ComparisonException e) {
-        throw Starlark.errorf("%s", e.getMessage());
+        throw new EvalException(loc, e);
       }
 
       if (comp.e != null) {
@@ -227,8 +229,8 @@ class MethodLibrary {
         throw (EvalException) comp.e;
       }
     } else {
-      throw Starlark.errorf(
-          "%s object is not callable", Starlark.repr(EvalUtils.getDataTypeName(key)));
+      throw new EvalException(
+          loc, Starlark.format("%r object is not callable", EvalUtils.getDataTypeName(key)));
     }
 
     if (reverse) {
@@ -303,8 +305,9 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
       },
+      useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> list(Object x, StarlarkThread thread) throws EvalException {
+  public StarlarkList<?> list(Object x, Location loc, StarlarkThread thread) throws EvalException {
     return StarlarkList.wrap(thread.mutability(), Starlark.toArray(x));
   }
 
@@ -320,11 +323,12 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
       },
+      useLocation = true,
       useStarlarkThread = true)
-  public Integer len(Object x, StarlarkThread thread) throws EvalException {
+  public Integer len(Object x, Location loc, StarlarkThread thread) throws EvalException {
     int len = Starlark.len(x);
     if (len < 0) {
-      throw Starlark.errorf("%s is not iterable", EvalUtils.getDataTypeName(x));
+      throw new EvalException(loc, EvalUtils.getDataTypeName(x) + " is not iterable");
     }
     return len;
   }
@@ -342,18 +346,20 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true,
             noneable = true)
-      })
-  public String str(Object x) throws EvalException {
+      },
+      useLocation = true)
+  public String str(Object x, Location loc) throws EvalException {
     try {
       return Starlark.str(x);
     } catch (NestedSetDepthException exception) {
-      throw Starlark.errorf(
-          "depset exceeded maximum depth %d"
+      throw new EvalException(
+          loc,
+          "depset exceeded maximum depth "
+              + exception.getDepthLimit()
               + ". This was only discovered when attempting to flatten the depset for str(), as "
               + "the size of depsets is unknown until flattening. "
               + "See https://github.com/bazelbuild/bazel/issues/9180 for details and possible "
-              + "solutions.",
-          exception.getDepthLimit());
+              + "solutions.");
     }
   }
 
@@ -454,35 +460,36 @@ class MethodLibrary {
                     + "integer literal. This parameter must not be supplied if the value is not a "
                     + "string.",
             named = true)
-      })
-  public Integer convertToInt(Object x, Object base) throws EvalException {
+      },
+      useLocation = true)
+  public Integer convertToInt(Object x, Object base, Location loc) throws EvalException {
     if (x instanceof String) {
       if (base == Starlark.UNBOUND) {
         base = 10;
       } else if (!(base instanceof Integer)) {
-        throw Starlark.errorf(
-            "base must be an integer (got '%s')", EvalUtils.getDataTypeName(base));
+        throw new EvalException(
+            loc, "base must be an integer (got '" + EvalUtils.getDataTypeName(base) + "')");
       }
-      return fromString((String) x, (Integer) base);
+      return fromString((String) x, loc, (Integer) base);
     } else {
       if (base != Starlark.UNBOUND) {
-        throw Starlark.errorf("int() can't convert non-string with explicit base");
+        throw new EvalException(loc, "int() can't convert non-string with explicit base");
       }
       if (x instanceof Boolean) {
         return ((Boolean) x).booleanValue() ? 1 : 0;
       } else if (x instanceof Integer) {
         return (Integer) x;
       }
-      throw Starlark.errorf("%s is not of type string or int or bool", Starlark.repr(x));
+      throw new EvalException(loc, Starlark.format("%r is not of type string or int or bool", x));
     }
   }
 
-  private int fromString(String string, int base) throws EvalException {
+  private int fromString(String string, Location loc, int base) throws EvalException {
     String stringForErrors = string;
 
     boolean isNegative = false;
     if (string.isEmpty()) {
-      throw Starlark.errorf("string argument to int() cannot be empty");
+      throw new EvalException(loc, Starlark.format("string argument to int() cannot be empty"));
     }
     char c = string.charAt(0);
     if (c == '+') {
@@ -501,9 +508,10 @@ class MethodLibrary {
         if (string.length() > 1 && string.startsWith("0")) {
           // We don't infer the base when input starts with '0' (due
           // to confusion between octal and decimal).
-          throw Starlark.errorf(
-              "cannot infer base for int() when value begins with a 0: %s",
-              Starlark.repr(stringForErrors));
+          throw new EvalException(
+              loc,
+              Starlark.format(
+                  "cannot infer base for int() when value begins with a 0: %r", stringForErrors));
         }
         base = 10;
       }
@@ -515,13 +523,14 @@ class MethodLibrary {
       if (base == 0) {
         base = expectedBase;
       } else if (base != expectedBase) {
-        throw Starlark.errorf(
-            "invalid literal for int() with base %d: %s", base, Starlark.repr(stringForErrors));
+        throw new EvalException(
+            loc,
+            Starlark.format("invalid literal for int() with base %d: %r", base, stringForErrors));
       }
     }
 
     if (base < 2 || base > 36) {
-      throw Starlark.errorf("int() base must be >= 2 and <= 36");
+      throw new EvalException(loc, "int() base must be >= 2 and <= 36");
     }
     try {
       // Negate by prepending a negative symbol, rather than by using arithmetic on the
@@ -530,7 +539,7 @@ class MethodLibrary {
       return Integer.parseInt(parseable, base);
     } catch (NumberFormatException | ArithmeticException e) {
       throw new EvalException(
-          null,
+          loc,
           Starlark.format("invalid literal for int() with base %d: %r", base, stringForErrors),
           e);
     }
@@ -567,13 +576,14 @@ class MethodLibrary {
             legacyNamed = true),
       },
       extraKeywords = @Param(name = "kwargs", doc = "Dictionary of additional entries."),
+      useLocation = true,
       useStarlarkThread = true)
-  public Dict<?, ?> dict(Object args, Dict<?, ?> kwargs, StarlarkThread thread)
+  public Dict<?, ?> dict(Object args, Dict<?, ?> kwargs, Location loc, StarlarkThread thread)
       throws EvalException {
     Dict<?, ?> dict =
         args instanceof Dict
             ? (Dict) args
-            : Dict.getDictFromArgs("dict", args, thread.mutability());
+            : Dict.getDictFromArgs("dict", args, loc, thread.mutability());
     return Dict.plus(dict, kwargs, thread.mutability());
   }
 
@@ -594,8 +604,9 @@ class MethodLibrary {
             defaultValue = "0",
             named = true)
       },
-      useStarlarkThread = true)
-  public StarlarkList<?> enumerate(Object input, Integer start, StarlarkThread thread)
+      useStarlarkThread = true,
+      useLocation = true)
+  public StarlarkList<?> enumerate(Object input, Integer start, Location loc, StarlarkThread thread)
       throws EvalException {
     Object[] array = Starlark.toArray(input);
     for (int i = 0; i < array.length; i++) {
@@ -662,9 +673,10 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
       },
+      useLocation = true,
       useStarlarkThread = true)
   public Sequence<Integer> range(
-      Integer startOrStop, Object stopOrNone, Integer step, StarlarkThread thread)
+      Integer startOrStop, Object stopOrNone, Integer step, Location loc, StarlarkThread thread)
       throws EvalException {
     int start;
     int stop;
@@ -675,10 +687,10 @@ class MethodLibrary {
       start = startOrStop;
       stop = (Integer) stopOrNone;
     } else {
-      throw Starlark.errorf("want int, got %s", EvalUtils.getDataTypeName(stopOrNone));
+      throw new EvalException(loc, "want int, got " + EvalUtils.getDataTypeName(stopOrNone));
     }
     if (step == 0) {
-      throw Starlark.errorf("step cannot be 0");
+      throw new EvalException(loc, "step cannot be 0");
     }
     return new RangeList(start, stop, step);
   }
@@ -773,8 +785,10 @@ class MethodLibrary {
             legacyNamed = true,
             noneable = true)
       },
+      useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> dir(Object object, StarlarkThread thread) throws EvalException {
+  public StarlarkList<?> dir(Object object, Location loc, StarlarkThread thread)
+      throws EvalException {
     // Order the fields alphabetically.
     Set<String> fields = new TreeSet<>();
     if (object instanceof ClassObject) {
@@ -806,13 +820,14 @@ class MethodLibrary {
                 "The name of the attribute that caused the error. This is used only for "
                     + "error reporting.",
             named = true)
-      })
-  public NoneType fail(Object msg, Object attr) throws EvalException {
+      },
+      useLocation = true)
+  public NoneType fail(Object msg, Object attr, Location loc) throws EvalException {
     String str = Starlark.str(msg);
     if (attr != Starlark.NONE) {
-      str = Starlark.format("attribute %s: %s", attr, str);
+      str = String.format("attribute %s: %s", attr, str);
     }
-    throw Starlark.errorf("%s", str);
+    throw new EvalException(loc, str);
   }
 
   @SkylarkCallable(
@@ -859,13 +874,14 @@ class MethodLibrary {
       thread.handleEvent(Event.debug(loc, p.toString()));
       return Starlark.NONE;
     } catch (NestedSetDepthException exception) {
-      throw Starlark.errorf(
-          "depset exceeded maximum depth %d"
+      throw new EvalException(
+          loc,
+          "depset exceeded maximum depth "
+              + exception.getDepthLimit()
               + ". This was only discovered when attempting to flatten the depset for print(), as "
               + "the size of depsets is unknown until flattening. "
               + "See https://github.com/bazelbuild/bazel/issues/9180 for details and possible "
-              + "solutions.",
-          exception.getDepthLimit());
+              + "solutions.");
     }
   }
 
@@ -1044,7 +1060,7 @@ class MethodLibrary {
       try {
         result.getSet().toList();
       } catch (NestedSetDepthException ex) {
-        throw Starlark.errorf("depset exceeded maximum depth %d", ex.getDepthLimit());
+        throw new EvalException(null, "depset exceeded maximum depth " + ex.getDepthLimit());
       }
     }
     return result;
@@ -1123,16 +1139,19 @@ class MethodLibrary {
             defaultValue = "''",
             doc = "Optional custom error to report if no condition matches.",
             named = true)
-      })
-  public Object select(Dict<?, ?> dict, String noMatchError) throws EvalException {
+      },
+      useLocation = true)
+  public Object select(Dict<?, ?> dict, String noMatchError, Location loc) throws EvalException {
     if (dict.isEmpty()) {
-      throw Starlark.errorf(
-          "select({}) with an empty dictionary can never resolve because it includes no conditions"
-              + " to match");
+      throw new EvalException(
+          loc,
+          "select({}) with an empty dictionary can never resolve because it includes no conditions "
+              + "to match");
     }
     for (Object key : dict.keySet()) {
       if (!(key instanceof String)) {
-        throw Starlark.errorf("Invalid key: %s. select keys must be label references", key);
+        throw new EvalException(
+            loc, String.format("Invalid key: %s. select keys must be label references", key));
       }
     }
     return SelectorList.of(new SelectorValue(dict, noMatchError));

@@ -45,6 +45,7 @@ final class MethodDescriptor {
   private final boolean selfCall;
   private final boolean allowReturnNones;
   private final boolean useLocation;
+  private final boolean useAst;
   private final boolean useStarlarkThread;
   private final boolean useStarlarkSemantics;
 
@@ -61,6 +62,7 @@ final class MethodDescriptor {
       boolean selfCall,
       boolean allowReturnNones,
       boolean useLocation,
+      boolean useAst,
       boolean useStarlarkThread,
       boolean useStarlarkSemantics) {
     this.method = method;
@@ -75,6 +77,7 @@ final class MethodDescriptor {
     this.selfCall = selfCall;
     this.allowReturnNones = allowReturnNones;
     this.useLocation = useLocation;
+    this.useAst = useAst;
     this.useStarlarkThread = useStarlarkThread;
     this.useStarlarkSemantics = useStarlarkSemantics;
   }
@@ -105,6 +108,7 @@ final class MethodDescriptor {
         annotation.selfCall(),
         annotation.allowReturnNones(),
         annotation.useLocation(),
+        annotation.useAst(),
         annotation.useStarlarkThread(),
         annotation.useStarlarkSemantics());
   }
@@ -118,9 +122,9 @@ final class MethodDescriptor {
       throw new IllegalStateException("not a struct field: " + name);
     }
     // Enforced by annotation processor.
-    if (useStarlarkThread) {
+    if (useAst || useStarlarkThread) {
       throw new IllegalStateException(
-          "SkylarkCallable has structField and useStarlarkThread: " + name);
+          "SkylarkCallable has structField and useAST/useStarlarkThread: " + name);
     }
     int nargs = (useLocation ? 1 : 0) + (useStarlarkSemantics ? 1 : 0);
     Object[] args = nargs == 0 ? EMPTY : new Object[nargs];
@@ -132,7 +136,7 @@ final class MethodDescriptor {
     if (useStarlarkSemantics) {
       args[nargs - 1] = semantics;
     }
-    return call(obj, args, mu);
+    return call(obj, args, loc, mu);
   }
 
   /**
@@ -142,31 +146,31 @@ final class MethodDescriptor {
    *
    * <p>The Mutability is used if it is necessary to allocate a Starlark copy of a Java result.
    */
-  Object call(Object obj, Object[] args, @Nullable Mutability mu)
+  Object call(Object obj, Object[] args, Location loc, @Nullable Mutability mu)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(obj);
     Object result;
     try {
       result = method.invoke(obj, args);
-    } catch (IllegalAccessException ex) {
-      // The annotated processor ensures that annotated methods are accessible.
-      throw new IllegalStateException(ex);
-
-    } catch (InvocationTargetException ex) {
-      Throwable e = ex.getCause();
+    } catch (IllegalAccessException e) {
+      // TODO(bazel-team): Print a nice error message. Maybe the method exists
+      // and an argument is missing or has the wrong type.
+      throw new EvalException(loc, "Method invocation failed: " + e);
+    } catch (InvocationTargetException x) {
+      Throwable e = x.getCause();
       if (e == null) {
-        throw new IllegalStateException(e);
+        // This is unlikely to happen.
+        throw new IllegalStateException(
+            String.format(
+                "causeless InvocationTargetException when calling %s with arguments %s at %s",
+                obj, Arrays.toString(args), loc),
+            x);
       }
-      // Don't intercept unchecked exceptions.
-      Throwables.throwIfUnchecked(e);
+      Throwables.propagateIfPossible(e, InterruptedException.class);
       if (e instanceof EvalException) {
-        throw (EvalException) e;
-      } else if (e instanceof InterruptedException) {
-        throw (InterruptedException) e;
-      } else {
-        // All other checked exceptions (e.g. LabelSyntaxException) are reported to Starlark.
-        throw new EvalException(null, null, e);
+        throw ((EvalException) e).ensureLocation(loc);
       }
+      throw new EvalException(loc, null, e);
     }
     if (method.getReturnType().equals(Void.TYPE)) {
       return Starlark.NONE;
@@ -218,6 +222,11 @@ final class MethodDescriptor {
   /** @see SkylarkCallable#allowReturnNones() */
   boolean isAllowReturnNones() {
     return allowReturnNones;
+  }
+
+  /** @see SkylarkCallable#useAst() */
+  boolean isUseAst() {
+    return useAst;
   }
 
   /** @see SkylarkCallable#extraPositionals() */

@@ -26,18 +26,31 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
- * BaseFunction is a base class for functions that have a FunctionSignature and optional default
- * values. Its {@link #callImpl} method converts the positional and named arguments into an array of
- * values corresponding to the parameters of the FunctionSignature, then calls the subclass's {@link
- * #call} method with this array.
+ * A base class for Skylark functions, whether builtin or user-defined.
+ *
+ * <p>Nomenclature: We call "Parameters" the formal parameters of a function definition. We call
+ * "Arguments" the actual values supplied at the call site.
+ *
+ * <p>The outer calling convention is like that of python3, with named parameters that can be
+ * mandatory or optional, and also be positional or named-only, and rest parameters for extra
+ * positional and keyword arguments. Callers supply a {@code List<Object>} args for positional
+ * arguments and a {@code Map<String, Object>} for keyword arguments, where positional arguments
+ * will be resolved first, then keyword arguments, with errors for a clash between the two, for
+ * missing mandatory parameter, or for unexpected extra positional or keyword argument in absence of
+ * rest parameter.
+ *
+ * <p>The inner calling convention is to pass the underlying method an {@code Object[]} of the
+ * type-checked argument values, one per expected parameter, parameters being sorted as documented
+ * in {@link FunctionSignature}.
+ *
+ * <p>The function may provide default values for optional parameters not provided by the caller.
+ * These default values can be null if there are no optional parameters or for builtin functions,
+ * but not for user-defined functions that have optional parameters.
  */
-// TODO(adonovan): express the processArguments functionality of this class as a standalone function
-// that takes signature and defaultValues as explicit parameters, and do away with this class. There
-// is no real need for a concept of "StarlarkCallable with Signature", though a few places in Bazel
-// rely on this concept. For example, the Args.add_all(map_all=..., map_each=...) parameters have
-// their signatures checked to discover errors eagerly.
-// Only StarlarkFunction needs getDefaultValues().
 public abstract class BaseFunction implements StarlarkCallable {
+
+  // TODO(adonovan): Turn fields into abstract methods. Make processArguments a static function
+  // with multiple parameters, instead of a "mix-in" that accesses instance fields.
 
   private final FunctionSignature signature;
 
@@ -64,7 +77,7 @@ public abstract class BaseFunction implements StarlarkCallable {
   }
 
   /** Constructs a BaseFunction with a given signature and default values. */
-  BaseFunction(FunctionSignature signature, @Nullable List<Object> defaultValues) {
+  protected BaseFunction(FunctionSignature signature, @Nullable List<Object> defaultValues) {
     this.signature = Preconditions.checkNotNull(signature);
     this.defaultValues = defaultValues;
     if (defaultValues != null) {
@@ -78,15 +91,23 @@ public abstract class BaseFunction implements StarlarkCallable {
   }
 
   /**
+   * The size of the array required by the callee.
+   */
+  protected int getArgArraySize() {
+    return signature.numParameters();
+  }
+
+  /**
    * Process the caller-provided arguments into an array suitable for the callee (this function).
    */
-  private Object[] processArguments(
+  public Object[] processArguments(
       List<Object> args,
       @Nullable Map<String, Object> kwargs,
       @Nullable Location loc,
       @Nullable StarlarkThread thread)
       throws EvalException {
-    Object[] arguments = new Object[signature.numParameters()];
+
+    Object[] arguments = new Object[getArgArraySize()];
 
     ImmutableList<String> names = signature.getParameterNames();
 
@@ -253,9 +274,22 @@ public abstract class BaseFunction implements StarlarkCallable {
       List<Object> args,
       Map<String, Object> kwargs)
       throws EvalException, InterruptedException {
+    // call is null when called from Java (as there's no Skylark call site).
     Location loc = call == null ? Location.BUILTIN : call.getLocation();
+
     Object[] arguments = processArguments(args, kwargs, loc, thread);
-    return call(arguments, call, thread);
+
+    // TODO(adonovan): move Callstack.push/pop into StarlarkThread.push/pop.
+    try {
+      if (Callstack.enabled) {
+        Callstack.push(this);
+      }
+      return call(arguments, call, thread);
+    } finally {
+      if (Callstack.enabled) {
+        Callstack.pop();
+      }
+    }
   }
 
   /**
@@ -265,14 +299,8 @@ public abstract class BaseFunction implements StarlarkCallable {
    * @param ast the source code for the function if user-defined
    * @param thread the Starlark thread for the call
    * @throws InterruptedException may be thrown in the function implementations.
-   * @deprecated override the {@code callImpl} method directly.
    */
-  // TODO(adonovan): the only remaining users of the "inner" protocol are:
-  // - StarlarkFunction.
-  // - PackageFactory.newPackageFunction, which goes to heroic lengths to reinvent the wheel.
-  // - SkylarkProvider, which can be optimized by using callImpl directly once
-  //   we've implemented the "vector" calling convention described in Eval.
-  @Deprecated
+  // Don't make it abstract, so that subclasses may be defined that @Override the outer call() only.
   protected Object call(Object[] args, @Nullable FuncallExpression ast, StarlarkThread thread)
       throws EvalException, InterruptedException {
     throw new EvalException(

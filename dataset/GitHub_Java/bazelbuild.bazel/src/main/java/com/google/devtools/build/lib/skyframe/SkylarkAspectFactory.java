@@ -77,9 +77,10 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
               .setSemantics(analysisEnv.getSkylarkSemantics())
               .setEventHandler(analysisEnv.getEventHandler())
               .build();
+      // NB: loading phase functions are not available: this is analysis already, so we do
+      // *not* setLoadingPhase().
 
       new BazelStarlarkContext(
-              BazelStarlarkContext.Phase.ANALYSIS,
               toolsRepository,
               /* fragmentNameToClass=*/ null,
               ruleContext.getRule().getPackage().getRepositoryMapping(),
@@ -92,7 +93,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
             Starlark.call(
                 thread,
                 skylarkAspect.getImplementation(),
-                Location.BUILTIN,
+                /*call=*/ null,
                 /*args=*/ ImmutableList.of(ctadBase.getConfiguredTarget(), skylarkRuleContext),
                 /*kwargs=*/ ImmutableMap.of());
 

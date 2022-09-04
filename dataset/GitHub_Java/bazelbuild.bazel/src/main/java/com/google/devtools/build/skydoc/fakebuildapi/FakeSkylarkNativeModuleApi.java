@@ -29,6 +29,8 @@ import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
+import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /** Fake implementation of {@link SkylarkNativeModuleApi}. */
@@ -91,11 +93,11 @@ public class FakeSkylarkNativeModuleApi implements SkylarkNativeModuleApi, Class
     // "native".
     return new StarlarkCallable() {
       @Override
-      public Object fastcall(
+      public Object callImpl(
           StarlarkThread thread,
           @Nullable FuncallExpression call,
-          Object[] positional,
-          Object[] named) {
+          List<Object> args,
+          Map<String, Object> kwargs) {
         return Starlark.NONE;
       }
 

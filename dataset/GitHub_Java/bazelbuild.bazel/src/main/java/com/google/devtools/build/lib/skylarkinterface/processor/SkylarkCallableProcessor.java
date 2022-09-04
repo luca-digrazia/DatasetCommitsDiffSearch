@@ -17,12 +17,10 @@ package com.google.devtools.build.lib.skylarkinterface.processor;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
-import com.google.errorprone.annotations.FormatMethod;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -56,11 +54,10 @@ import javax.tools.Diagnostic;
  *   <li>The method must be non-static.
  *   <li>If structField=true, there must be zero user-supplied parameters.
  *   <li>Method parameters must be supplied in the following order:
- *       <pre>method([positionals]*[other user-args](Location)(StarlarkThread)(StarlarkSemantics))
+ *       <pre>method([positionals]*[other user-args](Location)(FuncallExpression)(StarlarkThread))
  *       </pre>
- *       where Location, StarlarkThread, and StarlarkSemantics are supplied by the interpreter if
- *       and only if useLocation, useStarlarkThread, or useStarlarkSemantics options are specified,
- *       respectively.
+ *       where Location, FuncallExpression, and StarlarkThread are supplied by the interpreter if
+ *       and only if useLocation, useAst, and useStarlarkThread are specified, respectively.
  *   <li>The number of method parameters must match the number of annotation-declared parameters
  *       plus the number of interpreter-supplied parameters.
  *   <li>Each parameter, if explicitly typed, may only use either 'type' or 'allowedTypes', not
@@ -106,6 +103,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
   private static final String SKYLARK_LIST = "com.google.devtools.build.lib.syntax.Sequence<?>";
   private static final String SKYLARK_DICT = "com.google.devtools.build.lib.syntax.Dict<?,?>";
   private static final String LOCATION = "com.google.devtools.build.lib.events.Location";
+  private static final String AST = "com.google.devtools.build.lib.syntax.FuncallExpression";
   private static final String STARLARK_THREAD =
       "com.google.devtools.build.lib.syntax.StarlarkThread";
   private static final String STARLARK_SEMANTICS =
@@ -126,8 +124,8 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     processedClassMethods = LinkedHashMultimap.create();
   }
 
-  private TypeMirror getType(String canonicalName) {
-    return elements.getTypeElement(canonicalName).asType();
+  private TypeMirror getType(String name) {
+    return elements.getTypeElement(name).asType();
   }
 
   @Override
@@ -142,10 +140,11 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     // Ensure SkylarkModule-annotated classes implement StarlarkValue.
     for (Element cls : roundEnv.getElementsAnnotatedWith(SkylarkModule.class)) {
       if (!types.isAssignable(cls.asType(), skylarkValueType)) {
-        errorf(
+        error(
             cls,
-            "class %s has @SkylarkModule annotation but does not implement StarlarkValue",
-            cls.getSimpleName());
+            String.format(
+                "class %s has @SkylarkModule annotation but does not implement StarlarkValue",
+                cls.getSimpleName()));
       }
     }
 
@@ -174,7 +173,10 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
         verifyNameNotEmpty(methodElement, annotation);
         verifyDocumented(methodElement, annotation);
         verifyNotStructFieldWithParams(methodElement, annotation);
-        verifyParameters(methodElement, annotation);
+        verifyParamSemantics(methodElement, annotation);
+        verifyParamFlagSemantics(methodElement, annotation);
+        verifyParamGenericTypes(methodElement);
+        verifyNumberOfParameters(methodElement, annotation);
         verifyExtraInterpreterParams(methodElement, annotation);
         verifyIfSelfCall(methodElement, annotation);
         verifyFlagToggles(methodElement, annotation);
@@ -182,9 +184,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       } catch (SkylarkCallableProcessorException exception) {
         // TODO(adonovan): don't use exceptions; report multiple errors per pass
         // as this saves time in compiler-driven refactoring.
-        // This also allows us to report multiple locations,
-        // such as a Param annotation and the parameter.
-        error(exception.element, exception.errorMessage);
+        error(exception.methodElement, exception.errorMessage);
       }
 
       // Verify that result type, if final, might satisfy Starlark.fromJava.
@@ -199,12 +199,12 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
             && !types.isAssignable(obj, skylarkValueType)
             && !types.isAssignable(obj, listType)
             && !types.isAssignable(obj, mapType)) {
-          errorf(
+          error(
               methodElement,
-              "@SkylarkCallable-annotated method %s returns %s, which has no legal Starlark values"
-                  + " (see Starlark.fromJava)",
-              methodElement.getSimpleName(),
-              ret);
+              String.format(
+                  "@SkylarkCallable-annotated method %s returns %s, which has no legal Starlark"
+                      + " values (see Starlark.fromJava)",
+                  methodElement.getSimpleName(), ret));
         }
       }
 
@@ -212,12 +212,12 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       // or implements StarlarkValue, or an error has already been reported.
       Element cls = methodElement.getEnclosingElement();
       if (okClasses.add(cls) && !types.isAssignable(cls.asType(), skylarkValueType)) {
-        errorf(
+        error(
             cls,
-            "method %s has @SkylarkCallable annotation but enclosing class %s does not implement"
-                + " StarlarkValue nor has @SkylarkGlobalLibrary annotation",
-            methodElement.getSimpleName(),
-            cls.getSimpleName());
+            String.format(
+                "method %s has @SkylarkCallable annotation but enclosing class %s does not"
+                    + " implement StarlarkValue nor has @SkylarkGlobalLibrary annotation",
+                methodElement.getSimpleName(), cls.getSimpleName()));
       }
     }
 
@@ -288,7 +288,8 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       ExecutableElement methodElement, SkylarkCallable annotation)
       throws SkylarkCallableProcessorException {
     if (annotation.structField()) {
-      if (annotation.useStarlarkThread()
+      if (annotation.useAst()
+          || annotation.useStarlarkThread()
           || !annotation.extraPositionals().name().isEmpty()
           || !annotation.extraKeywords().name().isEmpty()) {
         // TODO(adonovan): decide on the restrictions.
@@ -301,68 +302,87 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
         throw new SkylarkCallableProcessorException(
             methodElement,
             "@SkylarkCallable-annotated methods with structField=true may not also specify "
-                + "useStarlarkThread, extraPositionals, or extraKeywords");
+                + "useAst, useStarlarkThread, extraPositionals, or extraKeywords");
       }
     }
   }
 
-  private void verifyParameters(ExecutableElement method, SkylarkCallable annotation) {
-    int numParams = method.getParameters().size();
-    int numExtraInterpreterParams = numExpectedExtraInterpreterParams(annotation);
-    int numParamAnnots = annotation.parameters().length;
-    if (numParams != numParamAnnots + numExtraInterpreterParams) {
-      errorf(
-          method,
-          "@SkylarkCallable annotated method has %d parameters, but annotation declared "
-              + "%d user-supplied parameters and %d extra interpreter parameters.",
-          numParams,
-          numParamAnnots,
-          numExtraInterpreterParams);
-    }
+  private static boolean isParamNamed(Param param) {
+    return param.named() || param.legacyNamed();
+  }
 
-    if (annotation.structField() && numParamAnnots > 0) {
-      errorf(
-          method,
-          "@SkylarkCallable annotated methods with structField=true must have "
-              + "0 user-supplied parameters. Expected %d extra interpreter parameters, "
-              + "but found %d total parameters.",
-          numExtraInterpreterParams,
-          numParams);
-    }
-
-    TypeMirror objectType = getType("java.lang.Object");
-
+  private void verifyParamSemantics(ExecutableElement methodElement, SkylarkCallable annotation)
+      throws SkylarkCallableProcessorException {
     boolean allowPositionalNext = true;
     boolean allowPositionalOnlyNext = true;
     boolean allowNonDefaultPositionalNext = true;
 
-    for (int i = 0; i < numParams && i < numParamAnnots; i++) {
-      VariableElement param = method.getParameters().get(i);
-      Param paramAnnot = annotation.parameters()[i];
+    int paramIndex = 0;
+    for (Param parameter : annotation.parameters()) {
+      if (parameter.noneable()) {
+        VariableElement methodParam = methodElement.getParameters().get(paramIndex);
+        if (!"java.lang.Object".equals(methodParam.asType().toString())) {
+          throw new SkylarkCallableProcessorException(
+              methodElement,
+              String.format(
+                  "Expected type 'Object' but got type '%s' for noneable parameter '%s'. The "
+                      + "argument for a noneable parameter may be None, so the java parameter "
+                      + "must be compatible with the type of None as well as possible non-None "
+                      + "values.",
+                  methodParam.asType(), methodParam.getSimpleName()));
+        }
+      } else { // !parameter.noneable()
+        if ("None".equals(parameter.defaultValue())) {
+          throw new SkylarkCallableProcessorException(
+              methodElement,
+              String.format(
+                  "Parameter '%s' has 'None' default value but is not noneable. "
+                      + "(If this is intended as a mandatory parameter, leave the defaultValue "
+                      + "field empty)",
+                  parameter.name()));
+        }
+      }
 
-      verifyParameter(param, paramAnnot, objectType);
+      if (!parameter.positional() && !parameter.named()) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format("Parameter '%s' must be either positional or named",
+                parameter.name()));
+      }
+      if ((parameter.allowedTypes().length > 0)
+          && (!"java.lang.Object".equals(paramTypeFieldCanonicalName(parameter)))) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format("Parameter '%s' has both 'type' and 'allowedTypes' specified. Only"
+                    + " one may be specified.",
+                parameter.name()));
+      }
 
-      // Check parameter ordering.
-      if (paramAnnot.positional()) {
+      if (parameter.positional()) {
         if (!allowPositionalNext) {
-          errorf(
-              param,
-              "Positional parameter '%s' is specified after one or more non-positonal parameters",
-              paramAnnot.name());
+          throw new SkylarkCallableProcessorException(
+              methodElement,
+              String.format(
+                  "Positional parameter '%s' is specified after one or more "
+                      + "non-positonal parameters",
+                  parameter.name()));
         }
-        if (!isParamNamed(paramAnnot) && !allowPositionalOnlyNext) {
-          errorf(
-              param,
-              "Positional-only parameter '%s' is specified after one or more named parameters",
-              paramAnnot.name());
+        if (!isParamNamed(parameter) && !allowPositionalOnlyNext) {
+          throw new SkylarkCallableProcessorException(
+              methodElement,
+              String.format(
+                  "Positional-only parameter '%s' is specified after one or more "
+                      + "named parameters",
+                  parameter.name()));
         }
-        if (paramAnnot.defaultValue().isEmpty()) { // There is no default value.
+        if (parameter.defaultValue().isEmpty()) { // There is no default value.
           if (!allowNonDefaultPositionalNext) {
-            errorf(
-                param,
-                "Positional parameter '%s' has no default value but is specified after one "
-                    + "or more positional parameters with default values",
-                paramAnnot.name());
+            throw new SkylarkCallableProcessorException(
+                methodElement,
+                String.format(
+                    "Positional parameter '%s' has no default value but is specified after one "
+                        + "or more positional parameters with default values",
+                    parameter.name()));
           }
         } else { // There is a default value.
           // No positional parameters without a default value can come after this parameter.
@@ -371,153 +391,117 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       } else { // Not positional.
         // No positional parameters can come after this parameter.
         allowPositionalNext = false;
-
-        if (!isParamNamed(paramAnnot)) {
-          errorf(param, "Parameter '%s' must be either positional or named", paramAnnot.name());
-        }
       }
-      if (isParamNamed(paramAnnot)) {
+      if (isParamNamed(parameter)) {
         // No positional-only parameters can come after this parameter.
         allowPositionalOnlyNext = false;
+      }
+      paramIndex++;
+    }
+  }
+
+  private void verifyParamFlagSemantics(ExecutableElement methodElement, SkylarkCallable annotation)
+      throws SkylarkCallableProcessorException {
+
+    for (Param parameter : annotation.parameters()) {
+      if (parameter.enableOnlyWithFlag() != FlagIdentifier.NONE
+          && parameter.disableWithFlag() != FlagIdentifier.NONE) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format(
+                "Parameter '%s' has enableOnlyWithFlag and disableWithFlag set. "
+                    + "At most one may be set",
+                parameter.name()));
+      }
+
+      boolean isParamControlledByFlag =
+          parameter.enableOnlyWithFlag() != FlagIdentifier.NONE
+              || parameter.disableWithFlag() != FlagIdentifier.NONE;
+
+      if (!isParamControlledByFlag && !parameter.valueWhenDisabled().isEmpty()) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format(
+                "Parameter '%s' has valueWhenDisabled set, but is always enabled",
+                parameter.name()));
+      } else if (isParamControlledByFlag && parameter.valueWhenDisabled().isEmpty()) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format(
+                "Parameter '%s' may be disabled by semantic flag, "
+                    + "thus valueWhenDisabled must be set",
+                parameter.name()));
       }
     }
 
     if (annotation.extraPositionals().enableOnlyWithFlag() != FlagIdentifier.NONE
         || annotation.extraPositionals().disableWithFlag() != FlagIdentifier.NONE) {
-      errorf(method, "The extraPositionals parameter may not be toggled by semantic flag");
+      throw new SkylarkCallableProcessorException(
+          methodElement, "The extraPositionals parameter may not be toggled by semantic flag");
     }
     if (annotation.extraKeywords().enableOnlyWithFlag() != FlagIdentifier.NONE
         || annotation.extraKeywords().disableWithFlag() != FlagIdentifier.NONE) {
-      errorf(method, "The extraKeywords parameter may not be toggled by semantic flag");
+      throw new SkylarkCallableProcessorException(
+          methodElement, "The extraKeywords parameter may not be toggled by semantic flag");
     }
   }
 
-  private static boolean isParamNamed(Param param) {
-    return param.named() || param.legacyNamed();
+  private String paramTypeFieldCanonicalName(Param param) {
+    try {
+      return param.type().toString();
+    } catch (MirroredTypeException exception) {
+      // This is a hack to obtain the actual canonical name of param.type(). Doing this ths
+      // "correct" way results in far less readable code.
+      // Since this processor is only for compile-time checks, this isn't efficiency we need
+      // to worry about.
+      return exception.getTypeMirror().toString();
+    }
   }
 
-  // Checks consistency of a single parameter with its Param annotation.
-  private void verifyParameter(Element param, Param paramAnnot, TypeMirror objectType) {
-    TypeMirror paramType = param.asType(); // type of the Java method parameter
+  private void verifyNumberOfParameters(ExecutableElement methodElement, SkylarkCallable annotation)
+      throws SkylarkCallableProcessorException {
+    List<? extends VariableElement> methodSignatureParams = methodElement.getParameters();
+    int numExtraInterpreterParams = numExpectedExtraInterpreterParams(annotation);
 
-    // A "noneable" parameter variable must accept the value None.
-    // A parameter whose default is None must be noneable.
-    if (paramAnnot.noneable()) {
-      if (!types.isSameType(paramType, objectType)) {
-        errorf(
-            param,
-            "Expected type 'Object' but got type '%s' for noneable parameter '%s'. The argument"
-                + " for a noneable parameter may be None, so the java parameter must be"
-                + " compatible with the type of None as well as possible non-None values.",
-            paramType,
-            param.getSimpleName());
-      }
-    } else if (paramAnnot.defaultValue().equals("None")) {
-      errorf(
-          param,
-          "Parameter '%s' has 'None' default value but is not noneable. (If this is intended"
-              + " as a mandatory parameter, leave the defaultValue field empty)",
-          paramAnnot.name());
+    int numDeclaredArgs = annotation.parameters().length;
+    if (methodSignatureParams.size() != numDeclaredArgs + numExtraInterpreterParams) {
+      throw new SkylarkCallableProcessorException(
+          methodElement,
+          String.format(
+              "@SkylarkCallable annotated method has %d parameters, but annotation declared "
+                  + "%d user-supplied parameters and %d extra interpreter parameters.",
+              methodSignatureParams.size(), numDeclaredArgs, numExtraInterpreterParams));
     }
-
-    // Check param.type.
-    if (!types.isSameType(getParamType(paramAnnot), objectType)) {
-      // Reject Param.type if not assignable to parameter variable.
-      TypeMirror t = getParamType(paramAnnot);
-      if (!types.isAssignable(t, types.erasure(paramType))) {
-        errorf(
-            param,
-            "annotated type %s of parameter %s is not assignable to variable of type %s",
-            t,
-            paramAnnot.name(),
-            paramType);
-      }
-
-      // Reject the combination of Param.type and Param.allowed_types.
-      if (paramAnnot.allowedTypes().length > 0) {
-        errorf(
-            param,
-            "Parameter '%s' has both 'type' and 'allowedTypes' specified. Only one may be"
-                + " specified.",
-            paramAnnot.name());
+    if (annotation.structField()) {
+      if (methodSignatureParams.size() != numExtraInterpreterParams) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format(
+                "@SkylarkCallable annotated methods with structField=true must have "
+                    + "0 user-supplied parameters. Expected %d extra interpreter parameters, "
+                    + "but found %d total parameters.",
+                numExtraInterpreterParams, methodSignatureParams.size()));
       }
     }
+  }
 
-    // Reject an Param.allowed_type if not assignable to parameter variable.
-    for (ParamType paramTypeAnnot : paramAnnot.allowedTypes()) {
-      TypeMirror t = getParamTypeType(paramTypeAnnot);
-      if (!types.isAssignable(t, types.erasure(paramType))) {
-        errorf(
-            param,
-            "annotated allowed_type %s of parameter %s is not assignable to variable of type %s",
-            t,
-            paramAnnot.name(),
-            paramType);
-      }
-    }
-
-    // Reject generic types C<T> other than C<?>,
-    // since reflective calls check only the toplevel class.
-    if (paramType instanceof DeclaredType) {
-      DeclaredType declaredType = (DeclaredType) paramType;
-      for (TypeMirror typeArg : declaredType.getTypeArguments()) {
-        if (!(typeArg instanceof WildcardType)) {
-          errorf(
-              param,
-              "Parameter %s has generic type %s, but only wildcard type parameters are"
-                  + " allowed. Type inference in a Starlark-exposed method is unsafe. See"
-                  + " @SkylarkCallable class documentation for details.",
-              param.getSimpleName(),
-              paramType);
+  private static void verifyParamGenericTypes(ExecutableElement methodElement)
+      throws SkylarkCallableProcessorException {
+    for (VariableElement methodParam : methodElement.getParameters()) {
+      if (methodParam.asType() instanceof DeclaredType) {
+        DeclaredType declaredType = (DeclaredType) methodParam.asType();
+        for (TypeMirror typeArg : declaredType.getTypeArguments()) {
+          if (!(typeArg instanceof WildcardType)) {
+            throw new SkylarkCallableProcessorException(
+                methodElement,
+                String.format(
+                    "Parameter %s has generic type %s, but may only wildcard type parameters are "
+                        + "allowed. Type inference in a Starlark-exposed method is unsafe. See "
+                        + "@SkylarkCallable class documentation for details.",
+                    methodParam.getSimpleName(), methodParam.asType()));
+          }
         }
       }
-    }
-
-    // Check sense of flag-controlled parameters.
-    if (paramAnnot.enableOnlyWithFlag() != FlagIdentifier.NONE
-        && paramAnnot.disableWithFlag() != FlagIdentifier.NONE) {
-      errorf(
-          param,
-          "Parameter '%s' has enableOnlyWithFlag and disableWithFlag set. At most one may be set",
-          paramAnnot.name());
-    }
-    boolean isParamControlledByFlag =
-        paramAnnot.enableOnlyWithFlag() != FlagIdentifier.NONE
-            || paramAnnot.disableWithFlag() != FlagIdentifier.NONE;
-    if (!isParamControlledByFlag && !paramAnnot.valueWhenDisabled().isEmpty()) {
-      errorf(
-          param,
-          "Parameter '%s' has valueWhenDisabled set, but is always enabled",
-          paramAnnot.name());
-    } else if (isParamControlledByFlag && paramAnnot.valueWhenDisabled().isEmpty()) {
-      errorf(
-          param,
-          "Parameter '%s' may be disabled by semantic flag, thus valueWhenDisabled must be set",
-          paramAnnot.name());
-    }
-  }
-
-  // Returns the logical type of Param.type.
-  private static TypeMirror getParamType(Param param) {
-    // See explanation of this hack at Element.getAnnotation
-    // and at https://stackoverflow.com/a/10167558.
-    try {
-      param.type();
-      throw new IllegalStateException("unreachable");
-    } catch (MirroredTypeException ex) {
-      return ex.getTypeMirror();
-    }
-  }
-
-  // Returns the logical type of ParamType.type.
-  private static TypeMirror getParamTypeType(ParamType paramType) {
-    // See explanation of this hack at Element.getAnnotation
-    // and at https://stackoverflow.com/a/10167558.
-    try {
-      paramType.type();
-      throw new IllegalStateException("unreachable");
-    } catch (MirroredTypeException ex) {
-      return ex.getTypeMirror();
     }
   }
 
@@ -527,7 +511,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     int currentIndex = methodSignatureParams.size() - numExpectedExtraInterpreterParams(annotation);
 
     // TODO(cparsons): Matching by class name alone is somewhat brittle, but due to tangled
-    // dependencies, it is difficult for this processor to depend directly on the expected
+    // dependencies, it is difficult for this processor to depend directy on the expected
     // classes here.
     if (!annotation.extraPositionals().name().isEmpty()) {
       if (!SKYLARK_LIST.equals(methodSignatureParams.get(currentIndex).asType().toString())) {
@@ -567,6 +551,16 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       }
       currentIndex++;
     }
+    if (annotation.useAst()) {
+      if (!AST.equals(methodSignatureParams.get(currentIndex).asType().toString())) {
+        throw new SkylarkCallableProcessorException(
+            methodElement,
+            String.format(
+                "Expected parameter index %d to be the %s type, matching useAst, but was %s",
+                currentIndex, AST, methodSignatureParams.get(currentIndex).asType().toString()));
+      }
+      currentIndex++;
+    }
     if (annotation.useStarlarkThread()) {
       if (!STARLARK_THREAD.equals(methodSignatureParams.get(currentIndex).asType().toString())) {
         throw new SkylarkCallableProcessorException(
@@ -600,6 +594,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     numExtraInterpreterParams += annotation.extraPositionals().name().isEmpty() ? 0 : 1;
     numExtraInterpreterParams += annotation.extraKeywords().name().isEmpty() ? 0 : 1;
     numExtraInterpreterParams += annotation.useLocation() ? 1 : 0;
+    numExtraInterpreterParams += annotation.useAst() ? 1 : 0;
     numExtraInterpreterParams += annotation.useStarlarkThread() ? 1 : 0;
     numExtraInterpreterParams += annotation.useStarlarkSemantics() ? 1 : 0;
     return numExtraInterpreterParams;
@@ -615,18 +610,13 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     messager.printMessage(Diagnostic.Kind.ERROR, msg, e);
   }
 
-  // A variant of 'error' that formats the error message.
-  @FormatMethod
-  private void errorf(Element e, String format, Object... args) {
-    messager.printMessage(Diagnostic.Kind.ERROR, String.format(format, args), e);
-  }
-
   private static class SkylarkCallableProcessorException extends Exception {
-    private final Element element;
+    private final ExecutableElement methodElement;
     private final String errorMessage;
 
-    private SkylarkCallableProcessorException(Element element, String errorMessage) {
-      this.element = element;
+    private SkylarkCallableProcessorException(
+        ExecutableElement methodElement, String errorMessage) {
+      this.methodElement = methodElement;
       this.errorMessage = errorMessage;
     }
   }

@@ -26,15 +26,14 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkerInputApi;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -187,9 +186,10 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
     }
 
     @Override
-    public Label getSkylarkOwner() throws EvalException {
+    public Label getSkylarkOwner(Location location) throws EvalException {
       if (owner == null) {
-        throw Starlark.errorf(
+        throw new EvalException(
+            location,
             "Owner is null. This means that some target upstream is of a rule type that uses the"
                 + " old API of create_linking_context");
       }
@@ -233,26 +233,6 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
 
     public List<Linkstamp> getLinkstamps() {
       return linkstamps;
-    }
-
-    @Override
-    public void debugPrint(Printer printer) {
-      printer.append("<LinkerInput(owner=");
-      owner.debugPrint(printer);
-      printer.append(", libraries=[");
-      for (LibraryToLink libraryToLink : libraries) {
-        libraryToLink.debugPrint(printer);
-        printer.append(", ");
-      }
-      printer.append("], userLinkFlags=[");
-      printer.append(Joiner.on(", ").join(userLinkFlags));
-      printer.append("], nonCodeInputs=[");
-      for (Artifact nonCodeInput : nonCodeInputs) {
-        nonCodeInput.debugPrint(printer);
-        printer.append(", ");
-      }
-      // TODO(cparsons): Add debug repesentation of linkstamps.
-      printer.append("])>");
     }
 
     public static Builder builder() {
@@ -346,16 +326,6 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   private final NestedSet<LinkerInput> linkerInputs;
   private final ExtraLinkTimeLibraries extraLinkTimeLibraries;
 
-  @Override
-  public void debugPrint(Printer printer) {
-    printer.append("<CcLinkingContext([");
-    for (LinkerInput linkerInput : linkerInputs.toList()) {
-      linkerInput.debugPrint(printer);
-      printer.append(", ");
-    }
-    printer.append("])>");
-  }
-
   public CcLinkingContext(
       NestedSet<LinkerInput> linkerInputs, ExtraLinkTimeLibraries extraLinkTimeLibraries) {
     this.linkerInputs = linkerInputs;
@@ -377,7 +347,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
 
   public List<Artifact> getStaticModeParamsForExecutableLibraries() {
     ImmutableList.Builder<Artifact> libraryListBuilder = ImmutableList.builder();
-    for (LibraryToLink libraryToLink : getLibraries().toList()) {
+    for (LibraryToLink libraryToLink : getLibraries()) {
       if (libraryToLink.getStaticLibrary() != null) {
         libraryListBuilder.add(libraryToLink.getStaticLibrary());
       } else if (libraryToLink.getPicStaticLibrary() != null) {
@@ -393,7 +363,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
 
   public List<Artifact> getStaticModeParamsForDynamicLibraryLibraries() {
     ImmutableList.Builder<Artifact> artifactListBuilder = ImmutableList.builder();
-    for (LibraryToLink library : getLibraries().toList()) {
+    for (LibraryToLink library : getLibraries()) {
       if (library.getPicStaticLibrary() != null) {
         artifactListBuilder.add(library.getPicStaticLibrary());
       } else if (library.getStaticLibrary() != null) {
@@ -408,12 +378,12 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   }
 
   public List<Artifact> getDynamicLibrariesForRuntime(boolean linkingStatically) {
-    return LibraryToLink.getDynamicLibrariesForRuntime(linkingStatically, getLibraries().toList());
+    return LibraryToLink.getDynamicLibrariesForRuntime(linkingStatically, getLibraries());
   }
 
   public NestedSet<LibraryToLink> getLibraries() {
     NestedSetBuilder<LibraryToLink> libraries = NestedSetBuilder.linkOrder();
-    for (LinkerInput linkerInput : linkerInputs.toList()) {
+    for (LinkerInput linkerInput : linkerInputs) {
       libraries.addAll(linkerInput.libraries);
     }
     return libraries.build();
@@ -450,14 +420,14 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
 
   public NestedSet<LinkOptions> getUserLinkFlags() {
     NestedSetBuilder<LinkOptions> userLinkFlags = NestedSetBuilder.linkOrder();
-    for (LinkerInput linkerInput : linkerInputs.toList()) {
+    for (LinkerInput linkerInput : linkerInputs) {
       userLinkFlags.addAll(linkerInput.getUserLinkFlags());
     }
     return userLinkFlags.build();
   }
 
   public ImmutableList<String> getFlattenedUserLinkFlags() {
-    return Streams.stream(getUserLinkFlags().toList())
+    return Streams.stream(getUserLinkFlags())
         .map(LinkOptions::get)
         .flatMap(Collection::stream)
         .collect(ImmutableList.toImmutableList());
@@ -465,7 +435,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
 
   public NestedSet<Linkstamp> getLinkstamps() {
     NestedSetBuilder<Linkstamp> linkstamps = NestedSetBuilder.linkOrder();
-    for (LinkerInput linkerInput : linkerInputs.toList()) {
+    for (LinkerInput linkerInput : linkerInputs) {
       linkstamps.addAll(linkerInput.getLinkstamps());
     }
     return linkstamps.build();
@@ -473,7 +443,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
 
   public NestedSet<Artifact> getNonCodeInputs() {
     NestedSetBuilder<Artifact> nonCodeInputs = NestedSetBuilder.linkOrder();
-    for (LinkerInput linkerInput : linkerInputs.toList()) {
+    for (LinkerInput linkerInput : linkerInputs) {
       nonCodeInputs.addAll(linkerInput.getNonCodeInputs());
     }
     return nonCodeInputs.build();

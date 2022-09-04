@@ -314,6 +314,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + ", "
           + func.getArguments().size()
           + ", "
+          + thread.isGlobal()
+          + ", "
           + (sem != null)
           + ")";
     }
@@ -398,6 +400,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + ", "
           + func.getArguments().size()
           + ", "
+          + thread.isGlobal()
+          + ", "
           + (sem != null)
           + ")";
     }
@@ -432,6 +436,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + named
           + ", "
           + argsString
+          + ", "
+          + thread.isGlobal()
           + ")";
     }
 
@@ -1322,7 +1328,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.with_extra()")
-        .testLookup("v", "with_extra(1, 0, true)");
+        .testLookup("v", "with_extra(1, 0, true, true)");
   }
 
   @Test
@@ -1338,7 +1344,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params_and_extra(1, True, named=True)")
-        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, 3, true)");
+        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, 3, true, true)");
   }
 
   @Test
@@ -1346,7 +1352,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_args_and_thread(1, True, 'extraArg1', 'extraArg2', named=True)")
-        .testLookup("b", "with_args_and_thread(1, true, true, args(extraArg1, extraArg2))");
+        .testLookup("b", "with_args_and_thread(1, true, true, args(extraArg1, extraArg2), true)");
 
     // Use an args list.
     new SkylarkTest()
@@ -1354,7 +1360,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         .setUp(
             "myargs = ['extraArg2']",
             "b = mock.with_args_and_thread(1, True, 'extraArg1', named=True, *myargs)")
-        .testLookup("b", "with_args_and_thread(1, true, true, args(extraArg1, extraArg2))");
+        .testLookup("b", "with_args_and_thread(1, true, true, args(extraArg1, extraArg2), true)");
   }
 
   @Test
@@ -1824,16 +1830,14 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testFunctionCallRecursion() throws Exception {
-    new SkylarkTest()
-        .testIfErrorContains(
-            "function 'f' called recursively",
-            "def main():",
-            "  f(5)",
-            "def f(n):",
-            "  if n > 0: g(n - 1)",
-            "def g(n):",
-            "  if n > 0: f(n - 1)",
-            "main()");
+    new SkylarkTest().testIfErrorContains("Recursion was detected when calling 'f' from 'g'",
+        "def main():",
+        "  f(5)",
+        "def f(n):",
+        "  if n > 0: g(n - 1)",
+        "def g(n):",
+        "  if n > 0: f(n - 1)",
+        "main()");
   }
 
   @Test

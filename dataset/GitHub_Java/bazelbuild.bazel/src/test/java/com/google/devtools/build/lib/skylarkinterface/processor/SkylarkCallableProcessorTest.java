@@ -84,7 +84,7 @@ public final class SkylarkCallableProcessorTest {
         .failsToCompile()
         .withErrorContaining(
             "@SkylarkCallable-annotated methods with structField=true may not also specify "
-                + "useStarlarkThread, extraPositionals, or extraKeywords");
+                + "useAst, useStarlarkThread, extraPositionals, or extraKeywords");
   }
 
   @Test
@@ -95,7 +95,7 @@ public final class SkylarkCallableProcessorTest {
         .failsToCompile()
         .withErrorContaining(
             "@SkylarkCallable-annotated methods with structField=true may not also specify "
-                + "useStarlarkThread, extraPositionals, or extraKeywords");
+                + "useAst, useStarlarkThread, extraPositionals, or extraKeywords");
   }
 
   @Test
@@ -106,7 +106,7 @@ public final class SkylarkCallableProcessorTest {
         .failsToCompile()
         .withErrorContaining(
             "@SkylarkCallable-annotated methods with structField=true may not also specify "
-                + "useStarlarkThread, extraPositionals, or extraKeywords");
+                + "useAst, useStarlarkThread, extraPositionals, or extraKeywords");
   }
 
   @Test
@@ -374,7 +374,7 @@ public final class SkylarkCallableProcessorTest {
         .failsToCompile()
         .withErrorContaining(
             "Parameter one has generic type "
-                + "com.google.devtools.build.lib.syntax.Sequence<java.lang.String>");
+                + "com.google.devtools.build.lib.syntax.Dict<?,java.lang.String>");
   }
 
   @Test

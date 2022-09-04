@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -67,20 +68,20 @@ public class FunctionTest extends EvaluationTestCase {
   }
 
   private void createOuterFunction(final List<Object> params) throws Exception {
-    StarlarkCallable outerFunc =
-        new StarlarkCallable() {
+    BaseFunction outerFunc =
+        new BaseFunction(FunctionSignature.ANY) {
           @Override
           public String getName() {
             return "outer_func";
           }
 
           @Override
-          public NoneType call(
+          public Object callImpl(
               StarlarkThread thread,
               FuncallExpression call,
-              Tuple<Object> args,
-              Dict<String, Object> kwargs)
-              throws EvalException {
+              List<Object> args,
+              Map<String, Object> kwargs)
+              throws EvalException, InterruptedException {
             params.addAll(args);
             return Starlark.NONE;
           }
@@ -357,7 +358,7 @@ public class FunctionTest extends EvaluationTestCase {
   @Test
   public void testKwargsBadKey() throws Exception {
     checkEvalError(
-        "keywords must be strings, not int", //
+        "keywords must be strings, not 'int'",
         "def func(a, b): return a + b",
         "func('a', **{3: 1})");
   }
@@ -365,23 +366,21 @@ public class FunctionTest extends EvaluationTestCase {
   @Test
   public void testKwargsIsNotDict() throws Exception {
     checkEvalError(
-        "argument after ** must be a dict, not int",
+        "argument after ** must be a dictionary, not 'int'",
         "def func(a, b): return a + b",
         "func('a', **42)");
   }
 
   @Test
   public void testKwargsCollision() throws Exception {
-    checkEvalError(
-        "func(a, b) got multiple values for parameter 'b'",
+    checkEvalError("argument 'b' passed both by position and by name in call to func(a, b)",
         "def func(a, b): return a + b",
         "func('a', 'b', **{'b': 'foo'})");
   }
 
   @Test
   public void testKwargsCollisionWithNamed() throws Exception {
-    checkEvalError(
-        "func(a, b) got multiple values for parameter 'b'",
+    checkEvalError("duplicate keyword 'b' in call to func",
         "def func(a, b): return a + b",
         "func('a', b = 'b', **{'b': 'foo'})");
   }

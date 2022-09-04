@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.repository.RepositoryResolvedEvent;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.SymbolGenerator;
@@ -131,12 +130,11 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
       // The fetch phase does not need the tools repository
       // or the fragment map because it happens before analysis.
       new BazelStarlarkContext(
-              BazelStarlarkContext.Phase.LOADING, // ("fetch")
-              /*toolsRepository=*/ null,
-              /*fragmentNameToClass=*/ null,
+              /* toolsRepository = */ null,
+              /* fragmentNameToClass = */ null,
               rule.getPackage().getRepositoryMapping(),
               new SymbolGenerator<>(key),
-              /*analysisRuleLabel=*/ null)
+              /* analysisRuleLabel= */ null)
           .storeInThread(thread);
 
       SkylarkRepositoryContext skylarkRepositoryContext =
@@ -185,7 +183,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
           Starlark.call(
               thread,
               function,
-              Location.BUILTIN,
+              /*call=*/ null,
               /*args=*/ ImmutableList.of(skylarkRepositoryContext),
               /*kwargs=*/ ImmutableMap.of());
       RepositoryResolvedEvent resolved =
