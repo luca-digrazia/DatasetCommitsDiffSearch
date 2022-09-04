@@ -22,14 +22,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.net.MediaType;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import com.google.inject.name.Named;
 import com.ning.http.client.*;
-import lib.security.Graylog2ServerUnavailableException;
-import models.Node;
-import models.User;
-import models.UserService;
+import models.*;
 import models.api.requests.ApiRequest;
 import models.api.responses.EmptyResponse;
 import org.slf4j.Logger;
@@ -39,15 +39,14 @@ import play.mvc.Http;
 
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
-import java.net.ConnectException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
+import java.net.*;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import static lib.Tools.rootCause;
 
 @Singleton
 class ApiClientImpl implements ApiClient {
@@ -55,17 +54,20 @@ class ApiClientImpl implements ApiClient {
 
     private AsyncHttpClient client;
     private final ServerNodes serverNodes;
+    private final Long defaultTimeout;
     private Thread shutdownHook;
 
     @Inject
-    private ApiClientImpl(ServerNodes serverNodes) {
+    private ApiClientImpl(ServerNodes serverNodes, @Named("Default Timeout") Long defaultTimeout) {
         this.serverNodes = serverNodes;
+        this.defaultTimeout = defaultTimeout;
     }
 
     @Override
     public void start() {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
         builder.setAllowPoolingConnection(false);
+        builder.setUserAgent("graylog2-web/" + Version.VERSION);
         client = new AsyncHttpClient(builder.build());
 
         shutdownHook = new Thread(new Runnable() {
@@ -79,7 +81,11 @@ class ApiClientImpl implements ApiClient {
 
     @Override
     public void stop() {
-        Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        try {
+            Runtime.getRuntime().removeShutdownHook(shutdownHook);
+        } catch (IllegalStateException e) {
+            // ignore race at shutdown.
+        }
         client.close();
     }
 
@@ -90,36 +96,37 @@ class ApiClientImpl implements ApiClient {
     }
 
     @Override
-    public <T> ApiRequestBuilder<T> get(Class<T> responseClass) {
+    public <T> lib.ApiRequestBuilder<T> get(Class<T> responseClass) {
         return new ApiRequestBuilder<>(Method.GET, responseClass);
     }
+
     @Override
-    public <T> ApiRequestBuilder<T> post(Class<T> responseClass) {
+    public <T> lib.ApiRequestBuilder<T> post(Class<T> responseClass) {
         return new ApiRequestBuilder<>(Method.POST, responseClass);
     }
 
     @Override
-    public ApiRequestBuilder<EmptyResponse> post() {
+    public lib.ApiRequestBuilder<EmptyResponse> post() {
         return post(EmptyResponse.class);
     }
 
     @Override
-    public <T> ApiRequestBuilder<T> put(Class<T> responseClass) {
+    public <T> lib.ApiRequestBuilder<T> put(Class<T> responseClass) {
         return new ApiRequestBuilder<>(Method.PUT, responseClass);
     }
 
     @Override
-    public ApiRequestBuilder<EmptyResponse> put() {
+    public lib.ApiRequestBuilder<EmptyResponse> put() {
         return put(EmptyResponse.class);
     }
 
     @Override
-    public <T> ApiRequestBuilder<T> delete(Class<T> responseClass) {
+    public <T> lib.ApiRequestBuilder<T> delete(Class<T> responseClass) {
         return new ApiRequestBuilder<>(Method.DELETE, responseClass);
     }
 
     @Override
-    public ApiRequestBuilder<EmptyResponse> delete() {
+    public lib.ApiRequestBuilder<EmptyResponse> delete() {
         return delete(EmptyResponse.class);
     }
 
@@ -138,57 +145,85 @@ class ApiClientImpl implements ApiClient {
     }
 
     private static <T> T deserializeJson(Response response, Class<T> responseClass) throws IOException {
-        return new Gson().fromJson(response.getResponseBody("UTF-8"), responseClass);
+        final Gson gson = new GsonBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").create();
+        return gson.fromJson(response.getResponseBody("UTF-8"), responseClass);
     }
 
 
-    public class ApiRequestBuilder<T> {
+    public class ApiRequestBuilder<T> implements lib.ApiRequestBuilder<T> {
         private String pathTemplate;
         private Node node;
+        private Radio radio;
         private Collection<Node> nodes;
-        private String username;
-        private String password;
         private final Method method;
         private ApiRequest body;
         private final Class<T> responseClass;
         private final ArrayList<Object> pathParams = Lists.newArrayList();
-        private final ArrayList<F.Tuple<String,String>> queryParams = Lists.newArrayList();
+        private final ArrayList<F.Tuple<String, String>> queryParams = Lists.newArrayList();
         private Set<Integer> expectedResponseCodes = Sets.newHashSet();
-        private TimeUnit timeoutUnit = TimeUnit.SECONDS;
-        private int timeoutValue = 5;
+        private TimeUnit timeoutUnit = TimeUnit.MILLISECONDS;
+        private long timeoutValue = defaultTimeout;
         private boolean unauthenticated = false;
+        private MediaType mediaType = MediaType.JSON_UTF_8;
+        private String sessionId;
+        private Boolean extendSession;
 
         public ApiRequestBuilder(Method method, Class<T> responseClass) {
             this.method = method;
             this.responseClass = responseClass;
         }
 
+        @Override
         public ApiRequestBuilder<T> path(String pathTemplate) {
             this.pathTemplate = pathTemplate;
             return this;
         }
 
         // convenience
-        public ApiRequestBuilder<T> path(String pathTemplate, Object... params) {
+        @Override
+        public lib.ApiRequestBuilder<T> path(String pathTemplate, Object... params) {
             path(pathTemplate);
             pathParams(params);
             return this;
         }
 
-        public ApiRequestBuilder<T> pathParams(Object... params) {
+        @Override
+        public lib.ApiRequestBuilder<T> pathParams(Object... params) {
             Collections.addAll(pathParams, params);
             return this;
         }
 
-        public ApiRequestBuilder<T> pathParam(Object param) {
+        @Override
+        public lib.ApiRequestBuilder<T> pathParam(Object param) {
             return pathParams(param);
         }
 
+        @Override
         public ApiRequestBuilder<T> node(Node node) {
             this.node = node;
             return this;
         }
-        public ApiRequestBuilder<T> nodes(Node... nodes) {
+
+        @Override
+        public lib.ApiRequestBuilder<T> radio(Radio radio) {
+            this.radio = radio;
+            return this;
+        }
+
+        @Override
+        public lib.ApiRequestBuilder<T> clusterEntity(ClusterEntity entity) {
+            if (entity instanceof Radio) {
+                this.radio = (Radio) entity;
+            } else if (entity instanceof Node) {
+                this.node = (Node) entity;
+            } else {
+                log.warn("You passed a ClusterEntity that is not of type Node or Radio. Selected nothing.");
+            }
+            return this;
+        }
+
+        @Override
+        public lib.ApiRequestBuilder<T> nodes(Node... nodes) {
             if (this.nodes != null) {
                 // TODO makes this sane
                 throw new IllegalStateException();
@@ -197,7 +232,8 @@ class ApiClientImpl implements ApiClient {
             return this;
         }
 
-        public ApiRequestBuilder<T> nodes(Collection<Node> nodes) {
+        @Override
+        public lib.ApiRequestBuilder<T> nodes(Collection<Node> nodes) {
             if (this.nodes != null) {
                 // TODO makes this sane
                 throw new IllegalStateException();
@@ -206,67 +242,116 @@ class ApiClientImpl implements ApiClient {
             return this;
         }
 
-        public ApiRequestBuilder<T> fromAllNodes() {
+        @Override
+        public lib.ApiRequestBuilder<T> fromAllNodes() {
             this.nodes = serverNodes.all();
             return this;
         }
 
+        @Override
+        public lib.ApiRequestBuilder<T> onlyMasterNode() {
+            this.node = serverNodes.master();
+            return this;
+        }
+
+        @Override
         public ApiRequestBuilder<T> queryParam(String name, String value) {
             queryParams.add(F.Tuple(name, value));
             return this;
         }
 
-        public ApiRequestBuilder<T> queryParam(String name, int value) {
+        @Override
+        public lib.ApiRequestBuilder<T> queryParam(String name, int value) {
             return queryParam(name, Integer.toString(value));
         }
 
-        public ApiRequestBuilder<T> queryParams(Map<String, String> params) {
-            for(Map.Entry<String, String> p : params.entrySet()) {
+        @Override
+        public lib.ApiRequestBuilder<T> queryParams(Map<String, String> params) {
+            for (Map.Entry<String, String> p : params.entrySet()) {
                 queryParam(p.getKey(), p.getValue());
             }
 
             return this;
         }
 
-        public ApiRequestBuilder<T> credentials(String username, String password) {
-            this.username = username;
-            this.password = password;
+        @Override
+        public lib.ApiRequestBuilder<T> session(String sessionId) {
+            this.sessionId = sessionId;
             return this;
         }
 
-        public ApiRequestBuilder<T> unauthenticated() {
+        @Override
+        public lib.ApiRequestBuilder<T> extendSession(boolean extend) {
+            this.extendSession = extend;
+            return this;
+        }
+
+        @Override
+        public lib.ApiRequestBuilder<T> unauthenticated() {
             this.unauthenticated = true;
             return this;
         }
 
-        public ApiRequestBuilder<T> body(ApiRequest body) {
+        @Override
+        public lib.ApiRequestBuilder<T> body(ApiRequest body) {
             this.body = body;
             return this;
         }
 
-        public ApiRequestBuilder<T> expect(int... httpStatusCodes) {
-            for(int code : httpStatusCodes) {
+        @Override
+        public lib.ApiRequestBuilder<T> expect(int... httpStatusCodes) {
+            for (int code : httpStatusCodes) {
                 this.expectedResponseCodes.add(code);
             }
 
             return this;
         }
 
-        public ApiRequestBuilder<T> timeout(int value, TimeUnit unit) {
+        @Override
+        public lib.ApiRequestBuilder<T> timeout(long value) {
+            this.timeoutValue = value;
+            this.timeoutUnit = TimeUnit.MILLISECONDS;
+            return this;
+        }
+
+        @Override
+        public ApiRequestBuilder<T> timeout(long value, TimeUnit unit) {
             this.timeoutValue = value;
             this.timeoutUnit = unit;
             return this;
         }
 
+        @Override
+        public lib.ApiRequestBuilder<T> accept(MediaType mediaType) {
+            this.mediaType = mediaType;
+            return this;
+        }
+
+        @Override
         public T execute() throws APIException, IOException {
-            if (node == null) {
-                if (nodes != null) {
-                    log.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!");
-                }
-                node(serverNodes.any());
+            if (radio != null && (node != null || nodes != null)) {
+                throw new RuntimeException("You set both and a Node and a Radio as target. This is not possible.");
             }
-            final URL url = prepareUrl(node);
+
+            final ClusterEntity target;
+
+            if (radio == null) {
+                if (node == null) {
+                    if (nodes != null) {
+                        log.error("Multiple nodes are set, but execute() was called. This is most likely a bug and you meant to call executeOnAll()!", new Throwable());
+                    }
+                    node(serverNodes.any());
+                }
+
+                target = node;
+            } else {
+                target = radio;
+            }
+
+            ensureAuthentication();
+            final URL url = prepareUrl(target);
             final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
+            requestBuilder.addHeader(Http.HeaderNames.ACCEPT, mediaType.toString());
 
             final Request request = requestBuilder.build();
             if (log.isDebugEnabled()) {
@@ -279,64 +364,113 @@ class ApiClientImpl implements ApiClient {
             }
 
             try {
+                // TODO implement streaming responses
                 Response response = requestBuilder.execute().get(timeoutValue, timeoutUnit);
 
-                node.touch();
+                target.touch();
 
                 // TODO this is wrong, shouldn't it accept some callback instead of throwing an exception?
                 if (!expectedResponseCodes.contains(response.getStatusCode())) {
                     throw new APIException(request, response);
                 }
 
-                // TODO: should we always insist on things being wrapped in json?
+                // TODO: once we switch to jackson we can take the media type into account automatically
+                final MediaType responseContentType;
+                if (response.getContentType() == null) {
+                    responseContentType = MediaType.JSON_UTF_8;
+                } else {
+                    responseContentType = MediaType.parse(response.getContentType());
+                }
+
+                if (!responseContentType.is(mediaType.withoutParameters())) {
+                    log.warn("We said we'd accept {} but got {} back, let's see how that's going to work out...", mediaType, responseContentType);
+                }
                 if (responseClass.equals(String.class)) {
                     return responseClass.cast(response.getResponseBody("UTF-8"));
                 }
 
-                if (response.getStatusCode() >= 200 && response.getStatusCode() < 300) {
-                    return deserializeJson(response, responseClass);
+                if (expectedResponseCodes.contains(response.getStatusCode())
+                        || (response.getStatusCode() >= 200 && response.getStatusCode() < 300)) {
+                    T result;
+                    try {
+                        if (response.getResponseBody().isEmpty()) {
+                            return null;
+                        }
+
+                        if (responseContentType.is(MediaType.JSON_UTF_8.withoutParameters())) {
+                            result = deserializeJson(response, responseClass);
+                        } else {
+                            log.error("Don't know how to deserialize objects with content in {}, expected {}, failing.", responseContentType, mediaType);
+                            throw new APIException(request, response);
+                        }
+
+                        if (result == null) {
+                            throw new APIException(request, response);
+                        }
+
+                        return result;
+                    } catch (Exception e) {
+                        log.error("Caught Exception while deserializing JSON request: " + e);
+                        log.debug("Response from backend was: " + response.getResponseBody("UTF-8"));
+
+                        throw new APIException(request, response);
+                    }
                 } else {
                     return null;
                 }
             } catch (InterruptedException e) {
                 // TODO
-                node.markFailure();
+                target.markFailure();
             } catch (MalformedURLException e) {
                 log.error("Malformed URL", e);
                 throw new RuntimeException("Malformed URL.", e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof ConnectException) {
                     log.warn("Graylog2 server unavailable. Connection refused.");
-                    node.markFailure();
+                    target.markFailure();
                     throw new Graylog2ServerUnavailableException(e);
                 }
-                log.error("REST call failed", e.getCause());
+                log.error("REST call failed", rootCause(e));
                 throw new APIException(request, e);
             } catch (IOException e) {
                 // TODO
-                log.error("unhandled IOException", e);
-                node.markFailure();
+                log.error("unhandled IOException", rootCause(e));
+                target.markFailure();
                 throw e;
             } catch (TimeoutException e) {
                 log.warn("Timed out requesting {}", request);
-                node.markFailure();
+                target.markFailure();
             }
-            // TODO should this throw an exception instead?
-            return null;
+            throw new APIException(request, new IllegalStateException("Unhandled error condition in API client"));
         }
 
+        private void ensureAuthentication() {
+            if (!unauthenticated && sessionId == null) {
+                final User user = UserService.current();
+                if (user != null) {
+                    session(user.getSessionId());
+                } else {
+                    log.warn("You did not add unauthenticated() nor session() but also don't have a current user. You probably meant unauthenticated(). This is a bug!", new Throwable());
+                }
+            }
+        }
+
+        @Override
         public Map<Node, T> executeOnAll() {
             HashMap<Node, T> results = Maps.newHashMap();
             if (node == null && nodes == null) {
                 nodes = serverNodes.all();
             }
 
-            Collection<F.Tuple> requests = Lists.newArrayList();
+            Collection<F.Tuple<ListenableFuture<Response>, Node>> requests = Lists.newArrayList();
             final Collection<Response> responses = Lists.newArrayList();
+
+            ensureAuthentication();
             for (Node currentNode : nodes) {
                 final URL url = prepareUrl(currentNode);
                 try {
                     final AsyncHttpClient.BoundRequestBuilder requestBuilder = requestBuilderForUrl(url);
+                    requestBuilder.addHeader(Http.HeaderNames.ACCEPT, mediaType.toString());
                     if (log.isDebugEnabled()) {
                         log.debug("API Request: {}", requestBuilder.build().toString());
                     }
@@ -347,7 +481,7 @@ class ApiClientImpl implements ApiClient {
                             return response;
                         }
                     });
-                    requests.add(new F.Tuple(future, currentNode));
+                    requests.add(new F.Tuple<>(future, currentNode));
                 } catch (IOException e) {
                     log.error("Cannot execute request", e);
                     currentNode.markFailure();
@@ -361,20 +495,19 @@ class ApiClientImpl implements ApiClient {
                     node.touch();
                     results.put(node, deserializeJson(response, responseClass));
                 } catch (InterruptedException e) {
-                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    log.error("API call Interrupted", e);
                     node.markFailure();
                 } catch (ExecutionException e) {
-                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    log.error("API call failed to execute.", e);
                     node.markFailure();
                 } catch (IOException e) {
-                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    log.error("API failed due to IO error", e);
                     node.markFailure();
                 } catch (TimeoutException e) {
-                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+                    log.error("API call timed out", e);
                     node.markFailure();
                 }
             }
-
 
             return results;
         }
@@ -382,6 +515,14 @@ class ApiClientImpl implements ApiClient {
         private AsyncHttpClient.BoundRequestBuilder requestBuilderForUrl(URL url) {
             // *sigh* the generic requestBuilder methods are protected/private making this verbose :(
             final AsyncHttpClient.BoundRequestBuilder requestBuilder;
+            final String userInfo = url.getUserInfo();
+            // have to hack around here, because the userInfo will unescape the @ in usernames :(
+            try {
+                url = UriBuilder.fromUri(url.toURI()).userInfo(null).build().toURL();
+            } catch (URISyntaxException | MalformedURLException ignore) {
+                // cannot happen, because it was a valid url before
+            }
+
             switch (method) {
                 case GET:
                     requestBuilder = client.prepareGet(url.toString());
@@ -399,8 +540,8 @@ class ApiClientImpl implements ApiClient {
                     throw new IllegalStateException("Illegal method " + method.toString());
             }
 
-            applyBasicAuthentication(requestBuilder, url.getUserInfo());
-            requestBuilder.setPerRequestConfig(new PerRequestConfig(null, (int)timeoutUnit.toMillis(timeoutValue)));
+            applyBasicAuthentication(requestBuilder, userInfo);
+            requestBuilder.setPerRequestConfig(new PerRequestConfig(null, (int) timeoutUnit.toMillis(timeoutValue)));
 
             if (body != null) {
                 if (method != Method.PUT && method != Method.POST) {
@@ -409,7 +550,7 @@ class ApiClientImpl implements ApiClient {
                 requestBuilder.addHeader("Content-Type", "application/json; charset=utf-8");
                 requestBuilder.setBodyEncoding("UTF-8");
                 requestBuilder.setBody(body.toJson());
-            } else if(method == Method.POST) {
+            } else if (method == Method.POST) {
                 log.warn("POST without body, this doesn't make sense,", new IllegalStateException());
             }
             // TODO: should we always insist on things being wrapped in json?
@@ -417,36 +558,38 @@ class ApiClientImpl implements ApiClient {
                 requestBuilder.addHeader("Accept", "application/json");
             }
             requestBuilder.addHeader("Accept-Charset", "utf-8");
+            // check for the request-global flag passed from the periodicals.
+            // you can override it per request, but that seems unlikely.
+            // this is a hack, if you have a better idea without touching dozens of methods, please share :)
+            if (extendSession == null) {
+                extendSession = Tools.apiRequestShouldExtendSession();
+            }
+            if (!extendSession) {
+                requestBuilder.addHeader("X-Graylog2-No-Session-Extension", "true");
+            }
             return requestBuilder;
         }
 
-        URL prepareUrl(Node node) {
+        // default visibility for tests
+        public URL prepareUrl(ClusterEntity target) {
             // if this is null there's not much we can do anyway...
             Preconditions.checkNotNull(pathTemplate, "path() needs to be set to a non-null value.");
 
             URI builtUrl;
             try {
                 String path = MessageFormat.format(pathTemplate, pathParams.toArray());
-                final UriBuilder uriBuilder = UriBuilder.fromUri(node.getTransportAddressUri());
+                final UriBuilder uriBuilder = UriBuilder.fromUri(target.getTransportAddress());
                 uriBuilder.path(path);
                 for (F.Tuple<String, String> queryParam : queryParams) {
                     uriBuilder.queryParam(queryParam._1, queryParam._2);
                 }
 
-                if (unauthenticated) {
-                    if (username != null) {
-                        log.error("Both credentials() and unauthenticated() are set for this request, this is a bug, using current user.");
-                    }
+                if (unauthenticated && sessionId != null) {
+                    log.error("Both session() and unauthenticated() are set for this request, this is a bug, using session id.", new Throwable());
                 }
-                if (!unauthenticated) {
-                    final User current = UserService.current();
-                    if (current != null) {
-                        username = current.getName();
-                        password = current.getPasswordHash();
-                    }
-                }
-                if (username != null && password != null) {
-                    uriBuilder.userInfo(username + ":" + password);
+                if (sessionId != null) {
+                    // pass the current session id via basic auth and special "password"
+                    uriBuilder.userInfo(sessionId + ":session");
                 }
                 builtUrl = uriBuilder.build();
                 return builtUrl.toURL();

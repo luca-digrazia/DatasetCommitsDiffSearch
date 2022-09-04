@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,14 +15,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib;
 
 import com.google.common.collect.Maps;
-import play.Play;
+import play.api.templates.Html;
 import play.data.Form;
 import play.mvc.Controller;
+import play.mvc.Http;
+import scala.collection.mutable.StringBuilder;
 
 import java.util.Map;
 import java.util.Random;
@@ -56,6 +57,24 @@ public class Tools {
         }
     }
 
+    /**
+     * Turn the argument into either itself or a HTML-safe non-breaking space if it is a string.
+     * @return HTML-safe non-breaking space of the argument itself
+     */
+    public static Object orNbsp(Object x) {
+        if (x == null) {
+            return new Html(new StringBuilder("&nbsp;"));
+        }
+
+        if (x instanceof String) {
+            final String s = x.toString();
+            if (s.isEmpty()) {
+                return new Html(new StringBuilder("&nbsp;"));
+            }
+        }
+        return x;
+    }
+
     public static String syslogLevelToHuman(int level) {
         switch (level) {
             case 0:
@@ -79,16 +98,6 @@ public class Tools {
         return "Invalid";
     }
 
-    public static byte[] appSecretAsBytes(int keySize) {
-        final String secret = Play.application().configuration().getString("application.secret");
-        final StringBuilder sb = new StringBuilder(secret);
-        while (sb.length() < keySize) {
-            sb.append(secret);
-        }
-        // sb is now at least 16 bytes long, take the first keySize
-        return sb.toString().substring(0, keySize).getBytes();
-    }
-
     public static <T> Form<T> bindMultiValueFormFromRequest(Class<T> requestClass) {
         Map<String, String> newData = Maps.newHashMap();
         Map<String, String[]> urlFormEncoded = Controller.request().body().asFormUrlEncoded();
@@ -106,5 +115,63 @@ public class Tools {
         }
         // bind to the MyEntity form object
         return new Form<>(requestClass).bind(newData);
+    }
+
+    public static String stringSearchParamOrEmpty(Http.Request request, String param) {
+        if (request.getQueryString(param) == null || request.getQueryString(param).isEmpty()) {
+            return "";
+        } else {
+            return request.getQueryString(param);
+        }
+    }
+
+    public static int intSearchParamOrEmpty(Http.Request request, String param) {
+        if (request.getQueryString(param) == null || request.getQueryString(param).isEmpty()) {
+            return 0;
+        } else {
+            try {
+                return Integer.parseInt(request.getQueryString(param));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+    }
+
+    public static String byteToHuman(long bytes) {
+        if (bytes < 1024) {
+            return bytes + "B";
+        }
+
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+
+        String pre = "kMGTPE".charAt(exp-1) + "i";
+        return String.format("%.1f%sB", bytes / Math.pow(1024, exp), pre);
+    }
+
+    public static <T> T firstNonNull(T defaultValue, T... objects) {
+        for (T object : objects) {
+            if (object != null) {
+                return object;
+            }
+        }
+        return defaultValue;
+    }
+
+    public static boolean apiRequestShouldExtendSession() {
+        try {
+            return !("true".equalsIgnoreCase(Http.Context.current().request().getHeader("X-Graylog2-No-Session-Extension")));
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    public static Throwable rootCause(Throwable t) {
+        Throwable rootCause = t;
+        Throwable cause = rootCause.getCause();
+        while (cause != null && cause != rootCause) {
+            rootCause = cause;
+            cause = cause.getCause();
+        }
+        return rootCause;
     }
 }
