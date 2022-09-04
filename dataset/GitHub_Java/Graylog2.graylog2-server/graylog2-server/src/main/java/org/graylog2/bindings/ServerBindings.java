@@ -46,7 +46,6 @@ import org.graylog2.bindings.providers.SystemJobManagerProvider;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
 import org.graylog2.bundles.BundleService;
 import org.graylog2.cluster.ClusterConfigServiceImpl;
-import org.graylog2.dashboards.widgets.WidgetCacheTime;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.filters.FilterService;
@@ -138,7 +137,6 @@ public class ServerBindings extends AbstractModule {
         install(new FactoryModuleBuilder().build(LdapSettingsImpl.Factory.class));
         install(new FactoryModuleBuilder().build(FieldValueAlertCondition.Factory.class));
         install(new FactoryModuleBuilder().build(MessageCountAlertCondition.Factory.class));
-        install(new FactoryModuleBuilder().build(WidgetCacheTime.Factory.class));
     }
 
     private void bindSingletons() {

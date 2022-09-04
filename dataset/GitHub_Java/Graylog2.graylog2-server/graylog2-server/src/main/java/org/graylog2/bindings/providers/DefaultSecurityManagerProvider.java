@@ -16,8 +16,10 @@
  */
 package org.graylog2.bindings.providers;
 
+import com.google.common.collect.Lists;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.Authenticator;
+import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
 import org.apache.shiro.authc.pam.FirstSuccessfulStrategy;
 import org.apache.shiro.authc.pam.ModularRealmAuthenticator;
 import org.apache.shiro.authz.ModularRealmAuthorizer;
@@ -25,57 +27,65 @@ import org.apache.shiro.cache.MemoryConstrainedCacheManager;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
 import org.apache.shiro.mgt.DefaultSubjectDAO;
-import org.apache.shiro.realm.AuthenticatingRealm;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.session.mgt.DefaultSessionManager;
 import org.apache.shiro.subject.Subject;
-import org.graylog2.security.InMemoryRolePermissionResolver;
+import org.graylog2.Configuration;
 import org.graylog2.security.MongoDbSessionDAO;
-import org.graylog2.security.OrderedAuthenticatingRealms;
-import org.graylog2.security.realm.MongoDbAuthorizationRealm;
-import org.graylog2.security.realm.RootAccountRealm;
+import org.graylog2.security.realm.*;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Singleton
 public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityManager> {
-    private DefaultSecurityManager sm = null;
+    private static DefaultSecurityManager sm = null;
 
     @Inject
     public DefaultSecurityManagerProvider(MongoDbSessionDAO mongoDbSessionDAO,
+                                          PasswordAuthenticator passwordAuthenticator,
                                           MongoDbAuthorizationRealm mongoDbAuthorizationRealm,
-                                          Map<String, AuthenticatingRealm> pluggableRealms,
-                                          InMemoryRolePermissionResolver inMemoryRolePermissionResolver,
-                                          OrderedAuthenticatingRealms orderedAuthenticatingRealms) {
-        sm = new DefaultSecurityManager(orderedAuthenticatingRealms);
+                                          LdapUserAuthenticator ldapUserAuthenticator,
+                                          SessionAuthenticator sessionAuthenticator,
+                                          AccessTokenAuthenticator accessTokenAuthenticator,
+                                          Configuration configuration) {
+        final GraylogSimpleAccountRealm inMemoryRealm = new GraylogSimpleAccountRealm();
+        inMemoryRealm.setCachingEnabled(false);
+        inMemoryRealm.addRootAccount(
+                configuration.getRootUsername(),
+                configuration.getRootPasswordSha2()
+        );
+        inMemoryRealm.setCredentialsMatcher(new HashedCredentialsMatcher("SHA-256"));
+
+        passwordAuthenticator.setCachingEnabled(false);
+        passwordAuthenticator.setCredentialsMatcher(new HashedCredentialsMatcher("SHA-1"));
+        mongoDbAuthorizationRealm.setCachingEnabled(false);
+
+        ldapUserAuthenticator.setCachingEnabled(false);
+
+        sessionAuthenticator.setCachingEnabled(false);
+        accessTokenAuthenticator.setCachingEnabled(false);
+
+
+        sm = new DefaultSecurityManager(Lists.<Realm>newArrayList(
+                sessionAuthenticator,
+                accessTokenAuthenticator,
+                ldapUserAuthenticator,
+                passwordAuthenticator,
+                inMemoryRealm));
         final Authenticator authenticator = sm.getAuthenticator();
         if (authenticator instanceof ModularRealmAuthenticator) {
             ((ModularRealmAuthenticator) authenticator).setAuthenticationStrategy(new FirstSuccessfulStrategy());
         }
-
-        // root account realm might be deactivated and won't be present in that case
-        List<Realm> realms = Stream.of(mongoDbAuthorizationRealm, pluggableRealms.get(RootAccountRealm.NAME))
-                                                  .filter(Objects::nonNull)
-                                                  .collect(Collectors.toList());
-        final ModularRealmAuthorizer authorizer = new ModularRealmAuthorizer(realms);
-
-        authorizer.setRolePermissionResolver(inMemoryRolePermissionResolver);
-        sm.setAuthorizer(authorizer);
+        sm.setAuthorizer(new ModularRealmAuthorizer(Lists.<Realm>newArrayList(mongoDbAuthorizationRealm, inMemoryRealm)));
 
         final DefaultSubjectDAO subjectDAO = new DefaultSubjectDAO();
         final DefaultSessionStorageEvaluator sessionStorageEvaluator = new DefaultSessionStorageEvaluator() {
             @Override
             public boolean isSessionStorageEnabled(Subject subject) {
                 // save to session if we already have a session. do not create on just for saving the subject
-                return subject.getSession(false) != null;
+                return (subject.getSession(false) != null);
             }
         };
         sessionStorageEvaluator.setSessionStorageEnabled(false);
@@ -85,7 +95,6 @@ public class DefaultSecurityManagerProvider implements Provider<DefaultSecurityM
         final DefaultSessionManager defaultSessionManager = (DefaultSessionManager) sm.getSessionManager();
         defaultSessionManager.setSessionDAO(mongoDbSessionDAO);
         defaultSessionManager.setDeleteInvalidSessions(true);
-        defaultSessionManager.setSessionValidationInterval(TimeUnit.MINUTES.toMillis(5));
         defaultSessionManager.setCacheManager(new MemoryConstrainedCacheManager());
         // DO NOT USE global session timeout!!! It's fucky.
         //defaultSessionManager.setGlobalSessionTimeout(TimeUnit.SECONDS.toMillis(5));
