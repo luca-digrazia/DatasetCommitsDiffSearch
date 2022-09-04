@@ -2,11 +2,14 @@ package io.quarkus.arc.impl;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InjectableBean;
+import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.InstanceHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.context.spi.CreationalContext;
+import org.jboss.logging.Logger;
 
 /**
  *
@@ -15,6 +18,8 @@ import javax.enterprise.context.spi.CreationalContext;
  * @param <T>
  */
 class InstanceHandleImpl<T> implements InstanceHandle<T> {
+
+    private static final Logger LOGGER = Logger.getLogger(InstanceHandleImpl.class.getName());
 
     @SuppressWarnings("unchecked")
     public static final <T> InstanceHandle<T> unavailable() {
@@ -66,7 +71,12 @@ class InstanceHandleImpl<T> implements InstanceHandle<T> {
                 if (bean.getScope().equals(Dependent.class)) {
                     destroyInternal();
                 } else {
-                    Arc.container().getActiveContext(bean.getScope()).destroy(bean);
+                    InjectableContext context = Arc.container().getActiveContext(bean.getScope());
+                    if (context == null) {
+                        throw new ContextNotActiveException(
+                                "Cannot destroy instance of " + bean + " - no active context found for: " + bean.getScope());
+                    }
+                    context.destroy(bean);
                 }
             }
         }
@@ -76,7 +86,16 @@ class InstanceHandleImpl<T> implements InstanceHandle<T> {
         if (parentCreationalContext != null) {
             parentCreationalContext.release();
         } else {
-            bean.destroy(instance, creationalContext);
+            try {
+                bean.destroy(instance, creationalContext);
+            } catch (Throwable t) {
+                String msg = "Error occurred while destroying instance of bean [%s]";
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.errorf(t, msg, bean.getClass().getName());
+                } else {
+                    LOGGER.errorf(msg + ": %s", bean.getClass().getName(), t);
+                }
+            }
         }
     }
 
