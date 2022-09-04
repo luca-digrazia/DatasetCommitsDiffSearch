@@ -29,7 +29,7 @@ import javax.annotation.Nullable;
 
 /** Wraps parsed (and, if requested, compiled) android resources. */
 public class ParsedAndroidResources extends AndroidResources {
-  @Nullable private final Artifact symbols;
+  private final Artifact symbols;
   @Nullable private final Artifact compiledSymbols;
   private final Label label;
   private final StampedAndroidManifest manifest;
@@ -55,11 +55,16 @@ public class ParsedAndroidResources extends AndroidResources {
         dataBindingContext.processResources(dataContext, resources, manifest.getPackage());
 
     return builder
+        .setOutput(dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS))
         .setCompiledSymbolsOutput(
             isAapt2
                 ? dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS)
                 : null)
-        .build(dataContext, databindingProcessedResources, manifest, dataBindingContext);
+        .build(
+            dataContext,
+            databindingProcessedResources,
+            manifest,
+            dataBindingContext);
   }
 
   @VisibleForTesting
@@ -69,7 +74,7 @@ public class ParsedAndroidResources extends AndroidResources {
 
   public static ParsedAndroidResources of(
       AndroidResources resources,
-      @Nullable Artifact symbols,
+      Artifact symbols,
       @Nullable Artifact compiledSymbols,
       Label label,
       StampedAndroidManifest manifest,
@@ -103,7 +108,6 @@ public class ParsedAndroidResources extends AndroidResources {
     this.dataBindingContext = dataBindingContext;
   }
 
-  @Nullable
   public Artifact getSymbols() {
     return symbols;
   }
@@ -164,7 +168,7 @@ public class ParsedAndroidResources extends AndroidResources {
     }
 
     ParsedAndroidResources other = (ParsedAndroidResources) object;
-    return Objects.equals(symbols, other.symbols)
+    return symbols.equals(other.symbols)
         && Objects.equals(compiledSymbols, other.compiledSymbols)
         && label.equals(other.label)
         && manifest.equals(other.manifest);

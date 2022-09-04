@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Type;
@@ -176,7 +177,8 @@ public final class DataBinding {
     ImmutableList.Builder<Artifact> dataBindingMetadataOutputs = ImmutableList.builder();
     if (ruleContext.attributes().has(attr, BuildType.LABEL_LIST)) {
       for (UsesDataBindingProvider provider :
-          ruleContext.getPrerequisites(attr, UsesDataBindingProvider.PROVIDER)) {
+          ruleContext.getPrerequisites(
+              attr, RuleConfiguredTarget.Mode.TARGET, UsesDataBindingProvider.PROVIDER)) {
         dataBindingMetadataOutputs.addAll(provider.getMetadataOutputs());
       }
     }
