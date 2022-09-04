@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
@@ -339,7 +338,7 @@ public interface NodeEntry extends ThinNodeEntry {
    * always produce the same result until the entry finishes evaluation. Contrast with {@link
    * #getAllDirectDepsForIncompleteNode}.
    */
-  ImmutableSet<SkyKey> getAllRemainingDirtyDirectDeps() throws InterruptedException;
+  Set<SkyKey> getAllRemainingDirtyDirectDeps() throws InterruptedException;
 
   /**
    * Whether this entry stores fingerprints of its dep groups, which enables it to change-prune

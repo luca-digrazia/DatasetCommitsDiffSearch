@@ -17,7 +17,6 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.testutil.EventIterableSubjectFactory.assertThatEvents;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 import static com.google.devtools.build.skyframe.GraphTester.CONCATENATE;
 import static org.junit.Assert.fail;
@@ -221,9 +220,12 @@ public class ParallelEvaluatorTest {
                   return null;
                 }
                 assertThat(future.isDone()).isTrue();
-                ExecutionException expected =
-                    assertThrows(ExecutionException.class, () -> future.get());
-                assertThat(expected.getCause()).isInstanceOf(UnsupportedOperationException.class);
+                try {
+                  future.get();
+                  fail();
+                } catch (ExecutionException expected) {
+                  assertThat(expected.getCause()).isInstanceOf(UnsupportedOperationException.class);
+                }
                 return new StringValue("Caught!");
               }
 
@@ -452,13 +454,17 @@ public class ParallelEvaluatorTest {
 
     // And we have a dedicated thread that kicks off the evaluation of A and B together (in that
     // order).
-    TestThread evalThread =
-        new TestThread() {
-          @Override
-          public void runTest() throws Exception {
-            assertThrows(InterruptedException.class, () -> eval(/*keepGoing=*/ true, keyA, keyB));
-          }
-        };
+    TestThread evalThread = new TestThread() {
+      @Override
+      public void runTest() throws Exception {
+        try {
+          eval(/*keepGoing=*/true, keyA, keyB);
+          fail();
+        } catch (InterruptedException e) {
+          // Expected.
+        }
+      }
+    };
 
     // Then when we start that thread,
     evalThread.start();
@@ -517,14 +523,17 @@ public class ParallelEvaluatorTest {
                 receivedValues.add(skyKey);
               }
             });
-    TestThread evalThread =
-        new TestThread() {
-          @Override
-          public void runTest() throws Exception {
-            assertThrows(
-                InterruptedException.class, () -> eval(/*keepGoing=*/ true, waitKey, fastKey));
-          }
-        };
+    TestThread evalThread = new TestThread() {
+      @Override
+      public void runTest() throws Exception {
+        try {
+          eval(/*keepGoing=*/true, waitKey, fastKey);
+          fail();
+        } catch (InterruptedException e) {
+          // Expected.
+        }
+      }
+    };
     evalThread.start();
     assertThat(allValuesReady.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
     evalThread.interrupt();
@@ -651,12 +660,15 @@ public class ParallelEvaluatorTest {
             new InMemoryGraphImpl(), ImmutableMap.of(GraphTester.NODE_TYPE, builder), false);
 
     SkyKey valueToEval = GraphTester.toSkyKey("a");
-    RuntimeException re =
-        assertThrows(RuntimeException.class, () -> evaluator.eval(ImmutableList.of(valueToEval)));
-    assertThat(re)
-        .hasMessageThat()
-        .contains("Unrecoverable error while evaluating node '" + valueToEval.toString() + "'");
-    assertThat(re).hasCauseThat().isInstanceOf(CustomRuntimeException.class);
+    try {
+      evaluator.eval(ImmutableList.of(valueToEval));
+      fail("Expected RuntimeException");
+    } catch (RuntimeException re) {
+      assertThat(re)
+          .hasMessageThat()
+          .contains("Unrecoverable error while evaluating node '" + valueToEval.toString() + "'");
+      assertThat(re).hasCauseThat().isInstanceOf(CustomRuntimeException.class);
+    }
   }
 
   @Test
@@ -1903,16 +1915,17 @@ public class ParallelEvaluatorTest {
             PARENT_TYPE, new ParentFunction());
     ParallelEvaluator evaluator = makeEvaluator(new InMemoryGraphImpl(), skyFunctions, false);
 
-    RuntimeException e =
-        assertThrows(
-            RuntimeException.class,
-            () -> evaluator.eval(ImmutableList.of(ParentKey.create("octodad"))));
-    assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("I WANT A PONY!!!");
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "Unrecoverable error while evaluating node 'child:billy the kid' "
-                + "(requested by nodes 'parent:octodad')");
+    try {
+      evaluator.eval(ImmutableList.of(ParentKey.create("octodad")));
+      fail();
+    } catch (RuntimeException e) {
+      assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("I WANT A PONY!!!");
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              "Unrecoverable error while evaluating node 'child:billy the kid' "
+                  + "(requested by nodes 'parent:octodad')");
+    }
   }
 
   private static class SomeOtherErrorException extends Exception {
@@ -2570,60 +2583,6 @@ public class ParallelEvaluatorTest {
     assertThat(result.hasError()).isTrue();
     assertThat(result.getError(errorKey).getRootCauseOfException()).isEqualTo(errorKey);
     assertThat(result.errorMap()).doesNotContainKey(rogueKey);
-  }
-
-  // Explicit test that we tolerate a SkyFunction that declares different [sequences of] deps each
-  // restart. Such behavior from a SkyFunction isn't desired, but Bazel-on-Skyframe does indeed do
-  // this.
-  @Test
-  public void declaresDifferentDepsAfterRestart() throws Exception {
-    graph = new DeterministicHelper.DeterministicProcessableGraph(new InMemoryGraphImpl());
-    tester = new GraphTester();
-    SkyKey grandChild1Key = GraphTester.toSkyKey("grandChild1");
-    tester.getOrCreate(grandChild1Key).setConstantValue(new StringValue("grandChild1"));
-    SkyKey child1Key = GraphTester.toSkyKey("child1");
-    tester
-        .getOrCreate(child1Key)
-        .addDependency(grandChild1Key)
-        .setConstantValue(new StringValue("child1"));
-    SkyKey grandChild2Key = GraphTester.toSkyKey("grandChild2");
-    tester.getOrCreate(grandChild2Key).setConstantValue(new StringValue("grandChild2"));
-    SkyKey child2Key = GraphTester.toSkyKey("child2");
-    tester.getOrCreate(child2Key).setConstantValue(new StringValue("child2"));
-    SkyKey parentKey = GraphTester.toSkyKey("parent");
-    AtomicInteger numComputes = new AtomicInteger(0);
-    tester
-        .getOrCreate(parentKey)
-        .setBuilder(
-            new SkyFunction() {
-              @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-                switch (numComputes.incrementAndGet()) {
-                  case 1:
-                    env.getValue(child1Key);
-                    Preconditions.checkState(env.valuesMissing());
-                    return null;
-                  case 2:
-                    env.getValue(child2Key);
-                    Preconditions.checkState(env.valuesMissing());
-                    return null;
-                  case 3:
-                    return new StringValue("the third time's the charm!");
-                  default:
-                    throw new IllegalStateException();
-                }
-              }
-
-              @Override
-              public String extractTag(SkyKey skyKey) {
-                return null;
-              }
-            });
-    EvaluationResult<StringValue> result = eval(/*keepGoing=*/ false, ImmutableList.of(parentKey));
-    assertThatEvaluationResult(result).hasNoError();
-    assertThatEvaluationResult(result)
-        .hasEntryThat(parentKey)
-        .isEqualTo(new StringValue("the third time's the charm!"));
   }
 
   private void runUnhandledTransitiveErrors(boolean keepGoing,

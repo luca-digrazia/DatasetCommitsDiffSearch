@@ -1362,9 +1362,7 @@ public class MemoizingEvaluatorTest {
       } else {
         assertThatErrorInfo(errorInfo).isNotTransient();
       }
-      assertThat(errorInfo.getException())
-          .hasMessageThat()
-          .isEqualTo(NODE_TYPE.getName() + ":errorKey");
+      assertThat(errorInfo.getException()).hasMessage(NODE_TYPE.getName() + ":errorKey");
       assertThat(errorInfo.getRootCauseOfException()).isEqualTo(errorKey);
     } else {
       // When errors are not stored alongside values, transient errors that are recovered from do
@@ -2760,19 +2758,14 @@ public class MemoizingEvaluatorTest {
             if (type == EventType.MARK_DIRTY) {
               TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
                   threadsStarted, "Both threads did not query if value isChanged in time");
-              if (order == Order.BEFORE) {
-                DirtyType dirtyType = (DirtyType) context;
-                if (dirtyType.equals(DirtyType.DIRTY)) {
-                  TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
-                      waitForChanged, "'changed' thread did not mark value changed in time");
-                  return;
-                }
+              DirtyType dirtyType = (DirtyType) context;
+              if (order == Order.BEFORE && dirtyType.equals(DirtyType.DIRTY)) {
+                TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
+                    waitForChanged, "'changed' thread did not mark value changed in time");
+                return;
               }
-              if (order == Order.AFTER) {
-                DirtyType dirtyType = ((NotifyingHelper.MarkDirtyAfterContext) context).dirtyType();
-                if (dirtyType.equals(DirtyType.CHANGE)) {
-                  waitForChanged.countDown();
-                }
+              if (order == Order.AFTER && dirtyType.equals(DirtyType.CHANGE)) {
+                waitForChanged.countDown();
               }
             }
           }
