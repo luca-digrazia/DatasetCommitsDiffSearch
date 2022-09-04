@@ -159,13 +159,12 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
             .getRemainingArguments();
 
     assertThat(args)
-        .containsAllOf(
+        .contains(
             "--java_out=lite,immutable,no_enforce_api_compatibility:"
                 + genfilesDir
-                + "/x/protolib-lite-src.jar",
-            "-Ix/file.proto=x/file.proto",
-            "x/file.proto")
-        .inOrder();
+                + "/x/protolib-lite-src.jar");
+
+    MoreAsserts.assertContainsSublist(args, "-Ix/file.proto=x/file.proto", "x/file.proto");
   }
 
   @Test
@@ -241,13 +240,12 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
     List<String> args =
         getGeneratingSpawnAction(litepb2, "cross/bravo-lite-src.jar").getRemainingArguments();
     assertThat(args)
-        .containsAllOf(
+        .contains(
             "--java_out=lite,immutable,no_enforce_api_compatibility:"
                 + genfilesDir
-                + "/cross/bravo-lite-src.jar",
-            "-Icross/bravo.proto=cross/bravo.proto",
-            "cross/bravo.proto")
-        .inOrder();
+                + "/cross/bravo-lite-src.jar");
+    MoreAsserts.assertContainsSublist(
+        args, "-Icross/bravo.proto=cross/bravo.proto", "cross/bravo.proto");
 
     List<String> directJars =
         prettyJarNames(
