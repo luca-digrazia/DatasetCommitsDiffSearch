@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,25 +21,25 @@ import android.content.Intent;
 public class Fragment {
 
 	public void onCreate(android.os.Bundle savedInstanceState) {
-
+		
 	}
-
+	
 	public void onViewCreated(android.view.View view, android.os.Bundle savedInstanceState) {
-
+		
 	}
-
+	
 	public android.view.View onCreateView(android.view.LayoutInflater inflater, android.view.ViewGroup container, android.os.Bundle savedInstanceState) {
 		return null;
 	}
-
-	public void onDestroyView() {
-
+	
+	public  void onDestroyView() {
+		
 	}
-
-	public void setArguments(android.os.Bundle args) {
-
+	
+	public  void setArguments(android.os.Bundle args) {
+		
 	}
-
+	
 	public Activity getActivity() {
 		return null;
 	}
