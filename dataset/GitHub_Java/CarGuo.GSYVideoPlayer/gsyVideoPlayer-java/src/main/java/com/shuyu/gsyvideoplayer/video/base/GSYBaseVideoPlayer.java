@@ -468,6 +468,13 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     }
 
     /**
+     * 是否需要使用竖屏全屏
+     */
+    protected boolean isVerticalVideoFull() {
+        return isVerticalVideo() && isAutoFullWithSize();
+    }
+
+    /**
      * 是否竖屏模式的竖屏
      */
     protected boolean isVerticalVideo() {
@@ -519,13 +526,6 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
     /************************* 开放接口 *************************/
 
     /**
-     * 是否需要使用竖屏全屏
-     */
-    public boolean isVerticalVideoFull() {
-        return isVerticalVideo() && isAutoFullWithSize();
-    }
-
-    /**
      * 旋转处理
      *
      * @param activity         页面
@@ -555,7 +555,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             }
         } else {
             //新版本isIfCurrentIsFullscreen的标志位内部提前设置了，所以不会和手动点击冲突
-            if (isIfCurrentIsFullscreen() && isVerticalVideoFull()) {
+            if (isIfCurrentIsFullscreen()) {
                 backFromFull(activity);
             }
             if (orientationUtils != null) {
