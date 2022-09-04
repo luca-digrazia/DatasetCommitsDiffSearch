@@ -9,13 +9,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
 
-import javax.validation.ClockProvider;
 import javax.validation.Constraint;
 import javax.validation.ConstraintValidator;
-import javax.validation.ConstraintValidatorFactory;
-import javax.validation.MessageInterpolator;
-import javax.validation.ParameterNameProvider;
-import javax.validation.TraversableResolver;
 import javax.validation.Valid;
 import javax.validation.executable.ValidateOnExecution;
 
@@ -51,13 +46,6 @@ import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterc
 
 class HibernateValidatorProcessor {
 
-    private static final DotName CONSTRAINT_VALIDATOR_FACTORY = DotName
-            .createSimple(ConstraintValidatorFactory.class.getName());
-    private static final DotName MESSAGE_INTERPOLATOR = DotName.createSimple(MessageInterpolator.class.getName());
-    private static final DotName TRAVERSABLE_RESOLVER = DotName.createSimple(TraversableResolver.class.getName());
-    private static final DotName PARAMETER_NAME_PROVIDER = DotName.createSimple(ParameterNameProvider.class.getName());
-    private static final DotName CLOCK_PROVIDER = DotName.createSimple(ClockProvider.class.getName());
-
     private static final DotName CONSTRAINT_VALIDATOR = DotName.createSimple(ConstraintValidator.class.getName());
 
     private static final DotName VALIDATE_ON_EXECUTION = DotName.createSimple(ValidateOnExecution.class.getName());
@@ -89,13 +77,11 @@ class HibernateValidatorProcessor {
                     "io.quarkus.hibernate.validator.runtime.jaxrs.JaxrsEndPointValidationInterceptor"));
         }
 
-        // Do not remove the Bean Validation beans
+        // Do not remove the ConstraintValidator beans
         unremovableBean.produce(new UnremovableBeanBuildItem(new Predicate<BeanInfo>() {
             @Override
             public boolean test(BeanInfo beanInfo) {
-                return beanInfo.hasType(CONSTRAINT_VALIDATOR) || beanInfo.hasType(CONSTRAINT_VALIDATOR_FACTORY)
-                        || beanInfo.hasType(MESSAGE_INTERPOLATOR) || beanInfo.hasType(TRAVERSABLE_RESOLVER)
-                        || beanInfo.hasType(PARAMETER_NAME_PROVIDER) || beanInfo.hasType(CLOCK_PROVIDER);
+                return beanInfo.hasType(CONSTRAINT_VALIDATOR);
             }
         }));
     }
