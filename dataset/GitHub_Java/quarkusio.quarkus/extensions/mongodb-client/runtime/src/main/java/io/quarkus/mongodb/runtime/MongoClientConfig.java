@@ -6,11 +6,10 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigDocSection;
+import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
-import io.quarkus.runtime.annotations.ConfigPhase;
-import io.quarkus.runtime.annotations.ConfigRoot;
 
-@ConfigRoot(name = "mongodb", phase = ConfigPhase.RUN_TIME)
+@ConfigGroup
 public class MongoClientConfig {
 
     /**
@@ -63,11 +62,11 @@ public class MongoClientConfig {
     public Optional<String> connectionString;
 
     /**
-     * Configures the Mongo server addressed (one if single mode).
-     * The addressed are passed as {@code host:port}.
+     * Configures the MongoDB server addressed (one if single mode).
+     * The addresses are passed as {@code host:port}.
      */
-    @ConfigItem
-    public Optional<List<String>> hosts;
+    @ConfigItem(defaultValue = "127.0.0.1:27017")
+    public List<String> hosts;
 
     /**
      * Configure the database name.
@@ -106,12 +105,6 @@ public class MongoClientConfig {
     public Optional<Duration> maxConnectionLifeTime;
 
     /**
-     * The maximum wait time that a thread may wait for a connection to become available.
-     */
-    @ConfigItem
-    public Optional<Duration> waitQueueTimeout;
-
-    /**
      * Configures the time period between runs of the maintenance job.
      */
     @ConfigItem
@@ -124,35 +117,27 @@ public class MongoClientConfig {
     public Optional<Duration> maintenanceInitialDelay;
 
     /**
-     * This multiplier, multiplied with the {@code maxPoolSize} setting, gives the maximum number of
-     * threads that may be waiting for a connection to become available from the pool. All further threads will get an
-     * exception right away.
-     */
-    @ConfigItem
-    public OptionalInt waitQueueMultiple;
-
-    /**
      * How long a connection can take to be opened before timing out.
      */
     @ConfigItem
     public Optional<Duration> connectTimeout;
 
     /**
-     * How long a send or receive on a socket can take before timing out.
+     * How long a socket read can take before timing out.
      */
     @ConfigItem
-    public Optional<Duration> socketTimeout;
+    public Optional<Duration> readTimeout;
 
     /**
      * If connecting with TLS, this option enables insecure TLS connections.
      */
-    @ConfigItem(defaultValue = "false")
+    @ConfigItem
     public boolean tlsInsecure;
 
     /**
      * Whether to connect using TLS.
      */
-    @ConfigItem(defaultValue = "false")
+    @ConfigItem
     public boolean tls;
 
     /**
@@ -198,12 +183,4 @@ public class MongoClientConfig {
      */
     @ConfigDocSection
     public CredentialConfig credentials;
-
-    /**
-     * Configures the maximum number of concurrent operations allowed to wait for a server to become available.
-     * All further operations will get an exception immediately.
-     */
-    @ConfigItem
-    public OptionalInt maxWaitQueueSize;
-
 }
