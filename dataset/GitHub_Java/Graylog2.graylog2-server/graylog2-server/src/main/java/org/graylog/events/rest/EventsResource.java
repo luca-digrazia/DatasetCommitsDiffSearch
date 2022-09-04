@@ -18,7 +18,6 @@ package org.graylog.events.rest;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog.events.search.EventsSearchParameters;
 import org.graylog.events.search.EventsSearchResult;
@@ -51,7 +50,7 @@ public class EventsResource extends RestResource implements PluginRestResource {
     @Path("/search")
     @ApiOperation("Search events")
     @NoAuditEvent("Doesn't change any data, only searches for events")
-    public EventsSearchResult search(@ApiParam(name = "JSON body") EventsSearchParameters request) {
+    public EventsSearchResult search(EventsSearchParameters request) {
         return searchService.search(request, getSubject());
     }
 }

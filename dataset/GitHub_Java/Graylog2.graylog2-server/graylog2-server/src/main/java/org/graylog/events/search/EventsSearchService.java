@@ -18,15 +18,19 @@ package org.graylog.events.search;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import org.apache.shiro.subject.Subject;
 import org.graylog.events.event.EventDto;
 import org.graylog.events.processor.DBEventDefinitionService;
 import org.graylog.events.processor.EventDefinitionDto;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.indexer.IndexMapping;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.Persisted;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.streams.StreamService;
+import org.joda.time.DateTime;
 
 import javax.inject.Inject;
 import java.util.Collections;
@@ -40,6 +44,7 @@ import java.util.stream.Collectors;
 
 import static org.graylog2.plugin.streams.Stream.DEFAULT_EVENTS_STREAM_ID;
 import static org.graylog2.plugin.streams.Stream.DEFAULT_SYSTEM_EVENTS_STREAM_ID;
+import static org.joda.time.DateTimeZone.UTC;
 
 public class EventsSearchService {
     private final MoreSearch moreSearch;
@@ -63,10 +68,7 @@ public class EventsSearchService {
     }
 
     public EventsSearchResult search(EventsSearchParameters parameters, Subject subject) {
-        final ImmutableSet.Builder<String> filterBuilder = ImmutableSet.<String>builder()
-                // Make sure we only filter for actual events and ignore anything else that might be in the event
-                // indices. (fixes an issue when users store non-event messages in event indices)
-                .add("_exists_:" + EventDto.FIELD_EVENT_DEFINITION_ID);
+        final ImmutableSet.Builder<String> filterBuilder = ImmutableSet.builder();
 
         if (!parameters.filter().eventDefinitions().isEmpty()) {
             final String eventDefinitionFilter = parameters.filter().eventDefinitions().stream()
@@ -97,7 +99,21 @@ public class EventsSearchService {
 
         final List<EventsSearchResult.Event> events = result.results().stream()
                 .map(resultMsg -> {
-                    final EventDto eventDto = objectMapper.convertValue(resultMsg.getMessage().getFields(), EventDto.class);
+                    final Message message = resultMsg.getMessage();
+
+                    // HACK fix timestamp format because DateTime cannot parse our Elasticsearch date format
+                    // TODO: Fix the timestamp issue in a nicer way. (e.g. custom deserializer that also works with mongojack)
+                    message.addField(EventDto.FIELD_PROCESSING_TIMESTAMP, DateTime.parse(String.valueOf(message.getField(EventDto.FIELD_PROCESSING_TIMESTAMP)), Tools.timeFormatterWithOptionalMilliseconds().withZone(UTC)));
+                    if (message.getField(EventDto.FIELD_TIMERANGE_START) != null) {
+                        message.addField(EventDto.FIELD_TIMERANGE_START, DateTime.parse(String.valueOf(message.getField(EventDto.FIELD_TIMERANGE_START)), Tools.timeFormatterWithOptionalMilliseconds().withZone(UTC)));
+                    }
+                    if (message.getField(EventDto.FIELD_TIMERANGE_END) != null) {
+                        message.addField(EventDto.FIELD_TIMERANGE_END, DateTime.parse(String.valueOf(message.getField(EventDto.FIELD_TIMERANGE_END)), Tools.timeFormatterWithOptionalMilliseconds().withZone(UTC)));
+                    }
+
+                    // Remove the _id field that has been added by our search code
+                    final Map<String, Object> event = Maps.filterEntries(resultMsg.getMessage().getFields(), input -> !"_id".equals(input.getKey()));
+                    final EventDto eventDto = objectMapper.convertValue(event, EventDto.class);
 
                     eventDefinitionIdsBuilder.add((String) resultMsg.getMessage().getField(EventDto.FIELD_EVENT_DEFINITION_ID));
                     streamIdsBuilder.addAll(resultMsg.getMessage().getStreamIds());
