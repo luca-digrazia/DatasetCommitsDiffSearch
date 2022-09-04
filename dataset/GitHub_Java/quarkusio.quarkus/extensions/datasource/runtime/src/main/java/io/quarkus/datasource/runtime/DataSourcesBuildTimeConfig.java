@@ -1,6 +1,7 @@
 package io.quarkus.datasource.runtime;
 
 import java.util.Map;
+import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigDocSection;
@@ -34,14 +35,32 @@ public class DataSourcesBuildTimeConfig {
     public boolean healthEnabled;
 
     /**
-     * Whether or not datasource metrics are published in case the smallrye-metrics extension is present.
+     * Whether or not datasource metrics are published in case a metrics extension is present.
      * <p>
      * This is a global setting and is not specific to a datasource.
      * <p>
      * NOTE: This is different from the "jdbc.enable-metrics" property that needs to be set on the JDBC datasource level to
      * enable collection of metrics for that datasource.
      */
-    @ConfigItem(name = "metrics.enabled", defaultValue = "false")
+    @ConfigItem(name = "metrics.enabled")
     public boolean metricsEnabled;
+
+    /**
+     * Only here to detect configuration errors.
+     * <p>
+     * This used to be runtime but we don't really care, we just want to catch invalid configurations.
+     *
+     * @deprecated
+     */
+    @Deprecated
+    public Optional<String> url;
+
+    /**
+     * Only here to detect configuration errors.
+     *
+     * @deprecated
+     */
+    @Deprecated
+    public Optional<String> driver;
 
 }

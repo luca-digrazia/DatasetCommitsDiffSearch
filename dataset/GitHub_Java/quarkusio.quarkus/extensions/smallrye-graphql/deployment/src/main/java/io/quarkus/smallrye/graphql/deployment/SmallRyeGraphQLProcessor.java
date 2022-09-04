@@ -55,7 +55,6 @@ import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.deployment.util.IoUtil;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.metrics.MetricsFactory;
 import io.quarkus.smallrye.graphql.runtime.SmallRyeGraphQLRecorder;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RequireBodyHandlerBuildItem;
@@ -72,7 +71,6 @@ import io.smallrye.graphql.schema.model.Field;
 import io.smallrye.graphql.schema.model.InputType;
 import io.smallrye.graphql.schema.model.InterfaceType;
 import io.smallrye.graphql.schema.model.Operation;
-import io.smallrye.graphql.schema.model.Reference;
 import io.smallrye.graphql.schema.model.Schema;
 import io.smallrye.graphql.schema.model.Type;
 import io.smallrye.graphql.spi.EventingService;
@@ -170,13 +168,10 @@ public class SmallRyeGraphQLProcessor {
     void activateMetrics(Capabilities capabilities,
             Optional<MetricsCapabilityBuildItem> metricsCapability,
             SmallRyeGraphQLConfig smallRyeGraphQLConfig,
-            BuildProducer<SystemPropertyBuildItem> systemProperties,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
+            BuildProducer<UnremovableBeanBuildItem> unremovableBeans,
+            BuildProducer<SystemPropertyBuildItem> systemProperties) {
         if (smallRyeGraphQLConfig.metricsEnabled) {
             if (metricsCapability.isPresent()) {
-                if (metricsCapability.get().metricsSupported(MetricsFactory.MP_METRICS)) {
-                    unremovableBeans.produce(UnremovableBeanBuildItem.beanClassNames("io.smallrye.metrics.MetricRegistries"));
-                }
                 systemProperties.produce(new SystemPropertyBuildItem("smallrye.graphql.metrics.enabled", "true"));
             } else {
                 LOG.info("The quarkus.smallrye-graphql.metrics.enabled property is true, but a metrics " +
@@ -286,9 +281,9 @@ public class SmallRyeGraphQLProcessor {
         for (Operation operation : operations) {
             classes.add(operation.getClassName());
             for (Argument argument : operation.getArguments()) {
-                classes.addAll(getAllReferenceClasses(argument.getReference()));
+                classes.add(argument.getReference().getClassName());
             }
-            classes.addAll(getAllReferenceClasses(operation.getReference()));
+            classes.add(operation.getReference().getClassName());
         }
         return classes;
     }
@@ -323,20 +318,7 @@ public class SmallRyeGraphQLProcessor {
     private Set<String> getFieldClassNames(Map<String, Field> fields) {
         Set<String> classes = new HashSet<>();
         for (Field field : fields.values()) {
-            classes.addAll(getAllReferenceClasses(field.getReference()));
-        }
-        return classes;
-    }
-
-    private Set<String> getAllReferenceClasses(Reference reference) {
-        Set<String> classes = new HashSet<>();
-        classes.add(reference.getClassName());
-        if (reference.getParametrizedTypeArguments() != null && !reference.getParametrizedTypeArguments().isEmpty()) {
-
-            Collection<Reference> parametrized = reference.getParametrizedTypeArguments().values();
-            for (Reference r : parametrized) {
-                classes.addAll(getAllReferenceClasses(r));
-            }
+            classes.add(field.getReference().getClassName());
         }
         return classes;
     }

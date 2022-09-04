@@ -6,7 +6,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -16,8 +15,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-
-import javax.ws.rs.core.Application;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -142,22 +139,14 @@ public class ResteasyServerCommonProcessor {
         /**
          * Whether or not detailed JAX-RS metrics should be enabled if the smallrye-metrics
          * extension is present.
-         *
+         * 
          * See <a href=
          * "https://github.com/eclipse/microprofile-metrics/blob/2.3.x/spec/src/main/asciidoc/required-metrics.adoc#optional-rest">MicroProfile
-         * Metrics: Optional REST metrics</a>.
-         *
-         * Deprecated. Use {@code quarkus.smallrye-metrics.jaxrs.enabled}.
+         * Metrics: Optional REST metrics</a>
          */
         @ConfigItem(name = "metrics.enabled", defaultValue = "false")
         public boolean metricsEnabled;
 
-        /**
-         * Ignore all explict JAX-RS {@link Application} classes.
-         * As multiple JAX-RS applications are not supported, this can be used to effectively merge all JAX-RS applications.
-         */
-        @ConfigItem(defaultValue = "false")
-        boolean ignoreApplicationClasses;
     }
 
     @BuildStep
@@ -190,11 +179,7 @@ public class ResteasyServerCommonProcessor {
             CustomScopeAnnotationsBuildItem scopes) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
 
-        Collection<AnnotationInstance> applicationPaths = Collections.emptySet();
-
-        if (!resteasyConfig.ignoreApplicationClasses) {
-            applicationPaths = index.getAnnotations(ResteasyDotNames.APPLICATION_PATH);
-        }
+        Collection<AnnotationInstance> applicationPaths = index.getAnnotations(ResteasyDotNames.APPLICATION_PATH);
 
         // currently we only examine the first class that is annotated with @ApplicationPath so best
         // fail if the user code has multiple such annotations instead of surprising the user
@@ -407,7 +392,6 @@ public class ResteasyServerCommonProcessor {
         prefixes.add(new AllowedJaxRsAnnotationPrefixBuildItem("io.quarkus.security")); // same for the security annotations
         prefixes.add(new AllowedJaxRsAnnotationPrefixBuildItem("javax.annotation.security"));
         prefixes.add(new AllowedJaxRsAnnotationPrefixBuildItem("jakarta.annotation.security"));
-        prefixes.add(new AllowedJaxRsAnnotationPrefixBuildItem("java.lang"));
         return prefixes;
     }
 
