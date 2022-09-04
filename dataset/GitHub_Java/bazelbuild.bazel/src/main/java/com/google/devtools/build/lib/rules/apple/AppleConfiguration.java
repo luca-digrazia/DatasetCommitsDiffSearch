@@ -107,7 +107,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   @Nullable private final String xcodeToolchain;
   @Nullable private final Label defaultProvisioningProfileLabel;
   private final boolean mandatoryMinimumVersion;
-  private final boolean objcProviderFromLinked;
 
   @VisibleForTesting
   AppleConfiguration(
@@ -161,7 +160,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     this.defaultProvisioningProfileLabel = options.defaultProvisioningProfile;
     this.xcodeToolchain = options.xcodeToolchain;
     this.mandatoryMinimumVersion = options.mandatoryMinimumVersion;
-    this.objcProviderFromLinked = options.objcProviderFromLinked;
   }
 
   /** Determines cpu value from apple-specific toolchain identifier. */
@@ -657,14 +655,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     return mandatoryMinimumVersion;
   }
 
-  /**
-   * Returns true if rules which manage link actions should propagate {@link ObjcProvider} at the
-   * top level.
-   **/
-  public boolean shouldLinkingRulesPropagateObjc() {
-    return objcProviderFromLinked;
-  }
-
   /** Returns true if {@link AppleCrosstoolTransition} should be applied to every apple rule. */
   public boolean isAppleCrosstoolEnabled() {
     return enableAppleCrosstool;
@@ -848,8 +838,12 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
    */
   public enum ConfigurationDistinguisher {
     UNKNOWN("unknown"),
+    /** Split transition distinguisher for {@code ios_extension} rule. */
+    IOS_EXTENSION("ios_extension"),
     /** Split transition distinguisher for {@code ios_application} rule. */
     IOS_APPLICATION("ios_application"),
+    /** Split transition distinguisher for {@code ios_framework} rule. */
+    FRAMEWORK("framework"),
     /** Distinguisher for {@code apple_binary} rule with "ios" platform_type. */
     APPLEBIN_IOS("applebin_ios"),
     /** Distinguisher for {@code apple_binary} rule with "watchos" platform_type. */

@@ -21,9 +21,7 @@ import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -163,12 +161,9 @@ public final class DottedVersion implements Comparable<DottedVersion>, SkylarkVa
   }
 
   @Override
-  @SkylarkCallable(
-    name = "compare_to",
-    doc =
-        "Compares based on most signifigant (first) not-matching version component. "
-            + "So, for example, 1.2.3 < 1.2.4"
-  )
+  @SkylarkCallable(name = "compare_to", 
+    doc = "Compares based on most signifigant (first) not-matching version component. "
+        + "So, for example, 1.2.3 < 1.2.4")
   public int compareTo(DottedVersion other) {
     int maxComponents = Math.max(components.size(), other.components.size());
     for (int componentIndex = 0; componentIndex < maxComponents; componentIndex++) {
@@ -185,16 +180,16 @@ public final class DottedVersion implements Comparable<DottedVersion>, SkylarkVa
   /**
    * Returns the string representation of this dotted version, padded to a minimum number of
    * components if the string representation does not already contain that many components.
-   *
+   * 
    * <p>For example, a dotted version of "7.3" will return "7.3" with either one or two components
    * requested, "7.3.0" if three are requested, and "7.3.0.0" if four are requested.
-   *
+   * 
    * <p>Trailing zero components at the end of a string representation will not be removed. For
-   * example, a dotted version of "1.0.0" will return "1.0.0" if only one or two components are
-   * requested.
+   * example, a dotted version of "1.0.0" will return "1.0.0" if only one or two components
+   * are requested.
    *
-   * @param numMinComponents the minimum number of dot-separated numbers that should be present in
-   *     the returned string representation
+   * @param numMinComponents the minimum number of dot-separated numbers that should be present
+   *     in the returned string representation
    */
   public String toStringWithMinimumComponents(int numMinComponents) {
     ImmutableList.Builder<Component> stringComponents = ImmutableList.builder();
@@ -262,12 +257,10 @@ public final class DottedVersion implements Comparable<DottedVersion>, SkylarkVa
     printer.append(stringRepresentation);
   }
 
-  public static final ObjectCodec<DottedVersion> CODEC =
+  static final ObjectCodec<DottedVersion> CODEC =
       new ObjectCodec<DottedVersion>() {
         @Override
-        public void serialize(
-            SerializationContext context, DottedVersion obj, CodedOutputStream codedOut)
-            throws IOException {
+        public void serialize(DottedVersion obj, CodedOutputStream codedOut) throws IOException {
           codedOut.writeInt32NoTag(obj.components.size());
           for (Component component : obj.components) {
             component.serialize(codedOut);
@@ -277,8 +270,7 @@ public final class DottedVersion implements Comparable<DottedVersion>, SkylarkVa
         }
 
         @Override
-        public DottedVersion deserialize(DeserializationContext context, CodedInputStream codedIn)
-            throws IOException {
+        public DottedVersion deserialize(CodedInputStream codedIn) throws IOException {
           int numComponents = codedIn.readInt32();
           // TODO(janakr: Presize this if/when https://github.com/google/guava/issues/196 is
           // resolved.
