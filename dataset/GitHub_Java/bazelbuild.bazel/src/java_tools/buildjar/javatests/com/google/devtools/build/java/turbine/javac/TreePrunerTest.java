@@ -19,15 +19,15 @@ import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Joiner;
-
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.parser.JavacParser;
 import com.sun.tools.javac.parser.ParserFactory;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
-import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.Context;
-
+import java.io.IOError;
+import java.io.IOException;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -36,7 +36,16 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TreePrunerTest {
 
-  static JCCompilationUnit parseLines(String... lines) {
+  Context context;
+
+  @Before
+  public void setUp() {
+    this.context = new Context();
+    // registers itself in the context as a side effect
+    new JavacFileManager(context, true, UTF_8);
+  }
+
+  JCCompilationUnit parseLines(String... lines) {
     Context context = new Context();
     try (JavacFileManager fm = new JavacFileManager(context, true, UTF_8)) {
       ParserFactory parserFactory = ParserFactory.instance(context);
@@ -45,36 +54,31 @@ public class TreePrunerTest {
           parserFactory.newParser(
               input, /*keepDocComments=*/ false, /*keepEndPos=*/ false, /*keepLineMap=*/ false);
       return parser.parseCompilationUnit();
+    } catch (IOException e) {
+      throw new IOError(e);
     }
   }
 
-  static JCVariableDecl parseField(String line) {
+  String printPruned(String line) {
     JCCompilationUnit unit = parseLines("class T {", line, "}");
+    TreePruner.prune(context, unit);
     JCClassDecl classDecl = (JCClassDecl) getOnlyElement(unit.defs);
-    return (JCVariableDecl) getOnlyElement(classDecl.defs);
-  }
-
-  static String printPruned(String line) {
-    JCVariableDecl tree = parseField(line);
-    TreePruner.prune(tree);
-    return tree.toString();
+    return getOnlyElement(classDecl.defs).toString();
   }
 
   @Test
   public void hello() {
     String[] lines = {
-      "class Test {",
-      // TODO(cushon): fix google-java-format's handling of lists of string literals
+      "class Test {", //
       "  void f() {",
       "    System.err.println(\"hello\");",
       "  }",
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(tree);
+    TreePruner.prune(context, tree);
     String[] expected = {
-      "class Test {",
-      // TODO(cushon): fix google-java-format's handling of lists of string literals
+      "class Test {", //
       "    ",
       "    void f() {",
       "    }",
@@ -96,10 +100,9 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(tree);
+    TreePruner.prune(context, tree);
     String[] expected = {
-      "class Test {",
-      // TODO(cushon): fix google-java-format's handling of lists of string literals
+      "class Test {", //
       "    {",
       "    }",
       "    static {",
@@ -112,8 +115,7 @@ public class TreePrunerTest {
   @Test
   public void nonConstantFieldInitializers() {
     String[] lines = {
-      "class Test {",
-      // TODO(cushon): fix google-java-format's handling of lists of string literals
+      "class Test {", //
       "  Object a = null;",
       "  int[] b = {1};",
       "  int c = g();",
@@ -121,10 +123,9 @@ public class TreePrunerTest {
       "}",
     };
     JCCompilationUnit tree = parseLines(lines);
-    TreePruner.prune(tree);
+    TreePruner.prune(context, tree);
     String[] expected = {
-      "class Test {",
-      // TODO(cushon): fix google-java-format's handling of lists of string literals
+      "class Test {", //
       "    Object a;",
       "    int[] b;",
       "    int c;",
@@ -220,7 +221,135 @@ public class TreePrunerTest {
     assertThat(printPruned("final int x = new X().y;")).isEqualTo("final int x");
   }
 
+  @Test
+  public void constructorChaining() {
+    String[] lines = {
+      "class Test {",
+      "  Test() {",
+      "    this(42);",
+      "    process();",
+      "  }",
+      "  Test() {",
+      "    this(42);",
+      "  }",
+      "  Test() {",
+      "    super(42);",
+      "  }",
+      "  Test() {}",
+      "}",
+    };
+    JCCompilationUnit tree = parseLines(lines);
+    TreePruner.prune(context, tree);
+    String[] expected = {
+      "class Test {",
+      "    ",
+      "    Test() {",
+      "        this(42);",
+      "    }",
+      "    ",
+      "    Test() {",
+      "        this(42);",
+      "    }",
+      "    ",
+      "    Test() {",
+      "        super(42);",
+      "    }",
+      "    ",
+      "    Test() {",
+      "    }",
+      "}",
+    };
+    assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void annotationDeclaration() {
+    String[] lines = {
+      "@interface Anno {",
+      "  int f() default CONST;",
+      "  int CONST = 42;",
+      "  int NONCONST = new Integer(42);",
+      "}",
+    };
+    JCCompilationUnit tree = parseLines(lines);
+    TreePruner.prune(context, tree);
+    String[] expected = {
+      "@interface Anno {",
+      "    ",
+      "    int f() default CONST;",
+      "    int CONST = 42;",
+      "    int NONCONST;",
+      "}",
+    };
+    assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void interfaceDeclaration() {
+    String[] lines = {
+      "interface Intf {", "  int CONST = 42;", "  int NONCONST = new Integer(42);", "}",
+    };
+    JCCompilationUnit tree = parseLines(lines);
+    TreePruner.prune(context, tree);
+    String[] expected = {
+      "interface Intf {", "    int CONST = 42;", "    int NONCONST;", "}",
+    };
+    assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
   private String prettyPrint(JCCompilationUnit tree) {
     return tree.toString().trim();
+  }
+
+  @Test
+  public void qualifiedSuperConstructorChaining() {
+    String[] lines = {
+      "class Test {",
+      "  class Inner {",
+      "    Inner(OuterInstance outer) {",
+      "      outer.super();",
+      "    }",
+      "  }",
+      "}",
+    };
+    JCCompilationUnit tree = parseLines(lines);
+    TreePruner.prune(context, tree);
+    String[] expected = {
+      "class Test {",
+      "    ",
+      "    class Inner {",
+      "        ",
+      "        Inner(OuterInstance outer) {",
+      "            outer.super();",
+      "        }",
+      "    }",
+      "}",
+    };
+    assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
+  }
+
+  @Test
+  public void unusedImport() {
+    String[] lines = {
+      "package p;",
+      "import com.google.common.collect.ImmutableMap;",
+      "public class Test {",
+      "  public Test() {",
+      "    ImmutableMap<String, String> map = ImmutableMap.of();",
+      "  }",
+      "}",
+    };
+    JCCompilationUnit tree = parseLines(lines);
+    TreePruner.prune(context, tree);
+    String[] expected = {
+      "package p;", //
+      "",
+      "public class Test {",
+      "    ",
+      "    public Test() {",
+      "    }",
+      "}",
+    };
+    assertThat(prettyPrint(tree)).isEqualTo(Joiner.on('\n').join(expected));
   }
 }
