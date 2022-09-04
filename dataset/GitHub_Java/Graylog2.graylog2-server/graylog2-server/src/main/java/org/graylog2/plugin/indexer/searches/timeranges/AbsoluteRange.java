@@ -75,9 +75,9 @@ public abstract class AbsoluteRange extends TimeRange {
     @Override
     public Map<String, Object> getPersistedConfig() {
         return ImmutableMap.<String, Object>of(
-            "type", ABSOLUTE,
-            "from", getFrom(),
-            "to", getTo());
+                "type", ABSOLUTE,
+                "from", getFrom(),
+                "to", getTo());
     }
 
     @AutoValue.Builder
@@ -95,7 +95,7 @@ public abstract class AbsoluteRange extends TimeRange {
             try {
                 return to(parseDateTime(to));
             } catch (IllegalArgumentException e) {
-                throw new InvalidRangeParametersException("Invalid end of range: " + to, e);
+                throw new InvalidRangeParametersException();
             }
         }
 
@@ -104,7 +104,7 @@ public abstract class AbsoluteRange extends TimeRange {
             try {
                 return from(parseDateTime(from));
             } catch (IllegalArgumentException e) {
-                throw new InvalidRangeParametersException("Invalid start of range: " + from, e);
+                throw new InvalidRangeParametersException();
             }
         }
 
