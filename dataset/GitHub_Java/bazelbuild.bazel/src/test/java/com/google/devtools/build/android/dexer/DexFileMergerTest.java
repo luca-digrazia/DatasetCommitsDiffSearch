@@ -30,7 +30,6 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.runfiles.Runfiles;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -50,22 +49,12 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class DexFileMergerTest {
 
-  private static final Path INPUT_JAR;
-  private static final Path INPUT_JAR2;
-  private static final Path MAIN_DEX_LIST_FILE;
+  private static final Path WORKING_DIR = Paths.get(System.getProperty("user.dir"));
+  private static final Path INPUT_JAR = WORKING_DIR.resolve(System.getProperty("testinputjar"));
+  private static final Path INPUT_JAR2 = WORKING_DIR.resolve(System.getProperty("testinputjar2"));
+  private static final Path MAIN_DEX_LIST_FILE =
+      WORKING_DIR.resolve(System.getProperty("testmaindexlist"));
   static final String DEX_PREFIX = "classes";
-
-  static {
-    try {
-      Runfiles runfiles = Runfiles.create();
-
-      INPUT_JAR = Paths.get(runfiles.rlocation(System.getProperty("testinputjar")));
-      INPUT_JAR2 = Paths.get(runfiles.rlocation(System.getProperty("testinputjar2")));
-      MAIN_DEX_LIST_FILE = Paths.get(runfiles.rlocation(System.getProperty("testmaindexlist")));
-    } catch (Exception e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
 
   /** Exercises DexFileMerger to write a single .dex file. */
   @Test
@@ -221,8 +210,7 @@ public class DexFileMergerTest {
       fail("Expected DexFileMerger to fail");
     } catch (IllegalArgumentException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "--minimal-main-dex is only supported with multidex enabled, but mode is: OFF");
     }
     try {
@@ -238,8 +226,7 @@ public class DexFileMergerTest {
       fail("Expected DexFileMerger to fail");
     } catch (IllegalArgumentException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo("--main-dex-list is only supported with multidex enabled, but mode is: OFF");
+          .hasMessage("--main-dex-list is only supported with multidex enabled, but mode is: OFF");
     }
   }
 
@@ -253,7 +240,7 @@ public class DexFileMergerTest {
           MultidexStrategy.OFF, /*mainDexList=*/ null, /*minimalMainDex=*/ false, DEX_PREFIX,
           dexArchive);
     } catch (IllegalStateException e) {
-      assertThat(e).hasMessageThat().isEqualTo("--forceJumbo flag not supported");
+      assertThat(e).hasMessage("--forceJumbo flag not supported");
       System.err.println("Skipping this test due to missing --forceJumbo support in Android SDK.");
       e.printStackTrace();
       return;
