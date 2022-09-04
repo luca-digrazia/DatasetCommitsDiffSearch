@@ -1,7 +1,6 @@
 package io.quarkus.funqy.runtime.bindings.knative.events;
 
 import static io.quarkus.funqy.knative.events.AbstractCloudEvent.isKnownSpecVersion;
-import static io.quarkus.funqy.knative.events.AbstractCloudEvent.parseMajorSpecVersion;
 import static io.quarkus.funqy.runtime.bindings.knative.events.KnativeEventsBindingRecorder.DATA_OBJECT_READER;
 import static io.quarkus.funqy.runtime.bindings.knative.events.KnativeEventsBindingRecorder.DATA_OBJECT_WRITER;
 import static io.quarkus.funqy.runtime.bindings.knative.events.KnativeEventsBindingRecorder.INPUT_CE_DATA_TYPE;
@@ -237,8 +236,6 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
 
                         boolean ceHasData = !Void.class.equals(innerInputType);
 
-                        int majorSpecVer = parseMajorSpecVersion(specVersion);
-
                         if (binaryCE) {
                             httpResponse.putHeader("ce-id", id);
                             httpResponse.putHeader("ce-specversion", specVersion);
@@ -254,7 +251,8 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
                             }
 
                             if (outputCloudEvent.dataSchema() != null) {
-                                String dsName = majorSpecVer == 0 ? "ce-schemaurl" : "ce-dataschema";
+                                String dsName = specVersion.charAt(0) == '0' ? "ce-schemaurl"
+                                        : "ce-dataschema";
                                 httpResponse.putHeader(dsName, outputCloudEvent.dataSchema());
                             }
 
@@ -299,7 +297,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
                             }
 
                             if (outputCloudEvent.dataSchema() != null) {
-                                String dsName = majorSpecVer == 0 ? "schemaurl" : "dataschema";
+                                String dsName = specVersion.charAt(0) == '0' ? "schemaurl" : "dataschema";
                                 responseEvent.put(dsName, outputCloudEvent.dataSchema());
                             }
 
@@ -313,32 +311,37 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
                             }
 
                             if (ceHasData) {
-                                if (majorSpecVer == 0) {
-                                    if (dataContentType != null && dataContentType.startsWith("application/json")) {
-                                        responseEvent.put("data", outputCloudEvent.data());
-                                    } else if (byte[].class.equals(innerOutputType)) {
-                                        responseEvent.put("datacontentencoding", "base64");
-                                        responseEvent.put("data", (byte[]) outputCloudEvent.data());
-                                    } else {
-                                        log.errorf(
-                                                "Don't know how to write ce to output (dataContentType: %s, javaType: %s).",
-                                                dataContentType, innerOutputType);
-                                        routingContext.fail(500);
-                                        return;
-                                    }
-                                } else {
-                                    if (dataContentType != null && dataContentType.startsWith("application/json")) {
-                                        responseEvent.put("data", outputCloudEvent.data());
-                                    } else if (byte[].class.equals(innerOutputType)) {
-                                        responseEvent.put("data_base64", (byte[]) outputCloudEvent.data());
-                                    } else {
-                                        log.errorf(
-                                                "Don't know how to write ce to output (dataContentType: %s, javaType: %s).",
-                                                dataContentType, innerOutputType);
-                                        routingContext.fail(500);
-                                        return;
-                                    }
-
+                                switch (specVersion.charAt(0)) {
+                                    case '1':
+                                        if (dataContentType != null && dataContentType.startsWith("application/json")) {
+                                            responseEvent.put("data", outputCloudEvent.data());
+                                        } else if (byte[].class.equals(innerOutputType)) {
+                                            responseEvent.put("data_base64", (byte[]) outputCloudEvent.data());
+                                        } else {
+                                            log.errorf(
+                                                    "Don't know how to write ce to output (dataContentType: %s, javaType: %s).",
+                                                    dataContentType, innerOutputType);
+                                            routingContext.fail(500);
+                                            return;
+                                        }
+                                        break;
+                                    case '0':
+                                        if (dataContentType != null && dataContentType.startsWith("application/json")) {
+                                            responseEvent.put("data", outputCloudEvent.data());
+                                        } else if (byte[].class.equals(innerOutputType)) {
+                                            responseEvent.put("datacontentencoding", "base64");
+                                            responseEvent.put("data", (byte[]) outputCloudEvent.data());
+                                        } else {
+                                            log.errorf(
+                                                    "Don't know how to write ce to output (dataContentType: %s, javaType: %s).",
+                                                    dataContentType, innerOutputType);
+                                            routingContext.fail(500);
+                                            return;
+                                        }
+                                        break;
+                                    default:
+                                        throw new RuntimeException(
+                                                "Unsupported CloudEvent spec-version: '" + specVersion + "'.");
                                 }
                             }
 
