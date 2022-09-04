@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.collect.Iterators;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Mutability.Freezable;
@@ -149,7 +148,7 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
     @Override
     public Iterator<E> iterator() {
-      return Iterators.unmodifiableIterator(getContentsUnsafe().iterator());
+      return Collections.unmodifiableCollection(getContentsUnsafe()).iterator();
     }
 
     @Override
