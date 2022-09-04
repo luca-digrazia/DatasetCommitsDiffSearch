@@ -453,7 +453,7 @@ public final class RuleContext extends TargetContext
     return isLegalFragment(fragment, NoTransition.INSTANCE);
   }
 
-  private BuildConfiguration getConfiguration(ConfigurationTransition transition) {
+  protected BuildConfiguration getConfiguration(ConfigurationTransition transition) {
     return transition.isHostTransition() ? hostConfiguration : getConfiguration();
   }
 

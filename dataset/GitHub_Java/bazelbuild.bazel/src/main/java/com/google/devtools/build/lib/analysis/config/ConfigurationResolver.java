@@ -393,7 +393,7 @@ public final class ConfigurationResolver {
       SkyFunction.Environment env, Label dep, BuildConfiguration parentConfig)
       throws InterruptedException {
     if (!parentConfig.trimConfigurations()) {
-      return parentConfig.getFragmentsMap().keySet();
+      return parentConfig.getAllFragments().keySet();
     }
     SkyKey fragmentsKey = TransitiveTargetKey.of(dep);
     TransitiveTargetValue transitiveDepInfo = (TransitiveTargetValue) env.getValue(fragmentsKey);
@@ -458,7 +458,7 @@ public final class ConfigurationResolver {
       throws ConfiguredTargetFunction.DependencyEvaluationException {
     Set<String> ctgFragmentNames = new HashSet<>();
     for (BuildConfiguration.Fragment fragment :
-        ctgValue.getConfiguration().getFragmentsMap().values()) {
+        ctgValue.getConfiguration().getAllFragments().values()) {
       ctgFragmentNames.add(fragment.getClass().getSimpleName());
     }
     Set<String> depFragmentNames = new HashSet<>();

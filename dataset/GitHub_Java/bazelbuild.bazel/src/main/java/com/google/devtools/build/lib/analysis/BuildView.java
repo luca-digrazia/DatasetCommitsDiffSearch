@@ -1133,12 +1133,6 @@ public class BuildView {
         getTopLevelTransitionForTarget(label, eventHandler));
   }
 
-  @VisibleForTesting
-  public ConfiguredTargetAndTarget getConfiguredTargetAndTargetForTesting(
-      ExtendedEventHandler eventHandler, Label label, BuildConfiguration config) {
-    return skyframeExecutor.getConfiguredTargetAndTargetForTesting(eventHandler, label, config);
-  }
-
   /**
    * Returns a RuleContext which is the same as the original RuleContext of the target parameter.
    */
