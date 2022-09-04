@@ -62,6 +62,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
+    if (!isAppleToolchain()) {
+      CcCommon.checkRuleLoadedThroughMacro(ruleContext);
+    }
     validateToolchain(ruleContext);
     CcToolchainAttributesProvider attributes =
         new CcToolchainAttributesProvider(
@@ -100,25 +103,17 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             ccToolchainProvider,
             ruleContext.getRule().getLocation());
 
-    ToolchainInfo toolchain =
-        new ToolchainInfo(
-            ImmutableMap.<String, Object>builder()
-                .put("cc", ccToolchainProvider)
-                // Add a clear signal that this is a CcToolchainProvider, since just "cc" is
-                // generic enough to possibly be re-used.
-                .put("cc_provider_in_toolchain", true)
-                .build());
     ruleConfiguredTargetBuilder
         .addNativeDeclaredProvider(ccToolchainProvider)
-        .addNativeDeclaredProvider(toolchain)
         .addNativeDeclaredProvider(templateVariableInfo)
         .setFilesToBuild(ccToolchainProvider.getAllFiles())
         .addProvider(new MiddlemanProvider(ccToolchainProvider.getAllFilesMiddleman()));
     return ruleConfiguredTargetBuilder.build();
   }
 
-  public static TemplateVariableInfo createMakeVariableProvider(
-      CcToolchainProvider toolchainProvider, Location location) {
+  static TemplateVariableInfo createMakeVariableProvider(
+      CcToolchainProvider toolchainProvider,
+      Location location) {
 
     HashMap<String, String> makeVariables =
         new HashMap<>(toolchainProvider.getAdditionalMakeVariables());

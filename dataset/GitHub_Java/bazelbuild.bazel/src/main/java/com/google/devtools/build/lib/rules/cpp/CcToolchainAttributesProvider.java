@@ -14,155 +14,176 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.Allowlist;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.LicensesProvider;
 import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
 import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.MiddlemanProvider;
+import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.License;
-import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
 
 /**
  * Provider encapsulating all the information from the cc_toolchain rule that affects creation of
  * {@link CcToolchainProvider}
  */
-public class CcToolchainAttributesProvider extends ToolchainInfo {
+// TODO(adonovan): rename s/Provider/Info/.
+public class CcToolchainAttributesProvider extends NativeInfo implements HasCcToolchainLabel {
 
-  public static final NativeProvider<CcToolchainAttributesProvider> PROVIDER =
-      new NativeProvider<CcToolchainAttributesProvider>(
-          CcToolchainAttributesProvider.class, "CcToolchainAttributesInfo") {};
+  public static final BuiltinProvider<CcToolchainAttributesProvider> PROVIDER =
+      new BuiltinProvider<CcToolchainAttributesProvider>(
+          "CcToolchainAttributesInfo", CcToolchainAttributesProvider.class) {};
 
   private final boolean supportsParamFiles;
   private final boolean supportsHeaderParsing;
-  private final NestedSet<Artifact> crosstool;
-  private final NestedSet<Artifact> crosstoolMiddleman;
-  private final NestedSet<Artifact> compile;
-  private final NestedSet<Artifact> compileWithoutIncludes;
-  private final NestedSet<Artifact> strip;
-  private final NestedSet<Artifact> objcopy;
-  private final NestedSet<Artifact> as;
-  private final NestedSet<Artifact> ar;
-  private final NestedSet<Artifact> link;
-  private final NestedSet<Artifact> dwp;
+  private final NestedSet<Artifact> allFiles;
+  private final NestedSet<Artifact> allFilesMiddleman;
+  private final NestedSet<Artifact> compilerFiles;
+  private final NestedSet<Artifact> compilerFilesWithoutIncludes;
+  private final NestedSet<Artifact> stripFiles;
+  private final NestedSet<Artifact> objcopyFiles;
+  private final NestedSet<Artifact> asFiles;
+  private final NestedSet<Artifact> arFiles;
+  private final NestedSet<Artifact> linkerFiles;
+  private final NestedSet<Artifact> dwpFiles;
+  private final Label libcTopAttribute;
   private final NestedSet<Artifact> libc;
   private final NestedSet<Artifact> libcMiddleman;
+  private final TransitiveInfoCollection libcTop;
+  private final NestedSet<Artifact> targetLibc;
+  private final TransitiveInfoCollection targetLibcTop;
   private final NestedSet<Artifact> fullInputsForCrosstool;
   private final NestedSet<Artifact> fullInputsForLink;
   private final NestedSet<Artifact> coverage;
   private final String compiler;
-  private final String proto;
   private final String cpu;
   private final Artifact ifsoBuilder;
   private final Artifact linkDynamicLibraryTool;
-  private final FdoProfileProvider fdoOptimizeProvider;
   private final TransitiveInfoCollection fdoOptimize;
   private final ImmutableList<Artifact> fdoOptimizeArtifacts;
   private final FdoPrefetchHintsProvider fdoPrefetch;
-  private final TransitiveInfoCollection libcTop;
+  private final PropellerOptimizeProvider propellerOptimize;
   private final TransitiveInfoCollection moduleMap;
   private final Artifact moduleMapArtifact;
   private final Artifact zipper;
   private final String purposePrefix;
   private final String runtimeSolibDirBase;
-  private final ImmutableList<? extends TransitiveInfoCollection> staticRuntimesLibs;
-  private final ImmutableList<? extends TransitiveInfoCollection> dynamicRuntimesLibs;
   private final LicensesProvider licensesProvider;
   private final Label toolchainType;
-  private final CcToolchainVariables additionalBuildVariables;
+  private final AdditionalBuildVariablesComputer additionalBuildVariablesComputer;
   private final CcToolchainConfigInfo ccToolchainConfigInfo;
   private final String toolchainIdentifier;
+  private final FdoProfileProvider fdoOptimizeProvider;
   private final FdoProfileProvider fdoProfileProvider;
+  private final FdoProfileProvider csFdoProfileProvider;
+  private final FdoProfileProvider xfdoProfileProvider;
   private final Label ccToolchainLabel;
+  private final TransitiveInfoCollection staticRuntimeLib;
+  private final TransitiveInfoCollection dynamicRuntimeLib;
+  private final PackageSpecificationProvider allowlistForLayeringCheck;
+  private final PackageSpecificationProvider allowlistForLooseHeaderCheck;
 
   public CcToolchainAttributesProvider(
       RuleContext ruleContext,
       boolean isAppleToolchain,
-      CcToolchainVariables additionalBuildVariables) {
-    super(ImmutableMap.of(), Location.BUILTIN);
+      AdditionalBuildVariablesComputer additionalBuildVariablesComputer) {
+    super();
     this.ccToolchainLabel = ruleContext.getLabel();
     this.toolchainIdentifier = ruleContext.attributes().get("toolchain_identifier", Type.STRING);
+    if (ruleContext.getFragment(CppConfiguration.class).removeCpuCompilerCcToolchainAttributes()
+        && (ruleContext.attributes().isAttributeValueExplicitlySpecified("cpu")
+            || ruleContext.attributes().isAttributeValueExplicitlySpecified("compiler"))) {
+      ruleContext.ruleError(
+          "attributes 'cpu' and 'compiler' have been deprecated, please remove them. See "
+              + "https://github.com/bazelbuild/bazel/issues/7075 for details.");
+    }
+
     this.cpu = ruleContext.attributes().get("cpu", Type.STRING);
     this.compiler = ruleContext.attributes().get("compiler", Type.STRING);
-    this.proto = ruleContext.attributes().get("proto", Type.STRING);
     this.supportsParamFiles = ruleContext.attributes().get("supports_param_files", BOOLEAN);
     this.supportsHeaderParsing = ruleContext.attributes().get("supports_header_parsing", BOOLEAN);
-    this.crosstool =
-        ruleContext
-            .getPrerequisite("all_files", Mode.HOST)
-            .getProvider(FileProvider.class)
-            .getFilesToBuild();
-    this.crosstoolMiddleman = getMiddlemanOrFiles(ruleContext, "all_files");
-    this.compile = getMiddlemanOrFiles(ruleContext, "compiler_files");
-    this.compileWithoutIncludes =
+    this.allFiles =
+        ruleContext.getPrerequisite("all_files").getProvider(FileProvider.class).getFilesToBuild();
+    this.allFilesMiddleman = getMiddlemanOrFiles(ruleContext, "all_files");
+    this.compilerFiles = getMiddlemanOrFiles(ruleContext, "compiler_files");
+    this.compilerFilesWithoutIncludes =
         getOptionalMiddlemanOrFiles(ruleContext, "compiler_files_without_includes");
-    this.strip = getMiddlemanOrFiles(ruleContext, "strip_files");
-    this.objcopy = getMiddlemanOrFiles(ruleContext, "objcopy_files");
-    this.as = getOptionalMiddlemanOrFiles(ruleContext, "as_files");
-    this.ar = getOptionalMiddlemanOrFiles(ruleContext, "ar_files");
-    this.link = getMiddlemanOrFiles(ruleContext, "linker_files");
-    this.dwp = getMiddlemanOrFiles(ruleContext, "dwp_files");
-    this.libcMiddleman =
-        getOptionalMiddlemanOrFiles(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
-    this.libc = getOptionalFiles(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
+    this.stripFiles = getMiddlemanOrFiles(ruleContext, "strip_files");
+    this.objcopyFiles = getMiddlemanOrFiles(ruleContext, "objcopy_files");
+    this.asFiles = getOptionalMiddlemanOrFiles(ruleContext, "as_files");
+    this.arFiles = getOptionalMiddlemanOrFiles(ruleContext, "ar_files");
+    this.linkerFiles = getMiddlemanOrFiles(ruleContext, "linker_files");
+    this.dwpFiles = getMiddlemanOrFiles(ruleContext, "dwp_files");
+
+    this.libcMiddleman = getOptionalMiddlemanOrFiles(ruleContext, CcToolchainRule.LIBC_TOP_ATTR);
+    this.libc = getOptionalFiles(ruleContext, CcToolchainRule.LIBC_TOP_ATTR);
+    this.libcTop = ruleContext.getPrerequisite(CcToolchainRule.LIBC_TOP_ATTR);
+
+    this.targetLibc = getOptionalFiles(ruleContext, CcToolchainRule.TARGET_LIBC_TOP_ATTR);
+    this.targetLibcTop = ruleContext.getPrerequisite(CcToolchainRule.TARGET_LIBC_TOP_ATTR);
+
+    this.libcTopAttribute = ruleContext.attributes().get("libc_top", BuildType.LABEL);
+
     this.fullInputsForCrosstool =
         NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(crosstoolMiddleman)
+            .addTransitive(allFilesMiddleman)
             .addTransitive(libcMiddleman)
             .build();
-    ;
-    this.fullInputsForLink = fullInputsForLink(ruleContext, link, libcMiddleman, isAppleToolchain);
-    NestedSet<Artifact> coverageAttribute =
-        getOptionalMiddlemanOrFiles(ruleContext, "coverage_files");
-    if (coverageAttribute.isEmpty()) {
-      this.coverage = Preconditions.checkNotNull(this.crosstool);
+    this.fullInputsForLink =
+        fullInputsForLink(ruleContext, linkerFiles, libcMiddleman, isAppleToolchain);
+    NestedSet<Artifact> coverageFiles = getOptionalMiddlemanOrFiles(ruleContext, "coverage_files");
+    if (coverageFiles.isEmpty()) {
+      this.coverage = Preconditions.checkNotNull(this.allFiles);
     } else {
-      this.coverage = coverageAttribute;
+      this.coverage = coverageFiles;
     }
-    this.ifsoBuilder = ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST);
-    this.linkDynamicLibraryTool =
-        ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST);
+    this.ifsoBuilder = ruleContext.getPrerequisiteArtifact("$interface_library_builder");
+    this.linkDynamicLibraryTool = ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool");
     this.fdoProfileProvider =
+        ruleContext.getPrerequisite(CcToolchainRule.FDO_PROFILE_ATTR, FdoProfileProvider.PROVIDER);
+    this.csFdoProfileProvider =
         ruleContext.getPrerequisite(
-            CcToolchainRule.FDO_PROFILE_ATTR, Mode.TARGET, FdoProfileProvider.PROVIDER);
+            CcToolchainRule.CSFDO_PROFILE_ATTR, FdoProfileProvider.PROVIDER);
+    this.xfdoProfileProvider =
+        ruleContext.getPrerequisite(CcToolchainRule.XFDO_PROFILE_ATTR, FdoProfileProvider.PROVIDER);
     this.fdoOptimizeProvider =
-        ruleContext.getPrerequisite(
-            CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET, FdoProfileProvider.PROVIDER);
-    this.fdoOptimize = ruleContext.getPrerequisite(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET);
+        ruleContext.getPrerequisite(CcToolchainRule.FDO_OPTIMIZE_ATTR, FdoProfileProvider.PROVIDER);
+    this.fdoOptimize = ruleContext.getPrerequisite(CcToolchainRule.FDO_OPTIMIZE_ATTR);
     this.fdoOptimizeArtifacts =
-        ruleContext.getPrerequisiteArtifacts(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET).list();
+        ruleContext.getPrerequisiteArtifacts(CcToolchainRule.FDO_OPTIMIZE_ATTR).list();
     this.fdoPrefetch =
-        ruleContext.getPrerequisite(
-            ":fdo_prefetch_hints", Mode.TARGET, FdoPrefetchHintsProvider.PROVIDER);
-    this.libcTop = ruleContext.getPrerequisite(CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
-    this.moduleMap = ruleContext.getPrerequisite("module_map", Mode.HOST);
-    this.moduleMapArtifact = ruleContext.getPrerequisiteArtifact("module_map", Mode.HOST);
-    this.zipper = ruleContext.getPrerequisiteArtifact(":zipper", Mode.HOST);
+        ruleContext.getPrerequisite(":fdo_prefetch_hints", FdoPrefetchHintsProvider.PROVIDER);
+    this.propellerOptimize =
+        ruleContext.getPrerequisite(":propeller_optimize", PropellerOptimizeProvider.PROVIDER);
+    this.moduleMap = ruleContext.getPrerequisite("module_map");
+    this.moduleMapArtifact = ruleContext.getPrerequisiteArtifact("module_map");
+    this.zipper = ruleContext.getPrerequisiteArtifact(":zipper");
     this.purposePrefix = Actions.escapeLabel(ruleContext.getLabel()) + "_";
     this.runtimeSolibDirBase = "_solib_" + "_" + Actions.escapeLabel(ruleContext.getLabel());
-    this.staticRuntimesLibs =
-        ImmutableList.copyOf(ruleContext.getPrerequisites("static_runtime_libs", Mode.TARGET));
-    this.dynamicRuntimesLibs =
-        ImmutableList.copyOf(ruleContext.getPrerequisites("dynamic_runtime_libs", Mode.TARGET));
+    this.staticRuntimeLib = ruleContext.getPrerequisite("static_runtime_lib");
+    this.dynamicRuntimeLib = ruleContext.getPrerequisite("dynamic_runtime_lib");
     this.ccToolchainConfigInfo =
         ruleContext.getPrerequisite(
-            CcToolchainRule.TOOLCHAIN_CONFIG_ATTR, Mode.TARGET, CcToolchainConfigInfo.PROVIDER);
+            CcToolchainRule.TOOLCHAIN_CONFIG_ATTR,
+            CcToolchainConfigInfo.PROVIDER);
 
     // If output_license is specified on the cc_toolchain rule, override the transitive licenses
     // with that one. This is necessary because cc_toolchain is used in the target configuration,
@@ -190,7 +211,18 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     } else {
       this.toolchainType = null;
     }
-    this.additionalBuildVariables = additionalBuildVariables;
+    this.additionalBuildVariablesComputer = additionalBuildVariablesComputer;
+    this.allowlistForLayeringCheck =
+        Allowlist.fetchPackageSpecificationProvider(
+            ruleContext, CcToolchain.ALLOWED_LAYERING_CHECK_FEATURES_ALLOWLIST);
+    this.allowlistForLooseHeaderCheck =
+        Allowlist.fetchPackageSpecificationProvider(
+            ruleContext, CcToolchain.LOOSE_HEADER_CHECK_ALLOWLIST);
+  }
+
+  @Override
+  public BuiltinProvider<CcToolchainAttributesProvider> getProvider() {
+    return PROVIDER;
   }
 
   public String getCpu() {
@@ -213,6 +245,10 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     return fdoPrefetch;
   }
 
+  public PropellerOptimizeProvider getPropellerOptimize() {
+    return propellerOptimize;
+  }
+
   public String getToolchainIdentifier() {
     return toolchainIdentifier;
   }
@@ -229,44 +265,44 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     return fdoOptimizeArtifacts;
   }
 
-  public ImmutableList<? extends TransitiveInfoCollection> getStaticRuntimesLibs() {
-    return staticRuntimesLibs;
-  }
-
   public LicensesProvider getLicensesProvider() {
     return licensesProvider;
   }
 
-  public ImmutableList<? extends TransitiveInfoCollection> getDynamicRuntimesLibs() {
-    return dynamicRuntimesLibs;
+  public TransitiveInfoCollection getStaticRuntimeLib() {
+    return staticRuntimeLib;
+  }
+
+  public TransitiveInfoCollection getDynamicRuntimeLib() {
+    return dynamicRuntimeLib;
   }
 
   public boolean isSupportsHeaderParsing() {
     return supportsHeaderParsing;
   }
 
-  public CcToolchainVariables getAdditionalBuildVariables() {
-    return additionalBuildVariables;
+  public AdditionalBuildVariablesComputer getAdditionalBuildVariablesComputer() {
+    return additionalBuildVariablesComputer;
   }
 
-  public NestedSet<Artifact> getCrosstool() {
-    return crosstool;
+  public NestedSet<Artifact> getAllFiles() {
+    return allFiles;
   }
 
-  public NestedSet<Artifact> getCrosstoolMiddleman() {
-    return crosstoolMiddleman;
+  public NestedSet<Artifact> getAllFilesMiddleman() {
+    return allFilesMiddleman;
   }
 
-  public NestedSet<Artifact> getCompile() {
-    return compile;
+  public NestedSet<Artifact> getCompilerFiles() {
+    return compilerFiles;
   }
 
-  public NestedSet<Artifact> getStrip() {
-    return strip;
+  public NestedSet<Artifact> getStripFiles() {
+    return stripFiles;
   }
 
-  public NestedSet<Artifact> getObjcopy() {
-    return objcopy;
+  public NestedSet<Artifact> getObjcopyFiles() {
+    return objcopyFiles;
   }
 
   public TransitiveInfoCollection getFdoOptimize() {
@@ -282,24 +318,24 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     return moduleMap;
   }
 
-  public NestedSet<Artifact> getAs() {
-    return as;
+  public NestedSet<Artifact> getAsFiles() {
+    return asFiles;
   }
 
-  public NestedSet<Artifact> getAr() {
-    return ar;
+  public NestedSet<Artifact> getArFiles() {
+    return arFiles;
   }
 
   public TransitiveInfoCollection getLibcTop() {
     return libcTop;
   }
 
-  public NestedSet<Artifact> getLink() {
-    return link;
+  public NestedSet<Artifact> getLinkerFiles() {
+    return linkerFiles;
   }
 
-  public NestedSet<Artifact> getDwp() {
-    return dwp;
+  public NestedSet<Artifact> getDwpFiles() {
+    return dwpFiles;
   }
 
   public FdoProfileProvider getFdoOptimizeProvider() {
@@ -310,16 +346,20 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     return moduleMapArtifact;
   }
 
-  public String getProto() {
-    return proto;
-  }
-
   public NestedSet<Artifact> getFullInputsForCrosstool() {
     return fullInputsForCrosstool;
   }
 
   public FdoProfileProvider getFdoProfileProvider() {
     return fdoProfileProvider;
+  }
+
+  public FdoProfileProvider getCSFdoProfileProvider() {
+    return csFdoProfileProvider;
+  }
+
+  public FdoProfileProvider getXFdoProfileProvider() {
+    return xfdoProfileProvider;
   }
 
   public Artifact getZipper() {
@@ -338,12 +378,32 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     return coverage;
   }
 
-  public NestedSet<Artifact> getCompileWithoutIncludes() {
-    return compileWithoutIncludes;
+  public NestedSet<Artifact> getCompilerFilesWithoutIncludes() {
+    return compilerFilesWithoutIncludes;
   }
 
   public NestedSet<Artifact> getLibc() {
     return libc;
+  }
+
+  public NestedSet<Artifact> getTargetLibc() {
+    return targetLibc;
+  }
+
+  public TransitiveInfoCollection getTargetLibcTop() {
+    return targetLibcTop;
+  }
+
+  public Label getLibcTopLabel() {
+    return getLibcTop() == null ? null : getLibcTop().getLabel();
+  }
+
+  public Label getTargetLibcTopLabel() {
+    return getTargetLibcTop() == null ? null : getTargetLibcTop().getLabel();
+  }
+
+  public Label getLibcTopAttribute() {
+    return libcTopAttribute;
   }
 
   public String getCompiler() {
@@ -354,13 +414,16 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
     return ifsoBuilder;
   }
 
-  private static NestedSet<Artifact> getMiddlemanOrFiles(RuleContext context, String attribute) {
-    return getMiddlemanOrFiles(context, attribute, Mode.HOST);
+  public PackageSpecificationProvider getAllowlistForLayeringCheck() {
+    return allowlistForLayeringCheck;
   }
 
-  private static NestedSet<Artifact> getMiddlemanOrFiles(
-      RuleContext context, String attribute, Mode mode) {
-    TransitiveInfoCollection dep = context.getPrerequisite(attribute, mode);
+  public PackageSpecificationProvider getAllowlistForLooseHeaderCheck() {
+    return allowlistForLooseHeaderCheck;
+  }
+
+  private static NestedSet<Artifact> getMiddlemanOrFiles(RuleContext context, String attribute) {
+    TransitiveInfoCollection dep = context.getPrerequisite(attribute);
     MiddlemanProvider middlemanProvider = dep.getProvider(MiddlemanProvider.class);
     // We use the middleman if we can (if the dep is a filegroup), otherwise, just the regular
     // filesToBuild (e.g. if it is a simple input file)
@@ -371,27 +434,21 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
 
   private static NestedSet<Artifact> getOptionalMiddlemanOrFiles(
       RuleContext context, String attribute) {
-    return getOptionalMiddlemanOrFiles(context, attribute, Mode.HOST);
-  }
-
-  private static NestedSet<Artifact> getOptionalMiddlemanOrFiles(
-      RuleContext context, String attribute, Mode mode) {
-    TransitiveInfoCollection dep = context.getPrerequisite(attribute, mode);
+    TransitiveInfoCollection dep = context.getPrerequisite(attribute);
     return dep != null
-        ? getMiddlemanOrFiles(context, attribute, mode)
+        ? getMiddlemanOrFiles(context, attribute)
         : NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   }
 
-  private static NestedSet<Artifact> getOptionalFiles(
-      RuleContext ruleContext, String attribute, Mode mode) {
-    TransitiveInfoCollection dep = ruleContext.getPrerequisite(attribute, mode);
+  private static NestedSet<Artifact> getOptionalFiles(RuleContext ruleContext, String attribute) {
+    TransitiveInfoCollection dep = ruleContext.getPrerequisite(attribute);
     return dep != null
         ? dep.getProvider(FileProvider.class).getFilesToBuild()
         : NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   }
 
   /**
-   * Returns the crosstool-derived link action inputs for a given rule. Adds the given set of
+   * Returns the allFiles-derived link action inputs for a given rule. Adds the given set of
    * artifacts as extra inputs.
    */
   private static NestedSet<Artifact> fullInputsForLink(
@@ -403,9 +460,18 @@ public class CcToolchainAttributesProvider extends ToolchainInfo {
         NestedSetBuilder.<Artifact>stableOrder().addTransitive(link).addTransitive(libcMiddleman);
     if (!isAppleToolchain) {
       builder
-          .add(ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST))
-          .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST));
+          .add(ruleContext.getPrerequisiteArtifact("$interface_library_builder"))
+          .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool"));
     }
     return builder.build();
   }
+}
+
+/**
+ * Temporary interface to cover common interface of {@link CcToolchainAttributesProvider} and {@link
+ * CcToolchainProvider}.
+ */
+// TODO(b/113849758): Remove once behavior is migrated.
+interface HasCcToolchainLabel extends Info {
+  Label getCcToolchainLabel();
 }
