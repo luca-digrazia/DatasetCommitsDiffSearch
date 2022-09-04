@@ -549,7 +549,7 @@ public class AndroidCompiledDataDeserializer implements AndroidDataDeserializer 
     Preconditions.checkArgument(compiledFileStream.skipBytes(8) == 8);
 
     byte[] file = new byte[resFileHeaderSize];
-    compiledFileStream.readFully(file);
+    compiledFileStream.read(file, 0, resFileHeaderSize);
     CompiledFile compiledFile = CompiledFile.parseFrom(file);
 
     Path sourcePath = Paths.get(compiledFile.getSourcePath());
