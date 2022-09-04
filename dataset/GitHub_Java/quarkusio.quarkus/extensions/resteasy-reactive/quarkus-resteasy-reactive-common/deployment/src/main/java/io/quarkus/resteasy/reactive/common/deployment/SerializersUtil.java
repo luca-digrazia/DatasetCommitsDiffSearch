@@ -38,7 +38,6 @@ public class SerializersUtil {
             if (!additionalWriter.getMediaTypeStrings().isEmpty()) {
                 writer.setMediaTypeStrings(additionalWriter.getMediaTypeStrings());
             }
-            writer.setPriority(additionalWriter.getPriority());
             recorder.registerWriter(serialisers, additionalWriter.getHandledClassName(), writer);
             reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, writerClassName));
         }
@@ -54,7 +53,6 @@ public class SerializersUtil {
             if (!additionalReader.getMediaTypeStrings().isEmpty()) {
                 reader.setMediaTypeStrings(additionalReader.getMediaTypeStrings());
             }
-            reader.setPriority(additionalReader.getPriority());
             recorder.registerReader(serialisers, additionalReader.getHandledClassName(), reader);
             reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClassName));
         }

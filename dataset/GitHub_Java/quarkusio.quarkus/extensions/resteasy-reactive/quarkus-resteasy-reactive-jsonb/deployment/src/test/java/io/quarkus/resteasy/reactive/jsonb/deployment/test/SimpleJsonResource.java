@@ -16,7 +16,7 @@ import javax.ws.rs.core.MediaType;
 import io.quarkus.runtime.BlockingOperationControl;
 
 @Path("/simple")
-public class SimpleJsonResource extends SuperClass<Person> {
+public class SimpleJsonResource {
 
     @GET
     @Path("/person")

@@ -18,7 +18,7 @@ import com.fasterxml.jackson.annotation.JsonView;
 import io.quarkus.runtime.BlockingOperationControl;
 
 @Path("/simple")
-public class SimpleJsonResource extends SuperClass<Person> {
+public class SimpleJsonResource {
 
     @GET
     @Path("/person")

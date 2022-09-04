@@ -136,10 +136,7 @@ public class RuntimeResourceDeployment {
         //which we also want in the abort handler chain
         abortHandlingChain.addAll(handlers);
 
-        //spec doesn't seem to test this, but RESTEeasy does not run request filters again for sub resources (which makes sense)
-        if (!locatableResource) {
-            handlers.addAll(interceptorDeployment.setupRequestFilterHandler());
-        }
+        handlers.addAll(interceptorDeployment.setupRequestFilterHandler());
 
         // some parameters need the body to be read
         MethodParameter[] parameters = method.getParameters();
