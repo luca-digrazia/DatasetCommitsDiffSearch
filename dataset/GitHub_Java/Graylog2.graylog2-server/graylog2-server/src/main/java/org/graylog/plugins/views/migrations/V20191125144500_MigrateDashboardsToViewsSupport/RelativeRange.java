@@ -39,7 +39,7 @@ public abstract class RelativeRange extends TimeRange {
         return builder().type(type).range(range).build();
     }
 
-    public static RelativeRange create(int range) {
+    static RelativeRange create(int range) {
         return create(RELATIVE, range);
     }
 

@@ -49,7 +49,7 @@ public abstract class AbsoluteRange extends TimeRange {
         return builder().type(type).from(from).to(to).build();
     }
 
-    public static AbsoluteRange create(DateTime from, DateTime to) {
+    static AbsoluteRange create(DateTime from, DateTime to) {
         return builder().type(ABSOLUTE).from(from).to(to).build();
     }
 
