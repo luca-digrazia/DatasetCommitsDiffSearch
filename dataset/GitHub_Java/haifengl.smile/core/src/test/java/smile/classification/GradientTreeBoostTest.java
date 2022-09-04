@@ -20,13 +20,12 @@ package smile.classification;
 import smile.data.*;
 import smile.math.MathEx;
 import smile.validation.*;
-import smile.validation.metric.Accuracy;
-import smile.validation.metric.Error;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import smile.validation.Error;
 
 import static org.junit.Assert.assertEquals;
 
@@ -68,11 +67,11 @@ public class GradientTreeBoostTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        ClassificationMetrics metrics = LOOCV.classification(WeatherNominal.formula, WeatherNominal.data,
-                (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int[] prediction = LOOCV.classification(WeatherNominal.formula, WeatherNominal.data, (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int error = Error.of(WeatherNominal.y, prediction);
 
-        System.out.println(metrics);
-        assertEquals(6, metrics.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(6, error);
 
         java.nio.file.Path temp = smile.data.Serialize.write(model);
         smile.data.Serialize.read(temp);
@@ -90,11 +89,10 @@ public class GradientTreeBoostTest {
             System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
         }
 
-        ClassificationMetrics metrics = LOOCV.classification(Iris.formula, Iris.data,
-                (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
-
-        System.out.println(metrics);
-        assertEquals(8, metrics.accuracy);
+        int[] prediction = LOOCV.classification(Iris.formula, Iris.data, (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int error = Error.of(Iris.y, prediction);
+        System.out.println("Error = " + error);
+        assertEquals(8, error);
     }
 
     @Test
@@ -102,11 +100,11 @@ public class GradientTreeBoostTest {
         System.out.println("Pen Digits");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<GradientTreeBoost> result = CrossValidation.classification(10, PenDigits.formula, PenDigits.data,
-                (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int[] prediction = CrossValidation.classification(10, PenDigits.formula, PenDigits.data, (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int error = Error.of(PenDigits.y, prediction);
 
-        System.out.println(result);
-        assertEquals(143, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(143, error);
     }
 
     @Test
@@ -114,11 +112,11 @@ public class GradientTreeBoostTest {
         System.out.println("Breast Cancer");
 
         MathEx.setSeed(19650218); // to get repeatable results.
-        ClassificationValidations<GradientTreeBoost> result = CrossValidation.classification(10, BreastCancer.formula, BreastCancer.data,
-                (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int[] prediction = CrossValidation.classification(10, BreastCancer.formula, BreastCancer.data, (f, x) -> GradientTreeBoost.fit(f, x, 100, 20, 6, 5, 0.05, 0.7));
+        int error = Error.of(BreastCancer.y, prediction);
 
-        System.out.println(result);
-        assertEquals(21, result.avg.accuracy);
+        System.out.println("Error = " + error);
+        assertEquals(21, error);
     }
 
     @Test

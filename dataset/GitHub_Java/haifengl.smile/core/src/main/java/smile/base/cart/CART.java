@@ -34,11 +34,7 @@ import java.util.*;
 import java.util.stream.IntStream;
 import java.util.AbstractMap.SimpleEntry;
 
-/**
- * Classification and regression tree.
- *
- * @author Haifeng Li
- */
+/** Classification and regression tree. */
 public abstract class CART implements SHAP<Tuple>, Serializable {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CART.class);

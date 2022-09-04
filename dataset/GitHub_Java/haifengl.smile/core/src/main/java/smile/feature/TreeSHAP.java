@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.feature;
 
@@ -35,7 +35,6 @@ public interface TreeSHAP extends SHAP<Tuple> {
      * Returns the classification/regression trees.
      */
     CART[] trees();
-
     /** Returns the formula associated with the model. */
     Formula formula();
 
@@ -48,12 +47,10 @@ public interface TreeSHAP extends SHAP<Tuple> {
         for (CART tree : forest) {
             double[] phii = tree.shap(xt);
 
-            if (phi == null) {
-              phi = phii;
-            } else {
-                for (int i = 0; i < phi.length; i++) {
+            if (phi == null) phi = phii;
+            else {
+                for (int i = 0; i < phi.length; i++)
                     phi[i] += phii[i];
-                }
             }
         }
 
