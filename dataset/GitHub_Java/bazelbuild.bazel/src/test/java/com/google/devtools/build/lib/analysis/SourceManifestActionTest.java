@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.python.PythonUtils;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Path;
@@ -88,25 +89,34 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
    * @throws InterruptedException
    * @throws IOException
    */
-  public String getFileContentsAsString(SourceManifestAction manifest) throws IOException {
+  public String getFileContentsAsString(SourceManifestAction manifest)
+      throws IOException, InterruptedException, ActionExecutionException {
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
     manifest.writeOutputFile(stream, reporter);
     return stream.toString();
   }
 
+  private SourceManifestAction createSymlinkAction(Runfiles.PruningManifest pruningManifest) {
+    return createAction(ManifestType.SOURCE_SYMLINKS, pruningManifest, true);
+  }
+
   private SourceManifestAction createSymlinkAction() {
-    return createAction(ManifestType.SOURCE_SYMLINKS, true);
+    return createSymlinkAction(null);
   }
 
   private SourceManifestAction createSourceOnlyAction() {
-    return createAction(ManifestType.SOURCES_ONLY, true);
+    return createAction(ManifestType.SOURCES_ONLY, null, true);
   }
 
-  private SourceManifestAction createAction(ManifestType type, boolean addInitPy) {
+  private SourceManifestAction createAction(ManifestType type,
+      Runfiles.PruningManifest pruningManifest, boolean addInitPy) {
     Runfiles.Builder builder = new Runfiles.Builder("TESTING", false);
     builder.addSymlinks(fakeManifest);
     if (addInitPy) {
       builder.setEmptyFilesSupplier(PythonUtils.GET_INIT_PY_FILES);
+    }
+    if (pruningManifest != null) {
+      builder.addPruningManifest(pruningManifest);
     }
     return new SourceManifestAction(type, NULL_ACTION_OWNER, manifestOutputFile, builder.build());
   }
@@ -215,7 +225,7 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
   @Test
   public void testGetMnemonic() throws Exception {
     assertThat(createSymlinkAction().getMnemonic()).isEqualTo("SourceSymlinkManifest");
-    assertThat(createAction(ManifestType.SOURCE_SYMLINKS, false).getMnemonic())
+    assertThat(createAction(ManifestType.SOURCE_SYMLINKS, null, false).getMnemonic())
         .isEqualTo("SourceSymlinkManifest");
     assertThat(createSourceOnlyAction().getMnemonic()).isEqualTo("PackagingSourcesManifest");
   }
@@ -230,7 +240,7 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
 
   @Test
   public void testSymlinkProgressMessageNoPyInitFiles() throws Exception {
-    String progress = createAction(ManifestType.SOURCE_SYMLINKS, false).getProgressMessage();
+    String progress =  createAction(ManifestType.SOURCE_SYMLINKS, null, false).getProgressMessage();
     assertWithMessage("null action not found in " + progress)
         .that(progress.contains("//null/action:owner"))
         .isTrue();
@@ -314,6 +324,19 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
   }
 
   /**
+   * Returns a new pruning manifest with the given manifest file and set of candidate source
+   * artifacts.
+   */
+  private Runfiles.PruningManifest pruningManifest(Artifact manifestFile, String... candidates)
+      throws Exception {
+    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
+    for (String name : candidates) {
+      builder.add(getSourceArtifact(name));
+    }
+    return new Runfiles.PruningManifest(builder.build(), manifestFile);
+  }
+
+  /**
    * Constructs a new manifest file artifact with the given name, writes the given contents
    * to that file, and returns the artifact.
    */
@@ -321,6 +344,63 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
     Artifact artifact = getBinArtifactWithNoOwner(name);
     scratch.file(artifact.getPath().getPathString(), lines);
     return artifact;
+  }
+
+  /**
+   * Tests that pruning manifest candidates are conditionally included, depending on whether
+   * or not they appear in the manifest.
+   */
+  @Test
+  public void testPruningManifest() throws Exception {
+    Artifact manifestFile = manifestFile("pruned.manifest", "a/b2.txt", "a/b4.txt");
+    Runfiles.PruningManifest manifest =
+        pruningManifest(manifestFile, "a/b1.txt", "a/b2.txt", "a/b3.txt", "a/b4.txt");
+    String manifestContents = getFileContentsAsString(createSymlinkAction(manifest));
+
+    assertThat(manifestContents)
+        .isEqualTo(
+            "TESTING/a/b2.txt /workspace/a/b2.txt\n"
+                + "TESTING/a/b4.txt /workspace/a/b4.txt\n"
+                + "TESTING/trivial/BUILD /workspace/trivial/BUILD\n"
+                + "TESTING/trivial/__init__.py \n"
+                + "TESTING/trivial/trivial.py /workspace/trivial/trivial.py\n");
+  }
+
+  /**
+   * Tests that the pruning manifest can't add runfiles that aren't part of the candidate set.
+   */
+  @Test
+  public void testPruningManifestOnlyExcludes() throws Exception {
+    Artifact manifestFile = manifestFile("pruned.manifest", "a/b2.txt", "a/b_UNDECLARED.txt");
+    Runfiles.PruningManifest manifest =
+        pruningManifest(manifestFile, "a/b1.txt", "a/b2.txt", "a/b3.txt", "a/b4.txt");
+    String manifestContents = getFileContentsAsString(createSymlinkAction(manifest));
+
+    assertThat(manifestContents)
+        .isEqualTo(
+            "TESTING/a/b2.txt /workspace/a/b2.txt\n"
+                + "TESTING/trivial/BUILD /workspace/trivial/BUILD\n"
+                + "TESTING/trivial/__init__.py \n"
+                + "TESTING/trivial/trivial.py /workspace/trivial/trivial.py\n");
+  }
+
+  /**
+   * Tests that the pruning manifest can't exclude runfiles that are also included from other
+   * sources.
+   */
+  @Test
+  public void testPruningManifestDoesntOverrideExplicitArtifacts() throws Exception {
+    Artifact manifestFile = manifestFile("pruned.manifest", "a/include.txt");
+    Runfiles.PruningManifest manifest =
+        pruningManifest(manifestFile, "a/include.txt", "a/exclude.txt", "trivial/trivial.py");
+    String manifestContents = getFileContentsAsString(createSymlinkAction(manifest));
+
+    assertThat(manifestContents)
+        .isEqualTo(
+            "TESTING/a/include.txt /workspace/a/include.txt\n"
+                + "TESTING/trivial/BUILD /workspace/trivial/BUILD\n"
+                + "TESTING/trivial/__init__.py \n"
+                + "TESTING/trivial/trivial.py /workspace/trivial/trivial.py\n");
   }
 
   private String computeKey(SourceManifestAction action) {

@@ -370,7 +370,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     }
     SkyValue value = result.get(key);
     if (value instanceof ActionExecutionValue) {
-      return ActionExecutionValue.createSimpleFileArtifactValue(
+      return ArtifactFunction.createSimpleFileArtifactValue(
           (Artifact.DerivedArtifact) artifact, (ActionExecutionValue) value);
     }
     return value;

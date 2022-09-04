@@ -157,7 +157,6 @@ public final class ActionsTestUtil {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         metadataHandler,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         fileOutErr,
         eventHandler,
@@ -179,7 +178,6 @@ public final class ActionsTestUtil {
         ActionInputPrefetcher.NONE,
         new ActionKeyContext(),
         /*metadataHandler=*/ null,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         /*fileOutErr=*/ null,
         eventHandler,
@@ -206,7 +204,6 @@ public final class ActionsTestUtil {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         metadataHandler,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         fileOutErr,
         eventHandler,
@@ -322,11 +319,6 @@ public final class ActionsTestUtil {
 
     @Override
     public boolean inErrorBubblingForTesting() {
-      return false;
-    }
-
-    @Override
-    public boolean restartPermitted() {
       return false;
     }
   }

@@ -68,7 +68,6 @@ public class ExecutableSymlinkActionTest {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         /*metadataHandler=*/ null,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         outErr,
         /*eventHandler=*/ null,

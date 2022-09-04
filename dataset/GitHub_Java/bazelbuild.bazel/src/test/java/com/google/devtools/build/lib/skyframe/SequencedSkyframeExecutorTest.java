@@ -450,10 +450,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
 
   private Collection<SkyKey> dirtyValues() throws InterruptedException {
     Diff diff =
-        new FilesystemValueChecker(
-                new TimestampGranularityMonitor(BlazeClock.instance()),
-                /* lastExecutionTimeRange= */ null,
-                /* numThreads= */ 20)
+        new FilesystemValueChecker(new TimestampGranularityMonitor(BlazeClock.instance()), null)
             .getDirtyKeys(
                 skyframeExecutor.getEvaluatorForTesting().getValues(),
                 new BasicFilesystemDirtinessChecker());
@@ -2227,7 +2224,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
         eventCollector, ".*after scanning.*\n.*Scanning.*\n.*Test dir/top.*");
   }
 
-  private static AnalysisProtos.Artifact getArtifact(
+  private AnalysisProtos.Artifact getArtifact(
       String execPath, ActionGraphContainer actionGraphContainer) {
     for (AnalysisProtos.Artifact artifact : actionGraphContainer.getArtifactsList()) {
       if (execPath.equals(artifact.getExecPath())) {
@@ -2248,7 +2245,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
         actionGraphContainer);
   }
 
-  private static AnalysisProtos.Action getGeneratingAction(
+  private AnalysisProtos.Action getGeneratingAction(
       String outputArtifactId, ActionGraphContainer actionGraphContainer) {
     for (AnalysisProtos.Action action : actionGraphContainer.getActionsList()) {
       for (String outputId : action.getOutputIdsList()) {
@@ -2260,8 +2257,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     return null;
   }
 
-  private static AnalysisProtos.Target getTarget(
-      String label, ActionGraphContainer actionGraphContainer) {
+  private AnalysisProtos.Target getTarget(String label, ActionGraphContainer actionGraphContainer) {
     for (AnalysisProtos.Target target : actionGraphContainer.getTargetsList()) {
       if (label.equals(target.getLabel())) {
         return target;
@@ -2270,7 +2266,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     return null;
   }
 
-  private static AnalysisProtos.AspectDescriptor getAspectDescriptor(
+  private AnalysisProtos.AspectDescriptor getAspectDescriptor(
       String aspectDescriptorId, ActionGraphContainer actionGraphContainer) {
     for (AnalysisProtos.AspectDescriptor aspectDescriptor :
         actionGraphContainer.getAspectDescriptorsList()) {
@@ -2281,7 +2277,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
     return null;
   }
 
-  private static AnalysisProtos.RuleClass getRuleClass(
+  private AnalysisProtos.RuleClass getRuleClass(
       String ruleClassId, ActionGraphContainer actionGraphContainer) {
     for (AnalysisProtos.RuleClass ruleClass : actionGraphContainer.getRuleClassesList()) {
       if (ruleClassId.equals(ruleClass.getId())) {

@@ -137,7 +137,7 @@ public class RemoteActionInputFetcherTest {
 
     // act
     assertThrows(
-        BulkTransferException.class,
+        IOException.class,
         () -> actionInputFetcher.prefetchFiles(ImmutableList.of(a), metadataProvider));
 
     // assert

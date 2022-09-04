@@ -196,7 +196,6 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         /*metadataHandler=*/ null,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         new FileOutErr(),
         new StoredEventHandler(),

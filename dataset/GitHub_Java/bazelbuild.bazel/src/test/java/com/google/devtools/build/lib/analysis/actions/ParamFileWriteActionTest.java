@@ -209,7 +209,6 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         /*metadataHandler=*/ null,
-        /*rewindingEnabled=*/ false,
         LostInputsCheck.NONE,
         new FileOutErr(),
         new StoredEventHandler(),

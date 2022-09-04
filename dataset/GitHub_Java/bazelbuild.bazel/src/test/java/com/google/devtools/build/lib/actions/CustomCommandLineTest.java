@@ -22,6 +22,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
+import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -38,7 +39,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-import net.starlark.java.eval.EvalException;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -56,7 +56,7 @@ public class CustomCommandLineTest {
   @Before
   public void createArtifacts() throws Exception  {
     Scratch scratch = new Scratch();
-    rootDir = ArtifactRoot.asDerivedRoot(scratch.dir("/exec/root"), false, "dir");
+    rootDir = ArtifactRoot.asDerivedRoot(scratch.dir("/exec/root"), "dir");
     artifact1 = ActionsTestUtil.createArtifact(rootDir, scratch.file("/exec/root/dir/file1.txt"));
     artifact2 = ActionsTestUtil.createArtifact(rootDir, scratch.file("/exec/root/dir/file2.txt"));
   }
@@ -820,7 +820,7 @@ public class CustomCommandLineTest {
   }
 
   @Test
-  public void testCombinedArgs() throws Exception {
+  public void testCombinedArgs() {
     CustomCommandLine cl =
         builder()
             .add("--arg")
@@ -889,7 +889,7 @@ public class CustomCommandLineTest {
   }
 
   @Test
-  public void testTreeFileArtifactExecPathArgs() throws Exception {
+  public void testTreeFileArtifactExecPathArgs() {
     SpecialArtifact treeArtifactOne = createTreeArtifact("myArtifact/treeArtifact1");
     SpecialArtifact treeArtifactTwo = createTreeArtifact("myArtifact/treeArtifact2");
 
@@ -900,9 +900,11 @@ public class CustomCommandLineTest {
             .build();
 
     TreeFileArtifact treeFileArtifactOne =
-        TreeFileArtifact.createTreeOutput(treeArtifactOne, "children/child1");
+        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
+            treeArtifactOne, "children/child1");
     TreeFileArtifact treeFileArtifactTwo =
-        TreeFileArtifact.createTreeOutput(treeArtifactTwo, "children/child2");
+        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
+            treeArtifactTwo, "children/child2");
 
     CustomCommandLine commandLine = commandLineTemplate.evaluateTreeFileArtifacts(
         ImmutableList.of(treeFileArtifactOne, treeFileArtifactTwo));
@@ -917,38 +919,7 @@ public class CustomCommandLineTest {
   }
 
   @Test
-  public void testTreeFileArtifactParentRelativePathArgs() throws Exception {
-    SpecialArtifact treeArtifact = createTreeArtifact("myArtifact/treeArtifact");
-
-    TreeFileArtifact treeFileArtifactOne =
-        TreeFileArtifact.createTreeOutput(treeArtifact, "children/child1");
-    TreeFileArtifact treeFileArtifactTwo =
-        TreeFileArtifact.createTreeOutput(treeArtifact, "children/child2");
-
-    CommandLineItem.MapFn<Artifact> expandParentRelativePath =
-        (src, args) -> {
-          try {
-            args.accept(src.getTreeRelativePathString());
-          } catch (EvalException e) {
-            new IllegalStateException("Unexpected EvalException thown.");
-          }
-        };
-
-    CustomCommandLine commandLineTemplate =
-        builder()
-            .addAll(
-                VectorArg.SimpleVectorArg.of(
-                        ImmutableList.of(treeFileArtifactOne, treeFileArtifactTwo))
-                    .mapped(expandParentRelativePath))
-            .build();
-
-    assertThat(commandLineTemplate.arguments())
-        .containsExactly("children/child1", "children/child2")
-        .inOrder();
-  }
-
-  @Test
-  public void testKeyComputation() throws Exception {
+  public void testKeyComputation() {
     NestedSet<String> values = NestedSetBuilder.<String>stableOrder().add("a").add("b").build();
     ImmutableList<CustomCommandLine> commandLines =
         ImmutableList.<CustomCommandLine>builder()
@@ -970,7 +941,7 @@ public class CustomCommandLineTest {
     Map<String, CustomCommandLine> digests = new HashMap<>();
     for (CustomCommandLine commandLine : commandLines) {
       Fingerprint fingerprint = new Fingerprint();
-      commandLine.addToFingerprint(actionKeyContext, /*artifactExpander=*/ null, fingerprint);
+      commandLine.addToFingerprint(actionKeyContext, fingerprint);
       String digest = fingerprint.hexDigestAndReset();
       CustomCommandLine previous = digests.putIfAbsent(digest, commandLine);
       if (previous != null) {
@@ -999,8 +970,12 @@ public class CustomCommandLineTest {
   }
 
   private SpecialArtifact createTreeArtifact(String rootRelativePath) {
-    return ActionsTestUtil.createTreeArtifactWithGeneratingAction(
-        rootDir, rootDir.getExecPath().getRelative(rootRelativePath));
+    PathFragment relpath = PathFragment.create(rootRelativePath);
+    return new SpecialArtifact(
+        rootDir,
+        rootDir.getExecPath().getRelative(relpath),
+        ActionsTestUtil.NULL_ACTION_LOOKUP_DATA.getActionLookupKey(),
+        SpecialArtifactType.TREE);
   }
 
   private static <T> ImmutableList<T> list(T... objects) {
