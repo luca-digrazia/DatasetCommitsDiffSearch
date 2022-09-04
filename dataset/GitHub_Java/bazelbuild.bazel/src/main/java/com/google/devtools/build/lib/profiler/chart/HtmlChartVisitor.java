@@ -80,10 +80,18 @@ public class HtmlChartVisitor implements ChartVisitor {
     heading("Tasks", 2);
     out.println("<p>To get more information about a task point the mouse at one of the bars.</p>");
 
-    out.printf(
-        "<div style='position:relative; height: %dpx; margin: %dpx'>\n",
+    out.printf("<div style='position:relative; height: %dpx; margin: %dpx'>\n",
         chart.getRowCount() * ROW_HEIGHT, H_OFFSET + 10);
   }
+
+  @Override
+  public void endVisit(Chart chart) {
+    printTimeAxis(chart);
+    out.println("</div>");
+
+    heading("Legend", 2);
+    printLegend(chart.getSortedTypes());
+}
 
   @Override
   public void visit(ChartColumn column) {
@@ -96,6 +104,7 @@ public class HtmlChartVisitor implements ChartVisitor {
     String style = chartTypeNameAsCSSClass(column.getType().getName());
     box(left, 0, width, height, style, column.getLabel(), 10);
   }
+
 
   @Override
   public void visit(ChartRow slot) {
@@ -135,16 +144,9 @@ public class HtmlChartVisitor implements ChartVisitor {
     }
   }
 
-  @Override
-  public void endVisit(Chart chart) {
-    printTimeAxis(chart);
-    out.println("</div>");
-
-    heading("Legend", 2);
-    printLegend(chart.getSortedTypes());
-  }
-
-  /** Converts the given value from the bar of the chart to pixels. */
+  /**
+   * Converts the given value from the bar of the chart to pixels.
+   */
   private int scale(long value) {
     return (int) (value / (1000000000L / pixelsPerSecond));
   }
