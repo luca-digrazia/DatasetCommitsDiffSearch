@@ -27,9 +27,7 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.dialect.DerbyTenSevenDialect;
 import org.hibernate.dialect.MariaDB103Dialect;
-import org.hibernate.dialect.MySQL8Dialect;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
@@ -54,6 +52,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
@@ -125,6 +124,7 @@ public final class HibernateOrmProcessor {
             List<NonJpaModelBuildItem> nonJpaModelBuildItems,
             List<IgnorableNonIndexedClasses> ignorableNonIndexedClassesBuildItems,
             CombinedIndexBuildItem index,
+            ApplicationIndexBuildItem applicationIndex,
             ArchiveRootBuildItem archiveRoot,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             Optional<DataSourceDriverBuildItem> driverBuildItem,
@@ -512,14 +512,6 @@ public final class HibernateOrmProcessor {
         if (resolvedDriver.contains("org.mariadb.jdbc.Driver")) {
             return Optional.of(MariaDB103Dialect.class.getName());
         }
-
-        if (resolvedDriver.contains("com.mysql.cj.jdbc.Driver")) {
-            return Optional.of(MySQL8Dialect.class.getName());
-        }
-        if (resolvedDriver.contains("org.apache.derby.jdbc.ClientDriver")) {
-            return Optional.of((DerbyTenSevenDialect.class.getName()));
-        }
-
         String error = driver.isPresent()
                 ? "Hibernate extension could not guess the dialect from the driver '" + resolvedDriver
                         + "'. Add an explicit '" + HIBERNATE_ORM_CONFIG_PREFIX + "dialect' property."
