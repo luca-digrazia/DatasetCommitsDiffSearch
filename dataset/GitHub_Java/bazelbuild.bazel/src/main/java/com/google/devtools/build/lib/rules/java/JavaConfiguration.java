@@ -170,7 +170,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final boolean experimentalTestRunner;
   private final boolean jplPropagateCcLinkParamsStore;
   private final boolean addTestSupportToCompileTimeDeps;
-  private final boolean isJlplStrictDepsEnforced;
   private final ImmutableList<Label> pluginList;
   private final boolean requireJavaToolchainHeaderCompilerDirect;
   private final boolean disallowResourceJars;
@@ -206,7 +205,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.explicitJavaTestDeps = javaOptions.explicitJavaTestDeps;
     this.experimentalTestRunner = javaOptions.experimentalTestRunner;
     this.jplPropagateCcLinkParamsStore = javaOptions.jplPropagateCcLinkParamsStore;
-    this.isJlplStrictDepsEnforced = javaOptions.isJlplStrictDepsEnforced;
     this.disallowResourceJars = javaOptions.disallowResourceJars;
     this.addTestSupportToCompileTimeDeps = javaOptions.addTestSupportToCompileTimeDeps;
 
@@ -430,10 +428,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
 
   public boolean addTestSupportToCompileTimeDeps() {
     return addTestSupportToCompileTimeDeps;
-  }
-
-  public boolean isJlplStrictDepsEnforced() {
-    return isJlplStrictDepsEnforced;
   }
 
   public List<Label> getPlugins() {
