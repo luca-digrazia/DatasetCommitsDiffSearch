@@ -1,7 +1,9 @@
 package io.dropwizard.validation;
 
 import io.dropwizard.validation.valuehandling.GuavaOptionalValidatedValueUnwrapper;
-import io.dropwizard.validation.valuehandling.OptionalValidatedValueUnwrapper;
+import io.dropwizard.validation.valuehandling.OptionalDoubleValidatedValueUnwrapper;
+import io.dropwizard.validation.valuehandling.OptionalIntValidatedValueUnwrapper;
+import io.dropwizard.validation.valuehandling.OptionalLongValidatedValueUnwrapper;
 import org.hibernate.validator.HibernateValidator;
 import org.hibernate.validator.HibernateValidatorConfiguration;
 import org.hibernate.validator.spi.valuehandling.ValidatedValueUnwrapper;
@@ -28,6 +30,8 @@ public class BaseValidator {
             .byProvider(HibernateValidator.class)
             .configure()
             .addValidatedValueHandler(new GuavaOptionalValidatedValueUnwrapper())
-            .addValidatedValueHandler(new OptionalValidatedValueUnwrapper());
+            .addValidatedValueHandler(new OptionalDoubleValidatedValueUnwrapper())
+            .addValidatedValueHandler(new OptionalIntValidatedValueUnwrapper())
+            .addValidatedValueHandler(new OptionalLongValidatedValueUnwrapper());
     }
 }
