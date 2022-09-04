@@ -889,7 +889,7 @@ public class ActionExecutionFunction implements SkyFunction {
       env.getListener()
           .post(
               new DiscoveredInputsEvent(
-                  SpawnMetrics.Builder.forOtherExec()
+                  new SpawnMetrics.Builder()
                       .setParseTime(discoveredInputsDuration)
                       .setTotalTime(discoveredInputsDuration)
                       .build(),

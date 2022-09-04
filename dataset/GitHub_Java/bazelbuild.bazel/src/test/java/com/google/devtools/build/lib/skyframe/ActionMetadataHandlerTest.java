@@ -364,7 +364,7 @@ public class ActionMetadataHandlerTest {
     assertThat(handler.getMetadata(artifact).getSize()).isEqualTo(10);
 
     // Inject a remote file of size 42.
-    handler.injectFile(
+    handler.injectRemoteFile(
         artifact, new RemoteFileArtifactValue(new byte[] {1, 2, 3}, 42, 0, "ultimate-answer"));
     assertThat(handler.getMetadata(artifact).getSize()).isEqualTo(42);
 
@@ -391,7 +391,7 @@ public class ActionMetadataHandlerTest {
 
     byte[] digest = new byte[] {1, 2, 3};
     int size = 10;
-    handler.injectFile(
+    handler.injectRemoteFile(
         artifact, new RemoteFileArtifactValue(digest, size, /*locationIndex=*/ 1, "action-id"));
 
     FileArtifactValue v = handler.getMetadata(artifact);
@@ -428,8 +428,8 @@ public class ActionMetadataHandlerTest {
     RemoteFileArtifactValue child1Value = new RemoteFileArtifactValue(new byte[] {1, 2, 3}, 5, 1);
     RemoteFileArtifactValue child2Value = new RemoteFileArtifactValue(new byte[] {4, 5, 6}, 10, 1);
 
-    handler.injectFile(child1, child1Value);
-    handler.injectFile(child2, child2Value);
+    handler.injectRemoteFile(child1, child1Value);
+    handler.injectRemoteFile(child2, child2Value);
 
     FileArtifactValue treeMetadata = handler.getMetadata(treeArtifact);
     FileArtifactValue child1Metadata = handler.getMetadata(child1);
@@ -464,12 +464,12 @@ public class ActionMetadataHandlerTest {
         new RemoteFileArtifactValue(new byte[] {1, 2, 3}, 5, 1, "foo");
     RemoteFileArtifactValue barValue =
         new RemoteFileArtifactValue(new byte[] {4, 5, 6}, 10, 1, "bar");
-    Map<TreeFileArtifact, FileArtifactValue> children =
+    Map<TreeFileArtifact, RemoteFileArtifactValue> children =
         ImmutableMap.of(
             TreeFileArtifact.createTreeOutput(treeArtifact, "foo"), fooValue,
             TreeFileArtifact.createTreeOutput(treeArtifact, "bar"), barValue);
 
-    handler.injectDirectory(treeArtifact, children);
+    handler.injectRemoteDirectory(treeArtifact, children);
 
     FileArtifactValue value = handler.getMetadata(treeArtifact);
     assertThat(value).isNotNull();

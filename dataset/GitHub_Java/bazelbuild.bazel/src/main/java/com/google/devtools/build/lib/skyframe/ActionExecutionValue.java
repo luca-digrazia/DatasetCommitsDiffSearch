@@ -165,8 +165,7 @@ public class ActionExecutionValue implements SkyValue {
    * <p>Primarily needed by {@link FilesystemValueChecker}. Also called by {@link ArtifactFunction}
    * when aggregating a {@link TreeArtifactValue} out of action template expansion outputs.
    */
-  // Visible only for testing: should be package-private.
-  public ImmutableMap<Artifact, FileArtifactValue> getAllFileValues() {
+  ImmutableMap<Artifact, FileArtifactValue> getAllFileValues() {
     return artifactData;
   }
 
@@ -175,8 +174,7 @@ public class ActionExecutionValue implements SkyValue {
    *
    * <p>Should only be needed by {@link FilesystemValueChecker}.
    */
-  // Visible only for testing: should be package-private.
-  public ImmutableMap<Artifact, TreeArtifactValue> getAllTreeArtifactValues() {
+  ImmutableMap<Artifact, TreeArtifactValue> getAllTreeArtifactValues() {
     return treeArtifactData;
   }
 
@@ -267,11 +265,6 @@ public class ActionExecutionValue implements SkyValue {
       Artifact newArtifact, TreeArtifactValue tree) {
     Preconditions.checkState(
         newArtifact.isTreeArtifact(), "Expected tree artifact, got %s", newArtifact);
-
-    if (TreeArtifactValue.OMITTED_TREE_MARKER.equals(tree)) {
-      return TreeArtifactValue.OMITTED_TREE_MARKER;
-    }
-
     SpecialArtifact newParent = (SpecialArtifact) newArtifact;
 
     Map<TreeFileArtifact, FileArtifactValue> newChildren =
