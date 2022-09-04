@@ -1,23 +1,23 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.classification;
 
-import smile.math.MathEx;
+import java.util.Arrays;
+import smile.math.Math;
 import smile.math.distance.Distance;
 import smile.math.distance.EuclideanDistance;
 import smile.math.distance.Metric;
@@ -83,40 +83,94 @@ public class KNN<T> implements SoftClassifier<T> {
      */
     private int k;
     /**
-     * The class labels.
+     * The number of classes.
      */
-    private ClassLabel labels;
+    private int c;
+
+    /**
+     * Trainer for KNN classifier.
+     */
+    public static class Trainer<T> extends ClassifierTrainer<T> {
+        /**
+         * The number of neighbors.
+         */
+        private int k;
+        /**
+         * The distance functor.
+         */
+        private Distance<T> distance;
+
+        /**
+         * Constructor.
+         * 
+         * @param distance the distance metric functor.
+         * @param k the number of neighbors.
+         */
+        public Trainer(Distance<T> distance, int k) {
+            if (k < 1) {
+                throw new IllegalArgumentException("Invalid k of k-NN: " + k);
+            }
+            
+            this.distance = distance;
+            this.k = k;
+        }
+        
+        @Override
+        public KNN<T> train(T[] x, int[] y) {
+            return new KNN<>(x, y, distance, k);
+        }
+    }
+    
     /**
      * Constructor.
      * @param knn k-nearest neighbor search data structure of training instances.
-     * @param y training labels.
+     * @param y training labels in [0, c), where c is the number of classes.
      * @param k the number of neighbors for classification.
      */
     public KNN(KNNSearch<T, T> knn, int[] y, int k) {
         this.knn = knn;
         this.k = k;
         this.y = y;
-        labels = ClassLabel.fit(y).labels;
+        
+        // class label set.
+        int[] labels = Math.unique(y);
+        Arrays.sort(labels);
+        
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i] < 0) {
+                throw new IllegalArgumentException("Negative class label: " + labels[i]); 
+            }
+            
+            if (i > 0 && labels[i] - labels[i-1] > 1) {
+                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+            }
+        }
+
+        c = labels.length;
+        if (c < 2) {
+            throw new IllegalArgumentException("Only one class.");            
+        }
     }
 
     /**
-     * Learn the 1-NN classifier.
+     * Constructor. By default, this is a 1-NN classifier.
      * @param x training samples.
-     * @param y training labels.
+     * @param y training labels in [0, c), where c is the number of classes.
      * @param distance the distance measure for finding nearest neighbors.
      */
-    public static <T> KNN<T> fit(T[] x, int[] y, Distance<T> distance) {
-        return fit(x, y, distance, 1);
+    public KNN(T[] x, int[] y, Distance<T> distance) {
+        this(x, y, distance, 1);
     }
 
     /**
-     * Learn the K-NN classifier.
-     * @param k the number of neighbors.
+     * Learn the K-NN classifier from data of any generalized type with a given
+     * distance definition.
+     * @param k the number of neighbors for classification.
      * @param x training samples.
-     * @param y training labels.
+     * @param y training labels in [0, c), where c is the number of classes.
      * @param distance the distance measure for finding nearest neighbors.
      */
-    public static <T> KNN<T> fit(T[] x, int[] y, Distance<T> distance, int k) {
+    public KNN(T[] x, int[] y, Distance<T> distance, int k) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -124,33 +178,51 @@ public class KNN<T> implements SoftClassifier<T> {
         if (k < 1) {
             throw new IllegalArgumentException("Illegal k = " + k);
         }
+        
+        // class label set.
+        int[] labels = Math.unique(y);
+        Arrays.sort(labels);
+        
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i] < 0) {
+                throw new IllegalArgumentException("Negative class label: " + labels[i]); 
+            }
+            
+            if (i > 0 && labels[i] - labels[i-1] > 1) {
+                throw new IllegalArgumentException("Missing class: " + labels[i]+1);                 
+            }
+        }
 
-        KNNSearch<T, T> knn;
+        c = labels.length;
+        if (c < 2) {
+            throw new IllegalArgumentException("Only one class.");            
+        }
+        
+        this.y = y;
+        this.k = k;
         if (distance instanceof Metric) {
             knn = new CoverTree<>(x, (Metric<T>) distance);
         } else {
             knn = new LinearSearch<>(x, distance);
         }
-
-        return new KNN(knn, y, k);
     }
 
     /**
-     * Learn the 1-NN classifier.
-     * @param x training samples.
-     * @param y training labels.
+     * Learn the 1-NN classifier from data of type double[].
+     * @param x the training samples.
+     * @param y training labels in [0, c), where c is the number of classes.
      */
-    public static KNN<double[]> fit(double[][] x, int[] y) {
-        return fit(x, y, 1);
+    public static KNN<double[]> learn(double[][] x, int[] y) {
+        return learn(x, y, 1);
     }
 
     /**
-     * Learn the K-NN classifier.
+     * Learn the K-NN classifier from data of type double[].
      * @param k the number of neighbors for classification.
      * @param x training samples.
-     * @param y training labels.
+     * @param y training labels in [0, c), where c is the number of classes.
      */
-    public static KNN<double[]> fit(double[][] x, int[] y, int k) {
+    public static KNN<double[]> learn(double[][] x, int[] y, int k) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -159,7 +231,7 @@ public class KNN<T> implements SoftClassifier<T> {
             throw new IllegalArgumentException("Illegal k = " + k);
         }
 
-        KNNSearch<double[], double[]> knn;
+        KNNSearch<double[], double[]> knn = null;
         if (x[0].length < 10) {
             knn = new KDTree<>(x, x);
         } else {
@@ -176,22 +248,35 @@ public class KNN<T> implements SoftClassifier<T> {
 
     @Override
     public int predict(T x, double[] posteriori) {
+        if (posteriori != null && posteriori.length != c) {
+            throw new IllegalArgumentException(String.format("Invalid posteriori vector size: %d, expected: %d", posteriori.length, c));
+        }
+
         Neighbor<T,T>[] neighbors = knn.knn(x, k);
         if (k == 1) {
             return y[neighbors[0].index];
         }
 
-        int[] count = new int[labels.size()];
+        int[] count = new int[c];
         for (int i = 0; i < k; i++) {
-            count[labels.id(y[neighbors[i].index])]++;
+            count[y[neighbors[i].index]]++;
         }
 
         if (posteriori != null) {
-            for (int i = 0; i < count.length; i++) {
+            for (int i = 0; i < c; i++) {
                 posteriori[i] = (double) count[i] / k;
             }
         }
+        
+        int max = 0;
+        int idx = 0;
+        for (int i = 0; i < c; i++) {
+            if (count[i] > max) {
+                max = count[i];
+                idx = i;
+            }
+        }
 
-        return labels.label(MathEx.whichMax(count));
+        return idx;
     }
 }

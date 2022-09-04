@@ -16,7 +16,7 @@
 
 package smile.regression;
 
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.kernel.MercerKernel;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;

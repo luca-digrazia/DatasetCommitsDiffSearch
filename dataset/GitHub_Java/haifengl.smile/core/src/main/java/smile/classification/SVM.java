@@ -20,8 +20,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.math.DoubleArrayList;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.SparseArray;
 import smile.math.kernel.LinearKernel;
 import smile.math.kernel.MercerKernel;
@@ -85,7 +87,7 @@ import smile.util.MulticoreExecutor;
  */
 public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
     private static final long serialVersionUID = 1L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SVM.class);
+    private static final Logger logger = LoggerFactory.getLogger(SVM.class);
 
     /**
      * The type of multi-class SVMs.
@@ -492,7 +494,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
             }
 
             // train SVM in a stochastic order.
-            int[] index = MathEx.permutate(n);
+            int[] index = Math.permutate(n);
             for (int i = 0; i < n; i++) {
                 if (weight == null) {
                     process(x[index[i]], y[index[i]]);
@@ -515,7 +517,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
 
             if (kernel instanceof LinearKernel && w != null) {
                 if (x instanceof double[]) {
-                    f += MathEx.dot(w, (double[]) x);
+                    f += Math.dot(w, (double[]) x);
                 } else if (x instanceof SparseArray) {
                     for (SparseArray.Entry e : (SparseArray) x) {
                         f += w[e.i] * e.x;
@@ -685,7 +687,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
             }
 
             // Determine curvature
-            double curv = v1.k + v2.k - 2 * kernel.k(v1.x, v2.x);
+            double curv = v1.k + v2.k - 2 * kernel.k(v1.x, v2.x);		
             if (curv <= 0.0) curv = TAU;
             
             double step = (v2.g - v1.g) / curv;
@@ -1227,12 +1229,12 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
             throw new IllegalArgumentException(String.format("The sizes of X and instance weight don't match: %d != %d", x.length, weight.length));
         }
 
-        int miny = MathEx.min(y);
+        int miny = Math.min(y);
         if (miny < 0) {
             throw new IllegalArgumentException("Negative class label:" + miny);
         }
 
-        int maxy = MathEx.max(y);
+        int maxy = Math.max(y);
         if (maxy >= k) {
             throw new IllegalArgumentException("Invalid class label:" + maxy);
         }
@@ -1529,7 +1531,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
         final double minProb = 1e-7;
         final double maxProb = 1 - minProb;
 
-        return MathEx.min(MathEx.max(svm.platt.predict(y), minProb), maxProb);
+        return Math.min(Math.max(svm.platt.predict(y), minProb), maxProb);
     }
 
     @Override
@@ -1564,7 +1566,7 @@ public class SVM <T> implements OnlineClassifier<T>, SoftClassifier<T> {
                 }
             }
 
-            MathEx.unitize1(prob);
+            smile.math.Math.unitize1(prob);
 
             return label;
         } else {

@@ -16,8 +16,6 @@
 
 package smile.regression;
 
-import smile.math.MathEx;
-
 /**
  * Elastic Net regularization. The elastic net is a regularized regression
  * method that linearly combines the L1 and L2 penalties of the lasso and ridge
@@ -127,10 +125,11 @@ public class ElasticNet implements Regression<double[]> {
     @Override
     public double predict(double[] x) {
         if (x.length != p) {
-            throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
+            throw new IllegalArgumentException(
+                    String.format("Invalid input vector size: %d, expected: %d", x.length, p));
         }
 
-        return MathEx.dot(x, w) + b;
+        return smile.math.Math.dot(x, w) + b;
     }
 
     /**

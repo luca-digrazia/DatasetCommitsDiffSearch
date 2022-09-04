@@ -16,7 +16,9 @@
 package smile.classification;
 
 import java.io.Serializable;
-import smile.math.MathEx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.math.Math;
 
 /**
  * Multilayer perceptron neural network. 
@@ -103,7 +105,7 @@ import smile.math.MathEx;
  */
 public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier<double[]> {
     private static final long serialVersionUID = 1L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(NeuralNetwork.class);
+    private static final Logger logger = LoggerFactory.getLogger(NeuralNetwork.class);
 
     /**
      * The types of error functions.
@@ -478,7 +480,7 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
             double r = 1.0 / Math.sqrt(net[l - 1].units);
             for (int i = 0; i < net[l].units; i++) {
                 for (int j = 0; j <= net[l - 1].units; j++) {
-                    net[l].weight[i][j] = MathEx.random(-r, r);
+                    net[l].weight[i][j] = Math.random(-r, r);
                 }
             }
         }
@@ -512,8 +514,8 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
             copycat.net[i].output = net[i].output.clone();
             copycat.net[i].error = net[i].error.clone();
             if (i > 0) {
-                copycat.net[i].weight = MathEx.clone(net[i].weight);
-                copycat.net[i].delta = MathEx.clone(net[i].delta);
+                copycat.net[i].weight = Math.clone(net[i].weight);
+                copycat.net[i].delta = Math.clone(net[i].delta);
             }
         }
 
@@ -623,7 +625,7 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
             }
 
             if (upper != outputLayer || activationFunction == ActivationFunction.LOGISTIC_SIGMOID) {
-                upper.output[i] = MathEx.logistic(sum);
+                upper.output[i] = Math.logistic(sum);
             } else {
                 if (activationFunction == ActivationFunction.LINEAR || activationFunction == ActivationFunction.SOFTMAX) {
                     upper.output[i] = sum;
@@ -928,7 +930,7 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
      */
     public void learn(double[][] x, int[] y) {
         int n = x.length;
-        int[] index = MathEx.permutate(n);
+        int[] index = Math.permutate(n);
         for (int i = 0; i < n; i++) {
             learn(x[index[i]], y[index[i]]);
         }

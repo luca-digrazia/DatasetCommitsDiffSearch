@@ -16,15 +16,11 @@
 
 package smile.regression;
 
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.Cholesky;
 import smile.math.matrix.DenseMatrix;
 import smile.math.special.Beta;
-
-import java.util.Properties;
 
 /**
  * Ridge Regression. Coefficient estimates for multiple linear regression models rely on
@@ -49,7 +45,7 @@ import java.util.Properties;
  * In this setting the belief that weight should be small is coded into a prior
  * distribution.
  * <p>
- * The penalty term is unfair to the predictor variables that are not on the
+ * The penalty term is unfair is the predictor variables are not on the
  * same scale. Therefore, if we know that the variables are not measured
  * in the same units, we typically scale the columns of X (to have sample
  * variance 1), and then we perform ridge regression.
@@ -70,14 +66,6 @@ import java.util.Properties;
 public class RidgeRegression implements Regression<double[]> {
     private static final long serialVersionUID = 1L;
 
-    /**
-     * Design matrix formula
-     */
-    private Formula formula;
-    /**
-     * The variable names.
-     */
-    private String[] names;
     /**
      * The dimensionality.
      */
@@ -157,106 +145,138 @@ public class RidgeRegression implements Regression<double[]> {
      * The p-value of the goodness-of-fit test of the model.
      */
     private double pvalue;
-
-    /** Private constructor. */
-    private RidgeRegression() {
-
-    }
-
     /**
-     * Fits a ridge regression model.
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     *             NO NEED to include a constant column of 1s for bias.
+     * Trainer for ridge regression.
+     */
+    public static class Trainer extends RegressionTrainer<double[]> {
+
+        /**
+         * The shrinkage/regularization parameter.
+         */
+        private double lambda;
+
+        /**
+         * Constructor.
+         * 
+         * @param lambda the number of trees.
+         */
+        public Trainer(double lambda) {
+            if (lambda < 0.0) {
+                throw new IllegalArgumentException("Invalid shrinkage/regularization parameter lambda = " + lambda);
+            }
+
+            this.lambda = lambda;
+        }
+
+        @Override
+        public RidgeRegression train(double[][] x, double[] y) {
+            return new RidgeRegression(x, y, lambda);
+        }
+    }
+    
+    /**
+     * Constructor. Learn the ridge regression model.
+     * @param x a matrix containing the explanatory variables. NO NEED to include a constant column of 1s for bias.
+     * @param y the response values.
      * @param lambda the shrinkage/regularization parameter. Large lambda means more shrinkage.
      *               Choosing an appropriate value of lambda is important, and also difficult.
      */
-    public static RidgeRegression fit(Formula formula, DataFrame data, double lambda) {
+    public RidgeRegression(double[][] x, double[] y, double lambda) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
+        }
+
         if (lambda < 0.0) {
             throw new IllegalArgumentException("Invalid shrinkage/regularization parameter lambda = " + lambda);
         }
 
-        DenseMatrix X = formula.matrix(data, false);
-        double[] y = formula.response(data).toDoubleArray();
-
-        int n = X.nrows();
-        int p = X.ncols() - 1;
+        int n = x.length;
+        p = x[0].length;
 
         if (n <= p) {
             throw new IllegalArgumentException(String.format("The input matrix is not over determined: %d rows, %d columns", n, p));
         }
 
-        RidgeRegression model = new RidgeRegression();
-        model.names = new String[p];
-        smile.data.formula.Term[] terms = formula.terms();
-        for (int i = 0; i < p; i++) {
-            model.names[i] = terms[i+1].toString();
+        ym = Math.mean(y);                
+        center = Math.colMeans(x);
+        
+        DenseMatrix X = Matrix.zeros(n, p);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < p; j++) {
+                X.set(i, j, x[i][j] - center[j]);
+            }
+        }
+        
+        scale = new double[p];
+        for (int j = 0; j < p; j++) {
+            for (int i = 0; i < n; i++) {
+                scale[j] += Math.sqr(X.get(i, j));
+            }
+            scale[j] = Math.sqrt(scale[j] / n);
         }
 
-        model.formula = formula;
-        model.p = p;
-        model.ym = MathEx.mean(y);
-        model.center = X.colMeans();
-        model.scale = X.colSds();
+        for (int j = 0; j < p; j++) {
+            if (!Math.isZero(scale[j])) {
+                for (int i = 0; i < n; i++) {
+                    X.div(i, j, scale[j]);
+                }
+            }
+        }
 
-        DenseMatrix scaledX = X.scale(model.center, model.scale);
+        w = new double[p];
+        X.atx(y, w);
 
-        model.w = new double[p];
-        scaledX.atx(y, model.w);
-
-        DenseMatrix XtX = scaledX.ata();;
+        DenseMatrix XtX = X.ata();;
         for (int i = 0; i < p; i++) {
             XtX.add(i, i, lambda);
         }
-        Cholesky cholesky = XtX.cholesky();
+        Cholesky cholesky = XtX.cholesky();;
 
-        cholesky.solve(model.w);
+        cholesky.solve(w);
         
         for (int j = 0; j < p; j++) {
-            if (!MathEx.isZero(model.scale[j])) {
-                model.w[j] /= model.scale[j];
+            if (!Math.isZero(scale[j])) {
+                w[j] /= scale[j];
             }
         }
-        model.b = model.ym - MathEx.dot(model.w, model.center);
+        b = ym - Math.dot(w, center);
 
         double[] yhat = new double[n];
-        X.ax(model.w, yhat);
+        Matrix.newInstance(x).ax(w, yhat);
 
         double TSS = 0.0;
-        model.RSS = 0.0;
-        double ybar = MathEx.mean(y);
-        model.residuals = new double[n];
+        RSS = 0.0;
+        double ybar = Math.mean(y);
+        residuals = new double[n];
         for (int i = 0; i < n; i++) {
-            double r = y[i] - yhat[i] - model.b;
-            model.residuals[i] = r;
-            model.RSS += MathEx.sqr(r);
-            TSS += MathEx.sqr(y[i] - ybar);
+            double r = y[i] - yhat[i] - b;
+            residuals[i] = r;
+            RSS += Math.sqr(r);
+            TSS += Math.sqr(y[i] - ybar);
         }
 
-        model.error = Math.sqrt(model.RSS / (n - p - 1));
-        model.df = n - p - 1;
+        error = Math.sqrt(RSS / (n - p - 1));
+        df = n - p - 1;
 
-        model.RSquared = 1.0 - model.RSS / TSS;
-        model.adjustedRSquared = 1.0 - ((1 - model.RSquared) * (n-1) / (n-p-1));
+        RSquared = 1.0 - RSS / TSS;
+        adjustedRSquared = 1.0 - ((1 - RSquared) * (n-1) / (n-p-1));
 
-        model.F = (TSS - model.RSS) * (n - p - 1) / (model.RSS * p);
+        F = (TSS - RSS) * (n - p - 1) / (RSS * p);
         int df1 = p;
         int df2 = n - p - 1;
-        model.pvalue = Beta.regularizedIncompleteBetaFunction(0.5 * df2, 0.5 * df1, df2 / (df2 + df1 * model.F));
+        pvalue = Beta.regularizedIncompleteBetaFunction(0.5 * df2, 0.5 * df1, df2 / (df2 + df1 * F));
 
         DenseMatrix inv = cholesky.inverse();
 
-        model.coefficients = new double[p][4];
+        coefficients = new double[p][4];
         for (int i = 0; i < p; i++) {
-            model.coefficients[i][0] = model.w[i];
-            double se = model.error * Math.sqrt(inv.get(i, i));
-            model.coefficients[i][1] = se;
-            double t = model.w[i] / se;
-            model.coefficients[i][2] = t;
-            model.coefficients[i][3] = Beta.regularizedIncompleteBetaFunction(0.5 * model.df, 0.5, model.df / (model.df + t * t));
+            coefficients[i][0] = w[i];
+            double se = error * Math.sqrt(inv.get(i, i));
+            coefficients[i][1] = se;
+            double t = w[i] / se;
+            coefficients[i][2] = t;
+            coefficients[i][3] = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
         }
-
-        return model;
     }
 
     /**
@@ -286,7 +306,7 @@ public class RidgeRegression implements Regression<double[]> {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
         }
 
-        return MathEx.dot(x, w) + b;
+        return Math.dot(x, w) + b;
     }
 
     /**
@@ -393,13 +413,13 @@ public class RidgeRegression implements Regression<double[]> {
         double[] r = residuals.clone();
         builder.append("\nResiduals:\n");
         builder.append("\t       Min\t        1Q\t    Median\t        3Q\t       Max\n");
-        builder.append(String.format("\t%10.4f\t%10.4f\t%10.4f\t%10.4f\t%10.4f%n", MathEx.min(r), MathEx.q1(r), MathEx.median(r), MathEx.q3(r), MathEx.max(r)));
+        builder.append(String.format("\t%10.4f\t%10.4f\t%10.4f\t%10.4f\t%10.4f%n", Math.min(r), Math.q1(r), Math.median(r), Math.q3(r), Math.max(r)));
 
         builder.append("\nCoefficients:\n");
         builder.append("            Estimate        Std. Error        t value        Pr(>|t|)\n");
         builder.append(String.format("Intercept%11.4f                NA             NA              NA%n", b));
         for (int i = 0; i < p; i++) {
-            builder.append(String.format("%s\t %11.4f%18.4f%15.4f%16.4f %s%n", names[i], coefficients[i][0], coefficients[i][1], coefficients[i][2], coefficients[i][3], significance(coefficients[i][3])));
+            builder.append(String.format("Var %d\t %11.4f%18.4f%15.4f%16.4f %s%n", i+1, coefficients[i][0], coefficients[i][1], coefficients[i][2], coefficients[i][3], significance(coefficients[i][3])));
         }
 
         builder.append("---------------------------------------------------------------------\n");

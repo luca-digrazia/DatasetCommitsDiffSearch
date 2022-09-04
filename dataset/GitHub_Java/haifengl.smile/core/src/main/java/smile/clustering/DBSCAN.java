@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.clustering;
 
 import java.util.List;
@@ -24,7 +22,7 @@ import smile.neighbor.Neighbor;
 import smile.neighbor.RNNSearch;
 import smile.neighbor.LinearSearch;
 import smile.neighbor.CoverTree;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.distance.Distance;
 import smile.math.distance.Metric;
 
@@ -93,13 +91,9 @@ public class DBSCAN<T> extends PartitionClustering<T> {
     private static final long serialVersionUID = 1L;
 
     /**
-     * Label for data samples in BFS queue.
-     */
-    private static final int QUEUED = -2;
-    /**
      * Label for unclassified data samples.
      */
-    private static final int UNDEFINED = -1;
+    private static final int UNCLASSIFIED = -1;
     /**
      * The minimum number of points required to form a cluster
      */
@@ -161,52 +155,32 @@ public class DBSCAN<T> extends PartitionClustering<T> {
 
         int n = data.length;
         y = new int[n];
-        Arrays.fill(y, UNDEFINED);
+        Arrays.fill(y, UNCLASSIFIED);
 
         for (int i = 0; i < data.length; i++) {
-            if (y[i] == UNDEFINED) {
+            if (y[i] == UNCLASSIFIED) {
                 List<Neighbor<T,T>> neighbors = new ArrayList<>();
                 nns.range(data[i], radius, neighbors);
                 if (neighbors.size() < minPts) {
                     y[i] = OUTLIER;
                 } else {
                     y[i] = k;
-
-                    for (Neighbor<T, T> neighbor : neighbors) {
-                        if (y[neighbor.index] == UNDEFINED) {
-                            y[neighbor.index] = QUEUED;
-                        }
-                    }
-
                     for (int j = 0; j < neighbors.size(); j++) {
-                        Neighbor<T,T> neighbor = neighbors.get(j);
-                        int index = neighbor.index;
-
-                        if (y[index] == OUTLIER) {
-                            y[index] = k;
-                        }
-
-                        if (y[index] == UNDEFINED || y[index] == QUEUED) {
-                            y[index] = k;
-
+                        if (y[neighbors.get(j).index] == UNCLASSIFIED) {
+                            y[neighbors.get(j).index] = k;
+                            Neighbor<T,T> neighbor = neighbors.get(j);
                             List<Neighbor<T,T>> secondaryNeighbors = new ArrayList<>();
                             nns.range(neighbor.key, radius, secondaryNeighbors);
 
                             if (secondaryNeighbors.size() >= minPts) {
-                                for (Neighbor<T, T> sn : secondaryNeighbors) {
-                                    int label = y[sn.index];
-                                    if (label == UNDEFINED) {
-                                        y[sn.index] = QUEUED;
-                                    }
-
-                                    if (label == UNDEFINED || label == OUTLIER) {
-                                        neighbors.add(sn);
-                                    }
-                                }
+                                neighbors.addAll(secondaryNeighbors);
                             }
                         }
-                    }
 
+                        if (y[neighbors.get(j).index] == OUTLIER) {
+                            y[neighbors.get(j).index] = k;
+                        }
+                    }
                     k++;
                 }
             }
@@ -257,7 +231,7 @@ public class DBSCAN<T> extends PartitionClustering<T> {
             label[yi]++;
         }
         
-        int c = MathEx.whichMax(label);
+        int c = Math.whichMax(label);
         if (c == k) c = OUTLIER;
         return c;
     }

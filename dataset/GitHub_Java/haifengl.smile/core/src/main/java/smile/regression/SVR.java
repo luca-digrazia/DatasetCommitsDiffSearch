@@ -24,7 +24,7 @@ import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import smile.math.DoubleArrayList;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.kernel.MercerKernel;
 import smile.util.MulticoreExecutor;
 
@@ -472,7 +472,7 @@ public class SVR<T> implements Regression<T> {
             
             double gj = -v.g[0];
             if (v.alpha[0] > 0.0 && gj < gi) {
-                double gain = -MathEx.sqr(gi - gj) / curv;
+                double gain = -Math.sqr(gi - gj) / curv;
                 if (gain < best) {
                     best = gain;
                     j = v;
@@ -483,7 +483,7 @@ public class SVR<T> implements Regression<T> {
             
             gj = v.g[1];
             if (v.alpha[1] < v.C && gj < gi) {
-                double gain = -MathEx.sqr(gi - gj) / curv;
+                double gain = -Math.sqr(gi - gj) / curv;
                 if (gain < best) {
                     best = gain;
                     j = v;
@@ -592,7 +592,7 @@ public class SVR<T> implements Regression<T> {
      * @return the soft margin penalty parameter.
      */
     public double getC() {
-        return C;
+    	return C;
     }
     
     /**
@@ -600,7 +600,7 @@ public class SVR<T> implements Regression<T> {
      * @return the loss function error threshold.
      */
     public double getEpsilon() {
-        return eps;
+    	return eps;
     }
     
     /**
@@ -608,6 +608,6 @@ public class SVR<T> implements Regression<T> {
      * @return tolerance of convergence test.
      */
     public double getTolerance() {
-        return tol;
+    	return tol;
     }
 }

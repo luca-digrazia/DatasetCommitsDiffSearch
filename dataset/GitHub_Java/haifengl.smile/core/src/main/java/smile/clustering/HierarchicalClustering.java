@@ -1,23 +1,21 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.clustering;
 
-import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.Queue;
 import smile.clustering.linkage.Linkage;
@@ -53,8 +51,8 @@ import smile.sort.IntHeapSelect;
  * 
  * @author Haifeng Li
  */
-public class HierarchicalClustering implements Serializable {
-    private static final long serialVersionUID = 2L;
+public class HierarchicalClustering {
+    private static final long serialVersionUID = 1L;
 
     /**
      * An n-1 by 2 matrix of which row i describes the merging of clusters at
@@ -72,27 +70,17 @@ public class HierarchicalClustering implements Serializable {
 
     /**
      * Constructor.
-     * @param tree an n-1 by 2 matrix of which row i describes the merging
-     *             of clusters at step i of the clustering.
-     * @param height the clustering height.
-     */
-    public HierarchicalClustering(int[][] tree, double[] height) {
-        this.merge = tree;
-        this.height = height;
-    }
-
-    /**
-     * Fits the Agglomerative Hierarchical Clustering with given linkage
+     * Learn the Agglomerative Hierarchical Clustering with given linkage
      * method, which includes proximity matrix.
      * @param linkage a linkage method to merge clusters. The linkage object
      * includes the proximity matrix of data.
      */
-    public static HierarchicalClustering fit(Linkage linkage) {
+    public HierarchicalClustering(Linkage linkage) {
         int n = linkage.size();
 
-        int[][] merge = new int[n - 1][2];
+        merge = new int[n - 1][2];
         int[] id = new int[n];
-        double[] height = new double[n - 1];
+        height = new double[n - 1];
 
         int[] points = new int[n];
         for (int i = 0; i < n; i++) {
@@ -119,8 +107,6 @@ public class HierarchicalClustering implements Serializable {
                 height[i] = Math.sqrt(height[i]);
             }
         }
-
-        return new HierarchicalClustering(merge, height);
     }
 
     /**

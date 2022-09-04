@@ -19,7 +19,7 @@ import java.util.Arrays;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.regression.RegressionTree;
 import smile.util.SmileUtils;
 import smile.validation.Accuracy;
@@ -359,7 +359,7 @@ public class GradientTreeBoost implements SoftClassifier<double[]> {
         this.maxNodes = maxNodes;
         this.shrinkage = shrinkage;
         this.subsample = subsample;
-        this.k = MathEx.max(y) + 1;
+        this.k = Math.max(y) + 1;
 
         if (k < 2) {
             throw new IllegalArgumentException("Only one class or negative class labels.");
@@ -423,7 +423,7 @@ public class GradientTreeBoost implements SoftClassifier<double[]> {
         double[] h = new double[n]; // current F(x_i)
         double[] response = new double[n]; // response variable for regression tree.
 
-        double mu = MathEx.mean(y2);
+        double mu = Math.mean(y2);
         b = 0.5 * Math.log((1 + mu) / (1 - mu));
 
         for (int i = 0; i < n; i++) {
@@ -442,7 +442,7 @@ public class GradientTreeBoost implements SoftClassifier<double[]> {
 
         for (int m = 0; m < ntrees; m++) {
             Arrays.fill(samples, 0);
-            MathEx.permutate(perm);
+            Math.permutate(perm);
             for (int l = 0; l < k; l++) {
                 int subj = (int) Math.round(nc[l] * subsample);
                 int count = 0;
@@ -527,7 +527,7 @@ public class GradientTreeBoost implements SoftClassifier<double[]> {
                 }
 
                 Arrays.fill(samples, 0);
-                MathEx.permutate(perm);
+                Math.permutate(perm);
                 for (int l = 0; l < k; l++) {
                     int subj = (int) Math.round(nc[l] * subsample);
                     int count = 0;
@@ -777,7 +777,7 @@ public class GradientTreeBoost implements SoftClassifier<double[]> {
                     for (int l = 0; l < k; l++) {
                         prediction[j][l] += shrinkage * forest[l][i].predict(x[j]);
                     }
-                    label[j] = MathEx.whichMax(prediction[j]);
+                    label[j] = Math.whichMax(prediction[j]);
                 }
 
                 accuracy[i] = measure.measure(y, label);
@@ -822,7 +822,7 @@ public class GradientTreeBoost implements SoftClassifier<double[]> {
                     for (int l = 0; l < k; l++) {
                         prediction[j][l] += shrinkage * forest[l][i].predict(x[j]);
                     }
-                    label[j] = MathEx.whichMax(prediction[j]);
+                    label[j] = Math.whichMax(prediction[j]);
                 }
 
                 for (int j = 0; j < m; j++) {

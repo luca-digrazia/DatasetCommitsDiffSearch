@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.util.SmileUtils;
 import smile.validation.Accuracy;
 import smile.validation.ClassificationMeasure;
@@ -249,7 +249,7 @@ public class AdaBoost implements SoftClassifier<double[]> {
         }
         
         // class label set.
-        int[] labels = MathEx.unique(y);
+        int[] labels = Math.unique(y);
         Arrays.sort(labels);
         
         for (int i = 0; i < labels.length; i++) {
@@ -293,13 +293,13 @@ public class AdaBoost implements SoftClassifier<double[]> {
         alpha = new double[ntrees];
         error = new double[ntrees];
         for (int t = 0; t < ntrees; t++) {
-            double W = MathEx.sum(w);
+            double W = Math.sum(w);
             for (int i = 0; i < n; i++) {
                 w[i] /= W;
             }
             
             Arrays.fill(samples, 0);  
-            int[] rand = MathEx.random(w, n);
+            int[] rand = Math.random(w, n);
             for (int s : rand) {
                 samples[s]++;
             }
@@ -331,7 +331,7 @@ public class AdaBoost implements SoftClassifier<double[]> {
             } else failures = 0;
             
             error[t] = e;
-            alpha[t] = Math.log((1-e)/ Math.max(1E-10,e)) + b;
+            alpha[t] = Math.log((1-e)/Math.max(1E-10,e)) + b;
             double a = Math.exp(alpha[t]);
             for (int i = 0; i < n; i++) {
                 if (err[i]) {
@@ -403,7 +403,7 @@ public class AdaBoost implements SoftClassifier<double[]> {
             y[trees[i].predict(x)] += alpha[i];
         }
             
-        return MathEx.whichMax(y);
+        return Math.whichMax(y);
     }
     
     /**
@@ -418,12 +418,12 @@ public class AdaBoost implements SoftClassifier<double[]> {
             posteriori[trees[i].predict(x)] += alpha[i];
         }
 
-        double sum = MathEx.sum(posteriori);
+        double sum = Math.sum(posteriori);
         for (int i = 0; i < k; i++) {
             posteriori[i] /= sum;
         }
 
-        return MathEx.whichMax(posteriori);
+        return Math.whichMax(posteriori);
     }
     
     /**
@@ -456,7 +456,7 @@ public class AdaBoost implements SoftClassifier<double[]> {
             for (int i = 0; i < T; i++) {
                 for (int j = 0; j < n; j++) {
                     prediction[j][trees[i].predict(x[j])] += alpha[i];
-                    label[j] = MathEx.whichMax(prediction[j]);
+                    label[j] = Math.whichMax(prediction[j]);
                 }
 
                 accuracy[i] = measure.measure(y, label);
@@ -499,7 +499,7 @@ public class AdaBoost implements SoftClassifier<double[]> {
             for (int i = 0; i < T; i++) {
                 for (int j = 0; j < n; j++) {
                     prediction[j][trees[i].predict(x[j])] += alpha[i];
-                    label[j] = MathEx.whichMax(prediction[j]);
+                    label[j] = Math.whichMax(prediction[j]);
                 }
 
                 for (int j = 0; j < m; j++) {

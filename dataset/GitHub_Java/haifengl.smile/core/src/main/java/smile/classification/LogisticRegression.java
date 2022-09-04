@@ -22,10 +22,9 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.data.AttributeDataset;
 import smile.math.DifferentiableMultivariateFunction;
-import smile.math.BFGS;
 import smile.util.MulticoreExecutor;
 
 /**
@@ -276,7 +275,7 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
         }
         
         // class label set.
-        int[] labels = MathEx.unique(y);
+        int[] labels = Math.unique(y);
         Arrays.sort(labels);
         
         for (int i = 0; i < labels.length; i++) {
@@ -302,10 +301,10 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
 
             L = 0.0;
             try {
-                L = -BFGS.min(func, 5, w, tol, maxIter);
+                L = -Math.min(func, 5, w, tol, maxIter);
             } catch (Exception ex) {
                 // If L-BFGS doesn't work, let's try BFGS.
-                L = -BFGS.min(func, w, tol, maxIter);
+                L = -Math.min(func, w, tol, maxIter);
             }
         } else {
             MultiClassObjectiveFunction func = new MultiClassObjectiveFunction(x, y, k, lambda);
@@ -314,10 +313,10 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
 
             L = 0.0;
             try {
-                L = -MathEx.min(func, 5, w, tol, maxIter);
+                L = -Math.min(func, 5, w, tol, maxIter);
             } catch (Exception ex) {
                 // If L-BFGS doesn't work, let's try BFGS.
-                L = -MathEx.min(func, w, tol, maxIter);
+                L = -Math.min(func, w, tol, maxIter);
             }
 
             W = new double[k][p+1];
@@ -510,7 +509,7 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
                     double wx = dot(x[i], w);
                     f += log1pe(wx) - y[i] * wx;
                     
-                    double yi = y[i] - MathEx.logistic(wx);
+                    double yi = y[i] - Math.logistic(wx);
                     for (int j = 0; j < p; j++) {
                         g[j] -= yi * x[i][j];
                     }
@@ -554,7 +553,7 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
                     double wx = dot(x[i], w);
                     f += log1pe(wx) - y[i] * wx;
 
-                    double yi = y[i] - MathEx.logistic(wx);
+                    double yi = y[i] - Math.logistic(wx);
                     for (int j = 0; j < p; j++) {
                         g[j] -= yi * x[i][j];
                     }
@@ -737,7 +736,7 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
                 double w2 = 0.0;
                 for (int i = 0; i < k; i++) {
                     for (int j = 0; j < p; j++) {
-                        w2 += MathEx.sqr(w[i*(p+1) + j]);
+                        w2 += Math.sqr(w[i*(p+1) + j]);
                     }
                 }
 
@@ -870,8 +869,8 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
         }
     }
 
-    @Override
-    public void learn(double[] x, int y) {
+	@Override
+	public void learn(double[] x, int y) {
         if (y < 0 || y >= k) {
             throw new IllegalArgumentException("Invalid label");
         }
@@ -883,7 +882,7 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
         if (k == 2) {
             // calculate gradient for incoming data
             double wx = dot(x, w);
-            double res = y - MathEx.logistic(wx);
+            double res = y - Math.logistic(wx);
 
             // update the weights
             for (int j = 0; j <= p; j++) {
@@ -925,7 +924,7 @@ public class LogisticRegression implements SoftClassifier<double[]>, OnlineClass
      */
     public void setLearningRate(double eta) {
         this.eta = eta;
-    }
+	}
 
     /**
      * Calculate softmax function without overflow.

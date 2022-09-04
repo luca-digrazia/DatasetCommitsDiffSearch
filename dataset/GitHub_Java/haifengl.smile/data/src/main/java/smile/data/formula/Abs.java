@@ -18,8 +18,6 @@ package smile.data.formula;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import smile.data.type.DataType;
-import smile.data.type.DataTypes;
 
 /**
  * The term of abs function.
@@ -57,10 +55,5 @@ public class Abs<T> implements Factor<T, Double> {
     @Override
     public Double apply(T o) {
         return Math.abs(child.apply(o));
-    }
-
-    @Override
-    public DataType type() {
-        return DataTypes.DoubleType;
     }
 }

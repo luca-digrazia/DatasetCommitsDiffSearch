@@ -21,7 +21,7 @@ import java.util.concurrent.Callable;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.util.MulticoreExecutor;
 import smile.util.SmileUtils;
 import smile.validation.RMSE;
@@ -302,7 +302,7 @@ public class RandomForest implements Regression<double[]> {
             if (subsample == 1.0) {
                 // Training samples draw with replacement.
                 for (int i = 0; i < n; i++) {
-                    int xi = MathEx.randomInt(n);
+                    int xi = Math.randomInt(n);
                     samples[xi]++;
                 }
             } else {
@@ -312,7 +312,7 @@ public class RandomForest implements Regression<double[]> {
                     perm[i] = i;
                 }
 
-                MathEx.permutate(perm);
+                Math.permutate(perm);
                 int m = (int) Math.round(n * subsample);
                 for (int i = 0; i < m; i++) {
                     samples[perm[i]]++;
@@ -568,7 +568,7 @@ public class RandomForest implements Regression<double[]> {
             if (oob[i] > 0) {
                 m++;
                 double pred = prediction[i] / oob[i];
-                error += MathEx.sqr(pred - y[i]);
+                error += Math.sqr(pred - y[i]);
             }
         }
 

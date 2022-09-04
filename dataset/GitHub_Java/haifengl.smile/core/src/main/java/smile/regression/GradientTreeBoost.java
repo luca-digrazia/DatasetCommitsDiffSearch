@@ -15,12 +15,13 @@
  *******************************************************************************/
 package smile.regression;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.sort.QuickSelect;
 import smile.util.SmileUtils;
 import smile.validation.RMSE;
@@ -402,7 +403,7 @@ public class GradientTreeBoost implements Regression<double[]> {
         RegressionTree.NodeOutput output = null;
         if (loss == Loss.LeastSquares) {
             response = residual;
-            b = MathEx.mean(y);
+            b = Math.mean(y);
             for (int i = 0; i < n; i++) {
                 residual[i] = y[i] - b;
             }
@@ -430,7 +431,7 @@ public class GradientTreeBoost implements Regression<double[]> {
         for (int m = 0; m < ntrees; m++) {
             Arrays.fill(samples, 0);
             
-            MathEx.permutate(perm);
+            Math.permutate(perm);
             for (int i = 0; i < N; i++) {
                 samples[perm[i]] = 1;
             }
@@ -511,7 +512,7 @@ public class GradientTreeBoost implements Regression<double[]> {
      * @return the sampling rate for stochastic gradient tree boosting.
      */
     public double getSamplingRate() {
-        return f;
+    	return f;
     }
   
     /**
@@ -519,7 +520,7 @@ public class GradientTreeBoost implements Regression<double[]> {
      * @return the maximum number of leaves in decision tree.
      */
     public int getmaxNodes() {
-        return maxNodes;
+    	return maxNodes;
     }
     
     /**
@@ -527,7 +528,7 @@ public class GradientTreeBoost implements Regression<double[]> {
      * @return the loss function.
      */
     public Loss getLossFunction() {
-        return loss;
+    	return loss;
     }
     
     /**

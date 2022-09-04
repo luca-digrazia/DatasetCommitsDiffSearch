@@ -22,7 +22,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import smile.clustering.linkage.Linkage;
 import smile.clustering.linkage.WardLinkage;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * Balanced Iterative Reducing and Clustering using Hierarchies. BIRCH performs
@@ -423,7 +423,7 @@ public class BIRCH implements Clustering<double[]> {
             for (int i = 0; i < n; i++) {
                 proximity[i] = new double[i + 1];
                 for (int j = 0; j < i; j++) {
-                    proximity[i][j] = MathEx.distance(centroids[i], centroids[j]);
+                    proximity[i][j] = Math.distance(centroids[i], centroids[j]);
                 }
             }
 

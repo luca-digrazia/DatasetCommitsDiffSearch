@@ -16,9 +16,11 @@
  *******************************************************************************/
 
 package smile.regression;
-
+ 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.Serializable;
-import smile.math.MathEx;
+import smile.math.Math;
  
  /**
   * Multilayer perceptron neural network for regression.
@@ -36,7 +38,7 @@ import smile.math.MathEx;
   */
  public class NeuralNetwork implements OnlineRegression<double[]> {
     private static final long serialVersionUID = 1L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(NeuralNetwork.class);
+    private static final Logger logger = LoggerFactory.getLogger(NeuralNetwork.class);
 
     public enum ActivationFunction {
         /**
@@ -301,10 +303,10 @@ import smile.math.MathEx;
         for (int l = 1; l < numLayers; l++) {
             net[l].weight = new double[numUnits[l]][numUnits[l - 1] + 1];
             net[l].delta = new double[numUnits[l]][numUnits[l - 1] + 1];
-            double r = 1.0 / MathEx.sqrt(net[l - 1].units);
+            double r = 1.0 / Math.sqrt(net[l - 1].units);
             for (int i = 0; i < net[l].units; i++) {
                 for (int j = 0; j <= net[l - 1].units; j++) {
-                    net[l].weight[i][j] = MathEx.random(-r, r);
+                    net[l].weight[i][j] = Math.random(-r, r);
                 }
             }
         }
@@ -335,8 +337,8 @@ import smile.math.MathEx;
             copycat.net[i].output = net[i].output.clone();
             copycat.net[i].error = net[i].error.clone();
             if (i > 0) {
-                copycat.net[i].weight = MathEx.clone(net[i].weight);
-                copycat.net[i].delta = MathEx.clone(net[i].delta);
+                copycat.net[i].weight = Math.clone(net[i].weight);
+                copycat.net[i].delta = Math.clone(net[i].delta);
             }
         }
 
@@ -440,10 +442,10 @@ import smile.math.MathEx;
 
             else {
                 if (activationFunction == ActivationFunction.LOGISTIC_SIGMOID) {
-                    upper.output[i] = MathEx.logistic(sum);
+                    upper.output[i] = Math.logistic(sum);
                 }
                 else if (activationFunction==ActivationFunction.TANH){
-                    upper.output[i]=(2* MathEx.logistic(2*sum))-1;
+                    upper.output[i]=(2*Math.logistic(2*sum))-1;
                 }
             }
         }
@@ -582,7 +584,7 @@ import smile.math.MathEx;
      */
     public void learn(double[][] x, double[] y) {
         int n = x.length;
-        int[] index = MathEx.permutate(n);
+        int[] index = Math.permutate(n);
         for (int i = 0; i < n; i++) {
             learn(x[index[i]], y[index[i]]);
         }
