@@ -16,6 +16,7 @@
 
 package org.jboss.shamrock.deployment.steps;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -23,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logging.Logger;
 import org.jboss.shamrock.deployment.annotations.BuildProducer;
 import org.jboss.shamrock.deployment.annotations.BuildStep;
@@ -96,9 +96,7 @@ class SubstrateConfigBuildStep {
                 systemProperty.produce(
                         new SystemPropertyBuildItem("javax.net.ssl.trustStore", graalVmLibDirectory.resolve(Paths.get("security", "cacerts")).toString()));
             } else {
-                // only warn if we're building a native image
-                if(ImageInfo.inImageBuildtimeCode())
-                    log.warn(
+                log.warn(
                         "SSL is enabled but the GRAALVM_HOME environment variable is not set. The java.library.path property has not been set and will need to be set manually.");
             }
         }
