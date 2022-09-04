@@ -700,6 +700,9 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
         for (int i = 0; i < outputLayer.units; i++) {
             double out = outputLayer.output[i];
             double g = output[i] - out;
+            if (errorFunction == ErrorFunction.LEAST_MEAN_SQUARES && activationFunction == ActivationFunction.LOGISTIC_SIGMOID) {
+                g *= out * (1.0 - out);
+            }
 
             if (errorFunction == ErrorFunction.LEAST_MEAN_SQUARES) {
                 error += 0.5 * g * g;
@@ -707,13 +710,8 @@ public class NeuralNetwork implements OnlineClassifier<double[]>, SoftClassifier
                 if (activationFunction == ActivationFunction.SOFTMAX) {
                     error -= output[i] * log(out);
                 } else if (activationFunction == ActivationFunction.LOGISTIC_SIGMOID) {
-                    // We have only one output neuron in this case.
                     error = -output[i] * log(out) - (1.0 - output[i]) * log(1.0 - out);
                 }
-            }
-
-            if (errorFunction == ErrorFunction.LEAST_MEAN_SQUARES && activationFunction == ActivationFunction.LOGISTIC_SIGMOID) {
-                g *= out * (1.0 - out);
             }
 
             gradient[i] = g;
