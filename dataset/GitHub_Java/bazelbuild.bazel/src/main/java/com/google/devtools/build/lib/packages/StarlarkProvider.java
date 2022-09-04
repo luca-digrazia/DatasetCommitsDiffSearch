@@ -18,7 +18,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Collection;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -241,14 +240,6 @@ public final class StarlarkProvider implements StarlarkCallable, StarlarkExporta
     @Override
     public String toString() {
       return exportedName;
-    }
-
-    @Override
-    void fingerprint(Fingerprint fp) {
-      // False => Not native.
-      fp.addBoolean(false);
-      fp.addString(extensionLabel.getCanonicalForm());
-      fp.addString(exportedName);
     }
 
     @Override
