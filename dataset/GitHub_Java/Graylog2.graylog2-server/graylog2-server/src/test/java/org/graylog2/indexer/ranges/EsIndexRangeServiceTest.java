@@ -165,8 +165,7 @@ public class EsIndexRangeServiceTest {
 
         assertThat(range).isNotNull();
         assertThat(range.indexName()).isEqualTo(index);
-        assertThat(range.begin()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
-        assertThat(range.end()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
+        Assertions.assertThat(range.end()).isEqualToIgnoringHours(DateTime.now(DateTimeZone.UTC));
     }
 
     @Test(expected = IndexMissingException.class)
@@ -270,9 +269,7 @@ public class EsIndexRangeServiceTest {
     public void testTimestampStatsOfIndexWithEmptyIndex() throws Exception {
         TimestampStats stats = indexRangeService.timestampStatsOfIndex("graylog");
 
-        assertThat(stats.min()).isEqualTo(new DateTime(0L ,DateTimeZone.UTC));
-        assertThat(stats.max()).isEqualTo(new DateTime(0L ,DateTimeZone.UTC));
-        assertThat(stats.avg()).isEqualTo(new DateTime(0L ,DateTimeZone.UTC));
+        assertThat(stats).isNull();
     }
 
     @Test(expected = IndexMissingException.class)
