@@ -42,7 +42,6 @@ import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -124,9 +123,6 @@ public final class TreeNodeRepository {
       public int hashCode() {
         return Objects.hash(segment, child);
       }
-
-      public static Comparator<ChildEntry> segmentOrder =
-          Comparator.comparing(ChildEntry::getSegment);
     }
 
     // Should only be called by the TreeNodeRepository.
@@ -348,7 +344,6 @@ public final class TreeNodeRepository {
         }
       }
     }
-    Collections.sort(entries, TreeNode.ChildEntry.segmentOrder);
     return interner.intern(new TreeNode(entries, null));
   }
 
@@ -362,18 +357,23 @@ public final class TreeNodeRepository {
         TreeNode child = entry.getChild();
         if (child.isLeaf()) {
           ActionInput input = child.getActionInput();
-          final Digest digest;
           if (input instanceof VirtualActionInput) {
             VirtualActionInput virtualInput = (VirtualActionInput) input;
-            digest = digestUtil.compute(virtualInput);
+            Digest digest = digestUtil.compute(virtualInput);
             virtualInputDigestCache.put(virtualInput, digest);
             // There may be multiple inputs with the same digest. In that case, we don't care which
             // one we get back from the digestVirtualInputCache later.
             digestVirtualInputCache.put(digest, virtualInput);
+            b.addFilesBuilder()
+                .setName(entry.getSegment())
+                .setDigest(digest)
+                .setIsExecutable(false);
           } else {
-            digest = DigestUtil.getFromInputCache(input, inputFileCache);
+            b.addFilesBuilder()
+                .setName(entry.getSegment())
+                .setDigest(DigestUtil.getFromInputCache(input, inputFileCache))
+                .setIsExecutable(execRoot.getRelative(input.getExecPathString()).isExecutable());
           }
-          b.addFilesBuilder().setName(entry.getSegment()).setDigest(digest).setIsExecutable(true);
         } else {
           Digest childDigest = Preconditions.checkNotNull(treeNodeDigestCache.get(child));
           if (child.getActionInput() != null) {
