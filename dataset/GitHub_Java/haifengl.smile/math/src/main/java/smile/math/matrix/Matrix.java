@@ -27,7 +27,6 @@ import java.util.Arrays;
 import smile.math.MathEx;
 import smile.math.blas.*;
 import smile.sort.QuickSort;
-import smile.stat.distribution.Distribution;
 import smile.stat.distribution.GaussianDistribution;
 import static smile.math.blas.Diag.*;
 import static smile.math.blas.Layout.*;
@@ -254,20 +253,22 @@ public class Matrix extends DMatrix {
      * Returns a random matrix of standard normal distribution.
      */
     public static Matrix randn(int m, int n) {
-        return rand(m, n, GaussianDistribution.getInstance());
+        return randn(m, n, 0.0f, 1.0f);
     }
 
     /**
-     * Returns a random matrix.
+     * Returns a random matrix of normal distribution.
      *
-     * @param distribution the distribution of random number.
+     * @param mu the mean of normal distribution.
+     * @param sigma the standard deviation of normal distribution.
      */
-    public static Matrix rand(int m, int n, Distribution distribution) {
+    public static Matrix randn(int m, int n, double mu, double sigma) {
         Matrix matrix = new Matrix(m, n);
+        GaussianDistribution g = new GaussianDistribution(mu, sigma);
 
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
-                matrix.set(i, j, distribution.rand());
+                matrix.set(i, j, (double) g.rand());
             }
         }
 
@@ -298,7 +299,6 @@ public class Matrix extends DMatrix {
     public static Matrix toeplitz(double[] a) {
         int n = a.length;
         Matrix toeplitz = new Matrix(n, n);
-        toeplitz.uplo(LOWER);
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < i; j++) {
@@ -307,34 +307,6 @@ public class Matrix extends DMatrix {
 
             for (int j = i; j < n; j++) {
                 toeplitz.set(i, j, a[j - i]);
-            }
-        }
-
-        return toeplitz;
-    }
-
-    /**
-     * Returns a Toeplitz matrix in which each descending diagonal
-     * from left to right is constant.
-     *
-     * @param kl A[i, j] = kl[i - j] for i >  j
-     * @param ku A[i, j] = ku[j - i] for i <= j
-     */
-    public static Matrix toeplitz(double[] kl, double[] ku) {
-        if (kl.length != ku.length - 1) {
-            throw new IllegalArgumentException(String.format("Invalid subdiagonals and superdiagonals size: %d != %d - 1", kl.length, ku.length));
-        }
-
-        int n = kl.length;
-        Matrix toeplitz = new Matrix(n, n);
-
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < i; j++) {
-                toeplitz.set(i, j, kl[i - j]);
-            }
-
-            for (int j = i; j < n; j++) {
-                toeplitz.set(i, j, ku[j - i]);
             }
         }
 
