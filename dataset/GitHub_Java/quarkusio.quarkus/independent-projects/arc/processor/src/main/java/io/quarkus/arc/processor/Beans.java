@@ -72,12 +72,6 @@ final class Beans {
                 // Qualifiers
                 qualifiers.add(qualifierAnnotation);
             }
-            // Treat the case when an additional bean defining annotation that is also a qualifier declares the default scope
-            StereotypeInfo stereotype = beanDeployment.getStereotype(annotation.name());
-            if (stereotype != null) {
-                stereotypes.add(stereotype);
-                continue;
-            }
             if (!qualifierCollection.isEmpty()) {
                 // we needn't process it further, the annotation was a qualifier (or multiple repeating ones)
                 continue;
@@ -108,6 +102,11 @@ final class Beans {
                 scopes.add(scopeAnnotation);
                 continue;
             }
+            StereotypeInfo stereotype = beanDeployment.getStereotype(annotation.name());
+            if (stereotype != null) {
+                stereotypes.add(stereotype);
+                continue;
+            }
         }
 
         if (scopes.size() > 1) {
@@ -136,7 +135,7 @@ final class Beans {
             if (alternativePriority == null) {
                 // after all attempts, priority is still null, bean will be ignored
                 LOGGER.infof(
-                        "Ignoring bean defined via %s - declared as an @Alternative but not selected by @Priority, @AlternativePriority or quarkus.arc.selected-alternatives",
+                        "Ignoring bean defined via %s - declared as an @Alternative but not selected by @Priority, @AlernativePriority or quarkus.arc.selected-alternatives",
                         beanClass.name());
                 return null;
             }
