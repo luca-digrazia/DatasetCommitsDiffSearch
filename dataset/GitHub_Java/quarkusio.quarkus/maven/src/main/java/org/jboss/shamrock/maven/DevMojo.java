@@ -24,8 +24,6 @@ import java.net.InetAddress;
 import java.net.JarURLConnection;
 import java.net.Socket;
 import java.net.URL;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -138,6 +136,9 @@ public class DevMojo extends AbstractMojo {
             } else if (!debug.toLowerCase().equals("false")) {
                 try {
                     int port = Integer.parseInt(debug);
+                    if (port <= 0) {
+                        throw new MojoFailureException("The specified debug port must be greater than 0");
+                    }
                     args.add("-Xdebug");
                     args.add("-Xrunjdwp:transport=dt_socket,address=" + port + ",server=y,suspend=y");
                 } catch (NumberFormatException e) {
@@ -169,14 +170,14 @@ public class DevMojo extends AbstractMojo {
             //this stuff does not change
             StringBuilder classPath = new StringBuilder();
             for (Artifact artifact : project.getArtifacts()) {
-                classPath.append(artifact.getFile().toPath().toAbsolutePath().toUri().toURL().toString());
+                classPath.append(artifact.getFile().getAbsolutePath());
                 classPath.append(" ");
             }
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
             File wiringClassesDirectory = new File(buildDir, "wiring-classes");
             wiringClassesDirectory.mkdirs();
 
-            classPath.append(wiringClassesDirectory.toPath().toAbsolutePath().toUri().toURL().toString()).append("/");
+            classPath.append(wiringClassesDirectory.getAbsolutePath()).append("/");
             classPath.append(' ');
 
             if (fakereplace) {
@@ -207,10 +208,8 @@ public class DevMojo extends AbstractMojo {
             //we also want to add the maven plugin jar to the class path
             //this allows us to just directly use classes, without messing around copying them
             //to the runner jar
-            URL classFile = DevModeMain.class.getClassLoader().getResource(DevModeMain.class.getName().replace('.', File.separatorChar) + ".class");
-            Path path = Paths.get(classFile.toURI());
-            path = path.getRoot().resolve(path.subpath(0, path.getNameCount() - Paths.get(DevModeMain.class.getName().replace('.', File.separatorChar) + ".class").getNameCount())).toAbsolutePath();
-            classPath.append(path.toAbsolutePath().toUri().toURL().toString()).append('/');
+            URL classFile = getClass().getClassLoader().getResource(DevModeMain.class.getName().replace('.', '/') + ".class");
+            classPath.append(((JarURLConnection) classFile.openConnection()).getJarFileURL().getFile());
 
             //now we need to build a temporary jar to actually run
 
