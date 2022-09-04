@@ -29,14 +29,14 @@ public class ServerConfigurationTest {
 
         this.http = new ConfigurationFactory<>(ServerConfiguration.class,
                                                Validation.buildDefaultValidatorFactory()
-                                                         .getValidator(),
-                                               objectMapper)
+                                                                 .getValidator(),
+                                               objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/server.yml").toURI()));
     }
 
     @Test
     public void loadsGzipConfig() throws Exception {
-        assertThat(http.getGzipConfiguration().isEnabled())
+        assertThat(http.getGzipHandlerFactory().isEnabled())
                 .isFalse();
     }
 
