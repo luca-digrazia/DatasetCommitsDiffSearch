@@ -42,7 +42,7 @@ public class FakeJavaCommon
 
   @Override
   public ProviderApi getJavaProvider() {
-    return new FakeProviderApi("JavaInfo");
+    return new FakeProviderApi();
   }
 
   @Override
@@ -54,7 +54,6 @@ public class FakeJavaCommon
       Object outputSourceJar,
       Sequence<?> javacOpts,
       Sequence<?> deps,
-      Sequence<?> runtimeDeps,
       Sequence<?> experimentalLocalCompileTimeDeps,
       Sequence<?> exports,
       Sequence<?> plugins,
@@ -119,12 +118,12 @@ public class FakeJavaCommon
 
   @Override
   public ProviderApi getJavaToolchainProvider() {
-    return new FakeProviderApi("JavaToolchain");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getJavaRuntimeProvider() {
-    return new FakeProviderApi("JavaRuntime");
+    return new FakeProviderApi();
   }
 
   @Override
@@ -135,7 +134,7 @@ public class FakeJavaCommon
 
   @Override
   public ProviderApi getMessageBundleInfo() {
-    return new FakeProviderApi("JavaMessageBundle");
+    return new FakeProviderApi();
   }
 
   @Override

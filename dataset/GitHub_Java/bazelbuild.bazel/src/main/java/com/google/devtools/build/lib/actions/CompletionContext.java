@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.actions;
 import static com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehavior.RESOLVE;
 import static com.google.devtools.build.lib.actions.FilesetManifest.RelativeSymlinkBehavior.RESOLVE_FULLY;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact.ArchivedTreeArtifact;
@@ -30,39 +31,31 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
- * Container for the data one needs to resolve aggregate artifacts from events signaling the
- * completion of a target or an aspect ({@code TargetCompleteEvent} and {@code
- * AspectCompleteEvent}).
+ * {@link CompletionContext} contains an {@link ArtifactExpander} and {@link ArtifactPathResolver}
+ * used to resolve output files during a {@link
+ * com.google.devtools.build.lib.skyframe.CompletionFunction} evaluation.
  *
- * <p>This is needed because some artifacts (tree artifacts and Filesets) are in fact aggregations
- * of multiple files.
+ * <p>Note that output Artifacts may in fact refer to aggregations, namely tree artifacts and
+ * Filesets. We expand these aggregations when visiting artifacts.
  */
-public class CompletionContext {
-  public static final CompletionContext FAILED_COMPLETION_CTX =
-      new CompletionContext(
-          null, (artifact, output) -> {}, ArtifactPathResolver.IDENTITY, false, false);
+@AutoValue
+public abstract class CompletionContext {
 
-  private final Path execRoot;
-  private final ArtifactExpander expander;
-  private final ArtifactPathResolver pathResolver;
+  public static final CompletionContext FAILED_COMPLETION_CTX = createNull();
 
-  private final boolean expandFilesets;
-  private final boolean fullyResolveFilesetLinks;
+  public abstract ArtifactExpander expander();
 
-  private CompletionContext(
-      Path execRoot,
-      ArtifactExpander expander,
-      ArtifactPathResolver pathResolver,
-      boolean expandFilesets,
-      boolean fullyResolveFilesetLinks) {
-    this.execRoot = execRoot;
-    this.expander = expander;
-    this.pathResolver = pathResolver;
-    this.expandFilesets = expandFilesets;
-    this.fullyResolveFilesetLinks = fullyResolveFilesetLinks;
-  }
+  public abstract ArtifactPathResolver pathResolver();
+
+  public abstract boolean expandFilesets();
+
+  public abstract boolean fullyResolveFilesetLinks();
+
+  @Nullable
+  public abstract Path execRoot();
 
   public static CompletionContext create(
       Map<Artifact, ImmutableCollection<Artifact>> expandedArtifacts,
@@ -82,12 +75,13 @@ public class CompletionContext {
             ? pathResolverFactory.createPathResolverForArtifactValues(
                 inputMap, expandedArtifacts, expandedFilesets, workspaceName)
             : ArtifactPathResolver.IDENTITY;
-    return new CompletionContext(
-        execRoot, expander, pathResolver, expandFilesets, fullyResolveFilesetSymlinks);
+    return new AutoValue_CompletionContext(
+        expander, pathResolver, expandFilesets, fullyResolveFilesetSymlinks, execRoot);
   }
 
-  public ArtifactPathResolver pathResolver() {
-    return pathResolver;
+  private static CompletionContext createNull() {
+    return new AutoValue_CompletionContext(
+        (artifact, output) -> {}, ArtifactPathResolver.IDENTITY, false, false, null);
   }
 
   public void visitArtifacts(Iterable<Artifact> artifacts, ArtifactReceiver receiver) {
@@ -95,12 +89,12 @@ public class CompletionContext {
       if (artifact.isMiddlemanArtifact()) {
         continue;
       } else if (artifact.isFileset()) {
-        if (expandFilesets) {
-          visitFileset(artifact, receiver, fullyResolveFilesetLinks ? RESOLVE_FULLY : RESOLVE);
+        if (expandFilesets()) {
+          visitFileset(artifact, receiver, fullyResolveFilesetLinks() ? RESOLVE_FULLY : RESOLVE);
         }
       } else if (artifact.isTreeArtifact()) {
         List<Artifact> expandedArtifacts = new ArrayList<>();
-        expander.expand(artifact, expandedArtifacts);
+        expander().expand(artifact, expandedArtifacts);
         for (Artifact expandedArtifact : expandedArtifacts) {
           receiver.accept(expandedArtifact);
         }
@@ -116,7 +110,7 @@ public class CompletionContext {
       RelativeSymlinkBehavior relativeSymlinkBehavior) {
     ImmutableList<FilesetOutputSymlink> links;
     try {
-      links = expander.getFileset(filesetArtifact);
+      links = expander().getFileset(filesetArtifact);
     } catch (MissingExpansionException e) {
       throw new IllegalStateException(e);
     }
@@ -134,13 +128,14 @@ public class CompletionContext {
       String targetFile = mapping.getValue();
       PathFragment locationInFileset = mapping.getKey();
       receiver.acceptFilesetMapping(
-          filesetArtifact, locationInFileset, execRoot.getRelative(targetFile));
+          filesetArtifact, locationInFileset, execRoot().getRelative(targetFile));
     }
   }
 
   /** A function that accepts an {@link Artifact}. */
   public interface ArtifactReceiver {
     void accept(Artifact artifact);
+
     void acceptFilesetMapping(Artifact fileset, PathFragment relName, Path targetFile);
   }
 

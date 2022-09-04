@@ -364,7 +364,8 @@ public class JavaHeaderCompileActionBuilder {
 
     if (targetLabel != null) {
       commandLine.add("--target_label");
-      if (targetLabel.getRepository().isDefault() || targetLabel.getRepository().isMain()) {
+      if (targetLabel.getPackageIdentifier().getRepository().isDefault()
+          || targetLabel.getPackageIdentifier().getRepository().isMain()) {
         commandLine.addLabel(targetLabel);
       } else {
         // @-prefixed strings will be assumed to be params filenames and expanded,

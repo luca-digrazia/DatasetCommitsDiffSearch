@@ -204,7 +204,7 @@ public final class JavaLibraryHelper {
       @Nullable Artifact outputSourceJar,
       @Nullable JavaInfo.Builder javaInfoBuilder,
       List<JavaGenJarsProvider> transitiveJavaGenJars,
-      ImmutableList<Artifact> additionalInputForDatabinding,
+      ImmutableList<Artifact> additionalJavaBaseInputs,
       NestedSet<Artifact> localClassPathEntries)
       throws InterruptedException {
 
@@ -241,7 +241,7 @@ public final class JavaLibraryHelper {
             javacOpts,
             attributes,
             javaToolchainProvider,
-            additionalInputForDatabinding);
+            additionalJavaBaseInputs);
     helper.addLocalClassPathEntries(localClassPathEntries);
     JavaCompileOutputs<Artifact> outputs = helper.createOutputs(output);
     artifactsBuilder.setCompileTimeDependencies(outputs.depsProto());

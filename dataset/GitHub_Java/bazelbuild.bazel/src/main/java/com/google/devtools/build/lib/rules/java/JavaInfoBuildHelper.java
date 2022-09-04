@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -229,7 +230,6 @@ final class JavaInfoBuildHelper {
       Artifact outputSourceJar,
       List<String> javacOpts,
       List<JavaInfo> deps,
-      List<JavaInfo> runtimeDeps,
       List<JavaInfo> experimentalLocalCompileTimeDeps,
       List<JavaInfo> exports,
       List<JavaInfo> plugins,
@@ -267,7 +267,6 @@ final class JavaInfoBuildHelper {
                     .addAll(tokenize(javacOpts))
                     .build());
 
-    streamProviders(runtimeDeps, JavaCompilationArgsProvider.class).forEach(helper::addRuntimeDep);
     streamProviders(deps, JavaCompilationArgsProvider.class).forEach(helper::addDep);
     streamProviders(exports, JavaCompilationArgsProvider.class).forEach(helper::addExport);
     helper.setCompilationStrictDepsMode(getStrictDepsMode(Ascii.toUpperCase(strictDepsMode)));
@@ -303,6 +302,11 @@ final class JavaInfoBuildHelper {
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =
         helper.buildCompilationArgsProvider(artifacts, true, neverlink);
+    Runfiles runfiles =
+        new Runfiles.Builder(starlarkRuleContext.getWorkspaceName())
+            .addTransitiveArtifactsWrappedInStableOrder(
+                javaCompilationArgsProvider.getRuntimeJars())
+            .build();
 
     ImmutableList<Artifact> outputSourceJars = ImmutableList.of(outputSourceJar);
 
@@ -316,14 +320,12 @@ final class JavaInfoBuildHelper {
         .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
         .addProvider(
             JavaSourceJarsProvider.class,
-            createJavaSourceJarsProvider(outputSourceJars, concat(runtimeDeps, exports, deps)))
+            createJavaSourceJarsProvider(outputSourceJars, concat(deps, exports)))
         .addProvider(JavaRuleOutputJarsProvider.class, outputJarsBuilder.build())
+        .addProvider(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
         .addProvider(
             JavaPluginInfoProvider.class,
             createJavaPluginsProvider(concat(exportedPlugins, exports)))
-        .addTransitiveOnlyRuntimeJarsToJavaInfo(deps)
-        .addTransitiveOnlyRuntimeJarsToJavaInfo(exports)
-        .addTransitiveOnlyRuntimeJarsToJavaInfo(runtimeDeps)
         .setNeverlink(neverlink)
         .build();
   }

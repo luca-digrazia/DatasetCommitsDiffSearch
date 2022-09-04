@@ -39,28 +39,6 @@ final class ActionInputMapHelper {
 
   private ActionInputMapHelper() {}
 
-  static void addToMap(
-      ActionInputMapSink inputMap,
-      Map<Artifact, ImmutableCollection<Artifact>> expandedArtifacts,
-      Map<SpecialArtifact, ArchivedTreeArtifact> archivedTreeArtifacts,
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles,
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
-      Artifact key,
-      SkyValue value,
-      Environment env)
-      throws InterruptedException {
-    addToMap(
-        inputMap,
-        expandedArtifacts,
-        archivedTreeArtifacts,
-        filesetsInsideRunfiles,
-        topLevelFilesets,
-        key,
-        value,
-        env,
-        MetadataConsumerForMetrics.NO_OP);
-  }
-
   /**
    * Adds a value obtained by an Artifact skyvalue lookup to the action input map. May do Skyframe
    * lookups.
@@ -73,23 +51,19 @@ final class ActionInputMapHelper {
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
       Artifact key,
       SkyValue value,
-      Environment env,
-      MetadataConsumerForMetrics consumer)
+      Environment env)
       throws InterruptedException {
     if (value instanceof AggregatingArtifactValue) {
       AggregatingArtifactValue aggregatingValue = (AggregatingArtifactValue) value;
       for (Pair<Artifact, FileArtifactValue> entry : aggregatingValue.getFileArtifacts()) {
         Artifact artifact = entry.first;
-        inputMap.put(artifact, entry.getSecond(), /*depOwner=*/ key);
+        inputMap.put(artifact, entry.second, /*depOwner=*/ key);
         if (artifact.isFileset()) {
           ImmutableList<FilesetOutputSymlink> expandedFileset =
               getFilesets(env, (SpecialArtifact) artifact);
           if (expandedFileset != null) {
             filesetsInsideRunfiles.put(artifact, expandedFileset);
-            consumer.accumulate(expandedFileset);
           }
-        } else {
-          consumer.accumulate(entry.getSecond());
         }
       }
       for (Pair<Artifact, TreeArtifactValue> entry : aggregatingValue.getTreeArtifacts()) {
@@ -100,7 +74,6 @@ final class ActionInputMapHelper {
             archivedTreeArtifacts,
             inputMap,
             /*depOwner=*/ key);
-        consumer.accumulate(entry.getSecond());
       }
       // We have to cache the "digest" of the aggregating value itself, because the action cache
       // checker may want it.
@@ -119,32 +92,21 @@ final class ActionInputMapHelper {
         expandedArtifacts.put(key, expansionBuilder.build());
       }
     } else if (value instanceof TreeArtifactValue) {
-      TreeArtifactValue treeArtifactValue = (TreeArtifactValue) value;
       expandTreeArtifactAndPopulateArtifactData(
           key,
-          treeArtifactValue,
+          (TreeArtifactValue) value,
           expandedArtifacts,
           archivedTreeArtifacts,
           inputMap,
           /*depOwner=*/ key);
-      consumer.accumulate(treeArtifactValue);
     } else if (value instanceof ActionExecutionValue) {
-      FileArtifactValue metadata = ((ActionExecutionValue) value).getExistingFileArtifactValue(key);
-      inputMap.put(key, metadata, key);
+      inputMap.put(key, ((ActionExecutionValue) value).getExistingFileArtifactValue(key), key);
       if (key.isFileset()) {
-        ImmutableList<FilesetOutputSymlink> filesets = getFilesets(env, (SpecialArtifact) key);
-        if (filesets != null) {
-          topLevelFilesets.put(key, filesets);
-          consumer.accumulate(filesets);
-        }
-      } else {
-        consumer.accumulate(metadata);
+        topLevelFilesets.put(key, getFilesets(env, (SpecialArtifact) key));
       }
     } else {
       Preconditions.checkArgument(value instanceof FileArtifactValue, "Unexpected value %s", value);
-      FileArtifactValue metadata = (FileArtifactValue) value;
-      inputMap.put(key, metadata, /*depOwner=*/ key);
-      consumer.accumulate(metadata);
+      inputMap.put(key, (FileArtifactValue) value, /*depOwner=*/ key);
     }
   }
 
@@ -189,8 +151,6 @@ final class ActionInputMapHelper {
       filesetActionKey = generatingActionKey;
     }
 
-    // TODO(janakr: properly handle exceptions coming from here, or prove they can never happen in
-    //  practice.
     ActionExecutionValue filesetValue = (ActionExecutionValue) env.getValue(filesetActionKey);
     if (filesetValue == null) {
       // At this point skyframe does not guarantee that the filesetValue will be ready, since

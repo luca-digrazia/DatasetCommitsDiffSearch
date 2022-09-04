@@ -19,8 +19,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -33,16 +33,26 @@ import java.util.Map;
 
 /** Builds the action to package the resources for a Java rule into a jar. */
 public class ResourceJarActionBuilder {
+  public static final String MNEMONIC = "JavaResourceJar";
+
+  private static final ParamFileInfo PARAM_FILE_INFO =
+      ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).build();
+
   private Artifact outputJar;
   private Map<PathFragment, Artifact> resources = ImmutableMap.of();
   private NestedSet<Artifact> resourceJars = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-  private List<Artifact> classpathResources = ImmutableList.of();
+  private ImmutableList<Artifact> classpathResources = ImmutableList.of();
   private List<Artifact> messages = ImmutableList.of();
   private JavaToolchainProvider javaToolchain;
-  private NestedSet<Artifact> javabase;
+  private NestedSet<Artifact> additionalInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
 
   public ResourceJarActionBuilder setOutputJar(Artifact outputJar) {
     this.outputJar = outputJar;
+    return this;
+  }
+
+  public ResourceJarActionBuilder setAdditionalInputs(NestedSet<Artifact> additionalInputs) {
+    this.additionalInputs = additionalInputs;
     return this;
   }
 
@@ -72,28 +82,20 @@ public class ResourceJarActionBuilder {
     return this;
   }
 
-  public ResourceJarActionBuilder setJavabase(NestedSet<Artifact> javabase) {
-    this.javabase = javabase;
-    return this;
-  }
-
   public void build(JavaSemantics semantics, RuleContext ruleContext) {
     checkNotNull(outputJar, "outputJar must not be null");
-    checkNotNull(javabase, "javabase must not be null");
     checkNotNull(javaToolchain, "javaToolchain must not be null");
+    checkNotNull(javaToolchain.getJavaRuntime(), "javabase must not be null");
 
     Artifact singleJar = javaToolchain.getSingleJar();
-    if (singleJar == null) {
-      singleJar = ruleContext.getPrerequisiteArtifact("$singlejar", Mode.HOST);
-    }
     SpawnAction.Builder builder = new SpawnAction.Builder();
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
-              ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
+              javaToolchain.getJavaRuntime().javaBinaryExecPathFragment(),
               singleJar,
-              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
-          .addTransitiveInputs(javabase);
+              javaToolchain.getJvmOptions())
+          .addTransitiveInputs(javaToolchain.getJavaRuntime().javaBaseInputsMiddleman());
     } else {
       builder.setExecutable(singleJar);
     }
@@ -121,15 +123,16 @@ public class ResourceJarActionBuilder {
     }
     ruleContext.registerAction(
         builder
+            .useDefaultShellEnvironment()
             .addOutput(outputJar)
             .addInputs(messages)
             .addInputs(resources.values())
             .addTransitiveInputs(resourceJars)
+            .addTransitiveInputs(additionalInputs)
             .addInputs(classpathResources)
-            .useParameterFile(ParameterFileType.SHELL_QUOTED)
-            .setCommandLine(command.build())
+            .addCommandLine(command.build(), PARAM_FILE_INFO)
             .setProgressMessage("Building Java resource jar")
-            .setMnemonic("JavaResourceJar")
+            .setMnemonic(MNEMONIC)
             .build(ruleContext));
   }
 
@@ -137,9 +140,9 @@ public class ResourceJarActionBuilder {
       PathFragment resourcePath, Artifact artifact, CustomCommandLine.Builder builder) {
     PathFragment execPath = artifact.getExecPath();
     if (execPath.equals(resourcePath)) {
-      builder.addPaths("%s", resourcePath);
+      builder.addFormatted("%s", resourcePath);
     } else {
-      builder.addPaths("%s:%s", execPath, resourcePath);
+      builder.addFormatted("%s:%s", execPath, resourcePath);
     }
   }
 }
