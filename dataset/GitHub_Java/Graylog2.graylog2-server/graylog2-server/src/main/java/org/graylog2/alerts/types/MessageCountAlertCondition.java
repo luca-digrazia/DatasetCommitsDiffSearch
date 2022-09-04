@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.alerts.AbstractAlertCondition;
+import org.graylog2.indexer.InvalidRangeFormatException;
 import org.graylog2.indexer.results.CountResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.SearchResult;
@@ -120,7 +121,6 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     private final int time;
     private final ThresholdType thresholdType;
     private final int threshold;
-    private final String query;
     private final Searches searches;
 
     @AssistedInject
@@ -153,7 +153,6 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
         }
         this.thresholdType = ThresholdType.valueOf(upperCaseThresholdType);
         this.threshold = Tools.getNumber(parameters.get("threshold"), 0).intValue();
-        this.query = (String) parameters.getOrDefault(CK_QUERY, CK_QUERY_DEFAULT_VALUE);
     }
 
     @Override
@@ -161,8 +160,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
         return "time: " + time
             + ", threshold_type: " + thresholdType.toString().toLowerCase(Locale.ENGLISH)
             + ", threshold: " + threshold
-            + ", grace: " + grace
-            + ", repeat notifications: " + repeatNotifications;
+            + ", grace: " + grace;
     }
 
     @Override
@@ -176,7 +174,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
             final RelativeRange relativeRange = RelativeRange.create(time * 60);
             final AbsoluteRange range = AbsoluteRange.create(relativeRange.getFrom(), relativeRange.getTo());
 
-            final String filter = buildQueryFilter(stream.getId(), query);
+            final String filter = "streams:" + stream.getId();
             final CountResult result = searches.count("*", range, filter);
             final long count = result.count();
 
@@ -198,7 +196,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
                 final List<MessageSummary> summaries = Lists.newArrayList();
                 if (getBacklog() > 0) {
                     final SearchResult backlogResult = searches.search("*", filter,
-                        range, getBacklog(), 0, new Sorting(Message.FIELD_TIMESTAMP, Sorting.Direction.DESC));
+                        range, getBacklog(), 0, new Sorting("timestamp", Sorting.Direction.DESC));
                     for (ResultMessage resultMessage : backlogResult.getResults()) {
                         final Message msg = resultMessage.getMessage();
                         summaries.add(new MessageSummary(resultMessage.getIndex(), msg));
@@ -215,6 +213,10 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
         } catch (InvalidRangeParametersException e) {
             // cannot happen lol
             LOG.error("Invalid timerange.", e);
+            return null;
+        } catch (InvalidRangeFormatException e) {
+            // lol same here
+            LOG.error("Invalid timerange format.", e);
             return null;
         }
     }

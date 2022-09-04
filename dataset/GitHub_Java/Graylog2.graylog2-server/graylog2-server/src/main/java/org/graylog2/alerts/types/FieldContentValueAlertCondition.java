@@ -22,6 +22,7 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.Configuration;
 import org.graylog2.alerts.AbstractAlertCondition;
+import org.graylog2.indexer.InvalidRangeFormatException;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.searches.Searches;
@@ -52,7 +53,6 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
     private final Configuration configuration;
     private final String field;
     private final String value;
-    private final String query;
 
     public interface Factory extends AlertCondition.Factory {
         @Override
@@ -110,12 +110,11 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
         this.configuration = configuration;
         this.field = (String) parameters.get("field");
         this.value = (String) parameters.get("value");
-        this.query = (String) parameters.getOrDefault(CK_QUERY, CK_QUERY_DEFAULT_VALUE);
     }
 
     @Override
     public CheckResult runCheck() {
-        String filter = buildQueryFilter(stream.getId(), query);
+        String filter = "streams:" + stream.getId();
         String query = field + ":\"" + value + "\"";
         Integer backlogSize = getBacklog();
         boolean backlogEnabled = false;
@@ -133,7 +132,7 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
                 RelativeRange.create(configuration.getAlertCheckInterval()),
                 searchLimit,
                 0,
-                new Sorting(Message.FIELD_TIMESTAMP, Sorting.Direction.DESC)
+                new Sorting("timestamp", Sorting.Direction.DESC)
             );
 
             final List<MessageSummary> summaries;
@@ -163,14 +162,15 @@ public class FieldContentValueAlertCondition extends AbstractAlertCondition {
             // cannot happen lol
             LOG.error("Invalid timerange.", e);
             return null;
+        } catch (InvalidRangeFormatException e) {
+            // lol same here
+            LOG.error("Invalid timerange format.", e);
+            return null;
         }
     }
 
     @Override
     public String getDescription() {
-        return "field: " + field
-                + ", value: " + value
-                + ", grace: " + grace
-                + ", repeat notifications: " + repeatNotifications;
+        return "field: " + field + ", value: " + value;
     }
 }
