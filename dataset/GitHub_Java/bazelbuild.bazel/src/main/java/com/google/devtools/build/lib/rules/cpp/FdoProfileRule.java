@@ -71,7 +71,7 @@ public final class FdoProfileRule implements RuleDefinition {
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = fdo_profile, TYPE = LIBRARY, FAMILY = C / C++) -->
+/*<!-- #BLAZE_RULE (NAME = fdo_profile, TYPE = LIBRARY, FAMILY = Cpp) -->
 
 <p>Represents an FDO profile that is either in the workspace or at a specified absolute path.
 Examples:</p>
