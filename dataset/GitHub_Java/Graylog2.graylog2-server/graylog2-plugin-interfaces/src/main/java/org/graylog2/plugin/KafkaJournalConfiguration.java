@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+ * Copyright (c) 2012 Graylog, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,37 +22,94 @@
  */
 package org.graylog2.plugin;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.joschi.jadconfig.Parameter;
+import com.github.joschi.jadconfig.util.Size;
+import com.sun.istack.internal.NotNull;
 import org.joda.time.Duration;
+
+import java.io.File;
+import java.util.Objects;
 
 public class KafkaJournalConfiguration {
 
-    @Parameter("message_journal_dir")
-    private String messageJournalDir = "journal";
+    public KafkaJournalConfiguration() { }
+
+    @JsonCreator
+    public KafkaJournalConfiguration(@NotNull @JsonProperty("directory") File messageJournalDir,
+                                     @JsonProperty("segment_size") long messageJournalSegmentSize,
+                                     @JsonProperty("segment_age") Duration messageJournalSegmentAge,
+                                     @JsonProperty("max_size") long messageJournalMaxSize,
+                                     @JsonProperty("max_age") Duration messageJournalMaxAge,
+                                     @JsonProperty("flush_interval") long messageJournalFlushInterval,
+                                     @JsonProperty("flush_age") Duration messageJournalFlushAge) {
+        this.messageJournalDir = Objects.requireNonNull(messageJournalDir);
+        this.messageJournalSegmentSize = Size.bytes(messageJournalSegmentSize);
+        this.messageJournalSegmentAge = messageJournalSegmentAge;
+        this.messageJournalMaxSize = Size.bytes(messageJournalMaxSize);
+        this.messageJournalMaxAge = messageJournalMaxAge;
+        this.messageJournalFlushInterval = messageJournalFlushInterval;
+        this.messageJournalFlushAge = messageJournalFlushAge;
+    }
+
+    @Parameter(value = "message_journal_dir", required = true)
+    @JsonProperty("directory")
+    private File messageJournalDir = new File("data/journal");
 
     @Parameter("message_journal_segment_size")
-    private int messageJournalSegmentSize = 1024 * 1024 * 100; // 100 MB
+    @JsonProperty("segment_size")
+    private Size messageJournalSegmentSize = Size.megabytes(100L);
+
+    @Parameter("message_journal_segment_age")
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonProperty("segment_age")
+    private Duration messageJournalSegmentAge = Duration.standardHours(1L);
 
     @Parameter("message_journal_max_size")
-    private long messageJournalMaxSize = 1024 * 1024 * 1024 * 5l; // 5 GB
+    @JsonProperty("max_size")
+    private Size messageJournalMaxSize = Size.gigabytes(5L);
 
     @Parameter("message_journal_max_age")
-    private Duration messageJournalMaxAge = Duration.standardHours(12);
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonProperty("max_age")
+    private Duration messageJournalMaxAge = Duration.standardHours(12L);
 
-    public String getMessageJournalDir() {
+    @Parameter("message_journal_flush_interval")
+    @JsonProperty("flush_interval")
+    private long messageJournalFlushInterval = 1_000_000L;
+
+    @Parameter("message_journal_flush_age")
+    @JsonFormat(shape = JsonFormat.Shape.NUMBER)
+    @JsonProperty("flush_age")
+    private Duration messageJournalFlushAge = Duration.standardMinutes(1L);
+
+    public File getMessageJournalDir() {
         return messageJournalDir;
     }
 
-    public int getMessageJournalSegmentSize() {
+    public Size getMessageJournalSegmentSize() {
         return messageJournalSegmentSize;
+    }
+
+    public Duration getMessageJournalSegmentAge() {
+        return messageJournalSegmentAge;
     }
 
     public Duration getMessageJournalMaxAge() {
         return messageJournalMaxAge;
     }
 
-    public long getMessageJournalMaxSize() {
+    public Size getMessageJournalMaxSize() {
         return messageJournalMaxSize;
     }
 
+    public long getMessageJournalFlushInterval() {
+        return messageJournalFlushInterval;
+    }
+
+    public Duration getMessageJournalFlushAge() {
+        return messageJournalFlushAge;
+    }
 }
