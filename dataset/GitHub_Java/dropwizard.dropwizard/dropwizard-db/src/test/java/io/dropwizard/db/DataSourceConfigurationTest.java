@@ -1,14 +1,14 @@
 package io.dropwizard.db;
 
-import com.google.common.base.Optional;
-import com.google.common.io.Resources;
-import io.dropwizard.configuration.ConfigurationFactory;
+import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.util.Duration;
-import org.junit.Test;
+import io.dropwizard.util.Resources;
+import org.junit.jupiter.api.Test;
 
-import javax.validation.Validation;
 import java.io.File;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,7 +24,7 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getPassword()).isEqualTo("iAMs00perSecrEET");
         assertThat(ds.getProperties()).containsEntry("charSet", "UTF-8");
         assertThat(ds.getMaxWaitForConnection()).isEqualTo(Duration.seconds(1));
-        assertThat(ds.getValidationQuery()).isEqualTo("/* MyService Health Check */ SELECT 1");
+        assertThat(ds.getValidationQuery()).isEqualTo(Optional.of("/* MyService Health Check */ SELECT 1"));
         assertThat(ds.getMinSize()).isEqualTo(8);
         assertThat(ds.getInitialSize()).isEqualTo(15);
         assertThat(ds.getMaxSize()).isEqualTo(32);
@@ -39,6 +39,7 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getAbandonWhenPercentageFull()).isEqualTo(75);
         assertThat(ds.isAlternateUsernamesAllowed()).isTrue();
         assertThat(ds.getCommitOnReturn()).isTrue();
+        assertThat(ds.getRollbackOnReturn()).isTrue();
         assertThat(ds.getAutoCommitByDefault()).isFalse();
         assertThat(ds.getDefaultCatalog()).isEqualTo("test_catalog");
         assertThat(ds.getDefaultTransactionIsolation())
@@ -53,6 +54,8 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getCheckConnectionOnReturn()).isEqualTo(true);
         assertThat(ds.getValidationQueryTimeout()).isEqualTo(Optional.of(Duration.seconds(3)));
         assertThat(ds.getValidatorClassName()).isEqualTo(Optional.of("io.dropwizard.db.CustomConnectionValidator"));
+        assertThat(ds.getJdbcInterceptors()).isEqualTo(Optional.of("StatementFinalizer;SlowQueryReport"));
+        assertThat(ds.isIgnoreExceptionOnPreLoad()).isTrue();
     }
 
     @Test
@@ -65,7 +68,7 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getPassword()).isEqualTo("iAMs00perSecrEET");
         assertThat(ds.getProperties()).isEmpty();
         assertThat(ds.getMaxWaitForConnection()).isEqualTo(Duration.seconds(30));
-        assertThat(ds.getValidationQuery()).isEqualTo("/* Health Check */ SELECT 1");
+        assertThat(ds.getValidationQuery()).isEqualTo(Optional.of("/* Health Check */ SELECT 1"));
         assertThat(ds.getMinSize()).isEqualTo(10);
         assertThat(ds.getInitialSize()).isEqualTo(10);
         assertThat(ds.getMaxSize()).isEqualTo(100);
@@ -80,6 +83,7 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getAbandonWhenPercentageFull()).isEqualTo(0);
         assertThat(ds.isAlternateUsernamesAllowed()).isFalse();
         assertThat(ds.getCommitOnReturn()).isFalse();
+        assertThat(ds.getRollbackOnReturn()).isFalse();
         assertThat(ds.getAutoCommitByDefault()).isNull();
         assertThat(ds.getDefaultCatalog()).isNull();
         assertThat(ds.getDefaultTransactionIsolation())
@@ -88,11 +92,12 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getInitializationQuery()).isNull();
         assertThat(ds.getLogAbandonedConnections()).isEqualTo(false);
         assertThat(ds.getLogValidationErrors()).isEqualTo(false);
-        assertThat(ds.getMaxConnectionAge()).isEqualTo(Optional.absent());
+        assertThat(ds.getMaxConnectionAge()).isEqualTo(Optional.empty());
         assertThat(ds.getCheckConnectionOnBorrow()).isEqualTo(false);
         assertThat(ds.getCheckConnectionOnConnect()).isEqualTo(true);
         assertThat(ds.getCheckConnectionOnReturn()).isEqualTo(false);
-        assertThat(ds.getValidationQueryTimeout()).isEqualTo(Optional.absent());
+        assertThat(ds.getValidationQueryTimeout()).isEqualTo(Optional.empty());
+        assertThat(ds.isIgnoreExceptionOnPreLoad()).isFalse();
     }
 
     @Test
@@ -104,10 +109,15 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getUser()).isNull();
         assertThat(ds.getPassword()).isNull();
     }
+    @Test
+    public void testInitialSizeZeroIsAllowed() throws Exception {
+        DataSourceFactory ds = getDataSourceFactory("yaml/empty_initial_pool.yml");
+        assertThat(ds.getInitialSize()).isEqualTo(0);
+    }
 
     private DataSourceFactory getDataSourceFactory(String resourceName) throws Exception {
-        return new ConfigurationFactory<>(DataSourceFactory.class,
-                Validation.buildDefaultValidatorFactory().getValidator(), Jackson.newObjectMapper(), "dw")
+        return new YamlConfigurationFactory<>(DataSourceFactory.class,
+                Validators.newValidator(), Jackson.newObjectMapper(), "dw")
                 .build(new File(Resources.getResource(resourceName).toURI()));
     }
 }

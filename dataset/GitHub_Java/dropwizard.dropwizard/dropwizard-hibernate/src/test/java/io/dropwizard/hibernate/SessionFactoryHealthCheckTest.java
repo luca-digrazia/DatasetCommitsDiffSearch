@@ -27,19 +27,19 @@ public class SessionFactoryHealthCheckTest {
     private final SessionFactory factory = mock(SessionFactory.class);
 
     @Test
-    void hasASessionFactory() throws Exception {
+    public void hasASessionFactory() throws Exception {
         assertThat(healthCheck().getSessionFactory())
                 .isEqualTo(factory);
     }
 
     @Test
-    void hasAValidationQuery() throws Exception {
+    public void hasAValidationQuery() throws Exception {
         assertThat(healthCheck("SELECT 1").getValidationQuery())
                 .isEqualTo(Optional.of("SELECT 1"));
     }
 
     @Test
-    void isHealthyIfNoExceptionIsThrown() throws Exception {
+    public void isHealthyIfNoExceptionIsThrown() throws Exception {
         final Session session = mock(Session.class);
         when(factory.openSession()).thenReturn(session);
 
@@ -61,7 +61,7 @@ public class SessionFactoryHealthCheckTest {
     }
 
     @Test
-    void isHealthyIfIsValid() {
+    public void isHealthyIfIsValid() {
         final Session session = mock(Session.class);
         when(factory.openSession()).thenReturn(session);
 
@@ -81,7 +81,7 @@ public class SessionFactoryHealthCheckTest {
     }
 
     @Test
-    void isUnhealthyIfAnExceptionIsThrown() throws Exception {
+    public void isUnhealthyIfAnExceptionIsThrown() throws Exception {
         final Session session = mock(Session.class);
         when(factory.openSession()).thenReturn(session);
 
@@ -108,7 +108,7 @@ public class SessionFactoryHealthCheckTest {
     }
 
     @Test
-    void isUnhealthyIfIsNotValid() {
+    public void isUnhealthyIfIsNotValid() {
         final Session session = mock(Session.class);
         when(factory.openSession()).thenReturn(session);
 

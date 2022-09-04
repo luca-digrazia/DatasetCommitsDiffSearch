@@ -1,10 +1,10 @@
 package io.dropwizard.db;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.base.Optional;
 import io.dropwizard.util.Duration;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Interface of a factory that produces JDBC data sources
@@ -32,6 +32,16 @@ public interface PooledDataSourceFactory {
      *
      * @return the timeout as {@code Duration}
      */
+    Optional<Duration> getValidationQueryTimeout();
+
+    /**
+     * Returns the timeout for awaiting a response from the database
+     * during connection health checks.
+     *
+     * @return the timeout as {@code Duration}
+     * @deprecated Use {@link #getValidationQueryTimeout()}
+     */
+    @Deprecated
     Optional<Duration> getHealthCheckValidationTimeout();
 
     /**
@@ -40,6 +50,16 @@ public interface PooledDataSourceFactory {
      *
      * @return the SQL query as a string
      */
+    Optional<String> getValidationQuery();
+
+    /**
+     * Returns the SQL query, which is being used for the database
+     * connection health check.
+     *
+     * @return the SQL query as a string
+     * @deprecated Use {@link #getValidationQuery()}
+     */
+    @Deprecated
     String getHealthCheckValidationQuery();
 
     /**
@@ -48,6 +68,13 @@ public interface PooledDataSourceFactory {
      * @return the JDBC driver class as a string
      */
     String getDriverClass();
+
+    /**
+     * Returns the JDBC connection URL.
+     *
+     * @return the JDBC connection URL as a string
+     */
+    String getUrl();
 
     /**
      * Configures the pool as a single connection pool.

@@ -34,7 +34,7 @@ public class JdbiHealthCheckTest {
     private ExecutorService executorService;
 
     @BeforeEach
-    void setup() {
+    public void setup() {
         jdbi = mock(Jdbi.class);
         handle = mock(Handle.class);
         connection = mock(Connection.class);
@@ -46,12 +46,12 @@ public class JdbiHealthCheckTest {
     }
 
     @AfterEach
-    void teardown() {
+    public void teardown() {
         executorService.shutdown();
     }
 
     @Test
-    void testNoTimeoutReturnsHealthy() throws Exception {
+    public void testNoTimeoutReturnsHealthy() throws Exception {
         when(handle.execute(VALIDATION_QUERY)).thenReturn(0);
 
         HealthCheck.Result result = healthCheck(VALIDATION_QUERY).check();
@@ -60,7 +60,7 @@ public class JdbiHealthCheckTest {
     }
 
     @Test
-    void tesHealthyAfterWhenMissingValidationQuery() throws Exception {
+    public void tesHealthyAfterWhenMissingValidationQuery() throws Exception {
         when(connection.isValid(anyInt())).thenReturn(true);
 
         HealthCheck.Result result = healthCheck().check();
@@ -70,7 +70,7 @@ public class JdbiHealthCheckTest {
     }
 
     @Test
-    void testItTimesOutProperly() throws Exception {
+    public void testItTimesOutProperly() throws Exception {
         when(handle.execute(VALIDATION_QUERY)).thenAnswer((Answer<Integer>) invocation -> {
             TimeUnit.SECONDS.sleep(10);
             return null;
@@ -82,7 +82,7 @@ public class JdbiHealthCheckTest {
     }
 
     @Test
-    void testUnhealthyWhenMissingValidationQuery() throws Exception {
+    public void testUnhealthyWhenMissingValidationQuery() throws Exception {
         HealthCheck.Result result = healthCheck().check();
 
         assertThat(result.isHealthy()).isFalse();
