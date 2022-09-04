@@ -40,7 +40,7 @@ public class IosExtensionBinaryTest extends ObjcRuleTestCase {
   @Before
   public final void initializeToolsConfigMock() throws Exception {
     MockProtoSupport.setup(mockToolsConfig);
-    MockObjcSupport.setup(mockToolsConfig);
+    MockObjcSupport.setupObjcProto(mockToolsConfig);
   }
 
   @Test
@@ -222,10 +222,5 @@ public class IosExtensionBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testCompilesSources() throws Exception {
     checkCompilesSources(RULE_TYPE);
-  }
-
-  @Test
-  public void testLinkActionWithTransitiveCppDependency() throws Exception {
-    checkLinkActionWithTransitiveCppDependency(RULE_TYPE, EXTRA_LINK_ARGS);
   }
 }

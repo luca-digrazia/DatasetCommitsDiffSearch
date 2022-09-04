@@ -113,4 +113,13 @@ public class LegacyIosTestTest extends IosTestTest {
     assertThat(Joiner.on(" ").join(linkAction.getArguments())).doesNotContain("-framework fx");
   }
 
+  @Test
+  public void testReceivesTransitivelyPropagatedDefines() throws Exception {
+    checkReceivesTransitivelyPropagatedDefines(RULE_TYPE);
+  }
+
+  @Test
+  public void testSdkIncludesUsedInCompileAction() throws Exception {
+    checkSdkIncludesUsedInCompileAction(RULE_TYPE);
+  }
 }
