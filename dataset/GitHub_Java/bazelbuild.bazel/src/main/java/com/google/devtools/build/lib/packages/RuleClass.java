@@ -647,7 +647,6 @@ public class RuleClass {
     private boolean isAnalysisTest = false;
     private boolean isConfigMatcher = false;
     private boolean hasFunctionTransitionWhitelist = false;
-    private boolean ignorePackageLicenses = false;
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
     private RuleTransitionFactory transitionFactory;
     private ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory = null;
@@ -809,7 +808,6 @@ public class RuleClass {
           isExecutableSkylark,
           isAnalysisTest,
           hasFunctionTransitionWhitelist,
-          ignorePackageLicenses,
           implicitOutputsFunction,
           isConfigMatcher,
           transitionFactory,
@@ -1203,16 +1201,6 @@ public class RuleClass {
       return this;
     }
 
-    /** This rule class ignores package-level licenses. */
-    public Builder setIgnorePackageLicenses() {
-      this.ignorePackageLicenses = true;
-      return this;
-    }
-
-    public boolean ignorePackageLicenses() {
-      return this.ignorePackageLicenses;
-    }
-
     public RuleClassType getType() {
       return this.type;
     }
@@ -1392,7 +1380,6 @@ public class RuleClass {
   private final boolean isAnalysisTest;
   private final boolean isConfigMatcher;
   private final boolean hasFunctionTransitionWhitelist;
-  private final boolean ignorePackageLicenses;
 
   /**
    * A (unordered) mapping from attribute names to small integers indexing into
@@ -1520,7 +1507,6 @@ public class RuleClass {
       boolean isExecutableSkylark,
       boolean isAnalysisTest,
       boolean hasFunctionTransitionWhitelist,
-      boolean ignorePackageLicenses,
       ImplicitOutputsFunction implicitOutputsFunction,
       boolean isConfigMatcher,
       RuleTransitionFactory transitionFactory,
@@ -1570,7 +1556,6 @@ public class RuleClass {
     this.isExecutableSkylark = isExecutableSkylark;
     this.isAnalysisTest = isAnalysisTest;
     this.hasFunctionTransitionWhitelist = hasFunctionTransitionWhitelist;
-    this.ignorePackageLicenses = ignorePackageLicenses;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
     this.supportsConstraintChecking = supportsConstraintChecking;
     this.requiredToolchains = ImmutableSet.copyOf(requiredToolchains);
@@ -2087,10 +2072,6 @@ public class RuleClass {
    */
   private static void checkThirdPartyRuleHasLicense(Rule rule,
       Package.Builder pkgBuilder, EventHandler eventHandler) {
-    if (rule.getRuleClassObject().ignorePackageLicenses()) {
-      // A package license is sufficient; ignore rules that don't include it.
-      return;
-    }
     if (isThirdPartyPackage(rule.getLabel().getPackageIdentifier())) {
       License license = rule.getLicense();
       if (license == null) {
@@ -2425,11 +2406,6 @@ public class RuleClass {
    */
   public boolean hasFunctionTransitionWhitelist() {
     return hasFunctionTransitionWhitelist;
-  }
-
-  /** Returns true if this rule class should ignore package-level licenses. */
-  public boolean ignorePackageLicenses() {
-    return ignorePackageLicenses;
   }
 
   public ImmutableSet<Label> getRequiredToolchains() {
