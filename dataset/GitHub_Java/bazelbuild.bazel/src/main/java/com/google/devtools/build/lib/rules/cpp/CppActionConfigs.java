@@ -31,8 +31,6 @@ public class CppActionConfigs {
     MAC
   }
 
-  // Note:  these configs won't be added to the crosstools that defines no_legacy_features feature
-  // (e.g. ndk, apple, enclave crosstools). Those need to be modified separately.
   public static String getCppActionConfigs(
       CppPlatform platform,
       ImmutableSet<String> existingFeatureNames,
@@ -400,21 +398,6 @@ public class CppActionConfigs {
                     "      flag: '-Xclang-only=-Wno-profile-instr-unprofiled'",
                     "      flag: '-Xclang-only=-Wno-profile-instr-out-of-date'",
                     "      flag: '-fprofile-correction'",
-                    "    }",
-                    "  }",
-                    "}"),
-                ifTrue(
-                    !existingFeatureNames.contains(CppRuleClasses.FDO_PREFETCH_HINTS),
-                    "feature {",
-                    "  name: 'fdo_prefetch_hints'",
-                    "  flag_set {",
-                    "    action: 'c-compile'",
-                    "    action: 'c++-compile'",
-                    "    action: 'lto-backend'",
-                    "    expand_if_all_available: 'fdo_prefetch_hints_path'",
-                    "    flag_group {",
-                    "      flag: '-Xclang-only=-mllvm'",
-                    "      flag: '-Xclang-only=-prefetch-hints-file=%{fdo_prefetch_hints_path}'",
                     "    }",
                     "  }",
                     "}"),
@@ -1162,17 +1145,21 @@ public class CppActionConfigs {
                     "    action: 'c++-header-parsing'",
                     "    action: 'lto-backend'",
                     "    flag_group {",
+                    "      expand_if_all_available: 'output_object_file'",
+                    "      flag: '-o'",
+                    "      flag: '%{output_object_file}'",
+                    "    }",
+                    "    flag_group {",
                     "      expand_if_all_available: 'output_assembly_file'",
                     "      flag: '-S'",
+                    "      flag: '-o'",
+                    "      flag: '%{output_assembly_file}'",
                     "    }",
                     "    flag_group {",
                     "      expand_if_all_available: 'output_preprocess_file'",
                     "      flag: '-E'",
-                    "    }",
-                    "    flag_group {",
-                    "      expand_if_all_available: 'output_file'",
                     "      flag: '-o'",
-                    "      flag: '%{output_file}'",
+                    "      flag: '%{output_preprocess_file}'",
                     "    }",
                     "  }",
                     "}")));

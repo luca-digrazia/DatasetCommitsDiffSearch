@@ -75,7 +75,7 @@ public class CppLinkstampCompileHelper {
             .setBuiltinIncludeFiles(buildInfoHeaderArtifacts)
             .addMandatoryInputs(nonCodeInputs)
             .setCppConfiguration(cppConfiguration)
-            .setActionName(CppActionNames.LINKSTAMP_COMPILE);
+            .setActionName(CppCompileAction.LINKSTAMP_COMPILE);
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     return builder.buildOrThrowIllegalStateException();
   }
@@ -93,12 +93,14 @@ public class CppLinkstampCompileHelper {
         ImmutableList.<String>builder()
             .add("GPLATFORM=\"" + cppConfiguration + "\"")
             .add("BUILD_COVERAGE_ENABLED=" + (codeCoverageEnabled ? "1" : "0"))
-            // G3_TARGET_NAME is a C string literal that normally contain the label of the target
-            // being linked.  However, they are set differently when using shared native deps. In
-            // that case, a single .so file is shared by multiple targets, and its contents cannot
-            // depend on which target(s) were specified on the command line.  So in that case we
-            // have to use the (obscure) name of the .so file instead, or more precisely the path of
-            // the .so file relative to the workspace root.
+            // G3_VERSION_INFO and G3_TARGET_NAME are C string literals that normally
+            // contain the label of the target being linked.  However, they are set
+            // differently when using shared native deps. In that case, a single .so file
+            // is shared by multiple targets, and its contents cannot depend on which
+            // target(s) were specified on the command line.  So in that case we have
+            // to use the (obscure) name of the .so file instead, or more precisely
+            // the path of the .so file relative to the workspace root.
+            .add("G3_VERSION_INFO=\"${LABEL}\"")
             .add("G3_TARGET_NAME=\"${LABEL}\"")
             // G3_BUILD_TARGET is a C string literal containing the output of this
             // link.  (An undocumented and untested invariant is that G3_BUILD_TARGET is the
@@ -138,7 +140,7 @@ public class CppLinkstampCompileHelper {
       boolean codeCoverageEnabled) {
     // TODO(b/34761650): Remove all this hardcoding by separating a full blown compile action.
     Preconditions.checkArgument(
-        featureConfiguration.actionIsConfigured(CppActionNames.LINKSTAMP_COMPILE));
+        featureConfiguration.actionIsConfigured(CppCompileAction.LINKSTAMP_COMPILE));
 
     return CompileBuildVariables.setupVariablesOrReportRuleError(
         ruleContext,

@@ -198,7 +198,7 @@ public final class CcCompilationHelper {
   private final List<Artifact> publicTextualHeaders = new ArrayList<>();
   private final List<Artifact> privateHeaders = new ArrayList<>();
   private final List<Artifact> additionalInputs = new ArrayList<>();
-  private final List<Artifact> additionalCompilationInputs = new ArrayList<>();
+  private final List<Artifact> compilationMandatoryInputs = new ArrayList<>();
   private final List<Artifact> additionalIncludeScanningRoots = new ArrayList<>();
   private final List<PathFragment> additionalExportedHeaders = new ArrayList<>();
   private final List<CppModuleMap> additionalCppModuleMaps = new ArrayList<>();
@@ -209,7 +209,7 @@ public final class CcCompilationHelper {
   private CoptsFilter coptsFilter = CoptsFilter.alwaysPasses();
   private final Set<String> defines = new LinkedHashSet<>();
   private final List<TransitiveInfoCollection> deps = new ArrayList<>();
-  private final List<CcCompilationContext> ccCompilationContexts = new ArrayList<>();
+  private final List<CcCompilationContext> depCcCompilationContexts = new ArrayList<>();
   private final List<PathFragment> looseIncludeDirs = new ArrayList<>();
   private final List<PathFragment> systemIncludeDirs = new ArrayList<>();
   private final List<PathFragment> includeDirs = new ArrayList<>();
@@ -550,10 +550,8 @@ public final class CcCompilationHelper {
     return this;
   }
 
-  /** For adding CC compilation contexts that affect compilation, e.g: from dependencies. */
-  public CcCompilationHelper addCcCompilationContexts(
-      List<CcCompilationContext> ccCompilationContexts) {
-    this.ccCompilationContexts.addAll(Preconditions.checkNotNull(ccCompilationContexts));
+  public CcCompilationHelper addDepCcCompilationContext(CcCompilationContext ccCompilationContext) {
+    this.depCcCompilationContexts.add(Preconditions.checkNotNull(ccCompilationContext));
     return this;
   }
 
@@ -674,9 +672,9 @@ public final class CcCompilationHelper {
   }
 
   /** Adds mandatory inputs for the compilation action. */
-  public CcCompilationHelper addAdditionalCompilationInputs(
+  public CcCompilationHelper addCompilationMandatoryInputs(
       Collection<Artifact> compilationMandatoryInputs) {
-    this.additionalCompilationInputs.addAll(compilationMandatoryInputs);
+    this.compilationMandatoryInputs.addAll(compilationMandatoryInputs);
     return this;
   }
 
@@ -701,10 +699,6 @@ public final class CcCompilationHelper {
         LanguageDependentFragment.Checker.depSupportsLanguage(
             ruleContext, dep, CppRuleClasses.LANGUAGE, "deps");
       }
-    }
-
-    if (!generatePicAction && !generateNoPicAction) {
-      ruleContext.ruleError("Either PIC or no PIC actions have to be created.");
     }
 
     ccCompilationContext = initializeCcCompilationContext();
@@ -935,7 +929,7 @@ public final class CcCompilationHelper {
     if (useDeps) {
       ccCompilationContextBuilder.mergeDependentCcCompilationContexts(
           CcCompilationInfo.getCcCompilationContexts(deps));
-      ccCompilationContextBuilder.mergeDependentCcCompilationContexts(ccCompilationContexts);
+      ccCompilationContextBuilder.mergeDependentCcCompilationContexts(depCcCompilationContexts);
     }
     CppHelper.mergeToolchainDependentCcCompilationContext(
         ruleContext, ccToolchain, ccCompilationContextBuilder);
@@ -950,7 +944,7 @@ public final class CcCompilationHelper {
     ccCompilationContextBuilder.addDeclaredIncludeSrcs(additionalInputs);
     ccCompilationContextBuilder.addNonCodeInputs(additionalInputs);
     ccCompilationContextBuilder.addModularHdrs(publicHeaders.getHeaders());
-    ccCompilationContextBuilder.addTextualHdrs(privateHeaders);
+    ccCompilationContextBuilder.addModularHdrs(privateHeaders);
     ccCompilationContextBuilder.addTextualHdrs(publicTextualHeaders);
     ccCompilationContextBuilder.addPregreppedHeaders(
         CppHelper.createExtractInclusions(ruleContext, semantics, publicHeaders.getHeaders()));
@@ -1319,7 +1313,7 @@ public final class CcCompilationHelper {
 
       builder
           .setSemantics(semantics)
-          .addMandatoryInputs(additionalCompilationInputs)
+          .addMandatoryInputs(compilationMandatoryInputs)
           .addAdditionalIncludeScanningRoots(additionalIncludeScanningRoots);
 
       boolean bitcodeOutput =
@@ -1733,6 +1727,7 @@ public final class CcCompilationHelper {
           CcCompilationContext.mergeForLipo(
               lipoProvider.getLipoCcCompilationContext(), ccCompilationContext));
     }
+    Preconditions.checkState(generatePicAction || generateNoPicAction);
     if (fake) {
       boolean usePic = !generateNoPicAction;
       createFakeSourceAction(
