@@ -33,7 +33,6 @@ public class EBeanTest extends AAProcessorTestHelper {
 		assertCompilationSuccessful(compileFiles(
 				SomeActivity.class,
 				SomeImplementation.class,
-				SingletonBean.class,
 				SomeGenericBean.class,
 				SomeGenericBeanExt.class));
 	}
