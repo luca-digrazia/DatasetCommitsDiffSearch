@@ -4,8 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.parser.AutoDetectParser;
@@ -20,17 +18,16 @@ import io.quarkus.tika.TikaParser;
 @Recorder
 public class TikaRecorder {
 
-    public void initTikaParser(BeanContainer container, TikaConfiguration config,
-            Map<String, List<TikaParserParameter>> parserConfig) {
-        TikaParser parser = initializeParser(config, parserConfig);
+    public void initTikaParser(BeanContainer container, TikaConfiguration config, List<String> supportedParserNames) {
+        TikaParser parser = initializeParser(config, supportedParserNames);
         TikaParserProducer producer = container.instance(TikaParserProducer.class);
         producer.initialize(parser);
     }
 
-    private TikaParser initializeParser(TikaConfiguration config, Map<String, List<TikaParserParameter>> parserConfig) {
+    private TikaParser initializeParser(TikaConfiguration config, List<String> supportedParserNames) {
         TikaConfig tikaConfig = null;
 
-        try (InputStream stream = getTikaConfigStream(config, parserConfig)) {
+        try (InputStream stream = getTikaConfigStream(config, supportedParserNames)) {
             tikaConfig = new TikaConfig(stream);
         } catch (Exception ex) {
             final String errorMessage = "Invalid tika-config.xml";
@@ -47,8 +44,7 @@ public class TikaRecorder {
         return new TikaParser(nativeParser, config.appendEmbeddedContent);
     }
 
-    private static InputStream getTikaConfigStream(TikaConfiguration config,
-            Map<String, List<TikaParserParameter>> parserConfig) {
+    private static InputStream getTikaConfigStream(TikaConfiguration config, List<String> supportedParserNames) {
         // Load tika-config.xml resource
         InputStream is = null;
         if (config.tikaConfigPath.isPresent()) {
@@ -60,35 +56,20 @@ public class TikaRecorder {
                 throw new TikaParseException(errorMessage);
             }
         } else {
-            is = generateTikaConfig(parserConfig);
+            is = generateTikaConfig(supportedParserNames);
         }
         return is;
     }
 
-    private static InputStream generateTikaConfig(Map<String, List<TikaParserParameter>> parserConfig) {
+    private static InputStream generateTikaConfig(List<String> supportedParserNames) {
         StringBuilder sb = new StringBuilder();
         sb.append("<properties>");
         sb.append("<parsers>");
-        for (Entry<String, List<TikaParserParameter>> parserEntry : parserConfig.entrySet()) {
-            sb.append("<parser class=\"").append(parserEntry.getKey()).append("\">");
-            if (!parserEntry.getValue().isEmpty()) {
-                appendParserParameters(sb, parserEntry.getValue());
-            }
-            sb.append("</parser>");
+        for (String parserName : supportedParserNames) {
+            sb.append("<parser class=\"").append(parserName).append("\"/>");
         }
         sb.append("</parsers>");
         sb.append("</properties>");
         return new ByteArrayInputStream(sb.toString().getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static void appendParserParameters(StringBuilder sb, List<TikaParserParameter> parserParams) {
-        sb.append("<params>");
-        for (TikaParserParameter parserParam : parserParams) {
-            sb.append("<param name=\"").append(parserParam.getName());
-            sb.append("\" type=\"").append(parserParam.getType()).append("\">");
-            sb.append(parserParam.getValue());
-            sb.append("</param>");
-        }
-        sb.append("</params>");
     }
 }

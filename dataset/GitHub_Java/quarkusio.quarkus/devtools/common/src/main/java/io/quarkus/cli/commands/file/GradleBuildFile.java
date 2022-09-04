@@ -6,7 +6,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Scanner;
@@ -16,24 +16,37 @@ import org.apache.maven.model.Dependency;
 
 import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.dependencies.Extension;
-import io.quarkus.generators.BuildTool;
+import io.quarkus.maven.utilities.MojoUtils;
 
 public class GradleBuildFile extends BuildFile {
 
-    protected static final String BUILD_GRADLE_PATH = "build.gradle";
+    private static final String BUILD_GRADLE_PATH = "build.gradle";
     private static final String SETTINGS_GRADLE_PATH = "settings.gradle";
     private static final String GRADLE_PROPERTIES_PATH = "gradle.properties";
 
     private String settingsContent = "";
     private String buildContent = "";
     private Properties propertiesContent = new Properties();
+    private ArrayList<Dependency> dependencies = null;
 
     public GradleBuildFile(ProjectWriter writer) throws IOException {
-        super(writer, BuildTool.GRADLE);
+        super(writer);
+        if (writer.exists(SETTINGS_GRADLE_PATH)) {
+            final byte[] settings = writer.getContent(SETTINGS_GRADLE_PATH);
+            settingsContent = new String(settings, StandardCharsets.UTF_8);
+        }
+        if (writer.exists(BUILD_GRADLE_PATH)) {
+            final byte[] build = writer.getContent(BUILD_GRADLE_PATH);
+            buildContent = new String(build, StandardCharsets.UTF_8);
+        }
+        if (writer.exists(GRADLE_PROPERTIES_PATH)) {
+            final byte[] properties = writer.getContent(GRADLE_PROPERTIES_PATH);
+            propertiesContent.load(new ByteArrayInputStream(properties));
+        }
     }
 
     @Override
-    public void close() throws IOException {
+    public void write() throws IOException {
         write(SETTINGS_GRADLE_PATH, settingsContent);
         write(BUILD_GRADLE_PATH, buildContent);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -41,27 +54,11 @@ public class GradleBuildFile extends BuildFile {
         write(GRADLE_PROPERTIES_PATH, out.toString(StandardCharsets.UTF_8.toString()));
     }
 
-    @Override
     public void completeFile(String groupId, String artifactId, String version) throws IOException {
-        init();
         completeSettingsContent(artifactId);
         completeBuildContent(groupId, version);
-        completeProperties();
-    }
-
-    protected void init() throws IOException {
-        if (getWriter().exists(SETTINGS_GRADLE_PATH)) {
-            final byte[] settings = getWriter().getContent(SETTINGS_GRADLE_PATH);
-            settingsContent = new String(settings, StandardCharsets.UTF_8);
-        }
-        if (getWriter().exists(BUILD_GRADLE_PATH)) {
-            final byte[] build = getWriter().getContent(BUILD_GRADLE_PATH);
-            buildContent = new String(build, StandardCharsets.UTF_8);
-        }
-        if (getWriter().exists(GRADLE_PROPERTIES_PATH)) {
-            final byte[] properties = getWriter().getContent(GRADLE_PROPERTIES_PATH);
-            propertiesContent.load(new ByteArrayInputStream(properties));
-        }
+        completeProperties(artifactId);
+        write();
     }
 
     private void completeBuildContent(String groupId, String version) {
@@ -132,7 +129,7 @@ public class GradleBuildFile extends BuildFile {
         settingsContent = res.toString();
     }
 
-    private void completeProperties() {
+    private void completeProperties(String artifactId) {
         if (propertiesContent.getProperty("quarkusVersion") == null) {
             propertiesContent.setProperty("quarkusVersion", getPluginVersion());
         }
@@ -197,7 +194,28 @@ public class GradleBuildFile extends BuildFile {
 
     @Override
     public List<Dependency> getDependencies() {
-        return Collections.emptyList();
+        if (dependencies == null) {
+            dependencies = new ArrayList<>();
+            boolean inDependencies = false;
+            try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes(StandardCharsets.UTF_8)),
+                    StandardCharsets.UTF_8.toString())) {
+                while (scanner.hasNextLine()) {
+                    String currentLine = scanner.nextLine();
+                    if (currentLine.startsWith("dependencies {")) {
+                        inDependencies = true;
+                    } else if (currentLine.startsWith("}")) {
+                        inDependencies = false;
+                    } else if (inDependencies && currentLine.contains("implementation ")
+                            && !currentLine.contains("enforcedPlatform")) {
+                        String dep = extractString(currentLine);
+                        if (dep != null) {
+                            dependencies.add(MojoUtils.parse(dep.trim().toLowerCase()));
+                        }
+                    }
+                }
+            }
+        }
+        return dependencies;
     }
 
     @Override
@@ -207,11 +225,54 @@ public class GradleBuildFile extends BuildFile {
 
     @Override
     protected List<Dependency> getManagedDependencies() {
-        // Gradle tooling API only provide resolved dependencies.
-        return Collections.emptyList();
+        List<Dependency> constraints = new ArrayList<>();
+        readLineByLine(buildContent, new GetConstraints(constraints));
+        return constraints;
     }
 
-    protected String getBuildContent() {
-        return buildContent;
+    private static class GetConstraints implements Consumer<String> {
+
+        private List<Dependency> result;
+        private boolean inConstraints = false;
+        private boolean inImplementation = false;
+
+        public GetConstraints(List<Dependency> result) {
+            this.result = result;
+        }
+
+        @Override
+        public void accept(String currentLine) {
+            if (currentLine.contains("constraints {")) {
+                inConstraints = true;
+            } else if (inConstraints && currentLine.contains("implementation")) {
+                String constraint = extractString(currentLine);
+                if (constraint != null) {
+                    result.add(MojoUtils.parse(constraint));
+                }
+            } else if (currentLine.contains("}")) {
+                if (inImplementation) {
+                    inImplementation = false;
+                } else {
+                    inConstraints = false;
+                }
+            } else if (!inConstraints && currentLine.contains("implementation")
+                    && (currentLine.contains("enforcedPlatform") || currentLine.contains("platform"))) {
+                String dep = extractString(currentLine);
+                if (dep != null) {
+                    result.add(MojoUtils.parse(dep.trim().toLowerCase()));
+                }
+            }
+        }
+
     }
+
+    private static String extractString(String line) {
+        if (line.indexOf('\'') != -1) {
+            return line.substring(line.indexOf('\'') + 1, line.lastIndexOf('\''));
+        } else if (line.indexOf('"') != -1) {
+            return line.substring(line.indexOf('"') + 1, line.lastIndexOf('"'));
+        }
+        return null;
+    }
+
 }
