@@ -34,7 +34,6 @@ import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -2242,11 +2241,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
           /*actionInputPrefetcher=*/ null,
           actionKeyContext,
           /*metadataHandler=*/ null,
-          LostInputsCheck.NONE,
           actionLogBufferPathGenerator.generate(ArtifactPathResolver.IDENTITY),
           reporter,
           clientEnv,
-          /*topLevelFilesets=*/ ImmutableMap.of(),
+          ImmutableMap.of(),
           artifactExpander,
           /*actionFileSystem=*/ null,
           /*skyframeDepsResult*/ null);

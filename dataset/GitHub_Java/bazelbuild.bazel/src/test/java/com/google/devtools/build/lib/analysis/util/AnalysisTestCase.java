@@ -446,9 +446,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     }
     try {
       return skyframeExecutor.getConfiguredTargetAndDataForTesting(reporter, parsedLabel, config);
-    } catch (StarlarkTransition.TransitionException
-        | InvalidConfigurationException
-        | InterruptedException e) {
+    } catch (StarlarkTransition.TransitionException | InvalidConfigurationException e) {
       throw new AssertionError(e);
     }
   }
@@ -498,9 +496,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     try {
       return skyframeExecutor.getConfiguredTargetAndDataForTesting(
           reporter, parsedLabel, configuration);
-    } catch (StarlarkTransition.TransitionException
-        | InvalidConfigurationException
-        | InterruptedException e) {
+    } catch (StarlarkTransition.TransitionException | InvalidConfigurationException e) {
       throw new AssertionError(e);
     }
   }

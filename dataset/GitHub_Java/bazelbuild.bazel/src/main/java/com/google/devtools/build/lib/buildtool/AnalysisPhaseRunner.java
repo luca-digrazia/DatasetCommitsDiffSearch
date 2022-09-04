@@ -60,13 +60,14 @@ public final class AnalysisPhaseRunner {
 
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
-  private AnalysisPhaseRunner() {}
+  protected CommandEnvironment env;
 
-  public static AnalysisResult execute(
-      CommandEnvironment env,
-      BuildRequest request,
-      BuildOptions buildOptions,
-      TargetValidator validator)
+  public AnalysisPhaseRunner(CommandEnvironment env) {
+    this.env = env;
+  }
+
+  public AnalysisResult execute(
+      BuildRequest request, BuildOptions buildOptions, TargetValidator validator)
       throws BuildFailedException, InterruptedException, ViewCreationFailedException,
           TargetParsingException, LoadingFailedException, AbruptExitException,
           InvalidConfigurationException {
@@ -75,7 +76,7 @@ public final class AnalysisPhaseRunner {
     TargetPatternPhaseValue loadingResult;
     Profiler.instance().markPhase(ProfilePhase.LOAD);
     try (SilentCloseable c = Profiler.instance().profile("evaluateTargetPatterns")) {
-      loadingResult = evaluateTargetPatterns(env, request, validator);
+      loadingResult = evaluateTargetPatterns(request, validator);
     }
     env.setWorkspaceName(loadingResult.getWorkspaceName());
 
@@ -120,7 +121,7 @@ public final class AnalysisPhaseRunner {
 
       try (SilentCloseable c = Profiler.instance().profile("runAnalysisPhase")) {
         analysisResult =
-            runAnalysisPhase(env, request, loadingResult, buildOptions, request.getMultiCpus());
+            runAnalysisPhase(request, loadingResult, buildOptions, request.getMultiCpus());
       }
 
       for (BlazeModule module : env.getRuntime().getBlazeModules()) {
@@ -132,7 +133,7 @@ public final class AnalysisPhaseRunner {
             analysisResult.getAspects());
       }
 
-      reportTargets(env, analysisResult);
+      reportTargets(analysisResult);
 
       for (ConfiguredTarget target : analysisResult.getTargetsToSkip()) {
         BuildConfiguration config =
@@ -160,8 +161,8 @@ public final class AnalysisPhaseRunner {
     return analysisResult;
   }
 
-  private static TargetPatternPhaseValue evaluateTargetPatterns(
-      CommandEnvironment env, final BuildRequest request, final TargetValidator validator)
+  private final TargetPatternPhaseValue evaluateTargetPatterns(
+      final BuildRequest request, final TargetValidator validator)
       throws LoadingFailedException, TargetParsingException, InterruptedException {
     boolean keepGoing = request.getKeepGoing();
     TargetPatternPhaseValue result =
@@ -192,8 +193,7 @@ public final class AnalysisPhaseRunner {
    * @throws InterruptedException if the current thread was interrupted.
    * @throws ViewCreationFailedException if analysis failed for any reason.
    */
-  private static AnalysisResult runAnalysisPhase(
-      CommandEnvironment env,
+  private AnalysisResult runAnalysisPhase(
       BuildRequest request,
       TargetPatternPhaseValue loadingResult,
       BuildOptions targetOptions,
@@ -260,7 +260,7 @@ public final class AnalysisPhaseRunner {
     return analysisResult;
   }
 
-  private static void reportTargets(CommandEnvironment env, AnalysisResult analysisResult) {
+  private void reportTargets(AnalysisResult analysisResult) {
     Collection<ConfiguredTarget> targetsToBuild = analysisResult.getTargetsToBuild();
     Collection<ConfiguredTarget> targetsToTest = analysisResult.getTargetsToTest();
     if (targetsToTest != null) {
