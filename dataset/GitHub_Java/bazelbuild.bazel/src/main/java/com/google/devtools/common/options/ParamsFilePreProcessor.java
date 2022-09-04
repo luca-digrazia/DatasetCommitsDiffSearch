@@ -68,13 +68,13 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
         while (iterator.hasNext()) {
           char next = iterator.next();
           if (Character.isWhitespace(next) && !iterator.isInQuote() && !iterator.isEscaped()) {
-            newArgs.add(arg.toString());
+            newArgs.add(unescape(arg.toString()));
             arg = new StringBuilder();
           } else {
             arg.append(next);
           }
         }
-        // If there is still an arg in the buffer, add it.
+        // If there is an arg in the buffer, add it.
         if (arg.length() > 0) {
           newArgs.add(arg.toString());
         }
@@ -90,6 +90,14 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
       }
     }
     return args;
+  }
+
+  private String unescape(String arg) {
+    if (arg.startsWith("'") && arg.endsWith("'")) {
+      String unescaped = arg.replace("'\\''", "'");
+      return unescaped.substring(1, unescaped.length() - 1);
+    }
+    return arg;
   }
 
   // Doesn't implement iterator to avoid autoboxing and to throw exceptions.
@@ -111,10 +119,14 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
     }
 
     public boolean hasNext() throws IOException {
+      return peek() != -1;
+    }
+
+    private int peek() throws IOException {
       reader.mark(1);
       int next = reader.read();
       reader.reset();
-      return next != -1;
+      return next;
     }
 
     public boolean isInQuote() {
@@ -142,12 +154,13 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
       }
       char current = (char) reader.read();
 
-      // check to see if the current position is escaped
-      if (lastChar == '\\') {
-        escaped = true;
-      } else {
-        escaped = false;
+      // check for \r\n line endings. If found, drop the \r for normalized parsing.
+      if (current == '\r' && peek() == '\n') {
+        current = (char) reader.read();
       }
+
+      // check to see if the current position is escaped
+      escaped = (lastChar == '\\');
 
       if (!escaped && current == '\'') {
         singleQuoteStart = singleQuoteStart == -1 ? readerPosition : -1;
