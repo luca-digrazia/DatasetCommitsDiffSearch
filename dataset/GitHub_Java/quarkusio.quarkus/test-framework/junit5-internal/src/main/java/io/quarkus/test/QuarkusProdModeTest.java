@@ -39,7 +39,6 @@ import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.TestWatcher;
 
 import io.quarkus.bootstrap.app.AugmentAction;
 import io.quarkus.bootstrap.app.AugmentResult;
@@ -56,7 +55,7 @@ import io.quarkus.utilities.JavaBinFinder;
  * consumption
  */
 public class QuarkusProdModeTest
-        implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, TestWatcher {
+        implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback {
 
     private static final String EXPECTED_OUTPUT_FROM_SUCCESSFULLY_STARTED = "features";
     private static final int DEFAULT_HTTP_PORT_INT = 8081;
@@ -68,7 +67,6 @@ public class QuarkusProdModeTest
     }
 
     private Path outputDir;
-    private Path buildDir;
     private Supplier<JavaArchive> archiveProducer;
     private String applicationName;
     private String applicationVersion;
@@ -80,7 +78,6 @@ public class QuarkusProdModeTest
     private CuratedApplication curatedApplication;
 
     private boolean run;
-    private boolean preventOutputDirCleanup;
 
     private String logFileName;
     private Map<String, String> runtimeProperties;
@@ -226,7 +223,7 @@ public class QuarkusProdModeTest
         try {
             outputDir = Files.createTempDirectory("quarkus-prod-mode-test");
             Path deploymentDir = outputDir.resolve("deployment");
-            buildDir = outputDir.resolve("build");
+            Path buildDir = outputDir.resolve("build");
 
             if (applicationName != null) {
                 overrideConfigKey("quarkus.application.name", applicationName);
@@ -240,50 +237,45 @@ public class QuarkusProdModeTest
             exportArchive(deploymentDir, testClass);
 
             Path testLocation = PathTestHelper.getTestClassesLocation(testClass);
-            QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder(deploymentDir)
-                    .setMode(QuarkusBootstrap.Mode.PROD)
-                    .setLocalProjectDiscovery(true)
-                    .addExcludedPath(testLocation)
-                    .setProjectRoot(testLocation)
-                    .setTargetDirectory(buildDir)
-                    .setForcedDependencies(forcedDependencies.stream().map(d -> new AppDependency(d, "compile"))
-                            .collect(Collectors.toList()));
-            if (applicationName != null) {
-                builder.setBaseName(applicationName);
-            }
-            curatedApplication = builder.build().bootstrap();
-
-            AugmentAction action = curatedApplication.createAugmentor();
-            AugmentResult result = action.createProductionApplication();
-
-            Path builtResultArtifact = setupProdModeResults(testClass, buildDir, result);
-
-            if (run) {
-                startBuiltResult(builtResultArtifact);
-                RestAssuredURLManager.setURL(false,
-                        runtimeProperties.get(QUARKUS_HTTP_PORT_PROPERTY) != null
-                                ? Integer.parseInt(runtimeProperties.get(QUARKUS_HTTP_PORT_PROPERTY))
-                                : DEFAULT_HTTP_PORT_INT);
-
-                if (logfilePath != null) {
-                    logfileField = Arrays.stream(testClass.getDeclaredFields()).filter(
-                            f -> f.isAnnotationPresent(LogFile.class) && Path.class.equals(f.getType()))
-                            .findAny();
-                    logfileField.ifPresent(f -> f.setAccessible(true));
+            try {
+                QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder(deploymentDir)
+                        .setMode(QuarkusBootstrap.Mode.PROD)
+                        .setLocalProjectDiscovery(true)
+                        .addExcludedPath(testLocation)
+                        .setProjectRoot(testLocation)
+                        .setTargetDirectory(buildDir)
+                        .setForcedDependencies(forcedDependencies.stream().map(d -> new AppDependency(d, "compile"))
+                                .collect(Collectors.toList()));
+                if (applicationName != null) {
+                    builder.setBaseName(applicationName);
                 }
+                curatedApplication = builder.build().bootstrap();
+
+                AugmentAction action = curatedApplication.createAugmentor();
+                AugmentResult result = action.createProductionApplication();
+
+                Path builtResultArtifact = setupProdModeResults(testClass, buildDir, result);
+
+                if (run) {
+                    startBuiltResult(builtResultArtifact);
+                    RestAssuredURLManager.setURL(false,
+                            runtimeProperties.get(QUARKUS_HTTP_PORT_PROPERTY) != null
+                                    ? Integer.parseInt(runtimeProperties.get(QUARKUS_HTTP_PORT_PROPERTY))
+                                    : DEFAULT_HTTP_PORT_INT);
+
+                    if (logfilePath != null) {
+                        logfileField = Arrays.stream(testClass.getDeclaredFields()).filter(
+                                f -> f.isAnnotationPresent(LogFile.class) && Path.class.equals(f.getType()))
+                                .findAny();
+                        logfileField.ifPresent(f -> f.setAccessible(true));
+                    }
+                }
+
+            } catch (Throwable e) {
+                throw e;
             }
-
         } catch (Exception e) {
-            preventOutputDirCleanup = true;
-            logOutputPathForPostMortem();
             throw new RuntimeException(e);
-        }
-    }
-
-    private void logOutputPathForPostMortem() {
-        if (buildDir != null) {
-            String message = "The output of the Quarkus build can be found at " + buildDir.toAbsolutePath().toString();
-            System.err.println(message);
         }
     }
 
@@ -357,12 +349,6 @@ public class QuarkusProdModeTest
     }
 
     @Override
-    public void testFailed(ExtensionContext context, Throwable cause) {
-        preventOutputDirCleanup = true;
-        logOutputPathForPostMortem();
-    }
-
-    @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
         if (run) {
             RestAssuredURLManager.clearURL();
@@ -383,7 +369,7 @@ public class QuarkusProdModeTest
             timeoutTask.cancel();
             timeoutTask = null;
 
-            if ((outputDir != null) && !preventOutputDirCleanup) {
+            if (outputDir != null) {
                 Files.walkFileTree(outputDir, new FileVisitor<Path>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
