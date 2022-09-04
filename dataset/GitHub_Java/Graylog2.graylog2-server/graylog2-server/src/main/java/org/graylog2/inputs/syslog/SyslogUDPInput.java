@@ -64,10 +64,17 @@ public class SyslogUDPInput extends SyslogInputBase {
         bootstrap.setPipelineFactory(new SyslogPipelineFactory(core, config));
 
         try {
-            channel = bootstrap.bind(socketAddress);
+            bootstrap.bind(socketAddress);
             LOG.info("Started UDP syslog server on {}", socketAddress);
         } catch (ChannelException e) {
             LOG.error("Could not bind Syslog UDP server to address " + socketAddress, e);
+        }
+    }
+
+    @Override
+    public void stop() {
+        if (bootstrap != null) {
+            bootstrap.shutdown();
         }
     }
 
@@ -80,6 +87,5 @@ public class SyslogUDPInput extends SyslogInputBase {
     public String getName() {
         return NAME;
     }
-
 
 }

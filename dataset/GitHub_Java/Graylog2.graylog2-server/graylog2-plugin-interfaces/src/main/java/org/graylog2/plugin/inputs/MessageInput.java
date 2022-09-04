@@ -33,8 +33,6 @@ import java.util.Map;
  */
 public abstract class MessageInput {
 
-    protected String title;
-    protected String creatorUserId;
     protected String inputId;
     protected String persistId;
 
@@ -64,20 +62,5 @@ public abstract class MessageInput {
     public String getPersistId() {
         return persistId;
     }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getCreatorUserId() {
-        return creatorUserId;
-    }
-
-    public void setCreatorUserId(String creatorUserId) {
-        this.creatorUserId = creatorUserId;
-    }
+    
 }

@@ -20,51 +20,34 @@
 
 package org.graylog2.inputs.gelf;
 
-import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MessageInputConfiguration;
-import org.graylog2.plugin.inputs.MessageInputConfigurationException;
-import org.graylog2.plugin.inputs.MessageInputConfigurationRequest;
-import org.jboss.netty.bootstrap.ServerBootstrap;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.graylog2.plugin.inputs.*;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import org.graylog2.Core;
 import org.graylog2.plugin.GraylogServer;
+
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GELFTCPInput implements MessageInput {
+public class GELFTCPInput extends MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(GELFTCPInput.class);
 
-    private static final String NAME = "GELF TCP";
+    public static final String NAME = "GELF TCP";
 
-    private MessageInputConfiguration config;
-    private GraylogServer server;
 
     @Override
-    public String getName() {
-        return NAME;
+    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
+        //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
-    public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException {
-        this.config = config;
-        this.server = graylogServer;
-    }
-
-    @Override
-    public void start() {
+    public void launch() throws MisfireException {
         /*final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
                         .setNameFormat("input-gelftcp-boss-%d")
@@ -95,17 +78,27 @@ public class GELFTCPInput implements MessageInput {
 
     @Override
     public void stop() {
-
+        //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
-    public MessageInputConfigurationRequest getRequestedConfiguration() {
-        return new MessageInputConfigurationRequest();
+    public ConfigurationRequest getRequestedConfiguration() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
     public boolean isExclusive() {
-        return false;
+        return false;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public String getName() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public Map<String, Object> getAttributes() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
 }

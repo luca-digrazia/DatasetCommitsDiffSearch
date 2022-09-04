@@ -21,79 +21,90 @@
 package org.graylog2.inputs.gelf;
 
 
-
-import java.net.InetSocketAddress;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import org.elasticsearch.common.netty.channel.ChannelException;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Core;
 import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.*;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GELFUDPInput implements MessageInput {
+public class GELFUDPInput extends MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(GELFUDPInput.class);
 
-    private static final String NAME = "GELF UDP";
-    
-    private Core graylogServer;
-    private InetSocketAddress socketAddress;
-    
+    public static final String NAME = "GELF UDP";
+
     @Override
-    public void initialize(Map<String, String> configuration, GraylogServer graylogServer) {
-        this.graylogServer = (Core) graylogServer;
-        this.socketAddress = new InetSocketAddress(
-                    configuration.get("listen_address"),
-                    Integer.parseInt(configuration.get("listen_port"))
-        );
-
-        spinUp();
+    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
+        //To change body of implemented methods use File | Settings | File Templates.
     }
-    
-    private void spinUp() {
-        
-        final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
-                new ThreadFactoryBuilder()
-                .setNameFormat("input-gelfudp-worker-%d")
-                .build());
-        
-        final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
 
-        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(
-                graylogServer.getConfiguration().getUdpRecvBufferSizes())
-        );
-        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(graylogServer));
+    @Override
+    public void launch() throws MisfireException {
+        //To change body of implemented methods use File | Settings | File Templates.
+    }
 
-        try {
-            bootstrap.bind(socketAddress);
-            LOG.info("Started UDP GELF server on {}", socketAddress);
-        } catch (ChannelException e) {
-            LOG.error("Could not bind UDP GELF server to address " + socketAddress, e);
-        }
+    @Override
+    public void stop() {
+        //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public boolean isExclusive() {
+        return false;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
     public String getName() {
-        return NAME;
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
-    public Map<String, String> getRequestedConfiguration() {
-        // Built in input. This is just for plugin compat. No special configuration required.
-        return Maps.newHashMap();
+    public Map<String, Object> getAttributes() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
-    
+
+    /*@Override
+    public void launch() throws MisfireException {
+        final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
+                new ThreadFactoryBuilder()
+                        .setNameFormat("input-" + inputId + "-gelfudp-worker-%d")
+                        .build());
+
+        final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
+
+        bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(
+                core.getConfiguration().getUdpRecvBufferSizes())
+        );
+        bootstrap.setPipelineFactory(new GELFUDPPipelineFactory(core));
+
+        try {
+            bootstrap.bind(socketAddress);
+            LOG.info("Started UDP GELF server on {}", socketAddress);
+        } catch (Exception e) {
+            String msg = "Could not bind UDP GELF server to address " + socketAddress;
+            LOG.error(msg, e);
+            throw new MisfireException(msg);
+        }
+    }*/
+
 }

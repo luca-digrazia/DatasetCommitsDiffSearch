@@ -19,35 +19,30 @@
  */
 package org.graylog2.inputs.http;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.plugin.inputs.MessageInputConfiguration;
-import org.graylog2.plugin.inputs.MessageInputConfigurationException;
-import org.graylog2.plugin.inputs.MessageInputConfigurationRequest;
+import org.graylog2.plugin.inputs.*;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.graylog2.Core;
-import org.graylog2.plugin.inputs.MessageInput;
-import org.jboss.netty.bootstrap.ServerBootstrap;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 
-import java.net.InetSocketAddress;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.graylog2.plugin.GraylogServer;
 
-public class GELFHttpInput implements MessageInput {
+import java.util.Map;
+
+public class GELFHttpInput extends MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(GELFHttpInput.class);
 
+    public static final String NAME = "GELF HTTP";
+
     @Override
-    public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException {
+    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
         //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override
-    public void start() {
+    public void launch() throws MisfireException {
         //To change body of implemented methods use File | Settings | File Templates.
     }
 
@@ -57,7 +52,7 @@ public class GELFHttpInput implements MessageInput {
     }
 
     @Override
-    public MessageInputConfigurationRequest getRequestedConfiguration() {
+    public ConfigurationRequest getRequestedConfiguration() {
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
@@ -68,6 +63,11 @@ public class GELFHttpInput implements MessageInput {
 
     @Override
     public String getName() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public Map<String, Object> getAttributes() {
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
@@ -105,16 +105,6 @@ public class GELFHttpInput implements MessageInput {
                 httpBootstrap.releaseExternalResources();
             }
         });
-    }
-
-    @Override
-    public String getName() {
-        return "GELF HTTP";
-    }
-
-    @Override
-    public Map<String, String> getRequestedConfiguration() {
-        // Built in input. This is just for plugin compat. No special configuration required.
-        return com.google.common.collect.Maps.newHashMap();
     }*/
+
 }
