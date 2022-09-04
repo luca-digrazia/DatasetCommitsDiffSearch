@@ -12,7 +12,7 @@ public class InvocationHandler implements RestHandler {
 
     @Override
     public void handle(QuarkusRestRequestContext requestContext) throws Exception {
-        if (requestContext.getResult() != null || requestContext.getThrowable() != null) {
+        if (requestContext.getResult() != null) {
             //processing was aborted
             //but we still follow through with the handler chain
             return;
@@ -23,13 +23,14 @@ public class InvocationHandler implements RestHandler {
         if (async) {
             requestContext.suspend();
         }
+        requestContext.requireCDIRequestScope();
         try {
             Object result = invoker.invoke(requestContext.getEndpointInstance(), requestContext.getParameters());
             if (!async) {
                 requestContext.setResult(result);
             }
         } catch (Throwable t) {
-            requestContext.setThrowable(t);
+            requestContext.handleException(t);
             if (async) {
                 requestContext.resume();
             }
