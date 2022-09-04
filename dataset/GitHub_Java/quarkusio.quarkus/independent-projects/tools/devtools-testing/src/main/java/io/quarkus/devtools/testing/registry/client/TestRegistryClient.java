@@ -132,11 +132,6 @@ public class TestRegistryClient implements RegistryClient {
         return config;
     }
 
-    @Override
-    public void clearCache() {
-        log.debug("% clearCache not supported", config.getId());
-    }
-
     public static RegistryConfig getDefaultConfig() {
 
         final JsonRegistryConfig config = new JsonRegistryConfig();
