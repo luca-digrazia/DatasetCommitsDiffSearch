@@ -33,15 +33,15 @@ public class RequestListADVideoPlayer extends ListADVideoPlayer {
                 Random random = new Random();
                 int i = random.nextInt(max) % (max - min + 1) + min;
                 if (i % 3 == 0) {
-                    mOriginUrl = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
-                    mUrl = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
+                    mOriginUrl = "http://wdquan-space.b0.upaiyun.com/VIDEO/2018/11/22/ae0645396048_hls_time10.m3u8";
+                    mUrl = "http://wdquan-space.b0.upaiyun.com/VIDEO/2018/11/22/ae0645396048_hls_time10.m3u8";
                     mTitle = "ggg2";
                 } else if (i % 4 == 0) {
                     //模拟请求失败
                     onError(0, 0);
                 } else {
-                    mOriginUrl = "http://video.7k.cn/app_video/20171202/6c8cf3ea/v.m3u8.mp4";
-                    mUrl = "http://video.7k.cn/app_video/20171202/6c8cf3ea/v.m3u8.mp4";
+                    mOriginUrl = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
+                    mUrl = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
                     mTitle = "ffff1";
                 }
                 mCache = false;

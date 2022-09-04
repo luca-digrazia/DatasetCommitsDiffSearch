@@ -9,6 +9,7 @@ import android.widget.ImageView;
 
 import com.example.gsyvideoplayer.R;
 import com.example.gsyvideoplayer.model.VideoModel;
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
@@ -69,7 +70,7 @@ public class SwitchListVideoAdapter extends BaseAdapter {
             holder = (ViewHolder) convertView.getTag();
         }
         final String urlH = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
-        final String urlV = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
+        final String urlV = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
         final String url = (position % 2 == 0) ? urlH : urlV;
         final int coverId = (position % 2 == 0) ? R.mipmap.xxx1 : R.mipmap.xxx2;
 
@@ -88,7 +89,13 @@ public class SwitchListVideoAdapter extends BaseAdapter {
             viewGroup.removeView(holder.imageView);
         }
         holder.gsyVideoPlayer.setThumbImageView(holder.imageView);
-        holder.gsyVideoPlayer.getThumbImageViewLayout().setVisibility(View.VISIBLE);
+
+        if (GSYVideoManager.instance().getPlayTag().equals(SwitchListVideoAdapter.TAG)
+                && (position == GSYVideoManager.instance().getPlayPosition())) {
+            holder.gsyVideoPlayer.getThumbImageViewLayout().setVisibility(View.GONE);
+        } else {
+            holder.gsyVideoPlayer.getThumbImageViewLayout().setVisibility(View.VISIBLE);
+        }
 
         return convertView;
 

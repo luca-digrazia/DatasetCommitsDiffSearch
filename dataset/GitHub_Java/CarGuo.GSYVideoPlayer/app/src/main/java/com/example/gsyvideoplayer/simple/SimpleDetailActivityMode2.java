@@ -55,7 +55,7 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
                 .setIsTouchWiget(true)
                 .setRotateViewAuto(false)
                 .setLockLand(false)
-                .setAutoFullWithSize(false)
+                .setAutoFullWithSize(true)
                 .setShowFullAnimation(false)
                 .setNeedLockFull(true)
                 .setUrl(url)
@@ -66,7 +66,7 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
                     public void onPrepared(String url, Object... objects) {
                         super.onPrepared(url, objects);
                         //开始播放了才能旋转和全屏
-                        orientationUtils.setEnable(detailPlayer.isRotateWithSystem());
+                        orientationUtils.setEnable(true);
                         isPlay = true;
                     }
 
@@ -136,9 +136,6 @@ public class SimpleDetailActivityMode2 extends AppCompatActivity {
 
 
 
-    /**
-     * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
-     */
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);

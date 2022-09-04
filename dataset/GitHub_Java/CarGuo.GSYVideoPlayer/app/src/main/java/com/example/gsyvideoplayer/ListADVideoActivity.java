@@ -3,7 +3,7 @@ package com.example.gsyvideoplayer;
 import android.content.Context;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.transition.Explode;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -164,7 +164,7 @@ public class ListADVideoActivity extends AppCompatActivity {
 
 
             final String url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
-            final String urlAD = "http://video.7k.cn/app_video/20171202/6c8cf3ea/v.m3u8.mp4";
+            final String urlAD = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
 
             //多个播放时必须在setUpLazy、setUp和getGSYVideoManager()等前面设置
             holder.gsyVideoPlayer.setPlayTag(TAG);
@@ -202,8 +202,8 @@ public class ListADVideoActivity extends AppCompatActivity {
                     resolveFullBtn(holder.adVideoPlayer);
                 }
             });
-            holder.gsyVideoPlayer.setRotateViewAuto(true);
-            holder.adVideoPlayer.setRotateViewAuto(true);
+            holder.gsyVideoPlayer.setRotateViewAuto(false);
+            holder.adVideoPlayer.setRotateViewAuto(false);
             holder.gsyVideoPlayer.setLockLand(true);
             holder.adVideoPlayer.setLockLand(true);
             holder.gsyVideoPlayer.setReleaseWhenLossAudio(false);
@@ -254,11 +254,16 @@ public class ListADVideoActivity extends AppCompatActivity {
                 @Override
                 public void onAutoComplete(String url, Object... objects) {
                     //广告结束，释放
-                    holder.adVideoPlayer.release();
+                    holder.adVideoPlayer.getCurrentPlayer().release();
                     holder.adVideoPlayer.onVideoReset();
                     holder.adVideoPlayer.setVisibility(View.GONE);
+
                     //开始播放原视频，根据是否处于全屏状态判断
-                    holder.gsyVideoPlayer.getCurrentPlayer().startAfterPrepared();
+                    int playPosition = holder.gsyVideoPlayer.getGSYVideoManager().getPlayPosition();
+                    if (position == playPosition) {
+                        holder.gsyVideoPlayer.getCurrentPlayer().startAfterPrepared();
+                    }
+
                     if (holder.adVideoPlayer.getCurrentPlayer().isIfCurrentIsFullscreen()) {
                         holder.adVideoPlayer.removeFullWindowViewOnly();
                         if (!holder.gsyVideoPlayer.getCurrentPlayer().isIfCurrentIsFullscreen()) {
@@ -296,7 +301,7 @@ public class ListADVideoActivity extends AppCompatActivity {
         public void startAdPlay(GSYADVideoPlayer gsyadVideoPlayer, StandardGSYVideoPlayer normalPlayer) {
             gsyadVideoPlayer.setVisibility(View.VISIBLE);
             gsyadVideoPlayer.startPlayLogic();
-            if (gsyadVideoPlayer.getCurrentPlayer().isIfCurrentIsFullscreen()) {
+            if (normalPlayer.getCurrentPlayer().isIfCurrentIsFullscreen()) {
                 resolveFullBtn(gsyadVideoPlayer);
                 gsyadVideoPlayer.setSaveBeforeFullSystemUiVisibility(normalPlayer.getSaveBeforeFullSystemUiVisibility());
             }

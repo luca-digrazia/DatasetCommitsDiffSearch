@@ -68,7 +68,7 @@ public class DetailListPlayer extends GSYBaseActivityDetail<ListGSYVideoPlayer> 
         detailPlayer.setLockLand(false);
         detailPlayer.setShowFullAnimation(false);
         //detailPlayer.setNeedLockFull(true);
-        detailPlayer.setAutoFullWithSize(false);
+        detailPlayer.setAutoFullWithSize(true);
 
         detailPlayer.setVideoAllCallBack(this);
 
