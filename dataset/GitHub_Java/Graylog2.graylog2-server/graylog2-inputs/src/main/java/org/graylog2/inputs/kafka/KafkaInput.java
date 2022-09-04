@@ -86,20 +86,22 @@ public class KafkaInput extends MessageInput {
         this.metricRegistry = metricRegistry;
         this.nodeId = nodeId;
         this.serverEventBus = serverEventBus;
-    }
-
-    @Subscribe
-    public void lifecycleStateChange(Lifecycle lifecycle) {
-        LOG.debug("Lifecycle changed to {}", lifecycle);
-        switch (lifecycle) {
-            case RUNNING:
-                paused = false;
-                pausedLatch.countDown();
-                break;
-            default:
-                pausedLatch = new CountDownLatch(1);
-                paused = true;
-        }
+        // listen for lifecycle changes
+        serverEventBus.register(new Object() {
+            @Subscribe
+            public void lifecycleStateChange(Lifecycle lifecycle) {
+                LOG.debug("Lifecycle changed to {}", lifecycle);
+                switch (lifecycle) {
+                    case RUNNING:
+                        paused = false;
+                        pausedLatch.countDown();
+                        break;
+                    default:
+                        pausedLatch = new CountDownLatch(1);
+                        paused = true;
+                }
+            }
+        });
     }
 
     @Override
@@ -126,9 +128,6 @@ public class KafkaInput extends MessageInput {
 
     @Override
     public void launch(final Buffer processBuffer) throws MisfireException {
-        // listen for lifecycle changes
-        serverEventBus.register(this);
-
         Properties props = new Properties();
 
         props.put("group.id", GROUP_ID);
@@ -261,8 +260,6 @@ public class KafkaInput extends MessageInput {
     @Override
     public void stop() {
         stopped = true;
-
-        serverEventBus.unregister(this);
 
         if (stopLatch != null) {
             try {
