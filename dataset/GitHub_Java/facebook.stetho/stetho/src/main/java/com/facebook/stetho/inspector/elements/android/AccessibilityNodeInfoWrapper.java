@@ -255,8 +255,7 @@ public final class AccessibilityNodeInfoWrapper {
         ViewCompat.onInitializeAccessibilityNodeInfo(child, childNodeInfo);
 
         CharSequence childNodeDescription = null;
-        if (AccessibilityUtil.isSpeakingNode(childNodeInfo, child) &&
-            !AccessibilityUtil.isAccessibilityFocusable(childNodeInfo, child)) {
+        if (AccessibilityUtil.isSpeakingNode(childNodeInfo, child)) {
           childNodeDescription = getDescription(childNodeInfo, child);
         }
 
