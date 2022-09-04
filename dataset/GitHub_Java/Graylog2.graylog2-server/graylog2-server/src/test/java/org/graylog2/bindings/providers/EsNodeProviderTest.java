@@ -85,7 +85,6 @@ public class EsNodeProviderTest {
         addEsConfig(esPropNames, settings, "node.name", "elasticsearch_node_name", "garylord");
         addEsConfig(esPropNames, settings, "node.master", "elasticsearch_node_master", "true");
         addEsConfig(esPropNames, settings, "node.data", "elasticsearch_node_data", "true");
-        addEsConfig(esPropNames, settings, "path.data", "elasticsearch_path_data", "elasticsearch-data");
         addEsConfig(esPropNames, settings, "transport.tcp.port", "elasticsearch_transport_tcp_port", "9999");
         addEsConfig(esPropNames, settings, "http.enabled", "elasticsearch_http_enabled", "true");
         addEsConfig(esPropNames,
@@ -104,8 +103,6 @@ public class EsNodeProviderTest {
                 "elasticsearch_discovery_initial_state_timeout",
                 "5s");
         esPropNames.put("action.auto_create_index", "false");
-
-        esPropNames.put("plugins.mandatory", "graylog2-monitor");
 
         ElasticsearchConfiguration config = setupConfig(settings);
 

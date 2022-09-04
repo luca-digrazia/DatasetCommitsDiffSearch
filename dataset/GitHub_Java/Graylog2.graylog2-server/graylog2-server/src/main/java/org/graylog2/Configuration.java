@@ -24,8 +24,6 @@ import org.graylog2.plugin.BaseConfiguration;
 
 import java.net.URI;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.graylog2.plugin.Tools.getUriWithDefaultPath;
 import static org.graylog2.plugin.Tools.getUriWithPort;
 import static org.graylog2.plugin.Tools.getUriWithScheme;
 
@@ -172,7 +170,7 @@ public class Configuration extends BaseConfiguration {
 
     @Override
     public URI getRestListenUri() {
-        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG2_DEFAULT_PORT), "/");
+        return getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG2_DEFAULT_PORT);
     }
 
     public String getRootUsername() {

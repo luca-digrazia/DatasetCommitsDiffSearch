@@ -1,6 +1,4 @@
 /**
- * Copyright 2014 TORCH GmbH <lennart@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,7 +13,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.periodical;
 
@@ -23,6 +20,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.http.HttpEntity;
@@ -37,39 +35,53 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.graylog2.Configuration;
 import org.graylog2.ServerVersion;
+import org.graylog2.configuration.TelemetryConfiguration;
+import org.graylog2.indexer.counts.Counts;
 import org.graylog2.metrics.MetricUtils;
 import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.periodical.Periodical;
+import org.graylog2.shared.stats.ThroughputStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
+import java.util.Set;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class TelemetryReporterThread extends Periodical {
-
     private static final Logger LOG = LoggerFactory.getLogger(TelemetryReporterThread.class);
+    private static final Set<String> METRICS_BLACKLIST = ImmutableSet.<String>builder()
+            .add("org.graylog2.rest.resources")
+            .build();
 
     @Inject
-    protected ObjectMapper objectMapper;
+    private ObjectMapper objectMapper;
 
     private final MetricRegistry metricRegistry;
     private final ServerStatus serverStatus;
+    private final TelemetryConfiguration telemetryConfiguration;
     private final Configuration configuration;
+    private final Counts counts;
+    private ThroughputStats throughputStats;
 
     @Inject
-    public TelemetryReporterThread(MetricRegistry metricRegistry, ServerStatus serverStatus, Configuration configuration) {
+    public TelemetryReporterThread(MetricRegistry metricRegistry,
+                                   ServerStatus serverStatus,
+                                   Counts counts,
+                                   ThroughputStats throughputStats,
+                                   TelemetryConfiguration telemetryConfiguration,
+                                   Configuration configuration) {
         this.metricRegistry = metricRegistry;
         this.serverStatus = serverStatus;
+        this.counts = counts;
+        this.throughputStats = throughputStats;
+        this.telemetryConfiguration = telemetryConfiguration;
         this.configuration = configuration;
     }
 
@@ -79,12 +91,12 @@ public class TelemetryReporterThread extends Periodical {
 
         HttpEntity postBody;
         try {
-            Map<String,Object> report = Maps.newHashMap();
+            Map<String, Object> report = Maps.newHashMap();
 
-            report.put("token", configuration.getTelemetryServiceToken());
+            report.put("token", telemetryConfiguration.getToken());
             report.put("anon_id", DigestUtils.sha256Hex(serverStatus.getNodeId().toString()));
-            report.put("server_version", ServerVersion.VERSION.toString());
-            report.put("metrics", MetricUtils.mapAll(metricRegistry.getMetrics()));
+            report.put("metrics", MetricUtils.mapAllFiltered(metricRegistry.getMetrics(), METRICS_BLACKLIST));
+            report.put("statistics", buildStatistics());
 
             String json = objectMapper.writeValueAsString(report);
 
@@ -96,16 +108,16 @@ public class TelemetryReporterThread extends Periodical {
 
         final HttpPost post;
         try {
-            post = new HttpPost(new URIBuilder(configuration.getTelemetryServiceUri()).build());
+            post = new HttpPost(new URIBuilder(telemetryConfiguration.getUri()).build());
             post.setHeader("User-Agent", "graylog2-server");
             post.setHeader("Content-Type", "application/json");
             post.setHeader("Content-Encoding", "gzip");
             post.setEntity(postBody);
 
             final RequestConfig.Builder configBuilder = RequestConfig.custom()
-                    .setConnectTimeout(configuration.getTelemetryServiceConnectTimeOut())
-                    .setSocketTimeout(configuration.getTelemetryServiceSocketTimeOut())
-                    .setConnectionRequestTimeout(configuration.getTelemetryServiceConnectionRequestTimeOut());
+                    .setConnectTimeout(telemetryConfiguration.getConnectTimeOut())
+                    .setSocketTimeout(telemetryConfiguration.getSocketTimeOut())
+                    .setConnectionRequestTimeout(telemetryConfiguration.getConnectionRequestTimeOut());
 
             if (configuration.getHttpProxyUri() != null) {
                 try {
@@ -147,6 +159,23 @@ public class TelemetryReporterThread extends Periodical {
         }
     }
 
+    private Map<String, Object> buildStatistics() {
+        Map<String, Object> statistics = Maps.newHashMap();
+
+        statistics.put("total_messages", counts.total());
+        statistics.put("started_at", serverStatus.getStartedAt());
+        statistics.put("lifecycle", serverStatus.getLifecycle());
+        statistics.put("lb_status", serverStatus.getLifecycle().getLoadbalancerStatus());
+        statistics.put("is_processing", serverStatus.isProcessing());
+        statistics.put("server_version", ServerVersion.VERSION.toString());
+        statistics.put("global_throughput", throughputStats.getCurrentThroughput());
+        statistics.put("stream_throughput", throughputStats.getCurrentStreamThroughputValues());
+        statistics.put("hostname", Tools.getLocalCanonicalHostname());
+        statistics.put("timezone", serverStatus.getTimezone().getID());
+
+        return statistics;
+    }
+
     @Override
     public boolean runsForever() {
         return false;
@@ -164,9 +193,9 @@ public class TelemetryReporterThread extends Periodical {
 
     @Override
     public boolean startOnThisNode() {
-        return configuration.isTelemetryServiceEnabled()
-                && configuration.getTelemetryServiceToken() != null
-                && !configuration.getTelemetryServiceToken().isEmpty()
+        return telemetryConfiguration.isEnabled()
+                && telemetryConfiguration.getToken() != null
+                && !telemetryConfiguration.getToken().isEmpty()
                 && !serverStatus.hasCapability(ServerStatus.Capability.LOCALMODE);
     }
 
@@ -177,7 +206,7 @@ public class TelemetryReporterThread extends Periodical {
 
     @Override
     public int getInitialDelaySeconds() {
-        return 0;
+        return 60;
     }
 
     @Override

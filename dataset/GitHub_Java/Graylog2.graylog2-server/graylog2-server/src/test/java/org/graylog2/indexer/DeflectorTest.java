@@ -23,6 +23,7 @@ package org.graylog2.indexer;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.indices.Indices;
+import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.system.activities.SystemMessageActivityWriter;
@@ -47,7 +48,7 @@ public class DeflectorTest {
                 new ElasticsearchConfiguration(),
                 mock(SystemMessageActivityWriter.class),
                 mock(RebuildIndexRangesJob.Factory.class),
-                mock(SetIndexReadOnlyJob.Factory.class),
+                mock(OptimizeIndexJob.Factory.class),
                 mock(CreateNewSingleIndexRangeJob.Factory.class),
                 mock(Indices.class));
     }
@@ -78,7 +79,7 @@ public class DeflectorTest {
                 mock(ElasticsearchConfiguration.class),
                 mock(SystemMessageActivityWriter.class),
                 mock(RebuildIndexRangesJob.Factory.class),
-                mock(SetIndexReadOnlyJob.Factory.class),
+                mock(OptimizeIndexJob.Factory.class),
                 mock(CreateNewSingleIndexRangeJob.Factory.class),
                 mock(Indices.class));
 
@@ -98,7 +99,7 @@ public class DeflectorTest {
                                     mock(ElasticsearchConfiguration.class),
                                     mock(SystemMessageActivityWriter.class),
                                     mock(RebuildIndexRangesJob.Factory.class),
-                                    mock(SetIndexReadOnlyJob.Factory.class),
+                                    mock(OptimizeIndexJob.Factory.class),
                                     mock(CreateNewSingleIndexRangeJob.Factory.class),
                                     mock(Indices.class));
         try {
@@ -116,7 +117,7 @@ public class DeflectorTest {
                                     mock(ElasticsearchConfiguration.class),
                                     mock(SystemMessageActivityWriter.class),
                                     mock(RebuildIndexRangesJob.Factory.class),
-                                    mock(SetIndexReadOnlyJob.Factory.class),
+                                    mock(OptimizeIndexJob.Factory.class),
                                     mock(CreateNewSingleIndexRangeJob.Factory.class),
                                     mock(Indices.class));
         try {

@@ -19,9 +19,9 @@ package org.graylog2.bindings.providers;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import javax.inject.Inject;
-import javax.inject.Provider;
-import javax.inject.Singleton;
+import com.google.inject.Inject;
+import com.google.inject.Provider;
+import com.google.inject.Singleton;
 import org.elasticsearch.common.settings.loader.YamlSettingsLoader;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
@@ -50,7 +50,7 @@ public class EsNodeProvider implements Provider<Node> {
     @Override
     @Singleton
     public Node get() {
-        final NodeBuilder builder = nodeBuilder().client(configuration.isClientNode());
+        final NodeBuilder builder = nodeBuilder().client(true);
         Map<String, String> settings = readNodeSettings(configuration);
 
         builder.settings().put(settings);
@@ -66,10 +66,6 @@ public class EsNodeProvider implements Provider<Node> {
         settings.put("node.name", conf.getNodeName());
         settings.put("node.master", Boolean.toString(conf.isMasterNode()));
         settings.put("node.data", Boolean.toString(conf.isDataNode()));
-
-        if (!isNullOrEmpty(conf.getPathData())) {
-            settings.put("path.data", conf.getPathData());
-        }
 
         settings.put("action.auto_create_index", Boolean.toString(false));
 
@@ -96,8 +92,6 @@ public class EsNodeProvider implements Provider<Node> {
         if (!isNullOrEmpty(conf.getNetworkPublishHost())) {
             settings.put("network.publish_host", conf.getNetworkPublishHost());
         }
-
-        settings.put("plugins.mandatory", "graylog2-monitor");
 
         // Overwrite from a custom ElasticSearch config file.
         final File esConfigFile = conf.getConfigFile();
