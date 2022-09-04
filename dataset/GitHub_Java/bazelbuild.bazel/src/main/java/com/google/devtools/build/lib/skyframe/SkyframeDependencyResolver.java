@@ -48,6 +48,13 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
   }
 
   @Override
+  protected void invalidVisibilityReferenceHook(TargetAndConfiguration value, Label label) {
+    env.getListener().handle(
+        Event.error(TargetUtils.getLocationMaybe(value.getTarget()), String.format(
+            "Label '%s' in visibility attribute does not refer to a package group", label)));
+  }
+
+  @Override
   protected void invalidPackageGroupReferenceHook(TargetAndConfiguration value, Label label) {
     env.getListener().handle(
         Event.error(TargetUtils.getLocationMaybe(value.getTarget()), String.format(
@@ -77,19 +84,27 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
   @Nullable
   @Override
   protected Map<Label, Target> getTargets(
-      Collection<Label> labels, Target fromTarget, NestedSetBuilder<Cause> rootCauses)
+      Iterable<Label> labels,
+      Target fromTarget,
+      NestedSetBuilder<Cause> rootCauses,
+      int labelsSizeHint)
       throws InterruptedException {
     Map<SkyKey, ValueOrException<NoSuchPackageException>> packages =
         env.getValuesOrThrow(
             Iterables.transform(labels, label -> PackageValue.key(label.getPackageIdentifier())),
             NoSuchPackageException.class);
+    if (labels instanceof Collection) {
+      labelsSizeHint = ((Collection<Label>) labels).size();
+    } else if (labelsSizeHint <= 0) {
+      labelsSizeHint = 2 * packages.size();
+    }
 
     // As per the comment in SkyFunctionEnvironment.getValueOrUntypedExceptions(), we are supposed
     // to prefer reporting errors to reporting null, we first check for errors in our dependencies.
     // This, of course, results in some wasted work in case this will need to be restarted later.
 
     // Duplicates can occur, so we can't use ImmutableMap.
-    HashMap<Label, Target> result = Maps.newHashMapWithExpectedSize(labels.size());
+    HashMap<Label, Target> result = Maps.newHashMapWithExpectedSize(labelsSizeHint);
     for (Label label : labels) {
       PackageValue packageValue;
       try {
