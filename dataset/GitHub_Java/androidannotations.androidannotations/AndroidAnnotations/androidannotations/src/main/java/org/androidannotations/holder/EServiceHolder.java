@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,23 +15,28 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.*;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+
+import javax.lang.model.element.TypeElement;
+
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.IntentBuilder;
 import org.androidannotations.helper.ServiceIntentBuilder;
 import org.androidannotations.process.ProcessHolder;
 
-import javax.lang.model.element.TypeElement;
-
-import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JMethod;
 
 public class EServiceHolder extends EComponentHolder implements HasIntentBuilder, HasReceiverRegistration {
 
     private ServiceIntentBuilder intentBuilder;
 	private JDefinedClass intentBuilderClass;
-	private JFieldRef intentField;
+	private JFieldVar intentField;
 	private ReceiverRegistrationHolder receiverRegistrationHolder;
 	private JBlock onDestroyBeforeSuperBlock;
 
@@ -85,12 +90,12 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 	}
 
 	@Override
-	public void setIntentField(JFieldRef intentField) {
+	public void setIntentField(JFieldVar intentField) {
 		this.intentField = intentField;
 	}
 
 	@Override
-	public JFieldRef getIntentField() {
+	public JFieldVar getIntentField() {
 		return intentField;
 	}
 

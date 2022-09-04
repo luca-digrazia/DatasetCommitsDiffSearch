@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,9 +23,9 @@ import com.sun.codemodel.JVar;
 public class RoboGuiceHolder {
 
 	private EActivityHolder holder;
-	protected JFieldVar scopedObjects;
+	protected JFieldVar scope;
 	protected JFieldVar eventManager;
-	public JFieldVar contentViewListenerField;
+	protected JMethod getInjector;
 	protected JBlock onRestartBeforeSuperBlock;
 	protected JBlock onRestartAfterSuperBlock;
 	protected JBlock onStartBeforeSuperBlock;
@@ -50,18 +50,18 @@ public class RoboGuiceHolder {
 		return eventManager;
 	}
 
-	public JFieldVar getScopedObjectsField() {
-		if (scopedObjects == null) {
-			holder.setScopedObjectsField();
+	public JFieldVar getScopeField() {
+		if (scope == null) {
+			holder.setScopeField();
 		}
-		return scopedObjects;
+		return scope;
 	}
 
-	public JFieldVar getContentViewListenerField() {
-		if (contentViewListenerField == null) {
-			holder.setContentViewListenerField();
+	public JMethod getGetInjector() {
+		if (getInjector == null) {
+			holder.setGetInjector();
 		}
-		return contentViewListenerField;
+		return getInjector;
 	}
 
 	public JBlock getOnRestartBeforeSuperBlock() {

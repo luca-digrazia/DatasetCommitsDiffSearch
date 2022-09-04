@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -107,8 +107,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	private void setFindViewById() {
 		JMethod findViewById = generatedClass.method(PUBLIC, classes().VIEW, "findViewById");
-		findViewById.annotate(Override.class);
-
 		JVar idParam = findViewById.param(codeModel().INT, "id");
 
 		JBlock body = findViewById.body();
@@ -277,7 +275,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		onDetachBeforeSuperBlock = onDetachBody.block();
 		onDetachBody.invoke(_super(), onDetach);
 	}
-
+	
 	private void setOnStop() {
 		JMethod onStop = generatedClass.method(PUBLIC, codeModel().VOID, "onStop");
 		onStop.annotate(Override.class);

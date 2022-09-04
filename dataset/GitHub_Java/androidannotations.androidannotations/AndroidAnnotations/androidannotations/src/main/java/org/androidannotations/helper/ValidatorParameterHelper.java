@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,23 +15,21 @@
  */
 package org.androidannotations.helper;
 
-import org.androidannotations.process.IsValid;
+import static java.util.Arrays.asList;
+
+import java.util.Arrays;
+import java.util.List;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Collection;
 
-import static java.util.Arrays.asList;
+import org.androidannotations.process.IsValid;
 
 public class ValidatorParameterHelper {
 
 	private static final List<String> ANDROID_SHERLOCK_MENU_ITEM_QUALIFIED_NAMES = asList(CanonicalNameConstants.MENU_ITEM, CanonicalNameConstants.SHERLOCK_MENU_ITEM);
-	private static final List<String> EDITOR_ACTION_ALLOWED_PARAMETER_TYPES = asList(CanonicalNameConstants.TEXT_VIEW,
-		CanonicalNameConstants.INTEGER, "int", CanonicalNameConstants.KEY_EVENT);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -137,53 +135,28 @@ public class ValidatorParameterHelper {
 		}
 	}
 
-	public void hasZeroOrOneCompoundButtonParameter(ExecutableElement executableElement, IsValid valid) {
-		hasZeroOrOneParameterOfType(CanonicalNameConstants.COMPOUND_BUTTON, executableElement, valid);
-	}
+	public void hasZeroOrOneCompoundButtonOrTwoCompoundButtonBooleanParameters(ExecutableElement executableElement, IsValid valid) {
+		List<? extends VariableElement> parameters = executableElement.getParameters();
 
-	public void hasZeroOrOneBooleanParameter(ExecutableElement executableElement, IsValid valid) {
-		hasZeroOrOneParameterOfPrimitiveType(CanonicalNameConstants.BOOLEAN, TypeKind.BOOLEAN, executableElement, valid);
-	}
-
-	private void hasZeroOrOneParameterOfType(String typeCanonicalName, ExecutableElement executableElement, IsValid valid) {
-		boolean parameterOfTypeFound = false;
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(typeCanonicalName)) {
-				if (parameterOfTypeFound) {
-					annotationHelper.printAnnotationError(executableElement, "You can declare only one parameter of type "+typeCanonicalName);
-					valid.invalidate();
-				}
-				parameterOfTypeFound = true;
-			}
-		}
-	}
-
-	private void hasZeroOrOneParameterOfPrimitiveType(String typeCanonicalName, TypeKind typeKind, ExecutableElement executableElement, IsValid valid) {
-		boolean parameterOfTypeFound = false;
-		for (VariableElement parameter : executableElement.getParameters()) {
-			if (parameter.asType().getKind() == typeKind || parameter.asType().toString().equals(typeCanonicalName)) {
-				if (parameterOfTypeFound) {
-					annotationHelper.printAnnotationError(executableElement, "You can declare only one parameter of type "+typeKind.name()+" or "+typeCanonicalName);
-					valid.invalidate();
-				}
-				parameterOfTypeFound = true;
-			}
-		}
-	}
-
-	public void hasNoOtherParameterThanCompoundButtonOrBoolean(ExecutableElement executableElement, IsValid valid) {
-		String[] types = new String[]{CanonicalNameConstants.COMPOUND_BUTTON, CanonicalNameConstants.BOOLEAN, "boolean"};
-		hasNotOtherParameterThanTypes(types, executableElement, valid);
-	}
-
-	private void hasNotOtherParameterThanTypes(String[] typesCanonicalNames, ExecutableElement executableElement, IsValid valid) {
-		Collection<String> types = Arrays.asList(typesCanonicalNames);
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterType = parameter.asType().toString();
-			if (!types.contains(parameterType)) {
-				annotationHelper.printAnnotationError(executableElement, "You can declare only parameters of type "+Arrays.toString(typesCanonicalNames));
+		if (parameters.size() == 0) {
+			return;
+		} else if (parameters.size() > 2) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with 0 or 1(CompoundButton) or 2(CompoundButton, boolean) parameter, instead of " + parameters.size());
+		} else {
+			VariableElement firstParameter = parameters.get(0);
+			String firstParameterType = firstParameter.asType().toString();
+			if (!firstParameterType.equals(CanonicalNameConstants.COMPOUND_BUTTON)) {
 				valid.invalidate();
+				annotationHelper.printAnnotationError(executableElement, "the first parameter must be a " + CanonicalNameConstants.COMPOUND_BUTTON + ", not a " + firstParameterType);
+			}
+			if (parameters.size() == 2) {
+				VariableElement secondParameter = parameters.get(1);
+				String secondParameterType = secondParameter.asType().toString();
+				if (!secondParameterType.equals(CanonicalNameConstants.BOOLEAN) && !secondParameterType.equals("boolean")) {
+					valid.invalidate();
+					annotationHelper.printAnnotationError(executableElement, "the second parameter must be a " + CanonicalNameConstants.BOOLEAN + " or boolean, not a " + secondParameterType);
+				}
 			}
 		}
 	}
@@ -240,45 +213,4 @@ public class ValidatorParameterHelper {
 		}
 	}
 
-	public void hasAtMostOneTextViewParameter(ExecutableElement executableElement, IsValid valid) {
-		hasAtMostOneSpecificParameter(executableElement, CanonicalNameConstants.TEXT_VIEW, valid);
-	}
-
-	public void hasAtMostOneIntegerParameter(ExecutableElement executableElement, IsValid valid) {
-		List<String> integers = Arrays.asList(CanonicalNameConstants.INTEGER, "integer");
-		hasAtMostOneSpecificParameter(executableElement, integers, valid);
-	}
-
-	public void hasAtMostOneKeyEventParameter(ExecutableElement executableElement, IsValid valid) {
-		hasAtMostOneSpecificParameter(executableElement, CanonicalNameConstants.KEY_EVENT, valid);
-
-	}
-
-	public void hasAtMostOneSpecificParameter(ExecutableElement executableElement, String qualifiedName, IsValid valid) {
-		hasAtMostOneSpecificParameter(executableElement, Arrays.asList(qualifiedName), valid);
-	}
-
-	public void hasAtMostOneSpecificParameter(ExecutableElement executableElement, List<String> qualifiedNames, IsValid valid) {
-		boolean hasOneMatchingParameter = false;
-		for (VariableElement parameter : executableElement.getParameters()) {
-			if (qualifiedNames.contains(parameter.asType().toString())) {
-				if (hasOneMatchingParameter) {
-					valid.invalidate();
-					annotationHelper.printAnnotationError(executableElement, "%s can't have more than one parameter of type "+parameter.asType().toString());
-				} else {
-					hasOneMatchingParameter = true;
-				}
-			}
-		}
-	}
-
-	public void hasNoOtherParameterFromATextViewAnIntegerAndAKeyEvent(ExecutableElement executableElement, IsValid valid) {
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterType = parameter.asType().toString();
-			if (!EDITOR_ACTION_ALLOWED_PARAMETER_TYPES.contains(parameterType)) {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(executableElement, "%s can only have TextView, int and/or KeyEvent parameters");
-			}
-		}
-	}
 }
