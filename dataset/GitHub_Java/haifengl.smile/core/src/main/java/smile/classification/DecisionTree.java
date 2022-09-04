@@ -297,7 +297,6 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
      * Learns a classification tree.
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @return the model.
      */
     public static DecisionTree fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
@@ -313,8 +312,7 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
      * </ul>
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param prop the hyper-parameters.
-     * @return the model.
+     * @param prop Training algorithm hyper-parameters and properties.
      */
     public static DecisionTree fit(Formula formula, DataFrame data, Properties prop) {
         SplitRule rule = SplitRule.valueOf(prop.getProperty("smile.cart.split.rule", "GINI"));
@@ -332,7 +330,6 @@ public class DecisionTree extends CART implements SoftClassifier<Tuple>, DataFra
      * @param maxDepth the maximum depth of the tree.
      * @param maxNodes the maximum number of leaf nodes in the tree.
      * @param nodeSize the minimum size of leaf nodes.
-     * @return the model.
      */
     public static DecisionTree fit(Formula formula, DataFrame data, SplitRule rule, int maxDepth, int maxNodes, int nodeSize) {
         formula = formula.expand(data.schema());

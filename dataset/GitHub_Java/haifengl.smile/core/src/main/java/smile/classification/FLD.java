@@ -130,7 +130,6 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @return the model
      */
     public static FLD fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
@@ -141,8 +140,6 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      *
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
-     * @param prop the hyper-parameters.
-     * @return the model
      */
     public static FLD fit(Formula formula, DataFrame data, Properties prop) {
         int L = Integer.parseInt(prop.getProperty("smile.fld.dimension", "-1"));
@@ -156,7 +153,6 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * Learn Fisher's linear discriminant.
      * @param x training samples.
      * @param y training labels.
-     * @return the model
      */
     public static FLD fit (double[][] x, int[] y) {
         return fit(x, y, -1, 1E-4);
@@ -167,9 +163,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * @param x training samples.
      * @param y training labels.
      * @param L the dimensionality of mapped space.
-     * @param tol a tolerance to decide if a covariance matrix is singular;
-     *            it will reject variables whose variance is less than tol<sup>2</sup>.
-     * @return the model
+     * @param tol a tolerance to decide if a covariance matrix is singular; it
+     * will reject variables whose variance is less than tol<sup>2</sup>.
      */
     public static FLD fit(double[][] x, int[] y, int L, double tol) {
         if (x.length != y.length) {
@@ -372,9 +367,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
     }
 
     /**
-     * Returns the projection matrix W. The dimension reduced data can
-     * be obtained by {@code y = W' * x}.
-     * @return the projection matrix.
+     * Returns the projection matrix W. The dimension reduced data can be obtained
+     * by y = W' * x.
      */
     public Matrix getProjection() {
         return scaling;

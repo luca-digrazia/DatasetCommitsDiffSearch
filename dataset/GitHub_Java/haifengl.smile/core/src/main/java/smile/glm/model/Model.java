@@ -46,73 +46,20 @@ import java.io.Serializable;
  * @author Haifeng Li
  */
 public interface Model extends Serializable {
-    /**
-     * The link function. For the most common distributions, the mean &mu;
-     * is one of the parameters in the standard form of the distribution's
-     * density function, and then the link function maps the density
-     * function into its canonical form.
-     *
-     * @param mu the mean of the distribution function.
-     * @return the linear predictor.
-     */
+    /** The link function. */
     double link(double mu);
-
-    /**
-     * The inverse of link function (aka the mean function).
-     *
-     * @param eta the linear predictor. The linear predictor is the quantity
-     *            which incorporates the independent variables into the model.
-     * @return the mean.
-     */
+    /** The inverse of link function. */
     double invlink(double eta);
-
-    /**
-     * The derivative of link function.
-     *
-     * @param mu the mean of the distribution function.
-     * @return the derivative of link function.
-     */
+    /** The derivative of link function. */
     double dlink(double mu);
-
-    /**
-     * The variance function.
-     *
-     * @param mu the mean of the distribution function.
-     * @return the variance function value.
-     */
+    /** The variance function. */
     double variance(double mu);
-
-    /**
-     * The deviance function.
-     *
-     * @param y the responsible variable.
-     * @param mu the mean of the distribution function.
-     * @param residuals the residuals.
-     * @return the deviance function value.
-     */
+    /** The deviance function. */
     double deviance(double[] y, double[] mu, double[] residuals);
-
-    /**
-     * The NULL deviance function.
-     *
-     * @param y the responsible variable.
-     * @param mu the mean of the distribution function.
-     * @return the null deviance function value.
-     */
+    /** The NULL deviance function. */
     double nullDeviance(double[] y, double mu);
-
-    /**
-     * The log-likelihood function.
-     * @param y the responsible variable.
-     * @param mu the mean of the distribution function.
-     * @return the log-likelihood.
-     */
+    /** The log-likelihood function. */
     double loglikelihood(double[] y, double[] mu);
-
-    /**
-     * The function to estimates the starting value of mean given y.
-     * @param y the responsible variable.
-     * @return the starting value of mean.
-     */
+    /** The function to estimates the tarting values of means given y. */
     double mustart(double y);
 }

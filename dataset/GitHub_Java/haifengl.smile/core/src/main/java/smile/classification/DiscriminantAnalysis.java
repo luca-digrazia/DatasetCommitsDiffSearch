@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,22 +13,27 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.classification;
 
 import smile.math.MathEx;
-import smile.math.matrix.DenseMatrix;
+import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
+import smile.util.IntSet;
 
-/** Common functions for various discriminant analysis. */
+/**
+ * Common functions for various discriminant analysis.
+ *
+ * @author Haifeng Li
+ */
 class DiscriminantAnalysis {
     /** The number of classes. */
     int k;
     /** The class labels in [0, k). */
     int[] y;
     /** The original class labels. */
-    ClassLabel labels;
+    IntSet labels;
     /** The number of instances in each class. */
     int[] ni;
     /** The priori probabilities. */
@@ -44,7 +49,7 @@ class DiscriminantAnalysis {
      * @param mean the mean vector of all samples.
      * @param mu the mean vectors of each class.
      */
-    public DiscriminantAnalysis(ClassLabel.Result codec, double[] priori, double[] mean, double[][] mu) {
+    public DiscriminantAnalysis(ClassLabels codec, double[] priori, double[] mean, double[][] mu) {
         this.k = codec.k;
         this.ni = codec.ni;
         this.y = codec.y;
@@ -75,7 +80,7 @@ class DiscriminantAnalysis {
         int n = x.length;
 
         // class label set.
-        ClassLabel.Result codec = ClassLabel.fit(y);
+        ClassLabels codec = ClassLabels.fit(y);
         int k = codec.k;
         y = codec.y;
         int[] ni = codec.ni;
@@ -130,15 +135,14 @@ class DiscriminantAnalysis {
     }
 
     /** Computes the covariance matrix of all samples. */
-    public static DenseMatrix St(double[][] x, double[] mean, int k, double tol) {
+    public static Matrix St(double[][] x, double[] mean, int k, double tol) {
         int n = x.length;
         int p = x[0].length;
 
-        DenseMatrix St = Matrix.zeros(p, p);
-        St.setSymmetric(true);
+        Matrix St = new Matrix(p, p);
+        St.uplo(UPLO.LOWER);
 
-        for (int i = 0; i < n; i++) {
-            double[] xi = x[i];
+        for (double[] xi : x) {
             for (int j = 0; j < p; j++) {
                 for (int l = 0; l <= j; l++) {
                     St.add(j, l, (xi[j] - mean[j]) * (xi[l] - mean[l]));
@@ -162,24 +166,24 @@ class DiscriminantAnalysis {
     }
 
     /** Computes the covariance matrix of each class. */
-    public static DenseMatrix[] cov(double[][] x, int[] y, double[][] mu, int[] ni, double tol) {
+    public static Matrix[] cov(double[][] x, int[] y, double[][] mu, int[] ni) {
         int n = x.length;
         int p = x[0].length;
         int k = mu.length;
 
-        DenseMatrix[] cov = new DenseMatrix[k];
+        Matrix[] cov = new Matrix[k];
 
         for (int i = 0; i < k; i++) {
             if (ni[i] <= p) {
                 throw new IllegalArgumentException(String.format("The sample size of class %d is too small.", i));
             }
 
-            cov[i] = Matrix.zeros(p, p);
-            cov[i].setSymmetric(true);
+            cov[i] = new Matrix(p, p);
+            cov[i].uplo(UPLO.LOWER);
         }
 
         for (int i = 0; i < n; i++) {
-            DenseMatrix v = cov[y[i]];
+            Matrix v = cov[y[i]];
             double[] mui = mu[y[i]];
             double[] xi = x[i];
             for (int j = 0; j < p; j++) {
@@ -189,9 +193,8 @@ class DiscriminantAnalysis {
             }
         }
 
-        tol = tol * tol;
         for (int i = 0; i < k; i++) {
-            DenseMatrix v = cov[i];
+            Matrix v = cov[i];
             int m = ni[i] - 1;
             for (int j = 0; j < p; j++) {
                 for (int l = 0; l <= j; l++) {

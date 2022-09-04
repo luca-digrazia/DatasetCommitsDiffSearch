@@ -1,23 +1,25 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.mds;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import smile.math.Math;
+import java.util.Properties;
+import smile.math.BFGS;
+import smile.math.MathEx;
 import smile.math.DifferentiableMultivariateFunction;
 import smile.sort.QuickSort;
 
@@ -33,86 +35,86 @@ import smile.sort.QuickSort;
  * @author Haifeng Li
  */
 public class IsotonicMDS {
-    private static final Logger logger = LoggerFactory.getLogger(SammonMapping.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(IsotonicMDS.class);
 
     /**
      * The final stress achieved.
      */
-    private double stress;
+    public final double stress;
     /**
-     * Coordinate matrix.
+     * The coordinates.
      */
-    private double[][] coordinates;
+    public final double[][] coordinates;
 
     /**
-     * Returns the final stress achieved.
+     * Constructor.
+     *
+     * @param stress the objective function value.
+     * @param coordinates the principal coordinates
      */
-    public double getStress() {
-        return stress;
+    public IsotonicMDS(double stress, double[][] coordinates) {
+        this.stress = stress;
+        this.coordinates = coordinates;
     }
 
     /**
-     * Returns the coordinates of projected data.
-     */
-    public double[][] getCoordinates() {
-        return coordinates;
-    }
-
-    /**
-     * Constructor. Learn a 2-dimensional Kruskal's non-metric MDS with default
-     * tolerance = 1E-4 and maxIter = 200.
+     * Fits Kruskal's non-metric MDS with default k = 2, tolerance = 1E-4 and maxIter = 200.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      */
-    public IsotonicMDS(double[][] proximity) {
-        this(proximity, 2);
+    public static IsotonicMDS of(double[][] proximity) {
+        return of(proximity, new Properties());
     }
 
     /**
-     * Constructor. Learn Kruskal's non-metric MDS with default
-     * tolerance = 1E-4 and maxIter = 200.
+     * Fits Kruskal's non-metric MDS.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param k the dimension of the projection.
      */
-    public IsotonicMDS(double[][] proximity, int k) {
-        this(proximity, k, 1E-4, 200);
+    public static IsotonicMDS of(double[][] proximity, int k) {
+        return of(proximity, k, 1E-4, 200);
     }
 
     /**
-     * Constructor. Learn Kruskal's non-metric MDS with default
-     * tolerance = 1E-4 and maxIter = 100.
+     * Fits Kruskal's non-metric MDS.
+     *
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
-     * diagonal should be zero and all other elements should be positive and symmetric.
-     * @param coordinates the initial projected coordinates, of which the column
-     * size is the projection dimension.
+     * diagonal should be zero and all other elements should be positive and
+     * symmetric. For pairwise distances matrix, it should be just the plain
+     * distance, not squared.
      */
-    public IsotonicMDS(double[][] proximity, double[][] coordinates) {
-        this(proximity, coordinates, 1E-4, 200);
+    public static IsotonicMDS of(double[][] proximity, Properties prop) {
+        int k = Integer.parseInt(prop.getProperty("smile.isotonic.mds.k", "2"));
+        double tol = Double.parseDouble(prop.getProperty("smile.isotonic.mds.tolerance", "1E-4"));
+        int maxIter = Integer.parseInt(prop.getProperty("smile.isotonic.mds.max.iterations", "200"));
+        return of(proximity, k, tol, maxIter);
     }
 
     /**
-     * Constructor. Learn Kruskal's non-metric MDS.
+     * Fits Kruskal's non-metric MDS.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param k the dimension of the projection.
-     * @param tol tolerance for stopping iterations.
+     * @param tol the tolerance for stopping iterations.
      * @param maxIter maximum number of iterations.
      */
-    public IsotonicMDS(double[][] proximity, int k, double tol, int maxIter) {
-        this(proximity, new MDS(proximity, k).getCoordinates(), tol, maxIter);
+    public static IsotonicMDS of(double[][] proximity, int k, double tol, int maxIter) {
+        Properties prop = new Properties();
+        prop.setProperty("smile.mds.k", String.valueOf(k));
+        return of(proximity, MDS.of(proximity, prop).coordinates, tol, maxIter);
     }
 
     /**
-     * Constructor. Learn Kruskal's non-metric MDS.
+     * Fits Kruskal's non-metric MDS.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param init the initial projected coordinates, of which the column
      * size is the projection dimension.
-     * @param tol tolerance for stopping iterations.
+     * @param tol the tolerance for stopping iterations.
      * @param maxIter maximum number of iterations.
      */
-    public IsotonicMDS(double[][] proximity, double[][] init, double tol, int maxIter) {
+    public static IsotonicMDS of(double[][] proximity, double[][] init, double tol, int maxIter) {
         if (proximity.length != proximity[0].length) {
             throw new IllegalArgumentException("The proximity matrix is not square.");
         }
@@ -121,9 +123,8 @@ public class IsotonicMDS {
             throw new IllegalArgumentException("The proximity matrix and the initial coordinates are of different size.");
         }
 
-        coordinates = Math.clone(init);
         int nr = proximity.length;
-        int nc = coordinates[0].length;
+        int nc = init[0].length;
 
         int n = nr * (nr - 1) / 2;
         double[] d = new double[n];
@@ -136,7 +137,7 @@ public class IsotonicMDS {
         double[] x = new double[nr * nc];
         for (int i = 0, l = 0; i < nr; i++) {
             for (int j = 0; j < nc; j++, l++) {
-                x[l] = coordinates[i][j];
+                x[l] = init[i][j];
             }
         }
 
@@ -145,12 +146,12 @@ public class IsotonicMDS {
 
         ObjectiveFunction func = new ObjectiveFunction(nr, nc, d, ord, ord2);
 
-        stress = 0.0;
+        double stress;
         try {
-            stress = Math.min(func, 5, x, tol, maxIter);
+            stress = BFGS.minimize(func, 5, x, tol, maxIter);
         } catch (Exception ex) {
             // If L-BFGS doesn't work, let's try BFGS.
-            stress = Math.min(func, x, tol, maxIter);
+            stress = BFGS.minimize(func, x, tol, maxIter);
         }
 
         if (stress == 0.0) {
@@ -165,39 +166,38 @@ public class IsotonicMDS {
             logger.info(String.format("Isotonic MDS: error = %.1f%%. The fit may be poor.", 100 * stress));
         }
 
-        coordinates = new double[nr][nc];
+        double[][] coordinates = new double[nr][nc];
         for (int i = 0, l = 0; i < nr; i++) {
             for (int j = 0; j < nc; j++, l++) {
                 coordinates[i][j] = x[l];
             }
         }
+
+        return new IsotonicMDS(stress, coordinates);
     }
 
     /**
      * Isotonic regression.
      */
     static class ObjectiveFunction implements DifferentiableMultivariateFunction {
-
-        int[] ord;		/* ranks of dissimilarities */
-
-        int[] ord2;		/* inverse ordering (which one is rank i?) */
-
-        int n;			/* number of  dissimilarities */
-
-        int nr;			/* number of data points */
-
-        int nc;			/* # cols of  fitted configuration */
-
-        int dimx;		/* Size of configuration array */
-
-        double[] d;		/* dissimilarities */
-
-        double[] y;		/* fitted distances (in rank of d order) */
-
-        double[] yc;		/* cumulative fitted distances (in rank of d order) */
-
-        double[] yf;		/* isotonic regression fitted values (ditto) */
-
+        /** ranks of dissimilarities */
+        int[] ord;
+        /** inverse ordering (which one is rank i?) */
+        int[] ord2;
+        /** number of dissimilarities */
+        int n;
+        /** number of data points */
+        int nr;
+        /** # cols of fitted configuration */
+        int nc;
+        /** dissimilarities */
+        double[] d;
+        /** fitted distances (in rank of d order) */
+        double[] y;
+        /** cumulative fitted distances (in rank of d order) */
+        double[] yc;
+        /** isotonic regression fitted values (ditto) */
+        double[] yf;
 
         ObjectiveFunction(int nr, int nc, double[] d, int[] ord, int[] ord2) {
             this.d = d;
@@ -217,7 +217,7 @@ public class IsotonicMDS {
                 for (int j = i + 1; j < nr; j++) {
                     double tmp = 0.0;
                     for (int c = 0; c < nc; c++) {
-                        tmp += Math.sqr(x[i * nc + c] - x[j * nc + c]);
+                        tmp += MathEx.sqr(x[i * nc + c] - x[j * nc + c]);
                     }
                     d[index++] = Math.sqrt(tmp);
                 }
@@ -262,12 +262,11 @@ public class IsotonicMDS {
                 sstar += tmp * tmp;
                 tstar += y[i] * y[i];
             }
-            double ssq = Math.sqrt(sstar / tstar);
-            return ssq;
+            return Math.sqrt(sstar / tstar);
         }
 
         @Override
-        public double f(double[] x, double[] g) {
+        public double g(double[] x, double[] g) {
             dist(x);
 
             yc[0] = 0.0;
@@ -302,7 +301,7 @@ public class IsotonicMDS {
             }
             double ssq = Math.sqrt(sstar / tstar);
 
-            int k = 0;
+            int k;
             for (int u = 0; u < nr; u++) {
                 for (int i = 0; i < nc; i++) {
                     tmp = 0.0;
@@ -312,7 +311,7 @@ public class IsotonicMDS {
                         }
                         if (s > u) {
                             k = nr * u - u * (u + 1) / 2 + s - u;
-                        } else if (s < u) {
+                        } else {
                             k = nr * s - s * (s + 1) / 2 + u - s;
                         }
                         k = ord2[k - 1];

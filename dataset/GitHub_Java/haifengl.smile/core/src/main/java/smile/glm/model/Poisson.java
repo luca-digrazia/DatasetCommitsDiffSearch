@@ -27,10 +27,7 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public interface Poisson {
-    /**
-     * log link function.
-     * @return log link function.
-     */
+    /** log link function. */
     static Model log() {
         return new Model() {
 

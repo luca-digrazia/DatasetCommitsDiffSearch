@@ -1,24 +1,26 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.mds;
 
 import java.util.Arrays;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import smile.math.Math;
+import java.util.Properties;
+
+import smile.math.MathEx;
 
 /**
  * The Sammon's mapping is an iterative technique for making interpoint
@@ -55,86 +57,93 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class SammonMapping {
-    private static final Logger logger = LoggerFactory.getLogger(SammonMapping.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SammonMapping.class);
 
     /**
      * The final stress achieved.
      */
-    private double stress;
+    public final double stress;
     /**
-     * Coordinate matrix.
+     * The coordinates.
      */
-    private double[][] coordinates;
+    public final double[][] coordinates;
 
     /**
-     * Returns the final stress achieved.
+     * Constructor.
+     *
+     * @param stress the objective function value.
+     * @param coordinates the principal coordinates
      */
-    public double getStress() {
-        return stress;
+    public SammonMapping(double stress, double[][] coordinates) {
+        this.stress = stress;
+        this.coordinates = coordinates;
     }
 
     /**
-     * Returns the coordinates of projected data.
-     */
-    public double[][] getCoordinates() {
-        return coordinates;
-    }
-
-    /**
-     * Constructor. Learn a 2-dimensional Sammon's mapping with default lambda = 0.2,
-     * tolerance = 1E-4 and maxIter = 100.
+     * Fits Sammon's mapping with default k = 2, lambda = 0.2, tolerance = 1E-4 and maxIter = 100.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      */
-    public SammonMapping(double[][] proximity) {
-        this(proximity, 2);
+    public static SammonMapping of(double[][] proximity) {
+        return of(proximity, new Properties());
     }
 
     /**
-     * Constructor. Learn Sammon's mapping with default lambda = 0.2, tolerance = 1E-4 and maxIter = 100.
+     * Fits Sammon's mapping.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param k the dimension of the projection.
      */
-    public SammonMapping(double[][] proximity, int k) {
-        this(proximity, k, 0.2, 1E-4, 100);
+    public static SammonMapping of(double[][] proximity, int k) {
+        return of(proximity, k, 0.2, 1E-4, 1E-3, 100);
     }
 
     /**
-     * Constructor. Learn Sammon's mapping with default lambda = 0.2, tolerance = 1E-4 and maxIter = 100.
+     * Fits Sammon's mapping.
+     *
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
-     * diagonal should be zero and all other elements should be positive and symmetric.
-     * @param coordinates the initial projected coordinates, of which the column
-     * size is the projection dimension.
+     * diagonal should be zero and all other elements should be positive and
+     * symmetric. For pairwise distances matrix, it should be just the plain
+     * distance, not squared.
      */
-    public SammonMapping(double[][] proximity, double[][] coordinates) {
-        this(proximity, coordinates, 0.2, 1E-4, 100);
+    public static SammonMapping of(double[][] proximity, Properties prop) {
+        int k = Integer.parseInt(prop.getProperty("smile.sammon.k", "2"));
+        double lambda = Double.parseDouble(prop.getProperty("smile.sammon.lambda", "0.2"));
+        double tol = Double.parseDouble(prop.getProperty("smile.sammon.tolerance", "1E-4"));
+        double stepTol = Double.parseDouble(prop.getProperty("smile.sammon.step.tolerance", "1E-3"));
+        int maxIter = Integer.parseInt(prop.getProperty("smile.sammon.max.iterations", "100"));
+        return of(proximity, k, lambda, tol, stepTol, maxIter);
     }
 
     /**
-     * Constructor. Learn Sammon's mapping.
+     * Fits Sammon's mapping.
      * @param proximity the nonnegative proximity matrix of dissimilarities. The
      * diagonal should be zero and all other elements should be positive and symmetric.
      * @param k the dimension of the projection.
      * @param lambda initial value of the step size constant in diagonal Newton method.
-     * @param tol tolerance for stopping iterations.
+     * @param tol the tolerance on objective function for stopping iterations.
+     * @param stepTol the tolerance on step size.
      * @param maxIter maximum number of iterations.
      */
-    public SammonMapping(double[][] proximity, int k, double lambda, double tol, int maxIter) {
-        this(proximity, new MDS(proximity, k).getCoordinates(), lambda, tol, maxIter);
+    public static SammonMapping of(double[][] proximity, int k, double lambda, double tol, double stepTol, int maxIter) {
+        Properties prop = new Properties();
+        prop.setProperty("smile.mds.k", String.valueOf(k));
+        return of(proximity, MDS.of(proximity, prop).coordinates, lambda, tol, stepTol, maxIter);
     }
 
     /**
-     * Constructor. Learn Sammon's mapping.
-     * @param proximity the nonnegative proximity matrix of dissimilarities. The
-     * diagonal should be zero and all other elements should be positive and symmetric.
+     * Fits Sammon's mapping.
+     * @param proximity the non-negative proximity matrix of dissimilarities.
+     *                  The diagonal should be zero and all other elements
+     *                  should be positive and symmetric.
      * @param init the initial projected coordinates, of which the column
-     * size is the projection dimension.
+     *             size is the projection dimension. It will be modified.
      * @param lambda initial value of the step size constant in diagonal Newton method.
-     * @param tol tolerance for stopping iterations.
+     * @param tol the tolerance for stopping iterations.
+     * @param stepTol the tolerance on step size.
      * @param maxIter maximum number of iterations.
      */
-    public SammonMapping(double[][] proximity, double[][] init, double lambda, double tol, int maxIter) {
+    public static SammonMapping of(double[][] proximity, double[][] init, double lambda, double tol, double stepTol, int maxIter) {
         if (proximity.length != proximity[0].length) {
             throw new IllegalArgumentException("The proximity matrix is not square.");
         }
@@ -151,14 +160,8 @@ public class SammonMapping {
             throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);            
         }
         
-        int m = proximity.length;
-        int n = proximity[0].length;
-
-        if (m != n) {
-            throw new IllegalArgumentException("The proximity matrix is not square.");
-        }
-
-        coordinates = Math.clone(init);
+        int n = proximity.length;
+        double[][] coordinates = init;
         
         double c = 0.0;
         for (int i = 0; i < n; i++) {
@@ -170,13 +173,13 @@ public class SammonMapping {
         int k = coordinates[0].length;
         double[][] xu = new double[n][k];
 
-        stress = 0.0;
+        double stress = 0.0;
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
                 double dij = proximity[i][j];
                 if (dij == 0.0) dij = 1.0E-10;
-                double rij = Math.distance(coordinates[i], coordinates[j]);
-                stress += Math.sqr(dij - rij) / dij;
+                double rij = MathEx.distance(coordinates[i], coordinates[j]);
+                stress += MathEx.sqr(dij - rij) / dij;
             }
         }
         stress /= c;
@@ -233,8 +236,8 @@ public class SammonMapping {
                 for (int j = i + 1; j < n; j++) {
                     double dij = proximity[i][j];
                     if (dij == 0.0) dij = 1.0E-10;
-                    double rij = Math.distance(xu[i], xu[j]);
-                    stress += Math.sqr(dij - rij) / dij;
+                    double rij = MathEx.distance(xu[i], xu[j]);
+                    stress += MathEx.sqr(dij - rij) / dij;
                 }
             }
             stress /= c;
@@ -242,8 +245,8 @@ public class SammonMapping {
             if (stress > eprev) {
                 stress = eprev;
                 lambda = lambda * 0.2;
-                if (lambda < 1E-3) {
-                    logger.info(String.format("Sammon's Mapping stress after %3d iterations: %.5f", iter-1, stress));
+                if (lambda < stepTol) {
+                    logger.info(String.format("Sammon's Mapping stops early as stress = %.5f after %d iterations", stress, iter-1));
                     break;
                 }
                 iter--;
@@ -255,7 +258,7 @@ public class SammonMapping {
                 eprev = stress;
 
                 // Move the centroid to origin and update
-                double[] mu = Math.colMeans(xu);
+                double[] mu = MathEx.colMeans(xu);
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < k; j++) {
                         coordinates[i][j] = xu[i][j] - mu[j];
@@ -271,5 +274,7 @@ public class SammonMapping {
                 }
             }
         }
+
+        return new SammonMapping(stress, coordinates);
     }
 }
