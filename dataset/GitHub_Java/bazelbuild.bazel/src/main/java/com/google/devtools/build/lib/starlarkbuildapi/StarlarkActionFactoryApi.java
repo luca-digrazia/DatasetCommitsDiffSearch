@@ -609,7 +609,8 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
             doc =
                 "(Experimental) runs the action on the given exec group's execution platform. If"
                     + " none, uses the target's default execution platform."),
-      })
+      },
+      useStarlarkThread = true)
   void runShell(
       Sequence<?> outputs,
       Object inputs,
@@ -622,7 +623,8 @@ public interface StarlarkActionFactoryApi extends StarlarkValue {
       Object envUnchecked,
       Object executionRequirementsUnchecked,
       Object inputManifestsUnchecked,
-      Object execGroupUnchecked)
+      Object execGroupUnchecked,
+      StarlarkThread thread)
       throws EvalException;
 
   @StarlarkMethod(
