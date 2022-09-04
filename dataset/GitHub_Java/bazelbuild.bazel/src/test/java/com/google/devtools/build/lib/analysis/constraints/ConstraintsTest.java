@@ -966,27 +966,6 @@ public class ConstraintsTest extends AbstractConstraintsTest {
   }
 
   @Test
-  public void selectableAliasDepsTreatedLikeOtherDeps() throws Exception {
-    new EnvironmentGroupMaker("buildenv/foo").setEnvironments("a", "b").setDefaults().make();
-    writeDepsForSelectTests();
-    scratch.file(
-        "hello/BUILD",
-        "alias(",
-        "    name = 'deps_a_alias',",
-        "    actual = '//deps:dep_a')",
-        "cc_library(",
-        "    name = 'lib',",
-        "    srcs = [],",
-        "    deps = select({",
-        "        '//config:a': [':deps_a_alias'],",
-        "        '//config:b': ['//deps:dep_b'],",
-        "    }),",
-        "    compatible_with = ['//buildenv/foo:a', '//buildenv/foo:b'])");
-    useConfiguration("--define", "mode=a");
-    assertThat(getConfiguredTarget("//hello:lib")).isNotNull();
-  }
-
-  @Test
   public void staticCheckingOnSelectsTemporarilyDisabled() throws Exception {
     // TODO(bazel-team): update this test once static checking on selects is implemented. When
     // that happens, the union of all deps in the select must support the environments in the
@@ -1081,14 +1060,9 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     reporter.removeHandler(failFastHandler);
     // Invalid because "--define mode=a" refines :lib to "compatible_with = []" (empty).
     assertThat(getConfiguredTarget("//hello:lib")).isNull();
-    assertContainsEvent(""
-        + "//hello:lib: the current command line flags disqualify all supported environments "
-        + "because of incompatible select() paths:\n"
-        + " \n"
-        + "  environment: //buildenv/foo:b\n"
-        + "    removed by: //hello:lib (/workspace/hello/BUILD:1:1)\n"
-        + "    which has a select() that chooses dep: //deps:dep_a\n"
-        + "    which lacks: //buildenv/foo:b");
+    assertContainsEvent("//hello:lib: the current command-line flags disqualify all supported "
+        + "environments because of incompatible select() paths:\n"
+        + " environment: //buildenv/foo:b removed by: //hello:lib (/workspace/hello/BUILD:1:1)");
   }
 
   @Test
@@ -1136,14 +1110,9 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     reporter.removeHandler(failFastHandler);
     // Invalid because "--define mode=a" refines :lib to "compatible_with = ['//buildenv/foo:a']".
     assertThat(getConfiguredTarget("//hello:depender")).isNull();
-    assertContainsEvent(""
-        + "//hello:depender: the current command line flags disqualify all supported environments "
-        + "because of incompatible select() paths:\n"
-        + " \n"
-        + "  environment: //buildenv/foo:b\n"
-        + "    removed by: //hello:lib (/workspace/hello/BUILD:1:1)\n"
-        + "    which has a select() that chooses dep: //deps:dep_a\n"
-        + "    which lacks: //buildenv/foo:b");
+    assertContainsEvent("//hello:depender: the current command-line flags disqualify all supported "
+        + "environments because of incompatible select() paths:\n"
+        + " environment: //buildenv/foo:b removed by: //hello:lib (/workspace/hello/BUILD:1:1)");
   }
 
   @Test
@@ -1176,14 +1145,9 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     reporter.removeHandler(failFastHandler);
     // Invalid because "--define mode=a" refines :lib to "compatible_with = ['//buildenv/foo:a']".
     assertThat(getConfiguredTarget("//hello:depender")).isNull();
-    assertContainsEvent(""
-        + "//hello:depender: the current command line flags disqualify all supported environments "
-        + "because of incompatible select() paths:\n"
-        + " \n"
-        + "  environment: //buildenv/foo:b\n"
-        + "    removed by: //hello:lib2 (/workspace/hello/BUILD:1:1)\n"
-        + "    which has a select() that chooses dep: //deps:dep_a\n"
-        + "    which lacks: //buildenv/foo:b");
+    assertContainsEvent("//hello:depender: the current command-line flags disqualify all supported "
+        + "environments because of incompatible select() paths:\n"
+        + " environment: //buildenv/foo:b removed by: //hello:lib2 (/workspace/hello/BUILD:1:1)");
   }
 
   @Test
@@ -1203,14 +1167,9 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     // Invalid because :lib has an implicit default of ['//buildenv/foo:b'] and "--define mode=a"
     // refines it to "compatible_with = []" (empty).
     assertThat(getConfiguredTarget("//hello:lib")).isNull();
-    assertContainsEvent(""
-        + "//hello:lib: the current command line flags disqualify all supported environments "
-        + "because of incompatible select() paths:\n"
-        + " \n"
-        + "  environment: //buildenv/foo:b\n"
-        + "    removed by: //hello:lib (/workspace/hello/BUILD:1:1)\n"
-        + "    which has a select() that chooses dep: //deps:dep_a\n"
-        + "    which lacks: //buildenv/foo:b");
+    assertContainsEvent("//hello:lib: the current command-line flags disqualify all supported "
+        + "environments because of incompatible select() paths:\n"
+        + " environment: //buildenv/foo:b removed by: //hello:lib (/workspace/hello/BUILD:1:1)");
   }
 
   @Test
@@ -1240,14 +1199,9 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     // Invalid because while the //buildenv/foo refinement successfully refines :lib to
     // ['//buildenv/foo:a'], the bar refinement refines it to [].
     assertThat(getConfiguredTarget("//hello:lib")).isNull();
-    assertContainsEvent(""
-        + "//hello:lib: the current command line flags disqualify all supported environments "
-        + "because of incompatible select() paths:\n"
-        + " \n"
-        + "  environment: //buildenv/bar:c\n"
-        + "    removed by: //hello:lib (/workspace/hello/BUILD:1:1)\n"
-        + "    which has a select() that chooses dep: //deps:dep_a\n"
-        + "    which lacks: //buildenv/bar:c");
+    assertContainsEvent("//hello:lib: the current command-line flags disqualify all supported "
+        + "environments because of incompatible select() paths:\n"
+        + " environment: //buildenv/bar:c removed by: //hello:lib (/workspace/hello/BUILD:1:1)");
   }
 
   /**
@@ -1278,23 +1232,12 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     useConfiguration("--define", "mode=a");
     reporter.removeHandler(failFastHandler);
     assertThat(getConfiguredTarget("//hello:lib")).isNull();
-    assertContainsEvent(""
-        + "//hello:lib: the current command line flags disqualify all supported environments "
-        + "because of incompatible select() paths:\n"
-        + " \n"
-        + "environment group: //buildenv/foo:foo:\n"
-        + " \n"
-        + "  environment: //buildenv/foo:a\n"
-        + "    removed by: //hello:lib (/workspace/hello/BUILD:9:1)\n"
-        + "    which has a select() that chooses dep: //hello:all_groups_gone\n"
-        + "    which lacks: //buildenv/foo:a\n"
-        + " \n"
-        + "environment group: //buildenv/bar:bar:\n"
-        + " \n"
-        + "  environment: //buildenv/bar:c\n"
-        + "    removed by: //hello:lib (/workspace/hello/BUILD:9:1)\n"
-        + "    which has a select() that chooses dep: //hello:all_groups_gone\n"
-        + "    which lacks: //buildenv/bar:c");
+    assertContainsEvent("//hello:lib: the current command-line flags disqualify all supported "
+        + "environments because of incompatible select() paths:\n"
+        + "\nenvironment group: //buildenv/foo:foo:\n"
+        + " environment: //buildenv/foo:a removed by: //hello:lib (/workspace/hello/BUILD:9:1)\n"
+        + "\nenvironment group: //buildenv/bar:bar:\n"
+        + " environment: //buildenv/bar:c removed by: //hello:lib (/workspace/hello/BUILD:9:1)");
   }
 
   private void writeRulesForRefiningSubsetTests(String topLevelRestrictedTo) throws Exception {
@@ -1338,7 +1281,7 @@ public class ConstraintsTest extends AbstractConstraintsTest {
     writeRulesForRefiningSubsetTests("b");
     reporter.removeHandler(failFastHandler);
     assertThat(getConfiguredTarget("//hello:lib")).isNull();
-    assertContainsEvent("//hello:lib: the current command line flags disqualify all supported "
+    assertContainsEvent("//hello:lib: the current command-line flags disqualify all supported "
         + "environments because of incompatible select() paths");
   }
 }
