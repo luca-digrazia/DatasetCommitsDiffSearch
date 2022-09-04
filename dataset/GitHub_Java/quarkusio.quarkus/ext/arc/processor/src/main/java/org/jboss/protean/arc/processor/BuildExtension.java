@@ -1,7 +1,5 @@
 package org.jboss.protean.arc.processor;
 
-import java.util.List;
-
 import org.jboss.jandex.IndexView;
 
 /**
@@ -27,9 +25,10 @@ public interface BuildExtension {
     }
 
     /**
-     * Initialize self.
+     * Initialize self. Processors are initialized before a bean deployment is constructed.
      *
-     * @param buildContext
+     * @param index
+     * @param contextData
      * @return {@code true} if the extension should be put into service, @{code false} otherwise
      */
     default boolean initialize(BuildContext buildContext) {
@@ -48,11 +47,9 @@ public interface BuildExtension {
 
         // Built-in keys
         static String BUILT_IN_PREFIX = BuildExtension.class.getPackage().getName() + ".";
-        static Key<IndexView> INDEX = new SimpleKey<>(BUILT_IN_PREFIX + "index");
-        static Key<List<InjectionPointInfo>> INJECTION_POINTS = new SimpleKey<>(BUILT_IN_PREFIX + "injectionPoints");
-        static Key<List<BeanInfo>> BEANS = new SimpleKey<>(BUILT_IN_PREFIX + "beans");
-        static Key<List<ObserverInfo>> OBSERVERS = new SimpleKey<>(BUILT_IN_PREFIX + "observers");
-        static Key<AnnotationStore> ANNOTATION_STORE = new SimpleKey<>(BUILT_IN_PREFIX + "annotationStore");
+        static Key<IndexView> INDEX = new SimpleKey<IndexView>(BUILT_IN_PREFIX + "index");
+        static Key<IndexView> INJECTION_POINTS = new SimpleKey<IndexView>(BUILT_IN_PREFIX + "injectionPoints");
+        static Key<IndexView> ANNOTATION_STORE = new SimpleKey<IndexView>(BUILT_IN_PREFIX + "annotationStore");
 
         String asString();
     }

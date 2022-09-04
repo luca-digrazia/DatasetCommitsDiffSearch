@@ -16,16 +16,14 @@ public interface BeanRegistrar extends BuildExtension {
     void register(RegistrationContext registrationContext);
 
 
-    interface RegistrationContext extends BuildContext {
+    interface RegistrationContext {
 
         /**
          *
-         * @param beanClass
+         * @param implementationClass
          * @return a new synthetic bean builder
          */
-        <T> BeanConfigurator<T> configure(Class<?> beanClass);
-
-        // TODO add synthetic observer?
+        <T> BeanConfigurator<T> configure(Class<T> implementationClass);
 
     }
 
