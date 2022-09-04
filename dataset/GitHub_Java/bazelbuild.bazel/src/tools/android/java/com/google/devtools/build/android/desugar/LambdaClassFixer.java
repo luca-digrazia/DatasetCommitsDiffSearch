@@ -47,7 +47,6 @@ class LambdaClassFixer extends ClassVisitor {
   private final LambdaInfo lambdaInfo;
   private final ClassReaderFactory factory;
   private final ImmutableSet<String> interfaceLambdaMethods;
-  private final boolean allowDefaultMethods;
   private final HashSet<String> implementedMethods = new HashSet<>();
   private final LinkedHashSet<String> methodsToMoveIn = new LinkedHashSet<>();
 
@@ -63,12 +62,11 @@ class LambdaClassFixer extends ClassVisitor {
 
 
   public LambdaClassFixer(ClassVisitor dest, LambdaInfo lambdaInfo, ClassReaderFactory factory,
-      ImmutableSet<String> interfaceLambdaMethods, boolean allowDefaultMethods) {
+      ImmutableSet<String> interfaceLambdaMethods) {
     super(Opcodes.ASM5, dest);
     this.lambdaInfo = lambdaInfo;
     this.factory = factory;
     this.interfaceLambdaMethods = interfaceLambdaMethods;
-    this.allowDefaultMethods = allowDefaultMethods;
   }
 
   public String getInternalName() {
@@ -134,9 +132,6 @@ class LambdaClassFixer extends ClassVisitor {
       methodVisitor =
           new UseBridgeMethod(methodVisitor, lambdaInfo, access, name, desc, signature, exceptions);
     }
-    if (!FACTORY_METHOD_NAME.equals(name) && !"<init>".equals(name)) {
-      methodVisitor = new LambdaClassInvokeSpecialRewriter(methodVisitor);
-    }
     return methodVisitor;
   }
 
@@ -188,10 +183,7 @@ class LambdaClassFixer extends ClassVisitor {
     }
 
     copyRewrittenLambdaMethods();
-
-    if (!allowDefaultMethods) {
-      copyBridgeMethods(interfaces);
-    }
+    copyBridgeMethods(interfaces);
     super.visitEnd();
   }
 
@@ -251,23 +243,6 @@ class LambdaClassFixer extends ClassVisitor {
         return null;
       }
       return super.visitAnnotation(desc, visible);
-    }
-  }
-
-  /** Rewriter for invokespecial in generated lambda classes. */
-  private static class LambdaClassInvokeSpecialRewriter extends MethodVisitor {
-
-    public LambdaClassInvokeSpecialRewriter(MethodVisitor dest) {
-      super(Opcodes.ASM5, dest);
-    }
-
-    @Override
-    public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
-      if (opcode == Opcodes.INVOKESPECIAL && name.startsWith("lambda$")) {
-        opcode = itf ? Opcodes.INVOKEINTERFACE : Opcodes.INVOKEVIRTUAL;
-      }
-
-      super.visitMethodInsn(opcode, owner, name, desc, itf);
     }
   }
 

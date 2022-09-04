@@ -51,22 +51,16 @@ class LambdaDesugaring extends ClassVisitor {
   private final LambdaClassMaker lambdas;
   private final ImmutableSet.Builder<String> aggregateInterfaceLambdaMethods;
   private final Map<Handle, MethodReferenceBridgeInfo> bridgeMethods = new HashMap<>();
-  private final boolean allowDefaultMethods;
 
   private String internalName;
   private boolean isInterface;
 
-  public LambdaDesugaring(
-      ClassVisitor dest,
-      ClassLoader targetLoader,
-      LambdaClassMaker lambdas,
-      ImmutableSet.Builder<String> aggregateInterfaceLambdaMethods,
-      boolean allowDefaultMethods) {
+  public LambdaDesugaring(ClassVisitor dest, ClassLoader targetLoader, LambdaClassMaker lambdas,
+      ImmutableSet.Builder<String> aggregateInterfaceLambdaMethods) {
     super(Opcodes.ASM5, dest);
     this.targetLoader = targetLoader;
     this.lambdas = lambdas;
     this.aggregateInterfaceLambdaMethods = aggregateInterfaceLambdaMethods;
-    this.allowDefaultMethods = allowDefaultMethods;
   }
 
   @Override
@@ -140,7 +134,7 @@ class LambdaDesugaring extends ClassVisitor {
       return null;
     }
     if (name.startsWith("lambda$") && BitFlags.isSet(access, Opcodes.ACC_SYNTHETIC)) {
-      if (!allowDefaultMethods && isInterface && BitFlags.isSet(access, Opcodes.ACC_STATIC)) {
+      if (isInterface && BitFlags.isSet(access, Opcodes.ACC_STATIC)) {
         // There must be a lambda in the interface (which in the absence of hand-written default or
         // static interface methods must mean it's in the <clinit> method or inside another lambda).
         // We'll move this method out of this class, so just record and drop it here.
@@ -151,13 +145,8 @@ class LambdaDesugaring extends ClassVisitor {
       if (BitFlags.isSet(access, Opcodes.ACC_PRIVATE)) {
         // Make lambda body method accessible from lambda class
         access &= ~Opcodes.ACC_PRIVATE;
-        if (allowDefaultMethods && isInterface) {
-          // java 8 requires interface methods to have exactly one of ACC_PUBLIC and ACC_PRIVATE
-          access |= Opcodes.ACC_PUBLIC;
-        } else {
-          // Method was private so it can be final, which should help VMs perform dispatch.
-          access |= Opcodes.ACC_FINAL;
-        }
+        // Method was private so it can be final, which should help VMs perform dispatch.
+        access |= Opcodes.ACC_FINAL;
       }
       // Guarantee unique lambda body method name to avoid accidental overriding. This wouldn't be
       // be necessary for static methods but in visitOuterClass we don't know whether a potential
@@ -424,10 +413,9 @@ class LambdaDesugaring extends ClassVisitor {
         case Opcodes.H_INVOKESTATIC:
           return lookup.findStatic(owner, asmHandle.getName(), signature);
         case Opcodes.H_INVOKEVIRTUAL:
+        case Opcodes.H_INVOKESPECIAL: // we end up calling these using invokevirtual
         case Opcodes.H_INVOKEINTERFACE:
           return lookup.findVirtual(owner, asmHandle.getName(), signature);
-        case Opcodes.H_INVOKESPECIAL: // we end up calling these using invokevirtual
-          return lookup.findSpecial(owner, asmHandle.getName(), signature, owner);
         case Opcodes.H_NEWINVOKESPECIAL:
           return lookup.findConstructor(owner, signature);
         default:
