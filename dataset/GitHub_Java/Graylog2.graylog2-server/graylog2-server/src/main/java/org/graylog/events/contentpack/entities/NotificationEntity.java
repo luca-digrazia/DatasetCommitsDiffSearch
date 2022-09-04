@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import org.graylog.events.notifications.NotificationDto;
 import org.graylog2.contentpacks.NativeEntityConverter;
-import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
 
 import java.util.Map;
@@ -71,11 +70,11 @@ public abstract class NotificationEntity implements NativeEntityConverter<Notifi
     }
 
     @Override
-    public NotificationDto toNativeEntity(Map<String, ValueReference> parameters, Map<EntityDescriptor, Object> nativeEntities) {
+    public NotificationDto toNativeEntity(Map<String, ValueReference> parameters) {
         return NotificationDto.builder()
-                .description(description().asString(parameters))
-                .title(title().asString(parameters))
-                .config(config().toNativeEntity(parameters, nativeEntities))
-                .build();
+            .description(description().asString(parameters))
+            .title(title().asString(parameters))
+            .config(config().toNativeEntity(parameters))
+            .build();
     }
 }

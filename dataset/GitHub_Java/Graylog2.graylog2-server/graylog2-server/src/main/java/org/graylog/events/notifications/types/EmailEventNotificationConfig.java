@@ -29,7 +29,6 @@ import org.graylog.events.event.EventDto;
 import org.graylog.events.notifications.EventNotificationConfig;
 import org.graylog.events.notifications.EventNotificationExecutionJob;
 import org.graylog.scheduler.JobTriggerData;
-import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.plugin.rest.ValidationResult;
 
@@ -42,9 +41,9 @@ import java.util.Set;
 public abstract class EmailEventNotificationConfig implements EventNotificationConfig {
     public static final String TYPE_NAME = "email-notification-v1";
 
-    private static final String DEFAULT_SENDER = "graylog@example.org";
-    static final String DEFAULT_SUBJECT = "Graylog event notification: ${event_definition_title}";
-    static final String DEFAULT_BODY_TEMPLATE = "--- [Event Definition] ---------------------------\n" +
+    public static final String DEFAULT_SENDER = "graylog@example.org";
+    public static final String DEFAULT_SUBJECT = "Graylog event notification: ${event_definition_title}";
+    public static final String DEFAULT_BODY_TEMPLATE = "--- [Event Definition] ---------------------------\n" +
             "Title:       ${event_definition_title}\n" +
             "Description: ${event_definition_description}\n" +
             "Type:        ${event_definition_type}\n" +
@@ -155,7 +154,7 @@ public abstract class EmailEventNotificationConfig implements EventNotificationC
     }
 
     @Override
-    public EventNotificationConfigEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
+    public EventNotificationConfigEntity toContentPackEntity() {
         return EmailEventNotificationConfigEntity.builder()
             .sender(ValueReference.of(sender()))
             .subject(ValueReference.of(subject()))
