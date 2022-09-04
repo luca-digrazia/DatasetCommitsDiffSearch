@@ -544,8 +544,10 @@ public class BeanGenerator extends AbstractGenerator {
                         } else {
                             // Create annotation literal first
                             ClassInfo qualifierClass = bean.getDeployment().getQualifier(qualifierAnnotation.name());
-                            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle, annotationLiterals.process(constructor,
-                                    classOutput, qualifierClass, qualifierAnnotation, Types.getPackageName(beanCreator.getClassName())));
+                            String annotationLiteralName = annotationLiterals.process(classOutput, qualifierClass, qualifierAnnotation,
+                                    Types.getPackageName(beanCreator.getClassName()));
+                            constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle,
+                                    constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
                         }
                     }
                     ResultHandle wrapHandle = constructor.newInstance(
@@ -588,8 +590,10 @@ public class BeanGenerator extends AbstractGenerator {
                 } else {
                     // Create annotation literal first
                     ClassInfo qualifierClass = bean.getDeployment().getQualifier(qualifierAnnotation.name());
-                    constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, qualifiersHandle, annotationLiterals.process(constructor, classOutput,
-                            qualifierClass, qualifierAnnotation, Types.getPackageName(beanCreator.getClassName())));
+                    String annotationLiteralName = annotationLiterals.process(classOutput, qualifierClass, qualifierAnnotation,
+                            Types.getPackageName(beanCreator.getClassName()));
+                    constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, qualifiersHandle,
+                            constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
                 }
             }
             ResultHandle unmodifiableQualifiersHandle = constructor.invokeStaticMethod(MethodDescriptors.COLLECTIONS_UNMODIFIABLE_SET, qualifiersHandle);
@@ -848,8 +852,8 @@ public class BeanGenerator extends AbstractGenerator {
                 for (AnnotationInstance binding : aroundConstructs.bindings) {
                     // Create annotation literals first
                     ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle,
-                            annotationLiterals.process(create, classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName())));
+                    String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName()));
+                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, create.newInstance(MethodDescriptor.ofConstructor(literalType)));
                 }
 
                 // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
@@ -935,8 +939,8 @@ public class BeanGenerator extends AbstractGenerator {
                 for (AnnotationInstance binding : postConstructs.bindings) {
                     // Create annotation literals first
                     ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle,
-                            annotationLiterals.process(create, classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName())));
+                    String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(beanCreator.getClassName()));
+                    create.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, create.newInstance(MethodDescriptor.ofConstructor(literalType)));
                 }
 
                 // InvocationContextImpl.postConstruct(instance,postConstructs).proceed()

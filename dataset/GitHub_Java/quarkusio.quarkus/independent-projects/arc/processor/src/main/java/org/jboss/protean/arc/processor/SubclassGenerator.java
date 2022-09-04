@@ -313,8 +313,9 @@ public class SubclassGenerator extends AbstractGenerator {
         for (AnnotationInstance binding : interceptedMethod.bindings) {
             // Create annotation literals first
             ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
+            String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(subclass.getClassName()));
             tryCatch.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle,
-                    annotationLiterals.process(tryCatch, classOutput, bindingClass, binding, Types.getPackageName(subclass.getClassName())));
+                    tryCatch.newInstance(MethodDescriptor.ofConstructor(literalType)));
         }
 
         ResultHandle invocationContext = tryCatch.invokeStaticMethod(MethodDescriptors.INVOCATION_CONTEXT_AROUND_INVOKE, tryCatch.getThis(),
@@ -342,8 +343,8 @@ public class SubclassGenerator extends AbstractGenerator {
             for (AnnotationInstance binding : bean.getLifecycleInterceptors(InterceptionType.PRE_DESTROY).bindings) {
                 // Create annotation literals first
                 ClassInfo bindingClass = bean.getDeployment().getInterceptorBinding(binding.name());
-                destroy.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle,
-                        annotationLiterals.process(destroy, classOutput, bindingClass, binding, Types.getPackageName(subclass.getClassName())));
+                String literalType = annotationLiterals.process(classOutput, bindingClass, binding, Types.getPackageName(subclass.getClassName()));
+                destroy.invokeInterfaceMethod(MethodDescriptors.SET_ADD, bindingsHandle, destroy.newInstance(MethodDescriptor.ofConstructor(literalType)));
             }
 
             // try
