@@ -449,7 +449,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
             throw new UnsupportedOperationException("The matrix is not square.");
         }
 
-        return Lanczos.eigen(this, k);
+        return EigenValueDecomposition.decompose(this, k);
     }
 
     @Override
