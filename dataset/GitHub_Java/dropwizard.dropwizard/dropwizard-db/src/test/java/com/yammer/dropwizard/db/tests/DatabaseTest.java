@@ -16,26 +16,29 @@ import org.skife.jdbi.v2.util.StringMapper;
 
 import java.sql.Types;
 
+import static com.yammer.dropwizard.db.DatabaseConfiguration.DatabaseConnectionConfiguration;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 public class DatabaseTest {
-    private final DatabaseConfiguration hsqlConfig = new DatabaseConfiguration();
+    private final DatabaseConfiguration config = new DatabaseConfiguration();
+    private final DatabaseConnectionConfiguration hsqlConfig = new DatabaseConnectionConfiguration();
     {
         LoggingFactory.bootstrap();
         hsqlConfig.setUrl("jdbc:hsqldb:mem:DbTest-"+System.currentTimeMillis());
         hsqlConfig.setUser("sa");
         hsqlConfig.setDriverClass("org.hsqldb.jdbcDriver");
+        config.addConnection("hsql", hsqlConfig);
     }
+    private final DatabaseFactory factory = new DatabaseFactory(config);
     private final Environment environment = mock(Environment.class);
-    private final DatabaseFactory factory = new DatabaseFactory(environment);
     private Database database;
 
     @Before
     public void setUp() throws Exception {
-        this.database = factory.build(hsqlConfig, "hsql");
+        this.database = factory.build("hsql", environment);
         final Handle handle = database.open();
         try {
             handle.createCall("DROP TABLE people IF EXISTS").invoke();
@@ -84,28 +87,17 @@ public class DatabaseTest {
 
     @Test
     public void managesTheDatabaseWithTheEnvironment() throws Exception {
-        final Database db = factory.build(hsqlConfig, "hsql");
+        final Database db = factory.build("hsql", environment);
 
         verify(environment).manage(db);
-    }
-
-    @Test
-    public void sqlObjectsCanAcceptOptionalParams() throws Exception {
-        final PersonDAO dao = database.open(PersonDAO.class);
-        try {
-            assertThat(dao.findByName(Optional.of("Coda Hale")),
-                       is("Coda Hale"));
-        } finally {
-            database.close(dao);
-        }
     }
 
     @Test
     public void sqlObjectsCanReturnImmutableLists() throws Exception {
         final PersonDAO dao = database.open(PersonDAO.class);
         try {
-            assertThat(dao.findAllNames(),
-                       is(ImmutableList.of("Coda Hale", "Kris Gale", "Old Guy")));
+            assertThat(dao.findByName(Optional.of("Coda Hale")),
+                       is("Coda Hale"));
         } finally {
             database.close(dao);
         }
