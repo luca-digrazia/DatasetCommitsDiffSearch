@@ -521,6 +521,11 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkValu
   }
 
   @Override
+  public Label argument() {
+    return this;
+  }
+
+  @Override
   public int hashCode() {
     return hashCode;
   }
