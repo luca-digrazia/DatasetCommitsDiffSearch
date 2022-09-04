@@ -207,11 +207,9 @@ public class ExtractorsResource extends RestResource {
         Input mongoInput = Input.find(core, input.getPersistId());
         mongoInput.removeExtractor(extractorId);
 
-        Extractor extractor = input.getExtractors().get(extractorId);
         input.getExtractors().remove(extractorId);
 
-        String msg = "Deleted extractor <" + extractorId + "> of type [" + extractor.getType() + "] " +
-                "from input <" + inputId + ">. Reason: REST request.";
+        String msg = "Deleted extractor <" + extractorId + ">. Reason: REST request.";
         LOG.info(msg);
         core.getActivityWriter().write(new Activity(msg, InputsResource.class));
 

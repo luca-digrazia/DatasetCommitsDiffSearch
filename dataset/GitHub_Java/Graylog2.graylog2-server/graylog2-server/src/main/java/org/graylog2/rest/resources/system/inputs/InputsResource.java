@@ -22,15 +22,18 @@ package org.graylog2.rest.resources.system.inputs;
 import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
-import org.graylog2.inputs.InputRegistry;
+import org.graylog2.inputs.Inputs;
 import org.graylog2.inputs.NoSuchInputTypeException;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.InputLaunchRequest;
@@ -46,6 +49,7 @@ import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -72,7 +76,7 @@ public class InputsResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        return json(input.asMap());
+        return json(toMap(input));
 
     }
 
@@ -83,7 +87,7 @@ public class InputsResource extends RestResource {
         List<Map<String, Object>> inputs = Lists.newArrayList();
 
         for (MessageInput input : core.inputs().getRunningInputs().values()) {
-            inputs.add(input.asMap());
+            inputs.add(toMap(input));
         }
 
         Map<String, Object> result = Maps.newHashMap();
@@ -118,7 +122,7 @@ public class InputsResource extends RestResource {
         DateTime createdAt = new DateTime(DateTimeZone.UTC);
         MessageInput input = null;
         try {
-            input = InputRegistry.factory(lr.type);
+            input = Inputs.factory(lr.type);
             input.configure(inputConfig, core);
             input.setTitle(lr.title);
             input.setCreatorUserId(lr.creatorUserId);
@@ -230,7 +234,7 @@ public class InputsResource extends RestResource {
 
         MessageInput input;
         try {
-            input = InputRegistry.factory(inputType);
+            input = Inputs.factory(inputType);
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
             throw new WebApplicationException(e, Response.Status.NOT_FOUND);
@@ -245,5 +249,22 @@ public class InputsResource extends RestResource {
 
         return json(result);
     }
+
+    private Map<String, Object> toMap(MessageInput input) {
+        Map<String, Object> inputMap = Maps.newHashMap();
+
+        inputMap.put("type", input.getClass().getCanonicalName());
+        inputMap.put("input_id", input.getId());
+        inputMap.put("persist_id", input.getPersistId());
+        inputMap.put("name", input.getName());
+        inputMap.put("title", input.getTitle());
+        inputMap.put("creator_user_id", input.getCreatorUserId());
+        inputMap.put("started_at", Tools.getISO8601String(input.getCreatedAt()));
+        inputMap.put("attributes", input.getAttributesWithMaskedPasswords());
+        inputMap.put("static_fields", input.getStaticFields());
+
+        return inputMap;
+    }
+
 
 }

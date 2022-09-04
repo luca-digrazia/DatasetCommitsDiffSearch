@@ -21,17 +21,28 @@ package org.graylog2.inputs;
 
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.mongodb.BasicDBObject;
+import org.bson.types.ObjectId;
 import org.graylog2.Core;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MisfireException;
+import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Response;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -42,19 +53,19 @@ public class Inputs {
 
     private final Core core;
     private Map<String, MessageInput> runningInputs;
+    private Map<String, String> availableInputs;
 
     private ExecutorService executor = Executors.newCachedThreadPool(
-            new ThreadFactoryBuilder().setNameFormat("systemjob-executor-%d").build()
+            new ThreadFactoryBuilder().setNameFormat("inputs-%d").build()
     );
 
     public Inputs(Core core) {
         this.core = core;
         runningInputs = Maps.newHashMap();
+        availableInputs = Maps.newHashMap();
     }
 
-    public void start(final MessageInput input) {
-        String id = UUID.randomUUID().toString();
-
+    public String launch(final MessageInput input, String id) {
         input.setId(id);
         runningInputs.put(id, input);
 
@@ -62,16 +73,107 @@ public class Inputs {
             @Override
             public void run() {
                 LOG.info("Starting [{}] input with ID <{}>", input.getClass().getCanonicalName(), input.getId());
-                input.start();
+                try {
+                    input.launch();
+                } catch (MisfireException e) {
+                    String msg = "The [" + input.getClass().getCanonicalName() + "] input with ID <" + input.getId() + "> " +
+                            "was accepted but misfired. Reason: " + e.getMessage();
+                    core.getActivityWriter().write(new Activity(msg, Inputs.class));
+                    LOG.error(msg, e);
+
+                    // Clean up.
+                    cleanInput(input);
+                } catch(Exception e) {
+                    LOG.error("Error in input <{}>", input.getId(), e);
+                }
             }
         });
+
+        return id;
+    }
+
+    public String launch(final MessageInput input) {
+        return launch(input, UUID.randomUUID().toString());
     }
 
     public Map<String, MessageInput> getRunningInputs() {
         return runningInputs;
     }
 
-    public int running() {
+    public boolean hasTypeRunning(Class klazz) {
+        for (MessageInput input : runningInputs.values()) {
+            if (input.getClass().equals(klazz)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public Map<String, String> getAvailableInputs() {
+        return availableInputs;
+    }
+
+    public int runningCount() {
         return runningInputs.size();
     }
+
+    public static MessageInput factory(String type) throws NoSuchInputTypeException {
+        try {
+            Class c = Class.forName(type);
+            return (MessageInput) c.newInstance();
+        } catch (ClassNotFoundException e) {
+             throw new NoSuchInputTypeException("There is no input of type <" + type + "> registered.");
+        } catch (Exception e) {
+            throw new RuntimeException("Could not create input of type <" + type + ">", e);
+        }
+    }
+
+    public void register(Class clazz, String name) {
+        availableInputs.put(clazz.getCanonicalName(), name);
+    }
+
+    public void cleanInput(MessageInput input) {
+        // Remove from running list.
+        getRunningInputs().remove(input.getId());
+
+        // Remove in Mongo.
+        Input.destroy(new BasicDBObject("_id", new ObjectId(input.getPersistId())), core, Input.COLLECTION);
+    }
+
+    public void launchPersisted() {
+        for (Input io : Input.allOfThisNode(core)) {
+            MessageInput input = null;
+            try {
+                input = Inputs.factory(io.getType());
+
+                // Add all standard fields.
+                input.configure(new Configuration(io.getConfiguration()), core);
+                input.setTitle(io.getTitle());
+                input.setCreatorUserId(io.getCreatorUserId());
+                input.setPersistId(io.getId().toStringMongod());
+                input.setCreatedAt(io.getCreatedAt());
+
+                // Add extractors.
+                for (Extractor extractor : io.getExtractors()) {
+                    input.addExtractor(extractor.getId(), extractor);
+                }
+
+                // Add static fields.
+                for (Map.Entry<String, String> field : io.getStaticFields().entrySet()) {
+                    input.addStaticField(field.getKey(), field.getValue());
+                }
+            } catch (NoSuchInputTypeException e) {
+                LOG.warn("Cannot launch persisted input. No such type [{}].", io.getType());
+                continue;
+            } catch (ConfigurationException e) {
+                LOG.error("Missing or invalid input plugin configuration.", e);
+                continue;
+            }
+
+            launch(input, io.getInputId());
+        }
+    }
+
+
 }
