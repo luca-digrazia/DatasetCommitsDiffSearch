@@ -25,7 +25,7 @@ import butterknife.ButterKnife;
 
 /**
  * Created by guoshuyu on 2017/6/18.
- * sampleVideo支持全屏与非全屏切换的清晰度，旋转，镜像等功能.
+ * ampleVideo支持全屏与非全屏切换的清晰度，旋转，镜像等功能.
  */
 
 public class DetailMoreTypeActivity extends AppCompatActivity{
@@ -199,6 +199,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity{
     private void resolveNormalVideoUI() {
         //增加title
         detailPlayer.getTitleTextView().setVisibility(View.GONE);
+        detailPlayer.getTitleTextView().setText("测试视频");
         detailPlayer.getBackButton().setVisibility(View.GONE);
     }
 }

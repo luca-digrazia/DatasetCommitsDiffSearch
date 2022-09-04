@@ -50,8 +50,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
     //数据源
     private int mSourcePosition = 0;
 
-    private String mTypeText = "标准";
-
     /**
      * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
      */
@@ -238,7 +236,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
         sampleVideo.mType = mType;
         sampleVideo.mTransformSize = mTransformSize;
         sampleVideo.mUrlList = mUrlList;
-        sampleVideo.mTypeText = mTypeText;
         //sampleVideo.resolveTransform();
         sampleVideo.resolveTypeUI();
         //sampleVideo.resolveRotateUI();
@@ -264,7 +261,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
             mSourcePosition = sampleVideo.mSourcePosition;
             mType = sampleVideo.mType;
             mTransformSize = sampleVideo.mTransformSize;
-            mTypeText = sampleVideo.mTypeText;
             setUp(mUrlList, mCache, mCachePath, mTitle);
             resolveTypeUI();
         }
@@ -318,7 +314,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
         changeTextureViewShowType();
         if (mTextureView != null)
             mTextureView.requestLayout();
-        mSwitchSize.setText(mTypeText);
     }
 
     /**
@@ -353,7 +348,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
                                 hideAllWidget();
                             }
                         }, 500);
-                        mTypeText = name;
                         mSwitchSize.setText(name);
                         mSourcePosition = position;
                     }

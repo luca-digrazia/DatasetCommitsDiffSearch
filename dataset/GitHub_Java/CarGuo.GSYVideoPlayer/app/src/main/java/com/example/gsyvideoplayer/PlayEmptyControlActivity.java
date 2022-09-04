@@ -56,6 +56,7 @@ public class PlayEmptyControlActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        videoPlayer.onVideoPause();
     }
 
     @Override
@@ -67,7 +68,6 @@ public class PlayEmptyControlActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        videoPlayer.release();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }

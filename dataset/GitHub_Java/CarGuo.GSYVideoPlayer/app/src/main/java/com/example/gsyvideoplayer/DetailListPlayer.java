@@ -113,14 +113,6 @@ public class DetailListPlayer extends AppCompatActivity {
                     orientationUtils.backToProtVideo();
                 }
             }
-
-            @Override
-            public void onEnterFullscreen(String url, Object... objects) {
-                super.onEnterFullscreen(url, objects);
-                //隐藏调全屏对象的返回按键
-                GSYVideoPlayer gsyVideoPlayer = (GSYVideoPlayer)objects[1];
-                gsyVideoPlayer.getBackButton().setVisibility(View.GONE);
-            }
         });
 
         detailPlayer.setLockClickListener(new LockClickListener() {
@@ -193,8 +185,9 @@ public class DetailListPlayer extends AppCompatActivity {
 
     private void resolveNormalVideoUI() {
         //增加title
-        detailPlayer.getTitleTextView().setVisibility(View.VISIBLE);
-        detailPlayer.getBackButton().setVisibility(View.VISIBLE);
+        detailPlayer.getTitleTextView().setVisibility(View.GONE);
+        detailPlayer.getTitleTextView().setText("测试视频");
+        detailPlayer.getBackButton().setVisibility(View.GONE);
     }
 
 }
