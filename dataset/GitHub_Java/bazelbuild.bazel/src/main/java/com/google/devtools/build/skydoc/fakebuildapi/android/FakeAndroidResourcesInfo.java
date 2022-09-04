@@ -78,11 +78,6 @@ public class FakeAndroidResourcesInfo
   }
 
   @Override
-  public NestedSet<FileApi> getTransitiveAapt2ValidationArtifacts() {
-    return null;
-  }
-
-  @Override
   public NestedSet<FileApi> getTransitiveSymbolsBin() {
     return null;
   }
@@ -135,8 +130,7 @@ public class FakeAndroidResourcesInfo
         SkylarkNestedSet transitiveSymbolsBin,
         SkylarkNestedSet transitiveCompiledSymbols,
         SkylarkNestedSet transitiveStaticLib,
-        SkylarkNestedSet transitiveRTxt,
-        Object transitiveAapt2ValidationArtifacts)
+        SkylarkNestedSet transitiveRTxt)
         throws EvalException {
       return new FakeAndroidResourcesInfo();
     }

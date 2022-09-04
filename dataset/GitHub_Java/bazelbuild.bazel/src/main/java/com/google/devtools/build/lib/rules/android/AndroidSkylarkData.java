@@ -84,7 +84,7 @@ public abstract class AndroidSkylarkData
       Environment env)
       throws InterruptedException, EvalException {
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
       String pkg = fromNoneable(customPackage, String.class);
       if (pkg == null) {
         pkg =
@@ -113,7 +113,7 @@ public abstract class AndroidSkylarkData
       throws InterruptedException, EvalException {
     String pkg = fromNoneable(customPackage, String.class);
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
       return AndroidManifest.from(
               ctx,
               errorReporter,
@@ -137,7 +137,7 @@ public abstract class AndroidSkylarkData
       Environment env)
       throws EvalException, InterruptedException {
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
       return AndroidAssets.from(
               errorReporter,
               listFromNoneable(assets, ConfiguredTarget.class),
@@ -164,7 +164,7 @@ public abstract class AndroidSkylarkData
       Environment env)
       throws EvalException, InterruptedException {
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
       AndroidAaptVersion aaptVersion =
           ctx.getSdk().getAapt2() != null ? AndroidAaptVersion.AAPT2 : AndroidAaptVersion.AAPT;
       return AndroidResources.from(errorReporter, getFileProviders(resources), "resources")
@@ -320,7 +320,7 @@ public abstract class AndroidSkylarkData
       Environment env)
       throws InterruptedException, EvalException {
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
 
       AndroidManifest rawManifest =
           AndroidManifest.from(
@@ -382,7 +382,7 @@ public abstract class AndroidSkylarkData
 
     AndroidAaptVersion aaptVersion;
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
       aaptVersion =
           AndroidAaptVersion.chooseTargetAaptVersion(ctx, errorReporter, aaptVersionString);
     } catch (RuleErrorException e) {
@@ -455,7 +455,7 @@ public abstract class AndroidSkylarkData
       Environment env)
       throws InterruptedException, EvalException {
     try (SkylarkErrorReporter errorReporter =
-        SkylarkErrorReporter.from(ctx.getRuleErrorConsumer(), location)) {
+        SkylarkErrorReporter.from(ctx.getActionConstructionContext(), location, env)) {
 
       BinaryDataSettings settings =
           fromNoneableOrDefault(

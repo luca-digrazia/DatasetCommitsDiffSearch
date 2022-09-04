@@ -35,9 +35,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
   @Nullable private final Artifact aapt2SourceJar;
   @Nullable private final Artifact staticLibrary;
 
-  // Opaque file used to trigger resource validation.
-  @Nullable private final Artifact aapt2ValidationArtifact;
-
   /**
    * Validates and packages merged resources.
    *
@@ -78,12 +75,7 @@ public class ValidatedAndroidResources extends MergedAndroidResources
       builder
           .setCompiledSymbols(merged.getCompiledSymbols())
           .setAapt2RTxtOut(
-              // TODO(b/123230194): use R.txt without transitive closure
-              dataContext.createOutputArtifact(
-                  AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_VALIDATION_ARTIFACT))
-          .setAapt2ValidationArtifactOut(
-              dataContext.createOutputArtifact(
-                  AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_VALIDATION_ARTIFACT))
+              dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_R_TXT))
           .setAapt2SourceJarOut(
               dataContext.createOutputArtifact(
                   AndroidRuleClasses.ANDROID_RESOURCES_AAPT2_SOURCE_JAR))
@@ -101,18 +93,10 @@ public class ValidatedAndroidResources extends MergedAndroidResources
       Artifact sourceJar,
       Artifact apk,
       @Nullable Artifact aapt2RTxt,
-      @Nullable Artifact aapt2ValidationArtifact,
       @Nullable Artifact aapt2SourceJar,
       @Nullable Artifact staticLibrary) {
     return new ValidatedAndroidResources(
-        merged,
-        rTxt,
-        sourceJar,
-        apk,
-        aapt2RTxt,
-        aapt2ValidationArtifact,
-        aapt2SourceJar,
-        staticLibrary);
+        merged, rTxt, sourceJar, apk, aapt2RTxt, aapt2SourceJar, staticLibrary);
   }
 
   private ValidatedAndroidResources(
@@ -121,7 +105,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
       Artifact sourceJar,
       Artifact apk,
       @Nullable Artifact aapt2RTxt,
-      @Nullable Artifact aapt2ValidationArtifact,
       @Nullable Artifact aapt2SourceJar,
       @Nullable Artifact staticLibrary) {
     super(merged);
@@ -129,7 +112,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
     this.sourceJar = sourceJar;
     this.apk = apk;
     this.aapt2RTxt = aapt2RTxt;
-    this.aapt2ValidationArtifact = aapt2ValidationArtifact;
     this.aapt2SourceJar = aapt2SourceJar;
     this.staticLibrary = staticLibrary;
   }
@@ -165,11 +147,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
     return aapt2RTxt;
   }
 
-  @Nullable
-  Artifact getAapt2ValidationArtifact() {
-    return aapt2ValidationArtifact;
-  }
-
   @Override
   @Nullable
   public Artifact getAapt2SourceJar() {
@@ -201,14 +178,7 @@ public class ValidatedAndroidResources extends MergedAndroidResources
         .map(
             merged ->
                 ValidatedAndroidResources.of(
-                    merged,
-                    rTxt,
-                    sourceJar,
-                    apk,
-                    aapt2RTxt,
-                    aapt2ValidationArtifact,
-                    aapt2SourceJar,
-                    staticLibrary));
+                    merged, rTxt, sourceJar, apk, aapt2RTxt, aapt2SourceJar, staticLibrary));
   }
 
   @Override
@@ -252,7 +222,6 @@ public class ValidatedAndroidResources extends MergedAndroidResources
         getJavaSourceJar(),
         getApk(),
         getAapt2RTxt(),
-        getAapt2ValidationArtifact(),
         getAapt2SourceJar(),
         getStaticLibrary());
   }
