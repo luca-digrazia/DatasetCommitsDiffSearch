@@ -930,6 +930,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.pruneCppInputDiscovery;
   }
 
+  public boolean getNoDotdScanningWithModules() {
+    return cppOptions.noDotdScanningWithModules;
+  }
+
   public boolean getParseHeadersVerifiesModules() {
     return cppOptions.parseHeadersVerifiesModules;
   }

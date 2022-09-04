@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.LicensesProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
@@ -45,8 +44,7 @@ import javax.annotation.Nullable;
 /** Information about a C++ compiler used by the <code>cc_*</code> rules. */
 @Immutable
 @AutoCodec
-public final class CcToolchainProvider extends ToolchainInfo
-    implements CcToolchainProviderApi, HasCcToolchainLabel {
+public final class CcToolchainProvider extends ToolchainInfo implements CcToolchainProviderApi {
   public static final String SKYLARK_NAME = "CcToolchainInfo";
 
   /** An empty toolchain to be returned in the error case (instead of null). */
@@ -87,8 +85,7 @@ public final class CcToolchainProvider extends ToolchainInfo
           /* fdoProvider= */ null,
           /* useLLVMCoverageMapFormat= */ false,
           /* codeCoverageEnabled= */ false,
-          /* isHostConfiguration= */ false,
-          /* licensesProvider= */ null);
+          /* isHostConfiguration= */ false);
 
   @Nullable private final CppConfiguration cppConfiguration;
   private final CppToolchainInfo toolchainInfo;
@@ -111,7 +108,7 @@ public final class CcToolchainProvider extends ToolchainInfo
   private final NestedSet<Artifact> dynamicRuntimeLinkInputs;
   @Nullable private final Artifact dynamicRuntimeLinkMiddleman;
   private final PathFragment dynamicRuntimeSolibDir;
-  private final CcInfo ccInfo;
+  private final CcCompilationInfo ccCompilationInfo;
   private final boolean supportsParamFiles;
   private final boolean supportsHeaderParsing;
   private final CcToolchainVariables buildVariables;
@@ -132,8 +129,6 @@ public final class CcToolchainProvider extends ToolchainInfo
    * don't take inspiration from it.
    */
   private final FdoProvider fdoProvider;
-
-  private final LicensesProvider licensesProvider;
 
   public CcToolchainProvider(
       ImmutableMap<String, Object> values,
@@ -171,8 +166,7 @@ public final class CcToolchainProvider extends ToolchainInfo
       FdoProvider fdoProvider,
       boolean useLLVMCoverageMapFormat,
       boolean codeCoverageEnabled,
-      boolean isHostConfiguration,
-      LicensesProvider licensesProvider) {
+      boolean isHostConfiguration) {
     super(values, Location.BUILTIN);
     this.cppConfiguration = cppConfiguration;
     this.toolchainInfo = toolchainInfo;
@@ -195,11 +189,8 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.dynamicRuntimeLinkInputs = Preconditions.checkNotNull(dynamicRuntimeLinkInputs);
     this.dynamicRuntimeLinkMiddleman = dynamicRuntimeLinkMiddleman;
     this.dynamicRuntimeSolibDir = Preconditions.checkNotNull(dynamicRuntimeSolibDir);
-    this.ccInfo =
-        CcInfo.builder()
-            .setCcCompilationContext(Preconditions.checkNotNull(ccCompilationContext))
-            .setCcLinkingInfo(CcLinkingInfo.EMPTY)
-            .build();
+    this.ccCompilationInfo =
+        new CcCompilationInfo(Preconditions.checkNotNull(ccCompilationContext));
     this.supportsParamFiles = supportsParamFiles;
     this.supportsHeaderParsing = supportsHeaderParsing;
     this.buildVariables = buildVariables;
@@ -220,7 +211,6 @@ public final class CcToolchainProvider extends ToolchainInfo
       this.forcePic = false;
       this.shouldStripBinaries = false;
     }
-    this.licensesProvider = licensesProvider;
   }
 
   /** Returns c++ Make variables. */
@@ -503,12 +493,12 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   /** Returns the {@code CcCompilationContext} for the toolchain. */
   public CcCompilationContext getCcCompilationContext() {
-    return ccInfo.getCcCompilationContext();
+    return ccCompilationInfo.getCcCompilationContext();
   }
 
-  /** Returns the {@code CcInfo} for the toolchain. */
-  public CcInfo getCcInfo() {
-    return ccInfo;
+  /** Returns the {@code CcCompilationContext} for the toolchain. */
+  public CcCompilationInfo getCcCompilationInfo() {
+    return ccCompilationInfo;
   }
 
   /**
@@ -1119,10 +1109,6 @@ public final class CcToolchainProvider extends ToolchainInfo
 
   public boolean getShouldStripBinaries() {
     return shouldStripBinaries;
-  }
-
-  public LicensesProvider getLicensesProvider() {
-    return licensesProvider;
   }
 }
 
