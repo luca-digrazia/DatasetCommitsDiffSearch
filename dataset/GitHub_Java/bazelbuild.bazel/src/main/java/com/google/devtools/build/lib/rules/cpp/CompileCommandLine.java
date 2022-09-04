@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Pair;
@@ -35,7 +36,7 @@ public final class CompileCommandLine {
   private final FeatureConfiguration featureConfiguration;
   private final CcToolchainVariables variables;
   private final String actionName;
-  private final Artifact dotdFile;
+  private final DotdFile dotdFile;
 
   @AutoCodec.Instantiator
   @VisibleForSerialization
@@ -45,7 +46,7 @@ public final class CompileCommandLine {
       FeatureConfiguration featureConfiguration,
       CcToolchainVariables variables,
       String actionName,
-      Artifact dotdFile) {
+      DotdFile dotdFile) {
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
     this.coptsFilter = coptsFilter;
     this.featureConfiguration = Preconditions.checkNotNull(featureConfiguration);
@@ -127,7 +128,7 @@ public final class CompileCommandLine {
     return sourceFile;
   }
 
-  public Artifact getDotdFile() {
+  public DotdFile getDotdFile() {
     return dotdFile;
   }
 
@@ -152,7 +153,10 @@ public final class CompileCommandLine {
   }
 
   public static Builder builder(
-      Artifact sourceFile, CoptsFilter coptsFilter, String actionName, Artifact dotdFile) {
+      Artifact sourceFile,
+      CoptsFilter coptsFilter,
+      String actionName,
+      DotdFile dotdFile) {
     return new Builder(sourceFile, coptsFilter, actionName, dotdFile);
   }
 
@@ -163,7 +167,7 @@ public final class CompileCommandLine {
     private FeatureConfiguration featureConfiguration;
     private CcToolchainVariables variables = CcToolchainVariables.EMPTY;
     private final String actionName;
-    @Nullable private final Artifact dotdFile;
+    @Nullable private final DotdFile dotdFile;
 
     public CompileCommandLine build() {
       return new CompileCommandLine(
@@ -176,7 +180,10 @@ public final class CompileCommandLine {
     }
 
     private Builder(
-        Artifact sourceFile, CoptsFilter coptsFilter, String actionName, Artifact dotdFile) {
+        Artifact sourceFile,
+        CoptsFilter coptsFilter,
+        String actionName,
+        DotdFile dotdFile) {
       this.sourceFile = sourceFile;
       this.coptsFilter = coptsFilter;
       this.actionName = actionName;
