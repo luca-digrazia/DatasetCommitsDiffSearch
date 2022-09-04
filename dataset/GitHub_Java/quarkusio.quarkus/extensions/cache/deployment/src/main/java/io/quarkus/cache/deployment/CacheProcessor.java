@@ -11,7 +11,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 
 import javax.enterprise.inject.spi.DeploymentException;
 
@@ -46,12 +45,12 @@ class CacheProcessor {
         return new FeatureBuildItem(Feature.CACHE);
     }
 
-    @BuildStep(onlyIf = CacheEnabled.class)
+    @BuildStep
     AnnotationsTransformerBuildItem annotationsTransformer() {
         return new AnnotationsTransformerBuildItem(new CacheAnnotationsTransformer());
     }
 
-    @BuildStep(onlyIf = CacheEnabled.class)
+    @BuildStep
     List<AdditionalBeanBuildItem> additionalBeans() {
         return Arrays.asList(
                 new AdditionalBeanBuildItem(CacheInvalidateAllInterceptor.class),
@@ -59,7 +58,7 @@ class CacheProcessor {
                 new AdditionalBeanBuildItem(CacheResultInterceptor.class));
     }
 
-    @BuildStep(onlyIf = CacheEnabled.class)
+    @BuildStep
     ValidationErrorBuildItem validateBeanDeployment(ValidationPhaseBuildItem validationPhase) {
         AnnotationStore annotationStore = validationPhase.getContext().get(Key.ANNOTATION_STORE);
         List<Throwable> throwables = new ArrayList<>();
@@ -75,7 +74,7 @@ class CacheProcessor {
         return new ValidationErrorBuildItem(throwables.toArray(new Throwable[0]));
     }
 
-    @BuildStep(onlyIf = CacheEnabled.class)
+    @BuildStep
     @Record(RUNTIME_INIT)
     void recordCachesBuild(CombinedIndexBuildItem combinedIndex, BeanContainerBuildItem beanContainer, CacheConfig config,
             CaffeineCacheBuildRecorder caffeineRecorder,
@@ -113,14 +112,5 @@ class CacheProcessor {
             }
         }
         return cacheNames;
-    }
-
-    private static class CacheEnabled implements BooleanSupplier {
-
-        CacheConfig config;
-
-        public boolean getAsBoolean() {
-            return config.enabled;
-        }
     }
 }

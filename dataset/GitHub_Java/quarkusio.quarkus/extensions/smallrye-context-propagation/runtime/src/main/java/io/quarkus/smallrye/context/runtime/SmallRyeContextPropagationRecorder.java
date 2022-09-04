@@ -10,7 +10,6 @@ import org.eclipse.microprofile.context.spi.ContextManagerProvider;
 import org.eclipse.microprofile.context.spi.ThreadContextProvider;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.smallrye.context.SmallRyeContextManager;
 import io.smallrye.context.SmallRyeContextManagerProvider;
@@ -41,7 +40,7 @@ public class SmallRyeContextPropagationRecorder {
         builder.withContextManagerExtensions(discoveredExtensions.toArray(new ContextManagerExtension[0]));
     }
 
-    public void configureRuntime(ExecutorService executorService, ShutdownContext shutdownContext) {
+    public void configureRuntime(ExecutorService executorService) {
         // associate the static init manager to the runtime CL
         ContextManagerProvider contextManagerProvider = ContextManagerProvider.instance();
         // finish building our manager
@@ -50,12 +49,6 @@ public class SmallRyeContextPropagationRecorder {
         SmallRyeContextManager contextManager = builder.build();
 
         contextManagerProvider.registerContextManager(contextManager, Thread.currentThread().getContextClassLoader());
-        shutdownContext.addShutdownTask(new Runnable() {
-            @Override
-            public void run() {
-                contextManagerProvider.releaseContextManager(contextManager);
-            }
-        });
     }
 
     public Supplier<Object> initializeManagedExecutor(ExecutorService executorService) {
