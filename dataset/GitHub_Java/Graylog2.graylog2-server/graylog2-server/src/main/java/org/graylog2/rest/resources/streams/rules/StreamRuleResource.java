@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -12,6 +12,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
+ *
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
@@ -31,15 +32,14 @@ import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
+import org.graylog2.rest.resources.streams.StreamResource;
 import org.graylog2.rest.resources.streams.rules.requests.CreateRequest;
 import org.graylog2.security.RestPermissions;
+import org.graylog2.streams.StreamImpl;
 import org.graylog2.streams.StreamRuleImpl;
-import org.graylog2.streams.StreamRuleService;
-import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -55,15 +55,6 @@ import java.util.Map;
 @Path("/streams/{streamid}/rules")
 public class StreamRuleResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(StreamRuleResource.class);
-    private final StreamRuleService streamRuleService;
-    private final StreamService streamService;
-
-    @Inject
-    public StreamRuleResource(StreamRuleService streamRuleService,
-                              StreamService streamService) {
-        this.streamRuleService = streamRuleService;
-        this.streamService = streamService;
-    }
 
     @POST
     @Timed
@@ -82,9 +73,10 @@ public class StreamRuleResource extends RestResource {
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
+        StreamImpl stream = null;
         try {
-            streamService.load(streamid);
-        } catch (NotFoundException e) {
+            stream = StreamImpl.load(loadObjectId(streamid), core);
+        } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
         }
 
@@ -95,11 +87,11 @@ public class StreamRuleResource extends RestResource {
         streamRuleData.put("inverted", cr.inverted);
         streamRuleData.put("stream_id", new ObjectId(streamid));
 
-        final StreamRule streamRule = new StreamRuleImpl(streamRuleData);
+        final StreamRuleImpl streamRule = new StreamRuleImpl(streamRuleData, core);
 
         String id;
         try {
-            id = streamService.save(streamRule);
+            id = streamRule.save().toStringMongod();
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
@@ -135,7 +127,7 @@ public class StreamRuleResource extends RestResource {
 
         StreamRule streamRule;
         try {
-            streamRule = streamRuleService.load(loadObjectId(streamRuleId));
+            streamRule = StreamRuleImpl.load(loadObjectId(streamRuleId), core);
             if (!streamRule.getStreamId().equals(streamid)) {
                 throw new NotFoundException();
             }
@@ -150,7 +142,7 @@ public class StreamRuleResource extends RestResource {
 
         String id;
         try {
-            streamRuleService.save(streamRule);
+            ((StreamRuleImpl)streamRule).save();
             id = streamRule.getId();
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
@@ -170,19 +162,11 @@ public class StreamRuleResource extends RestResource {
         List<Map<String, Object>> streamRules = Lists.newArrayList();
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
-        final Stream stream;
         try {
-            stream = streamService.load(streamid);
-        } catch (NotFoundException e) {
-            throw new WebApplicationException(404);
-        }
-
-        try {
-            for (StreamRule streamRule : streamRuleService.loadForStream(stream)) {
-                streamRules.add(streamRule.asMap());
+            for (StreamRule streamRule : StreamRuleImpl.findAllForStream(streamid, core)) {
+                streamRules.add(((StreamRuleImpl) streamRule).asMap());
             }
         } catch (org.graylog2.database.NotFoundException e) {
-            throw new WebApplicationException(404);
         }
 
         Map<String, Object> result = Maps.newHashMap();
@@ -199,11 +183,10 @@ public class StreamRuleResource extends RestResource {
     public Response get(@ApiParam(title = "streamid", description = "The id of the stream whose stream rule we want.", required = true) @PathParam("streamid") String streamid,
                       @ApiParam(title = "streamRuleId", description = "The stream rule id we are getting", required = true) @PathParam("streamRuleId") String streamRuleId) {
         StreamRule streamRule;
-
         checkPermission(RestPermissions.STREAMS_READ, streamid);
 
         try {
-            streamRule = streamRuleService.load(loadObjectId(streamRuleId));
+            streamRule = StreamRuleImpl.load(loadObjectId(streamRuleId), core);
         } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
         }
@@ -226,9 +209,9 @@ public class StreamRuleResource extends RestResource {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
         try {
-            StreamRule streamRule = streamRuleService.load(loadObjectId(streamRuleId));
+            StreamRuleImpl streamRule = StreamRuleImpl.load(loadObjectId(streamRuleId), core);
             if (streamRule.getStreamId().equals(streamid)) {
-                streamRuleService.destroy(streamRule);
+                streamRule.destroy();
             } else {
                 throw new NotFoundException();
             }
