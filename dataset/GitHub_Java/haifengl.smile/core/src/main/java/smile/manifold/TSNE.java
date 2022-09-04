@@ -27,7 +27,7 @@ import smile.stat.distribution.GaussianDistribution;
 import smile.util.MulticoreExecutor;
 
 /**
- * The t-distributed stochastic neighbor embedding (t-SNE) is a nonlinear
+ * t-distributed stochastic neighbor embedding (t-SNE) is a nonlinear
  * dimensionality reduction technique that is particularly well suited
  * for embedding high-dimensional data into a space of two or three
  * dimensions, which can then be visualized in a scatter plot. Specifically,
@@ -64,7 +64,7 @@ public class TSNE {
      */
     private double[][] coordinates;
 
-    private double eta             = 500;
+    private double eta             = 200;
     private double momentum        = 0.5;
     private double finalMomentum   = 0.8;
     private int momentumSwitchIter = 250;
@@ -78,20 +78,19 @@ public class TSNE {
 
     private double[][] P;
     private double[][] Q;
-    private double     Qsum;
 
-    /** Constructor. Train t-SNE for 1000 iterations, perplexity = 20 and learning rate = 200.
+    /** Constructor.
      *
-     * @param X input data. If X is a square matrix, it is assumed to be the squared distance/dissimilarity matrix.
+     * @param X input data. If X is a square matrix, it is assumed to be the distance/dissimilarity matrix.
      * @param d the dimension of embedding space.
      */
     public TSNE(double[][] X, int d) {
-        this(X, d, 20, 200, 1000);
+        this(X, d, 20, 200.0, 1000);
     }
 
-    /** Constructor. Train t-SNE for given number of iterations.
+    /** Constructor.
      *
-     * @param X input data. If X is a square matrix, it is assumed to be the squared distance/dissimilarity matrix.
+     * @param X input data. If X is a square matrix, it is assumed to be the distance/dissimilarity matrix.
      * @param d the dimension of embedding space.
      * @param perplexity the perplexity of the conditional distribution.
      * @param eta the learning rate.
@@ -104,8 +103,7 @@ public class TSNE {
         if (X.length == X[0].length) {
             D = X;
         } else {
-            D = new double[n][n];
-            Math.pdist(X, D, true, false);
+            D = Math.pdist(X);
         }
 
         coordinates = new double[n][d];
@@ -113,8 +111,8 @@ public class TSNE {
         dY = new double[n][d];
         gains = new double[n][d]; // adjust learning rate for each point
 
-        // Initialize Y randomly by N(0, 0.0001)
-        GaussianDistribution gaussian = new GaussianDistribution(0.0, 0.0001);
+        // Initialize Y randomly by N(0, 0.01)
+        GaussianDistribution gaussian = new GaussianDistribution(0.0, 0.01);
         for (int i = 0; i < n; i++) {
             Arrays.fill(gains[i], 1.0);
             double[] Yi = Y[i];
@@ -156,13 +154,13 @@ public class TSNE {
         for (int i = 0; i < nprocs; i++) {
             int start = i * chunk;
             int end = i == nprocs-1 ? n : (i+1) * chunk;
-            SNETask task = new SNETask(start, end);
+            SNETask task = new SNETask(start, end, P, Q, Y, dY, gains, minGain, eta);
             tasks.add(task);
         }
 
         for (int iter = 1; iter <= iterations; iter++, totalIter++) {
-            Math.pdist(Y, Q, true, false);
-            Qsum = 0.0;
+            Math.pdist(Y, Q);
+            double Qsum = 0.0;
             for (int i = 0; i < n; i++) {
                 double[] Qi = Q[i];
                 for (int j = 0; j < i; j++) {
@@ -173,6 +171,11 @@ public class TSNE {
                 }
             }
             Qsum *= 2.0;
+
+            for (SNETask task : tasks) {
+                task.Qsum = Qsum;
+                task.momentum = momentum;
+            }
 
             try {
                 MulticoreExecutor.run(tasks);
@@ -200,7 +203,7 @@ public class TSNE {
                         double p = Pi[j];
                         double q = Qi[j] / Qsum;
                         if (Double.isNaN(q) || q < 1E-16) q = 1E-16;
-                        C += p * Math.log2(p / q);
+                        C += p * Math.log(p / q);
                     }
                 }
                 logger.info("Error after {} iterations: {}", totalIter, 2 * C);
@@ -219,13 +222,29 @@ public class TSNE {
 
     private class SNETask implements Callable<Void> {
         int start, end;
+        double[][] Y;
+        double[][] dY;
+        double[][] gains;
+        double Qsum;
+        double[][] P;
+        double[][] Q;
+        double minGain;
+        double momentum;
+        double eta;
         double[] dC;
 
 
-        SNETask(int start, int end) {
+        SNETask(int start, int end, double[][] P, double[][] Q, double[][] Y, double[][] dY, double[][] gains, double minGain, double eta) {
             this.start = start;
             this.end = end;
-            this.dC = new double[coordinates[0].length];
+            this.P = P;
+            this.Q = Q;
+            this.Y = Y;
+            this.dY = dY;
+            this.gains = gains;
+            this.minGain = minGain;
+            this.eta = eta;
+            this.dC = new double[Y[0].length];
         }
 
         @Override
@@ -238,7 +257,6 @@ public class TSNE {
         }
 
         private void compute(int i) {
-            double[][] Y = coordinates;
             int n = Y.length;
             int d = Y[0].length;
             Arrays.fill(dC, 0.0);
@@ -278,7 +296,7 @@ public class TSNE {
     private double[][] expd(double[][] D, double perplexity, double tol) {
         int n          = D.length;
         double[][] P   = new double[n][n];
-        double[] DiSum = Math.rowSums(D);
+        double[] ds    = Math.rowSums(D);
 
         int nprocs = MulticoreExecutor.getThreadPoolSize();
         int chunk = n / nprocs;
@@ -286,7 +304,7 @@ public class TSNE {
         for (int i = 0; i < nprocs; i++) {
             int start = i * chunk;
             int end = i == nprocs-1 ? n : (i+1) * chunk;
-            PerplexityTask task = new PerplexityTask(start, end, D, P, DiSum, perplexity, tol);
+            PerplexityTask task = new PerplexityTask(start, end, D, P, ds, perplexity, tol);
             tasks.add(task);
         }
 
@@ -303,16 +321,16 @@ public class TSNE {
         int start, end;
         double[][] D;
         double[][] P;
-        double[] DiSum;
+        double[] ds;
         double perplexity;
         double tol;
 
-        PerplexityTask(int start, int end, double[][] D, double[][] P, double[] DiSum, double perplexity, double tol) {
+        PerplexityTask(int start, int end, double[][] D, double[][] P, double[] ds, double perplexity, double tol) {
             this.start = start;
             this.end = end;
             this.D = D;
             this.P = P;
-            this.DiSum = DiSum;
+            this.ds = ds;
             this.perplexity = perplexity;
             this.tol = tol;
         }
@@ -333,9 +351,9 @@ public class TSNE {
             double[] Di = D[i];
 
             // Use sqrt(1 / avg of distance) to initialize beta
-            double beta = Math.sqrt((n-1) / DiSum[i]);
+            double beta = Math.sqrt((n-1) / ds[i]);
             double betamin = 0.0;
-            double betamax = Double.POSITIVE_INFINITY;
+            double betamax = Double.MAX_VALUE;
             logger.debug("initial beta[{}] = {}", i, beta);
 
             // Evaluate whether the perplexity is within tolerance
@@ -361,7 +379,7 @@ public class TSNE {
                 if (Math.abs(Hdiff) > tol) {
                     if (Hdiff > 0) {
                         betamin = beta;
-                        if (Double.isInfinite(betamax))
+                        if (betamax == Double.MAX_VALUE)
                             beta *= 2.0;
                         else
                             beta = (beta + betamax) / 2;
