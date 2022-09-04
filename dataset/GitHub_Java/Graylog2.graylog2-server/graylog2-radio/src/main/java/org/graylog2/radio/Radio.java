@@ -1,5 +1,5 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -13,20 +13,17 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package org.graylog2.radio;
 
-import com.beust.jcommander.internal.Lists;
-import com.beust.jcommander.internal.Maps;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Inject;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
+import org.cliffc.high_scale_lib.Counter;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -35,28 +32,19 @@ import org.graylog2.inputs.BasicCache;
 import org.graylog2.inputs.Cache;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
-import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.Version;
 import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.plugin.indexer.MessageGateway;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
-import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
+import org.graylog2.radio.buffers.ProcessBuffer;
 import org.graylog2.radio.cluster.Ping;
-import org.graylog2.radio.inputs.RadioInputRegistry;
+import org.graylog2.radio.inputs.InputRegistry;
+import org.graylog2.radio.periodical.MasterCacheWorkerThread;
+import org.graylog2.radio.periodical.ThroughputCounterManagerThread;
 import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.radio.transports.kafka.KafkaProducer;
-import org.graylog2.shared.ProcessingHost;
-import org.graylog2.shared.buffers.ProcessBuffer;
-import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
-import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.periodical.MasterCacheWorkerThread;
-import org.graylog2.shared.periodical.ThroughputCounterManagerThread;
-import org.graylog2.shared.stats.ThroughputStats;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -71,24 +59,20 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class Radio implements InputHost, GraylogServer, ProcessingHost {
+public class Radio implements InputHost {
 
     private static final Logger LOG = LoggerFactory.getLogger(Radio.class);
 
     public static final Version VERSION = RadioVersion.VERSION;
 
     private DateTime startedAt;
-    @Inject
     private MetricRegistry metricRegistry;
-    @Inject
     private Configuration configuration;
 
     private GELFChunkManager gelfChunkManager;
@@ -96,25 +80,21 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     private static final int SCHEDULED_THREADS_POOL_SIZE = 10;
     private ScheduledExecutorService scheduler;
 
-    private RadioInputRegistry inputs;
+    private InputRegistry inputs;
     private Cache inputCache;
     private ProcessBuffer processBuffer;
     private AtomicInteger processBufferWatermark = new AtomicInteger();
+
+    private Counter throughputCounter = new Counter();
+    private long throughput = 0;
 
     private Ping.Pinger pinger;
 
     private final AsyncHttpClient httpClient;
 
-    private String nodeId;
+    private RadioTransport transport;
 
-    @Inject
-    private ProcessBuffer.Factory processBufferFactory;
-    @Inject
-    private RadioProcessBufferProcessor.Factory processBufferProcessorFactory;
-    @Inject
-    private ThroughputCounterManagerThread.Factory throughputCounterThreadFactory;
-    @Inject
-    private ThroughputStats throughputStats;
+    private String nodeId;
 
     public Radio() {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
@@ -122,8 +102,11 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
         httpClient = new AsyncHttpClient(builder.build());
     }
 
-    public void initialize() {
+    public void initialize(Configuration configuration, MetricRegistry metrics) {
         startedAt = new DateTime(DateTimeZone.UTC);
+
+        this.metricRegistry = metrics;
+        this.configuration = configuration;
 
         NodeId id = new NodeId(configuration.getNodeIdFile());
         this.nodeId = id.readOrGenerate();
@@ -132,27 +115,12 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
         gelfChunkManager.start();
 
         inputCache = new BasicCache();
+        processBuffer = new ProcessBuffer(this, inputCache);
+        processBuffer.initialize();
 
-        RadioTransport transport = new KafkaProducer(this);
+        transport = new KafkaProducer(this);
 
-        int processBufferProcessorCount = configuration.getProcessBufferProcessors();
-
-        ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processBufferProcessorCount];
-
-        for (int i = 0; i < processBufferProcessorCount; i++) {
-            processors[i] = processBufferProcessorFactory.create(this, i, processBufferProcessorCount, transport);
-        }
-
-        processBuffer = processBufferFactory.create(this, inputCache);
-        processBuffer.initialize(processors, configuration.getRingSize(),
-                configuration.getProcessorWaitStrategy(),
-                configuration.getProcessBufferProcessors()
-        );
-
-        this.inputs = new RadioInputRegistry(this,
-                this.getHttpClient(),
-                configuration.getGraylog2ServerUri()
-        );
+        this.inputs = new InputRegistry(this);
 
         if (this.configuration.getRestTransportUri() == null) {
             String guessedIf;
@@ -174,7 +142,7 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
                 new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
         );
 
-        ThroughputCounterManagerThread tt = throughputCounterThreadFactory.create();
+        ThroughputCounterManagerThread tt = new ThroughputCounterManagerThread(this);
         scheduler.scheduleAtFixedRate(tt, 0, 1, TimeUnit.SECONDS);
 
         MasterCacheWorkerThread masterCacheWorker = new MasterCacheWorkerThread(this, inputCache, processBuffer);
@@ -252,10 +220,8 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
         @Override
         protected void configure() {
-            bind(Radio.this).to(Radio.class);
             bind(metricRegistry).to(MetricRegistry.class);
-            bind(throughputStats).to(ThroughputStats.class);
-            bind(configuration).to(Configuration.class);
+            bind(Radio.this).to(Radio.class);
         }
 
     }
@@ -299,55 +265,23 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
         return inputCache;
     }
 
-    private AsyncHttpClient getHttpClient() {
+    public Counter getThroughputCounter() {
+        return throughputCounter;
+    }
+
+    public void setCurrentThroughput(long x) {
+        this.throughput = x;
+    }
+
+    public long getCurrentThroughput() {
+        return this.throughput;
+    }
+
+    public RadioTransport getTransport() {
+        return transport;
+    }
+
+    public AsyncHttpClient getHttpClient() {
         return httpClient;
-    }
-
-    public List<MessageFilter> getFilters() {
-        List<MessageFilter> result = Lists.newArrayList();
-        return result;
-    }
-
-    @Override
-    public void closeIndexShortcut(String indexName) {
-    }
-
-    @Override
-    public void deleteIndexShortcut(String indexName) {
-    }
-
-    @Override
-    public Map<String, Stream> getEnabledStreams() {
-        Map<String, Stream> result = Maps.newHashMap();
-        return result;
-    }
-
-    @Override
-    public MessageGateway getMessageGateway() {
-        return null;
-    }
-
-    @Override
-    public boolean isMaster() {
-        return false;
-    }
-
-    @Override
-    public Buffer getOutputBuffer() {
-        return null;
-    }
-
-    @Override
-    public void run() {
-    }
-
-    @Override
-    public boolean isServer() {
-        return false;
-    }
-
-    @Override
-    public boolean isRadio() {
-        return true;
     }
 }
