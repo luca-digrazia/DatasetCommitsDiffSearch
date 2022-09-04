@@ -9,7 +9,6 @@ import java.util.function.Consumer;
 import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.context.spi.CreationalContext;
-import org.jboss.logging.Logger;
 
 /**
  *
@@ -18,8 +17,6 @@ import org.jboss.logging.Logger;
  * @param <T>
  */
 class InstanceHandleImpl<T> implements InstanceHandle<T> {
-
-    private static final Logger LOGGER = Logger.getLogger(InstanceHandleImpl.class.getName());
 
     @SuppressWarnings("unchecked")
     public static final <T> InstanceHandle<T> unavailable() {
@@ -86,16 +83,7 @@ class InstanceHandleImpl<T> implements InstanceHandle<T> {
         if (parentCreationalContext != null) {
             parentCreationalContext.release();
         } else {
-            try {
-                bean.destroy(instance, creationalContext);
-            } catch (Throwable t) {
-                String msg = "Error occured while destroying instance of bean [%s]";
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.errorf(t, msg, bean.getClass().getName());
-                } else {
-                    LOGGER.errorf(msg + ": %s", bean.getClass().getName(), t);
-                }
-            }
+            bean.destroy(instance, creationalContext);
         }
     }
 
