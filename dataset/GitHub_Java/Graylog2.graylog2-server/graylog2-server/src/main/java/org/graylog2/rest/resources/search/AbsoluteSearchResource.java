@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -55,24 +54,13 @@ public class AbsoluteSearchResource extends SearchResource {
             @ApiParam(title = "from", description = "Timerange start. See description for date format", required = true) @QueryParam("from") String from,
             @ApiParam(title = "to", description = "Timerange end. See description for date format", required = true) @QueryParam("to") String to,
             @ApiParam(title = "limit", description = "Maximum number of messages to return.", required = false) @QueryParam("limit") int limit,
-            @ApiParam(title = "offset", description = "Offset", required = false) @QueryParam("offset") int offset,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
+            @ApiParam(title = "offset", description = "Offset", required = false) @QueryParam("offset") int offset) {
         checkQuery(query);
 
         try {
-            Map<String, Object> searchResult;
-
-            if (filter == null) {
-                searchResult = buildSearchResult(
-                        core.getIndexer().searches().search(query, buildAbsoluteTimeRange(from, to), limit, offset)
-                );
-            } else {
-                searchResult = buildSearchResult(
-                        core.getIndexer().searches().search(query, filter, buildAbsoluteTimeRange(from, to), limit, offset)
-                );
-            }
-
-            return json(searchResult);
+            return json(buildSearchResult(
+                    core.getIndexer().searches().search(query, buildAbsoluteTimeRange(from, to), limit, offset)
+            ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
             throw new WebApplicationException(400);
