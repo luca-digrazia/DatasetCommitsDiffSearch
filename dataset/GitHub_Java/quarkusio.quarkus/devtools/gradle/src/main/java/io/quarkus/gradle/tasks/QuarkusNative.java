@@ -25,6 +25,7 @@ import org.gradle.api.tasks.options.Option;
 
 import io.quarkus.creator.AppCreator;
 import io.quarkus.creator.AppCreatorException;
+import io.quarkus.creator.AppDependency;
 import io.quarkus.creator.phase.augment.AugmentOutcome;
 import io.quarkus.creator.phase.nativeimage.NativeImageOutcome;
 import io.quarkus.creator.phase.nativeimage.NativeImagePhase;
@@ -359,8 +360,9 @@ public class QuarkusNative extends QuarkusTask {
                 }
 
                 @Override
-                public Path getConfigDir() {
-                    return extension().outputConfigDirectory().toPath();
+                public boolean isWhitelisted(AppDependency dep) {
+                    // not relevant for this mojo
+                    throw new UnsupportedOperationException();
                 }
             }).pushOutcome(RunnerJarOutcome.class, new RunnerJarOutcome() {
                 final Path runnerJar = getProject().getBuildDir().toPath().resolve(extension().finalName() + "-runner.jar");

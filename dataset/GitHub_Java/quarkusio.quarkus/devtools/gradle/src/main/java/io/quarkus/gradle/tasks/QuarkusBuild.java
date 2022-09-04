@@ -16,22 +16,21 @@
 package io.quarkus.gradle.tasks;
 
 import java.io.File;
+import java.util.List;
 
-import org.gradle.api.GradleException;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 
-import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.model.AppModel;
-import io.quarkus.bootstrap.resolver.AppModelResolver;
-import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.creator.AppArtifact;
 import io.quarkus.creator.AppCreator;
 import io.quarkus.creator.AppCreatorException;
+import io.quarkus.creator.AppDependency;
 import io.quarkus.creator.phase.augment.AugmentPhase;
 import io.quarkus.creator.phase.curate.CurateOutcome;
 import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
 import io.quarkus.creator.phase.runnerjar.RunnerJarPhase;
+import io.quarkus.gradle.ResolvedGradleArtifactDeps;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -127,20 +126,10 @@ public class QuarkusBuild extends QuarkusTask {
     public void buildQuarkus() {
         getLogger().lifecycle("building quarkus runner");
 
-        final AppArtifact appArtifact = extension().getAppArtifact();
-        final AppModel appModel;
-        final AppModelResolver modelResolver = extension().resolveAppModel();
-        try {
-            appModel = modelResolver.resolveModel(appArtifact);
-        } catch (AppModelResolverException e) {
-            throw new GradleException("Failed to resolve application model " + appArtifact + " dependencies", e);
-        }
-
         try (AppCreator appCreator = AppCreator.builder()
                 // configure the build phases we want the app to go through
                 .addPhase(new AugmentPhase()
                         .setAppClassesDir(extension().outputDirectory().toPath())
-                        .setConfigDir(extension().outputConfigDirectory().toPath())
                         .setTransformedClassesDir(getTransformedClassesDirectory().toPath())
                         .setWiringClassesDir(getWiringClassesDirectory().toPath()))
                 .addPhase(new RunnerJarPhase()
@@ -151,17 +140,28 @@ public class QuarkusBuild extends QuarkusTask {
                 .setWorkDir(getProject().getBuildDir().toPath())
                 .build()) {
 
-            // push resolved application state
-            appCreator.pushOutcome(CurateOutcome.builder()
-                    .setAppModelResolver(modelResolver)
-                    .setAppModel(appModel)
-                    .build());
+            final AppArtifact appArtifact = new AppArtifact(extension().groupId(), extension().artifactId(),
+                    extension().version());
+            try {
+                ResolvedGradleArtifactDeps resolvedGradleArtifactDeps = new ResolvedGradleArtifactDeps(getProject());
+                final List<AppDependency> appDeps = resolvedGradleArtifactDeps.collectDependencies(appArtifact);
 
-            // resolve the outcome we need here
-            appCreator.resolveOutcome(RunnerJarOutcome.class);
+                // push resolved application state
+                appCreator.pushOutcome(CurateOutcome.builder()
+                        .setAppArtifact(appArtifact)
+                        .setArtifactResolver(resolvedGradleArtifactDeps)
+                        .setInitialDeps(appDeps)
+                        .build());
+
+                // resolve the outcome we need here
+                appCreator.resolveOutcome(RunnerJarOutcome.class);
+            } catch (AppCreatorException e) {
+                e.printStackTrace();
+            }
 
         } catch (AppCreatorException e) {
-            throw new GradleException("Failed to build a runnable JAR", e);
+            e.printStackTrace();
         }
+
     }
 }

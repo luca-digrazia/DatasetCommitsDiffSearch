@@ -21,10 +21,6 @@ import java.util.Set;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
-import org.gradle.api.tasks.SourceSetContainer;
-
-import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.resolver.AppModelResolver;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -44,8 +40,6 @@ public class QuarkusPluginExtension {
     private String finalName;
 
     private String sourceDir;
-
-    private String outputConfigDirectory;
 
     public QuarkusPluginExtension(Project project) {
         this.project = project;
@@ -69,18 +63,6 @@ public class QuarkusPluginExtension {
 
     public void setOutputDirectory(String outputDirectory) {
         this.outputDirectory = outputDirectory;
-    }
-
-    public File outputConfigDirectory() {
-        if (outputConfigDirectory == null)
-            outputConfigDirectory = project.getConvention().getPlugin(JavaPluginConvention.class)
-                    .getSourceSets().getByName("main").getOutput().getResourcesDir().getAbsolutePath();
-
-        return new File(outputConfigDirectory);
-    }
-
-    public void setConfigOutputDirectory(String outputDirectory) {
-        this.outputConfigDirectory = outputDirectory;
     }
 
     public File sourceDir() {
@@ -122,6 +104,18 @@ public class QuarkusPluginExtension {
         this.finalName = finalName;
     }
 
+    public String groupId() {
+        return project.getGroup().toString();
+    }
+
+    public String artifactId() {
+        return project.getName();
+    }
+
+    public String version() {
+        return project.getVersion().toString();
+    }
+
     public boolean uberJar() {
         return false;
     }
@@ -132,18 +126,8 @@ public class QuarkusPluginExtension {
     }
 
     public Set<File> dependencyFiles() {
-        SourceSetContainer sourceSets = project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets();
-        SourceSet sourceSet = sourceSets.getByName("main");
-        Set<File> files = sourceSet.getCompileClasspath().getFiles();
-        return files;
+        SourceSet sourceSet = project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets().getByName("main");
+        return sourceSet.getCompileClasspath().getFiles();
     }
 
-    public AppArtifact getAppArtifact() {
-        return new AppArtifact(project.getGroup().toString(), project.getName(),
-                project.getVersion().toString());
-    }
-
-    public AppModelResolver resolveAppModel() {
-        return new AppModelGradleResolver(project);
-    }
 }
