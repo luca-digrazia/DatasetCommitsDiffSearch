@@ -39,9 +39,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.DynamicModeConverter;
 import com.google.devtools.build.lib.rules.cpp.CppOptions.LibcTopLabelConverter;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
@@ -54,12 +51,9 @@ import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
 
-/** Configuration fragment for Android rules. */
-@SkylarkModule(
-  name = "android",
-  doc = "A configuration fragment for Android.",
-  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
-)
+/**
+ * Configuration fragment for Android rules.
+ */
 @Immutable
 public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
@@ -382,9 +376,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     // The idea is that once this option works, we'll flip the default value in a config file, then
     // once it is proven that it works, remove it from Bazel and said config file.
     @Option(
-      name = "desugar_for_android",
-      oldName = "experimental_desugar_for_android",
-      defaultValue = "true",
+      name = "experimental_desugar_for_android",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Whether to desugar Java 8 bytecode before dexing."
@@ -510,15 +503,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       help = "dx flags supported in tool that merges dex archives into final classes.dex files."
     )
     public List<String> dexoptsSupportedInDexMerger;
-
-    @Option(
-      name = "use_workers_with_dexbuilder",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Whether dexbuilder supports being run in local worker mode."
-    )
-    public boolean useWorkersWithDexbuilder;
 
     @Option(
       name = "experimental_android_rewrite_dexes_with_rex",
@@ -738,7 +722,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       host.nonIncrementalPerTargetDexopts = nonIncrementalPerTargetDexopts;
       host.dexoptsSupportedInIncrementalDexing = dexoptsSupportedInIncrementalDexing;
       host.dexoptsSupportedInDexMerger = dexoptsSupportedInDexMerger;
-      host.useWorkersWithDexbuilder = useWorkersWithDexbuilder;
       host.manifestMerger = manifestMerger;
       host.androidAaptVersion = androidAaptVersion;
       return host;
@@ -786,7 +769,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> dexoptsSupportedInIncrementalDexing;
   private final ImmutableList<String> targetDexoptsThatPreventIncrementalDexing;
   private final ImmutableList<String> dexoptsSupportedInDexMerger;
-  private final boolean useWorkersWithDexbuilder;
   private final boolean desugarJava8;
   private final boolean useRexToCompressDexFiles;
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
@@ -824,7 +806,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.targetDexoptsThatPreventIncrementalDexing =
         ImmutableList.copyOf(options.nonIncrementalPerTargetDexopts);
     this.dexoptsSupportedInDexMerger = ImmutableList.copyOf(options.dexoptsSupportedInDexMerger);
-    this.useWorkersWithDexbuilder = options.useWorkersWithDexbuilder;
     this.desugarJava8 = options.desugarJava8;
     this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
     this.useAndroidResourceShrinking = options.useAndroidResourceShrinking
@@ -856,7 +837,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     return cpu;
   }
 
-  @SkylarkCallable(name = "sdk", structField = true, doc = "Android SDK")
   public Label getSdk() {
     return sdk;
   }
@@ -907,11 +887,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
    */
   public ImmutableList<String> getTargetDexoptsThatPreventIncrementalDexing() {
     return targetDexoptsThatPreventIncrementalDexing;
-  }
-
-  /** Whether to assume the dexbuilder tool supports local worker mode. */
-  public boolean useWorkersWithDexbuilder() {
-    return useWorkersWithDexbuilder;
   }
 
   public boolean desugarJava8() {
