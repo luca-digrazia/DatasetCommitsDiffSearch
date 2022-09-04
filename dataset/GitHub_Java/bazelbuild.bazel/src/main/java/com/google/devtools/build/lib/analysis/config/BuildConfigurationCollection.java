@@ -59,9 +59,10 @@ public final class BuildConfigurationCollection {
   /**
    * Returns the host configuration for this collection.
    *
-   * <p>Don't use this method. It's limited in that it assumes a single host configuration for the
-   * entire collection. This may not be true in the future and more flexible interfaces will likely
-   * supplant this interface anyway.
+   * <p>Don't use this method. It's limited in that it assumes a single host configuration for
+   * the entire collection. This may not be true in the future and more flexible interfaces based
+   * on dynamic configurations will likely supplant this interface anyway. Its main utility is
+   * to keep Bazel working while dynamic configuration progress is under way.
    */
   public BuildConfiguration getHostConfiguration() {
     return hostConfiguration;

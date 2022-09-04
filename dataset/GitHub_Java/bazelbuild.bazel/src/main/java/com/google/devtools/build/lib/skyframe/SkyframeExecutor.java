@@ -1118,6 +1118,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     for (String cpu : multiCpu) {
       BuildOptions clonedOptions = buildOptions.clone();
       clonedOptions.get(BuildConfiguration.Options.class).cpu = cpu;
+      clonedOptions.get(BuildConfiguration.Options.class).experimentalMultiCpuDistinguisher = cpu;
       multiCpuOptions.add(clonedOptions);
     }
     return multiCpuOptions.build();
@@ -1434,7 +1435,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     Map<Label, Set<Class<? extends BuildConfiguration.Fragment>>> fragmentsMap = new HashMap<>();
     Set<Label> labelsWithErrors = new HashSet<>();
     for (Dependency key : keys) {
-      if (key.hasExplicitConfiguration()) {
+      if (key.hasStaticConfiguration()) {
         builder.put(key, key.getConfiguration());
       } else if (useUntrimmedDynamicConfigs(fromOptions)) {
         fragmentsMap.put(key.getLabel(), allFragments);
@@ -1463,7 +1464,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // Now get the configurations.
     final List<SkyKey> configSkyKeys = new ArrayList<>();
     for (Dependency key : keys) {
-      if (labelsWithErrors.contains(key.getLabel()) || key.hasExplicitConfiguration()) {
+      if (labelsWithErrors.contains(key.getLabel()) || key.hasStaticConfiguration()) {
         continue;
       }
       Set<Class<? extends BuildConfiguration.Fragment>> depFragments =
@@ -1478,7 +1479,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     EvaluationResult<SkyValue> configsResult =
         evaluateSkyKeys(eventHandler, configSkyKeys, /*keepGoing=*/true);
     for (Dependency key : keys) {
-      if (labelsWithErrors.contains(key.getLabel()) || key.hasExplicitConfiguration()) {
+      if (labelsWithErrors.contains(key.getLabel()) || key.hasStaticConfiguration()) {
         continue;
       }
       Set<Class<? extends BuildConfiguration.Fragment>> depFragments =
