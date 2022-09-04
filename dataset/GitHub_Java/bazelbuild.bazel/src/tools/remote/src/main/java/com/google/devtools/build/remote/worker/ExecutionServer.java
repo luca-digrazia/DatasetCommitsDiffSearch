@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.remote.worker;
 
-import static com.google.devtools.build.lib.remote.util.Utils.getFromFuture;
 import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.SEVERE;
@@ -25,7 +24,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.remote.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.ExecutionStatusException;
 import com.google.devtools.build.lib.remote.SimpleBlobStoreActionCache;
@@ -76,6 +74,7 @@ import java.util.logging.Logger;
 final class ExecutionServer extends ExecutionImplBase {
   private static final Logger logger = Logger.getLogger(ExecutionServer.class.getName());
 
+  private final Object lock = new Object();
 
   // The name of the container image entry in the Platform proto
   // (see third_party/googleapis/devtools/remoteexecution/*/remote_execution.proto and
@@ -178,7 +177,7 @@ final class ExecutionServer extends ExecutionImplBase {
     try {
       command =
           com.google.devtools.remoteexecution.v1test.Command.parseFrom(
-              getFromFuture(cache.downloadBlob(action.getCommandDigest())));
+              cache.downloadBlob(action.getCommandDigest()));
       cache.downloadTree(action.getInputRootDigest(), execRoot);
     } catch (CacheNotFoundException e) {
       throw StatusUtils.notFoundError(e.getMissingDigest());
@@ -214,10 +213,27 @@ final class ExecutionServer extends ExecutionImplBase {
     CommandResult cmdResult = null;
 
     FutureCommandResult futureCmdResult = null;
-    try {
-      futureCmdResult = cmd.executeAsync();
-    } catch (CommandException e) {
-      Throwables.throwIfInstanceOf(e.getCause(), IOException.class);
+    synchronized (lock) {
+      // Linux does not provide a safe API for a multi-threaded program to fork a subprocess.
+      // Consider the case where two threads both write an executable file and then try to execute
+      // it. It can happen that the first thread writes its executable file, with the file
+      // descriptor still being open when the second thread forks, with the fork inheriting a copy
+      // of the file descriptor. Then the first thread closes the original file descriptor, and
+      // proceeds to execute the file. At that point Linux sees an open file descriptor to the file
+      // and returns ETXTBSY (Text file busy) as an error. This race is inherent in the fork / exec
+      // duality, with fork always inheriting a copy of the file descriptor table; if there was a
+      // way to fork without copying the entire file descriptor table (e.g., only copy specific
+      // entries), we could avoid this race.
+      //
+      // I was able to reproduce this problem reliably by running significantly more threads than
+      // there are CPU cores on my workstation - the more threads the more likely it happens.
+      //
+      // As a workaround, we put a synchronized block around the fork.
+      try {
+        futureCmdResult = cmd.executeAsync();
+      } catch (CommandException e) {
+        Throwables.throwIfInstanceOf(e.getCause(), IOException.class);
+      }
     }
 
     if (futureCmdResult != null) {
@@ -236,7 +252,6 @@ final class ExecutionServer extends ExecutionImplBase {
         (cmdResult != null && cmdResult.getTerminationStatus().timedOut())
             || wasTimeout(timeoutMillis, System.currentTimeMillis() - startTime);
     final int exitCode;
-    Status errStatus = null;
     ExecuteResponse.Builder resp = ExecuteResponse.newBuilder();
     if (wasTimeout) {
       final String errMessage =
@@ -244,11 +259,11 @@ final class ExecutionServer extends ExecutionImplBase {
               "Command:\n%s\nexceeded deadline of %f seconds.",
               Arrays.toString(command.getArgumentsList().toArray()), timeoutMillis / 1000.0);
       logger.warning(errMessage);
-      errStatus =
+      resp.setStatus(
           Status.newBuilder()
               .setCode(Code.DEADLINE_EXCEEDED.getNumber())
               .setMessage(errMessage)
-              .build();
+              .build());
       exitCode = LOCAL_EXEC_ERROR;
     } else if (cmdResult == null) {
       exitCode = LOCAL_EXEC_ERROR;
@@ -257,28 +272,18 @@ final class ExecutionServer extends ExecutionImplBase {
     }
 
     ActionResult.Builder result = ActionResult.newBuilder();
-    try {
-      cache.upload(result, execRoot, outputs);
-    } catch (ExecException e) {
-      if (errStatus == null) {
-        errStatus =
-            Status.newBuilder()
-                .setCode(Code.FAILED_PRECONDITION.getNumber())
-                .setMessage(e.getMessage())
-                .build();
-      }
-    }
+    cache.upload(result, execRoot, outputs);
     byte[] stdout = cmdResult.getStdout();
     byte[] stderr = cmdResult.getStderr();
     cache.uploadOutErr(result, stdout, stderr);
     ActionResult finalResult = result.setExitCode(exitCode).build();
-    resp.setResult(finalResult);
-    if (errStatus != null) {
-      resp.setStatus(errStatus);
-      throw new ExecutionStatusException(errStatus, resp.build());
-    } else if (exitCode == 0 && !action.getDoNotCache()) {
+    if (exitCode == 0 && !action.getDoNotCache()) {
       ActionKey actionKey = digestUtil.computeActionKey(action);
       cache.setCachedActionResult(actionKey, finalResult);
+    }
+    resp.setResult(finalResult);
+    if (wasTimeout) {
+      throw new ExecutionStatusException(resp.getStatus(), resp.build());
     }
     return finalResult;
   }
