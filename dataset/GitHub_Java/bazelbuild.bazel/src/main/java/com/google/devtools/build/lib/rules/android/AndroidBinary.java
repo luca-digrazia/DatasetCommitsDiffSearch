@@ -1183,7 +1183,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     SpawnAction.Builder shardAction =
         new SpawnAction.Builder()
             .useDefaultShellEnvironment()
-            .setMnemonic("ShardForMultidex")
+            .setMnemonic("ShardClassesToDex")
             .setProgressMessage("Assembling dex files for %s",
                 ruleContext.getLabel().getCanonicalForm())
             .setExecutable(ruleContext.getExecutablePrerequisite("$dexsharder", Mode.HOST))
