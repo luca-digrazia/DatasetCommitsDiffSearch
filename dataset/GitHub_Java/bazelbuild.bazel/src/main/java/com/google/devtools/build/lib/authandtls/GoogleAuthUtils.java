@@ -34,14 +34,12 @@ import io.netty.channel.kqueue.KQueueDomainSocketChannel;
 import io.netty.channel.kqueue.KQueueEventLoopGroup;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /** Utility methods for using {@link AuthAndTLSOptions} with Google Cloud. */
@@ -56,29 +54,23 @@ public final class GoogleAuthUtils {
       String target,
       String proxy,
       AuthAndTLSOptions options,
-      @Nullable List<ClientInterceptor> interceptors)
+      @Nullable ClientInterceptor interceptor)
       throws IOException {
     Preconditions.checkNotNull(target);
     Preconditions.checkNotNull(options);
 
-    SslContext sslContext =
-        isTlsEnabled(target)
-            ? createSSlContext(
-                options.tlsCertificate, options.tlsClientCertificate, options.tlsClientKey)
-            : null;
+    final SslContext sslContext =
+        isTlsEnabled(target) ? createSSlContext(options.tlsCertificate) : null;
 
     String targetUrl = convertTargetScheme(target);
+
     try {
       NettyChannelBuilder builder =
           newNettyChannelBuilder(targetUrl, proxy)
               .negotiationType(
                   isTlsEnabled(target) ? NegotiationType.TLS : NegotiationType.PLAINTEXT);
-      if (options.grpcKeepaliveTime != null) {
-        builder.keepAliveTime(options.grpcKeepaliveTime.getSeconds(), TimeUnit.SECONDS);
-        builder.keepAliveTimeout(options.grpcKeepaliveTimeout.getSeconds(), TimeUnit.SECONDS);
-      }
-      if (interceptors != null) {
-        builder.intercept(interceptors);
+      if (interceptor != null) {
+        builder.intercept(interceptor);
       }
       if (sslContext != null) {
         builder.sslContext(sslContext);
@@ -109,48 +101,41 @@ public final class GoogleAuthUtils {
     // 'grpcs://' or empty prefix => TLS-enabled
     // when no schema prefix is provided in URL, bazel will treat it as a gRPC request with TLS
     // enabled
-    return !target.startsWith("grpc://") && !target.startsWith("unix:");
+    return !target.startsWith("grpc://");
   }
 
-  private static SslContext createSSlContext(
-      @Nullable String rootCert, @Nullable String clientCert, @Nullable String clientKey)
-      throws IOException {
-    SslContextBuilder sslContextBuilder;
-    try {
-      sslContextBuilder = GrpcSslContexts.forClient();
-    } catch (Exception e) {
-      String message = "Failed to init TLS infrastructure: " + e.getMessage();
-      throw new IOException(message, e);
-    }
-    if (rootCert != null) {
+  private static SslContext createSSlContext(@Nullable String rootCert) throws IOException {
+    if (rootCert == null) {
       try {
-        sslContextBuilder.trustManager(new File(rootCert));
+        return GrpcSslContexts.forClient().build();
+      } catch (Exception e) {
+        String message = "Failed to init TLS infrastructure: " + e.getMessage();
+        throw new IOException(message, e);
+      }
+    } else {
+      try {
+        return GrpcSslContexts.forClient().trustManager(new File(rootCert)).build();
       } catch (Exception e) {
         String message = "Failed to init TLS infrastructure using '%s' as root certificate: %s";
         message = String.format(message, rootCert, e.getMessage());
         throw new IOException(message, e);
       }
     }
-    if (clientCert != null && clientKey != null) {
-      try {
-        sslContextBuilder.keyManager(new File(clientCert), new File(clientKey));
-      } catch (Exception e) {
-        String message = "Failed to init TLS infrastructure using '%s' as client certificate: %s";
-        message = String.format(message, clientCert, e.getMessage());
-        throw new IOException(message, e);
-      }
-    }
-    try {
-      return sslContextBuilder.build();
-    } catch (Exception e) {
-      String message = "Failed to init TLS infrastructure: " + e.getMessage();
-      throw new IOException(message, e);
-    }
   }
 
-  private static NettyChannelBuilder newUnixNettyChannelBuilder(String target) throws IOException {
-    DomainSocketAddress address = new DomainSocketAddress(target.replaceFirst("^unix:", ""));
-    NettyChannelBuilder builder = NettyChannelBuilder.forAddress(address);
+  private static NettyChannelBuilder newNettyChannelBuilder(String targetUrl, String proxy)
+      throws IOException {
+    if (Strings.isNullOrEmpty(proxy)) {
+      return NettyChannelBuilder.forTarget(targetUrl).defaultLoadBalancingPolicy("round_robin");
+    }
+
+    if (!proxy.startsWith("unix:")) {
+      throw new IOException("Remote proxy unsupported: " + proxy);
+    }
+
+    DomainSocketAddress address = new DomainSocketAddress(proxy.replaceFirst("^unix:", ""));
+    NettyChannelBuilder builder =
+        NettyChannelBuilder.forAddress(address).overrideAuthority(targetUrl);
     if (KQueue.isAvailable()) {
       return builder
           .channelType(KQueueDomainSocketChannel.class)
@@ -163,23 +148,6 @@ public final class GoogleAuthUtils {
     }
 
     throw new IOException("Unix domain sockets are unsupported on this platform");
-  }
-
-  private static NettyChannelBuilder newNettyChannelBuilder(String targetUrl, String proxy)
-      throws IOException {
-    if (targetUrl.startsWith("unix:")) {
-      return newUnixNettyChannelBuilder(targetUrl);
-    }
-
-    if (Strings.isNullOrEmpty(proxy)) {
-      return NettyChannelBuilder.forTarget(targetUrl).defaultLoadBalancingPolicy("round_robin");
-    }
-
-    if (!proxy.startsWith("unix:")) {
-      throw new IOException("Remote proxy unsupported: " + proxy);
-    }
-
-    return newUnixNettyChannelBuilder(proxy).overrideAuthority(targetUrl);
   }
 
   /**

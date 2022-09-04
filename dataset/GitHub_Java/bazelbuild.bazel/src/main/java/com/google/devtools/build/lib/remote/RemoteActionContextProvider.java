@@ -137,6 +137,12 @@ final class RemoteActionContextProvider extends ActionContextProvider {
     String strategyName = remoteOptions.remoteLocalFallbackStrategy;
 
     for (ActionContext context : usedContexts) {
+      if (context instanceof RemoteSpawnStrategy && cache == null) {
+        throw new ExecutorInitException(
+            "--remote_cache or --remote_executor should be initialized when using "
+                + "--spawn_strategy=remote",
+            ExitCode.COMMAND_LINE_ERROR);
+      }
       if (context instanceof AbstractSpawnStrategy) {
         ExecutionStrategy annotation = context.getClass().getAnnotation(ExecutionStrategy.class);
         if (annotation != null) {
@@ -161,7 +167,8 @@ final class RemoteActionContextProvider extends ActionContextProvider {
     }
   }
 
-  /** Returns the remote cache. */
+  /** Returns the remote cache object if any. */
+  @Nullable
   RemoteCache getRemoteCache() {
     return cache;
   }
@@ -172,7 +179,9 @@ final class RemoteActionContextProvider extends ActionContextProvider {
 
   @Override
   public void executionPhaseEnding() {
-    cache.close();
+    if (cache != null) {
+      cache.close();
+    }
     if (executor != null) {
       executor.close();
     }

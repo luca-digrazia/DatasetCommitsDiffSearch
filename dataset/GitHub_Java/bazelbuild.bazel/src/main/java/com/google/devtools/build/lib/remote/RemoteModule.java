@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -37,7 +38,6 @@ import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.LocalFilesArtifactUploader;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
@@ -53,8 +53,6 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BuildEventArtifactUploaderFactory;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
-import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutorFactory;
 import com.google.devtools.build.lib.runtime.ServerBuilder;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -92,14 +90,10 @@ public final class RemoteModule extends BlazeModule {
   private final BuildEventArtifactUploaderFactoryDelegate
       buildEventArtifactUploaderFactoryDelegate = new BuildEventArtifactUploaderFactoryDelegate();
 
-  private final RepositoryRemoteExecutorFactoryDelegate repositoryRemoteExecutorFactoryDelegate =
-      new RepositoryRemoteExecutorFactoryDelegate();
-
   @Override
   public void serverInit(OptionsParsingResult startupOptions, ServerBuilder builder) {
     builder.addBuildEventArtifactUploaderFactory(
         buildEventArtifactUploaderFactoryDelegate, "remote");
-    builder.setRepositoryRemoteExecutorFactory(repositoryRemoteExecutorFactoryDelegate);
   }
 
   /** Returns whether remote execution should be available. */
@@ -135,9 +129,15 @@ public final class RemoteModule extends BlazeModule {
       return;
     }
 
-    if ((enableHttpCache || enableDiskCache) && enableRemoteExecution) {
+    if ((enableDiskCache || enableHttpCache) && enableRemoteExecution) {
       throw new AbruptExitException(
-          "Cannot combine gRPC based remote execution with disk caching or" + " HTTP-based caching",
+          "Cannot combine gRPC based remote execution with local disk or HTTP-based caching",
+          ExitCode.COMMAND_LINE_ERROR);
+    }
+
+    if (enableDiskCache && enableGrpcCache) {
+      throw new AbruptExitException(
+          "Cannot combine gRPC based remote caching with local disk caching",
           ExitCode.COMMAND_LINE_ERROR);
     }
 
@@ -151,7 +151,7 @@ public final class RemoteModule extends BlazeModule {
     cleanAndCreateRemoteLogsDir(logDir);
 
     try {
-      if ((enableHttpCache || enableDiskCache) && !enableGrpcCache) {
+      if (enableHttpCache || enableDiskCache) {
         RemoteCacheClient cacheClient =
             RemoteCacheClientFactory.create(
                 remoteOptions,
@@ -242,7 +242,7 @@ public final class RemoteModule extends BlazeModule {
               remoteOptions.remoteTimeout,
               retrier);
       cacheChannel.release();
-      RemoteCacheClient cacheClient =
+      GrpcCacheClient cacheClient =
           new GrpcCacheClient(
               cacheChannel.retain(),
               credentials,
@@ -272,36 +272,14 @@ public final class RemoteModule extends BlazeModule {
             new GrpcRemoteExecutor(
                 execChannel.retain(),
                 GoogleAuthUtils.newCallCredentials(authAndTlsOptions),
-                execRetrier,
-                remoteOptions);
+                execRetrier);
         execChannel.release();
         RemoteExecutionCache remoteCache =
             new RemoteExecutionCache(cacheClient, remoteOptions, digestUtil);
         actionContextProvider =
             RemoteActionContextProvider.createForRemoteExecution(
                 env, remoteCache, remoteExecutor, retryScheduler, digestUtil, logDir);
-        Context repoContext =
-            TracingMetadataUtils.contextWithMetadata(
-                buildRequestId, invocationId, "repository_rule");
-        repositoryRemoteExecutorFactoryDelegate.init(
-            new RemoteRepositoryRemoteExecutorFactory(
-                remoteCache,
-                remoteExecutor,
-                digestUtil,
-                repoContext,
-                remoteOptions.remoteInstanceName,
-                remoteOptions.remoteAcceptCached));
       } else {
-        if (enableDiskCache) {
-          cacheClient =
-              RemoteCacheClientFactory.createDiskAndRemoteClient(
-                  env.getWorkingDirectory(),
-                  remoteOptions.diskCache,
-                  remoteOptions.remoteVerifyDownloads,
-                  digestUtil,
-                  cacheClient);
-        }
-
         RemoteCache remoteCache = new RemoteCache(cacheClient, remoteOptions, digestUtil);
         actionContextProvider =
             RemoteActionContextProvider.createForRemoteCaching(
@@ -326,11 +304,11 @@ public final class RemoteModule extends BlazeModule {
       return ImmutableList.of();
     }
     boolean noPruningManifestsInBazel =
-        runfilesSupport.getRunfiles().getPruningManifests().isEmpty();
+        Iterables.isEmpty(runfilesSupport.getRunfiles().getPruningManifests());
     Preconditions.checkState(
         noPruningManifestsInBazel, "Bazel should not have pruning manifests. This is a bug.");
     ImmutableList.Builder<Artifact> runfilesBuilder = ImmutableList.builder();
-    for (Artifact runfile : runfilesSupport.getRunfiles().getUnconditionalArtifacts().toList()) {
+    for (Artifact runfile : runfilesSupport.getRunfiles().getUnconditionalArtifacts()) {
       if (runfile.isSourceArtifact()) {
         continue;
       }
@@ -347,7 +325,7 @@ public final class RemoteModule extends BlazeModule {
     return testProvider.getTestParams().getOutputs();
   }
 
-  private static NestedSet<? extends ActionInput> getArtifactsToBuild(
+  private static Iterable<? extends ActionInput> getArtifactsToBuild(
       ConfiguredTarget buildTarget, TopLevelArtifactContext topLevelArtifactContext) {
     return TopLevelArtifactHelper.getAllArtifactsToBuild(buildTarget, topLevelArtifactContext)
         .getImportantArtifacts();
@@ -378,7 +356,7 @@ public final class RemoteModule extends BlazeModule {
           // When running a test download the test.log and test.xml.
           filesToDownload.addAll(getTestOutputs(configuredTarget));
         } else {
-          filesToDownload.addAll(getArtifactsToBuild(configuredTarget, artifactContext).toList());
+          filesToDownload.addAll(getArtifactsToBuild(configuredTarget, artifactContext));
           filesToDownload.addAll(getRunfiles(configuredTarget));
         }
       }
@@ -438,7 +416,6 @@ public final class RemoteModule extends BlazeModule {
     }
 
     buildEventArtifactUploaderFactoryDelegate.reset();
-    repositoryRemoteExecutorFactoryDelegate.reset();
     actionContextProvider = null;
     actionInputFetcher = null;
     remoteOutputsMode = null;
@@ -519,7 +496,7 @@ public final class RemoteModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return ImmutableList.of("build", "test", "fetch").contains(command.name())
+    return "build".equals(command.name())
         ? ImmutableList.of(RemoteOptions.class, AuthAndTLSOptions.class)
         : ImmutableList.of();
   }
@@ -545,30 +522,6 @@ public final class RemoteModule extends BlazeModule {
         return new LocalFilesArtifactUploader();
       }
       return uploaderFactory0.create(env);
-    }
-  }
-
-  private static class RepositoryRemoteExecutorFactoryDelegate
-      implements RepositoryRemoteExecutorFactory {
-
-    private volatile RepositoryRemoteExecutorFactory delegate;
-
-    public void init(RepositoryRemoteExecutorFactory delegate) {
-      Preconditions.checkState(this.delegate == null);
-      this.delegate = delegate;
-    }
-
-    public void reset() {
-      this.delegate = null;
-    }
-
-    @Override
-    public RepositoryRemoteExecutor create() {
-      RepositoryRemoteExecutorFactory delegate = this.delegate;
-      if (delegate == null) {
-        return null;
-      }
-      return delegate.create();
     }
   }
 }
