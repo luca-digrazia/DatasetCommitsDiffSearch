@@ -1,30 +1,30 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.metrics.Gauge;
 import org.graylog2.restclient.lib.metrics.Metric;
+import org.graylog2.restclient.lib.plugin.configuration.RequestedConfigurationField;
 import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
 import org.graylog2.restclient.lib.timeranges.RelativeRange;
 import org.graylog2.restclient.models.api.requests.AddStaticFieldRequest;
@@ -32,6 +32,7 @@ import org.graylog2.restclient.models.api.requests.MultiMetricRequest;
 import org.graylog2.restclient.models.api.responses.metrics.GaugeResponse;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
 import org.graylog2.restclient.models.api.responses.system.InputSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.InputTypeSummaryResponse;
 import org.graylog2.restclient.models.api.results.MessageResult;
 import org.graylog2.restroutes.generated.routes;
 import org.joda.time.DateTime;
@@ -42,7 +43,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-public class Input {
+public class Input extends ConfigurableEntity {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(Input.class);
 
@@ -61,6 +62,7 @@ public class Input {
     private final String title;
     private final DateTime createdAt;
     private final User creatorUser;
+    private final String contentPack;
     private final Boolean global;
     private final Map<String, Object> attributes;
     private final Map<String, String> staticFields;
@@ -86,6 +88,7 @@ public class Input {
         this.attributes = is.attributes;
         this.staticFields = is.staticFields;
         this.createdAt = DateTime.parse(is.createdAt);
+        this.contentPack = is.contentPack;
 
         // We might get a double parsed from JSON here. Make sure to round it to Integer. (would be .0 anyways)
         for (Map.Entry<String, Object> e : attributes.entrySet()) {
@@ -136,6 +139,10 @@ public class Input {
 
     public User getCreatorUser() {
         return creatorUser;
+    }
+
+    public String getContentPack() {
+        return contentPack;
     }
 
     public Map<String, String> getStaticFields() {
@@ -211,7 +218,10 @@ public class Input {
     }
 
     private long asLong(String read_bytes, Map<String, Metric> metrics) {
-        return ((Number)((Gauge)metrics.get(read_bytes)).getValue()).longValue();
+        if (metrics.get(read_bytes) != null)
+            return ((Number)((Gauge)metrics.get(read_bytes)).getValue()).longValue();
+        else
+            return 0;
     }
 
     private String qualifiedIOMetricName(String base, boolean total) {
@@ -253,6 +263,18 @@ public class Input {
 
     public Map<String, Object> getAttributes() {
         return attributes;
+    }
+    public Map<String, Object> getAttributes(List<RequestedConfigurationField> configurationFields ) {
+        return getConfiguration(configurationFields);
+    }
+
+    public Map<String, Object> getAttributes(InputTypeSummaryResponse typeSummaryResponse ) {
+        return getAttributes(typeSummaryResponse.getRequestedConfiguration());
+    }
+
+    @Override
+    public Map<String, Object> getConfiguration() {
+        return getAttributes();
     }
 
     public Boolean getGlobal() {
