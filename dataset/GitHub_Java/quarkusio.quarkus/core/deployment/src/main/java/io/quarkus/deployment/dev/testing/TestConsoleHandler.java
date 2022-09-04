@@ -166,8 +166,12 @@ public class TestConsoleHandler implements TestListener {
                             + " were skipped. Tests took " + (results.getTotalTime())
                             + "ms." + "\u001b[0m";
                 } else {
-                    int failedTestsNum = results.getCurrentFailing().size();
-                    boolean hasFailingTests = failedTestsNum > 0;
+                    StringBuilder sb = new StringBuilder(
+                            "\u001B[91mTest run failed, " + methodCount.get() + " tests were run, "
+                                    + results.getCurrentFailing().size()
+                                    + " failed, "
+                                    + skipped.get()
+                                    + " were skipped. Tests took " + results.getTotalTime() + "ms");
                     for (Map.Entry<String, TestClassResult> classEntry : results.getCurrentFailing().entrySet()) {
                         for (TestResult test : classEntry.getValue().getFailing()) {
                             log.error(
@@ -175,12 +179,7 @@ public class TestConsoleHandler implements TestListener {
                                     test.getTestExecutionResult().getThrowable().get());
                         }
                     }
-                    String output = String.format("Test run failed, %d tests were run, ", methodCount.get())
-                            + String.format("%s%d failed%s, ",
-                                    hasFailingTests ? "\u001B[1m" : "", failedTestsNum,
-                                    hasFailingTests ? "\u001B[2m" : "")
-                            + String.format("%d were skipped. Tests took %dms", skipped.get(), results.getTotalTime());
-                    lastStatus = "\u001B[91m" + output + "\u001b[0m";
+                    lastStatus = sb.toString() + "\u001b[0m";
                 }
                 //this will re-print when using the basic console
                 promptHandler.setPrompt(RUNNING_PROMPT);
