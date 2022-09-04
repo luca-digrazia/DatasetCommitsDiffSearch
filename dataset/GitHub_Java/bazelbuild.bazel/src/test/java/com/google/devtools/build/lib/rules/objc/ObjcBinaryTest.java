@@ -867,21 +867,6 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testCompileWithTextualHeaders() throws Exception {
-    checkCompileWithTextualHeaders(RULE_TYPE);
-  }
-
-  @Test
-  public void testCompilesWithHdrs() throws Exception {
-    checkCompilesWithHdrs(RULE_TYPE);
-  }
-
-  @Test
-  public void testCompilesSources() throws Exception {
-    checkCompilesSources(RULE_TYPE);
-  }
-
-  @Test
   public void testCreate_debugSymbolActionWithAppleFlag() throws Exception {
     useConfiguration("--apple_generate_dsym");
     RULE_TYPE.scratchTarget(scratch, "srcs", "['a.m']");
@@ -929,10 +914,5 @@ public class ObjcBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testCustomModuleMap() throws Exception {
     checkCustomModuleMap(RULE_TYPE);
-  }
-
-  @Test
-  public void testGenruleDependency() throws Exception {
-    checkGenruleDependency(RULE_TYPE);
   }
 }

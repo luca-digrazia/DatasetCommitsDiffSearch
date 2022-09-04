@@ -15,9 +15,8 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -25,6 +24,7 @@ import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap.UmbrellaHeaderStrategy;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -244,7 +244,7 @@ public final class IntermediateArtifacts {
   }
 
   private Artifact scopedArtifact(PathFragment scopeRelative, boolean inGenfiles) {
-    ArtifactRoot root =
+    Root root =
         inGenfiles
             ? buildConfiguration.getGenfilesDirectory(ruleContext.getRule().getRepository())
             : buildConfiguration.getBinDirectory(ruleContext.getRule().getRepository());
@@ -297,6 +297,14 @@ public final class IntermediateArtifacts {
    */
   public Artifact gcnoFile(Artifact source) {
      return inUniqueObjsDir(source, ".gcno");
+  }
+
+  /**
+   * Returns the artifact corresponding to the pbxproj control file, which specifies the information
+   * required to generate the Xcode project file.
+   */
+  public Artifact pbxprojControlArtifact() {
+    return appendExtension(".xcodeproj-control");
   }
 
   /**
@@ -431,9 +439,9 @@ public final class IntermediateArtifacts {
             .toString()
             .replace("//", "")
             .replace("@", "")
-            .replace("-", "_")
             .replace("/", "_")
             .replace(":", "_");
+ 
     Optional<Artifact> customModuleMap = CompilationSupport.getCustomModuleMap(ruleContext);
     if (customModuleMap.isPresent()) {
       return new CppModuleMap(customModuleMap.get(), moduleName);

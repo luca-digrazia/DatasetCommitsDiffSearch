@@ -263,7 +263,7 @@ public final class CcLibraryHelper {
   private final List<Artifact> objectFiles = new ArrayList<>();
   private final List<Artifact> picObjectFiles = new ArrayList<>();
   private final List<Artifact> nonCodeLinkerInputs = new ArrayList<>();
-  private ImmutableList<String> copts = ImmutableList.of();
+  private final List<String> copts = new ArrayList<>();
   private final List<String> linkopts = new ArrayList<>();
   @Nullable private Pattern nocopts;
   private final Set<String> defines = new LinkedHashSet<>();
@@ -371,14 +371,15 @@ public final class CcLibraryHelper {
 
   /** Sets fields that overlap for cc_library and cc_binary rules. */
   public CcLibraryHelper fromCommon(CcCommon common) {
-    setCopts(common.getCopts());
-    addDefines(common.getDefines());
-    addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET));
-    addLooseIncludeDirs(common.getLooseIncludeDirs());
-    addNonCodeLinkerInputs(common.getLinkerScripts());
-    addSystemIncludeDirs(common.getSystemIncludeDirs());
-    setNoCopts(common.getNoCopts());
-    setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
+    this
+        .addCopts(common.getCopts())
+        .addDefines(common.getDefines())
+        .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
+        .addLooseIncludeDirs(common.getLooseIncludeDirs())
+        .addNonCodeLinkerInputs(common.getLinkerScripts())
+        .addSystemIncludeDirs(common.getSystemIncludeDirs())
+        .setNoCopts(common.getNoCopts())
+        .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext));
     return this;
   }
 
@@ -634,8 +635,11 @@ public final class CcLibraryHelper {
     return this;
   }
 
-  public CcLibraryHelper setCopts(ImmutableList<String> copts) {
-    this.copts = Preconditions.checkNotNull(copts);
+  /**
+   * Adds the copts to the compile command line.
+   */
+  public CcLibraryHelper addCopts(Iterable<String> copts) {
+    Iterables.addAll(this.copts, copts);
     return this;
   }
 
@@ -957,7 +961,7 @@ public final class CcLibraryHelper {
       ccOutputs =
           new CcCompilationOutputs.Builder()
               .merge(ccOutputs)
-              .addLtoBitcodeFile(ccOutputs.getLtoBitcodeFiles())
+              .addLTOBitcodeFile(ccOutputs.getLtoBitcodeFiles())
               .addObjectFiles(objectFiles)
               .addPicObjectFiles(picObjectFiles)
               .build();
@@ -1032,7 +1036,7 @@ public final class CcLibraryHelper {
             deps, /*generateDwo=*/
             false, /*ltoBackendArtifactsUsePic=*/
             false, /*ltoBackendArtifacts=*/
-            ImmutableList.<LtoBackendArtifacts>of());
+            ImmutableList.<LTOBackendArtifacts>of());
     Runfiles cppStaticRunfiles = collectCppRunfiles(ccLinkingOutputs, true);
     Runfiles cppSharedRunfiles = collectCppRunfiles(ccLinkingOutputs, false);
 
@@ -1148,14 +1152,9 @@ public final class CcLibraryHelper {
    * Creates the C/C++ compilation action creator.
    */
   private CppModel initializeCppModel() {
-    return new CppModel(
-            ruleContext,
-            semantics,
-            ccToolchain,
-            fdoSupport,
-            configuration,
-            copts)
+    return new CppModel(ruleContext, semantics, ccToolchain, fdoSupport, configuration)
         .addCompilationUnitSources(compilationUnitSources)
+        .addCopts(copts)
         .setLinkTargetType(linkType)
         .setNeverLink(neverlink)
         .addLinkActionInputs(linkActionInputs)
