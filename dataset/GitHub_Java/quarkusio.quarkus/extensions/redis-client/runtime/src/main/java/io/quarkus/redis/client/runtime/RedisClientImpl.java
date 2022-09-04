@@ -10,9 +10,9 @@ import io.vertx.redis.client.Response;
 
 class RedisClientImpl implements RedisClient {
     private final RedisAPI redisAPI;
-    private final Duration timeout;
+    private final long timeout;
 
-    public RedisClientImpl(RedisAPI redisAPI, Duration timeout) {
+    public RedisClientImpl(RedisAPI redisAPI, long timeout) {
         this.redisAPI = redisAPI;
         this.timeout = timeout;
     }
@@ -1023,7 +1023,7 @@ class RedisClientImpl implements RedisClient {
     }
 
     private Response await(Uni<io.vertx.mutiny.redis.client.Response> mutinyResponse) {
-        io.vertx.mutiny.redis.client.Response response = mutinyResponse.await().atMost(timeout);
+        io.vertx.mutiny.redis.client.Response response = mutinyResponse.await().atMost(Duration.ofSeconds(timeout));
         if (response == null) {
             return null;
         }
