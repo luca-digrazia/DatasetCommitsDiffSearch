@@ -26,7 +26,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -266,8 +265,7 @@ public class DevMojo extends AbstractMojo {
             return;
         }
 
-        // don't warn if running in a module of a multi-module project
-        if (!sourceDir.isDirectory() && (project.getParentFile() == null || !project.getParentFile().exists())) {
+        if (!sourceDir.isDirectory()) {
             getLog().warn("The project's sources directory does not exist " + sourceDir);
         }
 
@@ -547,15 +545,26 @@ public class DevMojo extends AbstractMojo {
             devModeContext.getBuildSystemProperties().putIfAbsent("quarkus.application.version", project.getVersion());
 
             devModeContext.setSourceEncoding(getSourceEncoding());
+            devModeContext.setSourceJavaVersion(source);
+            devModeContext.setTargetJvmVersion(target);
 
             // Set compilation flags.  Try the explicitly given configuration first.  Otherwise,
             // refer to the configuration of the Maven Compiler Plugin.
-            final Optional<Xpp3Dom> compilerPluginConfiguration = findCompilerPluginConfiguration();
             if (compilerArgs != null) {
                 devModeContext.setCompilerOptions(compilerArgs);
-            } else if (compilerPluginConfiguration.isPresent()) {
-                final Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.get().getChild("compilerArgs");
-                if (compilerPluginArgsConfiguration != null) {
+            } else {
+                for (Plugin plugin : project.getBuildPlugins()) {
+                    if (!plugin.getKey().equals("org.apache.maven.plugins:maven-compiler-plugin")) {
+                        continue;
+                    }
+                    Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
+                    if (compilerPluginConfiguration == null) {
+                        continue;
+                    }
+                    Xpp3Dom compilerPluginArgsConfiguration = compilerPluginConfiguration.getChild("compilerArgs");
+                    if (compilerPluginArgsConfiguration == null) {
+                        continue;
+                    }
                     List<String> compilerPluginArgs = new ArrayList<>();
                     for (Xpp3Dom argConfiguration : compilerPluginArgsConfiguration.getChildren()) {
                         compilerPluginArgs.add(argConfiguration.getValue());
@@ -566,24 +575,7 @@ public class DevMojo extends AbstractMojo {
                         compilerPluginArgs.add(compilerPluginArgsConfiguration.getValue().trim());
                     }
                     devModeContext.setCompilerOptions(compilerPluginArgs);
-                }
-            }
-            if (source != null) {
-                devModeContext.setSourceJavaVersion(source);
-            } else if (compilerPluginConfiguration.isPresent()) {
-                final Xpp3Dom javacSourceVersion = compilerPluginConfiguration.get().getChild("source");
-                if (javacSourceVersion != null && javacSourceVersion.getValue() != null
-                        && !javacSourceVersion.getValue().trim().isEmpty()) {
-                    devModeContext.setSourceJavaVersion(javacSourceVersion.getValue().trim());
-                }
-            }
-            if (target != null) {
-                devModeContext.setTargetJvmVersion(target);
-            } else if (compilerPluginConfiguration.isPresent()) {
-                final Xpp3Dom javacTargetVersion = compilerPluginConfiguration.get().getChild("target");
-                if (javacTargetVersion != null && javacTargetVersion.getValue() != null
-                        && !javacTargetVersion.getValue().trim().isEmpty()) {
-                    devModeContext.setTargetJvmVersion(javacTargetVersion.getValue().trim());
+                    break;
                 }
             }
 
@@ -862,18 +854,5 @@ public class DevMojo extends AbstractMojo {
             }
         }
         return ret;
-    }
-
-    private Optional<Xpp3Dom> findCompilerPluginConfiguration() {
-        for (final Plugin plugin : project.getBuildPlugins()) {
-            if (!plugin.getKey().equals("org.apache.maven.plugins:maven-compiler-plugin")) {
-                continue;
-            }
-            final Xpp3Dom compilerPluginConfiguration = (Xpp3Dom) plugin.getConfiguration();
-            if (compilerPluginConfiguration != null) {
-                return Optional.of(compilerPluginConfiguration);
-            }
-        }
-        return Optional.empty();
     }
 }
