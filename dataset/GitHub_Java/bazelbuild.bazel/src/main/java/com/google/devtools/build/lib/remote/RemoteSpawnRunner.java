@@ -230,11 +230,6 @@ class RemoteSpawnRunner implements SpawnRunner {
             .getResultsCachePolicyBuilder()
             .setPriority(remoteOptions.remoteResultCachePriority);
       }
-      if (remoteOptions.remoteExecutionPriority != 0) {
-        requestBuilder
-            .getExecutionPolicyBuilder()
-            .setPriority(remoteOptions.remoteExecutionPriority);
-      }
       ExecuteRequest request = requestBuilder.build();
       try {
         return retrier.execute(

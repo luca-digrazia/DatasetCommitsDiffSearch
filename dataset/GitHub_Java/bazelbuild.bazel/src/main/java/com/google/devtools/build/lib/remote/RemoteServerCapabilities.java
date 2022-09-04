@@ -150,9 +150,7 @@ class RemoteServerCapabilities {
       // Check remote execution is enabled.
       ExecutionCapabilities execCap = capabilities.getExecutionCapabilities();
       if (!execCap.getExecEnabled()) {
-        result.addError(
-            "Remote execution is not supported by the remote server, or the current "
-                + "account is not authorized to use remote execution.");
+        result.addError("Remote execution is not supported by the remote server.");
         return result.build(); // No point checking other execution fields.
       }
 
@@ -175,16 +173,16 @@ class RemoteServerCapabilities {
           && !cacheCap.getActionCacheUpdateCapabilities().getUpdateEnabled()) {
         result.addError(
             "--remote_local_fallback and --remote_upload_local_results are set, "
-                + "but the current account is not authorized to write local results "
-                + "to the remote cache.");
+                + "but the remote server prohibits writing local results to the "
+                + "remote cache.");
       }
     } else {
       // Local execution: check updating remote cache is allowed.
       if (remoteOptions.remoteUploadLocalResults
           && !cacheCap.getActionCacheUpdateCapabilities().getUpdateEnabled()) {
         result.addError(
-            "--remote_upload_local_results is set, but the current account is not authorized "
-                + "to write local results to the remote cache.");
+            "--remote_upload_local_results is set, but the remote server prohibits "
+                + "writing local results to remote cache.");
       }
     }
 
