@@ -2,7 +2,6 @@ package tv.danmaku.ijk.media.exo2;
 
 import android.content.Context;
 import android.media.AudioManager;
-import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,7 +14,6 @@ import com.shuyu.gsyvideoplayer.model.GSYModel;
 import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
 import com.shuyu.gsyvideoplayer.player.IPlayerManager;
 
-import java.text.DecimalFormat;
 import java.util.List;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
@@ -27,17 +25,13 @@ import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 public class Exo2PlayerManager implements IPlayerManager {
 
-    private Context context;
-
     private IjkExo2MediaPlayer mediaPlayer;
 
     private Surface surface;
 
     private DummySurface dummySurface;
 
-    private long lastTotalRxBytes = 0;
-
-    private long lastTimeStamp = 0;
+    private Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public IMediaPlayer getMediaPlayer() {
@@ -46,7 +40,6 @@ public class Exo2PlayerManager implements IPlayerManager {
 
     @Override
     public void initVideoPlayer(Context context, Message msg, List<VideoOptionModel> optionModelList, ICacheManager cacheManager) {
-        this.context = context.getApplicationContext();
         mediaPlayer = new IjkExo2MediaPlayer(context);
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         if (dummySurface == null) {
@@ -80,58 +73,76 @@ public class Exo2PlayerManager implements IPlayerManager {
         if (mediaPlayer == null) {
             return;
         }
-        if (msg.obj == null) {
-            mediaPlayer.setSurface(dummySurface);
-        } else {
-            Surface holder = (Surface) msg.obj;
-            surface = holder;
-            mediaPlayer.setSurface(holder);
-        }
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (msg.obj == null) {
+                    mediaPlayer.setSurface(dummySurface);
+                } else {
+                    Surface holder = (Surface) msg.obj;
+                    surface = holder;
+                    mediaPlayer.setSurface(holder);
+                }
+            }
+        });
     }
 
     @Override
     public void setSpeed(final float speed, final boolean soundTouch) {
-        if (mediaPlayer != null) {
-            try {
-                mediaPlayer.setSpeed(speed, 1);
-            } catch (Exception e) {
-                e.printStackTrace();
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mediaPlayer != null) {
+                    try {
+                        mediaPlayer.setSpeed(speed, 1);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             }
-        }
+        });
     }
 
     @Override
     public void setNeedMute(final boolean needMute) {
-        if (mediaPlayer != null) {
-            if (needMute) {
-                mediaPlayer.setVolume(0, 0);
-            } else {
-                mediaPlayer.setVolume(1, 1);
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mediaPlayer != null) {
+                    if (needMute) {
+                        mediaPlayer.setVolume(0, 0);
+                    } else {
+                        mediaPlayer.setVolume(1, 1);
+                    }
+                }
             }
-        }
+        });
     }
 
 
     @Override
     public void releaseSurface() {
         if (surface != null) {
-            //surface.release();
+            surface.release();
             surface = null;
         }
     }
 
     @Override
     public void release() {
-        if (mediaPlayer != null) {
-            mediaPlayer.setSurface(null);
-            mediaPlayer.release();
-        }
-        if (dummySurface != null) {
-            dummySurface.release();
-            dummySurface = null;
-        }
-        lastTotalRxBytes = 0;
-        lastTimeStamp = 0;
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mediaPlayer != null) {
+                    mediaPlayer.setSurface(null);
+                    mediaPlayer.release();
+                }
+                if (dummySurface != null) {
+                    dummySurface.release();
+                    dummySurface = null;
+                }
+            }
+        });
     }
 
     @Override
@@ -145,7 +156,7 @@ public class Exo2PlayerManager implements IPlayerManager {
     @Override
     public long getNetSpeed() {
         if (mediaPlayer != null) {
-            return getNetSpeed(context);
+            //todo
         }
         return 0;
     }
@@ -245,23 +256,4 @@ public class Exo2PlayerManager implements IPlayerManager {
     public boolean isSurfaceSupportLockCanvas() {
         return false;
     }
-
-
-    private long getNetSpeed(Context context) {
-        if (context == null) {
-            return 0;
-        }
-        long nowTotalRxBytes = TrafficStats.getUidRxBytes(context.getApplicationInfo().uid) == TrafficStats.UNSUPPORTED ? 0 : (TrafficStats.getTotalRxBytes() / 1024);//转为KB
-        long nowTimeStamp = System.currentTimeMillis();
-        long calculationTime = (nowTimeStamp - lastTimeStamp);
-        if (calculationTime == 0) {
-            return calculationTime;
-        }
-        //毫秒转换
-        long speed = ((nowTotalRxBytes - lastTotalRxBytes) * 1000 / calculationTime);
-        lastTimeStamp = nowTimeStamp;
-        lastTotalRxBytes = nowTotalRxBytes;
-        return speed;
-    }
-
 }
