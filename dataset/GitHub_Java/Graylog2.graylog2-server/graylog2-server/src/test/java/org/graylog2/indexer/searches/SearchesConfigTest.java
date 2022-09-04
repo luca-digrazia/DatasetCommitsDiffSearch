@@ -25,7 +25,7 @@ import static org.junit.Assert.assertEquals;
 public class SearchesConfigTest {
 
     @Test
-    public void defaultLimit() throws InvalidRangeParametersException {
+    public void limit() throws InvalidRangeParametersException {
         final SearchesConfig config = SearchesConfig.builder()
                 .query("")
                 .range(RelativeRange.create(5))
@@ -34,30 +34,6 @@ public class SearchesConfigTest {
                 .build();
 
         assertEquals("Limit should default", SearchesConfig.DEFAULT_LIMIT, config.limit());
-    }
-
-    @Test
-    public void negativeLimit() throws InvalidRangeParametersException {
-        final SearchesConfig config = SearchesConfig.builder()
-                .query("")
-                .range(RelativeRange.create(5))
-                .limit(-100)
-                .offset(0)
-                .build();
-
-        assertEquals("Limit should default", SearchesConfig.DEFAULT_LIMIT, config.limit());
-    }
-
-    @Test
-    public void explicitLimit() throws InvalidRangeParametersException {
-        final SearchesConfig config = SearchesConfig.builder()
-                .query("")
-                .range(RelativeRange.create(5))
-                .limit(23)
-                .offset(0)
-                .build();
-
-        assertEquals("Limit should not default", 23, config.limit());
     }
 
 }
