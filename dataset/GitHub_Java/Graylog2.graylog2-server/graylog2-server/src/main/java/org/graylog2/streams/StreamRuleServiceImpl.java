@@ -16,7 +16,6 @@
  */
 package org.graylog2.streams;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCursor;
@@ -32,6 +31,7 @@ import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleReques
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -41,7 +41,6 @@ public class StreamRuleServiceImpl extends PersistedServiceImpl implements Strea
     @Inject
     public StreamRuleServiceImpl(MongoConnection mongoConnection) {
         super(mongoConnection);
-        collection(StreamRuleImpl.class).createIndex(StreamRuleImpl.FIELD_STREAM_ID);
     }
 
     @Override
@@ -94,7 +93,8 @@ public class StreamRuleServiceImpl extends PersistedServiceImpl implements Strea
     }
 
     @Override
-    public Map<String, List<StreamRule>> loadForStreamIds(Collection<String> streamIds) {
+    public Map<String, List<StreamRule>> loadForStreamIds(Collection<String> streamIds)
+    {
         final List<ObjectId> objectIds = streamIds.stream()
             .map(ObjectId::new)
             .collect(Collectors.toList());
@@ -124,19 +124,20 @@ public class StreamRuleServiceImpl extends PersistedServiceImpl implements Strea
 
     @Override
     public Map<String, Long> streamRuleCountByStream() {
-        final ImmutableMap.Builder<String, Long> streamRules = ImmutableMap.builder();
-        try(DBCursor streamIds = collection(StreamImpl.class).find(new BasicDBObject(), new BasicDBObject("_id", 1))) {
-            for (DBObject keys : streamIds) {
-                final ObjectId streamId = (ObjectId) keys.get("_id");
-                streamRules.put(streamId.toHexString(), streamRuleCount(streamId));
-            }
+        final DBCursor streamIds = collection(StreamImpl.class).find(new BasicDBObject(), new BasicDBObject("_id", 1));
+
+        final Map<String, Long> streamRules = new HashMap<>(streamIds.size());
+        for (DBObject keys : streamIds) {
+            final ObjectId streamId = (ObjectId) keys.get("_id");
+            streamRules.put(streamId.toHexString(), streamRuleCount(streamId));
         }
 
-        return streamRules.build();
+        return streamRules;
     }
 
     @SuppressWarnings("unchecked")
-    private StreamRule toStreamRule(DBObject dbObject) {
+    private StreamRule toStreamRule(DBObject dbObject)
+    {
         final Map<String, Object> fields = dbObject.toMap();
         return new StreamRuleImpl((ObjectId) dbObject.get("_id"), fields);
     }
