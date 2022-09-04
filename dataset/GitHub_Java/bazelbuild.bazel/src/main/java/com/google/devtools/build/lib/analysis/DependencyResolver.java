@@ -54,7 +54,6 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -76,8 +75,7 @@ public abstract class DependencyResolver {
     /**
      * The attribute through which a dependency arises.
      *
-     * <p>Returns {@code null} for visibility, the dependency pointing from an output file to its
-     * generating rule and toolchain dependencies.
+     * <p>Should only be called for dependency kinds representing an attribute.
      */
     @Nullable
     Attribute getAttribute();
@@ -97,7 +95,7 @@ public abstract class DependencyResolver {
 
     @Override
     public Attribute getAttribute() {
-      return null;
+      throw new IllegalStateException();
     }
 
     @Nullable
@@ -339,29 +337,6 @@ public abstract class DependencyResolver {
           PartiallyResolvedDependency.of(toLabel, attributeTransition, propagatingAspects.build()));
     }
 
-    Set<PartiallyResolvedDependency> illegalVisibilityDeps = new LinkedHashSet<>();
-    for (PartiallyResolvedDependency dep : partiallyResolvedDeps.get(VISIBILITY_DEPENDENCY)) {
-      Target toTarget = targetMap.get(dep.getLabel());
-      if (toTarget == null) {
-        // Dependency pointing to non-existent target. This error was reported above, so we can just
-        // ignore this dependency.
-      }
-
-      if (!(toTarget instanceof PackageGroup)) {
-        // Note that this error could also be caught in
-        // AbstractConfiguredTarget.convertVisibility(), but we have an
-        // opportunity here to avoid dependency cycles that result from
-        // the visibility attribute of a rule referring to a rule that
-        // depends on it (instead of its package)
-        invalidPackageGroupReferenceHook(node, dep.getLabel());
-        illegalVisibilityDeps.add(dep);
-      }
-    }
-
-    for (PartiallyResolvedDependency illegalVisibilityDep : illegalVisibilityDeps) {
-      partiallyResolvedDeps.remove(VISIBILITY_DEPENDENCY, illegalVisibilityDep);
-    }
-
     OrderedSetMultimap<Attribute, Dependency> outgoingEdges = OrderedSetMultimap.create();
 
     for (Map.Entry<DependencyKind, PartiallyResolvedDependency> entry :
@@ -383,6 +358,29 @@ public abstract class DependencyResolver {
         // Dependency pointing to non-existent target. This error was reported above, so we can just
         // ignore this dependency. Toolchain dependencies always have toTarget == null since we do
         // not depend on their package.
+        continue;
+      }
+
+      if (entry.getKey() == VISIBILITY_DEPENDENCY) {
+        if (toTarget instanceof PackageGroup) {
+          outgoingEdges.put(null, Dependency.withNullConfiguration(dep.getLabel()));
+        } else {
+          // Note that this error could also be caught in
+          // AbstractConfiguredTarget.convertVisibility(), but we have an
+          // opportunity here to avoid dependency cycles that result from
+          // the visibility attribute of a rule referring to a rule that
+          // depends on it (instead of its package)
+          invalidPackageGroupReferenceHook(node, dep.getLabel());
+        }
+
+        continue;
+      }
+
+      if (entry.getKey() == OUTPUT_FILE_RULE_DEPENDENCY) {
+        outgoingEdges.put(
+            null,
+            Dependency.withTransitionAndAspects(
+                dep.getLabel(), NoTransition.INSTANCE, AspectCollection.EMPTY));
         continue;
       }
 
