@@ -146,9 +146,17 @@ class OutputStore {
     return treeArtifactContents.get(artifact);
   }
 
-  void addTreeArtifactContents(Artifact artifact, TreeFileArtifact contents) {
+  /**
+   * Same as {@link #getTreeArtifactContents} except that a new set of contents is created and
+   * stored instead of returning {@code null}.
+   */
+  Set<TreeFileArtifact> getOrCreateTreeArtifactContents(Artifact artifact) {
     Preconditions.checkArgument(artifact.isTreeArtifact(), artifact);
-    treeArtifactContents.computeIfAbsent(artifact, a -> Sets.newConcurrentHashSet()).add(contents);
+    return treeArtifactContents.computeIfAbsent(artifact, unused -> Sets.newConcurrentHashSet());
+  }
+
+  void addTreeArtifactContents(Artifact artifact, TreeFileArtifact contents) {
+    getOrCreateTreeArtifactContents(artifact).add(contents);
   }
 
   void injectRemoteFile(Artifact output, byte[] digest, long size, int locationIndex) {
