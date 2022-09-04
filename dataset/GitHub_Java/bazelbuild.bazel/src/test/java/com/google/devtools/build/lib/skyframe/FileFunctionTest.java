@@ -752,8 +752,7 @@ public class FileFunctionTest {
     FileValue value = (FileValue) result.get(key);
     assertThat(value).isNotNull();
     assertThat(value.exists()).isTrue();
-    assertThat(value.realRootedPath().getRootRelativePath().getPathString())
-        .isEqualTo("insideroot");
+    assertThat(value.realRootedPath().getRelativePath().getPathString()).isEqualTo("insideroot");
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -1202,8 +1201,7 @@ public class FileFunctionTest {
       if (absoluteSymlink) {
         FileSystemUtils.ensureSymbolicLink(intermediatePath, ancestorPath);
       } else {
-        FileSystemUtils.ensureSymbolicLink(
-            intermediatePath, ancestorRootedPath.getRootRelativePath());
+        FileSystemUtils.ensureSymbolicLink(intermediatePath, ancestorRootedPath.getRelativePath());
       }
     } else {
       FileSystemUtils.ensureSymbolicLink(ancestorPath, intermediatePath);
@@ -1211,7 +1209,7 @@ public class FileFunctionTest {
         FileSystemUtils.ensureSymbolicLink(intermediatePath, descendantPath);
       } else {
         FileSystemUtils.ensureSymbolicLink(
-            intermediatePath, descendantRootedPath.getRootRelativePath());
+            intermediatePath, descendantRootedPath.getRelativePath());
       }
     }
     StoredEventHandler eventHandler = new StoredEventHandler();

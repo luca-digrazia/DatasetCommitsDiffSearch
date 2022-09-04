@@ -60,14 +60,14 @@ public interface IncludeScanner {
    *     transitively for compiled header modules as include scanning entry points, and we need to
    *     add the entry points to the inputs here.</li></ol>
    * </p>
-   *
+   * 
    * <p>{@code mainSource} is the source file relative to which the {@code cmdlineIncludes} are
    * interpreted.</p>
    */
   void process(Artifact mainSource, Collection<Artifact> sources,
       Map<Artifact, Artifact> legalOutputPaths, List<PathFragment> includeDirs,
       List<PathFragment> quoteIncludeDirs, List<String> cmdlineIncludes,
-      Set<Artifact> includes, ActionExecutionContext actionExecutionContext, Artifact grepIncludes)
+      Set<Artifact> includes, ActionExecutionContext actionExecutionContext)
       throws IOException, ExecException, InterruptedException;
 
   /** Supplies IncludeScanners upon request. */
@@ -142,8 +142,7 @@ public interface IncludeScanner {
           Artifact mainSource =  scannable.getMainIncludeScannerSource();
           Collection<Artifact> sources = scannable.getIncludeScannerSources();
           scanner.process(mainSource, sources, legalOutputPaths, quoteIncludeDirs,
-              includeDirList, cmdlineIncludes, includes, actionExecutionContext,
-              action.getGrepIncludes());
+              includeDirList, cmdlineIncludes, includes, actionExecutionContext);
         }
       } catch (IOException e) {
         throw new EnvironmentalExecException(e.getMessage());
@@ -158,14 +157,12 @@ public interface IncludeScanner {
         // the root path for such includes
         if (included.getRoot().getRoot().isAbsolute()) {
           if (FileSystemUtils.startsWithAny(
-              actionExecutionContext.getInputPath(included).asFragment(),
-              absoluteBuiltInIncludeDirs)) {
+              included.getPath().asFragment(), absoluteBuiltInIncludeDirs)) {
             // Skip include files found in absolute include directories.
             continue;
           }
           throw new UserExecException(
-              "illegal absolute path to include file: "
-                  + actionExecutionContext.getInputPath(included));
+              "illegal absolute path to include file: " + included.getPath());
         }
         inputs.add(included);
       }

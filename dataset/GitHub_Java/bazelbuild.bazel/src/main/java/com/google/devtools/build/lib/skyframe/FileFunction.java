@@ -55,7 +55,7 @@ public class FileFunction implements SkyFunction {
     RootedPath rootedPath = (RootedPath) skyKey.argument();
     RootedPath realRootedPath = null;
     FileStateValue realFileStateValue = null;
-    PathFragment relativePath = rootedPath.getRootRelativePath();
+    PathFragment relativePath = rootedPath.getRelativePath();
 
     // Resolve ancestor symlinks, but only if the current file is not the filesystem root (has no
     // parent) or a package path root (treated opaquely and handled by skyframe's DiffAwareness
@@ -117,7 +117,7 @@ public class FileFunction implements SkyFunction {
   private static Pair<RootedPath, FileStateValue> resolveFromAncestors(
       RootedPath rootedPath, Environment env)
       throws FileFunctionException, InterruptedException {
-    PathFragment relativePath = rootedPath.getRootRelativePath();
+    PathFragment relativePath = rootedPath.getRelativePath();
     RootedPath realRootedPath = rootedPath;
     FileValue parentFileValue = null;
     PathFragment parentDirectory = relativePath.getParentDirectory();
@@ -130,10 +130,8 @@ public class FileFunction implements SkyFunction {
       }
       PathFragment baseName = PathFragment.create(relativePath.getBaseName());
       RootedPath parentRealRootedPath = parentFileValue.realRootedPath();
-      realRootedPath =
-          RootedPath.toRootedPath(
-              parentRealRootedPath.getRoot(),
-              parentRealRootedPath.getRootRelativePath().getRelative(baseName));
+      realRootedPath = RootedPath.toRootedPath(parentRealRootedPath.getRoot(),
+          parentRealRootedPath.getRelativePath().getRelative(baseName));
 
       if (!parentFileValue.exists()) {
         return Pair.<RootedPath, FileStateValue>of(

@@ -419,25 +419,25 @@ public class FilesystemValueCheckerTest {
     // To decouple FileSystemValueTester checking from Action execution, we inject TreeArtifact
     // contents into ActionExecutionValues.
 
-    SpecialArtifact out1 = createTreeArtifact("one");
+    Artifact out1 = createTreeArtifact("one");
     TreeFileArtifact file11 = treeFileArtifact(out1, "fizz");
     FileSystemUtils.createDirectoryAndParents(out1.getPath());
     FileSystemUtils.writeContentAsLatin1(file11.getPath(), "buzz");
 
-    SpecialArtifact out2 = createTreeArtifact("two");
+    Artifact out2 = createTreeArtifact("two");
     FileSystemUtils.createDirectoryAndParents(out2.getPath().getChild("subdir"));
     TreeFileArtifact file21 = treeFileArtifact(out2, "moony");
     TreeFileArtifact file22 = treeFileArtifact(out2, "subdir/wormtail");
     FileSystemUtils.writeContentAsLatin1(file21.getPath(), "padfoot");
     FileSystemUtils.writeContentAsLatin1(file22.getPath(), "prongs");
 
-    SpecialArtifact outEmpty = createTreeArtifact("empty");
+    Artifact outEmpty = createTreeArtifact("empty");
     FileSystemUtils.createDirectoryAndParents(outEmpty.getPath());
 
-    SpecialArtifact outUnchanging = createTreeArtifact("untouched");
+    Artifact outUnchanging = createTreeArtifact("untouched");
     FileSystemUtils.createDirectoryAndParents(outUnchanging.getPath());
 
-    SpecialArtifact last = createTreeArtifact("zzzzzzzzzz");
+    Artifact last = createTreeArtifact("zzzzzzzzzz");
     FileSystemUtils.createDirectoryAndParents(last.getPath());
 
     SkyKey actionLookupKey =
@@ -614,7 +614,7 @@ public class FilesystemValueCheckerTest {
         outputPath.getRelative(relPath), ArtifactRoot.asDerivedRoot(fs.getPath("/"), outputPath));
   }
 
-  private SpecialArtifact createTreeArtifact(String relPath) throws IOException {
+  private Artifact createTreeArtifact(String relPath) throws IOException {
     Path outputDir = fs.getPath("/bin");
     Path outputPath = outputDir.getRelative(relPath);
     outputDir.createDirectory();
@@ -623,7 +623,7 @@ public class FilesystemValueCheckerTest {
         outputPath,
         derivedRoot,
         derivedRoot.getExecPath().getRelative(derivedRoot.getRoot().relativize(outputPath)),
-        ArtifactOwner.NullArtifactOwner.INSTANCE,
+        ArtifactOwner.NULL_OWNER,
         SpecialArtifactType.TREE);
   }
 

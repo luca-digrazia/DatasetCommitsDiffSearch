@@ -200,7 +200,7 @@ public class Artifact
       throw new IllegalArgumentException(execPath + ": illegal execPath for " + path
           + " (root: " + root + ")");
     }
-    if (execPath.isEmpty()) {
+    if (execPath.segmentCount() == 0) {
       throw new IllegalArgumentException(
           "it is illegal to create an artifact with an empty execPath");
     }

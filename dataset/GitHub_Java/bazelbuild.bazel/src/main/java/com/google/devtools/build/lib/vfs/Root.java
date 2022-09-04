@@ -48,22 +48,22 @@ public interface Root extends Comparable<Root>, Serializable {
   }
 
   /** Returns a path by concatenating the root and the root-relative path. */
-  Path getRelative(PathFragment rootRelativePath);
+  Path getRelative(PathFragment relativePath);
 
   /** Returns a path by concatenating the root and the root-relative path. */
-  Path getRelative(String rootRelativePath);
+  Path getRelative(String relativePath);
 
   /** Returns the relative path between the root and the given path. */
   PathFragment relativize(Path path);
 
   /** Returns the relative path between the root and the given absolute path fragment. */
-  PathFragment relativize(PathFragment absolutePathFragment);
+  PathFragment relativize(PathFragment pathFragment);
 
   /** Returns whether the given path is under this root. */
   boolean contains(Path path);
 
   /** Returns whether the given absolute path fragment is under this root. */
-  boolean contains(PathFragment absolutePathFragment);
+  boolean contains(PathFragment pathFragment);
 
   /**
    * Returns the underlying path. Please avoid using this method.
@@ -84,13 +84,13 @@ public interface Root extends Comparable<Root>, Serializable {
     }
 
     @Override
-    public Path getRelative(PathFragment rootRelativePath) {
-      return path.getRelative(rootRelativePath);
+    public Path getRelative(PathFragment relativePath) {
+      return path.getRelative(relativePath);
     }
 
     @Override
-    public Path getRelative(String rootRelativePath) {
-      return path.getRelative(rootRelativePath);
+    public Path getRelative(String relativePath) {
+      return path.getRelative(relativePath);
     }
 
     @Override
@@ -99,9 +99,9 @@ public interface Root extends Comparable<Root>, Serializable {
     }
 
     @Override
-    public PathFragment relativize(PathFragment absolutePathFragment) {
-      Preconditions.checkArgument(absolutePathFragment.isAbsolute());
-      return absolutePathFragment.relativeTo(path.asFragment());
+    public PathFragment relativize(PathFragment relativePath) {
+      Preconditions.checkArgument(relativePath.isAbsolute());
+      return relativePath.relativeTo(path.asFragment());
     }
 
     @Override
@@ -110,9 +110,8 @@ public interface Root extends Comparable<Root>, Serializable {
     }
 
     @Override
-    public boolean contains(PathFragment absolutePathFragment) {
-      return absolutePathFragment.isAbsolute()
-          && absolutePathFragment.startsWith(path.asFragment());
+    public boolean contains(PathFragment relativePath) {
+      return relativePath.isAbsolute() && relativePath.startsWith(path.asFragment());
     }
 
     @Override
@@ -168,14 +167,14 @@ public interface Root extends Comparable<Root>, Serializable {
     }
 
     @Override
-    public Path getRelative(PathFragment rootRelativePath) {
-      Preconditions.checkArgument(rootRelativePath.isAbsolute());
-      return fileSystem.getPath(rootRelativePath);
+    public Path getRelative(PathFragment relativePath) {
+      Preconditions.checkArgument(relativePath.isAbsolute());
+      return fileSystem.getPath(relativePath);
     }
 
     @Override
-    public Path getRelative(String rootRelativePath) {
-      return getRelative(PathFragment.create(rootRelativePath));
+    public Path getRelative(String relativePath) {
+      return getRelative(PathFragment.create(relativePath));
     }
 
     @Override
@@ -184,9 +183,9 @@ public interface Root extends Comparable<Root>, Serializable {
     }
 
     @Override
-    public PathFragment relativize(PathFragment absolutePathFragment) {
-      Preconditions.checkArgument(absolutePathFragment.isAbsolute());
-      return absolutePathFragment;
+    public PathFragment relativize(PathFragment pathFragment) {
+      Preconditions.checkArgument(pathFragment.isAbsolute());
+      return pathFragment;
     }
 
     @Override
@@ -195,8 +194,8 @@ public interface Root extends Comparable<Root>, Serializable {
     }
 
     @Override
-    public boolean contains(PathFragment absolutePathFragment) {
-      return absolutePathFragment.isAbsolute();
+    public boolean contains(PathFragment pathFragment) {
+      return pathFragment.isAbsolute();
     }
 
     @Override

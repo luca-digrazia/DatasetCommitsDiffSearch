@@ -18,9 +18,13 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.common.hash.Hashing;
 import com.google.common.io.ByteSource;
 import com.google.common.io.CharStreams;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.vfs.Dirent.Type;
+import com.google.devtools.build.lib.vfs.Path.PathFactory;
+import com.google.devtools.common.options.EnumConverter;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,18 +40,67 @@ import java.util.List;
 @ThreadSafe
 public abstract class FileSystem {
 
-  private final DigestHashFunction digestFunction;
+  /** Type of hash function to use for digesting files. */
+  // The underlying HashFunctions are immutable and thread safe.
+  @SuppressWarnings("ImmutableEnumChecker")
+  public enum HashFunction {
+    MD5(Hashing.md5()),
+    SHA1(Hashing.sha1()),
+    SHA256(Hashing.sha256());
 
-  public FileSystem() {
-    this(DigestHashFunction.MD5);
+    private final com.google.common.hash.HashFunction hash;
+
+    HashFunction(com.google.common.hash.HashFunction hash) {
+      this.hash = hash;
+    }
+
+    /** Converts to {@link HashFunction}. */
+    public static class Converter extends EnumConverter<HashFunction> {
+      public Converter() {
+        super(HashFunction.class, "hash function");
+      }
+    }
+
+    public com.google.common.hash.HashFunction getHash() {
+      return hash;
+    }
+
+    public boolean isValidDigest(byte[] digest) {
+      return digest != null && digest.length * 8 == hash.bits();
+    }
   }
 
-  public FileSystem(DigestHashFunction digestFunction) {
+  private final HashFunction digestFunction;
+
+  public FileSystem() {
+    this(HashFunction.MD5);
+  }
+
+  public FileSystem(HashFunction digestFunction) {
     this.digestFunction = Preconditions.checkNotNull(digestFunction);
   }
 
-  public DigestHashFunction getDigestFunction() {
+  public HashFunction getDigestFunction() {
     return digestFunction;
+  }
+
+  private enum UnixPathFactory implements PathFactory {
+    INSTANCE {
+      @Override
+      public Path createRootPath(FileSystem filesystem) {
+        return new Path(filesystem, PathFragment.ROOT_DIR, null);
+      }
+
+      @Override
+      public Path createChildPath(Path parent, String childName) {
+        return new Path(parent.getFileSystem(), childName, parent);
+      }
+
+      @Override
+      public Path getCachedChildPathInternal(Path path, String childName) {
+        return Path.getCachedChildPathInternal(path, childName, /*cacheable=*/ true);
+      }
+    };
   }
 
   /**
@@ -59,23 +112,53 @@ public abstract class FileSystem {
     }
   }
 
+  /** Lazy-initialized on first access, always use {@link FileSystem#getRootDirectory} */
+  private volatile Path rootPath;
+
   private final Root absoluteRoot = new Root.AbsoluteRoot(this);
 
-  /**
-   * Returns an absolute path instance, given an absolute path name, without double slashes, .., or
-   * . segments. While this method will normalize the path representation by creating a
-   * structured/parsed representation, it will not cause any IO. (e.g., it will not resolve symbolic
-   * links if it's a Unix file system.
-   */
-  public Path getPath(String path) {
-    return Path.create(path, this);
+  /** Returns filesystem-specific path factory. */
+  protected PathFactory getPathFactory() {
+    return UnixPathFactory.INSTANCE;
   }
 
-  /** Returns an absolute path instance, given an absolute path fragment. */
-  public Path getPath(PathFragment pathFragment) {
-    Preconditions.checkArgument(pathFragment.isAbsolute());
-    return Path.createAlreadyNormalized(
-        pathFragment.getPathString(), pathFragment.getDriveStrLength(), this);
+  /**
+   * Returns an absolute path instance, given an absolute path name, without
+   * double slashes, .., or . segments. While this method will normalize the
+   * path representation by creating a structured/parsed representation, it will
+   * not cause any IO. (e.g., it will not resolve symbolic links if it's a Unix
+   * file system.
+   */
+  public Path getPath(String pathName) {
+    return getPath(PathFragment.create(pathName));
+  }
+
+  /**
+   * Returns an absolute path instance, given an absolute path name, without
+   * double slashes, .., or . segments. While this method will normalize the
+   * path representation by creating a structured/parsed representation, it will
+   * not cause any IO. (e.g., it will not resolve symbolic links if it's a Unix
+   * file system.
+   */
+  public Path getPath(PathFragment pathName) {
+    if (!pathName.isAbsolute()) {
+      throw new IllegalArgumentException(pathName.getPathString()  + " (not an absolute path)");
+    }
+    return getRootDirectory().getRelative(pathName);
+  }
+
+  /**
+   * Returns a path representing the root directory of the current file system.
+   */
+  public final Path getRootDirectory() {
+    if (rootPath == null) {
+      synchronized (this) {
+        if (rootPath == null) {
+          rootPath = getPathFactory().createRootPath(this);
+        }
+      }
+    }
+    return rootPath;
   }
 
   final Root getAbsoluteRoot() {
@@ -234,11 +317,11 @@ public abstract class FileSystem {
   }
 
   /**
-   * Gets a fast digest for the given path and hash function type, or {@code null} if there isn't
-   * one available or the filesystem doesn't support them. This digest should be suitable for
-   * detecting changes to the file.
+   * Gets a fast digest for the given path and hash function type, or {@code null} if there
+   * isn't one available or the filesystem doesn't support them. This digest should be
+   * suitable for detecting changes to the file.
    */
-  protected byte[] getFastDigest(Path path, DigestHashFunction hashFunction) throws IOException {
+  protected byte[] getFastDigest(Path path, HashFunction hashFunction) throws IOException {
     return null;
   }
 
@@ -259,15 +342,15 @@ public abstract class FileSystem {
   }
 
   /**
-   * Returns the digest of the file denoted by the path, following symbolic links, for the given
-   * hash digest function.
-   *
-   * <p>Subclasses may (and do) optimize this computation for particular digest functions.
+   * Returns the digest of the file denoted by the path, following
+   * symbolic links, for the given hash digest function.
    *
    * @return a new byte array containing the file's digest
    * @throws IOException if the digest could not be computed for any reason
+   *
+   * Subclasses may (and do) optimize this computation for particular digest functions.
    */
-  protected byte[] getDigest(final Path path, DigestHashFunction hashFunction) throws IOException {
+  protected byte[] getDigest(final Path path, HashFunction hashFunction) throws IOException {
     return new ByteSource() {
       @Override
       public InputStream openStream() throws IOException {
@@ -318,7 +401,7 @@ public abstract class FileSystem {
       throw new IOException(naive + " (Too many levels of symbolic links)");
     }
     if (linkTarget.isAbsolute()) {
-      dir = getPath(linkTarget.getDriveStr());
+      dir = getRootDirectory();
     }
     for (String name : linkTarget.segments()) {
       if (name.equals(".") || name.isEmpty()) {
@@ -551,17 +634,17 @@ public abstract class FileSystem {
 
   protected static Dirent.Type direntFromStat(FileStatus stat) {
     if (stat == null) {
-      return Dirent.Type.UNKNOWN;
+      return Type.UNKNOWN;
     } else if (stat.isSpecialFile()) {
-      return Dirent.Type.UNKNOWN;
+        return Type.UNKNOWN;
     } else if (stat.isFile()) {
-      return Dirent.Type.FILE;
+      return Type.FILE;
     } else if (stat.isDirectory()) {
-      return Dirent.Type.DIRECTORY;
+      return Type.DIRECTORY;
     } else if (stat.isSymbolicLink()) {
-      return Dirent.Type.SYMLINK;
+      return Type.SYMLINK;
     } else {
-      return Dirent.Type.UNKNOWN;
+      return Type.UNKNOWN;
     }
   }
 
