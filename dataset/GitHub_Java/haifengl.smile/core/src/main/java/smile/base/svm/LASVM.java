@@ -18,8 +18,9 @@
 package smile.base.svm;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 
@@ -62,7 +63,7 @@ public class LASVM<T> implements Serializable {
     /**
      * Support vectors.
      */
-    private final ArrayList<SupportVector<T>> sv = new ArrayList<>();
+    private final LinkedList<SupportVector<T>> sv = new LinkedList<>();
     /**
      * Threshold of decision function.
      */
@@ -163,7 +164,6 @@ public class LASVM<T> implements Serializable {
             vectors[i] = v.x;
             alpha[i] = v.alpha;
         }
-
         return new KernelMachine<>(kernel, vectors, alpha, b);
     }
 
@@ -175,7 +175,7 @@ public class LASVM<T> implements Serializable {
         int cp = 0, cn = 0;
 
         for (int i : MathEx.permutate(x.length)) {
-            if (y[i] == +1 && cp < few) {
+            if (y[i] == 1 && cp < few) {
                 if (process(i, x[i], y[i])) cp++;
             } else if (y[i] == -1 && cn < few) {
                 if (process(i, x[i], y[i])) cn++;
@@ -315,22 +315,22 @@ public class LASVM<T> implements Serializable {
 
         // Determine maximal step
         if (step >= 0.0) {
-            double delta = v1.alpha - v1.cmin;
-            if (delta < step) {
-                step = delta;
+            double ostep = v1.alpha - v1.cmin;
+            if (ostep < step) {
+                step = ostep;
             }
-            delta = v2.cmax - v2.alpha;
-            if (delta < step) {
-                step = delta;
+            ostep = v2.cmax - v2.alpha;
+            if (ostep < step) {
+                step = ostep;
             }
         } else {
-            double delta = v2.cmin - v2.alpha;
-            if (delta > step) {
-                step = delta;
+            double ostep = v2.cmin - v2.alpha;
+            if (ostep > step) {
+                step = ostep;
             }
-            delta = v1.alpha - v1.cmax;
-            if (delta > step) {
-                step = delta;
+            ostep = v1.alpha - v1.cmax;
+            if (ostep > step) {
+                step = ostep;
             }
         }
 
@@ -351,7 +351,6 @@ public class LASVM<T> implements Serializable {
 
     /**
      * Process a new sample.
-     * @return true if x is added to support vectors.
      */
     private boolean process(int i, T x, int y) {
         if (y != +1 && y != -1) {
@@ -360,7 +359,7 @@ public class LASVM<T> implements Serializable {
 
         // Bail out if already in expansion
         for (SupportVector<T> v : sv) {
-            if (v.x == x) return false;
+            if (v.x == x) return true;
         }
 
         // Compute gradient
@@ -384,7 +383,7 @@ public class LASVM<T> implements Serializable {
 
         // Insert
         SupportVector<T> v = new SupportVector<>(i, x, y, 0.0, g, Cp, Cn, kernel.k(x, x));
-        sv.add(v);
+        sv.addFirst(v);
         K[i] = cache;
 
         // Process
@@ -445,7 +444,7 @@ public class LASVM<T> implements Serializable {
      * Removes support vectors from the kernel expansion.
      * Online kernel classifiers usually experience considerable problems
      * with noisy data sets. Each iteration is likely to cause a mistake
-     * because the best achievable error rate for such problems
+     * because the best achievable misclassification rate for such problems
      * is high. The number of support vectors increases very rapidly and
      * potentially causes overfitting and poor convergence. Support vector
      * removal criteria avoid this drawback.
@@ -453,14 +452,15 @@ public class LASVM<T> implements Serializable {
     private void evict() {
         minmax();
 
-        sv.removeIf(v -> {
-            if (MathEx.isZero(v.alpha, 1E-4)) {
+        Iterator<SupportVector<T>> iter = sv.iterator();
+        while (iter.hasNext()) {
+            SupportVector<T> v = iter.next();
+            if (v.alpha == 0) {
                 if ((v.g >= gmax && 0 >= v.cmax) || (v.g <= gmin && 0 <= v.cmin)) {
                     K[v.i] = null;
-                    return true;
+                    iter.remove();
                 }
             }
-            return false;
-        });
+        }
     }
 }
