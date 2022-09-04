@@ -222,7 +222,7 @@ public abstract class NativeDepsHelper {
         CcCommon.configureFeatures(
             ruleContext,
             /* requestedFeatures= */ ImmutableSet.of(STATIC_LINKING_MODE),
-            /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
+            /* unsupportedFeatures= */ ImmutableSet.of(),
             toolchain);
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(

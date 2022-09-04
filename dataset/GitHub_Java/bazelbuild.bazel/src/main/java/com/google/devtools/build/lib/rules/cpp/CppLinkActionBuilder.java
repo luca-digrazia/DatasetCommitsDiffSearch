@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.collect.DedupingIterable;
 import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -1139,7 +1138,7 @@ public class CppLinkActionBuilder {
                 linkstampEntry.getValue(),
                 linkstampEntry.getKey().getDeclaredIncludeSrcs(),
                 ImmutableSet.copyOf(nonCodeInputs),
-                DedupingIterable.of(inputsBuilder.build()),
+                inputsBuilder.deduplicate().build(),
                 buildInfoHeaderArtifacts,
                 additionalLinkstampDefines,
                 toolchain,
@@ -1165,7 +1164,7 @@ public class CppLinkActionBuilder {
     return new CppLinkAction(
         getOwner(),
         mnemonic,
-        DedupingIterable.of(inputsBuilder.build()),
+        inputsBuilder.deduplicate().build(),
         actionOutputs,
         outputLibrary,
         output,

@@ -254,7 +254,6 @@ public class CppActionConfigs {
                     "    action: 'c++-module-codegen'",
                     "    action: 'c++-module-compile'",
                     "    flag_group {",
-                    "      expand_if_all_available: 'output_file'",
                     "      flag: '-frandom-seed=%{output_file}'",
                     "    }",
                     "  }",
@@ -592,6 +591,7 @@ public class CppActionConfigs {
                     "    flag_group {",
                     "      iterate_over: 'runtime_library_search_directories'",
                     "      flag_group {",
+
                     ifTrue(
                         supportsEmbeddedRuntimes,
                         "    expand_if_all_available: 'is_cc_test_link_action'",
@@ -936,7 +936,7 @@ public class CppActionConfigs {
                     "    action: 'c++-link-nodeps-dynamic-library'",
                     "    action: 'c++-link-executable'",
                     "    flag_group {",
-                    "      flag: '--coverage'",
+                    "      flag: '-lgcov'",
                     "    }",
                     "  }",
                     "  requires {",

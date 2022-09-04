@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 
@@ -106,7 +105,6 @@ public final class BazelJavaTestRule implements RuleDefinition {
         </p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("test_class", STRING))
-        .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
         .build();
   }
 

@@ -107,9 +107,9 @@ public final class CcLinkingHelper {
       return providers;
     }
 
-    @SkylarkCallable(name = "cc_linking_info", documented = false)
-    public CcLinkingInfo getCcLinkParamsInfo() {
-      return (CcLinkingInfo) providers.getProvider(CcLinkingInfo.PROVIDER.getKey());
+    @SkylarkCallable(name = "cc_link_params_info", documented = false)
+    public CcLinkParamsInfo getCcLinkParamsInfo() {
+      return (CcLinkParamsInfo) providers.getProvider(CcLinkParamsInfo.PROVIDER.getKey());
     }
 
     public Map<String, NestedSet<Artifact>> getOutputGroups() {
@@ -551,11 +551,9 @@ public final class CcLinkingHelper {
           new CcSpecificLinkParamsProvider(
               createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContextInfo, forcePic)));
     } else {
-      CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-      ccLinkingInfoBuilder.setCcLinkParamsInfo(
+      providers.put(
           new CcLinkParamsInfo(
               createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContextInfo, forcePic)));
-      providers.put(ccLinkingInfoBuilder.build());
     }
     return new LinkingInfo(
         providers.build(), outputGroups, ccLinkingOutputs, originalLinkingOutputs);
