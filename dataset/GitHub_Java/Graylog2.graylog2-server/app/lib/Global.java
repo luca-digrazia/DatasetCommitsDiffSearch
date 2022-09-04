@@ -1,5 +1,5 @@
 package lib;/*
- * Copyright 2013-2014 TORCH GmbH
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -31,7 +31,6 @@ import lib.security.RethrowingFirstSuccessfulStrategy;
 import lib.security.ServerRestInterfaceRealm;
 import models.LocalAdminUser;
 import models.ModelFactoryModule;
-import models.Node;
 import models.UserService;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationListener;
@@ -50,15 +49,10 @@ import play.Application;
 import play.Configuration;
 import play.GlobalSettings;
 import play.api.mvc.EssentialFilter;
-import play.libs.F;
-import play.mvc.Http;
-import play.mvc.SimpleResult;
 
 import java.io.File;
 import java.net.URI;
 import java.util.List;
-
-import static play.mvc.Results.internalServerError;
 
 /**
  *
@@ -125,8 +119,6 @@ public class Global extends GlobalSettings {
             @Override
             protected void configure() {
                 bind(URI[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes);
-                bind(Long.class).annotatedWith(Names.named("Default Timeout"))
-                        .toInstance(lib.Configuration.apiTimeout("DEFAULT"));
             }
         });
         modules.add(new ModelFactoryModule());
@@ -177,26 +169,12 @@ public class Global extends GlobalSettings {
     @Override
     @SuppressWarnings("unchecked")
     public <T extends EssentialFilter> Class<T>[] filters() {
-        return new Class[]{AccessLog.class, NoCacheHeader.class};
+        return new Class[]{AccessLog.class};
     }
 
     @Override
     public <A> A getControllerInstance(Class<A> controllerClass) throws Exception {
         return injector.getInstance(controllerClass);
-    }
-
-    @Override
-    public F.Promise<SimpleResult> onError(Http.RequestHeader request, Throwable t) {
-        if (t.getCause() instanceof Graylog2MasterUnavailableException) {
-            final ServerNodes serverNodes = injector.getInstance(ServerNodes.class);
-            final List<Node> configuredNodes = serverNodes.getConfiguredNodes();
-            final List<Node> nodesEverConnectedTo = serverNodes.all(true);
-
-            return F.Promise.<SimpleResult>pure(internalServerError(
-                    views.html.disconnected.no_master.render(Http.Context.current(), configuredNodes, nodesEverConnectedTo, serverNodes))
-            );
-        }
-        return super.onError(request, t);
     }
 
     @Override

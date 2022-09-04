@@ -19,6 +19,10 @@
 package lib;
 
 import com.google.common.collect.Maps;
+import models.User;
+import models.UserService;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import play.api.templates.Html;
 import play.data.Form;
 import play.mvc.Controller;
@@ -155,23 +159,5 @@ public class Tools {
             }
         }
         return defaultValue;
-    }
-
-    public static boolean apiRequestShouldExtendSession() {
-        try {
-            return !("true".equalsIgnoreCase(Http.Context.current().request().getHeader("X-Graylog2-No-Session-Extension")));
-        } catch (Exception e) {
-            return true;
-        }
-    }
-
-    public static Throwable rootCause(Throwable t) {
-        Throwable rootCause = t;
-        Throwable cause = rootCause.getCause();
-        while (cause != null && cause != rootCause) {
-            rootCause = cause;
-            cause = cause.getCause();
-        }
-        return rootCause;
     }
 }
