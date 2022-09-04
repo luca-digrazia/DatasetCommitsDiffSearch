@@ -111,7 +111,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     }
 
     @Override
-    public Input findForThisNode(String nodeId, String id) throws NotFoundException, IllegalArgumentException {
+    public Input findForThisNode(String nodeId, String id) throws NotFoundException {
         List<BasicDBObject> query = new ArrayList<BasicDBObject>();
         query.add(new BasicDBObject("_id", new ObjectId(id)));
 
@@ -123,10 +123,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
         DBObject o = findOne(InputImpl.class, new BasicDBObject("$and", query));
 
-        if (o == null)
-            throw new NotFoundException();
-        else
-            return new InputImpl((ObjectId) o.get("_id"), o.toMap());
+        return new InputImpl((ObjectId) o.get("_id"), o.toMap());
     }
 
     @Override
