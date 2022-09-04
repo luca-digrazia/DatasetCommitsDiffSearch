@@ -31,9 +31,9 @@ import org.glassfish.jersey.client.ClientRequest;
 import org.glassfish.jersey.client.JerseyClient;
 import org.glassfish.jersey.client.rx.rxjava2.RxFlowableInvokerProvider;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import javax.annotation.Nullable;
@@ -58,6 +58,7 @@ import java.net.Proxy;
 import java.net.ProxySelector;
 import java.net.SocketAddress;
 import java.net.URI;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
@@ -66,7 +67,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -74,16 +75,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class JerseyClientBuilderTest {
-    private final MetricRegistry metricRegistry = new MetricRegistry();
-    private final JerseyClientBuilder builder = new JerseyClientBuilder(metricRegistry);
-    private final LifecycleEnvironment lifecycleEnvironment = spy(new LifecycleEnvironment(metricRegistry));
+    private final JerseyClientBuilder builder = new JerseyClientBuilder(new MetricRegistry());
+    private final LifecycleEnvironment lifecycleEnvironment = spy(new LifecycleEnvironment());
     private final Environment environment = mock(Environment.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final ObjectMapper objectMapper = mock(ObjectMapper.class);
     private final Validator validator = Validators.newValidator();
     private final HttpClientBuilder apacheHttpClientBuilder = mock(HttpClientBuilder.class);
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
         when(environment.getObjectMapper()).thenReturn(objectMapper);
@@ -91,34 +91,46 @@ public class JerseyClientBuilderTest {
         builder.setApacheHttpClientBuilder(apacheHttpClientBuilder);
     }
 
-    @AfterEach
-    public void tearDown() {
+    @After
+    public void tearDown() throws Exception {
         executorService.shutdown();
     }
 
     @Test
-    public void throwsAnExceptionWithoutAnEnvironmentOrAThreadPoolAndObjectMapper() {
-        assertThatExceptionOfType(IllegalStateException.class)
-            .isThrownBy(() -> builder.build("test"))
-            .withMessage("Must have either an environment or both an executor service and an object mapper");
+    public void throwsAnExceptionWithoutAnEnvironmentOrAThreadPoolAndObjectMapper() throws Exception {
+        try {
+            builder.build("test");
+            failBecauseExceptionWasNotThrown(IllegalStateException.class);
+        } catch (IllegalStateException e) {
+            assertThat(e.getMessage())
+                    .isEqualTo("Must have either an environment or both an executor service and an object mapper");
+        }
     }
 
     @Test
-    public void throwsAnExceptionWithoutAnEnvironmentAndOnlyObjectMapper() {
-        assertThatExceptionOfType(IllegalStateException.class)
-            .isThrownBy(() -> builder.using(objectMapper).build("test"))
-            .withMessage("Must have either an environment or both an executor service and an object mapper");
+    public void throwsAnExceptionWithoutAnEnvironmentAndOnlyObjectMapper() throws Exception {
+        try {
+            builder.using(objectMapper).build("test");
+            failBecauseExceptionWasNotThrown(IllegalStateException.class);
+        } catch (IllegalStateException e) {
+            assertThat(e.getMessage())
+                    .isEqualTo("Must have either an environment or both an executor service and an object mapper");
+        }
     }
 
     @Test
-    public void throwsAnExceptionWithoutAnEnvironmentAndOnlyAThreadPool() {
-        assertThatExceptionOfType(IllegalStateException.class)
-            .isThrownBy(() -> builder.using(executorService).build("test"))
-            .withMessage("Must have either an environment or both an executor service and an object mapper");
+    public void throwsAnExceptionWithoutAnEnvironmentAndOnlyAThreadPool() throws Exception {
+        try {
+            builder.using(executorService).build("test");
+            failBecauseExceptionWasNotThrown(IllegalStateException.class);
+        } catch (IllegalStateException e) {
+            assertThat(e.getMessage())
+                    .isEqualTo("Must have either an environment or both an executor service and an object mapper");
+        }
     }
 
     @Test
-    public void includesJerseyProperties() {
+    public void includesJerseyProperties() throws Exception {
         final Client client = builder.withProperty("poop", true)
                 .using(executorService, objectMapper)
                 .build("test");
@@ -127,7 +139,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void includesJerseyProviderSingletons() {
+    public void includesJerseyProviderSingletons() throws Exception {
         final FakeMessageBodyReader provider = new FakeMessageBodyReader();
         final Client client = builder.withProvider(provider)
                 .using(executorService, objectMapper)
@@ -137,7 +149,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void includesJerseyProviderClasses() {
+    public void includesJerseyProviderClasses() throws Exception {
         @SuppressWarnings("unused")
         final Client client = builder.withProvider(FakeMessageBodyReader.class)
                 .using(executorService, objectMapper)
@@ -147,7 +159,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void createsAnRxEnabledClient() {
+    public void createsAnRxEnabledClient() throws Exception {
         final Client client =
             builder.using(executorService, objectMapper)
                 .buildRx("test", RxFlowableInvokerProvider.class);
@@ -161,7 +173,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void usesTheGivenThreadPool() {
+    public void usesTheGivenThreadPool() throws Exception {
         final Client client = builder.using(executorService, objectMapper).build("test");
         for (Object o : client.getConfiguration().getInstances()) {
             if (o instanceof DropwizardExecutorProvider) {
@@ -173,7 +185,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void usesTheGivenThreadPoolAndEnvironmentsObjectMapper() {
+    public void usesTheGivenThreadPoolAndEnvironmentsObjectMapper() throws Exception {
         final Client client = builder.using(environment).using(executorService).build("test");
         for (Object o : client.getConfiguration().getInstances()) {
             if (o instanceof DropwizardExecutorProvider) {
@@ -185,7 +197,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void createsNewConnectorProvider() {
+    public void createsNewConnectorProvider(){
         final JerseyClient clientA = (JerseyClient) builder.using(executorService, objectMapper).build("testA");
         final JerseyClient clientB = (JerseyClient) builder.build("testB");
         assertThat(clientA.getConfiguration().getConnectorProvider())
@@ -193,7 +205,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void usesSameConnectorProvider()  {
+    public void usesSameConnectorProvider(){
         final JerseyClient clientA = (JerseyClient) builder.using(executorService, objectMapper)
             .using(mock(ConnectorProvider.class))
             .build("testA");
@@ -204,7 +216,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void addBidirectionalGzipSupportIfEnabled() {
+    public void addBidirectionalGzipSupportIfEnabled() throws Exception {
         final JerseyClientConfiguration configuration = new JerseyClientConfiguration();
         configuration.setGzipEnabled(true);
 
@@ -218,7 +230,7 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void disablesGzipSupportIfDisabled() {
+    public void disablesGzipSupportIfDisabled() throws Exception {
         final JerseyClientConfiguration configuration = new JerseyClientConfiguration();
         configuration.setGzipEnabled(false);
 
@@ -234,7 +246,7 @@ public class JerseyClientBuilderTest {
 
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public void usesAnExecutorServiceFromTheEnvironment() {
+    public void usesAnExecutorServiceFromTheEnvironment() throws Exception {
         final JerseyClientConfiguration configuration = new JerseyClientConfiguration();
         configuration.setMinThreads(7);
         configuration.setMaxThreads(532);
@@ -299,11 +311,11 @@ public class JerseyClientBuilderTest {
             new X509TrustManager() {
 
                 @Override
-                public void checkClientTrusted(X509Certificate[] xcs, String string) {
+                public void checkClientTrusted(X509Certificate[] xcs, String string) throws CertificateException {
                 }
 
                 @Override
-                public void checkServerTrusted(X509Certificate[] xcs, String string) {
+                public void checkServerTrusted(X509Certificate[] xcs, String string) throws CertificateException {
                 }
 
                 @Override
@@ -381,7 +393,7 @@ public class JerseyClientBuilderTest {
         public JerseyClientBuilderTest readFrom(Class<JerseyClientBuilderTest> type, Type genericType,
                                                 Annotation[] annotations, MediaType mediaType,
                                                 MultivaluedMap<String, String> httpHeaders, InputStream entityStream)
-            throws WebApplicationException {
+            throws IOException, WebApplicationException {
             return null;
         }
     }
