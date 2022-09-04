@@ -77,8 +77,7 @@ public class CppLinkstampCompileHelper {
             .setShareable(true)
             .setShouldScanIncludes(false)
             .setActionName(CppActionNames.LINKSTAMP_COMPILE);
-    semantics.finalizeCompileActionBuilder(
-        ruleContext.getConfiguration(), featureConfiguration, builder);
+    semantics.finalizeCompileActionBuilder(ruleContext, builder);
     return builder.buildOrThrowIllegalStateException();
   }
 
@@ -86,14 +85,14 @@ public class CppLinkstampCompileHelper {
       String labelReplacement,
       String outputReplacement,
       Iterable<String> additionalLinkstampDefines,
-      CcToolchainProvider ccToolchainProvider,
+      CppConfiguration cppConfiguration,
       String fdoBuildStamp,
       boolean codeCoverageEnabled) {
     String labelPattern = Pattern.quote("${LABEL}");
     String outputPathPattern = Pattern.quote("${OUTPUT_PATH}");
     ImmutableList.Builder<String> defines =
         ImmutableList.<String>builder()
-            .add("GPLATFORM=\"" + ccToolchainProvider.getToolchainIdentifier() + "\"")
+            .add("GPLATFORM=\"" + cppConfiguration + "\"")
             .add("BUILD_COVERAGE_ENABLED=" + (codeCoverageEnabled ? "1" : "0"))
             // G3_TARGET_NAME is a C string literal that normally contain the label of the target
             // being linked.  However, they are set differently when using shared native deps. In
@@ -151,7 +150,8 @@ public class CppLinkstampCompileHelper {
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        buildInfoHeaderArtifacts.stream()
+        buildInfoHeaderArtifacts
+            .stream()
             .map(Artifact::getExecPathString)
             .collect(ImmutableList.toImmutableList()),
         CcCompilationHelper.getCoptsFromOptions(cppConfiguration, sourceFile.getExecPathString()),
@@ -170,7 +170,7 @@ public class CppLinkstampCompileHelper {
             labelReplacement,
             outputReplacement,
             additionalLinkstampDefines,
-            ccToolchainProvider,
+            cppConfiguration,
             fdoBuildStamp,
             codeCoverageEnabled));
   }
