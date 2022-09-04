@@ -253,17 +253,15 @@ public class InputsResource extends RestResource {
         final InputState inputState = inputRegistry.getInputState(inputId);
 
         if (inputState == null) {
-            final String error = "Cannot launch input <" + inputId + ">. Input not found.";
-            LOG.info(error);
-            throw new NotFoundException(error);
+            LOG.info("Cannot launch input. Input not found.");
+            throw new WebApplicationException(404);
         }
 
         final MessageInput input = inputState.getMessageInput();
 
         if (input == null) {
-            final String error = "Cannot launch input <" + inputId + ">. Input not found.";
-            LOG.info(error);
-            throw new NotFoundException(error);
+            LOG.info("Cannot launch input. Input not found.");
+            throw new WebApplicationException(404);
         }
 
         String msg = "Launching existing input [" + input.getName()+ "]. Reason: REST request.";
