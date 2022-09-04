@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  * A node with a ordinal split variable (real-valued or ordinal categorical value).
  */
 public class OrdinalNode extends InternalNode {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The split value.

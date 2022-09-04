@@ -105,18 +105,18 @@ public abstract class InternalNode implements Node {
     }
 
     @Override
-    public int leafs() {
-        return trueChild.leafs() + falseChild.leafs();
-    }
-
-    @Override
     public double deviance() {
         return deviance;
     }
 
     @Override
     public int depth() {
-        return Math.max(trueChild.depth(), falseChild.depth()) + 1;
+        // compute the depth of each subtree
+        int ld = trueChild.depth();
+        int rd = falseChild.depth();
+
+        // use the larger one
+        return Math.max(ld, rd) + 1;
     }
 
     @Override
@@ -176,7 +176,7 @@ public abstract class InternalNode implements Node {
             for (int i = 0; i < k; i++) {
                 count[i] = c1[i] + c2[i];
             }
-            size = (int) MathEx.sum(count);
+            size = MathEx.sum(count);
         }
 
         StringBuilder line = new StringBuilder();
