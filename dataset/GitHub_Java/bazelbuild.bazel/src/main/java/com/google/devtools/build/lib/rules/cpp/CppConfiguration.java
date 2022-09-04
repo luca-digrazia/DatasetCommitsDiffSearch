@@ -252,6 +252,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final Function<String, String> cpuTransformer;
 
   // The dynamic mode for linking.
+  private final DynamicMode dynamicMode;
   private final boolean stripBinaries;
   private final CompilationMode compilationMode;
   private final boolean useLLVMCoverageMap;
@@ -285,6 +286,15 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.cppToolchainInfo = new CppToolchainInfo(toolchain, crosstoolTopPathFragment, crosstoolTop);
     this.shouldProvideMakeVariables =
         params.commonOptions.makeVariableSource == MakeVariableSource.CONFIGURATION;
+
+    // With LLVM, ThinLTO is automatically used in place of LIPO. ThinLTO works fine with dynamic
+    // linking (and in fact creates a lot more work when dynamic linking is off).
+    if (cppOptions.getLipoMode() == LipoMode.BINARY && !isLLVMCompiler()) {
+      // TODO(bazel-team): implement dynamic linking with LIPO
+      this.dynamicMode = DynamicMode.OFF;
+    } else {
+      this.dynamicMode = cppOptions.dynamicMode;
+    }
 
     this.fdoZip = params.fdoZip;
     this.stripBinaries =
@@ -868,9 +878,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return ldExecutable != null ? ldExecutable.getPathString() : "";
   }
 
-  /** Returns the value of the --dynamic_mode flag. */
-  public DynamicMode getDynamicModeFlag() {
-    return cppOptions.dynamicMode;
+  /**
+   * Returns the dynamic linking mode (full, off, or default).
+   */
+  public DynamicMode getDynamicMode() {
+    return dynamicMode;
   }
 
   public boolean getLinkCompileOutputSeparately() {
@@ -909,20 +921,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return cppOptions.isFdo();
   }
 
-  /** Deprecated: Use {@link CcToolchainProvider#isLLVMCompiler()} */
-  // TODO(b/64384912): Remove in favor of CcToolchainProvider#isLLVMCompiler
-  @Deprecated
-  private final boolean isLLVMCompiler() {
+  public final boolean isLLVMCompiler() {
     return cppToolchainInfo.isLLVMCompiler();
   }
 
-  /**
-   * Returns true if LLVM FDO Optimization should be applied for this configuration.
-   *
-   * <p>Deprecated: Use {@link CppConfiguration#isLLVMOptimizedFdo(boolean)}
-   */
-  // TODO(b/64384912): Remove in favor of overload with isLLVMCompiler.
-  @Deprecated
+  /** Returns true if LLVM FDO Optimization should be applied for this configuration. */
   public boolean isLLVMOptimizedFdo() {
     return cppOptions.getFdoOptimize() != null
         && (CppFileTypes.LLVM_PROFILE.matches(cppOptions.getFdoOptimize())
@@ -931,30 +934,24 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 && cppOptions.getFdoOptimize().endsWith(".zip")));
   }
 
-  /** Returns true if LLVM FDO Optimization should be applied for this configuration. */
-  public boolean isLLVMOptimizedFdo(boolean isLLVMCompiler) {
-    return cppOptions.getFdoOptimize() != null
-        && (CppFileTypes.LLVM_PROFILE.matches(cppOptions.getFdoOptimize())
-            || CppFileTypes.LLVM_PROFILE_RAW.matches(cppOptions.getFdoOptimize())
-            || (isLLVMCompiler && cppOptions.getFdoOptimize().endsWith(".zip")));
-  }
-
-  /** Returns true if LIPO optimization is implied by the flags of this build. */
-  public boolean lipoOptimizationIsActivated() {
-    return cppOptions.isLipoOptimization();
-  }
-
   /**
    * Returns true if LIPO optimization should be applied for this configuration.
-   *
-   * <p>Deprecated: Use {@link CppHelper#isLipoOptimization(CppConfiguration, CcToolchainProvider)}
    */
-  // TODO(b/64384912): Remove usage in topLevelConfigurationHook and CppRuleClasses and delete.
-  @Deprecated
   public boolean isLipoOptimization() {
     // The LIPO optimization bits are set in the LIPO context collector configuration, too.
     // If compiler is LLVM, then LIPO gets auto-converted to ThinLTO.
     return cppOptions.isLipoOptimization() && !isLLVMCompiler();
+  }
+
+  /**
+   * Returns true if this is a data configuration for a LIPO-optimizing build.
+   *
+   * <p>This means LIPO is not applied for this configuration, but LIPO might be reenabled further
+   * down the dependency tree.
+   */
+  public boolean isDataConfigurationForLipoOptimization() {
+    // If compiler is LLVM, then LIPO gets auto-converted to ThinLTO.
+    return cppOptions.isDataConfigurationForLipoOptimization() && !isLLVMCompiler();
   }
 
   public boolean isLipoOptimizationOrInstrumentation() {
