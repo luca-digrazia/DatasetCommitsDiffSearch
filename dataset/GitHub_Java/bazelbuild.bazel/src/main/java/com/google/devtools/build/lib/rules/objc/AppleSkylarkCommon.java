@@ -195,7 +195,7 @@ public class AppleSkylarkCommon {
   }
 
   @SkylarkCallable(
-    name = AppleDynamicFrameworkInfo.SKYLARK_NAME,
+    name = AppleDynamicFrameworkProvider.SKYLARK_NAME,
     doc =
         "The constructor/key for the <code>AppleDynamicFramework</code> provider.<p>"
             + "If a target propagates the <code>AppleDynamicFramework</code> provider, use this "
@@ -207,11 +207,11 @@ public class AppleSkylarkCommon {
     structField = true
   )
   public Provider getAppleDynamicFrameworkConstructor() {
-    return AppleDynamicFrameworkInfo.SKYLARK_CONSTRUCTOR;
+    return AppleDynamicFrameworkProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
-    name = AppleDylibBinaryInfo.SKYLARK_NAME,
+    name = AppleDylibBinaryProvider.SKYLARK_NAME,
     doc =
         "The constructor/key for the <code>AppleDylibBinary</code> provider.<p>"
             + "If a target propagates the <code>AppleDylibBinary</code> provider, use this as the "
@@ -223,11 +223,11 @@ public class AppleSkylarkCommon {
     structField = true
   )
   public Provider getAppleDylibBinaryConstructor() {
-    return AppleDylibBinaryInfo.SKYLARK_CONSTRUCTOR;
+    return AppleDylibBinaryProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
-    name = AppleExecutableBinaryInfo.SKYLARK_NAME,
+    name = AppleExecutableBinaryProvider.SKYLARK_NAME,
     doc =
         "The constructor/key for the <code>AppleExecutableBinary</code> provider.<p>"
             + "If a target propagates the <code>AppleExecutableBinary</code> provider,"
@@ -239,11 +239,11 @@ public class AppleSkylarkCommon {
     structField = true
   )
   public Provider getAppleExecutableBinaryConstructor() {
-    return AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR;
+    return AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
-    name = AppleStaticLibraryInfo.SKYLARK_NAME,
+    name = AppleStaticLibraryProvider.SKYLARK_NAME,
     doc =
         "The constructor/key for the <code>AppleStaticLibrary</code> provider.<p>"
             + "If a target propagates the <code>AppleStaticLibrary</code> provider, use "
@@ -255,11 +255,11 @@ public class AppleSkylarkCommon {
     structField = true
   )
   public Provider getAppleStaticLibraryProvider() {
-    return AppleStaticLibraryInfo.SKYLARK_CONSTRUCTOR;
+    return AppleStaticLibraryProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
-    name = AppleDebugOutputsInfo.SKYLARK_NAME,
+    name = AppleDebugOutputsProvider.SKYLARK_NAME,
     doc =
         "The constructor/key for the <code>AppleDebugOutputs</code> provider.<p>"
             + "If a target propagates the <code>AppleDebugOutputs</code> provider, use this as the "
@@ -271,11 +271,11 @@ public class AppleSkylarkCommon {
     structField = true
   )
   public Provider getAppleDebugOutputsConstructor() {
-    return AppleDebugOutputsInfo.SKYLARK_CONSTRUCTOR;
+    return AppleDebugOutputsProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
-    name = AppleLoadableBundleBinaryInfo.SKYLARK_NAME,
+    name = AppleLoadableBundleBinaryProvider.SKYLARK_NAME,
     doc =
         "The constructor/key for the <code>AppleLoadableBundleBinary</code> provider.<p>"
             + "If a target propagates the <code>AppleLoadableBundleBinary</code> provider, "
@@ -287,7 +287,7 @@ public class AppleSkylarkCommon {
     structField = true
   )
   public Provider getAppleLoadableBundleBinaryConstructor() {
-    return AppleLoadableBundleBinaryInfo.SKYLARK_CONSTRUCTOR;
+    return AppleLoadableBundleBinaryProvider.SKYLARK_CONSTRUCTOR;
   }
 
   @SkylarkCallable(
@@ -403,19 +403,65 @@ public class AppleSkylarkCommon {
         }
       };
 
-  @SkylarkCallable(
+  @SkylarkSignature(
+    name = "new_xctest_app_provider",
+    objectType = AppleSkylarkCommon.class,
+    returnType = XcTestAppProvider.class,
+    doc = "Creates a new XcTestAppProvider instance.",
+    parameters = {
+      @Param(name = "self", type = AppleSkylarkCommon.class, doc = "The apple_common instance."),
+      @Param(
+        name = "bundle_loader",
+        type = Artifact.class,
+        named = true,
+        positional = false,
+        doc = "The bundle loader for the test. Corresponds to the binary inside the test IPA."
+      ),
+      @Param(
+        name = "ipa",
+        type = Artifact.class,
+        named = true,
+        positional = false,
+        doc = "The test IPA."
+      ),
+      @Param(
+        name = "objc_provider",
+        type = ObjcProvider.class,
+        named = true,
+        positional = false,
+        doc = "An ObjcProvider that should be included by tests using this test bundle."
+      )
+    }
+  )
+  public static final BuiltinFunction NEW_XCTEST_APP_PROVIDER =
+      new BuiltinFunction("new_xctest_app_provider") {
+        @SuppressWarnings("unused")
+        // This method is registered statically for skylark, and never called directly.
+        public XcTestAppProvider invoke(
+            AppleSkylarkCommon self,
+            Artifact bundleLoader,
+            Artifact ipa,
+            ObjcProvider objcProvider) {
+          return new XcTestAppProvider(bundleLoader, ipa, objcProvider);
+        }
+      };
+
+  @SkylarkSignature(
     name = "new_dynamic_framework_provider",
+    objectType = AppleSkylarkCommon.class,
+    returnType = AppleDynamicFrameworkProvider.class,
     doc = "Creates a new AppleDynamicFramework provider instance.",
     parameters = {
+      @Param(name = "self", type = AppleSkylarkCommon.class, doc = "The apple_common instance."),
       @Param(
-        name = AppleDynamicFrameworkInfo.DYLIB_BINARY_FIELD_NAME,
+        name = AppleDynamicFrameworkProvider.DYLIB_BINARY_FIELD_NAME,
         type = Artifact.class,
         named = true,
         positional = false,
         doc = "The dylib binary artifact of the dynamic framework."
       ),
       @Param(
-        name = AppleDynamicFrameworkInfo.OBJC_PROVIDER_FIELD_NAME,
+        name = AppleDynamicFrameworkProvider.OBJC_PROVIDER_FIELD_NAME,
         type = ObjcProvider.class,
         named = true,
         positional = false,
@@ -424,7 +470,7 @@ public class AppleSkylarkCommon {
                 + "dependencies linked into the binary."
       ),
       @Param(
-        name = AppleDynamicFrameworkInfo.FRAMEWORK_DIRS_FIELD_NAME,
+        name = AppleDynamicFrameworkProvider.FRAMEWORK_DIRS_FIELD_NAME,
         type = SkylarkNestedSet.class,
         generic1 = String.class,
         named = true,
@@ -436,7 +482,7 @@ public class AppleSkylarkCommon {
                 + "framework."
       ),
       @Param(
-        name = AppleDynamicFrameworkInfo.FRAMEWORK_FILES_FIELD_NAME,
+        name = AppleDynamicFrameworkProvider.FRAMEWORK_FILES_FIELD_NAME,
         type = SkylarkNestedSet.class,
         generic1 = Artifact.class,
         named = true,
@@ -449,29 +495,35 @@ public class AppleSkylarkCommon {
       )
     }
   )
-  public AppleDynamicFrameworkInfo newDynamicFrameworkProvider(
-      Artifact dylibBinary,
-      ObjcProvider depsObjcProvider,
-      Object dynamicFrameworkDirs,
-      Object dynamicFrameworkFiles) {
-    NestedSet<PathFragment> frameworkDirs;
-    if (dynamicFrameworkDirs == Runtime.NONE) {
-      frameworkDirs = NestedSetBuilder.<PathFragment>emptySet(Order.STABLE_ORDER);
-    } else {
-      Iterable<String> pathStrings =
-          ((SkylarkNestedSet) dynamicFrameworkDirs).getSet(String.class);
-      frameworkDirs =
-          NestedSetBuilder.<PathFragment>stableOrder()
-              .addAll(Iterables.transform(pathStrings, PathFragment::create))
-              .build();
-    }
-    NestedSet<Artifact> frameworkFiles =
-        dynamicFrameworkFiles != Runtime.NONE
-            ? ((SkylarkNestedSet) dynamicFrameworkFiles).getSet(Artifact.class)
-            : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
-    return new AppleDynamicFrameworkInfo(
-        dylibBinary, depsObjcProvider, frameworkDirs, frameworkFiles);
-  }
+  public static final BuiltinFunction NEW_DYNAMIC_FRAMEWORK_PROVIDER =
+      new BuiltinFunction("new_dynamic_framework_provider") {
+        @SuppressWarnings("unused")
+        // This method is registered statically for skylark, and never called directly.
+        public AppleDynamicFrameworkProvider invoke(
+            AppleSkylarkCommon self,
+            Artifact dylibBinary,
+            ObjcProvider depsObjcProvider,
+            Object dynamicFrameworkDirs,
+            Object dynamicFrameworkFiles) {
+          NestedSet<PathFragment> frameworkDirs;
+          if (dynamicFrameworkDirs == Runtime.NONE) {
+            frameworkDirs = NestedSetBuilder.<PathFragment>emptySet(Order.STABLE_ORDER);
+          } else {
+            Iterable<String> pathStrings =
+                ((SkylarkNestedSet) dynamicFrameworkDirs).getSet(String.class);
+            frameworkDirs =
+                NestedSetBuilder.<PathFragment>stableOrder()
+                    .addAll(Iterables.transform(pathStrings, PathFragment::create))
+                    .build();
+          }
+          NestedSet<Artifact> frameworkFiles =
+              dynamicFrameworkFiles != Runtime.NONE
+                  ? ((SkylarkNestedSet) dynamicFrameworkFiles).getSet(Artifact.class)
+                  : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
+          return new AppleDynamicFrameworkProvider(
+              dylibBinary, depsObjcProvider, frameworkDirs, frameworkFiles);
+        }
+      };
 
   @SkylarkCallable(
       name = "link_multi_arch_binary",
@@ -494,20 +546,31 @@ public class AppleSkylarkCommon {
     }
   }
 
-  @SkylarkCallable(
+  @SkylarkSignature(
     name = "dotted_version",
+    objectType = AppleSkylarkCommon.class,
+    returnType = DottedVersion.class,
     doc = "Creates a new <a href=\"DottedVersion.html\">DottedVersion</a> instance.",
     parameters = {
+      @Param(name = "self", type = AppleSkylarkCommon.class, doc = "The apple_common instance."),
       @Param(
         name = "version",
         type = String.class,
+        named = false,
+        positional = false,
         doc = "The string representation of the DottedVersion."
       )
     }
   )
-  public DottedVersion dottedVersion(String version) {
-    return DottedVersion.fromString(version);
-  }
+  public static final BuiltinFunction DOTTED_VERSION =
+      new BuiltinFunction("dotted_version") {
+        @SuppressWarnings("unused")
+        // This method is registered statically for skylark, and never called directly.
+        public DottedVersion invoke(
+            AppleSkylarkCommon self, String version) {
+          return DottedVersion.fromString(version);
+        }
+      };
 
   @SkylarkCallable(
     name = "objc_proto_aspect",
