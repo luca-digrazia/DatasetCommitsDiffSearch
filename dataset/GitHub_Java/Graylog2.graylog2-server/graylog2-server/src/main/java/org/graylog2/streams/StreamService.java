@@ -23,20 +23,16 @@ import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedService;
 import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public interface StreamService extends PersistedService {
-    Stream create(Map<String, Object> fields);
     Stream load(String id) throws NotFoundException;
-    void destroy(Stream stream) throws NotFoundException;
     List<Stream> loadAll();
     List<Stream> loadAllEnabled();
     void pause(Stream stream);
@@ -53,7 +49,4 @@ public interface StreamService extends PersistedService {
 
     void addAlertReceiver(Stream stream, String type, String name);
     void removeAlertReceiver(Stream stream, String type, String name);
-
-    void addOutput(Stream stream, Output output);
-    void removeOutput(Stream stream, Output output);
 }

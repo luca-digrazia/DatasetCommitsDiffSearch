@@ -26,40 +26,39 @@ import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.alerts.AbstractAlertCondition;
 import org.graylog2.alerts.AlertService;
+import org.graylog2.alerts.AlertServiceImpl;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.database.ValidationException;
-import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.database.EmbeddedPersistable;
-import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class StreamServiceImpl extends PersistedServiceImpl implements StreamService {
-    private final Logger LOG = LoggerFactory.getLogger(this.getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(StreamServiceImpl.class);
     private final StreamRuleService streamRuleService;
     private final AlertService alertService;
-    private final OutputService outputService;
-    private final NotificationService notificationService;
+
+    public StreamServiceImpl(MongoConnection mongoConnection) {
+        this(mongoConnection,
+                new StreamRuleServiceImpl(mongoConnection),
+                new AlertServiceImpl(mongoConnection));
+    }
 
     @Inject
-    public StreamServiceImpl(MongoConnection mongoConnection,
-                             StreamRuleService streamRuleService,
-                             AlertService alertService,
-                             OutputService outputService,
-                             NotificationService notificationService) {
+    public StreamServiceImpl(MongoConnection mongoConnection, StreamRuleService streamRuleService, AlertService alertService) {
         super(mongoConnection);
         this.streamRuleService = streamRuleService;
         this.alertService = alertService;
-        this.outputService = outputService;
-        this.notificationService = notificationService;
     }
 
     @SuppressWarnings("unchecked")
@@ -67,20 +66,10 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         DBObject o = get(StreamImpl.class, id);
 
         if (o == null) {
-            throw new NotFoundException("Stream <" + id + "> not found!");
+            throw new NotFoundException();
         }
 
-        List<StreamRule> streamRules = streamRuleService.loadForStreamId(id.toStringMongod());
-
-        List<ObjectId> outputIds = (List<ObjectId>)o.get("outputs");
-        Set<Output> outputs = loadOutputsForStreamId(outputIds);
-
-        return new StreamImpl((ObjectId) o.get("_id"), o.toMap(), streamRules, outputs);
-    }
-
-    @Override
-    public Stream create(Map<String, Object> fields) {
-        return new StreamImpl(fields);
+        return new StreamImpl((ObjectId) o.get("_id"), o.toMap());
     }
 
     public Stream load(String id) throws NotFoundException {
@@ -115,17 +104,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
 
         List<DBObject> results = query(StreamImpl.class, query);
         for (DBObject o : results) {
-            String id = o.get("_id").toString();
-            List<StreamRule> streamRules = null;
-            try {
-                streamRules = streamRuleService.loadForStreamId(id);
-            } catch (NotFoundException e) {
-                LOG.info("Exception while loading stream rules: " + e);
-            }
-
-            final Set<Output> outputs = loadOutputsForStreamId((List<ObjectId>)o.get("outputs"));
-
-            streams.add(new StreamImpl((ObjectId) o.get("_id"), o.toMap(), streamRules, outputs));
+            streams.add(new StreamImpl((ObjectId) o.get("_id"), o.toMap()));
         }
 
         return streams;
@@ -140,30 +119,9 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         return loadAll(queryOpts);
     }
 
-    protected Set<Output> loadOutputsForStreamId(List<ObjectId> outputIds) {
-        Set<Output> result = new HashSet<>();
-        if (outputIds != null)
-            for (ObjectId outputId : outputIds)
-                try {
-                    result.add(outputService.load(outputId.toStringMongod()));
-                } catch (NotFoundException e) {
-                    LOG.warn("Nonexisting output <{}> referenced from stream <{}>!", outputId.toStringMongod());
-                }
-
-        return result;
-
-    }
-
     public void destroy(Stream stream) throws NotFoundException {
         for (StreamRule streamRule : streamRuleService.loadForStream(stream)) {
-            super.destroy(streamRule);
-        }
-        for (Notification notification : notificationService.all()) {
-            Object rawValue = notification.getDetail("stream_id");
-            if ( rawValue != null && rawValue.toString().equals(stream.getId())) {
-                LOG.debug("Removing notification that references stream: {}", notification);
-                notificationService.destroy(notification);
-            }
+            //super.destroy(streamRule);
         }
         super.destroy(stream);
     }
@@ -271,22 +229,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         collection(stream).update(
                 new BasicDBObject("_id", new ObjectId(stream.getId())),
                 new BasicDBObject("$pull", new BasicDBObject("alert_receivers." + type, name))
-        );
-    }
-
-    @Override
-    public void addOutput(Stream stream, Output output) {
-        collection(stream).update(
-                new BasicDBObject("_id", new ObjectId(stream.getId())),
-                new BasicDBObject("$addToSet", new BasicDBObject("outputs", new ObjectId(output.getId())))
-        );
-    }
-
-    @Override
-    public void removeOutput(Stream stream, Output output) {
-        collection(stream).update(
-                new BasicDBObject("_id", new ObjectId(stream.getId())),
-                new BasicDBObject("$pull", new BasicDBObject("outputs", new ObjectId(output.getId())))
         );
     }
 }
