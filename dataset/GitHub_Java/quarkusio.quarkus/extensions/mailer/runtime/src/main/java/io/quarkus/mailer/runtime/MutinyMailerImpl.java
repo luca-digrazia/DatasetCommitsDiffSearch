@@ -46,6 +46,13 @@ public class MutinyMailerImpl implements ReactiveMailer {
     @Inject
     MailerSupport mailerSupport;
 
+    private static final Function<List<?>, Void> ignore = new Function<List<?>, Void>() {
+        @Override
+        public Void apply(List<?> results) {
+            return null;
+        }
+    };;
+
     @Override
     public Uni<Void> send(Mail... mails) {
         if (mails == null) {
@@ -67,7 +74,7 @@ public class MutinyMailerImpl implements ReactiveMailer {
                 })
                 .collect(Collectors.toList());
 
-        return Uni.combine().all().unis(unis).discardItems();
+        return Uni.combine().all().unis(unis).combinedWith(ignore);
     }
 
     private Uni<Void> send(Mail mail, MailMessage message) {
@@ -105,7 +112,6 @@ public class MutinyMailerImpl implements ReactiveMailer {
         message.setHtml(mail.getHtml());
         message.setHeaders(toMultimap(mail.getHeaders()));
         if (mail.getReplyTo() != null) {
-            // getReplyTo produces the comma-separated list.
             message.addHeader("Reply-To", mail.getReplyTo());
         }
 
@@ -142,7 +148,7 @@ public class MutinyMailerImpl implements ReactiveMailer {
     }
 
     private Uni<MailAttachment> toMailAttachment(Attachment attachment) {
-        MailAttachment attach = MailAttachment.create();
+        MailAttachment attach = new MailAttachment();
         attach.setName(attachment.getName());
         attach.setContentId(attachment.getContentId());
         attach.setDescription(attachment.getDescription());
@@ -167,12 +173,12 @@ public class MutinyMailerImpl implements ReactiveMailer {
             return open
                     .flatMap(af -> af.toMulti()
                             .map(io.vertx.mutiny.core.buffer.Buffer::getDelegate)
-                            .onTermination().call((r, f) -> af.close())
-                            .collect().in(Buffer::buffer, Buffer::appendBuffer));
+                            .on().termination((r, f) -> af.close())
+                            .collectItems().in(Buffer::buffer, Buffer::appendBuffer));
         } else if (attachment.getData() != null) {
             Publisher<Byte> data = attachment.getData();
             return Multi.createFrom().publisher(data)
-                    .collect().in(Buffer::buffer, Buffer::appendByte);
+                    .collectItems().in(Buffer::buffer, Buffer::appendByte);
         } else {
             return Uni.createFrom().failure(new IllegalArgumentException("Attachment has no data"));
         }

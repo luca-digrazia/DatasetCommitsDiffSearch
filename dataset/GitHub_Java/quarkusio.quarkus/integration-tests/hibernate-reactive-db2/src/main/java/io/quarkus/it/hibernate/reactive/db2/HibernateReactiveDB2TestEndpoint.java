@@ -51,7 +51,7 @@ public class HibernateReactiveDB2TestEndpoint {
         return mutinySession
                 .flatMap(session -> {
                     return populateDB()
-                            .onItem().produceUni(junk -> session.find(GuineaPig.class, expectedPig.getId()));
+                            .then(() -> session.find(GuineaPig.class, expectedPig.getId()));
                 });
     }
 
@@ -62,7 +62,7 @@ public class HibernateReactiveDB2TestEndpoint {
         return mutinySession
                 .flatMap(s -> s.persist(new GuineaPig(10, "Tulip")))
                 .flatMap(s -> s.flush())
-                .flatMap(junk -> selectNameFromId(10));
+                .then(() -> selectNameFromId(10));
     }
 
     @GET
@@ -132,9 +132,8 @@ public class HibernateReactiveDB2TestEndpoint {
     }
 
     private Uni<RowSet<Row>> populateDB() {
-        return db2Pool.getConnection()
-                .flatMap(c -> c.preparedQuery("DELETE FROM Pig").execute().map(junk -> c))
-                .flatMap(c -> c.preparedQuery("INSERT INTO Pig (id, name) VALUES (5, 'Aloi')").execute());
+        return db2Pool.query("DELETE FROM Pig").execute()
+                .flatMap(junk -> db2Pool.preparedQuery("INSERT INTO Pig (id, name) VALUES (5, 'Aloi')").execute());
     }
 
     private Uni<String> selectNameFromId(Integer id) {

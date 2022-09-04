@@ -15,8 +15,7 @@ public class FunctionInvoker {
     protected FunctionConstructor<?> constructor;
     protected ArrayList<ValueInjector> parameterInjectors;
     protected Class<?> inputType;
-    protected Type inputGenericType;
-    protected Type outputType;
+    protected Class<?> outputType;
     protected boolean isAsync;
 
     protected Map<String, Object> bindingContext = new ConcurrentHashMap<>();
@@ -34,7 +33,6 @@ public class FunctionInvoker {
                 ValueInjector injector = ParameterInjector.createInjector(type, clz, annotations);
                 if (injector instanceof InputValueInjector) {
                     inputType = clz;
-                    inputGenericType = method.getGenericParameterTypes()[i];
                 }
                 parameterInjectors.add(injector);
             }
@@ -48,8 +46,8 @@ public class FunctionInvoker {
                 Type genericReturnType = method.getGenericReturnType();
                 if (genericReturnType instanceof ParameterizedType) {
                     Type[] actualParams = ((ParameterizedType) genericReturnType).getActualTypeArguments();
-                    if (actualParams.length == 1) {
-                        outputType = actualParams[0];
+                    if (actualParams.length == 1 && actualParams[0] instanceof Class<?>) {
+                        outputType = (Class<?>) actualParams[0];
                     }
                 }
                 if (outputType == null) {
@@ -80,11 +78,7 @@ public class FunctionInvoker {
         return inputType;
     }
 
-    public Type getInputGenericType() {
-        return inputGenericType;
-    }
-
-    public Type getOutputType() {
+    public Class getOutputType() {
         return outputType;
     }
 
