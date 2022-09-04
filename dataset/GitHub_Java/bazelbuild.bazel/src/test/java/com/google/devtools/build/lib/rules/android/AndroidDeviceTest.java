@@ -637,16 +637,16 @@ public class AndroidDeviceTest extends BuildViewTestCase {
         "   tags = ['requires-kvm']",
         ")");
     scratch.file(
-        "javatests/com/app/starlarktest/starlarktest.bzl",
+        "javatests/com/app/skylarktest/skylarktest.bzl",
         "mystring = provider(fields = ['content'])",
         "def _impl(ctx):",
         "  return [mystring(content = ctx.attr.dep[AndroidDeviceBrokerInfo])]",
-        "starlarktest = rule(implementation=_impl, attrs = {'dep': attr.label()})");
+        "skylarktest = rule(implementation=_impl, attrs = {'dep': attr.label()})");
     scratch.file(
-        "javatests/com/app/starlarktest/BUILD",
-        "load(':starlarktest.bzl', 'starlarktest')",
-        "starlarktest(name = 'mytest', dep = '//tools/android/emulated_device:nexus_6')");
-    ConfiguredTarget ct = getConfiguredTarget("//javatests/com/app/starlarktest:mytest");
+        "javatests/com/app/skylarktest/BUILD",
+        "load(':skylarktest.bzl', 'skylarktest')",
+        "skylarktest(name = 'mytest', dep = '//tools/android/emulated_device:nexus_6')");
+    ConfiguredTarget ct = getConfiguredTarget("//javatests/com/app/skylarktest:mytest");
     assertThat(ct).isNotNull();
   }
 }

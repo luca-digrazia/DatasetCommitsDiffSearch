@@ -13,28 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.lib.exec;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.MissingExpansionException;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
-import com.google.devtools.build.lib.server.FailureDetails.Execution;
-import com.google.devtools.build.lib.server.FailureDetails.Execution.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.OutputService;
@@ -79,24 +71,21 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
                   : actionExecutionContext.getInputPath(action.getInputManifest());
           Map<PathFragment, PathFragment> symlinks;
           if (action.getRunfiles() != null) {
-            symlinks = Maps.transformValues(runfilesToMap(action, actionExecutionContext), TO_PATH);
+            try {
+              symlinks =
+                  Maps.transformValues(runfilesToMap(action, actionExecutionContext), TO_PATH);
+            } catch (IOException e) {
+              throw new EnvironmentalExecException(e);
+            }
           } else {
             Preconditions.checkState(action.isFilesetTree());
-            checkNotNull(inputManifest);
-
-            ImmutableList<FilesetOutputSymlink> filesetLinks;
-            try {
-              filesetLinks =
-                  actionExecutionContext
-                      .getArtifactExpander()
-                      .getFileset(action.getInputManifest());
-            } catch (MissingExpansionException e) {
-              throw new IllegalStateException(e);
-            }
+            Preconditions.checkNotNull(inputManifest);
 
             symlinks =
                 SymlinkTreeHelper.processFilesetLinks(
-                    filesetLinks,
+                    actionExecutionContext
+                        .getArtifactExpander()
+                        .getFileset(action.getInputManifest()),
                     action.getFilesetRoot(),
                     actionExecutionContext.getExecRoot().asFragment());
           }
@@ -116,8 +105,7 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
                 .createSymlinksDirectly(
                     action.getOutputManifest().getPath().getParentDirectory(), runfiles);
           } catch (IOException e) {
-            throw new EnvironmentalExecException(e, Code.SYMLINK_TREE_CREATION_IO_EXCEPTION)
-                .toActionExecutionException(action);
+            throw new EnvironmentalExecException(e).toActionExecutionException(action);
           }
 
           Path inputManifest =
@@ -136,13 +124,16 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
                   actionExecutionContext.getFileOutErr());
         }
       } catch (ExecException e) {
-        throw e.toActionExecutionException(action);
+        throw e.toActionExecutionException(
+            action.getProgressMessage(),
+            actionExecutionContext.showVerboseFailures(action.getOwner().getLabel()),
+            action);
       }
     }
   }
 
   private static Map<PathFragment, Artifact> runfilesToMap(
-      SymlinkTreeAction action, ActionExecutionContext actionExecutionContext) {
+      SymlinkTreeAction action, ActionExecutionContext actionExecutionContext) throws IOException {
     // This call outputs warnings about overlapping symlinks. However, this is already called by the
     // SourceManifestAction, so it can happen that we generate the warning twice. If the input
     // manifest is null, then we print the warning. Otherwise we assume that the
@@ -167,7 +158,8 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
       try {
         FileSystemUtils.writeContentAsLatin1(outputManifest, hexDigest);
       } catch (IOException e) {
-        throw createLinkFailureException(outputManifest, e);
+        throw new EnvironmentalExecException(
+            "Failed to link output manifest '" + outputManifest.getPathString() + "'", e);
       }
     } else {
       // Link output manifest on success. We avoid a file copy as these manifests may be
@@ -176,7 +168,8 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
       try {
         outputManifest.createSymbolicLink(inputManifest);
       } catch (IOException e) {
-        throw createLinkFailureException(outputManifest, e);
+        throw new EnvironmentalExecException(
+            "Failed to link output manifest '" + outputManifest.getPathString() + "'", e);
       }
     }
   }
@@ -187,16 +180,5 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
         actionExecutionContext.getInputPath(action.getInputManifest()),
         actionExecutionContext.getInputPath(action.getOutputManifest()).getParentDirectory(),
         action.isFilesetTree());
-  }
-
-  private static EnvironmentalExecException createLinkFailureException(
-      Path outputManifest, IOException e) {
-    return new EnvironmentalExecException(
-        e,
-        FailureDetail.newBuilder()
-            .setMessage("Failed to link output manifest '" + outputManifest.getPathString() + "'")
-            .setExecution(
-                Execution.newBuilder().setCode(Code.SYMLINK_TREE_MANIFEST_LINK_IO_EXCEPTION))
-            .build());
   }
 }

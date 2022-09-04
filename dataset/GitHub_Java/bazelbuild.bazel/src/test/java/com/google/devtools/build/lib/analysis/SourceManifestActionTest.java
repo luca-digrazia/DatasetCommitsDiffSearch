@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.rules.python.PythonUtils;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -74,7 +75,7 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
     pythonSourceFile = ActionsTestUtil.createArtifact(trivialRoot, pythonSourcePath);
     fakeManifest.put(buildFilePath.relativeTo(rootDirectory), buildFile);
     fakeManifest.put(pythonSourcePath.relativeTo(rootDirectory), pythonSourceFile);
-    ArtifactRoot outputDir = ArtifactRoot.asDerivedRoot(rootDirectory, false, "blaze-output");
+    ArtifactRoot outputDir = ArtifactRoot.asDerivedRoot(rootDirectory, "blaze-output");
     manifestOutputPath = rootDirectory.getRelative("blaze-output/trivial.runfiles_manifest");
     manifestOutputFile = ActionsTestUtil.createArtifact(outputDir, manifestOutputPath);
   }
@@ -105,8 +106,7 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
     Runfiles.Builder builder = new Runfiles.Builder("TESTING", false);
     builder.addSymlinks(fakeManifest);
     if (addInitPy) {
-      builder.setEmptyFilesSupplier(
-          analysisMock.pySupport().getPythonSemantics().getEmptyRunfilesSupplier());
+      builder.setEmptyFilesSupplier(PythonUtils.GET_INIT_PY_FILES);
     }
     return new SourceManifestAction(type, NULL_ACTION_OWNER, manifestOutputFile, builder.build());
   }
@@ -313,9 +313,19 @@ public final class SourceManifestActionTest extends BuildViewTestCase {
     assertThat(computeKey(action2)).isNotEqualTo(computeKey(action1));
   }
 
+  /**
+   * Constructs a new manifest file artifact with the given name, writes the given contents
+   * to that file, and returns the artifact.
+   */
+  private Artifact manifestFile(String name, String... lines) throws Exception {
+    Artifact artifact = getBinArtifactWithNoOwner(name);
+    scratch.file(artifact.getPath().getPathString(), lines);
+    return artifact;
+  }
+
   private String computeKey(SourceManifestAction action) {
     Fingerprint fp = new Fingerprint();
-    action.computeKey(actionKeyContext, /*artifactExpander=*/ null, fp);
+    action.computeKey(actionKeyContext, fp);
     return fp.hexDigestAndReset();
   }
 }

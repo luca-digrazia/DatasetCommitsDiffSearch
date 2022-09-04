@@ -34,8 +34,10 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.RunfilesApi;
-import com.google.devtools.build.lib.starlarkbuildapi.SymlinkEntryApi;
+import com.google.devtools.build.lib.skylarkbuildapi.RunfilesApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SymlinkEntryApi;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
@@ -45,8 +47,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.syntax.Location;
 
 /**
  * An object that encapsulates runfiles. Conceptually, the runfiles are a map of paths to files,
@@ -299,7 +299,7 @@ public final class Runfiles implements RunfilesApi {
     Set<PathFragment> manifestKeys =
         Streams.concat(
                 symlinks.toList().stream().map(SymlinkEntry::getPath),
-                getArtifacts().toList().stream().map(Artifact::getPackagePath))
+                getArtifacts().toList().stream().map(Artifact::getRootRelativePath))
             .collect(ImmutableSet.toImmutableSet());
     Iterable<PathFragment> emptyKeys = emptyFilesSupplier.getExtraPaths(manifestKeys);
     return NestedSetBuilder.<String>stableOrder()
@@ -385,7 +385,7 @@ public final class Runfiles implements RunfilesApi {
     Map<PathFragment, Artifact> manifest = getSymlinksAsMap(checker);
     // Add artifacts (committed to inclusion on construction of runfiles).
     for (Artifact artifact : getArtifacts().toList()) {
-      checker.put(manifest, artifact.getPackagePath(), artifact);
+      checker.put(manifest, artifact.getRootRelativePath(), artifact);
     }
 
     manifest = filterListForObscuringSymlinks(eventHandler, location, manifest);
@@ -523,7 +523,7 @@ public final class Runfiles implements RunfilesApi {
     // That is because the runfiles tree cannot contain the same artifact for different
     // configurations, because it only uses root-relative paths.
     for (Artifact artifact : artifacts.toList()) {
-      result.put(artifact.getPackagePath(), artifact);
+      result.put(artifact.getRootRelativePath(), artifact);
     }
     return result;
   }
@@ -895,7 +895,9 @@ public final class Runfiles implements RunfilesApi {
      * Collects runfiles from data dependencies of a target.
      */
     public Builder addDataDeps(RuleContext ruleContext) {
-      addTargets(getPrerequisites(ruleContext, "data"), RunfilesProvider.DATA_RUNFILES);
+      addTargets(
+          getPrerequisites(ruleContext, "data", TransitionMode.DONT_CHECK),
+          RunfilesProvider.DATA_RUNFILES);
       return this;
     }
 
@@ -1020,7 +1022,8 @@ public final class Runfiles implements RunfilesApi {
           // dependent rules in srcs (except for filegroups and such), but always in deps.
           // TODO(bazel-team): DONT_CHECK is not optimal here. Rules that use split configs need to
           // be changed not to call into here.
-          getPrerequisites(ruleContext, "srcs"), getPrerequisites(ruleContext, "deps"));
+          getPrerequisites(ruleContext, "srcs", TransitionMode.DONT_CHECK),
+          getPrerequisites(ruleContext, "deps", TransitionMode.DONT_CHECK));
     }
 
     /**
@@ -1031,9 +1034,9 @@ public final class Runfiles implements RunfilesApi {
      * <p>If the rule does not have the specified attribute, returns the empty list.
      */
     private static Iterable<? extends TransitiveInfoCollection> getPrerequisites(
-        RuleContext ruleContext, String attributeName) {
+        RuleContext ruleContext, String attributeName, TransitionMode mode) {
       if (ruleContext.getRule().isAttrDefined(attributeName, BuildType.LABEL_LIST)) {
-        return ruleContext.getPrerequisites(attributeName);
+        return ruleContext.getPrerequisites(attributeName, mode);
       } else {
         return Collections.emptyList();
       }
@@ -1074,7 +1077,7 @@ public final class Runfiles implements RunfilesApi {
     }
 
     for (Artifact artifact : getArtifacts().toList()) {
-      fp.addPath(artifact.getPackagePath());
+      fp.addPath(artifact.getRootRelativePath());
       fp.addPath(artifact.getExecPath());
     }
 

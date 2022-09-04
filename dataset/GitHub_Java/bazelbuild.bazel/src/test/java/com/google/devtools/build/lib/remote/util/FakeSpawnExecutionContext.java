@@ -112,9 +112,10 @@ public class FakeSpawnExecutionContext implements SpawnExecutionContext {
   }
 
   @Override
-  public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
+  public SortedMap<PathFragment, ActionInput> getInputMapping(boolean expandTreeArtifactsInRunfiles)
+      throws IOException {
     return new SpawnInputExpander(execRoot, /*strict*/ false)
-        .getInputMapping(spawn, this::artifactExpander, metadataProvider);
+        .getInputMapping(spawn, this::artifactExpander, metadataProvider, true);
   }
 
   @Override
