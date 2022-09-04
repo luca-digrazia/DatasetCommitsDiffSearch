@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -23,6 +22,7 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.ImportDepsCheckingLevel;
 import java.util.stream.Collectors;
@@ -34,10 +34,12 @@ public final class ImportDepsCheckActionBuilder {
     return new ImportDepsCheckActionBuilder();
   }
 
-  private Artifact outputArtifact;
+  private Artifact jdepsArtifact;
+  private Label ruleLabel;
   private NestedSet<Artifact> jarsToCheck;
   private NestedSet<Artifact> bootclasspath;
   private NestedSet<Artifact> declaredDeps;
+  private NestedSet<Artifact> transitiveDeps;
   private ImportDepsCheckingLevel importDepsCheckingLevel;
 
   private ImportDepsCheckActionBuilder() {}
@@ -48,23 +50,28 @@ public final class ImportDepsCheckActionBuilder {
     return this;
   }
 
-  public ImportDepsCheckActionBuilder outputArtifiact(Artifact outputArtifact) {
-    checkState(this.outputArtifact == null);
-    this.outputArtifact = checkNotNull(outputArtifact);
+  public ImportDepsCheckActionBuilder ruleLabel(Label ruleLabel) {
+    checkState(this.ruleLabel == null);
+    this.ruleLabel = checkNotNull(ruleLabel);
     return this;
   }
 
   public ImportDepsCheckActionBuilder importDepsCheckingLevel(
       ImportDepsCheckingLevel importDepsCheckingLevel) {
     checkState(this.importDepsCheckingLevel == null);
-    checkArgument(importDepsCheckingLevel != ImportDepsCheckingLevel.OFF);
     this.importDepsCheckingLevel = checkNotNull(importDepsCheckingLevel);
     return this;
   }
 
-  public ImportDepsCheckActionBuilder bootcalsspath(NestedSet<Artifact> bootclasspath) {
+  public ImportDepsCheckActionBuilder bootclasspath(NestedSet<Artifact> bootclasspath) {
     checkState(this.bootclasspath == null);
     this.bootclasspath = checkNotNull(bootclasspath);
+    return this;
+  }
+
+  public ImportDepsCheckActionBuilder jdepsOutputArtifact(Artifact jdepsArtifact) {
+    checkState(this.jdepsArtifact == null);
+    this.jdepsArtifact = checkNotNull(jdepsArtifact);
     return this;
   }
 
@@ -74,36 +81,30 @@ public final class ImportDepsCheckActionBuilder {
     return this;
   }
 
+  public ImportDepsCheckActionBuilder transitiveDeps(NestedSet<Artifact> transitiveDeps) {
+    checkState(this.transitiveDeps == null);
+    this.transitiveDeps = checkNotNull(transitiveDeps);
+    return this;
+  }
+
   public void buildAndRegister(RuleContext ruleContext) {
-    checkNotNull(outputArtifact);
     checkNotNull(jarsToCheck);
     checkNotNull(bootclasspath);
     checkNotNull(declaredDeps);
-    checkState(
-        importDepsCheckingLevel == ImportDepsCheckingLevel.ERROR
-            || importDepsCheckingLevel == ImportDepsCheckingLevel.WARNING,
-        "%s",
-        importDepsCheckingLevel);
+    checkNotNull(transitiveDeps);
+    checkNotNull(importDepsCheckingLevel);
+    checkNotNull(jdepsArtifact);
+    checkNotNull(ruleLabel);
 
-    CustomCommandLine args =
-        CustomCommandLine.builder()
-            .addExecPath("--output", outputArtifact)
-            .addExecPaths(VectorArg.addBefore("--input").each(jarsToCheck))
-            .addExecPaths(VectorArg.addBefore("--classpath_entry").each(declaredDeps))
-            .addExecPaths(VectorArg.addBefore("--bootclasspath_entry").each(bootclasspath))
-            .add(
-                importDepsCheckingLevel == ImportDepsCheckingLevel.ERROR
-                    ? "--fail_on_errors"
-                    : "--nofail_on_errors")
-            .build();
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .useDefaultShellEnvironment()
             .setExecutable(ruleContext.getExecutablePrerequisite("$import_deps_checker", Mode.HOST))
             .addTransitiveInputs(jarsToCheck)
             .addTransitiveInputs(declaredDeps)
+            .addTransitiveInputs(transitiveDeps)
             .addTransitiveInputs(bootclasspath)
-            .addOutput(outputArtifact)
+            .addOutput(jdepsArtifact)
             .setMnemonic("ImportDepsChecker")
             .setProgressMessage(
                 "Checking the completeness of the deps for %s",
@@ -112,7 +113,32 @@ public final class ImportDepsCheckActionBuilder {
                     .stream()
                     .map(Artifact::prettyPrint)
                     .collect(Collectors.joining(", ")))
-            .addCommandLine(args)
+            .addCommandLine(buildCommandLine())
             .build(ruleContext));
+  }
+
+  private CustomCommandLine buildCommandLine() {
+    return CustomCommandLine.builder()
+        .addExecPaths(VectorArg.addBefore("--input").each(jarsToCheck))
+        .addExecPaths(VectorArg.addBefore("--directdep").each(declaredDeps))
+        .addExecPaths(VectorArg.addBefore("--classpath_entry").each(transitiveDeps))
+        .addExecPaths(VectorArg.addBefore("--bootclasspath_entry").each(bootclasspath))
+        .addDynamicString(convertErrorFlag(importDepsCheckingLevel))
+        .addExecPath("--jdeps_output", jdepsArtifact)
+        .add("--rule_label", ruleLabel.toString())
+        .build();
+  }
+
+  private static String convertErrorFlag(ImportDepsCheckingLevel level) {
+    switch (level) {
+      case ERROR:
+        return "--checking_mode=error";
+      case WARNING:
+        return "--checking_mode=warning";
+      case OFF:
+        return "--checking_mode=silence";
+      default:
+        throw new RuntimeException("Unhandled deps checking level: " + level);
+    }
   }
 }
