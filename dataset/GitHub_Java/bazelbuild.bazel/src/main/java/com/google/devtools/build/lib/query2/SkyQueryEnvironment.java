@@ -27,6 +27,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -85,7 +86,6 @@ import com.google.devtools.build.lib.query2.engine.StreamableQueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.lib.query2.query.BlazeTargetAccessor;
-import com.google.devtools.build.lib.rules.repository.WorkspaceFileHelper;
 import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesValue;
 import com.google.devtools.build.lib.skyframe.ContainingPackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.GraphBackedRecursivePackageProvider;
@@ -333,7 +333,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         Preconditions.checkNotNull(result.get(universeKey), result);
       } else {
         // No values in the result, so there must be an error. We expect the error to be a cycle.
-        boolean foundCycle = !result.getError().getCycleInfo().isEmpty();
+        boolean foundCycle = !Iterables.isEmpty(result.getError().getCycleInfo());
         Preconditions.checkState(
             foundCycle,
             "Universe query \"%s\" failed with non-cycle error: %s",
@@ -451,8 +451,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return super.evaluateQuery(expr, batchCallback);
   }
 
-  Map<SkyKey, Collection<Target>> targetifyValues(Map<SkyKey, ? extends Iterable<SkyKey>> input)
-      throws InterruptedException {
+  private Map<SkyKey, Collection<Target>> targetifyValues(
+      Map<SkyKey, ? extends Iterable<SkyKey>> input) throws InterruptedException {
     return targetifyValues(
         input,
         makePackageKeyToTargetKeyMap(ImmutableSet.copyOf(Iterables.concat(input.values()))));
@@ -521,10 +521,12 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     for (Target target : targets) {
       targetsByKey.put(TARGET_TO_SKY_KEY.apply(target), target);
     }
-    Map<SkyKey, Collection<Target>> directDeps =
-        targetifyValues(getFwdDepLabels(targetsByKey.keySet()));
+    Map<SkyKey, Collection<Target>> directDeps = targetifyValues(
+        graph.getDirectDeps(targetsByKey.keySet()));
     if (targetsByKey.keySet().size() != directDeps.keySet().size()) {
-      Iterable<SkyKey> missingTargets = Sets.difference(targetsByKey.keySet(), directDeps.keySet());
+      Iterable<Label> missingTargets = Iterables.transform(
+          Sets.difference(targetsByKey.keySet(), directDeps.keySet()),
+          SKYKEY_TO_LABEL);
       eventHandler.handle(Event.warn("Targets were missing from graph: " + missingTargets));
     }
     ThreadSafeMutableSet<Target> result = createThreadSafeMutableSet();
@@ -534,28 +536,29 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return result;
   }
 
-  /** Returns the target dependencies' {@link Label}s of the passed in target {@code Label}s. */
-  protected Map<SkyKey, Iterable<SkyKey>> getFwdDepLabels(Iterable<SkyKey> targetLabels)
+  /**
+   * Returns deps in the form of {@link SkyKey}s.
+   *
+   * <p>The implementation of this method does not filter out deps due to disallowed edges,
+   * therefore callers are responsible for doing the right thing themselves.
+   */
+  public Multimap<SkyKey, SkyKey> getUnfilteredDirectDepsOfSkyKeys(Iterable<SkyKey> keys)
       throws InterruptedException {
-    Preconditions.checkState(
-        Iterables.all(targetLabels, IS_LABEL), "Expected all labels: %s", targetLabels);
-    return graph.getDirectDeps(targetLabels).entrySet().stream()
-        .collect(
-            ImmutableMap.toImmutableMap(
-                Map.Entry::getKey, entry -> Iterables.filter(entry.getValue(), IS_LABEL)));
+    ImmutableMultimap.Builder<SkyKey, SkyKey> builder = ImmutableMultimap.builder();
+    graph.getDirectDeps(keys).forEach(builder::putAll);
+    return builder.build();
   }
 
   @Override
   public Collection<Target> getReverseDeps(
       Iterable<Target> targets, QueryExpressionContext<Target> context)
       throws InterruptedException {
-    return getReverseDepsOfLabels(Iterables.transform(targets, Target::getLabel));
+    return getReverseDepsOfTransitiveTraversalKeys(Iterables.transform(targets, TARGET_TO_SKY_KEY));
   }
 
-  protected Collection<Target> getReverseDepsOfLabels(Iterable<Label> targetLabels)
-      throws InterruptedException {
-    Map<SkyKey, Collection<Target>> rawReverseDeps =
-        getRawReverseDeps(Iterables.transform(targetLabels, label -> label));
+  private Collection<Target> getReverseDepsOfTransitiveTraversalKeys(
+      Iterable<SkyKey> transitiveTraversalKeys) throws InterruptedException {
+    Map<SkyKey, Collection<Target>> rawReverseDeps = getRawReverseDeps(transitiveTraversalKeys);
     return processRawReverseDeps(rawReverseDeps);
   }
 
@@ -982,16 +985,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         Iterables.filter(transitiveTraversalKeys, Predicates.not(Predicates.in(successfulKeys)));
     Set<Map.Entry<SkyKey, Exception>> errorEntries =
         graph.getMissingAndExceptions(unsuccessfulKeys).entrySet();
-    Set<SkyKey> missingKeys = new HashSet<>();
     for (Map.Entry<SkyKey, Exception> entry : errorEntries) {
       if (entry.getValue() == null) {
-        missingKeys.add((SkyKey) entry.getKey().argument());
+        // Targets may be in the graph because they are not in the universe or depend on cycles.
+        eventHandler.handle(Event.warn(entry.getKey().argument() + " does not exist in graph"));
       } else {
         errorMessagesBuilder.add(entry.getValue().getMessage());
       }
-    }
-    if (!missingKeys.isEmpty()) {
-      eventHandler.handle(Event.warn("Targets were missing from graph: " + missingKeys));
     }
 
     // Lastly, report all found errors.
@@ -1013,11 +1013,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return eventHandler;
   }
 
-  public static final Predicate<SkyKey> IS_LABEL =
+  public static final Predicate<SkyKey> IS_TTV =
       SkyFunctionName.functionIs(Label.TRANSITIVE_TRAVERSAL);
 
   public static final Function<SkyKey, Label> SKYKEY_TO_LABEL =
-      skyKey -> IS_LABEL.apply(skyKey) ? (Label) skyKey.argument() : null;
+      skyKey -> IS_TTV.apply(skyKey) ? (Label) skyKey.argument() : null;
 
   static final Function<SkyKey, PackageIdentifier> PACKAGE_SKYKEY_TO_PACKAGE_IDENTIFIER =
       skyKey -> (PackageIdentifier) skyKey.argument();
@@ -1110,7 +1110,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private static Iterable<SkyKey> getPkgLookupKeysForFile(PathFragment originalFileFragment,
       PathFragment currentPathFragment) {
     if (originalFileFragment.equals(currentPathFragment)
-        && WorkspaceFileHelper.matchWorkspaceFileName(originalFileFragment)) {
+        && originalFileFragment.equals(LabelConstants.WORKSPACE_FILE_NAME)) {
       // TODO(mschaller): this should not be checked at runtime. These are constants!
       Preconditions.checkState(
           LabelConstants.WORKSPACE_FILE_NAME
