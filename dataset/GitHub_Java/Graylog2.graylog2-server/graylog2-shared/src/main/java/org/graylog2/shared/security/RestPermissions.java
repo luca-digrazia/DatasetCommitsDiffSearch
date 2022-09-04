@@ -47,7 +47,6 @@ public class RestPermissions {
     public static final String USERS_TOKENCREATE = "users:tokencreate";
     public static final String USERS_TOKENLIST = "users:tokenlist";
     public static final String USERS_TOKENREMOVE = "users:tokenremove";
-    public static final String USERS_ROLESEDIT = "users:rolesedit";
     public static final String THROUGHPUT_READ = "throughput:read";
     public static final String MESSAGECOUNT_READ = "messagecount:read";
     public static final String DASHBOARDS_CREATE = "dashboards:create";
@@ -85,8 +84,6 @@ public class RestPermissions {
     public static final String SYSTEMJOBS_READ = "systemjobs:read";
     public static final String SYSTEMJOBS_CREATE = "systemjobs:create";
     public static final String LDAP_EDIT = "ldap:edit";
-    public static final String LDAPGROUPS_READ = "ldapgroups:read";
-    public static final String LDAPGROUPS_EDIT = "ldapgroups:edit";
     public static final String LOGGERS_READ = "loggers:read";
     public static final String LOGGERS_EDIT = "loggers:edit";
     public static final String LOGGERS_READSUBSYSTEM = "loggers:readsubsystem";
@@ -123,13 +120,9 @@ public class RestPermissions {
     public static final String JOURNAL_READ = "journal:read";
     public static final String JOURNAL_EDIT = "journal:edit";
     public static final String COLLECTORS_READ = "collectors:read";
-    public static final String ROLES_CREATE = "roles:create";
-    public static final String ROLES_READ = "roles:read";
-    public static final String ROLES_EDIT = "roles:edit";
-    public static final String ROLES_DELETE = "roles:delete";
 
     // Standard set of permissions of readers.
-    public static final Set<String> READER_BASE_PERMISSIONS = ImmutableSet.<String>builder().add(
+    private static final Set<String> READER_BASE_PERMISSIONS = ImmutableSet.<String>builder().add(
                     BUFFERS_READ,
                     FIELDNAMES_READ,
                     INDEXERCLUSTER_READ,
