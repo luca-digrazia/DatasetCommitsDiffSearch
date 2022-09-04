@@ -20,18 +20,21 @@
 
 package org.graylog2.buffers.processors;
 
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.lmax.disruptor.EventHandler;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
 import org.bson.types.ObjectId;
+import com.google.common.collect.Maps;
 import org.graylog2.Core;
+import org.graylog2.buffers.MessageEvent;
 import org.graylog2.outputs.OutputRouter;
 import org.graylog2.outputs.OutputStreamConfigurationImpl;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.OutputStreamConfiguration;
 import org.graylog2.plugin.streams.Stream;
@@ -39,11 +42,12 @@ import org.graylog2.streams.StreamImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.*;
-
-import static com.codahale.metrics.MetricRegistry.name;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.lmax.disruptor.EventHandler;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Histogram;
+import com.yammer.metrics.core.Meter;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -57,9 +61,9 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
     private Core server;
 
     private List<Message> buffer = Lists.newArrayList();
-
-    private final Meter incomingMessages;
-    private final Histogram batchSize;
+    private final Meter incomingMessages = Metrics.newMeter(OutputBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
+    
+    private final Histogram batchSize = Metrics.newHistogram(OutputBufferProcessor.class, "BatchSize");
 
     private final long ordinal;
     private final long numberOfConsumers;
@@ -77,9 +81,6 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
             new ThreadFactoryBuilder()
             .setNameFormat("outputbuffer-processor-" + ordinal + "-executor-%d")
             .build());
-
-        incomingMessages = server.metrics().meter(name(OutputBufferProcessor.class, "incomingMessages"));
-        batchSize = server.metrics().histogram(name(OutputBufferProcessor.class, "batchSize"));
     }
 
     @Override
@@ -99,8 +100,8 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
 
         if (endOfBatch || buffer.size() >= server.getConfiguration().getOutputBatchSize()) {
 
-            final CountDownLatch doneSignal = new CountDownLatch(server.outputs().count());
-            for (final MessageOutput output : server.outputs().get()) {
+            final CountDownLatch doneSignal = new CountDownLatch(server.getOutputs().size());
+            for (final MessageOutput output : server.getOutputs()) {
                 final String typeClass = output.getClass().getCanonicalName();
 
                 try {
@@ -138,14 +139,10 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
             if (!doneSignal.await(10, TimeUnit.SECONDS)) {
                 LOG.warn("Timeout reached. Not waiting any longer for writer threads to complete.");
             }
-
-            int messagesWritten = buffer.size();
-
+            
             if (server.isStatsMode()) {
-                server.getBenchmarkCounter().add(messagesWritten);
+                server.getBenchmarkCounter().add(buffer.size());
             }
-
-            server.getThroughputCounter().add(messagesWritten);
             
             buffer.clear();
         }
@@ -159,7 +156,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
         
         for (Message message : messages) {
             for (Stream stream : message.getStreams()) {
-                distinctStreams.put(new ObjectId(stream.getId()), stream);
+                distinctStreams.put(stream.getId(), stream);
             }
         }
         

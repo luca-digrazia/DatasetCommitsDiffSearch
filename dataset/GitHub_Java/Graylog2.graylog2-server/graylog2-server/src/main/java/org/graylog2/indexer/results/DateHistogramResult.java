@@ -30,16 +30,26 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class DateHistogramResult extends IndexQueryResult {
+public class DateHistogramResult {
 	
+	private final String originalQuery;
 	private final DateHistogramFacet result;
 	private final Indexer.DateHistogramInterval interval;
+	private final TimeValue took;
 
 	public DateHistogramResult(DateHistogramFacet result, String originalQuery, Indexer.DateHistogramInterval interval, TimeValue took) {
-        super(originalQuery, took);
-
+		this.originalQuery = originalQuery;
 		this.result = result;
 		this.interval = interval;
+		this.took = took;
+	}
+	
+	public String getOriginalQuery() {
+		 return originalQuery;
+	}
+	
+	public TimeValue took() {
+		return took;
 	}
 	
 	public Indexer.DateHistogramInterval getInterval() {

@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,58 +15,51 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.outputs;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
-import com.google.common.collect.Maps;
-import org.graylog2.indexer.Indexer;
-import org.graylog2.plugin.Message;
 import org.graylog2.plugin.outputs.MessageOutput;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
+import org.graylog2.plugin.Message;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import com.google.common.collect.Maps;
+import org.graylog2.Core;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.outputs.OutputStreamConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.inject.Inject;
-import java.util.List;
-import java.util.Map;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ElasticSearchOutput implements MessageOutput {
 
-    private final Meter writes;
-    private final Timer processTime;
+    private final Meter writes = Metrics.newMeter(ElasticSearchOutput.class, "Writes", "messages", TimeUnit.SECONDS);
+    private final Timer processTime = Metrics.newTimer(ElasticSearchOutput.class, "ProcessTimeMilliseconds", TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
 
     private static final String NAME = "ElasticSearch Output";
     
     private static final Logger LOG = LoggerFactory.getLogger(ElasticSearchOutput.class);
-    private final Indexer indexer;
-
-    @Inject
-    public ElasticSearchOutput(MetricRegistry metricRegistry,
-                               Indexer indexer) {
-        this.indexer = indexer;
-        // Only constructing metrics here. write() get's another Core reference. (because this technically is a plugin)
-        this.writes = metricRegistry.meter(name(ElasticSearchOutput.class, "writes"));
-        this.processTime = metricRegistry.timer(name(ElasticSearchOutput.class, "processTime"));
-    }
 
     @Override
-    public void write(List<Message> messages, OutputStreamConfiguration streamConfig) throws Exception {
+    public void write(List<Message> messages, OutputStreamConfiguration streamConfig, GraylogServer server) throws Exception {
         LOG.debug("Writing <{}> messages.", messages.size());
+        
+        Core serverImpl = (Core) server;
         
         writes.mark();
 
-        Timer.Context tcx = processTime.time();
-        indexer.bulkIndex(messages);
+        TimerContext tcx = processTime.time();
+        serverImpl.getIndexer().bulkIndex(messages);
         tcx.stop();
     }
 

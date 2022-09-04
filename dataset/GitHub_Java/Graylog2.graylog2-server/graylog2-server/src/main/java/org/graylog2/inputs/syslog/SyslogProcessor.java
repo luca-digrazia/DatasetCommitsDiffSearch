@@ -20,9 +20,10 @@
 
 package org.graylog2.inputs.syslog;
 
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.Timer;
-import org.graylog2.plugin.inputs.MessageInputConfiguration;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.core.TimerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
@@ -34,13 +35,12 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Date;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -48,26 +48,18 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class SyslogProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogProcessor.class);
-    private final Core server;
-    private final MessageInputConfiguration config;
+    private Core server;
 
     private static final Pattern STRUCTURED_SYSLOG_PATTERN = Pattern.compile("<\\d+>\\d.*", Pattern.DOTALL);
     
-    private final Meter incomingMessages;
-    private final Meter parsingFailures;
-    private final Meter incompleteMessages;
-    private final Meter processedMessages;
-    private final Timer syslogParsedTime;
+    private final Meter incomingMessages = Metrics.newMeter(SyslogProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
+    private final Meter parsingFailures = Metrics.newMeter(SyslogProcessor.class, "MessageParsingFailures", "failures", TimeUnit.SECONDS);
+    private final Meter incompleteMessages = Metrics.newMeter(SyslogProcessor.class, "IncompleteMessages", "messages", TimeUnit.SECONDS);
+    private final Meter processedMessages = Metrics.newMeter(SyslogProcessor.class, "ProcessedMessages", "messages", TimeUnit.SECONDS);
+    private final Timer syslogParsedTime = Metrics.newTimer(SyslogProcessor.class, "SyslogParsedTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS);
 
-    public SyslogProcessor(Core server, MessageInputConfiguration config) {
+    public SyslogProcessor(Core server) {
         this.server = server;
-        this.config = config;
-
-        this.incomingMessages = server.metrics().meter(name(SyslogProcessor.class, "incomingMessages"));
-        this.parsingFailures = server.metrics().meter(name(SyslogProcessor.class, "parsingFailures"));
-        this.processedMessages = server.metrics().meter(name(SyslogProcessor.class, "processedMessages"));
-        this.incompleteMessages = server.metrics().meter(name(SyslogProcessor.class, "incompleteMessages"));
-        this.syslogParsedTime = server.metrics().timer(name(SyslogProcessor.class, "syslogParsedTime"));
     }
 
     public void messageReceived(String msg, InetAddress remoteAddress) throws BufferOutOfCapacityException {
@@ -88,6 +80,11 @@ public class SyslogProcessor {
             LOG.debug("Skipping incomplete message.");
             return;
         }
+        
+        // Possibly remove full message.
+        if (!this.server.getConfiguration().isSyslogStoreFullMessageEnabled()) {
+            lm.removeField("full_message");
+        }
 
         // Add to process buffer.
         LOG.debug("Adding received syslog message <{}> to process buffer: {}", lm.getId(), lm);
@@ -96,7 +93,7 @@ public class SyslogProcessor {
     }
 
     private Message parse(String msg, InetAddress remoteAddress) throws UnknownHostException {
-        Timer.Context tcx = syslogParsedTime.time();
+        TimerContext tcx = syslogParsedTime.time();
         
         if (remoteAddress == null) {
             remoteAddress = InetAddress.getLocalHost();
@@ -163,7 +160,7 @@ public class SyslogProcessor {
     }
 
     private String parseHost(SyslogServerEventIF msg, InetAddress remoteAddress) {
-        if (remoteAddress != null && config.getBoolean(SyslogInputBase.CK_FORCE_RDNS)) {
+        if (remoteAddress != null && server.getConfiguration().getForceSyslogRdns()) {
             try {
                 return Tools.rdnsLookup(remoteAddress);
             } catch (UnknownHostException e) {
@@ -177,13 +174,13 @@ public class SyslogProcessor {
     private double parseDate(SyslogServerEventIF msg) throws IllegalStateException {
         // Check if date could be parsed.
         if (msg.getDate() == null) {
-            if (config.getBoolean(SyslogInputBase.CK_ALLOW_OVERRIDE_DATE)) {
+            if (server.getConfiguration().getAllowOverrideSyslogDate()) {
                 // empty Date constructor allocates a Date object and initializes it so that it represents the time at which it was allocated.
                 msg.setDate(new Date());
-                LOG.info("Date could not be parsed. Was set to NOW because {} is true.", SyslogInputBase.CK_ALLOW_OVERRIDE_DATE);
+                LOG.info("Date could not be parsed. Was set to NOW because allow_override_syslog_date is true.");
             } else {
-                LOG.info("Syslog message is missing date or date could not be parsed. (Possibly set {} to true) "
-                        + "Not further handling. Message was: {}", SyslogInputBase.CK_ALLOW_OVERRIDE_DATE, new String(msg.getRaw()));
+                LOG.info("Syslog message is missing date or date could not be parsed. (Possibly set allow_override_syslog_date to true) "
+                        + "Not further handling. Message was: " + new String(msg.getRaw()));
                 throw new IllegalStateException();
             }
         }
