@@ -33,19 +33,13 @@ public interface BLAS {
     /** The default BLAS engine. */
     BLAS engine = getInstance();
 
-    /**
-     * Creates an instance.
-     * @return a BLAS instance.
-     */
+    /** Creates an instance. */
     static BLAS getInstance() {
         BLAS mkl = MKL();
         return mkl != null ? mkl : new smile.math.blas.openblas.OpenBLAS();
     }
 
-    /**
-     * Creates an MKL instance.
-     * @return a BLAS instance of MKL.
-     */
+    /** Creates an MKL instance. */
     static BLAS MKL() {
         org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BLAS.class);
 
@@ -96,24 +90,12 @@ public interface BLAS {
      */
     float asum(int n, float[] x, int incx);
 
-    /**
-     * Sums the absolute values of the elements of a vector.
-     *
-     * @param x Vector that contains elements to be summed.
-     *
-     * @return Sum of the absolute values of the elements of the vector x.
-     */
+    /** Sums the absolute values of the elements of a vector. */
     default double asum(double[] x) {
         return asum(x.length, x, 1);
     }
 
-    /**
-     * Sums the absolute values of the elements of a vector.
-     *
-     * @param x Vector that contains elements to be summed.
-     *
-     * @return Sum of the absolute values of the elements of the vector x.
-     */
+    /** Sums the absolute values of the elements of a vector. */
     default float asum(float[] x) {
         return asum(x.length, x, 1);
     }
@@ -180,40 +162,12 @@ public interface BLAS {
      */
     void axpy(int n, float alpha, float[] x, int incx, float[] y, int incy);
 
-    /**
-     * Computes a constant alpha times a vector x plus a vector y.
-     * The result overwrites the initial values of vector y.
-     * <p>
-     * When {@code alpha = 0.}, this routine returns immediately
-     * with no change in its arguments.
-     *
-     * @param alpha If {@code alpha = 0} this routine returns without any computation.
-     *
-     * @param x The vector to be scaled before summation.
-     *
-     * @param y Input and output array.
-     *          Before calling the routine, y contains the vector to be summed.
-     *          After the routine ends, y contains the result of the summation.
-     */
+    /** Computes a constant alpha times a vector x plus a vector y. */
     default void axpy(double alpha, double[] x, double[] y) {
         axpy(x.length, alpha, x, 1, y, 1);
     }
 
-    /**
-     * Computes a constant alpha times a vector x plus a vector y.
-     * The result overwrites the initial values of vector y.
-     * <p>
-     * When {@code alpha = 0.}, this routine returns immediately
-     * with no change in its arguments.
-     *
-     * @param alpha If {@code alpha = 0} this routine returns without any computation.
-     *
-     * @param x The vector to be scaled before summation.
-     *
-     * @param y Input and output array.
-     *          Before calling the routine, y contains the vector to be summed.
-     *          After the routine ends, y contains the result of the summation.
-     */
+    /** Computes a constant alpha times a vector x plus a vector y. */
     default void axpy(float alpha, float[] x, float[] y) {
         axpy(x.length, alpha, x, 1, y, 1);
     }
@@ -268,28 +222,12 @@ public interface BLAS {
      */
     float dot(int n, float[] x, int incx, float[] y, int incy);
 
-    /**
-     * Computes the dot product of two vectors.
-     *
-     * @param x Array x contains the first vector operand.
-     *
-     * @param y Array y contains the second vector operand.
-     *
-     * @return dot product. If {@code n <= 0}, return 0.
-     */
+    /** Computes the dot product of two vectors. */
     default double dot(double[] x, double[] y) {
         return dot(x.length, x, 1, y, 1);
     }
 
-    /**
-     * Computes the dot product of two vectors.
-     *
-     * @param x Array x contains the first vector operand.
-     *
-     * @param y Array y contains the second vector operand.
-     *
-     * @return dot product. If {@code n <= 0}, return 0.
-     */
+    /** Computes the dot product of two vectors. */
     default float dot(float[] x, float[] y) {
         return dot(x.length, x, 1, y, 1);
     }
@@ -324,24 +262,12 @@ public interface BLAS {
      */
     float nrm2(int n, float[] x, int incx);
 
-    /**
-     * Computes the Euclidean (L2) norm of a vector.
-     *
-     * @param x Array x contains the vector operand.
-     *
-     * @return Euclidean norm.
-     */
+    /** Computes the Euclidean (L2) norm of a vector. */
     default double nrm2(double[] x) {
         return nrm2(x.length, x, 1);
     }
 
-    /**
-     * Computes the Euclidean (L2) norm of a vector.
-     *
-     * @param x Array x contains the vector operand.
-     *
-     * @return Euclidean norm.
-     */
+    /** Computes the Euclidean (L2) norm of a vector. */
     default float nrm2(float[] x) {
        return nrm2(x.length, x, 1);
     }
@@ -350,8 +276,6 @@ public interface BLAS {
      * Scales a vector with a scalar.
      *
      * @param n Number of elements in the vectors.
-     *
-     * @param alpha The scaling factor.
      *
      * @param x Input and output array of dimension {@code (n-1) * |incx| + 1}.
      *          Vector to be scaled.
@@ -366,8 +290,6 @@ public interface BLAS {
      *
      * @param n Number of elements in the vectors.
      *
-     * @param alpha The scaling factor.
-     *
      * @param x Input and output array of dimension {@code (n-1) * |incx| + 1}.
      *          Vector to be scaled.
      *
@@ -376,24 +298,12 @@ public interface BLAS {
      */
     void scal(int n, float alpha, float[] x, int incx);
 
-    /**
-     * Scales a vector with a scalar.
-     *
-     * @param alpha The scaling factor.
-     *
-     * @param x Input and output vector to be scaled.
-     */
+    /** Scales a vector with a scalar. */
     default void scal(double alpha, double[] x) {
         scal(x.length, alpha, x, 1);
     }
 
-    /**
-     * Scales a vector with a scalar.
-     *
-     * @param alpha The scaling factor.
-     *
-     * @param x Input and output vector to be scaled.
-     */
+    /** Scales a vector with a scalar. */
     default void scal(float alpha, float[] x) {
         scal(x.length, alpha, x, 1);
     }
@@ -444,24 +354,12 @@ public interface BLAS {
      */
     void swap(int n, float[] x, int incx, float[] y, int incy);
 
-    /**
-     * Swaps two vectors.
-     *
-     * @param x Input and output vector to be swapped.
-     *
-     * @param y Input and output vector to be swapped.
-     */
+    /** Swaps two vectors. */
     default void swap(double[] x, double[] y) {
         swap(x.length, x, 1, y, 1);
     }
 
-    /**
-     * Swaps two vectors.
-     *
-     * @param x Input and output vector to be swapped.
-     *
-     * @param y Input and output vector to be swapped.
-     */
+    /** Swaps two vectors. */
     default void swap(float[] x, float[] y) {
         swap(x.length, x, 1, y, 1);
     }
@@ -503,10 +401,6 @@ public interface BLAS {
     /**
      * Searches a vector for the first occurrence of the the maximum absolute
      * value.
-     *
-     * @param x Vector to be searched.
-     *
-     * @return The first index of the maximum absolute value of vector x.
      */
     default long iamax(double[] x) {
         return iamax(x.length, x, 1);
@@ -515,10 +409,6 @@ public interface BLAS {
     /**
      * Searches a vector for the first occurrence of the the maximum absolute
      * value.
-     *
-     * @param x Vector to be searched.
-     *
-     * @return The first index of the maximum absolute value of vector x.
      */
     default long iamax(float[] x) {
         return iamax(x.length, x, 1);
