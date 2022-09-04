@@ -50,7 +50,7 @@ import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
-import com.google.devtools.build.lib.actions.ResourceSetOrBuilder;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
@@ -71,7 +71,7 @@ import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.starlarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.OnDemandString;
+import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -107,7 +107,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
   private final CharSequence progressMessage;
   private final String mnemonic;
 
-  private final ResourceSetOrBuilder resourceSetOrBuilder;
+  private final ResourceSet resourceSet;
   private final ImmutableMap<String, String> executionInfo;
 
   private final ExtraActionInfoSupplier extraActionInfoSupplier;
@@ -125,7 +125,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
    *     modified.
    * @param outputs the set of all files written by this action; must not be subsequently modified.
    * @param primaryOutput the primary output of this action
-   * @param resourceSetOrBuilder the resources consumed by executing this Action.
+   * @param resourceSet the resources consumed by executing this Action
    * @param env the action environment
    * @param commandLines the command lines to execute. This includes the main argv vector and any
    *     param file-backed command lines.
@@ -141,7 +141,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       NestedSet<Artifact> inputs,
       Iterable<Artifact> outputs,
       Artifact primaryOutput,
-      ResourceSetOrBuilder resourceSetOrBuilder,
+      ResourceSet resourceSet,
       CommandLines commandLines,
       CommandLineLimits commandLineLimits,
       boolean isShellCommand,
@@ -154,7 +154,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
         inputs,
         outputs,
         primaryOutput,
-        resourceSetOrBuilder,
+        resourceSet,
         commandLines,
         commandLineLimits,
         isShellCommand,
@@ -180,7 +180,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
    *     modified
    * @param outputs the set of all files written by this action; must not be subsequently modified.
    * @param primaryOutput the primary output of this action
-   * @param resourceSetOrBuilder the resources consumed by executing this Action.
+   * @param resourceSet the resources consumed by executing this Action
    * @param env the action's environment
    * @param executionInfo out-of-band information for scheduling the spawn
    * @param commandLines the command lines to execute. This includes the main argv vector and any
@@ -198,7 +198,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       NestedSet<Artifact> inputs,
       Iterable<? extends Artifact> outputs,
       Artifact primaryOutput,
-      ResourceSetOrBuilder resourceSetOrBuilder,
+      ResourceSet resourceSet,
       CommandLines commandLines,
       CommandLineLimits commandLineLimits,
       boolean isShellCommand,
@@ -212,7 +212,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       Consumer<Pair<ActionExecutionContext, List<SpawnResult>>> resultConsumer) {
     super(owner, tools, inputs, runfilesSupplier, outputs, env);
     this.primaryOutput = primaryOutput;
-    this.resourceSetOrBuilder = resourceSetOrBuilder;
+    this.resourceSet = resourceSet;
     this.executionInfo = executionInfo;
     this.commandLines = commandLines;
     this.commandLineLimits = commandLineLimits;
@@ -470,25 +470,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
   @Override
   protected String getRawProgressMessage() {
     if (progressMessage != null) {
-      if (progressMessage instanceof String) {
-        String progressMessageStr = (String) progressMessage;
-        if (progressMessageStr.contains("%{label}") && getOwner().getLabel() != null) {
-          progressMessageStr =
-              progressMessageStr.replace("%{label}", getOwner().getLabel().toString());
-        }
-        if (progressMessageStr.contains("%{output}") && getPrimaryOutput() != null) {
-          progressMessageStr =
-              progressMessageStr.replace("%{output}", getPrimaryOutput().getExecPathString());
-        }
-        if (progressMessageStr.contains("%{input}") && getPrimaryInput() != null) {
-          progressMessageStr =
-              progressMessageStr.replace("%{input}", getPrimaryInput().getExecPathString());
-        }
-        return progressMessageStr;
-      } else {
-        // handles OnDemandString
-        return progressMessage.toString();
-      }
+      return progressMessage.toString();
     }
     return super.getRawProgressMessage();
   }
@@ -579,8 +561,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
           executionInfo,
           SpawnAction.this.getRunfilesSupplier(),
           SpawnAction.this,
-          SpawnAction.this.resourceSetOrBuilder.buildResourceSet(inputs));
-
+          resourceSet);
       NestedSetBuilder<ActionInput> inputsBuilder = NestedSetBuilder.stableOrder();
       ImmutableList<Artifact> manifests = getRunfilesSupplier().getManifests();
       for (Artifact input : inputs.toList()) {
@@ -629,7 +610,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     private final NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     private final List<Artifact> outputs = new ArrayList<>();
     private final List<RunfilesSupplier> inputRunfilesSuppliers = new ArrayList<>();
-    private ResourceSetOrBuilder resourceSetOrBuilder = AbstractAction.DEFAULT_RESOURCE_SET;
+    private ResourceSet resourceSet = AbstractAction.DEFAULT_RESOURCE_SET;
     private ActionEnvironment actionEnvironment = null;
     private ImmutableMap<String, String> environment = ImmutableMap.of();
     private ImmutableSet<String> inheritedEnvironment = ImmutableSet.of();
@@ -661,7 +642,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       this.inputsBuilder.addTransitive(other.inputsBuilder.build());
       this.outputs.addAll(other.outputs);
       this.inputRunfilesSuppliers.addAll(other.inputRunfilesSuppliers);
-      this.resourceSetOrBuilder = other.resourceSetOrBuilder;
+      this.resourceSet = other.resourceSet;
       this.actionEnvironment = other.actionEnvironment;
       this.environment = other.environment;
       this.executionInfo = other.executionInfo;
@@ -760,7 +741,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
           inputsAndTools,
           ImmutableList.copyOf(outputs),
           outputs.get(0),
-          resourceSetOrBuilder,
+          resourceSet,
           commandLines,
           commandLineLimits,
           isShellCommand,
@@ -781,7 +762,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
         NestedSet<Artifact> inputsAndTools,
         ImmutableList<Artifact> outputs,
         Artifact primaryOutput,
-        ResourceSetOrBuilder resourceSetOrBuilder,
+        ResourceSet resourceSet,
         CommandLines commandLines,
         CommandLineLimits commandLineLimits,
         boolean isShellCommand,
@@ -797,7 +778,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
           inputsAndTools,
           outputs,
           primaryOutput,
-          resourceSetOrBuilder,
+          resourceSet,
           commandLines,
           commandLineLimits,
           isShellCommand,
@@ -901,12 +882,8 @@ public class SpawnAction extends AbstractAction implements CommandAction {
       return !outputs.isEmpty();
     }
 
-    /**
-     * Sets RecourceSet for builder. If ResourceSetBuilder set, then ResourceSetBuilder will
-     * override setResources.
-     */
-    public Builder setResources(ResourceSetOrBuilder resourceSetOrBuilder) {
-      this.resourceSetOrBuilder = resourceSetOrBuilder;
+    public Builder setResources(ResourceSet resourceSet) {
+      this.resourceSet = resourceSet;
       return this;
     }
 
@@ -1190,9 +1167,13 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     /**
      * Sets the progress message.
      *
-     * <p>The message may contain <code>%{label}</code>, <code>%{input}</code> or <code>%{output}
-     * </code> patterns, which are substituted with label string, first input or output's path,
-     * respectively.
+     * <p>If you are formatting the string in any way, prefer one of the overloads that do the
+     * formatting lazily. This helps save memory by delaying the construction of the progress
+     * message string.
+     *
+     * <p>If you cannot use simple formatting, try {@link Builder#setProgressMessage(LazyString)}.
+     *
+     * <p>If you must eagerly compute the string, use {@link Builder#setProgressMessageNonLazy}.
      */
     public Builder setProgressMessage(@CompileTimeConstant String progressMessage) {
       this.progressMessage = progressMessage;
@@ -1204,13 +1185,11 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      *
      * @param progressMessage The message to display
      * @param subject Passed to {@link String#format}
-     * @deprecated Use {@link #setProgressMessage(String)} with provided patterns.
      */
     @FormatMethod
-    @Deprecated
     public Builder setProgressMessage(@FormatString String progressMessage, Object subject) {
       return setProgressMessage(
-          new OnDemandString() {
+          new LazyString() {
             @Override
             public String toString() {
               return String.format(progressMessage, subject);
@@ -1224,14 +1203,12 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      * @param progressMessage The message to display
      * @param subject0 Passed to {@link String#format}
      * @param subject1 Passed to {@link String#format}
-     * @deprecated Use {@link #setProgressMessage(String)} with provided patterns.
      */
     @FormatMethod
-    @Deprecated
     public Builder setProgressMessage(
         @FormatString String progressMessage, Object subject0, Object subject1) {
       return setProgressMessage(
-          new OnDemandString() {
+          new LazyString() {
             @Override
             public String toString() {
               return String.format(progressMessage, subject0, subject1);
@@ -1246,14 +1223,12 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      * @param subject0 Passed to {@link String#format}
      * @param subject1 Passed to {@link String#format}
      * @param subject2 Passed to {@link String#format}
-     * @deprecated Use {@link #setProgressMessage(String)} with provided patterns.
      */
     @FormatMethod
-    @Deprecated
     public Builder setProgressMessage(
         @FormatString String progressMessage, Object subject0, Object subject1, Object subject2) {
       return setProgressMessage(
-          new OnDemandString() {
+          new LazyString() {
             @Override
             public String toString() {
               return String.format(progressMessage, subject0, subject1, subject2);
@@ -1269,10 +1244,8 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      * @param subject1 Passed to {@link String#format}
      * @param subject2 Passed to {@link String#format}
      * @param subject3 Passed to {@link String#format}
-     * @deprecated Use {@link #setProgressMessage(String)} with provided patterns.
      */
     @FormatMethod
-    @Deprecated
     public Builder setProgressMessage(
         @FormatString String progressMessage,
         Object subject0,
@@ -1280,7 +1253,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
         Object subject2,
         Object subject3) {
       return setProgressMessage(
-          new OnDemandString() {
+          new LazyString() {
             @Override
             public String toString() {
               return String.format(progressMessage, subject0, subject1, subject2, subject3);
@@ -1294,18 +1267,17 @@ public class SpawnAction extends AbstractAction implements CommandAction {
      * <p>When possible, prefer use of one of the overloads that use {@link String#format}. If you
      * do use this overload, take care not to capture anything expensive.
      */
-    private Builder setProgressMessage(OnDemandString progressMessage) {
+    public Builder setProgressMessage(LazyString progressMessage) {
       this.progressMessage = progressMessage;
       return this;
     }
 
     /**
-     * Sets the progress message.
+     * Sets an eagerly computed progress message.
      *
-     * <p>Same as {@link #setProgressMessage(String)}, except that it may be used with non compile
-     * time constants (needed for Starlark literals).
+     * <p>Prefer one of the lazy overloads whenever possible, as it will generally save memory.
      */
-    public Builder setProgressMessageFromStarlark(String progressMessage) {
+    public Builder setProgressMessageNonLazy(String progressMessage) {
       this.progressMessage = progressMessage;
       return this;
     }
