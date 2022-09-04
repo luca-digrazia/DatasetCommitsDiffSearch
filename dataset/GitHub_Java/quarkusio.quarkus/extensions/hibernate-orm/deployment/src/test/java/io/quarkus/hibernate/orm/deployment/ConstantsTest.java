@@ -46,8 +46,9 @@ public class ConstantsTest {
     }
 
     private void assertDialectMatch(String dbName, Class<?> dialectClass) {
-        final String guessDialect = Dialects.guessDialect(dbName);
-        Assertions.assertEquals(dialectClass.getName(), guessDialect);
+        final Optional<String> guessDialect = Dialects.guessDialect(dbName);
+        Assertions.assertTrue(guessDialect.isPresent());
+        Assertions.assertEquals(dialectClass.getName(), guessDialect.get());
     }
 
 }
