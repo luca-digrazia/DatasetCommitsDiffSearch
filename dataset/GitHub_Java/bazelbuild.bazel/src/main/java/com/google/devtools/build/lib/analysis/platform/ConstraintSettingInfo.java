@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintSetting
 import com.google.devtools.build.lib.util.Fingerprint;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Printer;
+import net.starlark.java.syntax.Location;
 
 /** Provider for a platform constraint setting that is available to be fulfilled. */
 @Immutable
@@ -41,7 +42,9 @@ public class ConstraintSettingInfo extends NativeInfo implements ConstraintSetti
   @Nullable private final Label defaultConstraintValueLabel;
 
   @VisibleForSerialization
-  ConstraintSettingInfo(Label label, Label defaultConstraintValueLabel) {
+  ConstraintSettingInfo(Label label, Label defaultConstraintValueLabel, Location location) {
+    super(location);
+
     this.label = label;
     this.defaultConstraintValueLabel = defaultConstraintValueLabel;
   }
@@ -102,12 +105,18 @@ public class ConstraintSettingInfo extends NativeInfo implements ConstraintSetti
 
   /** Returns a new {@link ConstraintSettingInfo} with the given data. */
   public static ConstraintSettingInfo create(Label constraintSetting) {
-    return create(constraintSetting, null);
+    return create(constraintSetting, null, Location.BUILTIN);
   }
 
   /** Returns a new {@link ConstraintSettingInfo} with the given data. */
   public static ConstraintSettingInfo create(
       Label constraintSetting, Label defaultConstraintValue) {
-    return new ConstraintSettingInfo(constraintSetting, defaultConstraintValue);
+    return create(constraintSetting, defaultConstraintValue, Location.BUILTIN);
+  }
+
+  /** Returns a new {@link ConstraintSettingInfo} with the given data. */
+  public static ConstraintSettingInfo create(
+      Label constraintSetting, Label defaultConstraintValue, Location location) {
+    return new ConstraintSettingInfo(constraintSetting, defaultConstraintValue, location);
   }
 }

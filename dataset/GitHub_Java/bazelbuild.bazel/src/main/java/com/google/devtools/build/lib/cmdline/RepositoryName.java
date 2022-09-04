@@ -240,7 +240,7 @@ public final class RepositoryName implements Serializable {
    * Returns the repository name, except that the main repo is conflated with the default repo
    * ({@code "@"} becomes the empty string).
    */
-  public String getCanonicalForm() {
+  public String getDefaultCanonicalForm() {
     return isMain() ? "" : getName();
   }
 

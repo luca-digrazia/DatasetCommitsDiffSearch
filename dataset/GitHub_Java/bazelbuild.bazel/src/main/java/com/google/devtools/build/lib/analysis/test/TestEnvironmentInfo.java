@@ -15,32 +15,36 @@
 package com.google.devtools.build.lib.analysis.test;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.starlarkbuildapi.test.TestEnvironmentInfoApi;
 import java.util.Map;
 
 /** Provider containing any additional environment variables for use in the test action. */
 @Immutable
-public final class TestEnvironmentInfo extends Info {
+public final class TestEnvironmentInfo extends NativeInfo implements TestEnvironmentInfoApi {
 
-  /** Skylark constructor and identifier for TestEnvironmentInfo. */
-  public static final NativeProvider<TestEnvironmentInfo> PROVIDER =
-      new NativeProvider<TestEnvironmentInfo>(
-          TestEnvironmentInfo.class, "TestEnvironment") {};
+  /** Starlark constructor and identifier for TestEnvironmentInfo. */
+  public static final BuiltinProvider<TestEnvironmentInfo> PROVIDER =
+      new BuiltinProvider<TestEnvironmentInfo>("TestEnvironment", TestEnvironmentInfo.class) {};
 
   private final Map<String, String> environment;
 
   /** Constructs a new provider with the given variable name to variable value mapping. */
   public TestEnvironmentInfo(Map<String, String> environment) {
-    super(PROVIDER, ImmutableMap.<String, Object>of("environment", environment));
     this.environment = Preconditions.checkNotNull(environment);
+  }
+
+  @Override
+  public BuiltinProvider<TestEnvironmentInfo> getProvider() {
+    return PROVIDER;
   }
 
   /**
    * Returns environment variables which should be set on the test action.
    */
+  @Override
   public Map<String, String> getEnvironment() {
     return environment;
   }

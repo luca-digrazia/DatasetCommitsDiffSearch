@@ -112,8 +112,9 @@ public class PlatformInfo extends NativeInfo
       ConstraintCollection constraints,
       String remoteExecutionProperties,
       ImmutableMap<String, String> execProperties,
-      Location creationLocation) {
-    super(creationLocation);
+      Location location) {
+    super(location);
+
     this.label = label;
     this.constraints = constraints;
     this.remoteExecutionProperties = Strings.nullToEmpty(remoteExecutionProperties);
@@ -172,7 +173,7 @@ public class PlatformInfo extends NativeInfo
     private final ConstraintCollection.Builder constraints = ConstraintCollection.builder();
     private String remoteExecutionProperties = null;
     @Nullable private ImmutableMap<String, String> execProperties;
-    private Location creationLocation = Location.BUILTIN;
+    private Location location = Location.BUILTIN;
 
     /**
      * Sets the parent {@link PlatformInfo} that this platform inherits from. Constraint values set
@@ -284,7 +285,7 @@ public class PlatformInfo extends NativeInfo
      * @return the {@link Builder} instance for method chaining
      */
     public Builder setLocation(Location location) {
-      this.creationLocation = location;
+      this.location = location;
       return this;
     }
 
@@ -333,7 +334,7 @@ public class PlatformInfo extends NativeInfo
       }
 
       return new PlatformInfo(
-          label, constraints.build(), remoteExecutionProperties, execProperties, creationLocation);
+          label, constraints.build(), remoteExecutionProperties, execProperties, location);
     }
 
     private static String mergeRemoteExecutionProperties(

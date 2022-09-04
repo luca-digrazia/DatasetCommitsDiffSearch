@@ -1121,37 +1121,15 @@ public abstract class Artifact
         ArtifactRoot treeArtifactRoot,
         PathFragment derivedPathPrefix,
         PathFragment customDerivedTreeRoot) {
-      return ArtifactRoot.asDerivedRoot(
-          getExecRoot(treeArtifactRoot),
-          // e.g. bazel-out/{customDerivedTreeRoot}/k8-fastbuild/bin
-          getExecPathWithinCustomDerivedRoot(
-              derivedPathPrefix, customDerivedTreeRoot, treeArtifactRoot.getExecPath()));
-    }
+      Path execRoot = getExecRoot(treeArtifactRoot);
 
-    /**
-     * Returns an exec path within the archived artifacts directory tree corresponding to the
-     * provided one.
-     *
-     * <p>Example: {@code bazel-out/k8-fastbuild/bin ->
-     * bazel-out/{customDerivedTreeRoot}/k8-fastbuild/bin}.
-     */
-    public static PathFragment getExecPathWithinArchivedArtifactsTree(
-        PathFragment derivedPathPrefix, PathFragment execPath) {
-      return getExecPathWithinCustomDerivedRoot(
-          derivedPathPrefix, ARCHIVED_ARTIFACTS_DERIVED_TREE_ROOT, execPath);
-    }
+      // bazel-out/k8-fastbuild/bin -> bazel-out/{customDerivedTreeRoot}/k8-fastbuild/bin
+      PathFragment rootExecPath =
+          derivedPathPrefix
+              .getRelative(customDerivedTreeRoot)
+              .getRelative(treeArtifactRoot.getExecPath().relativeTo(derivedPathPrefix));
 
-    /**
-     * Translates provided output {@code execPath} to one under provided derived tree root.
-     *
-     * <p>Example: {@code bazel-out/k8-fastbuild/bin ->
-     * bazel-out/{customDerivedTreeRoot}/k8-fastbuild/bin}.
-     */
-    private static PathFragment getExecPathWithinCustomDerivedRoot(
-        PathFragment derivedPathPrefix, PathFragment customDerivedTreeRoot, PathFragment execPath) {
-      return derivedPathPrefix
-          .getRelative(customDerivedTreeRoot)
-          .getRelative(execPath.relativeTo(derivedPathPrefix));
+      return ArtifactRoot.asDerivedRoot(execRoot, rootExecPath);
     }
 
     private static Path getExecRoot(ArtifactRoot artifactRoot) {
@@ -1362,8 +1340,8 @@ public abstract class Artifact
   public static final Function<Artifact, String> ROOT_RELATIVE_PATH_STRING =
       artifact -> artifact.getRootRelativePath().getPathString();
 
-  public static final Function<Artifact, String> RUNFILES_PATH_STRING =
-      artifact -> artifact.getRunfilesPath().getPathString();
+  public static final Function<Artifact, String> OUTPUT_DIR_RELATIVE_PATH_STRING =
+      artifact -> artifact.getOutputDirRelativePath(false).getPathString();
 
   /**
    * Converts a collection of artifacts into execution-time path strings, and
