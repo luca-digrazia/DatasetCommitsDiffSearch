@@ -964,7 +964,7 @@ public class SubsamplingScaleImageView extends View {
         private final WeakReference<Context> contextRef;
         private final String source;
         private final boolean sourceIsAsset;
-        private BitmapRegionDecoder decoder;
+        private WeakReference<BitmapRegionDecoder> decoderRef;
 
         public BitmapInitTask(SubsamplingScaleImageView view, Context context, String source, boolean sourceIsAsset) {
             this.viewRef = new WeakReference<SubsamplingScaleImageView>(view);
@@ -979,6 +979,7 @@ public class SubsamplingScaleImageView extends View {
                 if (viewRef != null && contextRef != null) {
                     Context context = contextRef.get();
                     if (context != null) {
+                        BitmapRegionDecoder decoder;
                         int exifOrientation = ORIENTATION_0;
                         if (sourceIsAsset) {
                             decoder = BitmapRegionDecoder.newInstance(context.getAssets().open(source, AssetManager.ACCESS_RANDOM), true);
@@ -1003,6 +1004,7 @@ public class SubsamplingScaleImageView extends View {
                             }
 
                         }
+                        decoderRef = new WeakReference<BitmapRegionDecoder>(decoder);
                         return new int[] { decoder.getWidth(), decoder.getHeight(), exifOrientation };
                     }
                 }
@@ -1014,8 +1016,9 @@ public class SubsamplingScaleImageView extends View {
 
         @Override
         protected void onPostExecute(int[] xyo) {
-            if (viewRef != null && decoder != null) {
+            if (viewRef != null && decoderRef != null) {
                 final SubsamplingScaleImageView subsamplingScaleImageView = viewRef.get();
+                final BitmapRegionDecoder decoder = decoderRef.get();
                 if (subsamplingScaleImageView != null && decoder != null && xyo != null && xyo.length == 3) {
                     subsamplingScaleImageView.onImageInited(decoder, xyo[0], xyo[1], xyo[2]);
                 }
