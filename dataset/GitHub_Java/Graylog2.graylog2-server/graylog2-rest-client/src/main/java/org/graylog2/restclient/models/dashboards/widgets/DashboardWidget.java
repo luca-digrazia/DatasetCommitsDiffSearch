@@ -211,7 +211,6 @@ public abstract class DashboardWidget {
                         w.config.get("lower_is_better") != null && Boolean.parseBoolean(String.valueOf(w.config.get("lower_is_better"))),
                         (String) w.config.get("field"),
                         (String) w.config.get("stats_function"),
-                        (w.config.containsKey("stream_id") ? (String) w.config.get("stream_id") : null),
                         w.creatorUserId
                 );
                 break;
