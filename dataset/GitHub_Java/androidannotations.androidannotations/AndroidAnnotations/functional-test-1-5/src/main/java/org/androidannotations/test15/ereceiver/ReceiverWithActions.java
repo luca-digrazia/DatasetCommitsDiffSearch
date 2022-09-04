@@ -15,18 +15,16 @@
  */
 package org.androidannotations.test15.ereceiver;
 
-import org.androidannotations.annotations.EReceiver;
-import org.androidannotations.annotations.ReceiverAction;
-
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import org.androidannotations.annotations.EReceiver;
+import org.androidannotations.annotations.ReceiverAction;
 
 @EReceiver
 public class ReceiverWithActions extends BroadcastReceiver {
 
 	public boolean simpleActionReceived = false;
-	public boolean actionWithSchemeReceived = false;
 
 	public boolean parameterActionReceived = false;
 	public String parameterActionValue = null;
@@ -43,11 +41,6 @@ public class ReceiverWithActions extends BroadcastReceiver {
 		simpleActionReceived = true;
 	}
 
-	@ReceiverAction(value = "ACTION_SCHEME_TEST", dataSchemes = "http")
-	public void onActionWithReceiver() {
-		actionWithSchemeReceived = true;
-	}
-
 	@ReceiverAction("ACTION_PARAMETER_TEST")
 	public void onParameterAction(@ReceiverAction.Extra String thisIsMyParameter) {
 		parameterActionReceived = true;
@@ -55,7 +48,8 @@ public class ReceiverWithActions extends BroadcastReceiver {
 	}
 
 	@ReceiverAction("ACTION_EXTRA_PARAMETER_TEST")
-	public void onExtraParameterAction(@ReceiverAction.Extra("thisExtraHasAnotherName") String thisIsAParameter) {
+	public void onExtraParameterAction(
+			@ReceiverAction.Extra("thisExtraHasAnotherName") String thisIsAParameter) {
 		extraParameterActionReceived = true;
 		extraParameterActionValue = thisIsAParameter;
 	}

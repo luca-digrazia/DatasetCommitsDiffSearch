@@ -21,7 +21,6 @@ import org.androidannotations.annotations.EFragment;
 import org.androidannotations.annotations.EIntentService;
 import org.androidannotations.annotations.EReceiver;
 import org.androidannotations.annotations.EService;
-import org.androidannotations.annotations.OnActivityResult;
 import org.androidannotations.annotations.Receiver;
 import org.androidannotations.annotations.Trace;
 import org.androidannotations.annotations.ViewById;
@@ -193,7 +192,7 @@ public class ValidatorHelper {
 	}
 
 	public void isStatic(Element element, IsValid valid) {
-		if (!annotationHelper.isStatic(element)) {
+		if (!annotationHelper.isPublic(element)) {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "%s cannot be used on a non static inner element");
 		}
@@ -1398,9 +1397,6 @@ public class ValidatorHelper {
 		boolean intentParameterFound = false;
 		for (VariableElement parameter : parameters) {
 			TypeMirror parameterType = parameter.asType();
-			if (parameter.getAnnotation(OnActivityResult.Extra.class) != null) {
-				continue;
-			}
 			if (parameterType.toString().equals(CanonicalNameConstants.INTEGER) //
 					|| parameterType.getKind().equals(TypeKind.INT)) {
 				if (resultCodeParameterFound) {

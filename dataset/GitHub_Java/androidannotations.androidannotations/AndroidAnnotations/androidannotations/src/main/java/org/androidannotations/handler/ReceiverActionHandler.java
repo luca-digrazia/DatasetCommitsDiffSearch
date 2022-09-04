@@ -18,12 +18,12 @@ package org.androidannotations.handler;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JVar;
 import org.androidannotations.annotations.ReceiverAction;
 import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.holder.EReceiverHolder;
 import org.androidannotations.model.AnnotationElements;
@@ -44,16 +44,11 @@ import static com.sun.codemodel.JMod.STATIC;
 public class ReceiverActionHandler extends BaseAnnotationHandler<EReceiverHolder> {
 
 	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
-	private ExtraHandler extraHandler;
+	private AnnotationHelper annotationHelper;
 
 	public ReceiverActionHandler(ProcessingEnvironment processingEnvironment) {
 		super(ReceiverAction.class, processingEnvironment);
-		extraHandler = new ExtraHandler(processingEnvironment);
-	}
-
-	public void register(AnnotationHandlers annotationHandlers) {
-		annotationHandlers.add(this);
-		annotationHandlers.add(extraHandler);
+		annotationHelper = new AnnotationHelper(processingEnvironment);
 	}
 
 	@Override
@@ -65,7 +60,7 @@ public class ReceiverActionHandler extends BaseAnnotationHandler<EReceiverHolder
 
 		validatorHelper.isNotPrivate(element, valid);
 
-		validatorHelper.param.hasNoOtherParameterThanContextOrIntentOrReceiverActionExtraAnnotated((ExecutableElement) element, valid);
+		validatorHelper.param.hasNoOtherParameterThanContextOrIntentOrExtraAnnotated((ExecutableElement) element, valid);
 	}
 
 	@Override
@@ -111,26 +106,10 @@ public class ReceiverActionHandler extends BaseAnnotationHandler<EReceiverHolder
 					extras.init(holder.getOnReceiveIntent().invoke("getExtras"));
 					callActionBlock = callActionBlock._if(extras.ne(_null()))._then();
 				}
-				callActionInvocation.arg(extraHandler.getExtraValue(param, extras, callActionBlock, holder));
+				callActionInvocation.arg(ReceiverActionExtraHandler.extractedFieldInExtra(param, extras, callActionBlock, holder, codeModelHelper, annotationHelper));
 			}
 		}
 		callActionBlock.add(callActionInvocation);
 		callActionBlock._return();
-	}
-
-	private static class ExtraHandler extends ExtraParameterHandler {
-
-		public ExtraHandler(ProcessingEnvironment processingEnvironment) {
-			super(ReceiverAction.Extra.class, ReceiverAction.class, processingEnvironment);
-		}
-
-		@Override
-		public String getAnnotationValue(VariableElement parameter) {
-			return parameter.getAnnotation(ReceiverAction.Extra.class).value();
-		}
-
-		public JExpression getExtraValue(VariableElement parameter, JVar extras, JBlock block, EReceiverHolder holder) {
-			return getExtraValue(parameter, holder.getOnReceiveIntent(), extras, block, holder.getOnReceiveMethod(), holder);
-		}
 	}
 }
