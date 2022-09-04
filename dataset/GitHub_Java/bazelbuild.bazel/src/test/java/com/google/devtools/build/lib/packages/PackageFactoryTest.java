@@ -24,9 +24,7 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.PackageValidator.InvalidPackageException;
 import com.google.devtools.build.lib.packages.util.PackageFactoryTestBase;
@@ -540,9 +538,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     Path path = scratch.file("/x/BUILD", "sh_library(name='y')");
 
     dummyPackageValidator.setImpl(
-        (pkg, eventHandler) -> {
+        pkg -> {
           if (pkg.getName().equals("x")) {
-            eventHandler.handle(Event.warn("warning event"));
             throw new InvalidPackageException(pkg.getPackageIdentifier(), "nope");
           }
         });
@@ -550,7 +547,6 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     Package pkg = packages.createPackage("x", RootedPath.toRootedPath(root, path));
     assertThat(pkg.containsErrors()).isFalse();
 
-    StoredEventHandler eventHandler = new StoredEventHandler();
     InvalidPackageException expected =
         assertThrows(
             InvalidPackageException.class,
@@ -558,12 +554,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
                 packages
                     .factory()
                     .afterDoneLoadingPackage(
-                        pkg,
-                        StarlarkSemantics.DEFAULT_SEMANTICS,
-                        /*loadTimeNanos=*/ 0,
-                        eventHandler));
+                        pkg, StarlarkSemantics.DEFAULT_SEMANTICS, /*loadTimeNanos=*/ 0));
     assertThat(expected).hasMessageThat().contains("no such package 'x': nope");
-    assertThat(eventHandler.getEvents()).containsExactly(Event.warn("warning event"));
   }
 
   @Test
