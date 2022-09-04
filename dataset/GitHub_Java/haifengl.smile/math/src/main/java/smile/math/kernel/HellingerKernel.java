@@ -18,13 +18,8 @@
 package smile.math.kernel;
 
 /**
- * The Hellinger kernel. The Hellinger distance is used to quantify the
- * similarity between two probability distributions. It is a type of
- * f-divergence. The Hellinger distance H(P, Q) on discrete distributions
- * is equivalent to the Euclidean distance of the square root vectors.
- * The Hellinger kernel is 1 - H<sup>2</sup>(P, Q), which is equivalent
- * to the dot product of the square root vectors.
- *
+ * The Hellinger Kernel.
+
  * @author Diego Catalano
  */
 public class HellingerKernel implements MercerKernel<double[]> {
@@ -37,7 +32,7 @@ public class HellingerKernel implements MercerKernel<double[]> {
 
     @Override
     public String toString() {
-        return "HellingerKernel()";
+        return "HellingerKernel";
     }
 
     @Override

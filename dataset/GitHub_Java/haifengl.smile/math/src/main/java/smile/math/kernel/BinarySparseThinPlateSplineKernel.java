@@ -31,13 +31,34 @@ import smile.math.MathEx;
  * 
  * @author Haifeng Li
  */
-public class BinarySparseThinPlateSplineKernel extends ThinPlateSpline implements MercerKernel<int[]> {
+public class BinarySparseThinPlateSplineKernel implements MercerKernel<int[]>, IsotropicKernel {
+    private static final long serialVersionUID = 2L;
+
+    /**
+     * The width of the kernel.
+     */
+    private double sigma;
+
     /**
      * Constructor.
-     * @param sigma The length scale of kernel.
+     * @param sigma the smooth/width parameter of Thin Plate Spline kernel.
      */
     public BinarySparseThinPlateSplineKernel(double sigma) {
-        super(sigma);
+        if (sigma <= 0) {
+            throw new IllegalArgumentException("sigma is not positive: " + sigma);
+        }
+
+        this.sigma = sigma;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Sparse Linear Thin Plate Spline Kernel (sigma = %.4f)", sigma);
+    }
+
+    @Override
+    public double k(double dist) {
+        return dist/(sigma*sigma) * Math.log(Math.sqrt(dist)/sigma);
     }
 
     @Override

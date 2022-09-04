@@ -17,63 +17,92 @@
 
 package smile.math.kernel;
 
-import smile.math.MathEx;
-
 /**
- * Pearson VII universal kernel. The Pearson VII function
- * is often used for curve fitting of X-ray diffraction
- * scans and single bands in infrared spectra.
- *
- * <h2>References</h2>
- * <ol>
- * <li> B. Üstün, W.J. Melssen, and L. Buydens. Facilitating the Application of Support Vector Regression by Using a Universal Pearson VII Function Based Kernel, 2006.</li>
- * </ol>
+ * The Pearson Kernel.
  *
  * @author Diego Catalano
  */
 public class PearsonKernel implements MercerKernel<double[]> {
     private static final long serialVersionUID = 2L;
-
-    /** The tailing factor of the peak. */
-    private final double omega;
-    /** Pearson width. */
-    private final double sigma;
-    /** The coefficient 4 * (2 ^ (1/omega) - 1) / (sigma^2). */
-    private final double C;
-
+    
+    private double omega;
+    private double sigma;
+    private double constant;
+    
     /**
-     * Constructor.
-     * @param sigma Pearson width.
-     * @param omega The tailing factor of the peak.
+     * Get the omega parameter.
+     * @return Omega parameter.
      */
-    public PearsonKernel(double sigma, double omega) {
-        this.omega = omega;
-        this.sigma = sigma;
-        this.C = 4.0 * (Math.pow(2.0, 1.0 / omega) - 1.0) / (sigma * sigma);
+    public double getOmega() {
+        return omega;
     }
 
     /**
-     * Returns Pearson width.
+     * Set the omega parameter.
+     * @param omega Omega parameter.
      */
-    public double sigma() {
+    public void setOmega(double omega) {
+        this.omega = omega;
+        this.constant = 2 * Math.sqrt(Math.pow(2, (1 / omega)) - 1) / sigma;
+    }
+
+    /**
+     * Get the sigma parameter.
+     * @return Sigma parameter.
+     */
+    public double getSigma() {
         return sigma;
     }
 
     /**
-     * Returns the tailing factor of the peak.
+     * Set the sigma parameter.
+     * @param sigma Sigma parameter.
      */
-    public double omega() {
-        return omega;
+    public void setSigma(double sigma) {
+        this.sigma = sigma;
+        this.constant = 2 * Math.sqrt(Math.pow(2, (1 / omega)) - 1) / sigma;
+    }
+    
+    /**
+     * Constructor.
+     */
+    public PearsonKernel() {
+        this(1,1);
+    }
+
+    /**
+     * Constructor.
+     * @param omega Omega value.
+     * @param sigma Sigma value.
+     */
+    public PearsonKernel(double omega, double sigma) {
+        this.omega = omega;
+        this.sigma = sigma;
     }
 
     @Override
     public String toString() {
-        return String.format("PearsonKernel(%.4f, %.4f)", sigma, omega);
+        return "Pearson Kernel";
     }
 
     @Override
     public double k(double[] x, double[] y) {
-        double d = MathEx.squaredDistance(x, y);
-        return 1.0 / Math.pow(1.0 + C * d, omega);
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
+        }
+
+        // Inner product
+        double xx = 0;
+        double yy = 0;
+        double xy = 0;
+        for (int i = 0; i < x.length; i++){
+            xx += x[i] * x[i];
+            yy += y[i] * y[i];
+            xy += x[i] * y[i];
+        }
+        
+        double m = constant * Math.sqrt(-2.0 * xy + xx + yy);
+        return 1.0 / Math.pow(1.0 + m * m, omega);
+
     }
 }

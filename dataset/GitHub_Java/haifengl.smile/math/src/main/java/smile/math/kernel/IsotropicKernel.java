@@ -37,19 +37,19 @@ public interface IsotropicKernel extends Function {
 
     /**
      * The isotropic kernel function.
-     * @param dist The distance.
+     * @param dist the squared distance.
      */
     double k(double dist);
 
     /**
      * Returns the kernel matrix.
      *
-     * @param pdist The pairwise distance matrix.
-     * @return The kernel matrix.
+     * @param pdist the pairwise squared distance matrix.
+     * @return the kernel matrix.
      */
     default Matrix K(Matrix pdist) {
         if (pdist.nrows() != pdist.ncols()) {
-            throw new IllegalArgumentException(String.format("pdist is not square: %d x %d", pdist.nrows(), pdist.ncols()));
+            throw new IllegalArgumentException("pdist is not square");
         }
 
         int n = pdist.nrows();
