@@ -1,11 +1,11 @@
 package io.quarkus.grpc.runtime;
 
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.Prioritized;
 import javax.inject.Inject;
@@ -14,14 +14,12 @@ import io.grpc.ClientInterceptor;
 
 @ApplicationScoped
 public class GrpcClientInterceptorContainer {
+
     @Inject
+    @Any
     Instance<ClientInterceptor> interceptors;
 
     public List<ClientInterceptor> getSortedInterceptors() {
-        if (interceptors.isUnsatisfied()) {
-            return Collections.emptyList();
-        }
-
         return interceptors.stream().sorted(new Comparator<ClientInterceptor>() { // NOSONAR
             @Override
             public int compare(ClientInterceptor si1, ClientInterceptor si2) {
