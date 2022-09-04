@@ -36,11 +36,7 @@ public class ValidatorParameterHelper {
 
 	private static final List<String> ANDROID_SHERLOCK_MENU_ITEM_QUALIFIED_NAMES = asList(CanonicalNameConstants.MENU_ITEM, CanonicalNameConstants.SHERLOCK_MENU_ITEM);
 	private static final List<String> EDITOR_ACTION_ALLOWED_PARAMETER_TYPES = asList(CanonicalNameConstants.TEXT_VIEW, CanonicalNameConstants.INTEGER, "int", CanonicalNameConstants.KEY_EVENT);
-	private static final List<String> PREFERENCE_CHANGE_ALLOWED_NEWVALUE_PARAM = asList(CanonicalNameConstants.OBJECT, CanonicalNameConstants.STRING_SET, CanonicalNameConstants.STRING, //
-			CanonicalNameConstants.BOOLEAN, boolean.class.getName(), //
-			CanonicalNameConstants.INTEGER, int.class.getName(), //
-			CanonicalNameConstants.LONG, long.class.getName(), //
-			CanonicalNameConstants.FLOAT, float.class.getName());
+	private static final List<String> PREFERENCE_CHANGE_ALLOWED_NEWVALUE_PARAM = asList(CanonicalNameConstants.OBJECT, CanonicalNameConstants.STRING_SET, CanonicalNameConstants.STRING, CanonicalNameConstants.BOOLEAN);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -268,7 +264,7 @@ public class ValidatorParameterHelper {
 
 	}
 
-	public void hasAtMostOnePreferenceChangeSupportedParameter(ExecutableElement executableElement, IsValid valid) {
+	public void hasAtMostOneStringOrSetOrBooleanOrObjectParameter(ExecutableElement executableElement, IsValid valid) {
 		hasAtMostOneSpecificParameter(executableElement, PREFERENCE_CHANGE_ALLOWED_NEWVALUE_PARAM, valid);
 	}
 
