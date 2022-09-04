@@ -153,7 +153,8 @@ public class ResourceCompiler {
             new IllegalArgumentException("Unexpected resource folder for file: " + file));
       }
 
-      final String filename = interpolateAapt2Filename(resourceFolderType, file);
+      final String filename =
+          interpolateAapt2Filename(resourceFolderType, file.getFileName().toString());
       final List<Path> results = new ArrayList<>();
       if (resourceFolderType.equals(ResourceFolderType.VALUES)
           || (resourceFolderType.equals(ResourceFolderType.RAW)
@@ -180,9 +181,8 @@ public class ResourceCompiler {
       return results;
     }
 
-    static String interpolateAapt2Filename(ResourceFolderType resourceFolderType, Path file) {
+    static String interpolateAapt2Filename(ResourceFolderType resourceFolderType, String filename) {
       // res/<not values>/foo.bar -> foo.bar
-      String filename = file.getFileName().toString();
       if (!resourceFolderType.equals(ResourceFolderType.VALUES)) {
         return filename;
       }
@@ -200,7 +200,7 @@ public class ResourceCompiler {
             new IllegalArgumentException(
                 "aapt2 does not support compiling resource xmls with multiple periods in the "
                     + "filename: "
-                    + file));
+                    + filename));
       }
 
       // res/values/foo.xml -> foo.arsc
@@ -296,10 +296,8 @@ public class ResourceCompiler {
           CompilingVisitor.destinationPath(file, compiledResourcesOut)
               .resolve(type + "_" + filename + CompiledResources.ATTRIBUTES_FILE_EXTENSION);
 
-      Preconditions.checkArgument(
-          !Files.exists(resourcesAttributesPath),
-          "%s was already created for another resource.",
-          resourcesAttributesPath);
+      Preconditions.checkArgument(!Files.exists(resourcesAttributesPath),
+          "%s was already created for another resource.", resourcesAttributesPath);
 
       while (attributeIterator.hasNext()) {
         Attribute attribute = attributeIterator.next();
