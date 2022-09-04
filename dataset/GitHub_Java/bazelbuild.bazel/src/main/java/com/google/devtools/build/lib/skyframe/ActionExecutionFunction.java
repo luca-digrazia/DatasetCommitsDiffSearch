@@ -783,7 +783,8 @@ public class ActionExecutionFunction implements SkyFunction {
           SkyframeActionExecutor.actionDependsOnBuildId(action));
     }
 
-    metadataHandler.prepareForActionExecution();
+    // Delete the metadataHandler's cache of the action's outputs, since they are being deleted.
+    metadataHandler.discardOutputMetadata();
 
     if (action.discoversInputs()) {
       Duration discoveredInputsDuration = Duration.ZERO;
@@ -821,7 +822,8 @@ public class ActionExecutionFunction implements SkyFunction {
           break;
         case DISCOVERED_DATA:
           metadataHandler = metadataHandler.transformAfterInputDiscovery(new OutputStore());
-          metadataHandler.prepareForActionExecution();
+          // Set the MetadataHandler to accept output information.
+          metadataHandler.discardOutputMetadata();
       }
       // When discover inputs completes, post an event with the duration values.
       env.getListener()
