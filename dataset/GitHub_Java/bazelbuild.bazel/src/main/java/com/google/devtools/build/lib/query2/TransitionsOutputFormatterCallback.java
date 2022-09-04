@@ -170,11 +170,10 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
                 .concat(
                     toOptions
                         .stream()
-                        .map(
-                            options -> {
-                              String checksum = options.computeChecksum();
-                              return checksum.equals(hostConfigurationChecksum) ? "HOST" : checksum;
-                            })
+                        .map(options -> {
+                          String checksum = BuildConfiguration.computeChecksum(options);
+                          return checksum.equals(hostConfigurationChecksum) ? "HOST" : checksum;
+                        })
                         .collect(Collectors.joining(", ")))
                 .concat(")"));
         if (verbosity == CqueryOptions.Transitions.LITE) {

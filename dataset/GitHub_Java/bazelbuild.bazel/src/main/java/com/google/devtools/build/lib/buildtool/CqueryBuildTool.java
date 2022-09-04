@@ -131,7 +131,7 @@ public class CqueryBuildTool extends BuildTool {
         configuredTargetQueryEnvironment.getDefaultOutputFormatters(
             configuredTargetQueryEnvironment.getAccessor(),
             cqueryOptions,
-            env.getReporter(),
+            env.getReporter().getOutErr().getOutputStream(),
             env.getSkyframeExecutor(),
             hostConfiguration);
     CqueryThreadsafeCallback callback =
