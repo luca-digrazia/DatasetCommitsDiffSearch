@@ -17,6 +17,7 @@
 package org.jboss.shamrock.dev;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
@@ -37,6 +38,7 @@ import org.jboss.logging.Logger;
 
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.util.FileUtils;
 
 public class RuntimeUpdatesProcessor {
 
