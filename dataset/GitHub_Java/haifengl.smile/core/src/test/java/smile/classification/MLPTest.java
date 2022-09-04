@@ -199,7 +199,7 @@ public class MLPTest {
         assertEquals(28, error);
     }
 
-    @Test
+    @Test(expected = Test.None.class)
     public void testUSPS() throws Exception {
         System.out.println("USPS SGD");
 
