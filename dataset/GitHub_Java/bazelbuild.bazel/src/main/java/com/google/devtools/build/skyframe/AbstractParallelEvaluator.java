@@ -66,7 +66,7 @@ import javax.annotation.Nullable;
  * translating a set of requested top-level nodes into actions, or constructing an evaluation
  * result. Derived classes should do this.
  */
-abstract class AbstractParallelEvaluator {
+public abstract class AbstractParallelEvaluator {
   private static final Logger logger = Logger.getLogger(AbstractParallelEvaluator.class.getName());
 
   final ProcessableGraph graph;
@@ -232,7 +232,6 @@ abstract class AbstractParallelEvaluator {
           graph.get(skyKey, Reason.RDEP_REMOVAL, ErrorTransienceValue.KEY).removeReverseDep(skyKey);
           return DirtyOutcome.NEEDS_EVALUATION;
         }
-        Map<SkyKey, ? extends NodeEntry> entriesToCheck = null;
         if (!evaluatorContext.keepGoing()) {
           // This check ensures that we maintain the invariant that if a node with an error is
           // reached during a no-keep-going build, none of its currently building parents
@@ -241,7 +240,8 @@ abstract class AbstractParallelEvaluator {
           // is done, then it is the parent's responsibility to notice that, which we do here.
           // We check the deps for errors so that we don't continue building this node if it has
           // a child error.
-          entriesToCheck = graph.getBatch(skyKey, Reason.OTHER, directDepsToCheck);
+          Map<SkyKey, ? extends NodeEntry> entriesToCheck =
+              graph.getBatch(skyKey, Reason.OTHER, directDepsToCheck);
           for (Map.Entry<SkyKey, ? extends NodeEntry> entry : entriesToCheck.entrySet()) {
             NodeEntry nodeEntryToCheck = entry.getValue();
             SkyValue valueMaybeWithMetadata = nodeEntryToCheck.getValueMaybeWithMetadata();
@@ -296,11 +296,8 @@ abstract class AbstractParallelEvaluator {
               unknownStatusDeps);
           continue;
         }
-        if (entriesToCheck == null || depsReport.hasInformation()) {
-          entriesToCheck = graph.getBatch(skyKey, Reason.ENQUEUING_CHILD, unknownStatusDeps);
-        }
         handleKnownChildrenForDirtyNode(
-            unknownStatusDeps, entriesToCheck, state, globalEnqueuedIndex.incrementAndGet());
+            unknownStatusDeps, state, globalEnqueuedIndex.incrementAndGet());
         return DirtyOutcome.ALREADY_PROCESSED;
       }
       switch (state.getDirtyState()) {
@@ -351,11 +348,10 @@ abstract class AbstractParallelEvaluator {
     }
 
     private void handleKnownChildrenForDirtyNode(
-        Collection<SkyKey> knownChildren,
-        Map<SkyKey, ? extends NodeEntry> oldChildren,
-        NodeEntry state,
-        int childEvaluationPriority)
+        Collection<SkyKey> knownChildren, NodeEntry state, int childEvaluationPriority)
         throws InterruptedException {
+      Map<SkyKey, ? extends NodeEntry> oldChildren =
+          graph.getBatch(skyKey, Reason.ENQUEUING_CHILD, knownChildren);
       if (oldChildren.size() != knownChildren.size()) {
         GraphInconsistencyReceiver inconsistencyReceiver =
             evaluatorContext.getGraphInconsistencyReceiver();
@@ -674,10 +670,7 @@ abstract class AbstractParallelEvaluator {
                 graph.createIfAbsentBatchAsync(
                     skyKey, Reason.RDEP_ADDITION, newDepsThatWerentInTheLastEvaluation);
         handleKnownChildrenForDirtyNode(
-            newDepsThatWereInTheLastEvaluation,
-            graph.getBatch(skyKey, Reason.ENQUEUING_CHILD, newDepsThatWereInTheLastEvaluation),
-            state,
-            childEvaluationPriority);
+            newDepsThatWereInTheLastEvaluation, state, childEvaluationPriority);
 
         // Due to multi-threading, this can potentially cause the current node to be re-enqueued if
         // all 'new' children of this node are already done. Therefore, there should not be any
