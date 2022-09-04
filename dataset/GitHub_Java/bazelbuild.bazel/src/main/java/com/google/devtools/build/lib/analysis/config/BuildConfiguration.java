@@ -145,6 +145,15 @@ public class BuildConfiguration implements BuildConfigurationApi {
     public String getOutputDirectoryName() {
       return null;
     }
+
+    /**
+     * Returns { 'option name': 'alternative default' } entries for options where the
+     * "real default" should be something besides the default specified in the {@link Option}
+     * declaration.
+     */
+    public Map<String, Object> lateBoundOptionDefaults() {
+      return ImmutableMap.of();
+    }
   }
 
   public static final Label convertOptionsLabel(String input) throws OptionsParsingException {
@@ -588,22 +597,12 @@ public class BuildConfiguration implements BuildConfigurationApi {
     public boolean collectCodeCoverage;
 
     @Option(
-        name = "incompatible_java_coverage",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        oldName = "experimental_java_coverage",
-        help =
-            "If true Bazel will use a new way of computing code coverage for java targets. "
-                + "It allows collecting  coverage for Starlark JVM rules and java_import. "
-                + "Only includes JVM files in the coverage report (e.g. dismisses data files). "
-                + "The report includes the actual path of the files relative to the workspace root "
-                + "instead of the package path (e.g. src/com/google/Action.java instead of "
-                + "com/google/Action.java.")
+      name = "experimental_java_coverage",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      help = "If true Bazel will use a new way of computing code coverage for java targets."
+    )
     public boolean experimentalJavaCoverage;
 
     @Option(
@@ -1272,7 +1271,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     this.testEnv = setupTestEnvironment();
 
     this.transitiveOptionDetails =
-        TransitiveOptionDetails.forOptions(buildOptions.getNativeOptions());
+        TransitiveOptionDetails.forOptionsWithDefaults(buildOptions.getNativeOptions());
 
     ImmutableMap.Builder<String, String> globalMakeEnvBuilder = ImmutableMap.builder();
 
