@@ -720,12 +720,6 @@ public class BootstrapMavenContext {
                 return null;
             }
         }
-        final Path rootProjectBaseDirPath = Paths.get(rootBaseDir);
-        // if the root project dir set by the Maven process (through the env variable) doesn't have a pom.xml
-        // then it probably isn't relevant
-        if (!Files.exists(rootProjectBaseDirPath.resolve("pom.xml"))) {
-            return null;
-        }
-        return rootProjectBaseDirPath;
+        return Paths.get(rootBaseDir);
     }
 }
