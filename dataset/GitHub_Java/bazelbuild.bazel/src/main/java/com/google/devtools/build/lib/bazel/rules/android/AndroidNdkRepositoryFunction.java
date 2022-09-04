@@ -17,7 +17,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.AndroidNdkCrosstools;
@@ -28,13 +27,12 @@ import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkRelease;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpls;
-import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpls.GnuLibStdCppStlImpl;
-import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpls.LibCppStlImpl;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.skyframe.DirectoryListingValue;
+import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
@@ -209,9 +207,9 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
     try {
 
       String hostPlatform = AndroidNdkCrosstools.getHostPlatform(ndkRelease);
-      NdkPaths ndkPaths = new NdkPaths(ruleName, hostPlatform, apiLevel, ndkRelease.majorRevision);
+      NdkPaths ndkPaths = new NdkPaths(ruleName, hostPlatform, apiLevel);
 
-      for (StlImpl stlImpl : StlImpls.get(ndkPaths, ndkRelease.majorRevision)) {
+      for (StlImpl stlImpl : StlImpls.get(ndkPaths)) {
         CrosstoolRelease crosstoolRelease =
             ndkMajorRevision.crosstoolRelease(ndkPaths, stlImpl, hostPlatform);
         crosstoolsAndStls.add(new CrosstoolStlPair(crosstoolRelease, stlImpl));
@@ -221,9 +219,7 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
       throw new RepositoryFunctionException(new IOException(e), Transience.PERSISTENT);
     }
 
-    String defaultCrosstool = getDefaultCrosstool(ndkRelease.majorRevision);
-
-    String buildFile = createBuildFile(ruleName, defaultCrosstool, crosstoolsAndStls.build());
+    String buildFile = createBuildFile(ruleName, crosstoolsAndStls.build());
     writeBuildFile(outputDirectory, buildFile);
     return RepositoryDirectoryValue.builder().setPath(outputDirectory);
   }
@@ -233,18 +229,12 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
     return AndroidNdkRepositoryRule.class;
   }
 
-  private static String getDefaultCrosstool(Integer majorRevision) {
-    // From NDK 17, libc++ replaces gnu-libstdc++ as the default STL.
-    return majorRevision <= 16 ? GnuLibStdCppStlImpl.NAME : LibCppStlImpl.NAME;
-  }
-
   private static PathFragment getAndroidNdkHomeEnvironmentVar(
       Path workspace, Map<String, String> env) {
     return workspace.getRelative(PathFragment.create(env.get(PATH_ENV_VAR))).asFragment();
   }
 
-  private static String createBuildFile(
-      String ruleName, String defaultCrosstool, List<CrosstoolStlPair> crosstools) {
+  private static String createBuildFile(String ruleName, List<CrosstoolStlPair> crosstools) {
 
     String buildFileTemplate = getTemplate("android_ndk_build_file_template.txt");
     String ccToolchainSuiteTemplate = getTemplate("android_ndk_cc_toolchain_suite_template.txt");
@@ -296,7 +286,6 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
 
     return buildFileTemplate
         .replace("%ruleName%", ruleName)
-        .replace("%defaultCrosstool%", "//:toolchain-" + defaultCrosstool)
         .replace("%ccToolchainSuites%", ccToolchainSuites)
         .replace("%ccToolchainRules%", ccToolchainRules)
         .replace("%stlFilegroups%", stlFilegroups)
@@ -342,9 +331,6 @@ public class AndroidNdkRepositoryFunction extends AndroidRepositoryFunction {
         toolchainFileGlobPatterns.add(NdkPaths.stripRepositoryPrefix(cxxFlag) + "/**/*");
       }
     }
-
-    // For NDK 15 and up. Unfortunately, the toolchain does not encode the NDK revision number.
-    toolchainFileGlobPatterns.add("ndk/sysroot/**/*");
 
     // If this is a clang toolchain, also add the corresponding gcc toolchain to the globs.
     int gccToolchainIndex = toolchain.getCompilerFlagList().indexOf("-gcc-toolchain");
