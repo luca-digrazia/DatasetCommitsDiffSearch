@@ -17,7 +17,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.Subscribe;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.io.Files;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.ResolvedEvent;
@@ -32,12 +31,13 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /** Module providing the collection of the resolved values for the repository rules executed. */
 public final class RepositoryResolvedModule extends BlazeModule {
   public static final String EXPORTED_NAME = "resolved";
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(RepositoryResolvedModule.class.getName());
   private Map<String, Object> resolvedValues;
   private String resolvedFile;
   private ImmutableList<String> orderedNames;
@@ -79,14 +79,35 @@ public final class RepositoryResolvedModule extends BlazeModule {
         resultBuilder.add(resolved);
       }
       try (Writer writer = Files.newWriter(new File(resolvedFile), StandardCharsets.UTF_8)) {
-        writer.write(EXPORTED_NAME + " = " + new ValuePrinter().repr(resultBuilder.build()));
+        writer.write(
+            EXPORTED_NAME + " = " + getWorkspacePrettyPrinter().repr(resultBuilder.build()));
         writer.close();
       } catch (IOException e) {
-        logger.atWarning().withCause(e).log("IO Error writing to file %s", resolvedFile);
+        logger.warning("IO Error writing to file " + resolvedFile + ": " + e);
       }
     }
 
     this.resolvedValues = null;
+  }
+
+  /**
+   * Returns a pretty printer that represents values in a form usable in WORKSPACE files.
+   *
+   * <p>In WORKSPACE files, the Label constructor is not available. Fortunately, in all places where
+   * a label is needed, we can pass the canonical string associated with this label.
+   */
+  private static Printer.PrettyPrinter getWorkspacePrettyPrinter() {
+    return new Printer.PrettyPrinter(new StringBuilder()) {
+      @Override
+      public Printer.BasePrinter repr(Object o) {
+        if (o instanceof Label) {
+          this.repr(((Label) o).getCanonicalForm());
+        } else {
+          super.repr(o);
+        }
+        return this;
+      }
+    };
   }
 
   @Subscribe
@@ -98,49 +119,6 @@ public final class RepositoryResolvedModule extends BlazeModule {
   public void resolved(ResolvedEvent event) {
     if (resolvedValues != null) {
       resolvedValues.put(event.getName(), event.getResolvedInformation());
-    }
-  }
-
-  // An printer of repository rule attribute values that inserts properly indented lines between
-  // sequence elements.
-  private static final class ValuePrinter extends Printer {
-    int indent = 0;
-
-    ValuePrinter() {
-      super(new StringBuilder());
-    }
-
-    @Override
-    public Printer repr(Object o) {
-      // In WORKSPACE files, the Label constructor is not available.
-      // Fortunately, in all places where a label is needed,
-      // we can pass the canonical string associated with this label.
-      if (o instanceof Label) {
-        return this.repr(((Label) o).getCanonicalForm());
-      }
-      return super.repr(o);
-    }
-
-    @Override
-    public Printer printList(Iterable<?> list, String before, String separator, String after) {
-      this.append(before);
-      indent++;
-      // If the list is empty, do not split the presentation over several lines.
-      String sep = null;
-      for (Object o : list) {
-        if (sep == null) { // first?
-          sep = separator.trim();
-        } else {
-          this.append(sep);
-        }
-        this.append("\n").append(Strings.repeat("     ", indent)).repr(o);
-      }
-      indent--;
-      // Final indent, if nonempty.
-      if (sep != null) {
-        this.append("\n").append(Strings.repeat("     ", indent));
-      }
-      return this.append(after);
     }
   }
 }
