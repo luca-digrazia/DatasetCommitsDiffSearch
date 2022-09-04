@@ -21,7 +21,6 @@ import android.content.res.AssetManager;
 import android.content.res.TypedArray;
 import android.graphics.*;
 import android.graphics.Bitmap.Config;
-import android.graphics.Paint.Style;
 import android.media.ExifInterface;
 import android.os.AsyncTask;
 import android.os.Build.VERSION;
@@ -36,7 +35,6 @@ import android.view.View;
 import com.davemorrissey.labs.subscaleview.R.styleable;
 
 import java.lang.ref.WeakReference;
-import java.math.BigDecimal;
 import java.util.*;
 
 /**
@@ -64,9 +62,6 @@ public class SubsamplingScaleImageView extends View {
     public static final int ORIENTATION_270 = 270;
 
     private static final List<Integer> VALID_ORIENTATIONS = Arrays.asList(ORIENTATION_0, ORIENTATION_90, ORIENTATION_180, ORIENTATION_270, ORIENTATION_USE_EXIF);
-
-    // Overlay tile boundaries and other info
-    private boolean debug = false;
 
     // Image orientation setting
     private int orientation = ORIENTATION_0;
@@ -512,16 +507,7 @@ public class SubsamplingScaleImageView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        Paint bitmapPaint = new Paint();
-
-        Paint textPaint = new Paint();
-        textPaint.setTextSize(18);
-        textPaint.setColor(Color.MAGENTA);
-
-        Paint linePaint = new Paint();
-        linePaint.setStrokeWidth(2);
-        linePaint.setColor(Color.MAGENTA);
-        linePaint.setStyle(Style.STROKE);
+        Paint paint = new Paint();
 
         // If image or view dimensions are not known yet, abort.
         if (sWidth == 0 || sHeight == 0 || decoder == null || getWidth() == 0 || getHeight() == 0) {
@@ -589,34 +575,19 @@ public class SubsamplingScaleImageView extends View {
         }
 
         // Render all loaded tiles. LinkedHashMap used for bottom up rendering - lower res tiles underneath.
-        bitmapPaint.setAntiAlias(true);
-        bitmapPaint.setFilterBitmap(true);
-        bitmapPaint.setDither(true);
+        paint.setAntiAlias(true);
+        paint.setFilterBitmap(true);
+        paint.setDither(true);
         for (Map.Entry<Integer, List<Tile>> tileMapEntry : tileMap.entrySet()) {
             if (tileMapEntry.getKey() == sampleSize || hasMissingTiles) {
                 for (Tile tile : tileMapEntry.getValue()) {
-                    Rect vRect = convertRect(sourceToViewRect(tile.sRect));
                     if (!tile.loading && tile.bitmap != null) {
-                        canvas.drawBitmap(tile.bitmap, null, vRect, bitmapPaint);
-                        if (debug) {
-                            canvas.drawRect(vRect, linePaint);
-                        }
-                    } else if (tile.loading && debug) {
-                        canvas.drawText("LOADING", vRect.left + 5, vRect.top + 35, textPaint);
-                    }
-                    if (tile.visible && debug) {
-                        canvas.drawText("ISS " + tile.sampleSize + " RECT " + tile.sRect.top + "," + tile.sRect.left + "," + tile.sRect.bottom + "," + tile.sRect.right, vRect.left + 5, vRect.top + 15, textPaint);
+                        canvas.drawBitmap(tile.bitmap, null, convertRect(sourceToViewRect(tile.sRect)), paint);
                     }
                 }
             }
         }
 
-        if (debug) {
-            canvas.drawText("Scale: " + String.format("%.2f", scale), 5, 15, textPaint);
-            canvas.drawText("Translate: " + String.format("%.2f", vTranslate.x) + ":" + String.format("%.2f", vTranslate.y), 5, 35, textPaint);
-            PointF center = getCenter();
-            canvas.drawText("Source center: " + String.format("%.2f", center.x) + ":" + String.format("%.2f", center.y), 5, 55, textPaint);
-        }
     }
 
     /**
@@ -1244,12 +1215,5 @@ public class SubsamplingScaleImageView extends View {
             refreshRequiredTiles(true);
             invalidate();
         }
-    }
-
-    /**
-     * Enables visual debugging, showing tile boundaries and sizes.
-     */
-    public void setDebug(boolean debug) {
-        this.debug = debug;
     }
 }
