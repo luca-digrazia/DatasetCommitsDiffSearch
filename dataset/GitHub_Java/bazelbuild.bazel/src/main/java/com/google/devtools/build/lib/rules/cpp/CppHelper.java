@@ -25,7 +25,9 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -44,6 +46,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Tool;
@@ -146,25 +149,32 @@ public class CppHelper {
    * @return a list of strings containing the expanded and tokenized values for the
    *         attribute
    */
-  private static List<String> expandMakeVariables(
+  // TODO(bazel-team): Move to CcCommon; refactor CcPlugin to use either CcLibraryHelper or
+  // CcCommon.
+  static List<String> expandMakeVariables(
       RuleContext ruleContext, String attributeName, List<String> input) {
     boolean tokenization =
         !ruleContext.getFeatures().contains("no_copts_tokenization");
 
     List<String> tokens = new ArrayList<>();
+    ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers =
+        ImmutableList.of(new CcFlagsSupplier(ruleContext));
+    ConfigurationMakeVariableContext makeVariableContext =
+        ruleContext.getConfigurationMakeVariableContext(makeVariableSuppliers);
     for (String token : input) {
       try {
         // Legacy behavior: tokenize all items.
         if (tokenization) {
-          ruleContext.tokenizeAndExpandMakeVars(tokens, attributeName, token);
+          ruleContext.tokenizeAndExpandMakeVars(
+              tokens, attributeName, token, makeVariableContext);
         } else {
           String exp =
-              ruleContext.expandSingleMakeVariable(attributeName, token);
+              ruleContext.expandSingleMakeVariable(attributeName, token, makeVariableContext);
           if (exp != null) {
             ShellUtils.tokenize(tokens, exp);
           } else {
             tokens.add(
-                ruleContext.expandMakeVariables(attributeName, token));
+                ruleContext.expandMakeVariables(attributeName, token, makeVariableContext));
           }
         }
       } catch (ShellUtils.TokenizationException e) {
@@ -175,20 +185,13 @@ public class CppHelper {
   }
 
   /**
-   * Returns the tokenized values of the copts attribute to copts.
+   * Appends the tokenized values of the copts attribute to copts.
    */
-  // Called from CcCommon and CcSupport (Google's internal version of proto_library).
-  public static ImmutableList<String> getAttributeCopts(RuleContext ruleContext) {
-    String attr = "copts";
+  public static ImmutableList<String> getAttributeCopts(RuleContext ruleContext, String attr) {
     Preconditions.checkArgument(ruleContext.getRule().isAttrDefined(attr, Type.STRING_LIST));
     List<String> unexpanded = ruleContext.attributes().get(attr, Type.STRING_LIST);
-    return ImmutableList.copyOf(expandMakeVariables(ruleContext, attr, unexpanded));
-  }
 
-  // Called from CcCommon.
-  static ImmutableList<String> getPackageCopts(RuleContext ruleContext) {
-    List<String> unexpanded = ruleContext.getRule().getPackage().getDefaultCopts();
-    return ImmutableList.copyOf(expandMakeVariables(ruleContext, "copts", unexpanded));
+    return ImmutableList.copyOf(expandMakeVariables(ruleContext, attr, unexpanded));
   }
 
   /**
@@ -199,6 +202,9 @@ public class CppHelper {
   public static List<String> expandLinkopts(
       RuleContext ruleContext, String attrName, Iterable<String> values) {
     List<String> result = new ArrayList<>();
+    ConfigurationMakeVariableContext makeVariableContext =
+        ruleContext.getConfigurationMakeVariableContext(
+            ImmutableList.of(new CcFlagsSupplier(ruleContext)));
     for (String value : values) {
       if (isLinkoptLabel(value)) {
         if (!expandLabel(ruleContext, result, value)) {
@@ -209,7 +215,8 @@ public class CppHelper {
             .tokenizeAndExpandMakeVars(
                 result,
                 attrName,
-                value);
+                value,
+                makeVariableContext);
       }
     }
     return result;

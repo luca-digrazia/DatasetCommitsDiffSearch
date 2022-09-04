@@ -368,11 +368,8 @@ public class CrosstoolConfigurationLoader {
         cpuBuilder.append("  ").append(selector.getCpu()).append(",\n");
       }
       throw new InvalidConfigurationException(
-          "No default_toolchain found for cpu '"
-              + desiredCpu
-              + "'. Valid cpus are: [\n"
-              + cpuBuilder
-              + "]");
+          "No toolchain found for cpu '" + desiredCpu
+          + "'. Valid cpus are: [\n" + cpuBuilder + "]");
     }
     checkToolChain(selectedIdentifier, desiredCpu);
 
