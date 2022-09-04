@@ -1115,6 +1115,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     List<String> result = new ArrayList<>();
     result.addAll(commonLinkOptions);
 
+    if (stripBinaries) {
+      result.add("-Wl,-S");
+    }
+
     result.addAll(linkOptionsFromCompilationMode.get(compilationMode));
     result.addAll(linkOptionsFromLipoMode.get(lipoMode));
     result.addAll(linkOptionsFromLinkingMode.get(linkingMode));
@@ -1632,11 +1636,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   public boolean isLipoOptimization() {
     // The LIPO optimization bits are set in the LIPO context collector configuration, too.
-    return cppOptions.isLipoOptimization();
+    return cppOptions.isLipoOptimization() && !isLipoContextCollector();
   }
 
   public boolean isLipoOptimizationOrInstrumentation() {
-    return cppOptions.isLipoOptimizationOrInstrumentation();
+    return cppOptions.isLipoOptimizationOrInstrumentation() && !isLipoContextCollector();
   }
 
   /**

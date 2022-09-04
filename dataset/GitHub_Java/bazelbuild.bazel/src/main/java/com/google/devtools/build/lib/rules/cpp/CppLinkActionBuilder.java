@@ -1309,7 +1309,8 @@ public class CppLinkActionBuilder {
           LINKSTAMP_PATHS_VARIABLE, linkstampPaths.build());
 
       // pic
-      if (cppConfiguration.forcePic()) {
+      boolean forcePic = cppConfiguration.forcePic();
+      if (forcePic) {
         buildVariables.addStringVariable(FORCE_PIC_VARIABLE, "");
       }
 
