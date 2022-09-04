@@ -55,32 +55,32 @@ public class MessageTest {
 
     @Before
     public void setUp() {
-        originalTimestamp = Tools.nowUTC();
+        originalTimestamp = Tools.iso8601();
         message = new Message("foo", "bar", originalTimestamp);
     }
 
     @Test
     public void testAddFieldDoesOnlyAcceptAlphanumericKeys() throws Exception {
-        Message m = new Message("foo", "bar", Tools.nowUTC());
+        Message m = new Message("foo", "bar", Tools.iso8601());
         m.addField("some_thing", "bar");
         assertEquals("bar", m.getField("some_thing"));
 
-        m = new Message("foo", "bar", Tools.nowUTC());
+        m = new Message("foo", "bar", Tools.iso8601());
         m.addField("some-thing", "bar");
         assertEquals("bar", m.getField("some-thing"));
 
-        m = new Message("foo", "bar", Tools.nowUTC());
+        m = new Message("foo", "bar", Tools.iso8601());
         m.addField("somethin$g", "bar");
         assertNull(m.getField("somethin$g"));
 
-        m = new Message("foo", "bar", Tools.nowUTC());
+        m = new Message("foo", "bar", Tools.iso8601());
         m.addField("someäthing", "bar");
         assertNull(m.getField("someäthing"));
     }
 
     @Test
     public void testAddFieldTrimsValue() throws Exception {
-        Message m = new Message("foo", "bar", Tools.nowUTC());
+        Message m = new Message("foo", "bar", Tools.iso8601());
         m.addField("something", " bar ");
         assertEquals("bar", m.getField("something"));
 
@@ -93,7 +93,7 @@ public class MessageTest {
 
     @Test
     public void testAddFieldWorksWithIntegers() throws Exception {
-        Message m = new Message("foo", "bar", Tools.nowUTC());
+        Message m = new Message("foo", "bar", Tools.iso8601());
         m.addField("something", 3);
         assertEquals(3, m.getField("something"));
     }
@@ -308,32 +308,32 @@ public class MessageTest {
 
     @Test
     public void testIsComplete() throws Exception {
-        Message message = new Message("message", "source", Tools.nowUTC());
+        Message message = new Message("message", "source", Tools.iso8601());
         assertTrue(message.isComplete());
 
-        message = new Message("message", "", Tools.nowUTC());
+        message = new Message("message", "", Tools.iso8601());
         assertTrue(message.isComplete());
 
-        message = new Message("message", null, Tools.nowUTC());
+        message = new Message("message", null, Tools.iso8601());
         assertTrue(message.isComplete());
 
-        message = new Message("", "source", Tools.nowUTC());
+        message = new Message("", "source", Tools.iso8601());
         assertFalse(message.isComplete());
 
-        message = new Message(null, "source", Tools.nowUTC());
+        message = new Message(null, "source", Tools.iso8601());
         assertFalse(message.isComplete());
     }
 
     @Test
     public void testGetValidationErrorsWithEmptyMessage() throws Exception {
-        final Message message = new Message("", "source", Tools.nowUTC());
+        final Message message = new Message("", "source", Tools.iso8601());
 
         assertEquals("message is empty, ", message.getValidationErrors());
     }
 
     @Test
     public void testGetValidationErrorsWithNullMessage() throws Exception {
-        final Message message = new Message(null, "source", Tools.nowUTC());
+        final Message message = new Message(null, "source", Tools.iso8601());
 
         assertEquals("message is missing, ", message.getValidationErrors());
     }
