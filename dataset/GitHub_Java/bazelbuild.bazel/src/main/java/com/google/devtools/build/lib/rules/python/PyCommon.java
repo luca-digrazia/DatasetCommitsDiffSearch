@@ -188,7 +188,7 @@ public final class PyCommon {
   private static String getOrderErrorMessage(String fieldName, Order expected, Order actual) {
     return String.format(
         "Incompatible order for %s: expected 'default' or '%s', got '%s'",
-        fieldName, expected.getStarlarkName(), actual.getStarlarkName());
+        fieldName, expected.getSkylarkName(), actual.getSkylarkName());
   }
 
   public PyCommon(RuleContext ruleContext, PythonSemantics semantics) {
