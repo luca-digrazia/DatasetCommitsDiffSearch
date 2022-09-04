@@ -13,7 +13,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public final class ApplicationUtil {
+public class ApplicationUtil {
   private ApplicationUtil() {
   }
 

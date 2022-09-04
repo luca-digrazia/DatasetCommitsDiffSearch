@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-final class WindowDescriptor extends ChainedDescriptor<Window> implements HighlightableDescriptor {
+final class WindowDescriptor extends ChainedDescriptor<Window> {
   private final Map<Window, ElementContext> mElementToContextMap =
       Collections.synchronizedMap(new IdentityHashMap<Window, ElementContext>());
 
@@ -52,12 +52,6 @@ final class WindowDescriptor extends ChainedDescriptor<Window> implements Highli
     } else {
       return decorView;
     }
-  }
-
-  @Override
-  public View getViewForHighlighting(Object element) {
-    Window window = (Window)element;
-    return window.peekDecorView();
   }
 
   // TODO: We're probably going to switch to another way of determining structural
@@ -189,7 +183,7 @@ final class WindowDescriptor extends ChainedDescriptor<Window> implements Highli
       if (mDecorView == null) {
         mDecorView = mWindow.peekDecorView();
         if (mDecorView != null) {
-          getHost().onChildInserted(mWindow, null, mDecorView);
+          getListener().onChildInserted(mWindow, null, mDecorView);
           // TODO: once we have the decorView, we don't need to worry about further changes (AFAIK).
           //       but since we're going to do something else for this (tree diffing), I don't
           //       think we need to worry about removing our callback for now

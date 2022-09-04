@@ -34,7 +34,12 @@ abstract class ViewHighlighter {
 
   public abstract void clearHighlight();
 
-  public abstract void setHighlightedView(View view, int color);
+  public abstract void setHighlightedView(
+      View view,
+      int contentColor,
+      int paddingColor,
+      int borderColor,
+      int marginColor);
 
   private static final class NoopHighlighter extends ViewHighlighter {
     @Override
@@ -42,7 +47,12 @@ abstract class ViewHighlighter {
     }
 
     @Override
-    public void setHighlightedView(View view, int color) {
+    public void setHighlightedView(
+        View view,
+        int contentColor,
+        int paddingColor,
+        int borderColor,
+        int marginColor) {
     }
   }
 
@@ -74,18 +84,33 @@ abstract class ViewHighlighter {
 
     @Override
     public void clearHighlight() {
-      setHighlightedViewImpl(null, 0);
+      setHighlightedViewImpl(null, 0, 0, 0, 0);
     }
 
     @Override
-    public void setHighlightedView(View view, int color) {
-      setHighlightedViewImpl(Util.throwIfNull(view), color);
+    public void setHighlightedView(
+        View view,
+        int contentColor,
+        int paddingColor,
+        int borderColor,
+        int marginColor) {
+      setHighlightedViewImpl(
+          Util.throwIfNull(view),
+          contentColor,
+          paddingColor,
+          borderColor,
+          marginColor);
     }
 
-    private void setHighlightedViewImpl(@Nullable View view, int color) {
+    private void setHighlightedViewImpl(
+        @Nullable View view,
+        int contentColor,
+        int paddingColor,
+        int borderColor,
+        int marginColor) {
       mHandler.removeCallbacks(mHighlightViewOnUiThreadRunnable);
       mViewToHighlight.set(view);
-      mContentColor.set(color);
+      mContentColor.set(contentColor);
       mHandler.postDelayed(mHighlightViewOnUiThreadRunnable, 100);
     }
 
