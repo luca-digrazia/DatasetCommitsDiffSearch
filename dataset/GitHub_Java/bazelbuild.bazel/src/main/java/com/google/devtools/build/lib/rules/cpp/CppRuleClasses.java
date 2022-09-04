@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.rules.cpp.transitions.EnableLipoTransition;
 import com.google.devtools.build.lib.rules.cpp.transitions.LipoContextCollectorTransition;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.OsUtils;
 
 /**
  * Rule class definitions for C++ rules.
@@ -169,16 +168,17 @@ public class CppRuleClasses {
 
   public static final LibraryLanguage LANGUAGE = new LibraryLanguage("C++");
 
-  /** Implicit outputs for cc_binary rules. */
+  /**
+   * Implicit outputs for cc_binary rules.
+   */
   public static final SafeImplicitOutputsFunction CC_BINARY_STRIPPED =
-      fromTemplates("%{name}.stripped" + OsUtils.executableExtension());
+      fromTemplates("%{name}.stripped");
+
 
   // Used for requesting dwp "debug packages".
   public static final SafeImplicitOutputsFunction CC_BINARY_DEBUG_PACKAGE =
       fromTemplates("%{name}.dwp");
 
-  /** A string constant for the copts feature. */
-  public static final String COPTS = "copts";
 
   /**
    * A string constant for the parse_headers feature.
@@ -322,13 +322,6 @@ public class CppRuleClasses {
    * targeting Windows that include a linker producing PDB files
    */
   public static final String GENERATE_PDB_FILE = "generate_pdb_file";
-
-  /**
-   * A string constant for no_stripping feature, if it's specified, then no strip action config is
-   * needed, instead the stripped binary will simply be a symlink (or a copy on Windows) of the
-   * original binary.
-   */
-  public static final String NO_STRIPPING = "no_stripping";
 
   /** A string constant for /showIncludes parsing feature, should only be used for MSVC toolchain */
   public static final String PARSE_SHOWINCLUDES = "parse_showincludes";

@@ -14,13 +14,13 @@
 
 package com.google.devtools.build.lib.bazel.rules.java;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromFunctions;
-import static com.google.devtools.build.lib.rules.java.JavaRuleClasses.CONTAINS_JAVA_PROVIDER;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
@@ -30,9 +30,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -44,10 +43,10 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.PackageNameConstraint;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaRuleClasses.IjarBaseRule;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
+import com.google.devtools.build.lib.rules.java.JavaProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
+import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
@@ -75,16 +74,53 @@ public class BazelJavaRuleClasses {
           JavaSemantics.JAVA_LIBRARY_CLASS_JAR,
           JavaSemantics.JAVA_LIBRARY_SOURCE_JAR);
 
+  /**
+   * Meant to be an element of {@code mandatoryProvidersLists} in order to accept rules providing
+   * a {@link JavaProvider} through an attribute. Other providers can be included in
+   * {@code mandatoryProvidersLists} as well.
+   */
+  public static final ImmutableList<SkylarkProviderIdentifier> CONTAINS_JAVA_PROVIDER =
+      ImmutableList.of(SkylarkProviderIdentifier.forKey(JavaProvider.JAVA_PROVIDER.getKey()));
+
   public static final ImmutableList<SkylarkProviderIdentifier> CONTAINS_CC_LINK_PARAMS =
       ImmutableList.of(
-          SkylarkProviderIdentifier.forKey(CcLinkParamsInfo.PROVIDER.getKey()));
+          SkylarkProviderIdentifier.forKey(CcLinkParamsProvider.CC_LINK_PARAMS.getKey()));
 
   /**
    * Meant to be the value of {@code mandatoryProvidersLists} in order for the rule to provide only
-   * a {@link JavaInfo} through an attribute.
+   * a {@link JavaProvider} through an attribute.
    */
   public static final ImmutableList<ImmutableList<SkylarkProviderIdentifier>>
       MANDATORY_JAVA_PROVIDER_ONLY = ImmutableList.of(CONTAINS_JAVA_PROVIDER);
+
+
+  /**
+   * Common attributes for rules that depend on ijar.
+   */
+  public static final class IjarBaseRule implements RuleDefinition {
+    @Override
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+      return builder
+          .add(
+              attr(":java_toolchain", LABEL)
+                  .useOutputLicenses()
+                  .mandatoryNativeProviders(
+                      ImmutableList.<Class<? extends TransitiveInfoProvider>>of(
+                          JavaToolchainProvider.class))
+                  .value(JavaSemantics.JAVA_TOOLCHAIN))
+          .setPreferredDependencyPredicate(JavaSemantics.JAVA_SOURCE)
+          .build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("$ijar_base_rule")
+          .type(RuleClassType.ABSTRACT)
+          .build();
+    }
+  }
+
 
   /**
    * Common attributes for Java rules.
@@ -94,10 +130,8 @@ public class BazelJavaRuleClasses {
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .add(attr(":jvm", LABEL).value(JavaSemantics.jvmAttribute(env)).useOutputLicenses())
-          .add(attr(":host_jdk", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .value(JavaSemantics.hostJdkAttribute(env)))
-          .add(attr("$jacoco_instrumentation", LABEL).cfg(HostTransition.INSTANCE))
+          .add(attr(":host_jdk", LABEL).cfg(HOST).value(JavaSemantics.hostJdkAttribute(env)))
+          .add(attr("$jacoco_instrumentation", LABEL).cfg(HOST))
           .build();
     }
 
@@ -248,12 +282,12 @@ public class BazelJavaRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(
               attr("plugins", LABEL_LIST)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .allowedRuleClasses("java_plugin")
                   .legacyAllowAnyFileType())
           .add(
               attr(":java_plugins", LABEL_LIST)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .allowedRuleClasses("java_plugin")
                   .silentRuleClassFilter()
                   .value(JavaSemantics.JAVA_PLUGINS))
@@ -284,10 +318,6 @@ public class BazelJavaRuleClasses {
 
     @Override
     public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
-      Label launcher = env.getLauncherLabel();
-      if (launcher != null) {
-        builder.add(attr("$launcher", LABEL).cfg(HostTransition.INSTANCE).value(launcher));
-      }
       return builder
           /* <!-- #BLAZE_RULE($base_java_binary).ATTRIBUTE(classpath_resources) -->
           <em class="harmful">DO NOT USE THIS OPTION UNLESS THERE IS NO OTHER WAY)</em>
@@ -335,7 +365,7 @@ public class BazelJavaRuleClasses {
           rule must be declared as a <code>java_binary</code>, but should
           still use the test runner as its main entry point.
 
-          The name of a test runner class can be overridden with <code>main_class</code> attribute.
+          The name of a test runner class can be overriden with <code>main_class</code> attribute.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("use_testrunner", BOOLEAN).value(false))
           /* <!-- #BLAZE_RULE($base_java_binary).ATTRIBUTE(main_class) -->
@@ -399,7 +429,7 @@ public class BazelJavaRuleClasses {
             <li><code>stamp = 0</code>: Always replace build information by constant values. This
               gives good build result caching.</li>
             <li><code>stamp = -1</code>: Embedding of build information is controlled by the
-              <a href="../user-manual.html#flag--stamp">--[no]stamp</a> flag.</li>
+              <a href="../blaze-user-manual.html#flag--stamp">--[no]stamp</a> flag.</li>
           </ul>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           // TODO(bazel-team): describe how to access this data at runtime
@@ -416,7 +446,7 @@ public class BazelJavaRuleClasses {
           indicates that you want to use the normal JDK launcher (bin/java or java.exe)
           as the value for this attribute. This is the default.</p>
 
-          <p>The related <a href="../user-manual.html#flag--java_launcher"><code>
+          <p>The related <a href="../blaze-user-manual.html#flag--java_launcher"><code>
           --java_launcher</code></a> Bazel flag affects only those
           <code>java_binary</code> and <code>java_test</code> targets that have
           <i>not</i> specified a <code>launcher</code> attribute.</p>

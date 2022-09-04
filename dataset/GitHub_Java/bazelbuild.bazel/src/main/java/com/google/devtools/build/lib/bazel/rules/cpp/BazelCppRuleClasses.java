@@ -37,6 +37,7 @@ import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
@@ -70,6 +71,29 @@ public class BazelCppRuleClasses {
 
   static final SafeImplicitOutputsFunction CC_BINARY_IMPLICIT_OUTPUTS =
       fromFunctions(CppRuleClasses.CC_BINARY_STRIPPED, CppRuleClasses.CC_BINARY_DEBUG_PACKAGE);
+
+  static final RuleClass.Configurator<BuildConfiguration, Rule> LIPO_ON_DEMAND =
+      new RuleClass.Configurator<BuildConfiguration, Rule>() {
+        @Override
+        public BuildConfiguration apply(Rule rule, BuildConfiguration configuration) {
+          Preconditions.checkState(!configuration.useDynamicConfigurations(),
+              "Dynamic configurations don't use rule class configurators for LIPO");
+          BuildConfiguration toplevelConfig =
+              configuration.getConfiguration(LipoTransition.TARGET_CONFIG_FOR_LIPO);
+          CppConfiguration cppConfig = configuration.getFragment(CppConfiguration.class);
+          if (toplevelConfig != null
+              && cppConfig.isDataConfigurationForLipoOptimization()
+              && rule.getLabel().equals(cppConfig.getLipoContextForBuild())) {
+            return toplevelConfig;
+          }
+          return configuration;
+        }
+
+        @Override
+        public String getCategory() {
+          return "lipo";
+        }
+      };
 
   public static final LateBoundLabel<BuildConfiguration> STL =
       new LateBoundLabel<BuildConfiguration>() {
@@ -201,11 +225,11 @@ public class BazelCppRuleClasses {
           Subject to <a href="${link make-variables}">"Make" variable</a> substitution and
           <a href="${link common-definitions#sh-tokenization}">Bourne shell tokenization</a>.
           Each string, which must consist of a single Bourne shell token,
-          is prepended with <code>-D</code> (or <code>/D</code> on Windows) and added to
+          is prepended with <code>-D</code> and added to
           <code>COPTS</code>.
           Unlike <a href="#cc_binary.copts"><code>copts</code></a>, these flags are added for the
           target and every rule that depends on it!  Be very careful, since this may have
-          far-reaching effects.  When in doubt, add "-D" (or <code>/D</code> on Windows) flags to
+          far-reaching effects.  When in doubt, add "-D" flags to
           <a href="#cc_binary.copts"><code>copts</code></a> instead.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("defines", STRING_LIST))
@@ -315,9 +339,6 @@ public class BazelCppRuleClasses {
                   .allowedRuleClasses(DEPS_ALLOWED_RULES)
                   .allowedFileTypes(CppFileTypes.LINKER_SCRIPT)
                   .skipAnalysisTimeFileTypeCheck())
-          .add(attr("reexport_deps", LABEL_LIST)
-              .allowedRuleClasses(DEPS_ALLOWED_RULES)
-              .allowedFileTypes())
           /*<!-- #BLAZE_RULE($cc_rule).ATTRIBUTE(linkopts) -->
           Add these flags to the C++ linker command.
           Subject to <a href="make-variables.html">"Make" variable</a> substitution,
@@ -440,11 +461,8 @@ public class BazelCppRuleClasses {
              included by a published header. See <a href="#hdrs">"Header inclusion
              checking"</a> for a more detailed description. </p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr("hdrs", LABEL_LIST)
-                  .orderIndependent()
-                  .direct_compile_time_input()
-                  .allowedFileTypes(FileTypeSet.ANY_FILE))
+          .add(attr("hdrs", LABEL_LIST).orderIndependent().direct_compile_time_input()
+              .allowedFileTypes(FileTypeSet.ANY_FILE))
           /* <!-- #BLAZE_RULE($cc_library).ATTRIBUTE(strip_include_prefix) -->
           The prefix to strip from the paths of the headers of this rule.
 
@@ -464,7 +482,7 @@ public class BazelCppRuleClasses {
           <p>When set, the headers in the <code>hdrs</code> attribute of this rule are accessible
           at is the value of this attribute prepended to their repository-relative path.
 
-          <p>The prefix in the <code>strip_include_prefix</code> attribute is removed before this
+          <p>The prefix in the <code>strip_include_prefix</code> attribute is removed beforethis
           prefix is added.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("include_prefix", STRING))
@@ -475,11 +493,8 @@ public class BazelCppRuleClasses {
              that is, they always need to be textually included by other source files to build valid
              code.</p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(
-              attr("textual_hdrs", LABEL_LIST)
-                  .orderIndependent()
-                  .direct_compile_time_input()
-                  .legacyAllowAnyFileType())
+          .add(attr("textual_hdrs", LABEL_LIST).orderIndependent().direct_compile_time_input()
+              .legacyAllowAnyFileType())
           // TODO(bazel-team): document or remove.
           .add(attr("linkstamp", LABEL).allowedFileTypes(CPP_SOURCE, C_SOURCE))
           .build();

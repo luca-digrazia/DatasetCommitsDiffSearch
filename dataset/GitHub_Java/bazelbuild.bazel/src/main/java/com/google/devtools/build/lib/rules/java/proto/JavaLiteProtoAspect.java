@@ -21,8 +21,6 @@ import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkParamsStore;
-import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.createNonStrictCompilationArgsProvider;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -222,7 +220,6 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       }
 
       javaProvidersBuilder.add(generatedCompilationArgsProvider);
-      javaProvidersBuilder.add(createCcLinkParamsStore(ruleContext, getProtoRuntimeDeps()));
       TransitiveInfoProviderMap javaProviders = javaProvidersBuilder.build();
 
       aspect
@@ -230,13 +227,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
               JavaSkylarkApiProvider.PROTO_NAME.getLegacyId(),
               JavaSkylarkApiProvider.fromProviderMap(javaProviders))
           .addProvider(
-              new JavaProtoLibraryAspectProvider(
-                  javaProviders,
-                  transitiveOutputJars.build(),
-                  createNonStrictCompilationArgsProvider(
-                      javaProtoLibraryAspectProviders,
-                      generatedCompilationArgsProvider.getJavaCompilationArgs(),
-                      getProtoRuntimeDeps())));
+              new JavaProtoLibraryAspectProvider(javaProviders, transitiveOutputJars.build()));
     }
 
     private void createProtoCompileAction(Artifact sourceJar) {
@@ -261,14 +252,12 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
               .setOutput(outputJar)
               .addSourceJars(sourceJar)
               .setJavacOpts(ProtoJavacOpts.constructJavacOpts(ruleContext));
-      helper.addDep(dependencyCompilationArgs).setCompilationStrictDepsMode(StrictDepsMode.OFF);
-      for (TransitiveInfoCollection t : getProtoRuntimeDeps()) {
-        JavaCompilationArgsProvider provider = t.getProvider(JavaCompilationArgsProvider.class);
-        if (provider != null) {
-          helper.addDep(provider);
-        }
+      helper.addDep(dependencyCompilationArgs);
+      TransitiveInfoCollection runtime = getProtoToolchainProvider().runtime();
+      if (runtime != null) {
+        helper.addDep(runtime.getProvider(JavaCompilationArgsProvider.class));
       }
-
+      helper.setCompilationStrictDepsMode(StrictDepsMode.OFF);
       JavaCompilationArtifacts artifacts =
           helper.build(
               javaSemantics,
@@ -276,11 +265,6 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
               JavaHelper.getHostJavabaseInputs(ruleContext),
               JavaCompilationHelper.getInstrumentationJars(ruleContext));
       return helper.buildCompilationArgsProvider(artifacts, true /* isReportedAsStrict */);
-    }
-
-    private ImmutableList<TransitiveInfoCollection> getProtoRuntimeDeps() {
-      TransitiveInfoCollection runtime = getProtoToolchainProvider().runtime();
-      return runtime != null ? ImmutableList.of(runtime) : ImmutableList.of();
     }
 
     private ProtoLangToolchainProvider getProtoToolchainProvider() {
