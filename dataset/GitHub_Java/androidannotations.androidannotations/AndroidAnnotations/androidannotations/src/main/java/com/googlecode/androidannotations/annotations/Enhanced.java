@@ -27,22 +27,10 @@ import java.lang.annotation.Target;
  * method.<br>
  * <br>
  * 
- * Supported annotations in @EViewGroup :
- * 
- * <ul>
- * <li>ViewById</li>
- * <li>AfterViews</li>
- * <li>Click</li>
- * <li>ItemClick</li>
- * <li>ItemLongClick</li>
- * <li>ItemSelected</li>
- * <li>LongClick</li>
- * <li>Touch</li>
- * </ul>
+ * Most annotations are supported in {@link Enhanced} classes
  * 
  */
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface Enhanced {
-	int value() default Id.DEFAULT_VALUE;
 }
