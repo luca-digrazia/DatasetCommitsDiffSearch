@@ -28,9 +28,10 @@ import org.graylog2.Log;
 
 import java.net.*;
 import java.io.*;
+import java.util.zip.Inflater;
 
 public class GELFServer {
-    private static final int MAX_PACKET_SIZE = 4096;
+    private static final int MAX_PACKET_SIZE = 8192;
 
     private DatagramSocket serverSocket = null;
 
@@ -54,17 +55,25 @@ public class GELFServer {
         return true;
     }
 
-    public String listen() {
+    public String listen() throws Exception {
+
+        // Reveive and fill buffer.
+        byte[] receiveData = new byte[MAX_PACKET_SIZE];
+        DatagramPacket receivedPacket = new DatagramPacket(receiveData, receiveData.length);
+
         try {
-            byte[] receiveData = new byte[MAX_PACKET_SIZE];
-            DatagramPacket receivedPacket = new DatagramPacket(receiveData, receiveData.length);
             serverSocket.receive(receivedPacket);
-            return new String(receivedPacket.getData(), 0, receivedPacket.getLength());
-        } catch(IOException e) {
-            Log.emerg("Could not receive on ServerSocket in GELFServer::listen(): " + e.toString());
+        } catch (SocketException e) {
+            return new String();
         }
 
-        return null;
+        // Uncompress.
+        Inflater decompresser = new Inflater();
+        decompresser.setInput(receiveData, 0, receiveData.length);
+        int finalLength = decompresser.inflate(receiveData);
+
+        // Convert to String and return.
+        return new String(receiveData, 0, finalLength, "UTF-8");
     }
 
     public void tearDown() {
