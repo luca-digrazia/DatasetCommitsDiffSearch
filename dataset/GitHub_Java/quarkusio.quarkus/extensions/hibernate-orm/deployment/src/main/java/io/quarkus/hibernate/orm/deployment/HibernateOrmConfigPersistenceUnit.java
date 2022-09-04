@@ -113,14 +113,11 @@ public class HibernateOrmConfigPersistenceUnit {
     public Optional<String> implicitNamingStrategy;
 
     /**
-     * Class name of a custom
-     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/boot/spi/MetadataBuilderContributor.html[`org.hibernate.boot.spi.MetadataBuilderContributor`]
-     * implementation.
+     * Class name of a custom {@link org.hibernate.boot.spi.MetadataBuilderContributor} implementation.
      *
      * [NOTE]
      * ====
-     * Not all customization options exposed by
-     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/boot/MetadataBuilder.html[`org.hibernate.boot.MetadataBuilder`]
+     * Not all customization options exposed by {@link org.hibernate.boot.MetadataBuilder}
      * will work correctly. Stay clear of options related to classpath scanning in particular.
      *
      * This setting is exposed mainly to allow registration of types, converters and SQL functions.
@@ -175,13 +172,6 @@ public class HibernateOrmConfigPersistenceUnit {
     public Map<String, HibernateOrmConfigPersistenceUnitCache> cache;
 
     /**
-     * Discriminator related configuration.
-     */
-    @ConfigItem
-    @ConfigDocSection
-    public HibernateOrmConfigPersistenceUnitDiscriminator discriminator;
-
-    /**
      * The default in Quarkus is for 2nd level caching to be enabled,
      * and a good implementation is already integrated for you.
      * <p>
@@ -226,8 +216,7 @@ public class HibernateOrmConfigPersistenceUnit {
                 !secondLevelCachingEnabled ||
                 multitenant.isPresent() ||
                 multitenantSchemaDatasource.isPresent() ||
-                fetch.isAnyPropertySet() ||
-                discriminator.isAnyPropertySet();
+                fetch.isAnyPropertySet();
     }
 
     @ConfigGroup
@@ -453,25 +442,5 @@ public class HibernateOrmConfigPersistenceUnit {
             return batchSize.isPresent() || maxDepth.isPresent();
         }
 
-    }
-
-    /**
-     * Discriminator configuration.
-     *
-     * Separated in a group configuration, in case it is necessary to add the another existing hibernate discriminator property.
-     */
-    @ConfigGroup
-    public static class HibernateOrmConfigPersistenceUnitDiscriminator {
-        /**
-         * Existing applications rely (implicitly or explicitly) on Hibernate ignoring any DiscriminatorColumn declarations on
-         * joined inheritance hierarchies. This setting allows these applications to maintain the legacy behavior of
-         * DiscriminatorColumn annotations being ignored when paired with joined inheritance.
-         */
-        @ConfigItem
-        public boolean ignoreExplicitForJoined;
-
-        public boolean isAnyPropertySet() {
-            return ignoreExplicitForJoined;
-        }
     }
 }

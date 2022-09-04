@@ -140,8 +140,7 @@ public final class JpaJandexScavenger {
         }
         try (QuarkusMappingFileParser parser = QuarkusMappingFileParser.create()) {
             for (String mappingFileName : mappingFileNames) {
-                Optional<RecordableXmlMapping> mappingOptional = parser.parse(persistenceUnitContribution.persistenceUnitName,
-                        persistenceUnitContribution.persistenceUnitRootURL, mappingFileName);
+                Optional<RecordableXmlMapping> mappingOptional = parser.parse(mappingFileName);
                 if (!mappingOptional.isPresent()) {
                     if (persistenceUnitContribution.explicitlyListedMappingFiles.contains(mappingFileName)) {
                         // Trigger an exception for files that are explicitly mentioned and could not be found
