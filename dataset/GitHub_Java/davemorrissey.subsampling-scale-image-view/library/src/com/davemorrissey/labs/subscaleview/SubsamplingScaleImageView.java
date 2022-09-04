@@ -351,10 +351,10 @@ public class SubsamplingScaleImageView extends View {
             if (imageSource.getSWidth() <= 0 || imageSource.getSHeight() <= 0) {
                 throw new IllegalArgumentException("Preview image cannot be used unless dimensions are provided for the main image");
             }
-            this.sWidth = imageSource.getSWidth();
-            this.sHeight = imageSource.getSHeight();
+            this.sWidth = previewSource.getSWidth();
+            this.sHeight = previewSource.getSHeight();
             if (previewSource.getBitmap() != null) {
-                onPreviewLoaded(previewSource.getBitmap());
+                onPreviewLoaded(bitmap);
             } else {
                 Uri uri = previewSource.getUri();
                 if (uri == null && previewSource.getResource() != null) {
@@ -367,7 +367,7 @@ public class SubsamplingScaleImageView extends View {
 
         if (imageSource.getBitmap() != null) {
             // Display the image as it is.
-            onImageLoaded(imageSource.getBitmap(), ORIENTATION_0);
+            onImageLoaded(bitmap, ORIENTATION_0);
         } else {
             Uri uri = imageSource.getUri();
             if (uri == null && imageSource.getResource() != null) {
