@@ -53,8 +53,8 @@ public class WorkspaceFactoryTest {
 
   @Test
   public void testWorkspaceWithIllegalCharacters() throws Exception {
-    helper.parse("workspace(name = 'a+b+c')");
-    assertThat(helper.getParserError()).contains("a+b+c is not a legal workspace name");
+    helper.parse("workspace(name = 'a.b.c')");
+    assertThat(helper.getParserError()).contains("a.b.c is not a legal workspace name");
   }
 
   @Test
@@ -175,10 +175,10 @@ public class WorkspaceFactoryTest {
   @Test
   public void testRepoMappingNotAStringStringDict() throws Exception {
     helper.parse("local_repository(name='foo', path='/foo', repo_mapping=1)");
-    assertThat(helper.getParserError()).contains("got int for 'repo_mapping', want dict");
+    assertThat(helper.getParserError()).contains("got 'int' for 'repo_mapping', want 'dict'");
 
     helper.parse("local_repository(name='foo', path='/foo', repo_mapping='hello')");
-    assertThat(helper.getParserError()).contains("got string for 'repo_mapping', want dict");
+    assertThat(helper.getParserError()).contains("got 'string' for 'repo_mapping', want 'dict'");
 
     helper.parse("local_repository(name='foo', path='/foo', repo_mapping={1: 1})");
     assertThat(helper.getParserError())
