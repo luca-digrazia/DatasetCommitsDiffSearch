@@ -384,7 +384,7 @@ public class BytecodeRecorderImpl implements BytecodeRecorder {
             out = method.newArray(expectedType.getComponentType(), method.load(length));
             for (int i = 0; i < length; ++i) {
                 ResultHandle component = loadObjectInstance(method, Array.get(param, i), returnValueResults, expectedType.getComponentType());
-                method.writeArrayValue(out, i, component);
+                method.writeArrayValue(out, method.load(i), component);
             }
         } else {
             if(nonDefaulConstructors.containsKey(param.getClass())) {
@@ -408,7 +408,6 @@ public class BytecodeRecorderImpl implements BytecodeRecorder {
 
                 out = method.newInstance(ofConstructor(param.getClass()));
             }
-            returnValueResults.put(param, out);
             if (param instanceof Collection) {
                 for (Object i : (Collection) param) {
                     ResultHandle val = loadObjectInstance(method, i, returnValueResults, i.getClass());
