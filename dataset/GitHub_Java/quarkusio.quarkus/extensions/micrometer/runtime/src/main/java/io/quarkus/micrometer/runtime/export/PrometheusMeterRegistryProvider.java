@@ -17,7 +17,6 @@ import io.micrometer.prometheus.PrometheusNamingConvention;
 import io.prometheus.client.CollectorRegistry;
 import io.quarkus.arc.AlternativePriority;
 import io.quarkus.arc.DefaultBean;
-import io.quarkus.arc.properties.UnlessBuildProperty;
 
 @Singleton
 public class PrometheusMeterRegistryProvider {
@@ -59,7 +58,6 @@ public class PrometheusMeterRegistryProvider {
 
     @Produces
     @Singleton
-    @UnlessBuildProperty(name = "quarkus.micrometer.export.prometheus.default-registry", stringValue = "false", enableIfMissing = true)
     @AlternativePriority(Interceptor.Priority.APPLICATION + 100)
     public PrometheusMeterRegistry registry(PrometheusConfig config, CollectorRegistry collectorRegistry, Clock clock) {
         return new PrometheusMeterRegistry(config, collectorRegistry, clock);
