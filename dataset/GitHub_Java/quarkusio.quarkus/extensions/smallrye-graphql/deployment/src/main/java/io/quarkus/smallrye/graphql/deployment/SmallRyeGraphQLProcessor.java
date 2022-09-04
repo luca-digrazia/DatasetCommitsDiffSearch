@@ -3,7 +3,6 @@ package io.quarkus.smallrye.graphql.deployment;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -238,11 +237,8 @@ public class SmallRyeGraphQLProcessor {
     @BuildStep
     void openTracingIntegration(Capabilities capabilities,
             BuildProducer<SystemPropertyBuildItem> properties) {
-        // if there is an opentracing tracer available, enable tracing within SmallRye GraphQL
-        if (capabilities.isPresent(Capability.OPENTRACING)) {
+        if (capabilities.isPresent(Capability.SMALLRYE_OPENTRACING)) {
             properties.produce(new SystemPropertyBuildItem("smallrye.graphql.tracing.enabled", "true"));
-        } else {
-            properties.produce(new SystemPropertyBuildItem("smallrye.graphql.tracing.enabled", "false"));
         }
     }
 
@@ -341,10 +337,10 @@ public class SmallRyeGraphQLProcessor {
             HttpRootPathBuildItem httpRootPath,
             CurateOutcomeBuildItem curateOutcomeBuildItem) throws Exception {
 
-        if (!quarkusConfig.ui.enable) {
+        if (!quarkusConfig.enableUi) {
             return;
         }
-        if ("/".equals(quarkusConfig.ui.rootPath)) {
+        if ("/".equals(quarkusConfig.rootPathUi)) {
             throw new ConfigurationError(
                     "quarkus.smallrye-graphql.root-path-ui was set to \"/\", this is not allowed as it blocks the application from serving anything else.");
         }
@@ -377,16 +373,16 @@ public class SmallRyeGraphQLProcessor {
                     cached.cachedDirectory = tempDir.toAbsolutePath().toString();
                     cached.cachedGraphQLPath = graphQLPath;
                 } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                    throw new RuntimeException(e);
                 }
             }
             Handler<RoutingContext> handler = recorder.uiHandler(cached.cachedDirectory,
-                    httpRootPath.adjustPath(quarkusConfig.ui.rootPath));
-            routeProducer.produce(new RouteBuildItem(quarkusConfig.ui.rootPath, handler));
-            routeProducer.produce(new RouteBuildItem(quarkusConfig.ui.rootPath + "/*", handler));
+                    httpRootPath.adjustPath(quarkusConfig.rootPathUi));
+            routeProducer.produce(new RouteBuildItem(quarkusConfig.rootPathUi, handler));
+            routeProducer.produce(new RouteBuildItem(quarkusConfig.rootPathUi + "/*", handler));
             notFoundPageDisplayableEndpointProducer
-                    .produce(new NotFoundPageDisplayableEndpointBuildItem(quarkusConfig.ui.rootPath + "/"));
-        } else if (quarkusConfig.ui.alwaysInclude) {
+                    .produce(new NotFoundPageDisplayableEndpointBuildItem(quarkusConfig.rootPathUi + "/"));
+        } else if (quarkusConfig.alwaysIncludeUi) {
             AppArtifact artifact = getGraphQLUiArtifact(curateOutcomeBuildItem);
             //we are including in a production artifact
             //just stick the files in the generated output
@@ -429,9 +425,9 @@ public class SmallRyeGraphQLProcessor {
             }
 
             Handler<RoutingContext> handler = recorder
-                    .uiHandler(GRAPHQL_UI_FINAL_DESTINATION, httpRootPath.adjustPath(quarkusConfig.ui.rootPath));
-            routeProducer.produce(new RouteBuildItem(quarkusConfig.ui.rootPath, handler));
-            routeProducer.produce(new RouteBuildItem(quarkusConfig.ui.rootPath + "/*", handler));
+                    .uiHandler(GRAPHQL_UI_FINAL_DESTINATION, httpRootPath.adjustPath(quarkusConfig.rootPathUi));
+            routeProducer.produce(new RouteBuildItem(quarkusConfig.rootPathUi, handler));
+            routeProducer.produce(new RouteBuildItem(quarkusConfig.rootPathUi + "/*", handler));
         }
     }
 
