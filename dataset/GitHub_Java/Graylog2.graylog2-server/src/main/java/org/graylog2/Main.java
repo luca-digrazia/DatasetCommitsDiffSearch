@@ -31,7 +31,6 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import org.graylog2.periodical.ChunkedGELFClientManagerThread;
 import org.graylog2.periodical.RRDThread;
 
 /**
@@ -158,15 +157,11 @@ public final class Main {
             System.exit(1); // Exit with error.
         }
 
-        // Start GELF threads.
+        // Start GELF thread.
         if (GELF.isEnabled()) {
             GELFMainThread gelfThread = new GELFMainThread(Integer.parseInt(Main.masterConfig.getProperty("gelf_listen_port")));
             gelfThread.start();
-
-            ChunkedGELFClientManagerThread gelfManager = new ChunkedGELFClientManagerThread();
-            gelfManager.start();
-            
-            System.out.println("[x] GELF threads are up.");
+            System.out.println("[x] GELF thread is up.");
         }
 
          // Start RRD writer thread.
