@@ -58,7 +58,7 @@ import javax.annotation.Nullable;
  */
 // Not final so that we can mock it in tests.
 public class TestRunnerAction extends AbstractAction implements NotifyOnActionCacheHit {
-  public static final PathFragment COVERAGE_TMP_ROOT = PathFragment.create("_coverage");
+  public static final PathFragment COVERAGE_TMP_ROOT = new PathFragment("_coverage");
 
   // Used for selecting subset of testcase / testmethods.
   private static final String TEST_BRIDGE_TEST_FILTER_ENV = "TESTBRIDGE_TEST_ONLY";
@@ -92,7 +92,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   private final int shardNum;
   private final int runNumber;
   private final String workspaceName;
-  private final boolean useTestRunner;
+  private final boolean useExperimentalTestRunner;
 
   // Mutable state related to test caching.
   private Boolean unconditionalExecution; // lazily initialized: null indicates unknown
@@ -131,10 +131,10 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
       int runNumber,
       BuildConfiguration configuration,
       String workspaceName,
-      boolean useTestRunner) {
+      boolean useExperimentalTestRunner) {
     super(owner, inputs,
         // Note that this action only cares about the runfiles, not the mapping.
-        new RunfilesSupplierImpl(PathFragment.create("runfiles"), executionSettings.getRunfiles()),
+        new RunfilesSupplierImpl(new PathFragment("runfiles"), executionSettings.getRunfiles()),
         list(testLog, cacheStatus, coverageArtifact, microCoverageArtifact));
     this.runtime = runtime;
     this.configuration = Preconditions.checkNotNull(configuration);
@@ -171,7 +171,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     this.undeclaredOutputsAnnotationsPath = undeclaredOutputsAnnotationsDir.getChild("ANNOTATIONS");
     this.testInfrastructureFailure = baseDir.getChild("test.infrastructure_failure");
     this.workspaceName = workspaceName;
-    this.useTestRunner = useTestRunner;
+    this.useExperimentalTestRunner = useExperimentalTestRunner;
 
     Map<String, String> mergedTestEnv = new HashMap<>(configuration.getTestEnv());
     mergedTestEnv.putAll(extraTestEnv);
@@ -610,8 +610,8 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     return executionSettings;
   }
 
-  public boolean useTestRunner() {
-    return useTestRunner;
+  public boolean useExperimentalTestRunner() {
+    return useExperimentalTestRunner;
   }
 
   public boolean isSharded() {
