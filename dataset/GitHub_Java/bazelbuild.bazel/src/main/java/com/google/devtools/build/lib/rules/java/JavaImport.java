@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
@@ -51,7 +50,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     ImmutableList<Artifact> srcJars = ImmutableList.of();
     ImmutableList<Artifact> jars = collectJars(ruleContext);
     Artifact srcJar = ruleContext.getPrerequisiteArtifact("srcjar", Mode.TARGET);
@@ -127,7 +126,17 @@ public class JavaImport implements RuleConfiguredTargetFactory {
 
     ImmutableBiMap<Artifact, Artifact> compilationToRuntimeJarMap =
         compilationToRuntimeJarMapBuilder.build();
-    semantics.addProviders(ruleContext, common, /* gensrcJar= */ null, ruleBuilder);
+    semantics.addProviders(
+        ruleContext,
+        common,
+        ImmutableList.<String>of(),
+        null /* classJar */,
+        srcJar /* srcJar */,
+        null /* genJar */,
+        null /* gensrcJar */,
+        compilationToRuntimeJarMap,
+        filesBuilder,
+        ruleBuilder);
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
 
@@ -158,7 +167,6 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .setRuntimeJars(javaArtifacts.getRuntimeJars())
         .setNeverlink(neverLink)
         .build();
     return ruleBuilder
@@ -166,6 +174,9 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addNativeDeclaredProvider(javaInfo)
+        .add(
+            JavaRuntimeJarProvider.class,
+            new JavaRuntimeJarProvider(javaArtifacts.getRuntimeJars()))
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
         .addNativeDeclaredProvider(new CcLinkParamsInfo(ccLinkParamsStore))
         .add(

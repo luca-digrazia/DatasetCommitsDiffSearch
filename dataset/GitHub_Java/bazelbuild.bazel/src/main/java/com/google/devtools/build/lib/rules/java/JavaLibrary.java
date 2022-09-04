@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.java;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -27,6 +26,9 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
@@ -43,7 +45,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     JavaCommon common = new JavaCommon(ruleContext, semantics);
     return init(
         ruleContext,
@@ -53,11 +55,9 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
   }
 
   final ConfiguredTarget init(
-      RuleContext ruleContext,
-      final JavaCommon common,
-      boolean includeGeneratedExtensionRegistry,
+      RuleContext ruleContext, final JavaCommon common, boolean includeGeneratedExtensionRegistry,
       boolean isJavaPluginRule)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException {
     JavaTargetAttributes.Builder attributesBuilder = common.initCommon();
 
     // Collect the transitive dependencies.
@@ -176,6 +176,15 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     NestedSet<LinkerInput> transitiveJavaNativeLibraries =
         common.collectTransitiveJavaNativeLibraries();
 
+    CcLinkParamsStore ccLinkParamsStore = new CcLinkParamsStore() {
+      @Override
+      protected void collect(CcLinkParams.Builder builder, boolean linkingStatically,
+                             boolean linkShared) {
+        builder.addTransitiveTargets(common.targetsTreatedAsDeps(ClasspathType.BOTH),
+            JavaCcLinkParamsProvider.TO_LINK_PARAMS, CcLinkParamsInfo.TO_LINK_PARAMS);
+      }
+    };
+
     ProtoJavaApiInfoAspectProvider.Builder protoAspectBuilder =
         ProtoJavaApiInfoAspectProvider.builder();
     for (TransitiveInfoCollection dep : common.getDependencies()) {
@@ -213,6 +222,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> proguardSpecs = new ProguardLibrary(ruleContext).collectProguardSpecs();
 
+    CcLinkParamsInfo ccLinkParamsInfo = new CcLinkParamsInfo(ccLinkParamsStore);
     JavaPluginInfoProvider pluginInfoProvider = isJavaPluginRule
         // For java_plugin we create the provider with content retrieved from the rule attributes.
         ? common.getJavaPluginInfoProvider(ruleContext)
@@ -238,6 +248,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
             RunfilesProvider.simple(
                 JavaCommon.getRunfiles(ruleContext, semantics, javaArtifacts, neverLink)))
         .setFilesToBuild(filesToBuild)
+        .addNativeDeclaredProvider(ccLinkParamsInfo)
         .addProvider(new JavaNativeLibraryProvider(transitiveJavaNativeLibraries))
         .addProvider(JavaSourceInfoProvider.fromJavaTargetAttributes(attributes, semantics))
         .addProvider(new ProguardSpecProvider(proguardSpecs))
