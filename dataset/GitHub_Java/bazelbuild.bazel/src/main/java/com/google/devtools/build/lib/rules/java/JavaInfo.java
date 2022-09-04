@@ -183,9 +183,6 @@ public final class JavaInfo extends NativeInfo {
         JavaInfo.fetchProvidersFromList(providers, JavaRunfilesProvider.class);
     List<JavaPluginInfoProvider> javaPluginInfoProviders =
         JavaInfo.fetchProvidersFromList(providers, JavaPluginInfoProvider.class);
-    List<JavaExportsProvider> javaExportsProviders =
-        JavaInfo.fetchProvidersFromList(providers, JavaExportsProvider.class);
-
 
     Runfiles mergedRunfiles = Runfiles.EMPTY;
     for (JavaRunfilesProvider javaRunfilesProvider : javaRunfilesProviders) {
@@ -208,8 +205,6 @@ public final class JavaInfo extends NativeInfo {
         .addProvider(JavaRunfilesProvider.class, new JavaRunfilesProvider(mergedRunfiles))
         .addProvider(
             JavaPluginInfoProvider.class, JavaPluginInfoProvider.merge(javaPluginInfoProviders))
-        .addProvider(JavaExportsProvider.class, JavaExportsProvider.merge(javaExportsProviders))
-        // TODO(b/65618333): add merge function to JavaGenJarsProvider. See #3769
         .build();
   }
 
