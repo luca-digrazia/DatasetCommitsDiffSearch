@@ -13,20 +13,45 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
-import com.google.common.base.Predicate;
-
 /**
  * The environment of a Blaze query which supports predefined streaming operations.
  *
  * @param <T> the node type of the dependency graph
  */
 public interface StreamableQueryEnvironment<T> extends QueryEnvironment<T> {
-
-  /** Retrieve and process all reverse dependencies of given expression in a streaming manner. */
-  void getAllRdeps(
+  QueryTaskFuture<Void> getAllRdepsBoundedParallel(
       QueryExpression expression,
-      Predicate<T> universe,
-      final Callback<T> callback,
-      final int depth)
-      throws QueryException, InterruptedException;
+      int depth,
+      QueryExpressionContext<T> context,
+      Callback<T> callback);
+
+  QueryTaskFuture<Void> getAllRdepsUnboundedParallel(
+      QueryExpression expression, QueryExpressionContext<T> context, Callback<T> callback);
+
+  QueryTaskFuture<Void> getRdepsBoundedParallel(
+      QueryExpression expression,
+      int depth,
+      QueryExpression universe,
+      QueryExpressionContext<T> context,
+      Callback<T> callback);
+
+  QueryTaskFuture<Void> getRdepsUnboundedParallel(
+      QueryExpression expression,
+      QueryExpression universe,
+      QueryExpressionContext<T> context,
+      Callback<T> callback);
+
+  QueryTaskFuture<Void> getDepsUnboundedParallel(
+      QueryExpression expression,
+      QueryExpressionContext<T> context,
+      Callback<T> callback,
+      QueryExpression caller);
+
+  // TODO(bazel-team): Make this parallel.
+  QueryTaskFuture<Void> getDepsBounded(
+      QueryExpression expression,
+      QueryExpressionContext<T> context,
+      Callback<T> callback,
+      int depth,
+      QueryExpression caller);
 }
