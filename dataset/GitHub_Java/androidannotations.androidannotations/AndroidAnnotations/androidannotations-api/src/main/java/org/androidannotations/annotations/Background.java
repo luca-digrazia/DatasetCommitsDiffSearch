@@ -28,7 +28,5 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface Background {
-	int delay() default 0; /* in milliseconds */
-
-	String serial() default "";
+	long delay() default 0;
 }
