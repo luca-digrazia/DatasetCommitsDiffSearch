@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe.packages;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
@@ -67,6 +66,7 @@ import com.google.devtools.build.lib.skyframe.WorkspaceASTFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceFileFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceNameFunction;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -267,6 +267,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable, ConstantRuleVisibility.PRIVATE);
     PrecomputedValue.SKYLARK_SEMANTICS.set(injectable, skylarkSemantics);
     PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.set(injectable, defaultsPackageContents);
+    PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(injectable, PathFragment.EMPTY_FRAGMENT);
     return new ImmutableDiff(ImmutableList.<SkyKey>of(), valuesToInject);
   }
 
@@ -374,10 +375,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
                 /* deletedPackages= */ new AtomicReference<>(ImmutableSet.<PackageIdentifier>of()),
                 getCrossRepositoryLabelViolationStrategy(),
                 getBuildFilesByPriority()))
-        .put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
-            new BlacklistedPackagePrefixesFunction(
-                /*hardcodedBlacklistedPackagePrefixes=*/ ImmutableSet.of(),
-                /*additionalBlacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
+        .put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES, new BlacklistedPackagePrefixesFunction())
         .put(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, new ContainingPackageLookupFunction())
         .put(SkyFunctions.AST_FILE_LOOKUP, new ASTFileLookupFunction(ruleClassProvider))
         .put(

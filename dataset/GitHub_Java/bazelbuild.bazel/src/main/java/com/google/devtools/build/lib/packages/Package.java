@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -35,16 +34,12 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AttributeMap.AcceptsLabelAttribute;
 import com.google.devtools.build.lib.packages.License.DistributionType;
-import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.SpellChecker;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -58,18 +53,16 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * A package, which is a container of {@link Rule}s, each of which contains a dictionary of named
- * attributes.
+ * A package, which is a container of {@link Rule}s, each of
+ * which contains a dictionary of named attributes.
  *
- * <p>Package instances are intended to be immutable and for all practical purposes can be treated
- * as such. Note, however, that some member variables exposed via the public interface are not
- * strictly immutable, so until their types are guaranteed immutable we're not applying the
- * {@code @Immutable} annotation here.
+ * <p>Package instances are intended to be immutable and for all practical
+ * purposes can be treated as such. Note, however, that some member variables
+ * exposed via the public interface are not strictly immutable, so until their
+ * types are guaranteed immutable we're not applying the {@code @Immutable}
+ * annotation here.
  */
-@SuppressWarnings("JavaLangClash")
 public class Package {
-  public static final InjectingObjectCodec<Package, PackageCodecDependencies> CODEC =
-      new PackageCodec();
 
   /**
    * Common superclass for all name-conflict exceptions.
@@ -113,10 +106,10 @@ public class Package {
   protected String workspaceName;
 
   /**
-   * The root of the source tree in which this package was found. It is an invariant that {@code
-   * sourceRoot.getRelative(packageId.getSourceRoot()).equals(packageDirectory)}.
+   * The root of the source tree in which this package was found. It is an invariant that
+   * {@code sourceRoot.getRelative(packageId.getSourceRoot()).equals(packageDirectory)}.
    */
-  private Root sourceRoot;
+  private Path sourceRoot;
 
   /**
    * The "Make" environment of this package, containing package-local
@@ -271,25 +264,15 @@ public class Package {
     defaultRestrictedTo = environments;
   }
 
-  /**
-   * Returns the source root (a directory) beneath which this package's BUILD file was found.
-   *
-   * <p>Assumes invariant: {@code
-   * getSourceRoot().getRelative(packageId.getSourceRoot()).equals(getPackageDirectory())}
-   */
-  public Root getSourceRoot() {
-    return sourceRoot;
-  }
-
   // This must always be consistent with Root.computeSourceRoot; otherwise computing source roots
   // from exec paths does not work, which can break the action cache for input-discovering actions.
-  private static Root getSourceRoot(Path buildFile, PathFragment packageFragment) {
+  private static Path getSourceRoot(Path buildFile, PathFragment packageFragment) {
     Path current = buildFile.getParentDirectory();
     for (int i = 0, len = packageFragment.segmentCount();
          i < len && !packageFragment.equals(PathFragment.EMPTY_FRAGMENT); i++) {
       current = current.getParentDirectory();
     }
-    return Root.fromPath(current);
+    return current;
   }
 
   /**
@@ -362,6 +345,16 @@ public class Package {
    */
   public Path getFilename() {
     return filename;
+  }
+
+  /**
+   * Returns the source root (a directory) beneath which this package's BUILD file was found.
+   *
+   * <p> Assumes invariant:
+   * {@code getSourceRoot().getRelative(packageId.getSourceRoot()).equals(getPackageDirectory())}
+   */
+  public Path getSourceRoot() {
+    return sourceRoot;
   }
 
   /**
@@ -1104,13 +1097,13 @@ public class Package {
       return subincludes == null ? Maps.<Label, Path>newHashMap() : subincludes;
     }
 
+    public Collection<Target> getTargets() {
+      return Package.getTargets(targets);
+    }
+
     @Nullable
     public Target getTarget(String name) {
       return targets.get(name);
-    }
-
-    public Collection<Target> getTargets() {
-      return Package.getTargets(targets);
     }
 
     /**
@@ -1281,8 +1274,7 @@ public class Package {
       for (OutputFile outputFile : rule.getOutputFiles()) {
         targets.put(outputFile.getName(), outputFile);
         PathFragment outputFileFragment = PathFragment.create(outputFile.getName());
-        int segmentCount = outputFileFragment.segmentCount();
-        for (int i = 1; i < segmentCount; i++) {
+        for (int i = 1; i < outputFileFragment.segmentCount(); i++) {
           String prefix = outputFileFragment.subFragment(0, i).toString();
           outputFilePrefixes.putIfAbsent(prefix, outputFile);
         }
@@ -1474,8 +1466,7 @@ public class Package {
 
         // Check if a prefix of this output file matches an already existing one
         PathFragment outputFileFragment = PathFragment.create(outputFileName);
-        int segmentCount = outputFileFragment.segmentCount();
-        for (int i = 1; i < segmentCount; i++) {
+        for (int i = 1; i < outputFileFragment.segmentCount(); i++) {
           String prefix = outputFileFragment.subFragment(0, i).toString();
           if (outputFiles.containsKey(prefix)) {
             throw conflictingOutputFile(outputFile, outputFiles.get(prefix));
@@ -1502,9 +1493,9 @@ public class Package {
      */
     private void checkForInputOutputConflicts(Rule rule, Set<String> outputFiles)
         throws NameConflictException, InterruptedException {
-      PackageIdentifier packageIdentifier = rule.getLabel().getPackageIdentifier();
+      PathFragment packageFragment = rule.getLabel().getPackageFragment();
       for (Label inputLabel : rule.getLabels()) {
-        if (packageIdentifier.equals(inputLabel.getPackageIdentifier())
+        if (packageFragment.equals(inputLabel.getPackageFragment())
             && outputFiles.contains(inputLabel.getName())) {
           throw inputOutputNameConflict(rule, inputLabel.getName());
         }
@@ -1559,35 +1550,6 @@ public class Package {
         message += target.getTargetKind();
       }
       return message + ", defined at " + target.getLocation();
-    }
-  }
-
-  /** Package codec implementation. */
-  private static final class PackageCodec
-      implements InjectingObjectCodec<Package, PackageCodecDependencies> {
-    @Override
-    public Class<Package> getEncodedClass() {
-      return Package.class;
-    }
-
-    @Override
-    public void serialize(
-        PackageCodecDependencies codecDeps, Package input, CodedOutputStream codedOut)
-        throws IOException {
-      codecDeps.getPackageSerializer().serialize(input, codedOut);
-    }
-
-    @Override
-    public Package deserialize(PackageCodecDependencies codecDeps, CodedInputStream codedIn)
-        throws SerializationException, IOException {
-      try {
-        return codecDeps.getPackageDeserializer().deserialize(codedIn);
-      } catch (PackageDeserializationException e) {
-        throw new SerializationException("Failed to deserialize Package", e);
-      } catch (InterruptedException e) {
-        throw new IllegalStateException(
-            "Unexpected InterruptedException during Package deserialization", e);
-      }
     }
   }
 }

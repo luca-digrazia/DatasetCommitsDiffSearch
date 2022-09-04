@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableCollection;
@@ -33,7 +32,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.packages.AstParseResult;
+import com.google.devtools.build.lib.packages.AstAfterPreprocessing;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
@@ -57,6 +56,7 @@ import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -92,8 +92,9 @@ public class PackageFunction implements SkyFunction {
 
   private final PackageFactory packageFactory;
   private final CachingPackageLocator packageLocator;
-  private final Cache<PackageIdentifier, BuilderAndGlobDeps> packageFunctionCache;
-  private final Cache<PackageIdentifier, AstParseResult> astCache;
+  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>>
+      packageFunctionCache;
+  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache;
   private final AtomicBoolean showLoadingProgress;
   private final AtomicInteger numPackagesLoaded;
   @Nullable private final PackageProgressReceiver packageProgress;
@@ -105,21 +106,18 @@ public class PackageFunction implements SkyFunction {
 
   private final ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile;
 
-  private final IncrementalityIntent incrementalityIntent;
-
   static final PathFragment DEFAULTS_PACKAGE_NAME = PathFragment.create("tools/defaults");
 
   public PackageFunction(
       PackageFactory packageFactory,
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, BuilderAndGlobDeps> packageFunctionCache,
-      Cache<PackageIdentifier, AstParseResult> astCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>> packageFunctionCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining,
       @Nullable PackageProgressReceiver packageProgress,
-      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
-      IncrementalityIntent incrementalityIntent) {
+      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
     this.skylarkImportLookupFunctionForInlining = skylarkImportLookupFunctionForInlining;
     // Can be null in tests.
     this.preludeLabel = packageFactory == null
@@ -133,7 +131,6 @@ public class PackageFunction implements SkyFunction {
     this.numPackagesLoaded = numPackagesLoaded;
     this.packageProgress = packageProgress;
     this.actionOnIOExceptionReadingBuildFile = actionOnIOExceptionReadingBuildFile;
-    this.incrementalityIntent = incrementalityIntent;
   }
 
   @VisibleForTesting
@@ -141,8 +138,8 @@ public class PackageFunction implements SkyFunction {
       PackageFactory packageFactory,
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, BuilderAndGlobDeps> packageFunctionCache,
-      Cache<PackageIdentifier, AstParseResult> astCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>> packageFunctionCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
     this(
@@ -154,8 +151,7 @@ public class PackageFunction implements SkyFunction {
         numPackagesLoaded,
         skylarkImportLookupFunctionForInlining,
         /*packageProgress=*/ null,
-        ActionOnIOExceptionReadingBuildFile.UseOriginalIOException.INSTANCE,
-        IncrementalityIntent.INCREMENTAL);
+        ActionOnIOExceptionReadingBuildFile.UseOriginalIOException.INSTANCE);
   }
 
   public void setSkylarkImportLookupFunctionForInliningForTesting(
@@ -204,36 +200,19 @@ public class PackageFunction implements SkyFunction {
     }
   }
 
-  /** An entry in {@link PackageFunction} internal cache. */
-  public static class BuilderAndGlobDeps {
-    private final Package.Builder builder;
+  /** An entry in {@link PackageFunction}'s internal caches. */
+  public static class CacheEntryWithGlobDeps<T> {
+    private final T value;
     private final Set<SkyKey> globDepKeys;
+    @Nullable
+    private final LegacyGlobber legacyGlobber;
 
-    private BuilderAndGlobDeps(Package.Builder builder, Set<SkyKey> globDepKeys) {
-      this.builder = builder;
+    private CacheEntryWithGlobDeps(T value, Set<SkyKey> globDepKeys,
+        @Nullable LegacyGlobber legacyGlobber) {
+      this.value = value;
       this.globDepKeys = globDepKeys;
+      this.legacyGlobber = legacyGlobber;
     }
-  }
-
-  /**
-   * A declaration to {@link PackageFunction} about how it will be used, for the sake of making
-   * use-case-driven performance optimizations.
-   */
-  public enum IncrementalityIntent {
-    /**
-     * {@link PackageFunction} will be used to load packages incrementally (e.g. on both clean
-     * builds and incremental builds, perhaps with cached globs). This is Bazel's normal use-case.
-     */
-    INCREMENTAL,
-
-    /**
-     * {@link PackageFunction} will never be used to load packages incrementally.
-     *
-     * <p>Do not use this unless you know what you are doing; Bazel will be intentionally
-     * incrementally incorrect!
-     */
-    // TODO(nharmata): Consider using this when --track_incremental_state=false.
-    NON_INCREMENTAL
   }
 
   private static void maybeThrowFilesystemInconsistency(PackageIdentifier packageIdentifier,
@@ -362,6 +341,13 @@ public class PackageFunction implements SkyFunction {
       throws InternalInconsistentFilesystemException, InterruptedException {
     boolean packageShouldBeInError = containsErrors;
 
+    // TODO(bazel-team): This means that many packages will have to be preprocessed twice. Ouch!
+    // We need a better continuation mechanism to avoid repeating work. [skyframe-loading]
+
+    // TODO(bazel-team): It would be preferable to perform I/O from the package preprocessor via
+    // Skyframe rather than add (potentially incomplete) dependencies after the fact.
+    // [skyframe-loading]
+
     Set<SkyKey> subincludePackageLookupDepKeys = Sets.newHashSet();
     for (Label label : subincludes.keySet()) {
       // Declare a dependency on the package lookup for the package giving access to the label.
@@ -442,7 +428,7 @@ public class PackageFunction implements SkyFunction {
       return null;
     }
     RootedPath workspacePath = RootedPath.toRootedPath(
-        packageLookupPath, Label.WORKSPACE_FILE_NAME);
+        packageLookupPath, Label.EXTERNAL_PACKAGE_FILE_NAME);
     SkyKey workspaceKey = ExternalPackageFunction.key(workspacePath);
     PackageValue workspace = null;
     try {
@@ -555,14 +541,7 @@ public class PackageFunction implements SkyFunction {
       return null;
     }
 
-    // Load the prelude from the same repository as the package being loaded.  Can't use
-    // Label.resolveRepositoryRelative because preludeLabel is in the main repository, not the
-    // default one, so it is resolved to itself.
-    Label pkgPreludeLabel =
-        Label.createUnvalidated(
-            PackageIdentifier.create(packageId.getRepository(), preludeLabel.getPackageFragment()),
-            preludeLabel.getName());
-    SkyKey astLookupKey = ASTFileLookupValue.key(pkgPreludeLabel);
+    SkyKey astLookupKey = ASTFileLookupValue.key(preludeLabel);
     ASTFileLookupValue astLookupValue = null;
     try {
       astLookupValue = (ASTFileLookupValue) env.getValueOrThrow(astLookupKey,
@@ -580,7 +559,7 @@ public class PackageFunction implements SkyFunction {
     List<Statement> preludeStatements =
         astLookupValue.lookupSuccessful()
             ? astLookupValue.getAST().getStatements() : ImmutableList.<Statement>of();
-    BuilderAndGlobDeps packageBuilderAndGlobDeps =
+    CacheEntryWithGlobDeps<Package.Builder> packageBuilderAndGlobDeps =
         loadPackage(
             workspaceName,
             replacementContents,
@@ -595,7 +574,7 @@ public class PackageFunction implements SkyFunction {
     if (packageBuilderAndGlobDeps == null) {
       return null;
     }
-    Package.Builder pkgBuilder = packageBuilderAndGlobDeps.builder;
+    Package.Builder pkgBuilder = packageBuilderAndGlobDeps.value;
     try {
       pkgBuilder.buildPartial();
     } catch (NoSuchPackageException e) {
@@ -939,44 +918,6 @@ public class PackageFunction implements SkyFunction {
     return true;
   }
 
-  private interface GlobberWithSkyframeGlobDeps extends Globber {
-    Set<SkyKey> getGlobDepsRequested();
-  }
-
-  private static class LegacyGlobberWithNoGlobDeps implements GlobberWithSkyframeGlobDeps {
-    private final LegacyGlobber delegate;
-
-    private LegacyGlobberWithNoGlobDeps(LegacyGlobber delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public Set<SkyKey> getGlobDepsRequested() {
-      return ImmutableSet.of();
-    }
-
-    @Override
-    public Token runAsync(List<String> includes, List<String> excludes, boolean excludeDirs)
-        throws BadGlobException, InterruptedException {
-      return delegate.runAsync(includes, excludes, excludeDirs);
-    }
-
-    @Override
-    public List<String> fetch(Token token) throws IOException, InterruptedException {
-      return delegate.fetch(token);
-    }
-
-    @Override
-    public void onInterrupt() {
-      delegate.onInterrupt();
-    }
-
-    @Override
-    public void onCompletion() {
-      delegate.onCompletion();
-    }
-  }
-
   /**
    * A {@link Globber} implemented on top of skyframe that falls back to a
    * {@link PackageFactory.LegacyGlobber} on a skyframe cache-miss. This way we don't require a
@@ -997,7 +938,7 @@ public class PackageFunction implements SkyFunction {
    * happen.
    * </ul>
    */
-  private static class SkyframeHybridGlobber implements GlobberWithSkyframeGlobDeps {
+  private static class SkyframeHybridGlobber implements Globber {
     private final PackageIdentifier packageId;
     private final Path packageRoot;
     private final Environment env;
@@ -1012,8 +953,7 @@ public class PackageFunction implements SkyFunction {
       this.legacyGlobber = legacyGlobber;
     }
 
-    @Override
-    public Set<SkyKey> getGlobDepsRequested() {
+    private Set<SkyKey> getGlobDepsRequested() {
       return ImmutableSet.copyOf(globDepsRequested);
     }
 
@@ -1231,26 +1171,6 @@ public class PackageFunction implements SkyFunction {
     }
   }
 
-  private GlobberWithSkyframeGlobDeps makeGlobber(
-      Path buildFilePath,
-      PackageIdentifier packageId,
-      Path packageRoot,
-      SkyFunction.Environment env) {
-    LegacyGlobber legacyGlobber = packageFactory.createLegacyGlobber(
-        buildFilePath.getParentDirectory(), packageId, packageLocator);
-    switch (incrementalityIntent) {
-      case INCREMENTAL:
-        return new SkyframeHybridGlobber(packageId, packageRoot, env, legacyGlobber);
-      case NON_INCREMENTAL:
-        // Skyframe globbing is only useful for incremental correctness and performance. The
-        // first time Bazel loads a package ever, Skyframe globbing is actually pure overhead
-        // (SkyframeHybridGlobber will make full use of LegacyGlobber).
-        return new LegacyGlobberWithNoGlobDeps(legacyGlobber);
-      default:
-        throw new IllegalStateException(incrementalityIntent.toString());
-    }
-  }
-
   /**
    * Constructs a {@link Package} object for the given package using legacy package loading.
    * Note that the returned package may be in error.
@@ -1259,11 +1179,11 @@ public class PackageFunction implements SkyFunction {
    *
    * <p>Exactly one of {@code replacementContents} and {@code buildFileValue} will be
    * non-{@code null}. The former indicates that we have a faux BUILD file with the given contents
-   * and the latter indicates that we have a legitimate BUILD file and should actually read its
-   * contents.
+   * and the latter indicates that we have a legitimate BUILD file and should actually do
+   * preprocessing.
    */
   @Nullable
-  private BuilderAndGlobDeps loadPackage(
+  private CacheEntryWithGlobDeps<Package.Builder> loadPackage(
       String workspaceName,
       @Nullable String replacementContents,
       PackageIdentifier packageId,
@@ -1275,18 +1195,26 @@ public class PackageFunction implements SkyFunction {
       Path packageRoot,
       Environment env)
       throws InterruptedException, PackageFunctionException {
-    BuilderAndGlobDeps builderAndGlobDeps = packageFunctionCache.getIfPresent(packageId);
-    if (builderAndGlobDeps == null) {
+    CacheEntryWithGlobDeps<Package.Builder> packageFunctionCacheEntry =
+        packageFunctionCache.getIfPresent(packageId);
+    if (packageFunctionCacheEntry == null) {
       profiler.startTask(ProfilerTask.CREATE_PACKAGE, packageId.toString());
       if (packageProgress != null) {
         packageProgress.startReadPackage(packageId);
       }
       try {
-        AstParseResult astParseResult = astCache.getIfPresent(packageId);
-        if (astParseResult == null) {
+        CacheEntryWithGlobDeps<AstAfterPreprocessing> astCacheEntry =
+            astCache.getIfPresent(packageId);
+        if (astCacheEntry == null) {
           if (showLoadingProgress.get()) {
             env.getListener().handle(Event.progress("Loading package: " + packageId));
           }
+          // We use a LegacyGlobber that doesn't sort the matches for each individual glob pattern,
+          // since we want to sort the final result anyway.
+          LegacyGlobber legacyGlobber = packageFactory.createLegacyGlobberThatDoesntSort(
+              buildFilePath.getParentDirectory(), packageId, packageLocator);
+          SkyframeHybridGlobber skyframeGlobber = new SkyframeHybridGlobber(packageId, packageRoot,
+              env, legacyGlobber);
           ParserInputSource input;
           if (replacementContents == null) {
             Preconditions.checkNotNull(buildFileValue, packageId);
@@ -1320,16 +1248,27 @@ public class PackageFunction implements SkyFunction {
           BuildFileAST ast =
               PackageFactory.parseBuildFile(
                   packageId, input, preludeStatements, astParsingEventHandler);
-          astParseResult = new AstParseResult(ast, astParsingEventHandler);
-          astCache.put(packageId, astParseResult);
+          // If no globs were fetched during preprocessing, then there's no need to reuse the
+          // legacy globber instance during BUILD file evaluation since the performance argument
+          // below does not apply.
+          Set<SkyKey> globDepsRequested = skyframeGlobber.getGlobDepsRequested();
+          LegacyGlobber legacyGlobberToStore = globDepsRequested.isEmpty() ? null : legacyGlobber;
+          astCacheEntry =
+              new CacheEntryWithGlobDeps<>(
+                  new AstAfterPreprocessing(ast, astParsingEventHandler),
+                  globDepsRequested,
+                  legacyGlobberToStore);
+          astCache.put(packageId, astCacheEntry);
         }
+        AstAfterPreprocessing astAfterPreprocessing = astCacheEntry.value;
+        Set<SkyKey> globDepsRequestedDuringPreprocessing = astCacheEntry.globDepKeys;
         SkylarkImportResult importResult;
         try {
           importResult =
               fetchImportsFromBuildFile(
                   buildFilePath,
                   packageId,
-                  astParseResult.ast,
+                  astAfterPreprocessing.ast,
                   env,
                   skylarkImportLookupFunctionForInlining);
         } catch (NoSuchPackageException e) {
@@ -1342,30 +1281,41 @@ public class PackageFunction implements SkyFunction {
           return null;
         }
         astCache.invalidate(packageId);
-        GlobberWithSkyframeGlobDeps globberWithSkyframeGlobDeps =
-            makeGlobber(buildFilePath, packageId, packageRoot, env);
-        Package.Builder pkgBuilder = packageFactory.createPackageFromAst(
+        // If a legacy globber was used to evaluate globs during preprocessing, it's important that
+        // we reuse that globber during BUILD file evaluation for performance, in the case that
+        // globs were fetched lazily during preprocessing. See Preprocessor.Factory#considersGlobs.
+        LegacyGlobber legacyGlobber = astCacheEntry.legacyGlobber != null
+            ? astCacheEntry.legacyGlobber
+            : packageFactory.createLegacyGlobber(
+                buildFilePath.getParentDirectory(), packageId, packageLocator);
+        SkyframeHybridGlobber skyframeGlobber = new SkyframeHybridGlobber(packageId, packageRoot,
+            env, legacyGlobber);
+        Package.Builder pkgBuilder = packageFactory.createPackageFromPreprocessingAst(
             workspaceName,
             packageId,
             buildFilePath,
-            astParseResult,
+            astAfterPreprocessing,
             importResult.importMap,
             importResult.fileDependencies,
             defaultVisibility,
             skylarkSemantics,
-            globberWithSkyframeGlobDeps);
-        builderAndGlobDeps =
-            new BuilderAndGlobDeps(pkgBuilder, globberWithSkyframeGlobDeps.getGlobDepsRequested());
+            skyframeGlobber);
+        Set<SkyKey> globDepsRequested = ImmutableSet.<SkyKey>builder()
+            .addAll(globDepsRequestedDuringPreprocessing)
+            .addAll(skyframeGlobber.getGlobDepsRequested())
+            .build();
+        packageFunctionCacheEntry =
+            new CacheEntryWithGlobDeps<>(pkgBuilder, globDepsRequested, null);
         numPackagesLoaded.incrementAndGet();
         if (packageProgress != null) {
           packageProgress.doneReadPackage(packageId);
         }
-        packageFunctionCache.put(packageId, builderAndGlobDeps);
+        packageFunctionCache.put(packageId, packageFunctionCacheEntry);
       } finally {
         profiler.completeTask(ProfilerTask.CREATE_PACKAGE);
       }
     }
-    return builderAndGlobDeps;
+    return packageFunctionCacheEntry;
   }
 
   private static class InternalInconsistentFilesystemException extends Exception {
