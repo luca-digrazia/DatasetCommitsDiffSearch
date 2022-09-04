@@ -15,10 +15,10 @@ public final class ApplicationInfoBuildItem extends SimpleBuildItem {
     }
 
     public String getName() {
-        return name;
+        return name == null ? UNSET_VALUE : name;
     }
 
     public String getVersion() {
-        return version;
+        return version == null ? UNSET_VALUE : version;
     }
 }
