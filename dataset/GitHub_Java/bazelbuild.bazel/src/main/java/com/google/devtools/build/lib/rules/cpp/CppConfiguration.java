@@ -43,11 +43,12 @@ import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigu
 import com.google.devtools.build.lib.rules.cpp.CrosstoolConfigurationLoader.CrosstoolFile;
 import com.google.devtools.build.lib.rules.cpp.transitions.ContextCollectorOwnerTransition;
 import com.google.devtools.build.lib.rules.cpp.transitions.DisableLipoTransition;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
@@ -61,7 +62,7 @@ import javax.annotation.Nullable;
  * architecture, target architecture, compiler version, and a standard library version. It has
  * information about the tools locations and the flags required for compiling.
  */
-@AutoCodec
+@AutoCodec(dependency = FileSystemProvider.class)
 @SkylarkModule(
   name = "cpp",
   doc = "A configuration fragment for C++.",
@@ -69,7 +70,8 @@ import javax.annotation.Nullable;
 )
 @Immutable
 public final class CppConfiguration extends BuildConfiguration.Fragment {
-  public static final ObjectCodec<CppConfiguration> CODEC = new CppConfiguration_AutoCodec();
+  public static final InjectingObjectCodec<CppConfiguration, FileSystemProvider> CODEC =
+      new CppConfiguration_AutoCodec();
 
   /**
    * String indicating a Mac system, for example when used in a crosstool configuration's host or
@@ -1343,6 +1345,36 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   public ImmutableSet<String> configurationEnabledFeatures(
       RuleContext ruleContext, ImmutableSet<String> disabledFeatures) {
     ImmutableSet.Builder<String> requestedFeatures = ImmutableSet.builder();
+    if (cppOptions.getFdoInstrument() != null) {
+      requestedFeatures.add(CppRuleClasses.FDO_INSTRUMENT);
+    }
+
+    String fdoZip = null;
+    if (fdoProfileAbsolutePath != null) {
+      fdoZip = fdoProfileAbsolutePath.getPathString();
+    } else if (fdoProfileLabel != null) {
+      fdoZip = fdoProfileLabel.getName();
+    }
+    boolean isFdo = fdoZip != null && compilationMode == CompilationMode.OPT;
+    if (isFdo && !CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip)) {
+      requestedFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
+    }
+    if (isFdo && CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip)) {
+      requestedFeatures.add(CppRuleClasses.AUTOFDO);
+      // For LLVM, support implicit enabling of ThinLTO for AFDO unless it has been
+      // explicitly disabled.
+      if (isLLVMCompiler() && !disabledFeatures.contains(CppRuleClasses.THIN_LTO)) {
+        requestedFeatures.add(CppRuleClasses.ENABLE_AFDO_THINLTO);
+      }
+    }
+    if (isLipoOptimizationOrInstrumentation()) {
+      // Map LIPO to ThinLTO for LLVM builds.
+      if (isLLVMCompiler() && cppOptions.getFdoOptimize() != null) {
+        requestedFeatures.add(CppRuleClasses.THIN_LTO);
+      } else {
+        requestedFeatures.add(CppRuleClasses.LIPO);
+      }
+    }
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
       requestedFeatures.add(CppRuleClasses.COVERAGE);
       if (useLLVMCoverageMap) {

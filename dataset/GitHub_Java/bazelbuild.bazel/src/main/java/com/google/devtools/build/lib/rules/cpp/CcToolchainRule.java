@@ -90,15 +90,7 @@ public final class CcToolchainRule implements RuleDefinition {
             attr("objcopy_files", LABEL)
                 .legacyAllowAnyFileType()
                 .cfg(HostTransition.INSTANCE)
-                 .mandatory())
-        .add(
-            attr("as_files", LABEL)
-                .legacyAllowAnyFileType()
-                .cfg(HostTransition.INSTANCE))
-        .add(
-            attr("ar_files", LABEL)
-                .legacyAllowAnyFileType()
-                .cfg(HostTransition.INSTANCE))
+                .mandatory())
         .add(
             attr("linker_files", LABEL)
                 .legacyAllowAnyFileType()
