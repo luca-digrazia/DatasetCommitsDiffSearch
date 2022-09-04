@@ -13,18 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.events.Location;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-/** Syntax node for dictionary comprehension expressions. */
+/**
+ * Syntax node for dictionary comprehension expressions.
+ */
 public final class DictComprehension extends AbstractComprehension {
   private final Expression keyExpression;
   private final Expression valueExpression;
 
-  DictComprehension(List<Clause> clauses, Expression keyExpression, Expression valueExpression) {
+  public DictComprehension(
+      List<Clause> clauses, Expression keyExpression, Expression valueExpression) {
     super(clauses, keyExpression, valueExpression);
     this.keyExpression = keyExpression;
     this.valueExpression = valueExpression;
@@ -49,10 +52,8 @@ public final class DictComprehension extends AbstractComprehension {
   }
 
   @Override
-  protected void printExpressions(Appendable buffer) throws IOException {
-    keyExpression.prettyPrint(buffer);
-    buffer.append(": ");
-    valueExpression.prettyPrint(buffer);
+  String printExpressions() {
+    return String.format("%s: %s", keyExpression, valueExpression);
   }
 
   /** Builder for {@link DictComprehension}. */
@@ -95,7 +96,7 @@ public final class DictComprehension extends AbstractComprehension {
 
     DictOutputCollector(Environment env) {
       // We want to keep the iteration order
-      result = SkylarkDict.of(env);
+      result = SkylarkDict.<Object, Object>of(env);
     }
 
     @Override
@@ -111,7 +112,7 @@ public final class DictComprehension extends AbstractComprehension {
     @Override
     public void evaluateAndCollect(Environment env) throws EvalException, InterruptedException {
       Object key = keyExpression.eval(env);
-      EvalUtils.checkValidDictKey(key, env);
+      EvalUtils.checkValidDictKey(key);
       result.put(key, valueExpression.eval(env), getLocation(), env);
     }
 

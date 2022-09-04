@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.syntax;
 
 /**
- * As syntax node for the not boolean operation.
+ * Syntax node for the not boolean operation.
  */
-public class NotExpression extends Expression {
+public final class NotExpression extends Expression {
 
   private final Expression expression;
 
@@ -24,12 +24,12 @@ public class NotExpression extends Expression {
     this.expression = expression;
   }
 
-  Expression getExpression() {
+  public Expression getExpression() {
     return expression;
   }
 
   @Override
-  Object eval(Environment env) throws EvalException, InterruptedException {
+  Object doEval(Environment env) throws EvalException, InterruptedException {
     return !EvalUtils.toBoolean(expression.eval(env));
   }
 
@@ -44,9 +44,7 @@ public class NotExpression extends Expression {
   }
 
   @Override
-  SkylarkType validate(ValidationEnvironment env) throws EvalException {
-    // Don't need type check here since EvalUtils.toBoolean() converts everything.
+  void validate(ValidationEnvironment env) throws EvalException {
     expression.validate(env);
-    return SkylarkType.BOOL;
   }
 }

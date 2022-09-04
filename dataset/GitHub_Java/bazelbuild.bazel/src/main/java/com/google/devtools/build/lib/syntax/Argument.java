@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.events.Location;
-import java.io.IOException;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.List;
+
 import javax.annotation.Nullable;
 
 /**
@@ -54,27 +54,15 @@ public abstract class Argument extends ASTNode {
     public boolean isPositional() {
       return false;
     }
-
     public boolean isKeyword() {
       return false;
     }
-
-    /** @deprecated Prefer {@link #getIdentifier()} instead. */
-    @Deprecated
-    @Nullable
-    public String getName() { // only for keyword arguments
+    @Nullable public String getName() { // only for keyword arguments
       return null;
     }
-
-    @Nullable
-    public Identifier getIdentifier() {
-      return null;
-    }
-
     public Expression getValue() {
       return value;
     }
-
     @Override
     public void accept(SyntaxTreeVisitor visitor) {
       visitor.visit(this);
@@ -88,47 +76,34 @@ public abstract class Argument extends ASTNode {
       super(value);
     }
 
-    @Override
-    public boolean isPositional() {
+    @Override public boolean isPositional() {
       return true;
     }
-
     @Override
-    public void prettyPrint(Appendable buffer) throws IOException {
-      value.prettyPrint(buffer);
+    public String toString() {
+      return String.valueOf(value);
     }
   }
 
   /** keyword argument: K = Expression */
   public static final class Keyword extends Passed {
 
-    final Identifier identifier;
+    final String name;
 
-    public Keyword(Identifier identifier, Expression value) {
+    public Keyword(String name, Expression value) {
       super(value);
-      this.identifier = identifier;
+      this.name = name;
     }
 
-    @Override
-    public String getName() {
-      return identifier.getName();
+    @Override public String getName() {
+      return name;
     }
-
-    @Override
-    public Identifier getIdentifier() {
-      return identifier;
-    }
-
-    @Override
-    public boolean isKeyword() {
+    @Override public boolean isKeyword() {
       return true;
     }
-
     @Override
-    public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append(identifier.getName());
-      buffer.append(" = ");
-      value.prettyPrint(buffer);
+    public String toString() {
+      return name + " = " + value;
     }
   }
 
@@ -139,15 +114,12 @@ public abstract class Argument extends ASTNode {
       super(value);
     }
 
-    @Override
-    public boolean isStar() {
+    @Override public boolean isStar() {
       return true;
     }
-
     @Override
-    public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append('*');
-      value.prettyPrint(buffer);
+    public String toString() {
+      return "*" + value;
     }
   }
 
@@ -158,30 +130,20 @@ public abstract class Argument extends ASTNode {
       super(value);
     }
 
-    @Override
-    public boolean isStarStar() {
+    @Override public boolean isStarStar() {
       return true;
     }
-
     @Override
-    public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append("**");
-      value.prettyPrint(buffer);
+    public String toString() {
+      return "**" + value;
     }
   }
 
   /** Some arguments failed to satisfy python call convention strictures */
-  static class ArgumentException extends Exception {
-    Location location;
-
+  protected static class ArgumentException extends Exception {
     /** construct an ArgumentException from a message only */
-    ArgumentException(Location location, String message) {
+    public ArgumentException(String message) {
       super(message);
-      this.location = location;
-    }
-
-    Location getLocation() {
-      return location;
     }
   }
 
@@ -197,20 +159,19 @@ public abstract class Argument extends ASTNode {
     boolean hasKwArg = false;
     for (Passed arg : arguments) {
       if (hasKwArg) {
-        throw new ArgumentException(arg.getLocation(), "argument after **kwargs");
+        throw new ArgumentException("argument after **kwargs");
       }
       if (arg.isPositional()) {
         if (hasNamed) {
-          throw new ArgumentException(arg.getLocation(), "non-keyword arg after keyword arg");
+          throw new ArgumentException("non-keyword arg after keyword arg");
         } else if (arg.isStar()) {
-          throw new ArgumentException(
-              arg.getLocation(), "only named arguments may follow *expression");
+          throw new ArgumentException("only named arguments may follow *expression");
         }
       } else if (arg.isKeyword()) {
         hasNamed = true;
       } else if (arg.isStar()) {
         if (hasStar) {
-          throw new ArgumentException(arg.getLocation(), "more than one *stararg");
+          throw new ArgumentException("more than one *stararg");
         }
         hasStar = true;
       } else {
@@ -218,12 +179,4 @@ public abstract class Argument extends ASTNode {
       }
     }
   }
-
-  @Override
-  public final void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    prettyPrint(buffer);
-  }
-
-  @Override
-  public abstract void prettyPrint(Appendable buffer) throws IOException;
 }

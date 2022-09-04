@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,7 +47,7 @@ public abstract class AbstractComprehension extends Expression {
   public interface Clause extends Serializable {
 
     /** Enum for distinguishing clause types. */
-    enum Kind {
+    public enum Kind {
       FOR,
       IF
     }
@@ -59,7 +58,7 @@ public abstract class AbstractComprehension extends Expression {
      * <p>This avoids having to rely on reflection, or on checking whether {@link #getLValue} is
      * null.
      */
-    Kind getKind();
+    public abstract Kind getKind();
 
     /**
      * The evaluation of the comprehension is based on recursion. Each clause may
@@ -73,96 +72,78 @@ public abstract class AbstractComprehension extends Expression {
      * @param collector the aggregated results of the comprehension.
      * @param step the index of the next clause to evaluate.
      */
-    void eval(Environment env, OutputCollector collector, int step)
+    abstract void eval(Environment env, OutputCollector collector, int step)
         throws EvalException, InterruptedException;
 
-    void validate(ValidationEnvironment env, Location loc) throws EvalException;
+    abstract void validate(ValidationEnvironment env, Location loc) throws EvalException;
 
     /**
      * The LValue defined in Clause, i.e. the loop variables for ForClause and null for
      * IfClause. This is needed for SyntaxTreeVisitor.
      */
     @Nullable  // for the IfClause
-    LValue getLValue();
+    public abstract LValue getLValue();
 
     /**
      * The Expression defined in Clause, i.e. the collection for ForClause and the
      * condition for IfClause. This is needed for SyntaxTreeVisitor.
      */
-    Expression getExpression();
-
-    /** Pretty print to a buffer. */
-    void prettyPrint(Appendable buffer) throws IOException;
+    public abstract Expression getExpression();
   }
 
   /**
    * A for clause in a comprehension, e.g. "for a in b" in the example above.
    */
   public static final class ForClause implements Clause {
-    private final LValue lvalue;
-    private final Expression iterable;
+    private final LValue variables;
+    private final Expression list;
 
     @Override
     public Kind getKind() {
       return Kind.FOR;
     }
 
-    public ForClause(LValue lvalue, Expression iterable) {
-      this.lvalue = lvalue;
-      this.iterable = iterable;
+    public ForClause(LValue variables, Expression list) {
+      this.variables = variables;
+      this.list = list;
     }
 
     @Override
     public void eval(Environment env, OutputCollector collector, int step)
         throws EvalException, InterruptedException {
-      Object iterableObject = iterable.eval(env);
+      Object listValueObject = list.eval(env);
       Location loc = collector.getLocation();
-      Iterable<?> listValue = EvalUtils.toIterable(iterableObject, loc, env);
-      EvalUtils.lock(iterableObject, loc);
+      Iterable<?> listValue = EvalUtils.toIterable(listValueObject, loc);
+      EvalUtils.lock(listValueObject, loc);
       try {
         for (Object listElement : listValue) {
-          lvalue.assign(listElement, env, loc);
+          variables.assign(env, loc, listElement);
           evalStep(env, collector, step);
         }
       } finally {
-        EvalUtils.unlock(iterableObject, loc);
+        EvalUtils.unlock(listValueObject, loc);
       }
     }
 
     @Override
     public void validate(ValidationEnvironment env, Location loc) throws EvalException {
-      lvalue.validate(env, loc);
-      iterable.validate(env);
+      variables.validate(env, loc);
+      list.validate(env);
     }
 
     @Override
     public LValue getLValue() {
-      return lvalue;
+      return variables;
     }
 
     @Override
     public Expression getExpression() {
-      return iterable;
-    }
-
-    @Override
-    public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append("for ");
-      lvalue.prettyPrint(buffer);
-      buffer.append(" in ");
-      iterable.prettyPrint(buffer);
+      return list;
     }
 
     @Override
     public String toString() {
-      StringBuilder builder = new StringBuilder();
-      try {
-        prettyPrint(builder);
-      } catch (IOException e) {
-        // Not possible for StringBuilder.
-        throw new AssertionError(e);
-      }
-      return builder.toString();
+      return Printer.format("for %s in %r", variables.toString(), list);
     }
   }
 
@@ -205,21 +186,8 @@ public abstract class AbstractComprehension extends Expression {
     }
 
     @Override
-    public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append("if ");
-      condition.prettyPrint(buffer);
-    }
-
-    @Override
     public String toString() {
-      StringBuilder builder = new StringBuilder();
-      try {
-        prettyPrint(builder);
-      } catch (IOException e) {
-        // Not possible for StringBuilder.
-        throw new AssertionError(e);
-      }
-      return builder.toString();
+      return String.format("if %s", condition);
     }
   }
 
@@ -245,23 +213,23 @@ public abstract class AbstractComprehension extends Expression {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    buffer.append(openingBracket());
-    printExpressions(buffer);
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append(openingBracket()).append(printExpressions());
     for (Clause clause : clauses) {
-      buffer.append(' ');
-      clause.prettyPrint(buffer);
+      sb.append(' ').append(clause);
     }
-    buffer.append(closingBracket());
+    sb.append(closingBracket());
+    return sb.toString();
   }
 
   /** Base class for comprehension builders. */
   public abstract static class AbstractBuilder {
 
-    protected final List<Clause> clauses = new ArrayList<>();
+    protected List<Clause> clauses = new ArrayList<>();
 
-    public void addFor(LValue lvalue, Expression iterable) {
-      Clause forClause = new ForClause(lvalue, iterable);
+    public void addFor(Expression loopVar, Expression listExpression) {
+      Clause forClause = new ForClause(new LValue(loopVar), listExpression);
       clauses.add(forClause);
     }
 
@@ -285,40 +253,14 @@ public abstract class AbstractComprehension extends Expression {
   Object doEval(Environment env) throws EvalException, InterruptedException {
     OutputCollector collector = createCollector(env);
     evalStep(env, collector, 0);
-    Object result = collector.getResult(env);
-
-    if (!env.getSemantics().incompatibleComprehensionVariablesDoNotLeak) {
-      return result;
-    }
-
-    // Undefine loop variables (remove them from the environment).
-    // This code is useful for the transition, to make sure no one relies on the old behavior
-    // (where loop variables were leaking).
-    // TODO(laurentlb): Instead of removing variables, we should create them in a nested scope.
-    for (Clause clause : clauses) {
-      // Check if a loop variable conflicts with another local variable.
-      LValue lvalue = clause.getLValue();
-      if (lvalue != null) {
-        for (String name : lvalue.boundNames()) {
-          env.removeLocalBinding(name);
-        }
-      }
-    }
-    return result;
+    return collector.getResult(env);
   }
 
   @Override
-  void validate(ValidationEnvironment parentEnv) throws EvalException {
-    // Create a new scope so that loop variables do not leak outside the comprehension.
-    ValidationEnvironment env =
-        parentEnv.getSemantics().incompatibleComprehensionVariablesDoNotLeak
-            ? new ValidationEnvironment(parentEnv)
-            : parentEnv;
-
+  void validate(ValidationEnvironment env) throws EvalException {
     for (Clause clause : clauses) {
       clause.validate(env, getLocation());
     }
-
     // Clauses have to be validated before expressions in order to introduce the variable names.
     for (Expression expr : outputExpressions) {
       expr.validate(env);
@@ -344,8 +286,10 @@ public abstract class AbstractComprehension extends Expression {
     }
   }
 
-  /** Pretty-prints the output expression(s). */
-  protected abstract void printExpressions(Appendable buffer) throws IOException;
+  /**
+   * Returns a {@link String} representation of the output expression(s).
+   */
+  abstract String printExpressions();
 
   abstract OutputCollector createCollector(Environment env);
 

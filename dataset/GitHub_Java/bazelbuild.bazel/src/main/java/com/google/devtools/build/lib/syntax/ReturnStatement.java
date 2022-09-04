@@ -56,7 +56,7 @@ public final class ReturnStatement extends Statement {
     throw new ReturnException(returnExpression.getLocation(), returnExpression.eval(env));
   }
 
-  public Expression getReturnExpression() {
+  Expression getReturnExpression() {
     return returnExpression;
   }
 

@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
-import java.io.IOException;
 import java.util.List;
 
 /**
@@ -43,10 +42,12 @@ public final class DictionaryLiteral extends Expression {
     }
 
     @Override
-    public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-      key.prettyPrint(buffer);
-      buffer.append(": ");
-      value.prettyPrint(buffer);
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append(key);
+      sb.append(": ");
+      sb.append(value);
+      return sb.toString();
     }
 
     @Override
@@ -63,35 +64,36 @@ public final class DictionaryLiteral extends Expression {
 
   /** A new literal for an empty dictionary, onto which a new location can be specified */
   public static DictionaryLiteral emptyDict() {
-    return new DictionaryLiteral(ImmutableList.of());
+    return new DictionaryLiteral(ImmutableList.<DictionaryEntryLiteral>of());
   }
 
   @Override
   Object doEval(Environment env) throws EvalException, InterruptedException {
-    SkylarkDict<Object, Object> dict = SkylarkDict.of(env);
+    SkylarkDict<Object, Object> dict = SkylarkDict.<Object, Object>of(env);
     Location loc = getLocation();
     for (DictionaryEntryLiteral entry : entries) {
+      if (entry == null) {
+        throw new EvalException(loc, "null expression in " + this);
+      }
       Object key = entry.key.eval(env);
       Object val = entry.value.eval(env);
-      if (env.getSemantics().incompatibleDictLiteralHasNoDuplicates && dict.containsKey(key)) {
-        throw new EvalException(
-            loc, "Duplicated key " + Printer.repr(key) + " when creating dictionary");
-      }
       dict.put(key, val, loc, env);
     }
     return dict;
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    buffer.append("{");
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{");
     String sep = "";
     for (DictionaryEntryLiteral e : entries) {
-      buffer.append(sep);
-      e.prettyPrint(buffer);
+      sb.append(sep);
+      sb.append(e);
       sep = ", ";
     }
-    buffer.append("}");
+    sb.append("}");
+    return sb.toString();
   }
 
   @Override
@@ -101,5 +103,13 @@ public final class DictionaryLiteral extends Expression {
 
   public ImmutableList<DictionaryEntryLiteral> getEntries() {
     return entries;
+  }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    for (DictionaryEntryLiteral entry : entries) {
+      entry.key.validate(env);
+      entry.value.validate(env);
+    }
   }
 }

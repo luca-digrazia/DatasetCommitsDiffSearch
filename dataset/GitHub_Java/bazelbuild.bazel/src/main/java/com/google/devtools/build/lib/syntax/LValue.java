@@ -17,30 +17,17 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.util.Preconditions;
-import java.io.IOException;
 import java.util.Collection;
 
 /**
- * A term that can appear on the left-hand side of an assignment statement, for loop, comprehension
- * clause, etc. E.g.,
- * <ul>
- *   <li>{@code lvalue = 2}
- *   <li>{@code [for lvalue in exp]}
- *   <li>{@code for lvalue in exp: pass}
- * </ul>
- *
- * <p>An {@code LValue}'s expression must have one of the following forms:
- * <ul>
- *   <li>(Variable assignment) an {@link Identifier};
- *   <li>(Sequence assignment) a {@link ListLiteral} (either list or tuple) of expressions that can
- *       themselves appear in an {@code LValue}; or
- *   <li>(List or dictionary item assignment) an {@link IndexExpression}.
- * </ul>
- * In particular and unlike Python, slice expressions, dot expressions, and starred expressions
- * cannot appear in LValues.
+ * Class representing an LValue.
+ * It appears in assignment, for loop and comprehensions, e.g.
+ *    lvalue = 2
+ *    [for lvalue in exp]
+ *    for lvalue in exp: pass
+ * An LValue can be a simple variable or something more complex like a tuple.
  */
-public final class LValue extends ASTNode {
-
+public class LValue extends ASTNode {
   private final Expression expr;
 
   public LValue(Expression expr) {
@@ -128,14 +115,11 @@ public final class LValue extends ASTNode {
 
     if (lhs instanceof ListLiteral) {
       ListLiteral variables = (ListLiteral) lhs;
-      Collection<?> rvalue = EvalUtils.toCollection(result, loc, env);
+      Collection<?> rvalue = EvalUtils.toCollection(result, loc);
       int len = variables.getElements().size();
       if (len != rvalue.size()) {
         throw new EvalException(loc, String.format(
             "lvalue has length %d, but rvalue has has length %d", len, rvalue.size()));
-      }
-      if (len == 0) {
-        throw new EvalException(loc, "invalid lvalue, expected at least one item");
       }
       int i = 0;
       for (Object o : rvalue) {
@@ -227,7 +211,7 @@ public final class LValue extends ASTNode {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    expr.prettyPrint(buffer);
+  public String toString() {
+    return expr.toString();
   }
 }
