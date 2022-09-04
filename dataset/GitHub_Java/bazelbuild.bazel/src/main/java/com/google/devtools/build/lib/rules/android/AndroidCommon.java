@@ -59,6 +59,7 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
+import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -626,14 +627,10 @@ public class AndroidCommon {
 
     nativeHeaderOutput = helper.createNativeHeaderJar(classJar);
 
-    outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
-    helper.createCompileAction(
-        classJar,
-        manifestProtoOutput,
-        outputDepsProto,
-        genSourceJar,
-        genClassJar,
-        nativeHeaderOutput);
+    JavaCompileAction javaCompileAction =
+        helper.createCompileAction(
+            classJar, manifestProtoOutput, genSourceJar, genClassJar, nativeHeaderOutput);
+    outputDepsProto = javaCompileAction.getOutputDepsProto();
 
     if (generateExtensionRegistry) {
       generatedExtensionRegistryProvider =
