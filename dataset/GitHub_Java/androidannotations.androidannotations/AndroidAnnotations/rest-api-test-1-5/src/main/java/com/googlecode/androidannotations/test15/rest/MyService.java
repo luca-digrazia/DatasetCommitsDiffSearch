@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -33,53 +33,47 @@ import com.googlecode.androidannotations.annotations.rest.Put;
 import com.googlecode.androidannotations.annotations.rest.Rest;
 import com.googlecode.androidannotations.api.rest.MediaType;
 
-@Rest("http://company.com/ajax/services")
-// if defined, the url will be added as a prefix to every request
+@Rest("http://company.com/ajax/services") // if defined, the url will be added as a prefix to every request
 public interface MyService {
 
-	// url variables are mapped to method parameter names.
-	@Get("/events/{year}/{location}")
-	@Accept(MediaType.APPLICATION_JSON)
-	EventList getEvents(String location, int year);
+  // url variables are mapped to method parameter names. 
+  @Get("/events/{year}/{location}")
+  @Accept(MediaType.APPLICATION_JSON)
+  EventList getEvents(String location, int year);
 
-	// The response can be a ResponseEntity<T>
-	@Get("/events/{year}/{location}")
-	/*
-	 * You may (or may not) declare throwing RestClientException (as a reminder,
-	 * since it's a RuntimeException), but nothing else.
-	 */
-	ResponseEntity<EventList> getEvents2(String location, int year) throws RestClientException;
+  // The response can be a ResponseEntity<T>
+  @Get("/events/{year}/{location}")
+  ResponseEntity<EventList> getEvents2(String location, int year) throws RestClientException; // You may (or may not) declare throwing RestClientException (as a reminder, since it's a RuntimeException), but nothing else.
+  
+  // There should be max 1 parameter that is not mapped to an attribute. This parameter will be used as the post entity.
+  @Post("/events/")
+  @Accept(MediaType.APPLICATION_JSON)
+  Event addEvent(Event event);  
+  
+  @Post("/events/{year}/")
+  Event addEvent(Event event, int year);
+  
+  @Post("/events/")
+  ResponseEntity<Event> addEvent2(Event event);  
+  
+  @Post("/events/{year}/")
+  @Accept(MediaType.APPLICATION_JSON)
+  ResponseEntity<Event> addEvent2(Event event, int year);
 
-	// There should be max 1 parameter that is not mapped to an attribute. This
-	// parameter will be used as the post entity.
-	@Post("/events/")
-	@Accept(MediaType.APPLICATION_JSON)
-	Event addEvent(Event event);
+  @Put("/events/{id}")
+  void updateEvent(Event event, int id);
 
-	@Post("/events/{year}/")
-	Event addEvent(Event event, int year);
+  // url variables are mapped to method parameter names. 
+  @Delete("/events/{id}")
+  void removeEvent(long id);
+  
+  @Head("/events/{year}/{location}")
+  HttpHeaders getEventHeaders(String location, int year);
 
-	@Post("/events/")
-	ResponseEntity<Event> addEvent2(Event event);
+  @Options("/events/{year}/{location}")
+  Set<HttpMethod> getEventOptions(String location, int year);
 
-	@Post("/events/{year}/")
-	@Accept(MediaType.APPLICATION_JSON)
-	ResponseEntity<Event> addEvent2(Event event, int year);
+  // if you need to add some configuration to the Spring RestTemplate.
+  RestTemplate getRestTemplate();
 
-	@Put("/events/{id}")
-	void updateEvent(Event event, int id);
-
-	// url variables are mapped to method parameter names.
-	@Delete("/events/{id}")
-	void removeEvent(long id);
-
-	@Head("/events/{year}/{location}")
-	HttpHeaders getEventHeaders(String location, int year);
-
-	@Options("/events/{year}/{location}")
-	Set<HttpMethod> getEventOptions(String location, int year);
-
-	// if you need to add some configuration to the Spring RestTemplate.
-	RestTemplate getRestTemplate();
-	
 }

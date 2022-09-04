@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -48,22 +48,26 @@ public class AcceptValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
+//		 validatorHelper.notAlreadyValidated(element, validatedElements, valid);
+
 		// Interface annotated
 		if (element instanceof TypeElement) {
 
 			validatorHelper.elementHasRestAnnotation(element, validatedElements, valid);
-
-			// Method Annotated
+			
+		// Method Annotated
 		} else {
 			ExecutableElement executableElement = (ExecutableElement) element;
 
 			validatorHelper.enclosingElementHasRestAnnotation(executableElement, validatedElements, valid);
-
+			
 			validatorHelper.elementHasGetOrPostAnnotation(executableElement, validatedElements, valid);
-
+			
 			validatorHelper.throwsOnlyRestClientException(executableElement, valid);
 
 		}
+
+		// TODO Check if has JSON Parser API (Jackson, GSon ...)
 
 		return valid.isValid();
 	}

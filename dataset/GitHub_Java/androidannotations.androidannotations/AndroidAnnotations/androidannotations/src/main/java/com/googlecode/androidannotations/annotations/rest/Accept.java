@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,8 +20,10 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import com.googlecode.androidannotations.api.rest.MediaType;
+
 @Retention(RetentionPolicy.SOURCE)
-@Target({ ElementType.METHOD, ElementType.TYPE })
+@Target({ElementType.METHOD ,ElementType.TYPE})
 public @interface Accept {
-	String value();
+	MediaType value();
 }
