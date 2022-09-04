@@ -788,7 +788,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           ((Attribute.SplitTransition<BuildOptions>) transition).split(fromOptions);
       if (toOptions.isEmpty()) {
         // When the split returns an empty list, it's signaling it doesn't apply to this instance.
-        // So return the original options.
+        // Check that it's safe to skip the transition and return the original options.
+        Verify.verify(transition.defaultsToSelf());
         result = ImmutableList.<BuildOptions>of(fromOptions);
       } else {
         result = toOptions;

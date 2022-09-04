@@ -1056,12 +1056,9 @@ public class BuildView {
       throws EvalException, InvalidConfigurationException,
       InterruptedException, InconsistentAspectOrderException {
     return skyframeExecutor.getConfiguredTargets(
-        eventHandler,
-        ct.getConfiguration(),
+        eventHandler, ct.getConfiguration(),
         ImmutableSet.copyOf(
-            getDirectPrerequisiteDependenciesForTesting(
-                    eventHandler, ct, configurations, /*toolchainContext=*/ null)
-                .values()),
+            getDirectPrerequisiteDependenciesForTesting(eventHandler, ct, configurations).values()),
         false);
   }
 
@@ -1069,10 +1066,9 @@ public class BuildView {
   public OrderedSetMultimap<Attribute, Dependency> getDirectPrerequisiteDependenciesForTesting(
       final ExtendedEventHandler eventHandler,
       final ConfiguredTarget ct,
-      BuildConfigurationCollection configurations,
-      ToolchainContext toolchainContext)
+      BuildConfigurationCollection configurations)
       throws EvalException, InvalidConfigurationException, InterruptedException,
-          InconsistentAspectOrderException {
+             InconsistentAspectOrderException {
     if (!(ct.getTarget() instanceof Rule)) {
       return OrderedSetMultimap.create();
     }
@@ -1132,11 +1128,8 @@ public class BuildView {
     TargetAndConfiguration ctgNode =
         new TargetAndConfiguration(ct.getTarget(), ct.getConfiguration());
     return dependencyResolver.dependentNodeMap(
-        ctgNode,
-        configurations.getHostConfiguration(),
-        /*aspect=*/ null,
-        getConfigurableAttributeKeysForTesting(eventHandler, ctgNode),
-        toolchainContext);
+        ctgNode, configurations.getHostConfiguration(), /*aspect=*/ null,
+        getConfigurableAttributeKeysForTesting(eventHandler, ctgNode));
   }
 
   /**
@@ -1167,13 +1160,11 @@ public class BuildView {
   private OrderedSetMultimap<Attribute, ConfiguredTarget> getPrerequisiteMapForTesting(
       final ExtendedEventHandler eventHandler,
       ConfiguredTarget target,
-      BuildConfigurationCollection configurations,
-      ToolchainContext toolchainContext)
-      throws EvalException, InvalidConfigurationException, InterruptedException,
-          InconsistentAspectOrderException {
+      BuildConfigurationCollection configurations)
+      throws EvalException, InvalidConfigurationException,
+             InterruptedException, InconsistentAspectOrderException {
     OrderedSetMultimap<Attribute, Dependency> depNodeNames =
-        getDirectPrerequisiteDependenciesForTesting(
-            eventHandler, target, configurations, toolchainContext);
+        getDirectPrerequisiteDependenciesForTesting(eventHandler, target, configurations);
 
     ImmutableMultimap<Dependency, ConfiguredTarget> cts = skyframeExecutor.getConfiguredTargetMap(
         eventHandler,
@@ -1267,9 +1258,6 @@ public class BuildView {
     ToolchainContext toolchainContext =
         skyframeExecutor.getToolchainContextForTesting(
             requiredToolchains, targetConfig, eventHandler);
-    OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap =
-        getPrerequisiteMapForTesting(eventHandler, target, configurations, toolchainContext);
-    toolchainContext.resolveToolchains(prerequisiteMap);
 
     return new RuleContext.Builder(
             env,
@@ -1282,8 +1270,7 @@ public class BuildView {
         .setVisibility(
             NestedSetBuilder.<PackageSpecification>create(
                 Order.STABLE_ORDER, PackageSpecification.everything()))
-        .setPrerequisites(
-            getPrerequisiteMapForTesting(eventHandler, target, configurations, toolchainContext))
+        .setPrerequisites(getPrerequisiteMapForTesting(eventHandler, target, configurations))
         .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
         .setUniversalFragment(ruleClassProvider.getUniversalFragment())
         .setToolchainContext(toolchainContext)
@@ -1303,9 +1290,7 @@ public class BuildView {
       throws EvalException, InvalidConfigurationException, InterruptedException,
              InconsistentAspectOrderException {
     Collection<ConfiguredTarget> configuredTargets =
-        getPrerequisiteMapForTesting(
-                eventHandler, dependentTarget, configurations, /*toolchainContext=*/ null)
-            .values();
+        getPrerequisiteMapForTesting(eventHandler, dependentTarget, configurations).values();
     for (ConfiguredTarget ct : configuredTargets) {
       if (ct.getLabel().equals(desiredTarget)) {
         return ct;

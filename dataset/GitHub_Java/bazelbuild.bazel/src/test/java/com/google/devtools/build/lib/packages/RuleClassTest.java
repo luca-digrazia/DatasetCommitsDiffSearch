@@ -1037,6 +1037,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
 
     assertThat(ruleClass.getRequiredToolchains())
         .containsExactly(
-            Label.parseAbsolute("//toolchain:tc1"), Label.parseAbsolute("//toolchain:tc2"));
+            Label.parseAbsolute("//toolchain:tc1"), Label.parseAbsolute("//toolchain:tc2"))
+        .inOrder();
   }
 }

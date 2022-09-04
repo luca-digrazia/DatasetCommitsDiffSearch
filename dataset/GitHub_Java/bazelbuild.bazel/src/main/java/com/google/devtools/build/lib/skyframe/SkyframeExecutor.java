@@ -837,7 +837,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Set<Label> requiredToolchains, BuildConfiguration config, ExtendedEventHandler eventHandler)
       throws ToolchainContextException, InterruptedException {
     SkyFunctionEnvironmentForTesting env =
-        new SkyFunctionEnvironmentForTesting(buildDriver, eventHandler, this);
+        new SkyFunctionEnvironmentForTesting(buildDriver, eventHandler);
     return ToolchainUtil.createToolchainContext(env, "", requiredToolchains, config);
   }
 
@@ -1075,8 +1075,19 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       boolean keepGoing)
       throws InvalidConfigurationException, InterruptedException {
     setConfigurationFragmentFactories(configurationFragmentFactories);
+    return createDynamicConfigurations(eventHandler, buildOptions, multiCpu);
+  }
+
+  /**
+   * {@link #createConfigurations} implementation that creates the configurations dynamically.
+   */
+  private BuildConfigurationCollection createDynamicConfigurations(
+      ExtendedEventHandler eventHandler,
+      BuildOptions buildOptions,
+      Set<String> multiCpu)
+      throws InvalidConfigurationException, InterruptedException {
     List<BuildConfiguration> topLevelTargetConfigs =
-        getConfigurations(eventHandler, getTopLevelBuildOptions(buildOptions, multiCpu), keepGoing);
+        getConfigurations(eventHandler, getTopLevelBuildOptions(buildOptions, multiCpu));
 
     // The host configuration inherits the data, not target options. This is so host tools don't
     // apply LIPO.
@@ -1093,7 +1104,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         dataOptions.get(BuildConfiguration.Options.class).useDistinctHostConfiguration
             ? HostTransition.INSTANCE.apply(dataOptions)
             : dataOptions;
-    BuildConfiguration hostConfig = getConfiguration(eventHandler, hostOptions, keepGoing);
+    BuildConfiguration hostConfig = getConfiguration(eventHandler, hostOptions);
 
     // TODO(gregce): cache invalid option errors in BuildConfigurationFunction, then use a dedicated
     // accessor (i.e. not the event handler) to trigger the exception below.
@@ -1354,9 +1365,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * @throws InvalidConfigurationException if the build options produces an invalid configuration
    */
   public BuildConfiguration getConfiguration(ExtendedEventHandler eventHandler,
-      BuildOptions options, boolean keepGoing) throws InvalidConfigurationException {
+      BuildOptions options) throws InvalidConfigurationException {
     return Iterables.getOnlyElement(
-        getConfigurations(eventHandler, ImmutableList.of(options), keepGoing));
+        getConfigurations(eventHandler, ImmutableList.<BuildOptions>of(options)));
   }
 
   /**
@@ -1366,7 +1377,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * @throws InvalidConfigurationException if any build options produces an invalid configuration
    */
   public List<BuildConfiguration> getConfigurations(ExtendedEventHandler eventHandler,
-      List<BuildOptions> optionsList, boolean keepGoing) throws InvalidConfigurationException {
+      List<BuildOptions> optionsList) throws InvalidConfigurationException {
     Preconditions.checkArgument(!Iterables.isEmpty(optionsList));
 
     // Prepare the Skyframe inputs.
@@ -1384,7 +1395,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     // Skyframe-evaluate the configurations and throw errors if any.
     EvaluationResult<SkyValue> evalResult =
-        evaluateSkyKeys(eventHandler, configSkyKeys, keepGoing);
+        evaluateSkyKeys(eventHandler, configSkyKeys, /*keepGoing=*/true);
     if (evalResult.hasError()) {
       Map.Entry<SkyKey, ErrorInfo> firstError = Iterables.get(evalResult.errorMap().entrySet(), 0);
       ErrorInfo error = firstError.getValue();
@@ -1523,7 +1534,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * Evaluates the given sky keys, blocks, and returns their evaluation results. Enables/disables
    * "keep going" on evaluation errors as specified.
    */
-  EvaluationResult<SkyValue> evaluateSkyKeys(
+  private EvaluationResult<SkyValue> evaluateSkyKeys(
       final ExtendedEventHandler eventHandler,
       final Iterable<SkyKey> skyKeys,
       final boolean keepGoing) {

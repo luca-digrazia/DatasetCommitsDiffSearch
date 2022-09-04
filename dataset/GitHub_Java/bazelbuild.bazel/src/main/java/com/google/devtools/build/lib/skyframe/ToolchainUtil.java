@@ -82,32 +82,6 @@ public class ToolchainUtil {
     }
   }
 
-  /**
-   * Returns the {@link PlatformInfo} provider from the {@link ConfiguredTarget} in the {@link
-   * ValueOrException}, or {@code null} if the {@link ConfiguredTarget} is not present. If the
-   * {@link ConfiguredTarget} does not have a {@link PlatformInfo} provider, a {@link
-   * InvalidPlatformException} is thrown, wrapped in a {@link ToolchainContextException}.
-   */
-  @Nullable
-  private static PlatformInfo findPlatformInfo(
-      ValueOrException<ConfiguredValueCreationException> valueOrException, String platformType)
-      throws ConfiguredValueCreationException, ToolchainContextException {
-
-    ConfiguredTargetValue ctv = (ConfiguredTargetValue) valueOrException.get();
-    if (ctv == null) {
-      return null;
-    }
-
-    ConfiguredTarget configuredTarget = ctv.getConfiguredTarget();
-    PlatformInfo platformInfo = PlatformProviderUtils.platform(configuredTarget);
-    if (platformInfo == null) {
-      throw new ToolchainContextException(
-          new InvalidPlatformException(platformType, configuredTarget));
-    }
-
-    return platformInfo;
-  }
-
   @Nullable
   private static PlatformDescriptors loadPlatformDescriptors(
       Environment env, BuildConfiguration configuration)
@@ -130,15 +104,24 @@ public class ToolchainUtil {
         env.getValuesOrThrow(
             ImmutableList.of(executionPlatformKey, targetPlatformKey),
             ConfiguredValueCreationException.class);
-    boolean valuesMissing = env.valuesMissing();
+    if (env.valuesMissing()) {
+      return null;
+    }
     try {
-      PlatformInfo execPlatform =
-          findPlatformInfo(values.get(executionPlatformKey), "execution platform");
-      PlatformInfo targetPlatform =
-          findPlatformInfo(values.get(targetPlatformKey), "target platform");
+      ConfiguredTarget executionPlatformTarget =
+          ((ConfiguredTargetValue) values.get(executionPlatformKey).get()).getConfiguredTarget();
+      ConfiguredTarget targetPlatformTarget =
+          ((ConfiguredTargetValue) values.get(targetPlatformKey).get()).getConfiguredTarget();
+      PlatformInfo execPlatform = PlatformProviderUtils.platform(executionPlatformTarget);
+      PlatformInfo targetPlatform = PlatformProviderUtils.platform(targetPlatformTarget);
 
-      if (valuesMissing) {
-        return null;
+      if (execPlatform == null) {
+        throw new ToolchainContextException(
+            new InvalidPlatformException("execution platform", executionPlatformTarget));
+      }
+      if (targetPlatform == null) {
+        throw new ToolchainContextException(
+            new InvalidPlatformException("target platform", targetPlatformTarget));
       }
 
       return PlatformDescriptors.create(execPlatform, targetPlatform);
@@ -183,7 +166,9 @@ public class ToolchainUtil {
                 ConfiguredValueCreationException.class,
                 InvalidToolchainLabelException.class,
                 EvalException.class);
-    boolean valuesMissing = false;
+    if (env.valuesMissing()) {
+      return null;
+    }
 
     // Load the toolchains.
     ImmutableBiMap.Builder<Label, Label> builder = new ImmutableBiMap.Builder<>();
@@ -197,17 +182,8 @@ public class ToolchainUtil {
       try {
         Label requiredToolchainType =
             ((ToolchainResolutionKey) entry.getKey().argument()).toolchainType();
-        ValueOrException4<
-                NoToolchainFoundException, ConfiguredValueCreationException,
-                InvalidToolchainLabelException, EvalException>
-            valueOrException = entry.getValue();
-        if (valueOrException.get() == null) {
-          valuesMissing = true;
-        } else {
-          Label toolchainLabel =
-              ((ToolchainResolutionValue) valueOrException.get()).toolchainLabel();
-          builder.put(requiredToolchainType, toolchainLabel);
-        }
+        Label toolchainLabel = ((ToolchainResolutionValue) entry.getValue().get()).toolchainLabel();
+        builder.put(requiredToolchainType, toolchainLabel);
       } catch (NoToolchainFoundException e) {
         // Save the missing type and continue looping to check for more.
         missingToolchains.add(e.missingToolchainType());
@@ -218,10 +194,6 @@ public class ToolchainUtil {
       } catch (EvalException e) {
         throw new ToolchainContextException(e);
       }
-    }
-
-    if (valuesMissing) {
-      return null;
     }
 
     if (!missingToolchains.isEmpty()) {

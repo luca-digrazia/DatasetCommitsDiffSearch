@@ -21,19 +21,18 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.AliasProvider;
-import com.google.devtools.build.lib.analysis.AspectResolver;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
+import com.google.devtools.build.lib.analysis.MergedConfiguredTarget;
+import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -256,8 +255,8 @@ public final class AspectFunction implements SkyFunction {
 
     // When getting the dependencies of this hybrid aspect+base target, use the aspect's
     // configuration. The configuration of the aspect will always be a superset of the target's
-    // (trimmed configuration mode: target is part of the aspect's config fragment requirements;
-    // untrimmed mode: target is the same configuration as the aspect), so the fragments
+    // (dynamic configuration mode: target is part of the aspect's config fragment requirements;
+    // static configuration mode: target is the same configuration as the aspect), so the fragments
     // required by all dependencies (both those of the aspect and those of the base target)
     // will be present this way.
     TargetAndConfiguration originalTargetAndAspectConfiguration =
@@ -467,7 +466,7 @@ public final class AspectFunction implements SkyFunction {
     }
 
     ConfiguredAspect configuredAspect;
-    if (AspectResolver.aspectMatchesConfiguredTarget(associatedTarget, aspect)) {
+    if (ConfiguredTargetFunction.aspectMatchesConfiguredTarget(associatedTarget, aspect)) {
       configuredAspect =
           view.getConfiguredTargetFactory()
               .createAspect(
