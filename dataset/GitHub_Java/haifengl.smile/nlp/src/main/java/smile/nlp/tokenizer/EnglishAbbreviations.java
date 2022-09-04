@@ -29,10 +29,6 @@ import java.util.Iterator;
  * @author Haifeng Li
  */
 class EnglishAbbreviations {
-    /** Utility classes should not have public constructors. */
-    private EnglishAbbreviations() {
-
-    }
 
     /**
      * A list of abbreviations.

@@ -655,19 +655,17 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
             int n = x.length;
             int tc = 0;
             int fc = 0;
-            // reuse samples for false branch child
             int[] trueSamples = new int[n];
-            //int[] falseSamples = new int[n];
+            int[] falseSamples = new int[n];
 
             if (attributes[node.splitFeature].getType() == Attribute.Type.NOMINAL) {
                 for (int i = 0; i < n; i++) {
                     if (samples[i] > 0) {
                         if (x[i][node.splitFeature] == node.splitValue) {
                             trueSamples[i] = samples[i];
-                            tc += trueSamples[i];
-                            samples[i] = 0;
+                            tc += samples[i];
                         } else {
-                            //falseSamples[i] = samples[i];
+                            falseSamples[i] = samples[i];                            
                             fc += samples[i];
                         }
                     }
@@ -677,10 +675,9 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
                     if (samples[i] > 0) {
                         if (x[i][node.splitFeature] <= node.splitValue) {
                             trueSamples[i] = samples[i];
-                            tc += trueSamples[i];
-                            samples[i] = 0;
+                            tc += samples[i];
                         } else {
-                            //falseSamples[i] = samples[i];
+                            falseSamples[i] = samples[i];                            
                             fc += samples[i];
                         }
                     }
@@ -701,7 +698,7 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
             for (int i = 0; i < n; i++) {
                 int yi = y[i];
                 trueChildPosteriori[yi] += trueSamples[i];
-                falseChildPosteriori[yi] += samples[i];
+                falseChildPosteriori[yi] += falseSamples[i];
             }
 
             // add-k smoothing of posteriori probability
@@ -722,7 +719,7 @@ public class DecisionTree implements SoftClassifier<double[]>, Serializable {
                 }
             }
 
-            TrainNode falseChild = new TrainNode(node.falseChild, x, y, samples);
+            TrainNode falseChild = new TrainNode(node.falseChild, x, y, falseSamples);
             if (fc > nodeSize && falseChild.findBestSplit()) {
                 if (nextSplits != null) {
                     nextSplits.add(falseChild);

@@ -1,19 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.sequence;
 
@@ -24,8 +23,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
-import smile.math.MathEx;
-import smile.math.matrix.Matrix;
+import smile.math.Math;
 import smile.stat.distribution.EmpiricalDistribution;
 
 /**
@@ -59,15 +57,40 @@ public class HMMTest {
     }
 
     /**
+     * Test of numStates method, of class HMM.
+     */
+    @Test
+    public void testNumStates() {
+        System.out.println("numStates");
+        HMM hmm = new HMM(pi, a, b);
+        int expResult = 2;
+        int result = hmm.numStates();
+        assertEquals(expResult, result);
+    }
+
+    /**
+     * Test of numSymbols method, of class HMM.
+     */
+    @Test
+    public void testNumSymbols() {
+        System.out.println("numSymbols");
+        HMM hmm = new HMM(pi, a, b);
+        int expResult = 2;
+        int result = hmm.numSymbols();
+        assertEquals(expResult, result);
+    }
+
+    /**
      * Test of getInitialStateProbabilities method, of class HMM.
      */
     @Test
     public void testGetInitialStateProbabilities() {
         System.out.println("getInitialStateProbabilities");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
+        HMM hmm = new HMM(pi, a, b);
+        double[] expResult = pi;
         double[] result = hmm.getInitialStateProbabilities();
-        for (int i = 0; i < pi.length; i++) {
-            assertEquals(pi[i], result[i], 1E-7);
+        for (int i = 0; i < expResult.length; i++) {
+            assertEquals(expResult[i], result[i], 1E-7);
         }
     }
 
@@ -77,11 +100,12 @@ public class HMMTest {
     @Test
     public void testGetStateTransitionProbabilities() {
         System.out.println("getStateTransitionProbabilities");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
-        Matrix result = hmm.getStateTransitionProbabilities();
-        for (int i = 0; i < a.length; i++) {
-            for (int j = 0; j < a[i].length; j++) {
-                assertEquals(a[i][j], result.get(i, j), 1E-7);
+        HMM hmm = new HMM(pi, a, b);
+        double[][] expResult = a;
+        double[][] result = hmm.getStateTransitionProbabilities();
+        for (int i = 0; i < expResult.length; i++) {
+            for (int j = 0; j < expResult[i].length; j++) {
+                assertEquals(expResult[i][j], result[i][j], 1E-7);
             }
         }
     }
@@ -92,11 +116,12 @@ public class HMMTest {
     @Test
     public void testGetSymbolEmissionProbabilities() {
         System.out.println("getSymbolEmissionProbabilities");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
-        Matrix result = hmm.getSymbolEmissionProbabilities();
-        for (int i = 0; i < b.length; i++) {
-            for (int j = 0; j < b[i].length; j++) {
-                assertEquals(b[i][j], result.get(i, j), 1E-7);
+        HMM hmm = new HMM(pi, a, b);
+        double[][] expResult = b;
+        double[][] result = hmm.getSymbolEmissionProbabilities();
+        for (int i = 0; i < expResult.length; i++) {
+            for (int j = 0; j < expResult[i].length; j++) {
+                assertEquals(expResult[i][j], result[i][j], 1E-7);
             }
         }
     }
@@ -105,11 +130,11 @@ public class HMMTest {
      * Test of p method, of class HMM.
      */
     @Test
-    public void testJointP() {
-        System.out.println("joint p");
+    public void testP_intArr_intArr() {
+        System.out.println("p");
         int[] o = {0, 0, 1, 1, 0, 1, 1, 0};
         int[] s = {0, 0, 1, 1, 1, 1, 1, 0};
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
+        HMM hmm = new HMM(pi, a, b);
         double expResult = 7.33836e-05;
         double result = hmm.p(o, s);
         assertEquals(expResult, result, 1E-10);
@@ -119,9 +144,9 @@ public class HMMTest {
      * Test of logp method, of class HMM.
      */
     @Test
-    public void testJointLogp() {
-        System.out.println("joint logp");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
+    public void testLogp_intArr_intArr() {
+        System.out.println("logp");
+        HMM hmm = new HMM(pi, a, b);
         int[] o = {0, 0, 1, 1, 0, 1, 1, 0};
         int[] s = {0, 0, 1, 1, 1, 1, 1, 0};
         double expResult = -9.51981;
@@ -133,9 +158,9 @@ public class HMMTest {
      * Test of p method, of class HMM.
      */
     @Test
-    public void testP() {
+    public void testP_intArr() {
         System.out.println("p");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
+        HMM hmm = new HMM(pi, a, b);
         int[] o = {0, 0, 1, 1, 0, 1, 1, 0};
         double expResult = 0.003663364;
         double result = hmm.p(o);
@@ -146,9 +171,9 @@ public class HMMTest {
      * Test of logp method, of class HMM.
      */
     @Test
-    public void testLogp() {
+    public void testLogp_intArr() {
         System.out.println("logp");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
+        HMM hmm = new HMM(pi, a, b);
         int[] o = {0, 0, 1, 1, 0, 1, 1, 0};
         double expResult = -5.609373;
         double result = hmm.logp(o);
@@ -161,7 +186,7 @@ public class HMMTest {
     @Test
     public void testPredict() {
         System.out.println("predict");
-        HMM hmm = new HMM(pi, new Matrix(a), new Matrix(b));
+        HMM hmm = new HMM(pi, a, b);
         int[] o = {0, 0, 1, 1, 0, 1, 1, 0};
         int[] s = {0, 0, 0, 0, 0, 0, 0, 0};
         int[] result = hmm.predict(o);
@@ -172,13 +197,11 @@ public class HMMTest {
     }
 
     /**
-     * Test of fit method, of class HMM.
+     * Test of learn method, of class HMM.
      */
     @Test
-    public void testFit() {
-        System.out.println("fit");
-        MathEx.setSeed(19650218); // to get repeatable results.
-
+    public void testLearn() {
+        System.out.println("learn");
         EmpiricalDistribution initial = new EmpiricalDistribution(pi);
 
         EmpiricalDistribution[] transition = new EmpiricalDistribution[a.length];
@@ -194,7 +217,7 @@ public class HMMTest {
         int[][] sequences = new int[5000][];
         int[][] labels = new int[5000][];
         for (int i = 0; i < sequences.length; i++) {
-            sequences[i] = new int[30 * (MathEx.randomInt(5) + 1)];
+            sequences[i] = new int[30 * (Math.randomInt(5) + 1)];
             labels[i] = new int[sequences[i].length];
             int state = (int) initial.rand();
             sequences[i][0] = (int) emission[state].rand();
@@ -206,41 +229,132 @@ public class HMMTest {
             }
         }
 
-        HMM model = HMM.fit(sequences, labels);
-        System.out.println(model);
+        HMM hmm = new HMM(sequences, labels);
+        System.out.println(hmm);
 
-        double[] expPi2 = {0.5076, 0.4924};
-        double[][] expA2 = {{0.8002, 0.1998}, {0.1987, 0.8013}};
-        double[][] expB2 = {{0.5998, 0.4002}, {0.4003, 0.5997}};
+        double[] pi2 = {0.55, 0.45};
+        double[][] a2 = {{0.7, 0.3}, {0.15, 0.85}};
+        double[][] b2 = {{0.45, 0.55}, {0.3, 0.7}};
+        HMM init = new HMM(pi2, a2, b2);
+        HMM result = init.learn(sequences, 100);
+        System.out.println(result);
+    }
 
-        double[] pi2 = model.getInitialStateProbabilities();
-        for (int i = 0; i < pi.length; i++) {
-            assertEquals(expPi2[i], pi2[i], 1E-4);
-        }
+    /**
+     * Test of p method, of class HMM.
+     */
+    @Test
+    public void testP_intArr_intArr2() {
+        System.out.println("p");
+        String[] symbols = {"0", "1"};
+        HMM<String> hmm = new HMM<>(pi, a, b, symbols);
 
-        Matrix a2 = model.getStateTransitionProbabilities();
-        for (int i = 0; i < a.length; i++) {
-            for (int j = 0; j < a[i].length; j++) {
-                assertEquals(expA2[i][j], a2.get(i, j), 1E-4);
-            }
-        }
+        String[] o = {"0", "0", "1", "1", "0", "1", "1", "0"};
+        int[] s = {0, 0, 1, 1, 1, 1, 1, 0};
+        double expResult = 7.33836e-05;
+        double result = hmm.p(o, s);
+        assertEquals(expResult, result, 1E-10);
+    }
 
-        Matrix b2 = model.getSymbolEmissionProbabilities();
-        for (int i = 0; i < b.length; i++) {
-            for (int j = 0; j < b[i].length; j++) {
-                assertEquals(expB2[i][j], b2.get(i, j), 1E-4);
-            }
+    /**
+     * Test of logp method, of class HMM.
+     */
+    @Test
+    public void testLogp_intArr_intArr2() {
+        System.out.println("logp");
+        String[] symbols = {"0", "1"};
+        HMM<String> hmm = new HMM<>(pi, a, b, symbols);
+
+        String[] o = {"0", "0", "1", "1", "0", "1", "1", "0"};
+        int[] s = {0, 0, 1, 1, 1, 1, 1, 0};
+        double expResult = -9.51981;
+        double result = hmm.logp(o, s);
+        assertEquals(expResult, result, 1E-5);
+    }
+
+    /**
+     * Test of p method, of class HMM.
+     */
+    @Test
+    public void testP_intArr2() {
+        System.out.println("p");
+        String[] symbols = {"0", "1"};
+        HMM<String> hmm = new HMM<>(pi, a, b, symbols);
+
+        String[] o = {"0", "0", "1", "1", "0", "1", "1", "0"};
+        double expResult = 0.003663364;
+        double result = hmm.p(o);
+        assertEquals(expResult, result, 1E-9);
+    }
+
+    /**
+     * Test of logp method, of class HMM.
+     */
+    @Test
+    public void testLogp_intArr2() {
+        System.out.println("logp");
+        String[] symbols = {"0", "1"};
+        HMM<String> hmm = new HMM<>(pi, a, b, symbols);
+
+        String[] o = {"0", "0", "1", "1", "0", "1", "1", "0"};
+        double expResult = -5.609373;
+        double result = hmm.logp(o);
+        assertEquals(expResult, result, 1E-6);
+    }
+
+    /**
+     * Test of predict method, of class HMM.
+     */
+    @Test
+    public void testPredict2() {
+        System.out.println("predict");
+        String[] symbols = {"0", "1"};
+        HMM<String> hmm = new HMM<>(pi, a, b, symbols);
+
+        String[] o = {"0", "0", "1", "1", "0", "1", "1", "0"};
+        int[] s = {0, 0, 0, 0, 0, 0, 0, 0};
+        int[] result = hmm.predict(o);
+        assertEquals(o.length, result.length);
+        for (int i = 0; i < s.length; i++) {
+            assertEquals(s[i], result[i]);
         }
     }
 
     /**
-     * Test of update method, of class HMM.
+     * Test of predict method, of class HMM.
      */
     @Test
-    public void testUpdate() {
-        System.out.println("update");
-        MathEx.setSeed(19650218); // to get repeatable results.
+    public void testPredict3() {
+        System.out.println("predict");
+        String[] symbols = {"H", "T", "P"};
+        double[] pi2 = {0.4, 0.3, 0.3};
+        double[][] a2 = {
+            {0.3, 0.4, 0.3},
+            {0.3, 0.3, 0.4},
+            {0.4, 0.2, 0.4}
+        };
+        double[][] b2 = {
+            {0.4, 0.3, 0.3},
+            {0.5, 0.2, 0.3},
+            {0.2, 0.3, 0.5}
+        };
+        HMM<String> hmm = new HMM<>(pi2, a2, b2, symbols);
 
+        String[] o = {"H", "H", "P", "P", "P", "H", "H", "H", "P", "P", "P", "H", "T", "T", "T"};
+        int[] s = {0, 1, 2, 2, 2, 0, 1, 1, 2, 2, 2, 0, 2, 2, 0};
+        int[] result = hmm.predict(o);
+        assertEquals(o.length, result.length);
+        for (int i = 0; i < s.length; i++) {
+            assertEquals(s[i], result[i]);
+        }
+    }
+
+    /**
+     * Test of learn method, of class HMM.
+     */
+    @Test
+    public void testLearn2() {
+        System.out.println("learn");
         EmpiricalDistribution initial = new EmpiricalDistribution(pi);
 
         EmpiricalDistribution[] transition = new EmpiricalDistribution[a.length];
@@ -253,45 +367,30 @@ public class HMMTest {
             emission[i] = new EmpiricalDistribution(b[i]);
         }
 
-        int[][] sequences = new int[5000][];
+        String[] symbols = {"0", "1"};
+        String[][] sequences = new String[5000][];
         int[][] labels = new int[5000][];
         for (int i = 0; i < sequences.length; i++) {
-            sequences[i] = new int[30 * (MathEx.randomInt(5) + 1)];
+            sequences[i] = new String[30 * (Math.randomInt(5) + 1)];
             labels[i] = new int[sequences[i].length];
             int state = (int) initial.rand();
-            sequences[i][0] = (int) emission[state].rand();
+            sequences[i][0] = symbols[(int) emission[state].rand()];
             labels[i][0] = state;
             for (int j = 1; j < sequences[i].length; j++) {
                 state = (int) transition[state].rand();
-                sequences[i][j] = (int) emission[state].rand();
+                sequences[i][j] = symbols[(int) emission[state].rand()];
                 labels[i][j] = state;
             }
         }
 
-        double[] expPi2 = {0.47245901561967496, 0.527540984380325};
-        double[][] expA2 = {{0.8006, 0.1994}, {0.1986, 0.8014}};
-        double[][] expB2 = {{0.6008, 0.3992}, {0.3997, 0.6003}};
-        HMM model = new HMM(pi, new Matrix(a), new Matrix(b));
-        model.update(sequences, 100);
-        System.out.println(model);
+        HMM<String> hmm = new HMM(sequences, labels);
+        System.out.println(hmm);
 
-        double[] pi2 = model.getInitialStateProbabilities();
-        for (int i = 0; i < pi.length; i++) {
-            assertEquals(expPi2[i], pi2[i], 1E-4);
-        }
-
-        Matrix a2 = model.getStateTransitionProbabilities();
-        for (int i = 0; i < a.length; i++) {
-            for (int j = 0; j < a[i].length; j++) {
-                assertEquals(expA2[i][j], a2.get(i, j), 1E-4);
-            }
-        }
-
-        Matrix b2 = model.getSymbolEmissionProbabilities();
-        for (int i = 0; i < b.length; i++) {
-            for (int j = 0; j < b[i].length; j++) {
-                assertEquals(expB2[i][j], b2.get(i, j), 1E-4);
-            }
-        }
+        double[] pi2 = {0.55, 0.45};
+        double[][] a2 = {{0.7, 0.3}, {0.15, 0.85}};
+        double[][] b2 = {{0.45, 0.55}, {0.3, 0.7}};
+        HMM<String> init = new HMM<>(pi2, a2, b2, symbols);
+        HMM<String> result = init.learn(sequences, 100);
+        System.out.println(result);
     }
 }

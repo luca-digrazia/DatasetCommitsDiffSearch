@@ -489,12 +489,5 @@ public class AdaBoost implements SoftClassifier<double[]>, Serializable {
         
         return results;
     }
-
-    /**
-     * Returns the decision trees.
-     */
-    public DecisionTree[] getTrees() {
-        return trees;
-    }
 }
 

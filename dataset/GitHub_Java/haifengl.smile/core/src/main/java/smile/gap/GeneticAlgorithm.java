@@ -19,10 +19,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import smile.math.Math;
 import smile.util.MulticoreExecutor;
 
@@ -264,7 +262,7 @@ public class GeneticAlgorithm <T extends Chromosome> {
      * Elitism can very rapidly increase performance of GA, because it prevents
      * losing the best found solution.
      */
-    public GeneticAlgorithm<T> setElitism(int elitism) {
+    public GeneticAlgorithm setElitism(int elitism) {
         if (elitism < 0 || elitism >= size) {
             throw new IllegalArgumentException("Invalid elitism: " + elitism);
         }
@@ -285,7 +283,7 @@ public class GeneticAlgorithm <T extends Chromosome> {
      * @param size the size of tournament pool.
      * @param p the best-player-wins probability.
      */
-    public GeneticAlgorithm<T> setTournament(int size, double p) {
+    public GeneticAlgorithm setTournament(int size, double p) {
         if (size < 1) {
             throw new IllegalArgumentException("Invalid tournament size: " + size);
         }
@@ -318,7 +316,7 @@ public class GeneticAlgorithm <T extends Chromosome> {
      * Sets it be zero to disable local search.
      * @param t the number of iterations of local search.
      */
-    public GeneticAlgorithm<T> setLocalSearchSteps(int t) {
+    public GeneticAlgorithm setLocalSearchSteps(int t) {
         if (t < 0) {
             throw new IllegalArgumentException("Invalid of number of iterations of local search: " + t);
         }

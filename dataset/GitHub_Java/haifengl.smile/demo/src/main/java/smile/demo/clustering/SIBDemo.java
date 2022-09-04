@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.demo.clustering;
@@ -36,6 +35,7 @@ import javax.swing.JTextField;
 
 import smile.clustering.SIB;
 import smile.data.SparseDataset;
+import smile.data.parser.SparseDatasetParser;
 
 /**
  *
@@ -122,14 +122,13 @@ public class SIBDemo extends JPanel implements Runnable, ActionListener {
 
         if (dataset[datasetIndex] == null) {
             try {
-                dataset[datasetIndex] = SparseDataset.from(smile.util.Paths.getTestData(datasource[datasetIndex]));
-                /*
+                SparseDatasetParser parser = new SparseDatasetParser(1);
+                dataset[datasetIndex] = parser.parse(datasetName[datasetIndex], smile.data.parser.IOUtils.getTestDataFile(datasource[datasetIndex]));
                 for (int i = dataset[datasetIndex].size(); i-- > 0; ) {
-                    if (dataset[datasetIndex].get(i).isEmpty()) {
+                    if (dataset[datasetIndex].get(i).x.isEmpty()) {
                         dataset[datasetIndex].remove(i);
                     }
                 }
-                 */
                 dataset[datasetIndex].unitize1();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);

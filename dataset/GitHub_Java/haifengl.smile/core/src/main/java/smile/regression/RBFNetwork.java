@@ -284,7 +284,7 @@ public class RBFNetwork<T> implements Regression<T> {
             }
         }
 
-        QRDecomposition qr = new QRDecomposition(G);
+        QRDecomposition qr = new QRDecomposition(G, true);
         qr.solve(b, w);
     }
 

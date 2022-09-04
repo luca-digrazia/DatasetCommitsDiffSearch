@@ -1,32 +1,28 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.association;
 
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.Queue;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Total support tree is a kind of compressed set enumeration tree so that we
  * can generate association rules in a storage efficient way.
- *
+ * 
  * <h2>References</h2>
  * <ol>
  * <li> Frans Coenen, Paul Leng, and Shakil Ahmed. Data Structure for Association Rule Mining: T-Trees and P-Trees. IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING, 16(6):774-778, 2004.</li>
@@ -34,7 +30,7 @@ import java.util.stream.StreamSupport;
  * 
  * @author Haifeng Li
  */
-class TotalSupportTree implements Iterable<ItemSet> {
+class TotalSupportTree {
 
     class Node {
         /**
@@ -70,70 +66,24 @@ class TotalSupportTree implements Iterable<ItemSet> {
      */
     Node root = new Node();
     /**
-     * The number transactions in the database.
-     */
-    int numTransactions = 0;
-    /**
-     * The required minimum support of item sets.
-     */
-    private int minSupport;
-    /**
      * The index of items after sorting.
      */
     private int[] order;
     /**
-     * The buffer to collect mining results.
+     * The required minimum support of item sets.
      */
-    private Queue<ItemSet> buffer = new LinkedList<>();
+    private int minSupport;
 
     /**
      * Constructor.
+     * @param order the index of items after sorting.
+     * @param numItems the number of items with sufficient support.
+     * @param order the index of items after sorting.
      */
-    public TotalSupportTree(FPTree tree) {
-        this.numTransactions = tree.numTransactions;
-        this.minSupport = tree.minSupport;
-        this.order = tree.order;
-        root.children = new Node[tree.numFreqItems];
-        FPGrowth.apply(tree).forEach(itemset -> add(itemset.items, itemset.support));
-    }
-
-    /**
-     * Returns the number transactions in the database.
-     */
-    public int size() {
-        return numTransactions;
-    }
-
-    @Override
-    public Iterator<ItemSet> iterator() {
-        return new Iterator<ItemSet>() {
-            int i = 0;
-
-            @Override
-            public boolean hasNext() {
-                if (buffer.isEmpty()) {
-                    for (; i < root.children.length; i++) {
-                        Node child = root.children[i];
-                        if (child != null && child.support >= minSupport) {
-                            int[] itemset = {child.id};
-                            generate(itemset, i, child);
-
-                            if (!buffer.isEmpty()) {
-                                i++; // we will miss i++ in for loop once break
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                return !buffer.isEmpty();
-            }
-
-            @Override
-            public ItemSet next() {
-                return buffer.poll();
-            }
-        };
+    public TotalSupportTree(int minSupport, int numItems, int[] order) {
+        this.minSupport = minSupport;
+        this.order = order;
+        root.children = new Node[numItems];
     }
 
     /**
@@ -142,7 +92,7 @@ class TotalSupportTree implements Iterable<ItemSet> {
      * descending order according to their frequency.
      * @param support the support value associated with the given item set.
      */
-    private void add(int[] itemset, int support) {
+    public void add(int[] itemset, int support) {
         add(root, 0, itemset.length - 1, itemset, support);
     }
 
@@ -191,6 +141,7 @@ class TotalSupportTree implements Iterable<ItemSet> {
      * and 0 otherwise.
      * @param itemset the given item set.
      * @param index the current index in the given item set.
+     * @param nodes the nodes of the current T-tree level.
      * @return the support value (0 if not found)
      */
     private int getSupport(int[] itemset, int index, Node node) {
@@ -212,31 +163,77 @@ class TotalSupportTree implements Iterable<ItemSet> {
     }
     
     /**
-     * Mines the frequent item sets.
-     * @return the stream of frequent item sets
+     * Mines the frequent item sets. The discovered frequent item sets
+     * will be returned in a list.
+     * @return the list of frequent item sets
      */
-    public Stream<ItemSet> stream() {
-        return StreamSupport.stream(spliterator(), false);
+    public List<ItemSet> getFrequentItemsets() {
+        List<ItemSet> list = new ArrayList<>();
+        getFrequentItemsets(null, list);
+        return list;
+    }
+    
+    /**
+     * Mines the frequent item sets. The discovered frequent item sets
+     * will be printed out to the provided stream.
+     * @param out a print stream for output of frequent item sets.
+     * @return the number of discovered frequent item sets
+     */
+    public long getFrequentItemsets(PrintStream out) {
+        return getFrequentItemsets(out, null);
     }
     
     /**
      * Returns the set of frequent item sets.
+     * @param out a print stream for output of frequent item sets.
+     * @param list a container to store frequent item sets on output.
+     * @return the number of discovered frequent item sets
+     */
+    private long getFrequentItemsets(PrintStream out, List<ItemSet> list) {
+        long n = 0;
+        if (root.children != null) {
+            for (int i = 0; i < root.children.length; i++) {
+                Node child = root.children[i];
+                if (child != null && child.support >= minSupport) {
+                    int[] itemset = {child.id};
+                    n += getFrequentItemsets(out, list, itemset, i, child);
+                }
+            }
+        }
+        
+        return n;
+    }
+
+    /**
+     * Returns the set of frequent item sets.
+     * @param out a print stream for output of frequent item sets.
+     * @param list a container to store frequent item sets on output.
      * @param node the path from root to this node matches the given item set.
      * @param itemset the frequent item set generated so far.
      * @param size the length/size of the current array level in the T-tree.
+     * @return the number of discovered frequent item sets
      */
-    private void generate(int[] itemset, int size, Node node) {
+    private long getFrequentItemsets(PrintStream out, List<ItemSet> list, int[] itemset, int size, Node node) {
         ItemSet set = new ItemSet(itemset, node.support);
-        buffer.offer(set);
+        if (out != null) {
+            out.println(set);
+        }
 
+        if (list != null) {
+            list.add(set);
+        }
+
+        long n = 1;
         if (node.children != null) {
             for (int i = 0; i < size; i++) {
                 Node child = node.children[i];
                 if (child != null && child.support >= minSupport) {
                     int[] newItemset = FPGrowth.insert(itemset, child.id);
-                    generate(newItemset, i, child);
+                    n += getFrequentItemsets(out, list, newItemset, i, child);
                 }
             }
         }
+
+        return n;
     }
 }

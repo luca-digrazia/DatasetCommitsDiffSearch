@@ -25,7 +25,6 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class DiscreteMixture extends DiscreteDistribution {
-    private static final long serialVersionUID = 1L;
 
     /**
      * A component in the mixture distribution is defined by a distribution
@@ -43,6 +42,13 @@ public class DiscreteMixture extends DiscreteDistribution {
         public double priori;
     }
     List<Component> components;
+
+    /**
+     * Constructor.
+     */
+    DiscreteMixture() {
+        components = new ArrayList<>();
+    }
 
     /**
      * Constructor.

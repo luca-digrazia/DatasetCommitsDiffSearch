@@ -1,27 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.association;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.stream.Stream;
 import smile.sort.QuickSort;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * FP-tree data structure used in FP-growth (frequent pattern growth)
@@ -37,7 +34,7 @@ import smile.math.MathEx;
  *
  * @author Haifeng Li
  */
-public class FPTree {
+final class FPTree {
 
     /**
      * FP-tree node object.
@@ -139,6 +136,7 @@ public class FPTree {
 
         /**
          * Adds this node to header table.
+         * @param header the header table.
          */
         void addToHeaderTable() {
             next = headerTable[order[id]].node;
@@ -279,7 +277,7 @@ public class FPTree {
      * of frequency.
      */
     public FPTree(int[][] itemsets, int minSupport) {
-        this(freq(MathEx.max(itemsets)+1, Arrays.stream(itemsets)), minSupport);
+        this(freq(itemsets), minSupport);
 
         // Add each itemset into to the FP-tree.
         for (int[] itemset : itemsets) {
@@ -289,13 +287,16 @@ public class FPTree {
     
     /**
      * Returns the frequency of single items.
-     * @param n the number of items.
      * @param itemsets the transaction database.
      * @return the frequency of single items
      */
-    public static int[] freq(int n, Stream<int[]> itemsets) {
-        int[] f = new int[n];
-        itemsets.forEach(itemset -> { for (int i : itemset) f[i]++; });
+    private static int[] freq(int[][] itemsets) {
+        int[] f = new int[Math.max(itemsets) + 1];
+        for (int[] itemset : itemsets) {
+            for (int i : itemset) {
+                f[i]++;
+            }
+        }
         return f;
     }
     

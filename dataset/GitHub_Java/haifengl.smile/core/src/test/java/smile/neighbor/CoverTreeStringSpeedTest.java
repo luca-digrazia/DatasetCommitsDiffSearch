@@ -17,8 +17,6 @@
 package smile.neighbor;
 
 import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.After;
@@ -34,14 +32,13 @@ import smile.math.distance.EditDistance;
  */
 public class CoverTreeStringSpeedTest {
 
-    List<String> words = new ArrayList<String>();
+    List<String> words = new ArrayList<>();
     CoverTree<String> cover;
 
     public CoverTreeStringSpeedTest() {
         long start = System.currentTimeMillis();
         try {
-            InputStream stream = this.getClass().getResourceAsStream("/smile/data/neighbor/index.noun");
-            BufferedReader input = new BufferedReader(new InputStreamReader(stream));
+            BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("neighbor/index.noun");
             String line = input.readLine();
             while (line != null) {
                 if (!line.startsWith(" ")) {
@@ -55,14 +52,14 @@ public class CoverTreeStringSpeedTest {
         }
 
         double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Loading data: %.2fs\n", time);
+        System.out.format("Loading data: %.2fs%n", time);
 
         String[] data = words.toArray(new String[words.size()]);
 
         start = System.currentTimeMillis();
-        cover = new CoverTree<String>(data, new EditDistance(50, true));
+        cover = new CoverTree<>(data, new EditDistance(50, true));
         time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Building cover tree: %.2fs\n", time);
+        System.out.format("Building cover tree: %.2fs%n", time);
     }
 
     @BeforeClass
@@ -88,12 +85,12 @@ public class CoverTreeStringSpeedTest {
     public void testNaiveSpeed() {
         System.out.println("cover tree");
         long start = System.currentTimeMillis();
-        List<Neighbor<String, String>> neighbors = new ArrayList<Neighbor<String, String>>();
+        List<Neighbor<String, String>> neighbors = new ArrayList<>();
         for (int i = 1000; i < 1100; i++) {
             cover.range(words.get(i), 1, neighbors);
             neighbors.clear();
         }
         double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Cover tree string search: %.2fs\n", time);
+        System.out.format("Cover tree string search: %.2fs%n", time);
     }
 }

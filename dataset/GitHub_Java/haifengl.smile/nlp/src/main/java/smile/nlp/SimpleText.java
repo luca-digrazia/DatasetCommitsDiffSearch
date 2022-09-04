@@ -1,26 +1,23 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.nlp;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import smile.util.MutableInt;
-import smile.util.Strings;
 
 /**
  * A list-of-words representation of documents.
@@ -40,7 +37,7 @@ public class SimpleText extends Text implements TextTerms, AnchorText {
     /**
      * The term frequency.
      */
-    private HashMap<String, MutableInt> freq = new HashMap<>();
+    private HashMap<String, Integer> freq = new HashMap<>();
     /**
      * The maximum term frequency over all terms in the documents;
      */
@@ -52,21 +49,22 @@ public class SimpleText extends Text implements TextTerms, AnchorText {
      * @param words the word list of document.
      */
     public SimpleText(String id, String title, String body, String[] words) {
-        super(id, title, body);
+    	super(id, title, body);
 
         this.words = words;
 
         for (String w : words) {
-            MutableInt count = freq.get(w);
-            if (count == null) {
-                count = new MutableInt(1);
-                freq.put(w, count);
+            Integer f = freq.get(w);
+            if (f == null) {
+                f = 1;
             } else {
-                count.increment();
+                f = f + 1;
             }
 
-            if (count.value > maxtf) {
-                maxtf = count.value;
+            freq.put(w, f);
+
+            if (f > maxtf) {
+                maxtf = f;
             }
         }
     }
@@ -88,8 +86,13 @@ public class SimpleText extends Text implements TextTerms, AnchorText {
     
     @Override
     public int tf(String term) {
-        MutableInt count = freq.get(term);
-        return count == null ? 0 : count.value;
+        Integer f = freq.get(term);
+        
+        if (f == null) {
+            return 0;
+        }
+        
+        return f;
     }
 
     @Override
@@ -103,7 +106,7 @@ public class SimpleText extends Text implements TextTerms, AnchorText {
      * anchor text in the corpus pointing to this text.
      */
     public String getAnchor() {
-        return anchor;
+    	return anchor;
     }
     
     /**
@@ -111,22 +114,22 @@ public class SimpleText extends Text implements TextTerms, AnchorText {
      * pointing to this text. So addAnchor is more appropriate in most cases.
      */
     public SimpleText setAnchor(String anchor) {
-        this.anchor = anchor;
+    	this.anchor = anchor;
         return this;
     }
     
     public SimpleText addAnchor(String linkLabel) {
-        if (anchor == null) {
-            anchor = linkLabel;
-        } else {
-            anchor = anchor + "\n" + linkLabel;
-        }
+    	if (anchor == null) {
+    		anchor = linkLabel;
+    	} else {
+    		anchor = anchor + " " + linkLabel;
+    	}
         return this;
     }
     
     @Override
     public String toString() {
-        return String.format("Document[%s]", id, Strings.isNullOrEmpty(title) ? id : title);
+        return String.format("Document[%s%s]", getID(), getTitle() == null ? "" : " -- "+ getTitle());
     }
 
     @Override
@@ -140,11 +143,11 @@ public class SimpleText extends Text implements TextTerms, AnchorText {
         }
 
         final SimpleText other = (SimpleText) obj;
-        return id.equals(other.id);
+        return getID().equals(other.getID());
     }
 
     @Override
     public int hashCode() {
-        return id.hashCode();
+    	return getID().hashCode();
     }
 }

@@ -27,7 +27,13 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class DiscreteExponentialFamilyMixture extends DiscreteMixture {
-    private static final long serialVersionUID = 1L;
+
+    /**
+     * Constructor.
+     */
+    DiscreteExponentialFamilyMixture() {
+        super();
+    }
 
     /**
      * Constructor.

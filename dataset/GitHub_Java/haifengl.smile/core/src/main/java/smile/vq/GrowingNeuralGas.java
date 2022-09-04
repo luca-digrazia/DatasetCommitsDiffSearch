@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.vq;
@@ -25,7 +24,7 @@ import smile.clustering.HierarchicalClustering;
 import smile.clustering.linkage.Linkage;
 import smile.clustering.linkage.UPGMALinkage;
 import smile.sort.HeapSelect;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * Growing Neural Gas. As an extension of Neural Gas, Growing Neural Gas
@@ -34,13 +33,13 @@ import smile.math.MathEx;
  * <p>
  * Compared to Neural Gas, GNG has the following distinctions:
  * <ul>
- * <li> The system has the ability to add and delete nodes. </li>
+ * <li> The system has the ability to add and delete nodes.
  * <li> Local Error measurements are noted at each step helping it to locally
- * insert/delete nodes.</li>
+ * insert/delete nodes.
  * <li> Edges are connected between nodes, so a sufficiently old edges is
- * deleted. Such edges are intended place holders for localized data distribution.</li>
+ * deleted. Such edges are intended place holders for localized data distribution.
  * <li> Such edges also help to locate distinct clusters (those clusters are
- * not connected by edges).</li>
+ * not connected by edges).
  * </ul>
  * 
  * <h2>References</h2>
@@ -138,7 +137,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
 
         @Override
         public int compareTo(Node o) {
-            return Double.compare(dist, o.dist);
+            return (int) Math.signum(dist - o.dist);
         }
     }
 
@@ -265,7 +264,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
         Node[] top2 = new Node[2];
         HeapSelect<Node> heap = new HeapSelect<>(top2);
         for (Node neuron : nodes) {
-            neuron.dist = MathEx.squaredDistance(neuron.w, x);
+            neuron.dist = Math.squaredDistance(neuron.w, x);
             heap.add(neuron);
         }
 
@@ -378,13 +377,20 @@ public class GrowingNeuralGas implements Clustering<double[]> {
      * @param k the number of clusters.
      */
     public void partition(int k) {
-        double[][] x = new double[nodes.size()][];
-        for (int i = 0; i < x.length; i++) {
-            x[i] = nodes.get(i).w;
-        }
+        double[][] reps = new double[nodes.size()][];
+        int i = 0;
+        for (Node neuron : nodes)
+            reps[i++] = neuron.w;
 
-        Linkage linkage = UPGMALinkage.of(x);
-        HierarchicalClustering hc = HierarchicalClustering.fit(linkage);
+        double[][] proximity = new double[nodes.size()][];
+        for (i = 0; i < nodes.size(); i++) {
+            proximity[i] = new double[i+1];
+            for (int j = 0; j < i; j++)
+                proximity[i][j] = Math.distance(reps[i], reps[j]);
+        }
+        
+        Linkage linkage = new UPGMALinkage(proximity);
+        HierarchicalClustering hc = new HierarchicalClustering(linkage);
         y = hc.partition(k);
     }
 
@@ -402,7 +408,7 @@ public class GrowingNeuralGas implements Clustering<double[]> {
 
         int i = 0;
         for (Node neuron : nodes) {
-            double dist = MathEx.squaredDistance(x, neuron.w);
+            double dist = Math.squaredDistance(x, neuron.w);
             if (dist < minDist) {
                 minDist = dist;
                 bestCluster = i;

@@ -48,14 +48,14 @@ public abstract class ProjectionDemo extends JPanel implements Runnable, ActionL
         "projection/COMBO17.dat"
     };
 
-    protected static AttributeDataset[] dataset = new AttributeDataset[datasetName.length];
-    protected static int datasetIndex = 0;
+    static AttributeDataset[] dataset = new AttributeDataset[datasetName.length];
+    static int datasetIndex = 0;
     
     JPanel optionPane;
     JComponent canvas;
     private JButton startButton;
     private JComboBox<String> datasetBox;
-    protected char pointLegend = '.';
+    char pointLegend = '.';
 
     /**
      * Constructor.

@@ -23,7 +23,9 @@ import smile.graph.AdjacencyList;
 import smile.graph.Graph;
 import smile.math.Math;
 import smile.math.distance.EuclideanDistance;
-import smile.math.matrix.*;
+import smile.math.matrix.EigenValueDecomposition;
+import smile.math.matrix.LUDecomposition;
+import smile.math.matrix.SparseMatrix;
 import smile.neighbor.CoverTree;
 import smile.neighbor.KDTree;
 import smile.neighbor.KNNSearch;
@@ -147,7 +149,7 @@ public class LLE {
             colIndex[i] = colIndex[i - 1] + k + 1;
         }
 
-        DenseMatrix C = new ColumnMajorMatrix(k, k);
+        double[][] C = new double[k][k];
         double[] x = new double[k];
         double[] b = new double[k];
         for (int i = 0; i < k; i++) {
@@ -159,22 +161,22 @@ public class LLE {
             double trace = 0.0;
             for (int p = 0; p < k; p++) {
                 for (int q = 0; q < k; q++) {
-                    C.set(p, q, 0.0);
+                    C[p][q] = 0.0;
                     for (int l = 0; l < D; l++) {
-                        C.add(p, q, (data[i][l] - data[N[i][p]][l]) * (data[i][l] - data[N[i][q]][l]));
+                        C[p][q] += (data[i][l] - data[N[i][p]][l]) * (data[i][l] - data[N[i][q]][l]);
                     }
                 }
-                trace += C.get(p, p);
+                trace += C[p][p];
             }
 
             if (tol != 0.0) {
                 trace *= tol;
                 for (int p = 0; p < k; p++) {
-                    C.add(p, p, trace);
+                    C[p][p] += trace;
                 }
             }
 
-            LUDecomposition lu = new LUDecomposition(C);
+            LUDecomposition lu = new LUDecomposition(C, true);
             lu.solve(b, x);
 
             double sum = Math.sum(x);

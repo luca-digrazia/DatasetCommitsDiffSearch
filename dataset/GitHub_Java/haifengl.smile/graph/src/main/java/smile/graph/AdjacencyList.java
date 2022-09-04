@@ -21,9 +21,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.SparseMatrix;
-import smile.util.PriorityQueue;
+import smile.sort.PriorityQueue;
 
 /**
  * An adjacency list representation of a graph. Multigraph is supported.
@@ -64,8 +62,12 @@ public class AdjacencyList implements Graph {
     public AdjacencyList(int n, boolean digraph) {
         this.n = n;
         this.digraph = digraph;
-        graph = new LinkedList[n];
-        for (int i = 0; i < n; i++) {
+
+        LinkedList<Edge> list = new LinkedList<>();
+        graph = (LinkedList<Edge>[]) java.lang.reflect.Array.newInstance(list.getClass(), n);
+
+        graph[0] = list;
+        for (int i = 1; i < n; i++) {
             graph[i] = new LinkedList<>();
         }
     }
@@ -628,41 +630,24 @@ public class AdjacencyList implements Graph {
         return g;
     }
     
-    @Override
-    public Matrix toMatrix() {
-        int size = 0;
-        int[] colSize = new int[n];
-        int[] pos = new int[n];
-        int[] colIndex = new int[n + 1];
-        for (LinkedList<Edge> edges : graph) {
-            size += edges.size();
-            for (Edge edge : edges) {
-                colSize[edge.v2] += 1;
-            }
-        }
-
-        for (int i = 0; i < n; i++) {
-            colIndex[i + 1] = colIndex[i] + colSize[i];
-        }
-
-        int[] rowIndex = new int[size];
-        double[] x = new double[size];
-
+    /**
+     * Returns the adjacency matrix.
+     * @return the adjacency matrix
+     */
+    /*
+    public SparseMatrix toSparseMatrix() {
+        SparseDataset matrix = new SparseDataset(n);
+        
         for (LinkedList<Edge> edges : graph) {
             for (Edge edge : edges) {
-                int i = edge.v1;
-                int j = edge.v2;
-                int k = colIndex[j] + pos[j];
-
-                rowIndex[k] = i;
-                x[k] = edge.weight;
-                pos[j]++;
+                matrix.set(edge.v1, edge.v2, edge.weight);
             }
         }
-
-        return new SparseMatrix(n, n, x, rowIndex, colIndex);
+        
+        return matrix.toSparseMatrix();
     }
-
+    */
+    
     /**
      * Converts the sparse matrix to a graph. If the matrix is structurally
      * symmetric, it is taken as the adjacency matrix of an undirected graph,
@@ -672,7 +657,8 @@ public class AdjacencyList implements Graph {
      * 
      * @return a graph
      */
-    public static AdjacencyList of(SparseMatrix matrix) {
+    /*
+    public static AdjacencyList fromSparseMatrix(SparseMatrix matrix) {
         boolean symmetric = false;
         
         if (matrix.nrows() == matrix.ncols()) {
@@ -719,4 +705,5 @@ public class AdjacencyList implements Graph {
             return graph;            
         }
     }
+    */
 }

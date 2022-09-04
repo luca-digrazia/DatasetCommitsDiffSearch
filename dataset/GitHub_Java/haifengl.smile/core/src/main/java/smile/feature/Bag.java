@@ -23,15 +23,17 @@ import java.util.Map;
  * The bag-of-words feature of text used in natural language
  * processing and information retrieval. In this model, a text (such as a
  * sentence or a document) is represented as an unordered collection of words,
- * disregarding grammar and even word order.
+ * disregarding grammar and even word order. This is a generic implementations.
+ * Thus, it can be used for sequences of any (discrete) data types with limited
+ * number of values.
  * 
  * @author Haifeng Li
  */
-public class Bag {
+public class Bag<T> {
     /**
      * The mapping from feature words to indices.
      */
-    private Map<String, Integer> words;
+    private Map<T, Integer> features;
 
     /**
      * True to check if feature words appear in a document instead of their
@@ -41,48 +43,47 @@ public class Bag {
 
     /**
      * Constructor.
-     * @param words the list of feature words.
+     * @param features the list of feature objects.
      */
-    public Bag(String[] words) {
-        this(words, false);
+    public Bag(T[] features) {
+        this(features, false);
     }
 
     /**
      * Constructor.
-     * @param words the list of feature words. The feature words should be unique in the list.
+     * @param features the list of feature objects. The feature objects should be unique in the list.
      * Note that the Bag class doesn't learn the features, but just use them as attributes.
      * @param binary true to check if feature object appear in a collection
      * instead of their frequencies.
      */
-    public Bag(String[] words, boolean binary) {
+    public Bag(T[] features, boolean binary) {
         this.binary = binary;
-        this.words = new HashMap<>();
-        for (int i = 0, k = 0; i < words.length; i++) {
-            if (this.words.containsKey(words[i])) {
-                throw new IllegalArgumentException("Duplicated word:" + words[i]);
+        this.features = new HashMap<>();
+        for (int i = 0, k = 0; i < features.length; i++) {
+            if (!this.features.containsKey(features[i])) {
+                this.features.put(features[i], k++);
             }
-            this.words.put(words[i], k++);
         }
     }
-
+    
     /**
      * Returns the bag-of-words features of a document. The features are real-valued
      * in convenience of most learning algorithms although they take only integer
      * or binary values.
      */
-    public double[] apply(String[] x) {
-        double[] bag = new double[words.size()];
+    public double[] feature(T[] x) {
+        double[] bag = new double[features.size()];
 
         if (binary) {
-            for (String word : x) {
-                Integer f = words.get(word);
+            for (T word : x) {
+                Integer f = features.get(word);
                 if (f != null) {
                     bag[f] = 1.0;
                 }
             }
         } else {
-            for (String word : x) {
-                Integer f = words.get(word);
+            for (T word : x) {
+                Integer f = features.get(word);
                 if (f != null) {
                     bag[f]++;
                 }

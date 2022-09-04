@@ -1,22 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.neighbor;
 
+import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -25,9 +25,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.IndexNoun;
 import smile.math.distance.EditDistance;
-
 import static org.junit.Assert.*;
 
 /**
@@ -36,18 +34,29 @@ import static org.junit.Assert.*;
  */
 public class BKTreeTest {
 
-    String[] words = IndexNoun.words;
+    List<String> words = new ArrayList<>();
     BKTree<String> bktree;
     LinearSearch<String> naive;
 
     public BKTreeTest() {
-        long start = System.currentTimeMillis();
-        bktree = new BKTree<>(new EditDistance(50, true));
-        bktree.add(words);
-        double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Building BK-tree: %.2fs%n", time);
+        try {
+            BufferedReader input = smile.data.parser.IOUtils.getTestDataReader("neighbor/index.noun");
+            String line = input.readLine();
+            while (line != null) {
+                if (!line.startsWith(" ")) {
+                    String[] w = line.split("\\s");
+                    words.add(w[0].replace('_', ' '));
+                }
+                line = input.readLine();
+            }
+        } catch (Exception e) {
+            System.err.println(e);
+        }
 
-        naive = new LinearSearch<>(words, new EditDistance(true));
+        String[] data = words.toArray(new String[1]);
+        bktree = new BKTree<>(new EditDistance(50, true));
+        bktree.add(data);
+        naive = new LinearSearch<>(data, new EditDistance(50, true));
     }
 
     @BeforeClass
@@ -66,21 +75,17 @@ public class BKTreeTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of range method, of class BKTree.
+     */
     @Test
     public void testRange() {
         System.out.println("range");
         List<Neighbor<String, String>> n1 = new ArrayList<>();
         List<Neighbor<String, String>> n2 = new ArrayList<>();
         for (int i = 1000; i < 1100; i++) {
-            bktree.range(words[i], 1, n1);
-            naive.range(words[i], 1, n2);
-            /*
-            System.out.println(i+" "+words[i]);
-            java.util.Collections.sort(n1);
-            java.util.Collections.sort(n2);
-            System.out.println(n1.stream().map(Objects::toString).collect(Collectors.joining(", ")));
-            System.out.println(n2.stream().map(Objects::toString).collect(Collectors.joining(", ")));
-             */
+            bktree.range(words.get(i), 1, n1);
+            naive.range(words.get(i), 1, n2);
             assertEquals(n1.size(), n2.size());
             String[] s1 = new String[n1.size()];
             String[] s2 = new String[n2.size()];
@@ -96,42 +101,5 @@ public class BKTreeTest {
             n1.clear();
             n2.clear();
         }
-    }
-
-    @Test
-    public void testSpeed() {
-        System.out.println("speed");
-        long start = System.currentTimeMillis();
-        List<Neighbor<String, String>> neighbors = new ArrayList<>();
-        for (int i = 1000; i < 1100; i++) {
-            bktree.range(words[i], 1, neighbors);
-            neighbors.clear();
-        }
-        double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 1 search: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 1000; i < 1100; i++) {
-            bktree.range(words[i], 2, neighbors);
-            neighbors.clear();
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 2 search: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 1000; i < 1100; i++) {
-            bktree.range(words[i], 3, neighbors);
-            neighbors.clear();
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 3 search: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 1000; i < 1100; i++) {
-            bktree.range(words[i], 4, neighbors);
-            neighbors.clear();
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("BK-tree range 4 search: %.2fs%n", time);
     }
 }

@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.demo.mds;
 
 import java.awt.BorderLayout;
@@ -33,9 +31,9 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
-import org.apache.commons.csv.CSVFormat;
-import smile.data.DataFrame;
-import smile.io.DatasetReader;
+import smile.data.Attribute;
+import smile.data.AttributeDataset;
+import smile.data.parser.DelimitedTextParser;
 import smile.mds.SammonMapping;
 import smile.plot.PlotCanvas;
 import smile.plot.ScatterPlot;
@@ -56,7 +54,7 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
         "projection/bank25d.txt"
     };
 
-    static DataFrame[] dataset = new DataFrame[datasetName.length];
+    static AttributeDataset[] dataset = new AttributeDataset[datasetName.length];
     static int datasetIndex = 0;
 
     JPanel optionPane;
@@ -96,8 +94,15 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
      */
     public JComponent learn() {
         JPanel pane = new JPanel(new GridLayout(1, 2));
-        double[][] data = dataset[datasetIndex].toArray();
-        String[] labels = dataset[datasetIndex].names();
+        double[][] data = dataset[datasetIndex].toArray(new double[dataset[datasetIndex].size()][]);
+        String[] labels = dataset[datasetIndex].toArray(new String[dataset[datasetIndex].size()]);
+        if (labels[0] == null) {
+            Attribute[] attr = dataset[datasetIndex].attributes();
+            labels = new String[attr.length];
+            for (int i = 0; i < labels.length; i++) {
+                labels[i] = attr[i].getName();
+            }
+        }
 
         long clock = System.currentTimeMillis();
         SammonMapping sammon = new SammonMapping(data, 2);
@@ -124,15 +129,16 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
         datasetBox.setEnabled(false);
 
         try {
-            JComponent plot = learn();
-            if (plot != null) {
-                if (canvas != null) remove(canvas);
-                canvas = plot;
-                add(plot, BorderLayout.CENTER);
-            }
-            validate();
+        	JComponent plot = learn();
+        	if (plot != null) {
+        		if (canvas != null)
+        			remove(canvas);
+        		canvas = plot;
+        		add(plot, BorderLayout.CENTER);
+        	}
+        	validate();
         } catch (Exception ex) {
-            System.err.println(ex);
+        	System.err.println(ex);
         }
         
         startButton.setEnabled(true);
@@ -145,13 +151,16 @@ public class SammonMappingDemo extends JPanel implements Runnable, ActionListene
             datasetIndex = datasetBox.getSelectedIndex();
 
             if (dataset[datasetIndex] == null) {
-                CSVFormat format = CSVFormat.DEFAULT.withDelimiter('\t').withFirstRecordAsHeader();
+                DelimitedTextParser parser = new DelimitedTextParser();
+                parser.setDelimiter("[\t]+");
+                parser.setRowNames(true);
+                parser.setColumnNames(true);
+                if (datasetIndex == 2 || datasetIndex == 3) {
+                    parser.setRowNames(false);
+                }
 
                 try {
-                    dataset[datasetIndex] = DatasetReader.csv(smile.util.Paths.getTestData(datasource[datasetIndex]), format);
-                    if (datasetIndex != 2 && datasetIndex != 3) {
-                        dataset[datasetIndex] = dataset[datasetIndex].drop(0); // row names
-                    }
+                    dataset[datasetIndex] = parser.parse(datasetName[datasetIndex], smile.data.parser.IOUtils.getTestDataFile(datasource[datasetIndex]));
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(null, "Failed to load dataset.", "ERROR", JOptionPane.ERROR_MESSAGE);
                     System.err.println(ex);

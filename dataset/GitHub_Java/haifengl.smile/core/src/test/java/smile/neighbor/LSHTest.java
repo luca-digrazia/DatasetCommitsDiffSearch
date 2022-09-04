@@ -1,35 +1,32 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.neighbor;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.USPS;
-import smile.math.MathEx;
+
+import smile.data.AttributeDataset;
+import smile.data.NominalAttribute;
+import smile.data.parser.DelimitedTextParser;
 import smile.math.distance.EuclideanDistance;
-import static org.junit.Assert.*;
 
 /**
  *
@@ -37,14 +34,33 @@ import static org.junit.Assert.*;
  */
 @SuppressWarnings("rawtypes")
 public class LSHTest {
-    double[][] x = USPS.x;
-    double[][] testx = USPS.testx;
-    LSH<double[]> lsh;
-    LinearSearch<double[]> naive = new LinearSearch<>(x, new EuclideanDistance());
+    double[][] x = null;
+    double[][] testx = null;
+    LSH<double[]> lsh = null;
+    LinearSearch<double[]> naive = null;
 
-    public LSHTest() throws IOException {
-        MathEx.setSeed(19650218); // to get repeatable results.
-        lsh = new LSH<>(x, x, 4.0, 1017881);
+    public LSHTest() {
+        DelimitedTextParser parser = new DelimitedTextParser();
+        parser.setResponseIndex(new NominalAttribute("class"), 0);
+        try {
+            AttributeDataset train = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset test = parser.parse("USPS Test", smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"));
+
+            x = train.toArray(new double[train.size()][]);
+            testx = test.toArray(new double[test.size()][]);
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
+
+        naive = new LinearSearch<>(x, new EuclideanDistance());
+        lsh = new LSH<>(x, x);
+        /*
+        lsh = new LSH<double[]>(256, 100, 3, 4.0);
+        for (double[] xi : x) {
+            lsh.put(xi, xi);
+        }
+         * 
+         */
     }
 
     @BeforeClass
@@ -63,112 +79,95 @@ public class LSHTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of nearest method, of class LSH.
+     */
     @Test
     public void testNearest() {
         System.out.println("nearest");
 
-        int recall = 0;
-        double error = 0.0;
+        long time = System.currentTimeMillis();
+        double recall = 0.0;
+        double dist = 0.0;
         int hit = 0;
         for (int i = 0; i < testx.length; i++) {
             Neighbor neighbor = lsh.nearest(testx[i]);
-            if (neighbor != null) {
+            if (neighbor.index != -1) {
+                dist += neighbor.distance;
                 hit++;
-
-                Neighbor truth = naive.nearest(testx[i]);
-                if (neighbor.index == truth.index) {
-                    recall++;
-                } else {
-                    error += Math.abs(neighbor.distance - truth.distance) / truth.distance;
-                }
+            }
+            if (neighbor.index == naive.nearest(testx[i]).index) {
+                recall++;
             }
         }
 
-        error /= (hit - recall);
-
-        assertEquals(1154, recall);
-        assertEquals(2007, hit);
-        assertEquals(0.1305, error, 1E-4);
-        System.out.format("recall is %.2f%%%n", 100.0 * recall / testx.length);
-        System.out.format("error when miss is %.2f%%%n", 100.0 * error);
-        System.out.format("null rate is %.2f%%%n", 100.0 - 100.0 * hit / testx.length);
+        recall /= testx.length;
+        System.out.println("recall is " + recall);
+        System.out.println("average distance is " + dist / hit);
+        System.out.println("time is " + (System.currentTimeMillis() - time) / 1000.0);
     }
 
+    /**
+     * Test of knn method, of class LSH.
+     */
     @Test
     public void testKnn() {
         System.out.println("knn");
 
-        int[] recall = new int[testx.length];
+        long time = System.currentTimeMillis();
+        double recall = 0.0;
         for (int i = 0; i < testx.length; i++) {
-            int k = 7;
+            int k = 3;
             Neighbor[] n1 = lsh.knn(testx[i], k);
             Neighbor[] n2 = naive.knn(testx[i], k);
-            for (Neighbor m2 : n2) {
-                for (Neighbor m1 : n1) {
-                    if (m1.index == m2.index) {
-                        recall[i]++;
+            int hit = 0;
+            for (int m = 0; m < n1.length && n1[m] != null; m++) {
+                for (int n = 0; n < n2.length && n2[n] != null; n++) {
+                    if (n1[m].index == n2[n].index) {
+                        hit++;
                         break;
                     }
                 }
             }
+            recall += 1.0 * hit / k;
         }
 
-        System.out.format("q1     of recall is %d%n", MathEx.q1(recall));
-        System.out.format("median of recall is %d%n", MathEx.median(recall));
-        System.out.format("q3     of recall is %d%n", MathEx.q3(recall));
+        recall /= testx.length;
+        System.out.println("recall is " + recall);
+        System.out.println("time is " + (System.currentTimeMillis() - time) / 1000.0);
     }
 
+    /**
+     * Test of range method, of class LSH.
+     */
     @Test
     public void testRange() {
         System.out.println("range");
 
-        int[] recall = new int[testx.length];
+        long time = System.currentTimeMillis();
+        double recall = 0.0;
         for (int i = 0; i < testx.length; i++) {
             ArrayList<Neighbor<double[], double[]>> n1 = new ArrayList<>();
             ArrayList<Neighbor<double[], double[]>> n2 = new ArrayList<>();
             lsh.range(testx[i], 8.0, n1);
             naive.range(testx[i], 8.0, n2);
 
-            for (Neighbor m2 : n2) {
-                for (Neighbor m1 : n1) {
-                    if (m1.index == m2.index) {
-                        recall[i]++;
+            int hit = 0;
+            for (int m = 0; m < n1.size(); m++) {
+                for (int n = 0; n < n2.size(); n++) {
+                    if (n1.get(m).index == n2.get(n).index) {
+                        hit++;
                         break;
                     }
                 }
             }
+            if (!n2.isEmpty()) {
+                recall += 1.0 * hit / n2.size();
+            }
         }
 
-        System.out.format("q1     of recall is %d%n", MathEx.q1(recall));
-        System.out.format("median of recall is %d%n", MathEx.median(recall));
-        System.out.format("q3     of recall is %d%n", MathEx.q3(recall));
-    }
-
-    @Test(expected = Test.None.class)
-    public void testSpeed() throws Exception {
-        System.out.println("Speed");
-
-        long start = System.currentTimeMillis();
-        for (int i = 0; i < testx.length; i++) {
-            lsh.nearest(testx[i]);
-        }
-        double time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("NN: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        for (int i = 0; i < testx.length; i++) {
-            lsh.knn(testx[i], 10);
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("10-NN: %.2fs%n", time);
-
-        start = System.currentTimeMillis();
-        List<Neighbor<double[], double[]>> n = new ArrayList<>();
-        for (int i = 0; i < testx.length; i++) {
-            lsh.range(testx[i], 8.0, n);
-            n.clear();
-        }
-        time = (System.currentTimeMillis() - start) / 1000.0;
-        System.out.format("Range: %.2fs%n", time);
+        recall /= testx.length;
+        System.out.println("recall is " + recall);
+        System.out.println("time is " + (System.currentTimeMillis() - time) / 1000.0);
     }
 }

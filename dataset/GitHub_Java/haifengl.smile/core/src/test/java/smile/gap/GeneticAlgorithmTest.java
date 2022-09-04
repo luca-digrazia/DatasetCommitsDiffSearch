@@ -95,7 +95,7 @@ public class GeneticAlgorithmTest {
         assertEquals(18, result.fitness(), 1E-7);
 
         int[] best = {1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        for (int i = 0; i < best.length; i++) {
+        for (int i : result.bits()) {
             assertEquals(best[i], result.bits()[i]);
         }
         

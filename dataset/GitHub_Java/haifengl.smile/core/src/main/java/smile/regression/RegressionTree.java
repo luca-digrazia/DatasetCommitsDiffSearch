@@ -597,17 +597,16 @@ public class RegressionTree implements Regression<double[]> {
             int tc = 0;
             int fc = 0;
             int[] trueSamples = new int[n];
-            //int[] falseSamples = new int[n];
+            int[] falseSamples = new int[n];
 
             if (attributes[node.splitFeature].getType() == Attribute.Type.NOMINAL) {
                 for (int i = 0; i < n; i++) {
                     if (samples[i] > 0) {
                         if (x[i][node.splitFeature] == node.splitValue) {
                             trueSamples[i] = samples[i];
-                            tc += trueSamples[i];
-                            samples[i] = 0;
+                            tc += samples[i];
                         } else {
-                            //falseSamples[i] = samples[i];
+                            falseSamples[i] = samples[i];                            
                             fc += samples[i];
                         }
                     }
@@ -617,10 +616,9 @@ public class RegressionTree implements Regression<double[]> {
                     if (samples[i] > 0) {
                         if (x[i][node.splitFeature] <= node.splitValue) {
                             trueSamples[i] = samples[i];
-                            tc += trueSamples[i];
-                            samples[i] = 0;
+                            tc += samples[i];
                         } else {
-                            //falseSamples[i] = samples[i];
+                            falseSamples[i] = samples[i];                            
                             fc += samples[i];
                         }
                     }
@@ -648,7 +646,7 @@ public class RegressionTree implements Regression<double[]> {
                 }
             }
 
-            falseChild = new TrainNode(node.falseChild, x, y, samples);
+            falseChild = new TrainNode(node.falseChild, x, y, falseSamples);
             if (fc > nodeSize && falseChild.findBestSplit()) {
                 if (nextSplits != null) {
                     nextSplits.add(falseChild);
@@ -797,16 +795,15 @@ public class RegressionTree implements Regression<double[]> {
             int tc = 0;
             int fc = 0;
             int[] trueSamples = new int[n];
-            //int[] falseSamples = new int[n];
+            int[] falseSamples = new int[n];
 
             for (int i = 0; i < n; i++) {
                 if (samples[i] > 0) {
                     if (x[i][node.splitFeature] == (int) node.splitValue) {
                         trueSamples[i] = samples[i];
-                        tc += trueSamples[i];
-                        samples[i] = 0;
+                        tc += samples[i];
                     } else {
-                        //falseSamples[i] = samples[i];
+                        falseSamples[i] = samples[i];
                         fc += samples[i];
                     }
                 }
@@ -824,7 +821,7 @@ public class RegressionTree implements Regression<double[]> {
                 }
             }
 
-            falseChild = new SparseBinaryTrainNode(node.falseChild, x, y, samples);
+            falseChild = new SparseBinaryTrainNode(node.falseChild, x, y, falseSamples);
             if (fc > nodeSize && falseChild.findBestSplit()) {
                 if (nextSplits != null) {
                     nextSplits.add(falseChild);

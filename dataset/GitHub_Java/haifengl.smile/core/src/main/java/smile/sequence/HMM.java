@@ -17,7 +17,7 @@ package smile.sequence;
 
 import java.util.HashMap;
 import java.util.Map;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * First-order Hidden Markov Model. A hidden Markov model (HMM) is a statistical
@@ -443,8 +443,8 @@ public class HMM<O> implements SequenceLabeler<O> {
                 throw new IllegalArgumentException(String.format("The length of observation sequence %d and that of corresponding label sequence are different.", i));
             }
 
-            numStates = Math.max(numStates, MathEx.max(labels[i]) + 1);
-            numSymbols = Math.max(numSymbols, MathEx.max(observations[i]) + 1);
+            numStates = Math.max(numStates, Math.max(labels[i]) + 1);
+            numSymbols = Math.max(numSymbols, Math.max(observations[i]) + 1);
         }
 
         pi = new double[numStates];
@@ -460,10 +460,10 @@ public class HMM<O> implements SequenceLabeler<O> {
             }
         }
 
-        MathEx.unitize1(pi);
+        Math.unitize1(pi);
         for (int i = 0; i < numStates; i++) {
-            MathEx.unitize1(a[i]);
-            MathEx.unitize1(b[i]);
+            Math.unitize1(a[i]);
+            Math.unitize1(b[i]);
         }
     }
 
@@ -504,8 +504,8 @@ public class HMM<O> implements SequenceLabeler<O> {
         numSymbols = 0;
 
         for (int i = 0; i < obs.length; i++) {
-            numStates = Math.max(numStates, MathEx.max(labels[i]) + 1);
-            numSymbols = Math.max(numSymbols, MathEx.max(obs[i]) + 1);
+            numStates = Math.max(numStates, Math.max(labels[i]) + 1);
+            numSymbols = Math.max(numSymbols, Math.max(obs[i]) + 1);
         }
 
         pi = new double[numStates];
@@ -521,10 +521,10 @@ public class HMM<O> implements SequenceLabeler<O> {
             }
         }
 
-        MathEx.unitize1(pi);
+        Math.unitize1(pi);
         for (int i = 0; i < numStates; i++) {
-            MathEx.unitize1(a[i]);
-            MathEx.unitize1(b[i]);
+            Math.unitize1(a[i]);
+            Math.unitize1(b[i]);
         }
     }
 

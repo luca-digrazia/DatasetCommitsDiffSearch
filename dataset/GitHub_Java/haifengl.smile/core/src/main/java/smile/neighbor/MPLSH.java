@@ -15,11 +15,10 @@
  *******************************************************************************/
 package smile.neighbor;
 
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
-
 import smile.math.IntArrayList;
 import smile.math.Math;
 import smile.sort.HeapSelect;
@@ -820,7 +819,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
     /**
      * Set if exclude query object self from the neighborhood.
      */
-    public MPLSH<E> setIdenticalExcluded(boolean excluded) {
+    public MPLSH setIdenticalExcluded(boolean excluded) {
         identicalExcluded = excluded;
         return this;
     }

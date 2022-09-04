@@ -17,7 +17,7 @@ package smile.plot;
 
 import java.util.Arrays;
 
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * The coordinate base of PlotCanvas. This support both 2D and 3D
