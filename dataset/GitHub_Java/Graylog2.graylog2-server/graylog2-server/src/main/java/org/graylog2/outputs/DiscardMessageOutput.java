@@ -81,9 +81,9 @@ public class DiscardMessageOutput implements MessageOutput {
         messagesDiscarded.mark(messages.size());
     }
 
-    public interface Factory extends MessageOutput.Factory<DiscardMessageOutput> {
+    public interface Factory extends MessageOutput.Factory<GelfOutput> {
         @Override
-        DiscardMessageOutput create(Stream stream, Configuration configuration);
+        GelfOutput create(Stream stream, Configuration configuration);
 
         @Override
         Config getConfig();
