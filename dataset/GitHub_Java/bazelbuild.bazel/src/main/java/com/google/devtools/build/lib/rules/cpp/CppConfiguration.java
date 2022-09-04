@@ -264,12 +264,16 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    */
   private final boolean lipoContextCollector;
 
+  /** If true, add the toolchain identifier to the name of the output directory. */
+  private final boolean toolchainIdInOutputDirectory;
+
   private final CppToolchainInfo cppToolchainInfo;
 
   protected CppConfiguration(CppConfigurationParameters params)
       throws InvalidConfigurationException {
     CrosstoolConfig.CToolchain toolchain = params.toolchain;
     cppOptions = params.cppOptions;
+    this.toolchainIdInOutputDirectory = cppOptions.toolchainIdInOutputDirectory;
     this.desiredCpu = Preconditions.checkNotNull(params.commonOptions.cpu);
     this.lipoMode = cppOptions.getLipoMode();
     this.convertLipoToThinLto = cppOptions.convertLipoToThinLto;
@@ -1579,9 +1583,14 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     } else {
       lipoSuffix = "";
     }
-    String toolchainPrefix = desiredCpu;
-    if (!cppOptions.outputDirectoryTag.isEmpty()) {
-      toolchainPrefix += "-" + cppOptions.outputDirectoryTag;
+    String toolchainPrefix;
+    if (toolchainIdInOutputDirectory) {
+      toolchainPrefix = cppToolchainInfo.getToolchainIdentifier();
+    } else {
+      toolchainPrefix = desiredCpu;
+      if (!cppOptions.outputDirectoryTag.isEmpty()) {
+        toolchainPrefix += "-" + cppOptions.outputDirectoryTag;
+      }
     }
 
     return toolchainPrefix + lipoSuffix;

@@ -287,8 +287,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     linkActionBuilder.setLinkStaticness(linkStaticness);
     linkActionBuilder.setFake(fake);
 
-    if (CppLinkAction.enableSymbolsCounts(
-        cppConfiguration, ccToolchain.supportsGoldLinker(), fake, linkType)) {
+    if (CppLinkAction.enableSymbolsCounts(cppConfiguration, fake, linkType)) {
       linkActionBuilder.setSymbolCountsOutput(ruleContext.getBinArtifact(
           CppLinkAction.symbolCountsFileName(binaryPath)));
     }

@@ -61,19 +61,22 @@ public final class LtoBackendArtifacts {
   // The result of executing the above command line, an ELF object file.
   private final Artifact objectFile;
 
+  // A map of all of the bitcode files. This is the universe from which the .imports file
+  // distills its lists.  The map is the same across all LtoBackendArtifacts of a given
+  // binary.
+  private final Map<PathFragment, Artifact> bitcodeFiles;
+
+  // Command line arguments to apply to back-end compile action, typically from
+  // the feature configuration and user-provided linkopts.
+  private List<String> commandLine;
+
   LtoBackendArtifacts(
       PathFragment ltoOutputRootPrefix,
       Artifact bitcodeFile,
       Map<PathFragment, Artifact> allBitCodeFiles,
       RuleContext ruleContext,
       BuildConfiguration configuration,
-      CppLinkAction.LinkArtifactFactory linkArtifactFactory,
-      FeatureConfiguration featureConfiguration,
-      CcToolchainProvider ccToolchain,
-      FdoSupportProvider fdoSupport,
-      boolean usePic,
-      boolean generateDwo,
-      List<String> commandLine) {
+      CppLinkAction.LinkArtifactFactory linkArtifactFactory) {
     this.bitcodeFile = bitcodeFile;
     PathFragment obj = ltoOutputRootPrefix.getRelative(bitcodeFile.getRootRelativePath());
 
@@ -83,17 +86,7 @@ public final class LtoBackendArtifacts {
     index = linkArtifactFactory.create(
         ruleContext, configuration, FileSystemUtils.appendExtension(obj, ".thinlto.bc"));
 
-    scheduleLtoBackendAction(
-        ruleContext,
-        featureConfiguration,
-        ccToolchain,
-        fdoSupport,
-        usePic,
-        generateDwo,
-        configuration,
-        linkArtifactFactory,
-        commandLine,
-        allBitCodeFiles);
+    bitcodeFiles = allBitCodeFiles;
   }
 
   // Interface to create an LTO backend that does not perform any cross-module optimization.
@@ -102,31 +95,14 @@ public final class LtoBackendArtifacts {
       Artifact bitcodeFile,
       RuleContext ruleContext,
       BuildConfiguration configuration,
-      CppLinkAction.LinkArtifactFactory linkArtifactFactory,
-      FeatureConfiguration featureConfiguration,
-      CcToolchainProvider ccToolchain,
-      FdoSupportProvider fdoSupport,
-      boolean usePic,
-      boolean generateDwo,
-      List<String> commandLine) {
+      CppLinkAction.LinkArtifactFactory linkArtifactFactory) {
     this.bitcodeFile = bitcodeFile;
 
     PathFragment obj = ltoOutputRootPrefix.getRelative(bitcodeFile.getRootRelativePath());
     objectFile = linkArtifactFactory.create(ruleContext, configuration, obj);
     imports = null;
     index = null;
-
-    scheduleLtoBackendAction(
-        ruleContext,
-        featureConfiguration,
-        ccToolchain,
-        fdoSupport,
-        usePic,
-        generateDwo,
-        configuration,
-        linkArtifactFactory,
-        commandLine,
-        null);
+    bitcodeFiles = null;
   }
 
   public Artifact getObjectFile() {
@@ -142,7 +118,11 @@ public final class LtoBackendArtifacts {
     builder.add(index);
   }
 
-  private void scheduleLtoBackendAction(
+  public void setCommandLine(List<String> cmdLine) {
+    commandLine = cmdLine;
+  }
+
+  public void scheduleLtoBackendAction(
       RuleContext ruleContext,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchain,
@@ -150,9 +130,7 @@ public final class LtoBackendArtifacts {
       boolean usePic,
       boolean generateDwo,
       BuildConfiguration configuration,
-      CppLinkAction.LinkArtifactFactory linkArtifactFactory,
-      List<String> commandLine,
-      Map<PathFragment, Artifact> bitcodeFiles) {
+      CppLinkAction.LinkArtifactFactory linkArtifactFactory) {
     LtoBackendAction.Builder builder = new LtoBackendAction.Builder();
 
     builder.addInput(bitcodeFile);
