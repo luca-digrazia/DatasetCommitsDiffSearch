@@ -196,9 +196,9 @@ public class MessageToJsonSerializer {
         final DeserializeBean bean = mapper.readValue(bytes, DeserializeBean.class);
         final Map<String, Object> fields = bean.getFields();
         final Message message = new Message(
-                (String) fields.remove("message"),
-                (String) fields.remove("source"),
-                new DateTime((long) fields.remove("timestamp"), DateTimeZone.UTC)
+                (String) fields.get("message"),
+                (String) fields.get("source"),
+                new DateTime((long) fields.get("timestamp"), DateTimeZone.UTC)
         );
         final List<Stream> streamList = Lists.newArrayList();
 
@@ -211,7 +211,6 @@ public class MessageToJsonSerializer {
         }
 
         message.setStreams(streamList);
-        message.addFields(fields);
 
         final MessageInput input;
         if (bean.getSourceInput() != null)

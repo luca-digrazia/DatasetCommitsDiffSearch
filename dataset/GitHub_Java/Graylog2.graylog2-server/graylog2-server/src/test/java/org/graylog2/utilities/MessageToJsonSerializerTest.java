@@ -16,7 +16,7 @@
  */
 package org.graylog2.utilities;
 
-import com.google.common.collect.Lists;
+import com.beust.jcommander.internal.Lists;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
