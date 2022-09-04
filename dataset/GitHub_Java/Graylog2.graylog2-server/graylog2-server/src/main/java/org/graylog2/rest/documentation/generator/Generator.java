@@ -19,12 +19,14 @@
  */
 package org.graylog2.rest.documentation.generator;
 
-import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.Core;
 import org.graylog2.rest.documentation.annotations.*;
 import org.reflections.Reflections;
+import org.reflections.scanners.MethodAnnotationsScanner;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +34,9 @@ import javax.ws.rs.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * This is generating API information in Swagger format.
@@ -85,18 +89,12 @@ public class Generator {
                 }
 
                 Map<String, Object> apiDescription = Maps.newHashMap();
-                apiDescription.put("name", info.value());
                 apiDescription.put("path", path.value());
                 apiDescription.put("description", info.description());
 
                 apis.add(apiDescription);
             }
-            Collections.sort(apis, new Comparator<Map<String, Object>>() {
-                @Override
-                public int compare(Map<String, Object> o1, Map<String, Object> o2) {
-                    return ComparisonChain.start().compare(o1.get("name").toString(), o2.get("name").toString()).result();
-                }
-            });
+
             Map<String, String> info = Maps.newHashMap();
             info.put("title", "Graylog2 REST API");
 
@@ -171,12 +169,7 @@ public class Generator {
                     operation.put("summary", apiOperation.value());
                     operation.put("notes", apiOperation.notes());
                     operation.put("nickname", method.getName());
-
-                    List<Map<String, Object>> parameters = determineParameters(method);
-                    if (parameters != null && !parameters.isEmpty()) {
-                        operation.put("parameters", parameters);
-                    }
-
+                    operation.put("parameters", determineParameters(method));
                     operation.put("responseMessages", determineResponses(method));
 
                     operations.add(operation);
@@ -225,20 +218,16 @@ public class Generator {
                 String paramType = "";
                 if (annotation instanceof QueryParam) {
                     paramType = "query";
-                } else if (annotation instanceof PathParam) {
+                }
+
+                if (annotation instanceof PathParam) {
                     paramType = "path";
-                } else {
-                    paramType = "body";
                 }
 
                 parameter.put("paramType", paramType);
             }
 
-            // There might be un-annotated parameters.
-            if (!parameter.isEmpty()) {
-                parameters.add(parameter);
-            }
-
+            parameters.add(parameter);
             i++;
         }
 

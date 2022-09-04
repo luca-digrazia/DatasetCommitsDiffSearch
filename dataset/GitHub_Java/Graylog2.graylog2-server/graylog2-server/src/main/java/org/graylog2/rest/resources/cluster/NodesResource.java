@@ -22,16 +22,14 @@ package org.graylog2.rest.resources.cluster;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.sun.jersey.api.core.ResourceConfig;
-import org.graylog2.Core;
 import org.graylog2.cluster.Node;
 import org.graylog2.plugin.Tools;
+import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
-import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
 import java.util.Map;
@@ -39,21 +37,23 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
+@Api(value = "Cluster: Nodes", description = "Nodes of this cluster / Node discovery")
 @Path("/cluster/nodes")
 public class NodesResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(NodesResource.class);
 
-    @Context
-    ResourceConfig rc;
-
     @GET
     @Timed
     @Path("/{nodeId}")
+    @ApiOperation(value = "Information about a node.",
+                  notes = "This is returning information of a node in context to its state in the cluster. " +
+                          "Use the system API of the node itself to get system information.")
     @Produces(MediaType.APPLICATION_JSON)
-    public String node(@PathParam("nodeId") String nodeId, @QueryParam("pretty") boolean prettyPrint) {
-        Core core = (Core) rc.getProperty("core");
-
+    @ApiResponses(value = {
+            @ApiResponse(code = 404, message = "Node not found.")
+    })
+    public String node(@ApiParam(title = "nodeId", required = true) @PathParam("nodeId") String nodeId) {
         if (nodeId == null || nodeId.isEmpty()) {
             LOG.error("Missing nodeId. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -66,36 +66,39 @@ public class NodesResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("node_id", node.getNodeId());
-        result.put("transport_address", node.getTransportAddress());
-        result.put("last_seen", Tools.getISO8601String(node.getLastSeen()));
-
-        return json(result, prettyPrint);
+        return json(nodeSummary(node));
     }
 
     @GET
     @Timed
-    @Path("/")
+    @ApiOperation(value = "List all active nodes in this cluster.")
     @Produces(MediaType.APPLICATION_JSON)
-    public String list(@QueryParam("pretty") boolean prettyPrint) {
-        Core core = (Core) rc.getProperty("core");
-
+    public String list() {
         List<Map<String, Object>> nodes = Lists.newArrayList();
 
         for (Node node : Node.allActive(core).values()) {
-            Map<String, Object> nodeMap = Maps.newHashMap();
-            nodeMap.put("node_id", node.getNodeId());
-            nodeMap.put("transport_address", node.getTransportAddress());
-            nodeMap.put("last_seen", Tools.getISO8601String(node.getLastSeen()));
-
-            nodes.add(nodeMap);
+            nodes.add(nodeSummary(node));
         }
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("total", nodes.size());
         result.put("nodes", nodes);
 
-        return json(result, prettyPrint);
+        return json(result);
+    }
+
+    private Map<String, Object> nodeSummary(Node node) {
+        Map<String, Object> m  = Maps.newHashMap();
+
+        m.put("node_id", node.getNodeId());
+        m.put("is_master", node.isMaster());
+        m.put("hostname", Tools.getLocalCanonicalHostname());
+        m.put("transport_address", node.getTransportAddress());
+        m.put("last_seen", Tools.getISO8601String(node.getLastSeen()));
+
+        // Only meant to be used for representation. Not a real ID.
+        m.put("short_node_id", node.getShortNodeId());
+
+        return m;
     }
 }
