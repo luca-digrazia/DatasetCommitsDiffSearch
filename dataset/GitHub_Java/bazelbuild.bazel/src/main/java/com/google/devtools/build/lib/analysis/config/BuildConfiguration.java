@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkConverter;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -50,6 +51,8 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.BuildConfigurationApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.Path;
@@ -78,6 +81,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -321,15 +325,30 @@ public class BuildConfiguration implements BuildConfigurationApi {
         help = "If true, the genfiles directory is folded into the bin directory.")
     public boolean mergeGenfilesDirectory;
 
+    /**
+     * AssignmentConverter that also supports Starlarkization. For use with options that use {@link
+     * com.google.devtools.common.options.Converters.AssignmentConverter} and
+     * {@link @Option#allowMultiple}.
+     */
+    public static class StarlarkAssignmentConverter extends Converters.AssignmentConverter
+        implements StarlarkConverter<List<Map.Entry<String, String>>, Map.Entry<String, String>> {
+      @Override
+      public SkylarkList<Tuple<String>> convertToStarlark(List<Map.Entry<String, String>> entries) {
+        return SkylarkList.createImmutable(
+            entries.stream()
+                .map(e -> Tuple.of(e.getKey(), e.getValue()))
+                .collect(Collectors.toList()));
+      }
+    }
+
     @Option(
-      name = "define",
-      converter = Converters.AssignmentConverter.class,
-      defaultValue = "",
-      allowMultiple = true,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "Each --define option specifies an assignment for a build variable."
-    )
+        name = "define",
+        converter = StarlarkAssignmentConverter.class,
+        defaultValue = "",
+        allowMultiple = true,
+        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+        effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
+        help = "Each --define option specifies an assignment for a build variable.")
     public List<Map.Entry<String, String>> commandLineBuildVariables;
 
     @Option(
@@ -570,20 +589,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
               + "for different variables accumulate."
     )
     public List<Map.Entry<String, String>> actionEnvironment;
-
-    @Option(
-        name = "repo_env",
-        converter = Converters.OptionalAssignmentConverter.class,
-        allowMultiple = true,
-        defaultValue = "",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
-        help =
-            "Specifies additional environment variables to be available only for repository rules."
-                + " Note that repository rules see the full environment anyway, but in this way"
-                + " configuration information can be passed to repositories through options without"
-                + " invalidating the action graph.")
-    public List<Map.Entry<String, String>> repositoryEnvironment;
 
     @Option(
       name = "collect_code_coverage",
