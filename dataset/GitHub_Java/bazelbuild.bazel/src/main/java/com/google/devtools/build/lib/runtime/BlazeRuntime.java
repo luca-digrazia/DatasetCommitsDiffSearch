@@ -75,6 +75,7 @@ import com.google.devtools.build.lib.server.CommandProtos.EnvironmentVariable;
 import com.google.devtools.build.lib.server.CommandProtos.ExecRequest;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Filesystem;
+import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
 import com.google.devtools.build.lib.server.GrpcServerImpl;
 import com.google.devtools.build.lib.server.PidFileWatcher;
 import com.google.devtools.build.lib.server.RPCServer;
@@ -305,7 +306,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
 
   /** Configure profiling based on the provided options. */
   ProfilerStartedEvent initProfiler(
-      boolean tracerEnabled,
       ExtendedEventHandler eventHandler,
       BlazeWorkspace workspace,
       CommonCommandOptions options,
@@ -321,7 +321,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     String profileName = null;
     UploadContext streamingContext = null;
     try {
-      if (tracerEnabled) {
+      if (options.enableTracer || options.profilePath != null) {
         if (options.enableTracerCompression == TriState.YES
             || (options.enableTracerCompression == TriState.AUTO
                 && (options.profilePath == null
@@ -653,7 +653,8 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       logger.atInfo().withCause(e).log("Interrupted in afterCommand");
       afterCommandResult =
           BlazeCommandResult.detailedExitCode(
-              InterruptedFailureDetails.detailedExitCode("executor completion interrupted"));
+              InterruptedFailureDetails.detailedExitCode(
+                  "executor completion interrupted", Code.EXECUTOR_COMPLETION));
       Thread.currentThread().interrupt();
     }
 

@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.AnsiStrippingOutputStream;
 import com.google.devtools.build.lib.util.DebugLoggerConfigurator;
@@ -324,6 +325,9 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
             && !commonOptions.enableTracer;
     if (commandSupportsProfile && !profileExplicitlyDisabled) {
       commonOptions.enableTracer = true;
+      if (!options.containsExplicitOption("experimental_profile_cpu_usage")) {
+        commonOptions.enableCpuUsageProfiling = true;
+      }
     }
     // TODO(ulfjack): Move the profiler initialization as early in the startup sequence as possible.
     // Profiler setup and shutdown must always happen in pairs. Shutdown is currently performed in
@@ -538,7 +542,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
           Thread.currentThread().interrupt();
           String message = "command interrupted while syncing package loading";
           reporter.handle(Event.error(message));
-          earlyExitCode = InterruptedFailureDetails.detailedExitCode(message);
+          earlyExitCode =
+              InterruptedFailureDetails.detailedExitCode(message, Code.PACKAGE_LOADING_SYNC);
         } catch (AbruptExitException e) {
           logger.atInfo().withCause(e).log("Error package loading");
           reporter.handle(Event.error(e.getMessage()));
