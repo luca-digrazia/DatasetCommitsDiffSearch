@@ -14,7 +14,6 @@ import org.gradle.api.file.FileCollection;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Optional;
-import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.TaskAction;
@@ -79,28 +78,20 @@ public class QuarkusBuild extends QuarkusTask {
     }
 
     @OutputFile
-    public File getRunnerJar() {
+    public File getOutputDir() {
         return new File(getProject().getBuildDir(), extension().finalName() + "-runner.jar");
-    }
-
-    @OutputDirectory
-    public File getFastJar() {
-        return new File(getProject().getBuildDir(), "quarkus-app");
     }
 
     @TaskAction
     public void buildQuarkus() {
-        getLogger().lifecycle("building quarkus jar");
+        getLogger().lifecycle("building quarkus runner");
 
         final AppArtifact appArtifact = extension().getAppArtifact();
         appArtifact.setPaths(QuarkusGradleUtils.getOutputPaths(getProject()));
         final AppModelResolver modelResolver = extension().getAppModelResolver();
 
-        final Properties effectiveProperties = getBuildSystemProperties(appArtifact);
-        if (ignoredEntries != null && ignoredEntries.size() > 0) {
-            String joinedEntries = String.join(",", ignoredEntries);
-            effectiveProperties.setProperty("quarkus.package.user-configured-ignored-entries", joinedEntries);
-        }
+        final Properties realProperties = getBuildSystemProperties(appArtifact);
+
         boolean clear = false;
         if (uberJar && System.getProperty("quarkus.package.uber-jar") == null) {
             System.setProperty("quarkus.package.uber-jar", "true");
@@ -111,7 +102,7 @@ public class QuarkusBuild extends QuarkusTask {
                 .setAppModelResolver(modelResolver)
                 .setTargetDirectory(getProject().getBuildDir().toPath())
                 .setBaseName(extension().finalName())
-                .setBuildSystemProperties(effectiveProperties)
+                .setBuildSystemProperties(realProperties)
                 .setAppArtifact(appArtifact)
                 .setLocalProjectDiscovery(false)
                 .setIsolateDeployment(true)
