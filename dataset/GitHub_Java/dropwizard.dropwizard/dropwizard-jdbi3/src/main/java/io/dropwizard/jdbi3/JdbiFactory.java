@@ -1,7 +1,5 @@
 package io.dropwizard.jdbi3;
 
-import java.util.Optional;
-
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jdbi3.InstrumentedSqlLogger;
 import com.codahale.metrics.jdbi3.strategies.SmartNameStrategy;
@@ -73,7 +71,7 @@ public class JdbiFactory {
         environment.lifecycle().manage(dataSource);
 
         // Setup the required health checks.
-        final Optional<String> validationQuery = configuration.getValidationQuery();
+        final String validationQuery = configuration.getValidationQuery();
         environment.healthChecks().register(name, new JdbiHealthCheck(
             environment.getHealthCheckExecutorService(),
             configuration.getValidationQueryTimeout().orElseGet(() -> Duration.seconds(5)),

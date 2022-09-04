@@ -12,7 +12,6 @@ import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.statement.SqlStatements;
 import org.junit.jupiter.api.Test;
 
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +37,7 @@ public class JdbiFactoryTest {
         when(environment.healthChecks()).thenReturn(healthChecks);
 
         when(configuration.build(metrics, name)).thenReturn(dataSource);
-        when(configuration.getValidationQuery()).thenReturn(Optional.of(validationQuery));
+        when(configuration.getValidationQuery()).thenReturn(validationQuery);
         when(configuration.isAutoCommentsEnabled()).thenReturn(true);
 
         when(jdbi.getConfig(SqlStatements.class)).thenReturn(sqlStatements);
