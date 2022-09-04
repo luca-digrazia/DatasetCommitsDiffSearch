@@ -1,20 +1,25 @@
 package com.yammer.dropwizard.jersey;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
 import com.google.common.collect.ImmutableList;
+import com.yammer.dropwizard.json.Json;
+import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.validation.InvalidEntityException;
-import com.yammer.dropwizard.validation.Validated;
 import com.yammer.dropwizard.validation.Validator;
+import org.codehaus.jackson.annotate.JsonIgnoreType;
+import org.eclipse.jetty.io.EofException;
 
 import javax.validation.Valid;
-import javax.validation.groups.Default;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.ext.MessageBodyReader;
+import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 
@@ -23,25 +28,19 @@ import java.lang.reflect.Type;
  * response entities from objects. Any request entity method parameters annotated with
  * {@code @Valid} are validated, and an informative 422 Unprocessable Entity response is returned
  * should the entity be invalid.
- *
- * (Essentially, extends {@link JacksonJaxbJsonProvider} with validation and support for
- * {@link JsonIgnoreType}.)
  */
 @Provider
-public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
+@Produces("application/json")
+@Consumes("application/json")
+public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
+                                                   MessageBodyWriter<Object> {
+    private static final Log LOG = Log.forClass(JacksonMessageBodyProvider.class);
     private static final Validator VALIDATOR = new Validator();
 
-    /**
- 	 * The default group array used in case any of the validate methods is called without a group.
- 	 */
- 	 private static final Class<?>[] DEFAULT_GROUP_ARRAY = new Class<?>[] { Default.class };
+    private final Json json;
 
-    public JacksonMessageBodyProvider(ObjectMapper mapper) {
-        setMapper(mapper);
-    }
-
-    public JacksonMessageBodyProvider() {
-        super();
+    public JacksonMessageBodyProvider(Json json) {
+        this.json = json;
     }
 
     @Override
@@ -49,7 +48,7 @@ public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
                               Type genericType,
                               Annotation[] annotations,
                               MediaType mediaType) {
-        return !isIgnored(type) && super.isReadable(type, genericType, annotations, mediaType);
+        return !isIgnored(type) && json.canDeserialize(type);
     }
 
     @Override
@@ -58,37 +57,25 @@ public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
                            Annotation[] annotations,
                            MediaType mediaType,
                            MultivaluedMap<String, String> httpHeaders,
-                           InputStream entityStream) throws IOException {
-        return validate(annotations, super.readFrom(type,
-                                            genericType,
-                                            annotations,
-                                            mediaType,
-                                            httpHeaders,
-                                            entityStream));
-    }
-
-    private Object validate(Annotation[] annotations, Object value) {
-        Class<?>[] classes = null;
-
-        for(Annotation annotation : annotations) {
-            if(annotation.annotationType() == Valid.class) {
-                classes = DEFAULT_GROUP_ARRAY;
-                break;
-            } else if(annotation.annotationType() == Validated.class) {
-                classes = ((Validated) annotation).value();
-                break;
-            }
+                           InputStream entityStream) throws IOException, WebApplicationException {
+        boolean validating = false;
+        for (Annotation annotation : annotations) {
+            validating = validating || (annotation.annotationType() == Valid.class);
         }
 
-        if(classes != null) {
-            final ImmutableList<String> errors = VALIDATOR.validate(value, classes);
-            if(!errors.isEmpty()) {
+        final Object value = parseEntity(genericType, entityStream);
+        if (validating) {
+            final ImmutableList<String> errors = VALIDATOR.validate(value);
+            if (!errors.isEmpty()) {
                 throw new InvalidEntityException("The request entity had the following errors:",
                                                  errors);
             }
         }
-
         return value;
+    }
+
+    private Object parseEntity(Type genericType, InputStream entityStream) throws IOException {
+        return json.readValue(entityStream, genericType);
     }
 
     @Override
@@ -96,11 +83,37 @@ public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
                                Type genericType,
                                Annotation[] annotations,
                                MediaType mediaType) {
-        return !isIgnored(type) && super.isWriteable(type, genericType, annotations, mediaType);
+        return !isIgnored(type) && json.canSerialize(type);
     }
 
     private boolean isIgnored(Class<?> type) {
         final JsonIgnoreType ignore = type.getAnnotation(JsonIgnoreType.class);
         return (ignore != null) && ignore.value();
+    }
+
+    @Override
+    public long getSize(Object t,
+                        Class<?> type,
+                        Type genericType,
+                        Annotation[] annotations,
+                        MediaType mediaType) {
+        return -1;
+    }
+
+    @Override
+    public void writeTo(Object t,
+                        Class<?> type,
+                        Type genericType,
+                        Annotation[] annotations,
+                        MediaType mediaType,
+                        MultivaluedMap<String, Object> httpHeaders,
+                        OutputStream entityStream) throws IOException, WebApplicationException {
+        try {
+            json.writeValue(entityStream, t);
+        } catch (EofException ignored) {
+            // we don't care about these
+        } catch (IOException e) {
+            LOG.error(e, "Error writing response");
+        }
     }
 }
