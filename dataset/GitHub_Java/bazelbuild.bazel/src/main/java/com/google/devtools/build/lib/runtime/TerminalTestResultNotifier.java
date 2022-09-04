@@ -96,10 +96,10 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
   private boolean duplicateLabels(Set<TestSummary> summaries) {
     Set<Label> labelsSeen = new HashSet<>();
     for (TestSummary summary : summaries) {
-      if (labelsSeen.contains(summary.getLabel())) {
+      if (labelsSeen.contains(summary.getTarget().getLabel())) {
         return true;
       }
-      labelsSeen.add(summary.getLabel());
+      labelsSeen.add(summary.getTarget().getLabel());
     }
     return false;
   }

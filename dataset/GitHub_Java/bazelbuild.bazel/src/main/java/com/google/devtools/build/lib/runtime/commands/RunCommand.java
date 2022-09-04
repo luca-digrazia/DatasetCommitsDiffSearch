@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -28,7 +27,7 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
+import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
 import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
@@ -37,8 +36,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SymlinkTreeHelper;
 import com.google.devtools.build.lib.packages.InputFile;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Rule;
@@ -48,7 +45,6 @@ import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.BadExitStatusException;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -60,6 +56,8 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils;
+import com.google.devtools.build.lib.util.OsUtils;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -112,12 +110,12 @@ public class RunCommand implements BlazeCommand  {
   }
 
   @VisibleForTesting
-  public static final String SINGLE_TARGET_MESSAGE =
-      "Only a single target can be run. "
-          + "Do not use wildcards that match more than one target";
-
+  public static final String SINGLE_TARGET_MESSAGE = "Blaze can only run a single target. "
+      + "Do not use wildcards that match more than one target";
   @VisibleForTesting
   public static final String NO_TARGET_MESSAGE = "No targets found to run";
+
+  private static final String PROCESS_WRAPPER = "process-wrapper" + OsUtils.executableExtension();
 
   // Value of --run_under as of the most recent command invocation.
   private RunUnder currentRunUnder;
@@ -227,12 +225,6 @@ public class RunCommand implements BlazeCommand  {
       configuration = result.getBuildConfigurationCollection().getTargetConfigurations().get(0);
     }
     Path workingDir;
-    if (!configuration.buildRunfilesManifests()) {
-      env.getReporter()
-          .handle(
-              Event.error("--nobuild_runfile_manifests is incompatible with the \"run\" command"));
-      return ExitCode.COMMAND_LINE_ERROR;
-    }
     try {
       workingDir = ensureRunfilesBuilt(env, targetToRun);
     } catch (CommandException e) {
@@ -272,9 +264,11 @@ public class RunCommand implements BlazeCommand  {
     // on that platform. Also we skip it when writing the command-line to a file instead
     // of executing it directly.
     if (OS.getCurrent() != OS.WINDOWS && runOptions.scriptPath == null) {
-      Preconditions.checkState(ProcessWrapperUtil.isSupported(env),
-          "process-wraper not found in embedded tools");
-      cmdLine.add(ProcessWrapperUtil.getProcessWrapper(env).getPathString());
+      PathFragment processWrapperPath =
+          env.getBlazeWorkspace().getBinTools().getExecPath(PROCESS_WRAPPER);
+      Preconditions.checkNotNull(
+          processWrapperPath, PROCESS_WRAPPER + " not found in embedded tools");
+      cmdLine.add(env.getExecRoot().getRelative(processWrapperPath).getPathString());
     }
     List<String> prettyCmdLine = new ArrayList<>();
     // Insert the command prefix specified by the "--run_under=<command-prefix>" option
@@ -373,7 +367,7 @@ public class RunCommand implements BlazeCommand  {
       return env.getWorkingDirectory();
     }
 
-    Artifact manifest = Preconditions.checkNotNull(runfilesSupport.getRunfilesManifest());
+    Artifact manifest = runfilesSupport.getRunfilesManifest();
     PathFragment runfilesDir = runfilesSupport.getRunfilesDirectoryExecPath();
     Path workingDir = env.getExecRoot().getRelative(runfilesDir);
     // On Windows, runfiles tree is disabled.
@@ -479,36 +473,26 @@ public class RunCommand implements BlazeCommand  {
   /**
    * Performs all available validation checks on an individual target.
    *
-   * @param configuredTarget ConfiguredTarget to validate
+   * @param target ConfiguredTarget to validate
    * @return ExitCode.SUCCESS if all checks succeeded, otherwise a different error code.
-   * @throws IllegalStateException if unable to find a target from the package manager.
    */
-  private ExitCode fullyValidateTarget(CommandEnvironment env, ConfiguredTarget configuredTarget) {
-
-    Target target = null;
-    try {
-      target = env.getPackageManager().getTarget(env.getReporter(), configuredTarget.getLabel());
-    } catch (NoSuchTargetException | NoSuchPackageException | InterruptedException e) {
-      env.getReporter().handle(Event.error("Failed to find a target to validate. " + e));
-      throw new IllegalStateException("Failed to find a target to validate");
-    }
-
-    String targetError = validateTarget(target);
+  private ExitCode fullyValidateTarget(CommandEnvironment env, ConfiguredTarget target) {
+    String targetError = validateTarget(target.getTarget());
 
     if (targetError != null) {
       env.getReporter().handle(Event.error(targetError));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
-    Artifact executable = configuredTarget.getProvider(FilesToRunProvider.class).getExecutable();
+    Artifact executable = target.getProvider(FilesToRunProvider.class).getExecutable();
     if (executable == null) {
-      env.getReporter().handle(Event.error(notExecutableError(target)));
+      env.getReporter().handle(Event.error(notExecutableError(target.getTarget())));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
     // Shouldn't happen: We just validated the target.
-    Preconditions.checkState(
-        executable != null, "Could not find executable for target %s", configuredTarget);
+    Preconditions.checkState(executable != null,
+        "Could not find executable for target %s", target);
     Path executablePath = executable.getPath();
     try {
       if (!executablePath.exists() || !executablePath.isExecutable()) {

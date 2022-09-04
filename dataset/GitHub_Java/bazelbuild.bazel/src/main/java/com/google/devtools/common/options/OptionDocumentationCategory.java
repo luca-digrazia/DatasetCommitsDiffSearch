@@ -54,12 +54,6 @@ public enum OptionDocumentationCategory {
   /** This option's primary purpose is to affect the verbosity, format or location of logging. */
   LOGGING,
 
-  /**
-   * This option affects how strictly Bazel enforces valid build inputs (rule definitions,
-   * flag combinations, etc).
-   */
-  INPUT_STRICTNESS,
-
   /** This option deals with how to go about executing the build. */
   EXECUTION_STRATEGY,
 
@@ -83,12 +77,6 @@ public enum OptionDocumentationCategory {
    * an iOS application with a certificate.)
    */
   SIGNING,
-
-  /**
-   * This option affects semantics of the skylark language or the build API accessible to BUILD
-   * files, .bzl files, or WORKSPACE files.
-   */
-  STARLARK_SEMANTICS,
 
   /**
    * This option dictates information about the test environment or test runner.
