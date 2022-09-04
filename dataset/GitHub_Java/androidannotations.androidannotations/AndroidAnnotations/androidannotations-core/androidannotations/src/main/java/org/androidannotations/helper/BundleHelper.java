@@ -54,8 +54,6 @@ public class BundleHelper {
 		METHOD_SUFFIX_BY_TYPE_NAME.put("char[]", "CharArray");
 
 		METHOD_SUFFIX_BY_TYPE_NAME.put(CHAR_SEQUENCE, "CharSequence");
-		METHOD_SUFFIX_BY_TYPE_NAME.put(CHAR_SEQUENCE + "[]", "CharSequenceArray");
-		METHOD_SUFFIX_BY_TYPE_NAME.put("java.util.ArrayList<" + CHAR_SEQUENCE + ">", "CharSequenceArrayList");
 
 		METHOD_SUFFIX_BY_TYPE_NAME.put("double", "Double");
 		METHOD_SUFFIX_BY_TYPE_NAME.put("double[]", "DoubleArray");
