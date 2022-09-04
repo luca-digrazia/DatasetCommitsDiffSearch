@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 public class BackgroundExecutor {
 
 	private static Executor executor = Executors.newCachedThreadPool();
-	private static ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(2 * Runtime.getRuntime().availableProcessors());
+	private static ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1);
 
 	public static void execute(Runnable runnable) {
 		executor.execute(runnable);
