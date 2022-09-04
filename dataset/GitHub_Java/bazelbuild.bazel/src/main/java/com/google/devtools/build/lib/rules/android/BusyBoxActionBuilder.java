@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -46,11 +45,6 @@ public final class BusyBoxActionBuilder {
   private static final ParamFileInfo FORCED_PARAM_FILE_INFO =
       ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED)
           .setUseAlways(OS.getCurrent() == OS.WINDOWS)
-          .build();
-
-  private static final ParamFileInfo WORKERS_FORCED_PARAM_FILE_INFO =
-      ParamFileInfo.builder(ParameterFileType.UNQUOTED)
-          .setUseAlways(true)
           .build();
 
   private final AndroidDataContext dataContext;
@@ -95,12 +89,6 @@ public final class BusyBoxActionBuilder {
             + " analysis time. Use one of the transitive input methods instead.");
     commandLine.add(arg, value);
     inputs.addAll(valueArtifacts);
-    return this;
-  }
-
-  /** Adds the given input artifacts without any command line options. */
-  public BusyBoxActionBuilder addInputs(Iterable<Artifact> inputs) {
-    this.inputs.addAll(inputs);
     return this;
   }
 
@@ -153,12 +141,6 @@ public final class BusyBoxActionBuilder {
     Preconditions.checkNotNull(value);
     commandLine.addExecPath(arg, value);
     outputs.add(value);
-    return this;
-  }
-
-  /** Adds the given output artifacts without adding any command line options. */
-  public BusyBoxActionBuilder addOutputs(Iterable<Artifact> outputs) {
-    this.outputs.addAll(outputs);
     return this;
   }
 
@@ -223,15 +205,21 @@ public final class BusyBoxActionBuilder {
   /**
    * Adds an efficient flag and inputs based on transitive values.
    *
-   * <p>Each value will be separated on the command line by the ':' character, the option parser's
-   * PathListConverter delimiter.
+   * <p>Each value will be separated on the command line by the host-specific path separator.
    *
    * <p>Unlike other transitive input methods in this class, this method adds the values to both the
    * command line and the list of inputs.
    */
   public BusyBoxActionBuilder addTransitiveVectoredInput(
       @CompileTimeConstant String arg, NestedSet<Artifact> values) {
-    commandLine.addExecPaths(arg, VectorArg.join(":").each(values));
+    commandLine.addExecPaths(
+        arg,
+        VectorArg.join(
+                dataContext
+                    .getActionConstructionContext()
+                    .getConfiguration()
+                    .getHostPathSeparator())
+            .each(values));
     inputs.addTransitive(values);
     return this;
   }
@@ -327,22 +315,14 @@ public final class BusyBoxActionBuilder {
    * @param mnemonic a mnemonic used to indicate the tool being run, for example, "BusyBoxTool".
    */
   public void buildAndRegister(String message, String mnemonic) {
-    spawnActionBuilder
-        .useDefaultShellEnvironment()
-        .addTransitiveInputs(inputs.build())
-        .addOutputs(outputs.build())
-        .setExecutable(dataContext.getBusybox())
-        .setProgressMessage("%s for %s", message, dataContext.getLabel())
-        .setMnemonic(mnemonic);
-
-    if (dataContext.isPersistentBusyboxToolsEnabled()) {
-      spawnActionBuilder
-          .setExecutionInfo(ExecutionRequirements.WORKER_MODE_ENABLED)
-          .addCommandLine(commandLine.build(), WORKERS_FORCED_PARAM_FILE_INFO);
-    } else {
-      spawnActionBuilder.addCommandLine(commandLine.build(), FORCED_PARAM_FILE_INFO);
-    }
-
-    dataContext.registerAction(spawnActionBuilder);
+    dataContext.registerAction(
+        spawnActionBuilder
+            .useDefaultShellEnvironment()
+            .addTransitiveInputs(inputs.build())
+            .addOutputs(outputs.build())
+            .addCommandLine(commandLine.build(), FORCED_PARAM_FILE_INFO)
+            .setExecutable(dataContext.getBusybox())
+            .setProgressMessage("%s for %s", message, dataContext.getLabel())
+            .setMnemonic(mnemonic));
   }
 }

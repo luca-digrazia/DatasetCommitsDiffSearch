@@ -19,7 +19,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
@@ -119,8 +118,7 @@ public class AndroidResourceParsingActionBuilder {
   public ParsedAndroidResources build(
       AndroidDataContext dataContext,
       AndroidResources androidResources,
-      StampedAndroidManifest manifest,
-      DataBindingContext dataBindingContext) {
+      StampedAndroidManifest manifest) {
     if (dataBindingInfoZip != null) {
       // Manifest information is needed for data binding
       setManifest(manifest.getManifest());
@@ -131,19 +129,14 @@ public class AndroidResourceParsingActionBuilder {
     build(dataContext);
 
     return ParsedAndroidResources.of(
-        androidResources,
-        output,
-        compiledSymbols,
-        dataContext.getLabel(),
-        manifest,
-        dataBindingContext);
+        androidResources, output, compiledSymbols, dataContext.getLabel(), manifest);
   }
 
   public ParsedAndroidAssets build(AndroidDataContext dataContext, AndroidAssets assets) {
     setAssets(assets);
     build(dataContext);
 
-    return ParsedAndroidAssets.of(assets, output, compiledSymbols, dataContext.getLabel());
+    return ParsedAndroidAssets.of(assets, output, dataContext.getLabel());
   }
 
   /**

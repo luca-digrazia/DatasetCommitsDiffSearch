@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import javax.annotation.Nullable;
 
 /**
@@ -33,8 +32,7 @@ public class AndroidResourceMergingActionBuilder {
   private static final AndroidDataConverter<MergableAndroidData> RESOURCE_CONTAINER_TO_ARG =
       AndroidDataConverter.MERGABLE_DATA_CONVERTER;
 
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final AndroidDataConverter<CompiledMergableAndroidData>
+  private static final AndroidDataConverter<CompiledMergableAndroidData>
       RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
           AndroidDataConverter.<CompiledMergableAndroidData>builder(JoinerType.SEMICOLON_AMPERSAND)
               .withRoots(CompiledMergableAndroidData::getResourceRoots)

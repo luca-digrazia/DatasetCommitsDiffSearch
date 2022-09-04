@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import java.util.Collection;
 
 public final class AndroidManifestMergeHelper {
@@ -33,7 +34,7 @@ public final class AndroidManifestMergeHelper {
       Artifact mergedManifest) {
     createMergeManifestAction(
         ruleContext,
-        ruleContext.getPrerequisite("$android_manifest_merge_tool"),
+        ruleContext.getPrerequisite("$android_manifest_merge_tool", Mode.HOST),
         merger,
         mergees,
         excludePermissions,

@@ -227,12 +227,18 @@ public final class ResourceApk {
     return resourceDeps.toInfo(validatedResources);
   }
 
-  AndroidAssetsInfo toAssetsInfo(Label label) {
+  // TODO(b/77574966): Stop returning an Optional once we get rid of ResourceContainer and can
+  // guarantee that only properly merged assets are passed into this object.
+  Optional<AndroidAssetsInfo> toAssetsInfo(Label label) {
     if (primaryAssets instanceof MergedAndroidAssets) {
       MergedAndroidAssets merged = (MergedAndroidAssets) primaryAssets;
-      return merged.toProvider();
+      AndroidAssetsInfo assetsInfo = merged.toProvider();
+      return Optional.of(assetsInfo);
+    } else if (primaryAssets == null) {
+      return Optional.of(assetDeps.toInfo(label));
+    } else {
+      return Optional.empty();
     }
-    return assetDeps.toInfo(label);
   }
 
   // TODO(b/77574966): Remove this cast once we get rid of ResourceContainer and can guarantee
@@ -258,19 +264,26 @@ public final class ResourceApk {
     Optional<AndroidManifestInfo> manifestInfo = toManifestInfo();
     manifestInfo.ifPresent(builder::addNativeDeclaredProvider);
 
-    AndroidAssetsInfo assetsInfo = toAssetsInfo(label);
-    builder.addNativeDeclaredProvider(assetsInfo);
-    if (assetsInfo.getValidationResult() != null) {
-      // Asset merging output isn't consumed by anything. Require it to be run by top-level
-      // targets
-      // so we can validate there are no asset merging conflicts.
-      builder.addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, assetsInfo.getValidationResult());
+    Optional<AndroidAssetsInfo> assetsInfo = toAssetsInfo(label);
+    if (assetsInfo.isPresent()) {
+      builder.addNativeDeclaredProvider(assetsInfo.get());
+      if (assetsInfo.get().getValidationResult() != null) {
+        // Asset merging output isn't consumed by anything. Require it to be run by top-level
+        // targets
+        // so we can validate there are no asset merging conflicts.
+        builder.addOutputGroup(
+            OutputGroupInfo.HIDDEN_TOP_LEVEL, assetsInfo.get().getValidationResult());
       }
+    }
 
-    if (manifestInfo.isPresent() && !isLibrary) {
+    if (manifestInfo.isPresent() && assetsInfo.isPresent() && !isLibrary) {
       builder.addNativeDeclaredProvider(
           AndroidBinaryDataInfo.of(
-              resourceApk, resourceProguardConfig, resourceInfo, assetsInfo, manifestInfo.get()));
+              resourceApk,
+              resourceProguardConfig,
+              resourceInfo,
+              assetsInfo.get(),
+              manifestInfo.get()));
     }
 
     if (includeSkylarkApiProvider) {

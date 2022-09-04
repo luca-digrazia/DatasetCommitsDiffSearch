@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
@@ -28,7 +27,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -63,7 +61,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
               + "targets implicitly. Please use android_library.exports to explicitly specify "
               + "targets this rule exports";
       AndroidConfiguration androidConfig = ruleContext.getFragment(AndroidConfiguration.class);
-      if (androidConfig.allowSrcsLessAndroidLibraryDeps(ruleContext)) {
+      if (androidConfig.allowSrcsLessAndroidLibraryDeps()) {
         ruleContext.attributeWarning("deps", message);
       } else {
         ruleContext.attributeError("deps", message);
@@ -160,11 +158,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
                 .process(ruleContext, dataContext, manifest, isNeverLink);
 
         MergedAndroidAssets assets =
-            AndroidAssets.from(ruleContext)
-                .process(
-                    dataContext,
-                    assetDeps,
-                    AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+            AndroidAssets.from(ruleContext).process(dataContext, assetDeps);
 
         resourceApk = ResourceApk.of(resources, assets, null, null);
       } else {
@@ -244,13 +238,15 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         .add(
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))
-        .addNativeDeclaredProvider(
-            new AndroidCcLinkParamsProvider(androidCommon.getCcLinkParamsStore()))
+        .add(
+            AndroidCcLinkParamsProvider.class,
+            AndroidCcLinkParamsProvider.create(androidCommon.getCcLinkParamsStore()))
         .add(ProguardSpecProvider.class, new ProguardSpecProvider(transitiveProguardConfigs))
         .addNativeDeclaredProvider(
             new AndroidProguardInfo(proguardLibrary.collectLocalProguardSpecs()))
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, transitiveProguardConfigs)
-        .addNativeDeclaredProvider(
+        .add(
+            AndroidLibraryResourceClassJarProvider.class,
             AndroidLibraryResourceClassJarProvider.create(transitiveResourcesJars.build()));
 
     if (!JavaCommon.isNeverLink(ruleContext)) {
@@ -264,7 +260,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.naiveLinkOrder();
     Iterable<AndroidLibraryResourceClassJarProvider> providers =
         AndroidCommon.getTransitivePrerequisites(
-            ruleContext, Mode.TARGET, AndroidLibraryResourceClassJarProvider.PROVIDER);
+            ruleContext, Mode.TARGET, AndroidLibraryResourceClassJarProvider.class);
     for (AndroidLibraryResourceClassJarProvider resourceJarProvider : providers) {
       builder.addTransitive(resourceJarProvider.getResourceClassJars());
     }

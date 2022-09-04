@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.actions.CommandLineItem.ParametrizedMapFn;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.errorprone.annotations.CompileTimeConstant;
 import java.util.Objects;
@@ -38,7 +37,6 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
    * Converts Android data to the "SerializedAndroidData" format used by the Android data processing
    * actions.
    */
-  @AutoCodec
   static final AndroidDataConverter<MergableAndroidData> MERGABLE_DATA_CONVERTER =
       AndroidDataConverter.<MergableAndroidData>builder(JoinerType.SEMICOLON_AMPERSAND)
           .withRoots(MergableAndroidData::getResourceRoots)
@@ -139,54 +137,24 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
     }
 
     Builder<T> withRoots(Function<T, ImmutableList<PathFragment>> rootsFunction) {
-      // Anonymous inner class for serialization.
-      return with(
-          new Function<T, String>() {
-            @Override
-            public String apply(T t) {
-              // Copied from rootsToString to get rid of internal Lambda.
-              return rootsFunction
-                  .apply(t)
-                  .stream()
-                  .map(PathFragment::toString)
-                  .collect(Collectors.joining("#"));
-            }
-          });
+      return with(t -> rootsToString(rootsFunction.apply(t)));
     }
 
     Builder<T> withArtifact(Function<T, Artifact> artifactFunction) {
-      // Anonymous inner class for serialization.
-      return with(
-          new Function<T, String>() {
-            @Override
-            public String apply(T t) {
-              return artifactFunction.apply(t).getExecPathString();
-            }
-          });
+      return with(t -> artifactFunction.apply(t).getExecPathString());
     }
 
     Builder<T> maybeWithArtifact(Function<T, Artifact> nullableArtifactFunction) {
-      // Anonymous inner class for serialization.
       return with(
-          new Function<T, String>() {
-            @Override
-            public String apply(T t) {
-              @Nullable Artifact artifact = nullableArtifactFunction.apply(t);
-              return artifact == null ? "" : artifact.getExecPathString();
-            }
+          t -> {
+            @Nullable Artifact artifact = nullableArtifactFunction.apply(t);
+            return artifact == null ? "" : artifact.getExecPathString();
           });
     }
 
     Builder<T> withLabel(Function<T, Label> labelFunction) {
       // Escape labels, since they are known to contain separating characters (specifically, ':').
-      // Anonymous inner class for serialization.
-      return with(
-          new Function<T, String>() {
-            @Override
-            public String apply(T t) {
-              return joinerType.escape(labelFunction.apply(t).toString());
-            }
-          });
+      return with(t -> joinerType.escape(labelFunction.apply(t).toString()));
     }
 
     Builder<T> with(Function<T, String> stringFunction) {

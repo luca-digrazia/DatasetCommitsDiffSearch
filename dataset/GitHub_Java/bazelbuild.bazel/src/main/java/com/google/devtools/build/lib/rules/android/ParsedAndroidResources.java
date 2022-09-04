@@ -72,7 +72,7 @@ public class ParsedAndroidResources extends AndroidResources
     this(other, other.symbols, other.compiledSymbols, other.label, manifest);
   }
 
-  protected ParsedAndroidResources(
+  private ParsedAndroidResources(
       AndroidResources resources,
       Artifact symbols,
       @Nullable Artifact compiledSymbols,

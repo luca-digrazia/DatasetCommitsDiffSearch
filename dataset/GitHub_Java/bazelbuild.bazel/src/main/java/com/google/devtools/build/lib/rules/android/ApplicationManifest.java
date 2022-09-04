@@ -418,8 +418,7 @@ public final class ApplicationManifest {
           .setSymbols(resourceContainer.getSymbols())
           .setSourceJarOut(resourceContainer.getJavaSourceJar());
     }
-    ResourceContainer processed =
-        builder.build(dataContext, resourceContainer, DataBinding.contextFrom(ruleContext));
+    ResourceContainer processed = builder.build(dataContext, resourceContainer);
 
     ResourceContainer finalContainer =
         new RClassGeneratorActionBuilder()
@@ -548,7 +547,7 @@ public final class ApplicationManifest {
                     .getFragment(AndroidConfiguration.class)
                     .throwOnResourceConflict())
             .setPackageUnderTest(null)
-            .build(dataContext, resourceContainer, DataBinding.contextFrom(ruleContext));
+            .build(dataContext, resourceContainer);
 
     // Intentionally skip building an R class JAR - incremental binaries handle this separately.
 
@@ -631,7 +630,7 @@ public final class ApplicationManifest {
             .setRTxtOut(resourceContainer.getRTxt())
             .setSymbols(resourceContainer.getSymbols())
             .setSourceJarOut(resourceContainer.getJavaSourceJar())
-            .build(dataContext, resourceContainer, DataBinding.contextFrom(ruleContext));
+            .build(dataContext, resourceContainer);
 
     ResourceContainer finalContainer =
         new RClassGeneratorActionBuilder()

@@ -31,9 +31,10 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.java.ImportDepsCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgs;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
@@ -107,10 +108,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
               .process(ruleContext, dataContext, manifest, neverlink);
       MergedAndroidAssets mergedAssets =
           AndroidAssets.forAarImport(assets)
-              .process(
-                  dataContext,
-                  AssetDependencies.fromRuleDeps(ruleContext, neverlink),
-                  AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+              .process(dataContext, AssetDependencies.fromRuleDeps(ruleContext, neverlink));
 
       resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
     } else {
@@ -164,28 +162,30 @@ public class AarImport implements RuleConfiguredTargetFactory {
             /* bothDeps = */ targets);
     javaSemantics.checkRule(ruleContext, common);
 
-    Artifact jdepsArtifact = createAarArtifact(ruleContext, "jdeps.proto");
-
     common.setJavaCompilationArtifacts(
         new JavaCompilationArtifacts.Builder()
             .addRuntimeJar(mergedJar)
             .addCompileTimeJarAsFullJar(mergedJar)
-            .setCompileTimeDependencies(jdepsArtifact)
             .build());
 
     JavaConfiguration javaConfig = ruleContext.getFragment(JavaConfiguration.class);
+    // TODO(cnsun): need to pass the transitive classpath too to emit add dep command.
+    NestedSet<Artifact> directDeps = getCompileTimeJarsFromCollection(targets, /*isStrict=*/ true);
+      NestedSet<Artifact> bootclasspath = getBootclasspath(ruleContext);
     Artifact depsCheckerResult =
         createAarArtifact(ruleContext, "aar_import_deps_checker_result.txt");
+    Artifact jdepsArtifact = createAarArtifact(ruleContext, "jdeps.proto");
     ImportDepsCheckActionBuilder.newBuilder()
-        .bootcalsspath(getBootclasspath(ruleContext))
-        .declareDeps(getCompileTimeJarsFromCollection(targets, /*isDirect=*/ true))
-        .transitiveDeps(getCompileTimeJarsFromCollection(targets, /*isDirect=*/ false))
+        .bootcalsspath(bootclasspath)
+        .declareDeps(directDeps)
         .checkJars(NestedSetBuilder.<Artifact>stableOrder().add(mergedJar).build())
         .outputArtifiact(depsCheckerResult)
         .importDepsCheckingLevel(javaConfig.getImportDepsCheckingLevel())
         .jdepsOutputArtifact(jdepsArtifact)
         .ruleLabel(ruleContext.getLabel().getName())
         .buildAndRegister(ruleContext);
+    NestedSet<Artifact> compileTimeDependencyArtifacts =
+        common.collectCompileTimeDependencyArtifacts(jdepsArtifact);
 
     // We pass depsCheckerResult to create the action of extracting ANDROID_MANIFEST. Note that
     // this action does not need depsCheckerResult. The only reason is that we need to check the
@@ -196,9 +196,16 @@ public class AarImport implements RuleConfiguredTargetFactory {
             ruleContext, aar, ANDROID_MANIFEST, depsCheckerResult, androidManifestArtifact));
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =
-        common.collectJavaCompilationArgs(
-            /* isNeverLink = */ JavaCommon.isNeverLink(ruleContext),
-            /* srcLessDepsExport = */ false);
+        JavaCompilationArgsProvider.create(
+            common.collectJavaCompilationArgs(
+                /* recursive = */ false,
+                JavaCommon.isNeverLink(ruleContext),
+                /* srcLessDepsExport = */ false),
+            common.collectJavaCompilationArgs(
+                /* recursive = */ true,
+                JavaCommon.isNeverLink(ruleContext),
+                /* srcLessDepsExport = */ false),
+            compileTimeDependencyArtifacts);
 
     JavaInfo.Builder javaInfoBuilder =
         JavaInfo.Builder.create()
@@ -233,10 +240,15 @@ public class AarImport implements RuleConfiguredTargetFactory {
     return ruleBuilder.build();
   }
 
-  private static NestedSet<Artifact> getCompileTimeJarsFromCollection(
-      ImmutableList<TransitiveInfoCollection> deps, boolean isDirect) {
-    JavaCompilationArgsProvider provider = JavaCompilationArgsProvider.legacyFromTargets(deps);
-    return isDirect ? provider.getDirectCompileTimeJars() : provider.getTransitiveCompileTimeJars();
+  private NestedSet<Artifact> getCompileTimeJarsFromCollection(
+      ImmutableList<TransitiveInfoCollection> deps, boolean isStrict) {
+    return JavaCompilationArgs.builder()
+        .addTransitiveCompilationArgs(
+            JavaCompilationArgsProvider.legacyFromTargets(deps),
+            /*recursive=*/ !isStrict,
+            ClasspathType.BOTH)
+        .build()
+        .getCompileTimeJars();
   }
 
   private NestedSet<Artifact> getBootclasspath(RuleContext ruleContext) {
