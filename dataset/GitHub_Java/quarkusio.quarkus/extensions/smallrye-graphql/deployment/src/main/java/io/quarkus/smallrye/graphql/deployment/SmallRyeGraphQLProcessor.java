@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -72,7 +71,6 @@ import io.smallrye.graphql.schema.model.Operation;
 import io.smallrye.graphql.schema.model.Schema;
 import io.smallrye.graphql.schema.model.Type;
 import io.smallrye.graphql.spi.LookupService;
-import io.smallrye.graphql.spi.SchemaBuildingExtensionService;
 import io.vertx.core.Handler;
 import io.vertx.ext.web.RoutingContext;
 
@@ -81,7 +79,9 @@ import io.vertx.ext.web.RoutingContext;
  * We scan all annotations and build the model during build.
  */
 public class SmallRyeGraphQLProcessor {
-    private static final Logger LOG = Logger.getLogger(SmallRyeGraphQLProcessor.class);
+    private static final Logger log = Logger.getLogger(SmallRyeGraphQLProcessor.class);
+
+    private static final Logger LOG = Logger.getLogger(SmallRyeGraphQLProcessor.class.getName());
     private static final String SCHEMA_PATH = "/schema.graphql";
     private static final String SPI_PATH = "META-INF/services/";
 
@@ -129,15 +129,6 @@ public class SmallRyeGraphQLProcessor {
                 lookupService);
         serviceProvider.produce(
                 new ServiceProviderBuildItem(LookupService.class.getName(), lookupImplementations.toArray(new String[0])));
-
-        // Schema Extension Service (We use the one from the CDI Module)
-        String schemaExtensionService = SPI_PATH + SchemaBuildingExtensionService.class.getName();
-        Set<String> schemaExtensionImplementations = ServiceUtil.classNamesNamedIn(
-                Thread.currentThread().getContextClassLoader(),
-                schemaExtensionService);
-        serviceProvider.produce(
-                new ServiceProviderBuildItem(SchemaBuildingExtensionService.class.getName(),
-                        schemaExtensionImplementations.toArray(new String[0])));
     }
 
     @Record(ExecutionTime.STATIC_INIT)
@@ -178,7 +169,7 @@ public class SmallRyeGraphQLProcessor {
                         new UnremovableBeanBuildItem.BeanClassNameExclusion("io.smallrye.metrics.MetricRegistries")));
                 systemProperties.produce(new SystemPropertyBuildItem("smallrye.graphql.metrics.enabled", "true"));
             } else {
-                LOG.warn("The quarkus.smallrye-graphql.metrics.enabled property is true, but the quarkus-smallrye-metrics " +
+                log.warn("The quarkus.smallrye-graphql.metrics.enabled property is true, but the quarkus-smallrye-metrics " +
                         "dependency is not present.");
                 systemProperties.produce(new SystemPropertyBuildItem("smallrye.graphql.metrics.enabled", "false"));
             }
@@ -200,9 +191,7 @@ public class SmallRyeGraphQLProcessor {
             BuildProducer<NotFoundPageDisplayableEndpointBuildItem> notFoundPageDisplayableEndpointProducer,
             LaunchModeBuildItem launchMode,
             SmallRyeGraphQLRecorder recorder,
-            ShutdownContextBuildItem shutdownContext,
-            BeanContainerBuildItem beanContainerBuildItem // don't remove this - makes sure beanContainer is initialized
-    ) {
+            ShutdownContextBuildItem shutdownContext) throws IOException {
 
         /*
          * <em>Ugly Hack</em>
@@ -273,7 +262,6 @@ public class SmallRyeGraphQLProcessor {
         classes.add(graphql.schema.GraphQLScalarType.class);
         classes.add(graphql.schema.GraphQLSchema.class);
         classes.add(graphql.schema.GraphQLTypeReference.class);
-        classes.add(List.class);
         return classes.toArray(new Class[] {});
     }
 
@@ -316,9 +304,9 @@ public class SmallRyeGraphQLProcessor {
         return classes;
     }
 
-    private Set<String> getFieldClassNames(Map<String, Field> fields) {
+    private Set<String> getFieldClassNames(Set<Field> fields) {
         Set<String> classes = new HashSet<>();
-        for (Field field : fields.values()) {
+        for (Field field : fields) {
             classes.add(field.getReference().getClassName());
         }
         return classes;
