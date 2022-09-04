@@ -1,37 +1,27 @@
 package io.quarkus.qute;
 
-import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * A result node backed by an object value.
+ * A result node backed by a single object value.
  */
 public class SingleResultNode implements ResultNode {
 
     private final Object value;
-    private final Expression expression;
-    private final List<ResultMapper> mappers;
+    private final ExpressionNode expressionNode;
 
     public SingleResultNode(Object value, ExpressionNode expressionNode) {
         this.value = value;
-        this.mappers = expressionNode.getEngine().getResultMappers().isEmpty() ? null
-                : expressionNode.getEngine().getResultMappers();
-        this.expression = this.mappers != null ? expressionNode.expression : null;
+        this.expressionNode = expressionNode.getEngine().getResultMappers().isEmpty() ? null : expressionNode;
     }
 
     @Override
     public void process(Consumer<String> consumer) {
         if (value != null) {
             String result = null;
-            if (mappers != null) {
-                for (ResultMapper mapper : mappers) {
-                    if (mapper.appliesTo(expression.origin, value)) {
-                        result = mapper.map(value, expression);
-                        break;
-                    }
-                }
-            }
-            if (result == null) {
+            if (expressionNode != null) {
+                result = expressionNode.getEngine().mapResult(value, expressionNode.expression);
+            } else {
                 result = value.toString();
             }
             consumer.accept(result);

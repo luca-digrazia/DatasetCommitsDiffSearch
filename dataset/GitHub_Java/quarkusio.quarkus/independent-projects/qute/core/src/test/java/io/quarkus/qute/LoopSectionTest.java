@@ -1,12 +1,16 @@
 package io.quarkus.qute;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.junit.jupiter.api.Test;
 
@@ -18,25 +22,25 @@ public class LoopSectionTest {
         Map<String, String> item = new HashMap<>();
         item.put("name", "Lu");
 
-        List<Map<String, String>> listOfMaps = new ArrayList<>();
-        listOfMaps.add(item);
-        listOfMaps.add(new HashMap<>());
+        List<Map<String, String>> items = new ArrayList<>();
+        items.add(item);
+        items.add(new HashMap<>());
 
         Engine engine = Engine.builder()
                 .addSectionHelper(new IfSectionHelper.Factory())
                 .addSectionHelper(new LoopSectionHelper.Factory()).addDefaultValueResolvers()
                 .build();
 
-        Template template = engine.parse("{#for item in this}{count}.{item.name}{#if hasNext}\n{/if}{/for}");
-        assertEquals("1.Lu\n2.NOT_FOUND", template.render(listOfMaps));
+        Template template = engine.parse("{#for item in this}{count}.{item.name ?: 'NOT_FOUND'}{#if hasNext}\n{/if}{/for}");
+        assertEquals("1.Lu\n2.NOT_FOUND", template.render(items));
 
-        template = engine.parse("{#each this}{count}.{it.name}{#if hasNext}\n{/if}{/each}");
+        template = engine.parse("{#each this}{count}.{it.name ?: 'NOT_FOUND'}{#if hasNext}\n{/if}{/each}");
         assertEquals("1.Lu\n2.NOT_FOUND",
-                template.render(listOfMaps));
+                template.render(items));
 
         template = engine.parse("{#each this}{#if odd}odd{#else}even{/if}{/each}");
         assertEquals("oddeven",
-                template.render(listOfMaps));
+                template.render(items));
     }
 
     @Test
@@ -58,9 +62,7 @@ public class LoopSectionTest {
         data.add("bravo");
         data.add("charlie");
 
-        Engine engine = Engine.builder()
-                .addSectionHelper(new LoopSectionHelper.Factory()).addDefaultValueResolvers()
-                .build();
+        Engine engine = Engine.builder().addDefaults().build();
 
         assertEquals("alpha:charlie:",
                 engine.parse("{#each this}{it}:{/each}").render(data.stream().filter(e -> !e.startsWith("b"))));
@@ -87,7 +89,7 @@ public class LoopSectionTest {
                         for (char c : context.getBase().toString().toCharArray()) {
                             chars.add(c);
                         }
-                        return CompletableFuture.completedFuture(chars);
+                        return CompletedStage.of(chars);
                     }
                 })
                 .build();
@@ -104,12 +106,89 @@ public class LoopSectionTest {
 
     @Test
     public void testIntegerStream() {
-        Engine engine = Engine.builder()
-                .addSectionHelper(new LoopSectionHelper.Factory()).addDefaultValueResolvers()
-                .build();
+        Engine engine = Engine.builder().addDefaults().build();
 
         assertEquals("1:2:3:",
                 engine.parse("{#for i in total}{i}:{/for}").data("total", 3).render());
+    }
+
+    @Test
+    public void testIterator() {
+        Engine engine = Engine.builder().addDefaults().build();
+        assertEquals("1:2:3:",
+                engine.parse("{#for i in items}{i}:{/for}").data("items", Arrays.asList("1", "2", "3").iterator()).render());
+    }
+
+    @Test
+    public void testArray() {
+        Engine engine = Engine.builder().addDefaults().build();
+        assertEquals("1:2:3:",
+                engine.parse("{#for i in items}{i}:{/for}").data("items", new Integer[] { 1, 2, 3 }).render());
+    }
+
+    @Test
+    public void testNull() {
+        Engine engine = Engine.builder().addDefaults().build();
+        try {
+            engine.parse("{#for i in items}{i}:{/for}").data("items", null).render();
+            fail();
+        } catch (TemplateException expected) {
+            assertTrue(expected.getMessage().contains("{items} resolved to null, use {items.orEmpty} to ignore this error"),
+                    expected.getMessage());
+        }
+    }
+
+    @Test
+    public void testNoniterable() {
+        Engine engine = Engine.builder().addDefaults().build();
+        try {
+            engine.parse("{#for i in items}{i}:{/for}").data("items", Boolean.TRUE).render();
+            fail();
+        } catch (TemplateException expected) {
+            assertTrue(expected.getMessage().contains("{items} resolved to [java.lang.Boolean] which is not iterable"),
+                    expected.getMessage());
+        }
+    }
+
+    @Test
+    public void testNotFound() {
+        Engine engine = Engine.builder().addDefaults().strictRendering(false).build();
+        try {
+            engine.parse("{#for i in items}{i}:{/for}").render();
+            fail();
+        } catch (TemplateException expected) {
+            assertTrue(expected.getMessage().contains("{items} not found, use {items.orEmpty} to ignore this error"),
+                    expected.getMessage());
+        }
+    }
+
+    @Test
+    void testScope() {
+        final HashMap<String, Object> dep1 = new HashMap<>();
+        dep1.put("version", "1.0");
+        final HashMap<String, Object> data = new HashMap<>();
+        data.put("dependencies", Arrays.asList(dep1, new HashMap<>()));
+        data.put("version", "hellllllo");
+        Engine engine = Engine.builder().strictRendering(false).addDefaults().build();
+        String result = engine.parse("{#for dep in dependencies}{#if dep.version}<version>{dep.version}</version>{/if}{/for}")
+                .render(data);
+        assertFalse(result.contains("hellllllo"), result);
+        result = engine.parse("{#for dep in dependencies}{#if dep.version}<version>{version}</version>{/if}{/for}")
+                .render(data);
+        assertTrue(result.contains("hellllllo"), result);
+        result = engine.parse("{#each dependencies}{#if it.version}<version>{it.version}</version>{/if}{/each}")
+                .render(data);
+        assertFalse(result.contains("hellllllo"), result);
+        result = engine.parse("{#each dependencies}{#if it.version}<version>{version}</version>{/if}{/each}")
+                .render(data);
+        assertTrue(result.contains("hellllllo"), result);
+    }
+
+    @Test
+    public void testElseBlock() {
+        Engine engine = Engine.builder().addDefaults().build();
+        assertEquals("No items.",
+                engine.parse("{#for i in items}{item}{#else}No items.{/for}").data("items", Collections.emptyList()).render());
     }
 
 }

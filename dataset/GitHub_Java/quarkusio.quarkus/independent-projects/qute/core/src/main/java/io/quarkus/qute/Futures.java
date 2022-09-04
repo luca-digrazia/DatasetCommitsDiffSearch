@@ -5,13 +5,25 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 
-class Futures {
+public final class Futures {
 
-    static <T> CompletableFuture<T> failure(Throwable t) {
-        CompletableFuture<T> failure = new CompletableFuture<>();
-        failure.completeExceptionally(t);
-        return failure;
+    private Futures() {
+    }
+
+    static <T> Supplier<T> toSupplier(CompletableFuture<T> fu) {
+        return new Supplier<T>() {
+            @Override
+            public T get() {
+                try {
+                    return fu.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new TemplateException(e);
+                }
+            }
+        };
     }
 
     @SuppressWarnings("unchecked")
@@ -28,6 +40,7 @@ class Futures {
                 result.completeExceptionally(t1);
             } else {
                 // Build a map from the params
+                // IMPL NOTE: Keep the map mutable - it can be modified in UserTagSectionHelper 
                 Map<String, Object> paramValues = new HashMap<>();
                 int j = 0;
                 try {
@@ -35,7 +48,7 @@ class Futures {
                         paramValues.put(entry.getKey(), results[j++].get());
                     }
                     result.complete(paramValues);
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     result.completeExceptionally(e);
                 }
 
@@ -43,4 +56,5 @@ class Futures {
         });
         return result;
     }
+
 }
