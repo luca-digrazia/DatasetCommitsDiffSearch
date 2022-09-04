@@ -352,18 +352,10 @@ final class ClassConfigPropertiesUtil {
             if (superClassDotName.equals(DotNames.OBJECT)) {
                 break;
             }
-
-            ClassInfo newCurrentClassInHierarchy = applicationIndex.getClassByName(superClassDotName);
-            if (newCurrentClassInHierarchy == null) {
-                if (!superClassDotName.toString().startsWith("java.")) {
-                    LOGGER.warn("Class '" + superClassDotName + "' which is a parent class of '"
-                            + currentClassInHierarchy.name()
-                            + "' is not part of the Jandex index so its fields will be ignored. If you intended to include these fields, consider making the dependency part of the Jandex index by following the advice at: https://quarkus.io/guides/cdi-reference#bean_discovery");
-                }
+            currentClassInHierarchy = applicationIndex.getClassByName(superClassDotName);
+            if (currentClassInHierarchy == null) {
                 break;
             }
-
-            currentClassInHierarchy = newCurrentClassInHierarchy;
         }
 
         for (ConfigPropertyBuildItemCandidate candidate : configPropertyBuildItemCandidates) {
