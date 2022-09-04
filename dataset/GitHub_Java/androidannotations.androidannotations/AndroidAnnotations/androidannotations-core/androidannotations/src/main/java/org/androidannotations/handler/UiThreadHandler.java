@@ -69,7 +69,7 @@ public class UiThreadHandler extends AbstractRunnableHandler {
 			// Put in the check for the UI thread.
 			addUIThreadCheck(delegatingMethod, previousBody, holder);
 		}
-		delegatingMethod.body().add(refClass(UiThreadExecutor.class).staticInvoke(METHOD_RUN_TASK) //
+		delegatingMethod.body().add(getJClass(UiThreadExecutor.class).staticInvoke(METHOD_RUN_TASK) //
 				.arg(annotation.id()) //
 				.arg(_new(anonymousRunnableClass)) //
 				.arg(lit(delay)));
@@ -84,8 +84,8 @@ public class UiThreadHandler extends AbstractRunnableHandler {
 	 */
 	private void addUIThreadCheck(JMethod delegatingMethod, JBlock previousBody, EComponentHolder holder) throws JClassAlreadyExistsException {
 		// Get the Thread and Looper class.
-		JClass tClass = holder.classes().THREAD;
-		JClass lClass = holder.classes().LOOPER;
+		JClass tClass = getClasses().THREAD;
+		JClass lClass = getClasses().LOOPER;
 
 		// invoke the methods.
 		JExpression lhs = tClass.staticInvoke(METHOD_CUR_THREAD);

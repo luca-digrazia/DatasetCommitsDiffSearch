@@ -58,12 +58,12 @@ public class SystemServiceHandler extends BaseAnnotationHandler<EComponentHolder
 		TypeMirror serviceType = element.asType();
 		String fieldTypeQualifiedName = serviceType.toString();
 
-		JFieldRef serviceRef = getEnvironment().getAndroidSystemServices().getServiceConstant(serviceType, holder);
+		JFieldRef serviceRef = getEnvironment().getAndroidSystemServices().getServiceConstantRef(serviceType);
 
 		JBlock methodBody = holder.getInitBody();
 
 		if (CanonicalNameConstants.APP_WIDGET_MANAGER.equals(fieldTypeQualifiedName)) {
-			createSpecialInjection(holder, fieldName, fieldTypeQualifiedName, serviceRef, methodBody, 21, "LOLLIPOP", holder.classes().APP_WIDGET_MANAGER, "getInstance", true);
+			createSpecialInjection(holder, fieldName, fieldTypeQualifiedName, serviceRef, methodBody, 21, "LOLLIPOP", getClasses().APP_WIDGET_MANAGER, "getInstance", true);
 		} else {
 			methodBody.add(createNormalInjection(holder, fieldName, fieldTypeQualifiedName, serviceRef, methodBody));
 		}
@@ -82,7 +82,7 @@ public class SystemServiceHandler extends BaseAnnotationHandler<EComponentHolder
 			JStatement oldInjection = (JStatement) assign(ref(fieldName), injectionMethodInvokation);
 
 			if (isApiOnClasspath(apiLevelName)) {
-				JConditional conditional = methodBody._if(holder.classes().BUILD_VERSION.staticRef("SDK_INT").gte(holder.classes().BUILD_VERSION_CODES.staticRef(apiLevelName)));
+				JConditional conditional = methodBody._if(getClasses().BUILD_VERSION.staticRef("SDK_INT").gte(getClasses().BUILD_VERSION_CODES.staticRef(apiLevelName)));
 				conditional._then().add(createNormalInjection(holder, fieldName, fieldTypeQualifiedName, serviceRef, methodBody));
 				conditional._else().add(oldInjection);
 			} else {
@@ -92,11 +92,11 @@ public class SystemServiceHandler extends BaseAnnotationHandler<EComponentHolder
 	}
 
 	private JStatement createNormalInjection(EComponentHolder holder, String fieldName, String fieldTypeQualifiedName, JFieldRef serviceRef, JBlock methodBody) {
-		return (JStatement) assign(ref(fieldName), cast(refClass(fieldTypeQualifiedName), holder.getContextRef().invoke("getSystemService").arg(serviceRef)));
+		return (JStatement) assign(ref(fieldName), cast(getJClass(fieldTypeQualifiedName), holder.getContextRef().invoke("getSystemService").arg(serviceRef)));
 	}
 
 	private boolean isApiOnClasspath(String apiName) {
-		TypeElement typeElement = processingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.BUILD_VERSION_CODES);
+		TypeElement typeElement = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.BUILD_VERSION_CODES);
 		for (Element element : typeElement.getEnclosedElements()) {
 			if (element.getSimpleName().contentEquals(apiName)) {
 				return true;

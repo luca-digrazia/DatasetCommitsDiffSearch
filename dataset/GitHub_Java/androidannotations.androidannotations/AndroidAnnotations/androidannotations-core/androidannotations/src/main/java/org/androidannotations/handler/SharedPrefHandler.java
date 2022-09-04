@@ -114,7 +114,7 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 
 		validatorHelper.isInterface(typeElement, validation);
 
-		List<? extends Element> inheritedMembers = processingEnvironment().getElementUtils().getAllMembers(typeElement);
+		List<? extends Element> inheritedMembers = getProcessingEnvironment().getElementUtils().getAllMembers(typeElement);
 
 		for (Element memberElement : inheritedMembers) {
 			if (!memberElement.getEnclosingElement().asType().toString().equals("java.lang.Object")) {
@@ -183,7 +183,7 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 			break;
 		}
 		case APPLICATION_DEFAULT: {
-			JClass preferenceManagerClass = refClass("android.preference.PreferenceManager");
+			JClass preferenceManagerClass = getJClass("android.preference.PreferenceManager");
 			constructorSuperBlock.invoke("super") //
 					.arg(preferenceManagerClass.staticInvoke("getDefaultSharedPreferences") //
 							.arg(contextParam));
@@ -194,9 +194,9 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 
 	private JMethod getLocalClassName(SharedPrefHolder holder) {
 
-		JClass stringClass = classes().STRING;
+		JClass stringClass = getClasses().STRING;
 		JMethod getLocalClassName = holder.getGeneratedClass().method(PRIVATE | STATIC, stringClass, "getLocalClassName");
-		JClass contextClass = classes().CONTEXT;
+		JClass contextClass = getClasses().CONTEXT;
 
 		JVar contextParam = getLocalClassName.param(contextClass, "context");
 
@@ -206,7 +206,7 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 
 		JVar className = body.decl(stringClass, "className", contextParam.invoke("getClass").invoke("getName"));
 
-		JVar packageLen = body.decl(codeModel().INT, "packageLen", packageName.invoke("length"));
+		JVar packageLen = body.decl(getCodeModel().INT, "packageLen", packageName.invoke("length"));
 
 		JExpression condition = className.invoke("startsWith").arg(packageName).not() //
 				.cor(className.invoke("length").lte(packageLen)) //
@@ -272,7 +272,7 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 			keyExpression = lit(fieldName);
 		} else {
 			IRInnerClass idClass = getEnvironment().getRClass().get(IRClass.Res.STRING);
-			JFieldRef idRef = idClass.getIdStaticRef(keyResId, processHolder());
+			JFieldRef idRef = idClass.getIdStaticRef(keyResId, getEnvironment());
 			keyExpression = holder.getEditorContextField().invoke("getString").arg(idRef);
 		}
 
@@ -301,7 +301,7 @@ public class SharedPrefHandler extends BaseGeneratingAnnotationHandler<SharedPre
 	}
 
 	private JExpression newEmptyStringHashSet() {
-		return JExpr._new(classes().HASH_SET.narrow(classes().STRING)).arg(lit(0));
+		return JExpr._new(getClasses().HASH_SET.narrow(getClasses().STRING)).arg(lit(0));
 	}
 
 }

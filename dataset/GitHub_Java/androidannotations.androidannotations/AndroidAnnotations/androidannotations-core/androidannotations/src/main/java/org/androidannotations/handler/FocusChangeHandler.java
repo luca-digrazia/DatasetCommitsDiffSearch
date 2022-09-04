@@ -64,8 +64,8 @@ public class FocusChangeHandler extends AbstractViewListenerHandler {
 
 	@Override
 	protected void processParameters(EComponentWithViewSupportHolder holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> parameters) {
-		JVar viewParam = listenerMethod.param(classes().VIEW, "view");
-		JVar hasFocusParam = listenerMethod.param(codeModel().BOOLEAN, "hasFocus");
+		JVar viewParam = listenerMethod.param(getClasses().VIEW, "view");
+		JVar hasFocusParam = listenerMethod.param(getCodeModel().BOOLEAN, "hasFocus");
 
 		for (VariableElement parameter : parameters) {
 			String parameterType = parameter.asType().toString();
@@ -79,7 +79,7 @@ public class FocusChangeHandler extends AbstractViewListenerHandler {
 
 	@Override
 	protected JMethod createListenerMethod(JDefinedClass listenerAnonymousClass) {
-		return listenerAnonymousClass.method(JMod.PUBLIC, codeModel().VOID, "onFocusChange");
+		return listenerAnonymousClass.method(JMod.PUBLIC, getCodeModel().VOID, "onFocusChange");
 	}
 
 	@Override
@@ -89,6 +89,6 @@ public class FocusChangeHandler extends AbstractViewListenerHandler {
 
 	@Override
 	protected JClass getListenerClass() {
-		return classes().VIEW_ON_FOCUS_CHANGE_LISTENER;
+		return getClasses().VIEW_ON_FOCUS_CHANGE_LISTENER;
 	}
 }

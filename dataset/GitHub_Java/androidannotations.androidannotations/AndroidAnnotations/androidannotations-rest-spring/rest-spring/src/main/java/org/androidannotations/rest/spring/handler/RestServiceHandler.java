@@ -21,16 +21,16 @@ import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.process.ElementValidation;
 import org.androidannotations.rest.spring.annotations.Rest;
 import org.androidannotations.rest.spring.annotations.RestService;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldRef;
 
 public class RestServiceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
@@ -57,9 +57,9 @@ public class RestServiceHandler extends BaseAnnotationHandler<EComponentHolder> 
 
 		String generatedClassName = interfaceName + classSuffix();
 
-		AbstractJClass clazz = codeModelHelper.narrowGeneratedClass(getJClass(generatedClassName), fieldTypeMirror);
+		JClass clazz = codeModelHelper.narrowGeneratedClass(getJClass(generatedClassName), fieldTypeMirror);
 
-		JBlock methodBody = holder.getInitBodyInjectionBlock();
+		JBlock methodBody = holder.getInitBody();
 
 		JFieldRef field = JExpr.ref(fieldName);
 

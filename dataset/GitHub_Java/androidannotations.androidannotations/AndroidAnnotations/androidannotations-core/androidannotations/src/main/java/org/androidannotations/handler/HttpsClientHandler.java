@@ -76,9 +76,9 @@ public class HttpsClientHandler extends BaseAnnotationHandler<EComponentHolder> 
 		String fieldName = element.getSimpleName().toString();
 		JBlock methodBody = holder.getInitBody();
 
-		ProcessHolder.Classes classes = classes();
+		ProcessHolder.Classes classes = getClasses();
 
-		JDefinedClass jAnonClass = codeModel().anonymousClass(classes.DEFAULT_HTTP_CLIENT);
+		JDefinedClass jAnonClass = getCodeModel().anonymousClass(classes.DEFAULT_HTTP_CLIENT);
 
 		JMethod method = jAnonClass.method(JMod.PROTECTED, classes.CLIENT_CONNECTION_MANAGER, "createClientConnectionManager");
 		method.annotate(Override.class);

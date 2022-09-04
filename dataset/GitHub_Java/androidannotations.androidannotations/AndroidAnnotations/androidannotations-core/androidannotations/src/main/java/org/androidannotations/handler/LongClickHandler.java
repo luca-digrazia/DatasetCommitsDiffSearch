@@ -69,7 +69,7 @@ public class LongClickHandler extends AbstractViewListenerHandler {
 	@Override
 	protected void processParameters(EComponentWithViewSupportHolder holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> parameters) {
 		boolean hasViewParameter = parameters.size() == 1;
-		JVar viewParam = listenerMethod.param(classes().VIEW, "view");
+		JVar viewParam = listenerMethod.param(getClasses().VIEW, "view");
 		if (hasViewParameter) {
 			call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.VIEW, viewParam, parameters.get(0)));
 		}
@@ -77,7 +77,7 @@ public class LongClickHandler extends AbstractViewListenerHandler {
 
 	@Override
 	protected JMethod createListenerMethod(JDefinedClass listenerAnonymousClass) {
-		return listenerAnonymousClass.method(JMod.PUBLIC, codeModel().BOOLEAN, "onLongClick");
+		return listenerAnonymousClass.method(JMod.PUBLIC, getCodeModel().BOOLEAN, "onLongClick");
 	}
 
 	@Override
@@ -87,6 +87,6 @@ public class LongClickHandler extends AbstractViewListenerHandler {
 
 	@Override
 	protected JClass getListenerClass() {
-		return classes().VIEW_ON_LONG_CLICK_LISTENER;
+		return getClasses().VIEW_ON_LONG_CLICK_LISTENER;
 	}
 }

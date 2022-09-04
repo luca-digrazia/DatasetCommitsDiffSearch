@@ -15,15 +15,14 @@
  */
 package org.androidannotations.ormlite.handler;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr.cast;
-import static com.helger.jcodemodel.JExpr.ref;
-
-import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeMirror;
-
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JVar;
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.ormlite.annotations.OrmLiteDao;
@@ -31,14 +30,14 @@ import org.androidannotations.ormlite.helper.OrmLiteClasses;
 import org.androidannotations.ormlite.helper.OrmLiteHelper;
 import org.androidannotations.ormlite.helper.OrmLiteValidatorHelper;
 import org.androidannotations.ormlite.holder.OrmLiteHolder;
+import org.androidannotations.process.ElementValidation;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JCatchBlock;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JTryBlock;
-import com.helger.jcodemodel.JVar;
+import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeMirror;
+
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.ref;
 
 public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
@@ -70,20 +69,20 @@ public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		String fieldName = element.getSimpleName().toString();
 
-		AbstractJClass modelClass = getJClass(ormLiteHelper.getEntityType(element).toString());
-		AbstractJClass idClass = getJClass(ormLiteHelper.getEntityIdType(element).toString());
-		IJExpression modelClassDotClass = modelClass.dotclass();
+		JClass modelClass = getJClass(ormLiteHelper.getEntityType(element).toString());
+		JClass idClass = getJClass(ormLiteHelper.getEntityIdType(element).toString());
+		JExpression modelClassDotClass = modelClass.dotclass();
 
-		AbstractJClass daoClass = getJClass(OrmLiteClasses.DAO).narrow(modelClass, idClass);
+		JClass daoClass = getJClass(OrmLiteClasses.DAO).narrow(modelClass, idClass);
 
 		TypeMirror databaseHelperTypeMirror = annotationHelper.extractAnnotationParameter(element, "helper");
 		JFieldVar databaseHelperRef = ormLiteHolder.getDatabaseHelperRef(databaseHelperTypeMirror);
 
-		JBlock initBody = holder.getInitBodyInjectionBlock();
+		JBlock initBody = holder.getInitBody();
 
-		IJExpression injectExpr = databaseHelperRef.invoke("getDao").arg(modelClassDotClass);
+		JExpression injectExpr = databaseHelperRef.invoke("getDao").arg(modelClassDotClass);
 		if (elementExtendsRuntimeExceptionDao(element)) {
-			AbstractJClass daoImplClass = codeModelHelper.typeMirrorToJClass(element.asType());
+			JClass daoImplClass = codeModelHelper.typeMirrorToJClass(element.asType());
 			injectExpr = _new(daoImplClass).arg(cast(daoClass, injectExpr));
 		}
 
