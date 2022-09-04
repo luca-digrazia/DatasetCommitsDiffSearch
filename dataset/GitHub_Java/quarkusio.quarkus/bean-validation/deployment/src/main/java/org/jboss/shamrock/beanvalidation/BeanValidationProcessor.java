@@ -27,7 +27,6 @@ import java.util.Set;
 import javax.validation.Constraint;
 
 import org.hibernate.validator.internal.metadata.core.ConstraintHelper;
-import org.hibernate.validator.messageinterpolation.AbstractMessageInterpolator;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -110,9 +109,8 @@ class BeanValidationProcessor {
     @BuildStep
     SubstrateConfigBuildItem substrateConfig() {
         return SubstrateConfigBuildItem.builder()
-                .addResourceBundle(AbstractMessageInterpolator.DEFAULT_VALIDATION_MESSAGES)
-                .addResourceBundle(AbstractMessageInterpolator.USER_VALIDATION_MESSAGES)
-                .addResourceBundle(AbstractMessageInterpolator.CONTRIBUTOR_VALIDATION_MESSAGES)
+                .addRuntimeInitializedClass("javax.el.ELUtil")
+                .addResourceBundle("org.hibernate.validator.ValidationMessages")
                 .build();
     }
 

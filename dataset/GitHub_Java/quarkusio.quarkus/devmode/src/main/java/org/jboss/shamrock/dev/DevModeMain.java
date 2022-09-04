@@ -78,9 +78,6 @@ public class DevModeMain {
         }
 
         runtimeUpdatesProcessor = RuntimeCompilationSetup.setup();
-        if(runtimeUpdatesProcessor != null) {
-            runtimeUpdatesProcessor.scanForChangedClasses();
-        }
         //TODO: we can't handle an exception on startup with hot replacement, as Undertow might not have started
 
         doStart();

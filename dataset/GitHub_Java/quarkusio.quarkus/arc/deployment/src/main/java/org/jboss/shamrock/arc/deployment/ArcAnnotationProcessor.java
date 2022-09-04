@@ -23,6 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -32,6 +33,8 @@ import java.util.stream.Collectors;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 
+import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
@@ -41,7 +44,7 @@ import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
 import org.jboss.protean.arc.ArcContainer;
-import org.jboss.protean.arc.processor.BeanDefiningAnnotation;
+import org.jboss.protean.arc.processor.AnnotationsTransformer;
 import org.jboss.protean.arc.processor.BeanProcessor;
 import org.jboss.protean.arc.processor.BeanProcessor.Builder;
 import org.jboss.protean.arc.processor.ReflectionRegistration;
@@ -65,6 +68,7 @@ import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveMethodBuildItem;
+import org.jboss.shamrock.deployment.cdi.AnnotationTransformerBuildItem;
 import org.jboss.shamrock.deployment.cdi.BeanContainerListenerBuildItem;
 import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
 import org.jboss.shamrock.deployment.cdi.GeneratedBeanBuildItem;
@@ -117,7 +121,8 @@ public class ArcAnnotationProcessor {
     public BeanContainerBuildItem build(ArcDeploymentTemplate arcTemplate, BuildProducer<ServletExtensionBuildItem> extensions,
             BuildProducer<InjectionProviderBuildItem> injectionProvider, List<BeanContainerListenerBuildItem> beanContainerListenerBuildItems,
                                         ApplicationArchivesBuildItem applicationArchivesBuildItem,
-            List<GeneratedBeanBuildItem> generatedBeans, List<AnnotationsTransformerBuildItem> annotationTransformers, ShutdownContextBuildItem shutdown) throws Exception {
+            List<GeneratedBeanBuildItem> generatedBeans, List<AnnotationTransformerBuildItem> annotationTransformerAdapters,
+            List<org.jboss.shamrock.arc.deployment.AnnotationTransformerBuildItem> annotationTransformers, ShutdownContextBuildItem shutdown) throws Exception {
 
 
         List<String> additionalBeans = new ArrayList<>();
@@ -155,7 +160,7 @@ public class ArcAnnotationProcessor {
         });
         builder.setIndex(index);
         builder.setAdditionalBeanDefiningAnnotations(additionalBeanDefiningAnnotations.stream()
-                .map((s) -> new BeanDefiningAnnotation(s.getName(), s.getDefaultScope()))
+                .map(BeanDefiningAnnotationBuildItem::getName)
                 .collect(Collectors.toList()));
         builder.setSharedAnnotationLiterals(false);
         builder.addResourceAnnotations(resourceAnnotations.stream()
@@ -172,7 +177,17 @@ public class ArcAnnotationProcessor {
                 reflectiveFields.produce(new ReflectiveFieldBuildItem(fieldInfo));
             }
         });
-        for (AnnotationsTransformerBuildItem transformerItem : annotationTransformers) {
+        for (AnnotationTransformerBuildItem adapterItem : annotationTransformerAdapters) {
+            // TODO make use of Arc API instead of BiFunction
+            builder.addAnnotationTransformer(new AnnotationsTransformer() {
+
+                @Override
+                public Collection<AnnotationInstance> transform(AnnotationTarget target, Collection<AnnotationInstance> annotations) {
+                    return adapterItem.getTransformer().apply(target, annotations);
+                }
+            });
+        }
+        for (org.jboss.shamrock.arc.deployment.AnnotationTransformerBuildItem transformerItem : annotationTransformers) {
             builder.addAnnotationTransformer(transformerItem.getAnnotationsTransformer());
         }
 
