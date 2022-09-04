@@ -51,11 +51,11 @@ public interface AndroidAnnotationsEnvironment {
 
 	Set<String> getSupportedAnnotationTypes();
 
-	List<AnnotationHandler<?>> getHandlers();
+	List<AnnotationHandler<? extends GeneratedClassHolder>> getHandlers();
 
-	List<AnnotationHandler<?>> getDecoratingHandlers();
+	List<AnnotationHandler<? extends GeneratedClassHolder>> getDecoratingHandlers();
 
-	List<GeneratingAnnotationHandler<?>> getGeneratingHandlers();
+	List<GeneratingAnnotationHandler<? extends GeneratedClassHolder>> getGeneratingHandlers();
 
 	IRClass getRClass();
 

@@ -19,7 +19,6 @@ import java.util.Set;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
@@ -34,7 +33,7 @@ import org.androidannotations.internal.model.AnnotationElements.AnnotatedAndRoot
 import org.androidannotations.logger.Logger;
 import org.androidannotations.logger.LoggerFactory;
 
-import com.helger.jcodemodel.JCodeModel;
+import com.sun.codemodel.JCodeModel;
 
 public class ModelProcessor {
 
@@ -111,12 +110,6 @@ public class ModelProcessor {
 					enclosingElement = annotatedElement;
 				} else {
 					enclosingElement = annotatedElement.getEnclosingElement();
-					/*
-					 * we are processing a method parameter
-					 */
-					if (enclosingElement instanceof ExecutableElement) {
-						enclosingElement = enclosingElement.getEnclosingElement();
-					}
 				}
 
 				/*
