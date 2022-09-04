@@ -201,7 +201,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
     private NestedSet<Artifact> processorPath = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     private final List<String> processorNames = new ArrayList<>();
 
-    private NestedSet<Artifact> additionalInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    private NestedSet<Artifact> javabaseInputs;
     private Artifact javacJar;
     private NestedSet<Artifact> toolsJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
 
@@ -315,9 +315,9 @@ public class JavaHeaderCompileAction extends SpawnAction {
     }
 
     /** Sets the javabase inputs. */
-    public Builder setAdditionalInputs(NestedSet<Artifact> additionalInputs) {
-      checkNotNull(additionalInputs, "additionalInputs must not be null");
-      this.additionalInputs = additionalInputs;
+    public Builder setJavaBaseInputs(NestedSet<Artifact> javabaseInputs) {
+      checkNotNull(javabaseInputs, "javabaseInputs must not be null");
+      this.javabaseInputs = javabaseInputs;
       return this;
     }
 
@@ -336,12 +336,11 @@ public class JavaHeaderCompileAction extends SpawnAction {
     }
 
     /** Builds and registers the {@link JavaHeaderCompileAction} for a header compilation. */
-    public void build(JavaToolchainProvider javaToolchain, JavaRuntimeInfo hostJavabase) {
-      ruleContext.registerAction(buildInternal(javaToolchain, hostJavabase));
+    public void build(JavaToolchainProvider javaToolchain) {
+      ruleContext.registerAction(buildInternal(javaToolchain));
     }
 
-    private Action[] buildInternal(
-        JavaToolchainProvider javaToolchain, JavaRuntimeInfo hostJavabase) {
+    private Action[] buildInternal(JavaToolchainProvider javaToolchain) {
       checkNotNull(outputDepsProto, "outputDepsProto must not be null");
       checkNotNull(sourceFiles, "sourceFiles must not be null");
       checkNotNull(sourceJars, "sourceJars must not be null");
@@ -376,8 +375,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
       ImmutableList<Artifact> outputs = ImmutableList.of(outputJar, outputDepsProto);
       NestedSet<Artifact> baseInputs =
           NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(hostJavabase.javaBaseInputsMiddleman())
-              .addTransitive(additionalInputs)
+              .addTransitive(javabaseInputs)
               .addAll(bootclasspathEntries)
               .addAll(sourceJars)
               .addAll(sourceFiles)
@@ -414,7 +412,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
             .addOutputs(outputs)
             .addCommandLine(commandLine.build(), paramFileInfo)
             .setJarExecutable(
-                hostJavabase.javaBinaryExecPath(),
+                JavaCommon.getHostJavaExecutable(ruleContext),
                 javaToolchain.getHeaderCompiler(),
                 javaToolchain.getJvmOptions())
             .setMnemonic("Turbine")
@@ -436,8 +434,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
               ParameterFile.ParameterFileType.UNQUOTED,
               ISO_8859_1);
       CommandLine transitiveCommandLine =
-          getBaseArgs(javaToolchain, hostJavabase)
-              .addFormatted("@%s", paramsFile.getExecPath()).build();
+          getBaseArgs(javaToolchain).addFormatted("@%s", paramsFile.getExecPath()).build();
       NestedSet<Artifact> transitiveInputs =
           NestedSetBuilder.<Artifact>stableOrder()
               .addTransitive(baseInputs)
@@ -476,9 +473,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
       checkState(!directJars.isEmpty());
       NestedSet<Artifact> directInputs =
           NestedSetBuilder.fromNestedSet(baseInputs).addTransitive(directJars).build();
-      CustomCommandLine directCommandLine = baseCommandLine(
-          getBaseArgs(javaToolchain, hostJavabase), directJars)
-          .build();
+      CustomCommandLine directCommandLine =
+          baseCommandLine(getBaseArgs(javaToolchain), directJars).build();
       return new Action[] {
         parameterFileWriteAction,
         new JavaHeaderCompileAction(
@@ -518,10 +514,9 @@ public class JavaHeaderCompileAction extends SpawnAction {
       };
     }
 
-    private CustomCommandLine.Builder getBaseArgs(
-        JavaToolchainProvider javaToolchain, JavaRuntimeInfo hostJavabase) {
+    private CustomCommandLine.Builder getBaseArgs(JavaToolchainProvider javaToolchain) {
       return CustomCommandLine.builder()
-          .addPath(hostJavabase.javaBinaryExecPath())
+          .addPath(JavaCommon.getHostJavaExecutable(ruleContext))
           .add("-Xverify:none")
           .addAll(javaToolchain.getJvmOptions())
           .addExecPath("-jar", javaToolchain.getHeaderCompiler());
@@ -549,11 +544,9 @@ public class JavaHeaderCompileAction extends SpawnAction {
         result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
       }
 
-      if (!javacOpts.isEmpty()) {
-        result.addAll("--javacopts", javacOpts);
-        // terminate --javacopts with `--` to support javac flags that start with `--`
-        result.add("--");
-      }
+      result.addAll("--javacopts", javacOpts);
+      // terminate --javacopts with `--` to support javac flags that start with `--`
+      result.add("--");
 
       if (ruleKind != null) {
         result.add("--rule_kind", ruleKind);
