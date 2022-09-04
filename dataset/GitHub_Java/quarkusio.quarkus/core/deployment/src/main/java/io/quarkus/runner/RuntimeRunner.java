@@ -97,7 +97,6 @@ public class RuntimeRunner implements Runnable, Closeable {
             builder.setRoot(target);
             builder.setClassLoader(loader);
             builder.setLaunchMode(launchMode);
-            builder.setBuildSystemProperties(buildSystemProperties);
             if (liveReloadState != null) {
                 builder.setLiveReloadState(liveReloadState);
             }
