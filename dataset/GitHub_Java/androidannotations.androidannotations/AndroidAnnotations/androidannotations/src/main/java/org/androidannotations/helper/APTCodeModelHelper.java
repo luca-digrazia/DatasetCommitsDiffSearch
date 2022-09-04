@@ -216,13 +216,6 @@ public class APTCodeModelHelper {
 		return method;
 	}
 
-	public void generifyStaticHelper(GeneratedClassHolder holder, JMethod staticHelper, TypeElement annotatedClass) {
-		for (TypeParameterElement param : annotatedClass.getTypeParameters()) {
-			JClass bounds = typeBoundsToJClass(holder, param.getBounds());
-			staticHelper.generify(param.getSimpleName().toString(), bounds);
-		}
-	}
-
 	private JMethod findAlreadyGeneratedMethod(ExecutableElement executableElement, GeneratedClassHolder holder) {
 		JDefinedClass definedClass = holder.getGeneratedClass();
 		String methodName = executableElement.getSimpleName().toString();
@@ -511,15 +504,4 @@ public class APTCodeModelHelper {
 		}
 	}
 
-	//TODO it would be nice to cache the result map for better performance
-	public TypeMirror getActualType(Element element, GeneratedClassHolder holder) {
-		Types types = holder.processingEnvironment().getTypeUtils();
-		DeclaredType typeMirror = (DeclaredType) element.getEnclosingElement().asType();
-		TypeMirror annotatedClass = holder.getAnnotatedElement().asType();
-
-		Map<String, TypeMirror> actualTypes = getActualTypes(types, typeMirror, annotatedClass);
-
-		TypeMirror type = actualTypes.get(element.asType().toString());
-		return type == null ? element.asType() : type;
-	}
 }
