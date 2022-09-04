@@ -23,7 +23,6 @@ import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.utils.GifCreateHelper;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
 import java.io.File;
@@ -40,7 +39,7 @@ import butterknife.ButterKnife;
  * Created by guoshuyu on 2017/6/18.
  */
 
-public class DetailControlActivity extends GSYBaseActivityDetail<StandardGSYVideoPlayer> {
+public class DetailControlActivity extends GSYBaseActivityDetail {
 
     @BindView(R.id.post_detail_nested_scroll)
     NestedScrollView postDetailNestedScroll;
@@ -70,7 +69,7 @@ public class DetailControlActivity extends GSYBaseActivityDetail<StandardGSYVide
     @BindView(R.id.loadingView)
     View loadingView;
 
-    private String url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
+    private String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
 
     private GifCreateHelper mGifCreateHelper;
 
@@ -145,7 +144,7 @@ public class DetailControlActivity extends GSYBaseActivityDetail<StandardGSYVide
     }
 
     @Override
-    public StandardGSYVideoPlayer getGSYVideoPlayer() {
+    public GSYBaseVideoPlayer getGSYVideoPlayer() {
         return detailPlayer;
     }
 
