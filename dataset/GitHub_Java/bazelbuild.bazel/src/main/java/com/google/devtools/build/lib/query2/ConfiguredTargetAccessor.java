@@ -29,10 +29,7 @@ import com.google.devtools.build.skyframe.WalkableGraph;
 import java.util.List;
 import java.util.Set;
 
-/** A {@link TargetAccessor} for {@link ConfiguredTarget} objects.
- *
- * Incomplete; we'll implement getLabelListAttr and getVisibility when needed.
- */
+/** A {@link TargetAccessor} for {@link ConfiguredTarget} objects. Incomplete. */
 class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget> {
 
   private final WalkableGraph walkableGraph;
@@ -112,11 +109,6 @@ class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget> {
   }
 
   public Target getTargetFromConfiguredTarget(ConfiguredTarget configuredTarget) {
-    return getTargetFromConfiguredTarget(configuredTarget, walkableGraph);
-  }
-
-  public static Target getTargetFromConfiguredTarget(
-      ConfiguredTarget configuredTarget, WalkableGraph walkableGraph) {
     Target target = null;
     try {
       Label label =
