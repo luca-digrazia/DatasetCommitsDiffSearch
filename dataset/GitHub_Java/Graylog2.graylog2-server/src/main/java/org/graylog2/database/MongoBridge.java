@@ -129,7 +129,7 @@ public class MongoBridge {
     public void writeActivity(Activity activity) {
         BasicDBObject obj = new BasicDBObject();
         obj.put("timestamp", Tools.getUTCTimestamp());
-        obj.put("content", activity.getMessage());
+        obj.put("content", activity.getContent());
         obj.put("caller", activity.getCaller().getCanonicalName());
         
         connection.getDatabase().getCollection("server_activities").insert(obj);
