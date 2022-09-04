@@ -2,7 +2,7 @@ package io.dropwizard.hibernate;
 
 import io.dropwizard.db.ManagedDataSource;
 import org.hibernate.SessionFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -13,16 +13,23 @@ public class SessionFactoryManagerTest {
     private final SessionFactoryManager manager = new SessionFactoryManager(factory, dataSource);
 
     @Test
-    public void closesTheFactoryOnStopping() throws Exception {
+    void closesTheFactoryOnStopping() throws Exception {
         manager.stop();
 
         verify(factory).close();
     }
 
     @Test
-    public void stopsTheDataSourceOnStopping() throws Exception {
+    void stopsTheDataSourceOnStopping() throws Exception {
         manager.stop();
 
         verify(dataSource).stop();
+    }
+
+    @Test
+    void startsTheDataSourceOnStarting() throws Exception {
+        manager.start();
+
+        verify(dataSource).start();
     }
 }

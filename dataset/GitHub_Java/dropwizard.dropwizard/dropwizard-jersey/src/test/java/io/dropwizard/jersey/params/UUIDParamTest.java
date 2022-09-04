@@ -1,40 +1,44 @@
 package io.dropwizard.jersey.params;
 
-import org.junit.Test;
+import io.dropwizard.jersey.errors.ErrorMessage;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class UUIDParamTest {
-
-    @Test
-    public void aUUIDStringReturnsAUUIDObject() throws Exception {
-        final String uuidString = "067e6162-3b6f-4ae2-a171-2470b63dff00";
-        final UUID uuid = UUID.fromString(uuidString);
-
-        final UUIDParam param = new UUIDParam(uuidString);
-        assertThat(param.get())
-                .isEqualTo(uuid);
+    private void UuidParamNegativeTest(String input) {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> new UUIDParam(input))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
+            .satisfies(e -> assertThat(e.getResponse().getEntity()).isEqualTo(
+                new ErrorMessage(400, "Parameter is not a UUID.")
+            ));
     }
 
     @Test
-    @SuppressWarnings("ResultOfObjectAllocationIgnored")
-    public void aNonUUIDThrowsAnException() throws Exception {
-        try {
-            new UUIDParam("foo");
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-        } catch (WebApplicationException e) {
-            final Response response = e.getResponse();
+    void aUUIDStringReturnsAUUIDObject() {
+        final String uuidString = "067e6162-3b6f-4ae2-a171-2470b63dff00";
+        final UUID uuid = UUID.fromString(uuidString);
 
-            assertThat(response.getStatus())
-                    .isEqualTo(400);
+        assertThat(new UUIDParam(uuidString).get()).isEqualTo(uuid);
+    }
 
-            assertThat((String) response.getEntity())
-                    .isEqualTo("\"foo\" is not a UUID.");
-        }
+    @Test
+    void noSpaceUUID() {
+        UuidParamNegativeTest("067e61623b6f4ae2a1712470b63dff00");
+    }
+
+    @Test
+    void tooLongUUID() {
+        UuidParamNegativeTest("067e6162-3b6f-4ae2-a171-2470b63dff000");
+    }
+
+    @Test
+    void aNonUUIDThrowsAnException() {
+        UuidParamNegativeTest("foo");
     }
 }

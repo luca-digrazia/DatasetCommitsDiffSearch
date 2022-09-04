@@ -1,16 +1,16 @@
 package io.dropwizard.jersey.params;
 
-import org.junit.Test;
+import io.dropwizard.jersey.errors.ErrorMessage;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class LongParamTest {
     @Test
-    public void aLongReturnsALong() throws Exception {
+    void aLongReturnsALong() {
         final LongParam param = new LongParam("200");
 
         assertThat(param.get())
@@ -18,19 +18,42 @@ public class LongParamTest {
     }
 
     @Test
-    @SuppressWarnings("ResultOfObjectAllocationIgnored")
-    public void aNonIntegerThrowsAnException() throws Exception {
-        try {
-            new LongParam("foo");
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-        } catch (WebApplicationException e) {
-            final Response response = e.getResponse();
+    void nullThrowsAnException() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> new LongParam(null))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
+            .satisfies(e -> assertThat(e.getResponse().getEntity()).isEqualTo(
+                new ErrorMessage(400, "Parameter is not a number.")
+            ));
+    }
 
-            assertThat(response.getStatus())
-                    .isEqualTo(400);
+    @Test
+    void emptyStringThrowsAnException() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> new LongParam(null))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
+            .satisfies(e -> assertThat(e.getResponse().getEntity()).isEqualTo(
+                new ErrorMessage(400, "Parameter is not a number.")
+            ));
+    }
 
-            assertThat((String) response.getEntity())
-                    .isEqualTo("\"foo\" is not a number.");
-        }
+    @Test
+    void aNonIntegerThrowsAnException() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> new LongParam("foo"))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
+            .satisfies(e -> assertThat(e.getResponse().getEntity()).isEqualTo(
+                new ErrorMessage(400, "Parameter is not a number.")
+            ));
+    }
+
+    @Test
+    void aNonIntegerThrowsAnExceptionWithCustomName() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> new LongParam("foo", "customName"))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
+            .satisfies(e -> assertThat(e.getResponse().getEntity()).isEqualTo(
+                new ErrorMessage(400, "customName is not a number.")
+            ));
     }
 }

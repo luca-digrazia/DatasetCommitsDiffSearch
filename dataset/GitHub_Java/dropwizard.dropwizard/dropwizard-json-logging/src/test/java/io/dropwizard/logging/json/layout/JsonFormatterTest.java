@@ -8,19 +8,20 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class JsonFormatterTest {
 
-    private final Map<String, Object> map = Maps.of(
+    private final SortedMap<String, Object> map = new TreeMap<>(Maps.of(
             "name", "Jim",
-            "hobbies", Arrays.asList("Reading", "Biking", "Snorkeling"));
+            "hobbies", Arrays.asList("Reading", "Biking", "Snorkeling")));
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
 
     @Test
-    public void testNoPrettyPrintNoLineSeparator() throws IOException {
+    void testNoPrettyPrintNoLineSeparator() throws IOException {
         JsonFormatter formatter = new JsonFormatter(objectMapper, false, false);
 
         final JsonNode actual = objectMapper.readTree(formatter.toJson(map));
@@ -30,7 +31,7 @@ public class JsonFormatterTest {
 
 
     @Test
-    public void testNoPrettyPrintWithLineSeparator() throws IOException {
+    void testNoPrettyPrintWithLineSeparator() throws IOException {
         JsonFormatter formatter = new JsonFormatter(objectMapper, false, true);
 
         final String content = formatter.toJson(map);
@@ -41,7 +42,7 @@ public class JsonFormatterTest {
     }
 
     @Test
-    public void testPrettyPrintWithLineSeparator() {
+    void testPrettyPrintWithLineSeparator() {
         JsonFormatter formatter = new JsonFormatter(objectMapper, true, true);
         assertThat(formatter.toJson(map)).isEqualTo(String.format("{%n" +
                 "  \"hobbies\" : [ \"Reading\", \"Biking\", \"Snorkeling\" ],%n" +
@@ -50,7 +51,7 @@ public class JsonFormatterTest {
     }
 
     @Test
-    public void testPrettyPrintNoLineSeparator() {
+    void testPrettyPrintNoLineSeparator() {
         JsonFormatter formatter = new JsonFormatter(objectMapper, true, false);
         assertThat(formatter.toJson(map)).isEqualTo(String.format("{%n" +
                 "  \"hobbies\" : [ \"Reading\", \"Biking\", \"Snorkeling\" ],%n" +

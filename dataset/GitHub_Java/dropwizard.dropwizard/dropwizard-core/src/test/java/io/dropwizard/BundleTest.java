@@ -7,20 +7,30 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.util.Collections;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class BundleTest {
     @Test
-    public void deprecatedBundleWillBeInitializedAndRun() throws Exception {
+    void deprecatedBundleWillBeInitializedAndRun() throws Exception {
         final DeprecatedBundle deprecatedBundle = new DeprecatedBundle();
         assertThat(deprecatedBundle.wasInitialized()).isFalse();
         assertThat(deprecatedBundle.wasRun()).isFalse();
 
         final File configFile = File.createTempFile("bundle-test", ".yml");
         try {
-            Files.write(configFile.toPath(), Collections.singleton("text: Test"));
+            Files.write(configFile.toPath(), Arrays.asList(
+                "text: Test",
+                "server:",
+                "  applicationConnectors:",
+                "    - type: http",
+                "      port: 0",
+                "  adminConnectors:",
+                "    - type: http",
+                "      port: 0"
+            ));
+
             final TestApplication application = new TestApplication(deprecatedBundle);
             application.run("server", configFile.getAbsolutePath());
         } finally {

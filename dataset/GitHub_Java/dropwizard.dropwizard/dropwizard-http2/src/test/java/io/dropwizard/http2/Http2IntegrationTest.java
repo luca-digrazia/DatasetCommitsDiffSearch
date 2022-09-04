@@ -1,79 +1,58 @@
 package io.dropwizard.http2;
 
-import com.google.common.base.Optional;
 import io.dropwizard.Configuration;
-import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.testing.ConfigOverride;
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
-import org.eclipse.jetty.http.HttpFields;
-import org.eclipse.jetty.http.HttpURI;
-import org.eclipse.jetty.http.HttpVersion;
-import org.eclipse.jetty.http.MetaData;
-import org.eclipse.jetty.http2.api.Session;
-import org.eclipse.jetty.http2.api.server.ServerSessionListener;
-import org.eclipse.jetty.http2.client.HTTP2Client;
-import org.eclipse.jetty.http2.frames.HeadersFrame;
-import org.eclipse.jetty.util.FuturePromise;
-import org.eclipse.jetty.util.Promise;
-import org.eclipse.jetty.util.ssl.SslContextFactory;
-import org.junit.After;
-import org.junit.Before;
+import io.dropwizard.testing.junit5.DropwizardAppExtension;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import org.glassfish.jersey.client.JerseyClient;
+import org.glassfish.jersey.client.JerseyClientBuilder;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class Http2IntegrationTest {
-
-    static {
-        BootstrapLogging.bootstrap();
-    }
+@ExtendWith(DropwizardExtensionsSupport.class)
+public class Http2IntegrationTest extends AbstractHttp2Test {
 
     @Rule
-    public final DropwizardAppRule<Configuration> appRule = new DropwizardAppRule<>(
+    public final DropwizardAppExtension<Configuration> appRule = new DropwizardAppExtension<>(
             FakeApplication.class, ResourceHelpers.resourceFilePath("test-http2.yml"),
             Optional.of("tls_http2"),
             ConfigOverride.config("tls_http2", "server.connector.keyStorePath",
-                    ResourceHelpers.resourceFilePath("stores/http2_server.jks"))
+                    ResourceHelpers.resourceFilePath("stores/http2_server.jks")),
+            ConfigOverride.config("tls_http2", "server.connector.trustStorePath",
+                    ResourceHelpers.resourceFilePath("stores/http2_client.jts"))
     );
 
-    private final HTTP2Client client = new HTTP2Client();
-    private final SslContextFactory sslContextFactory = new SslContextFactory();
-
-    @Before
-    public void setUp() throws Exception {
-        sslContextFactory.setTrustStorePath(ResourceHelpers.resourceFilePath("stores/http2_client.jts"));
-        sslContextFactory.setTrustStorePassword("http2_client");
-        sslContextFactory.setIncludeCipherSuites("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-        client.addBean(sslContextFactory);
-        client.start();
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        client.stop();
+    @Test
+    void testHttp11() throws Exception {
+        final String hostname = "localhost";
+        final int port = appRule.getLocalPort();
+        final JerseyClient http11Client = new JerseyClientBuilder()
+                .sslContext(sslContextFactory.getSslContext())
+                .build();
+        final Response response = http11Client.target("https://" + hostname + ":" + port + "/api/test")
+                .request()
+                .get();
+        assertThat(response.getHeaderString(HttpHeaders.CONTENT_TYPE)).isEqualTo(MediaType.APPLICATION_JSON);
+        assertThat(response.readEntity(String.class)).isEqualTo(FakeApplication.HELLO_WORLD);
+        http11Client.close();
     }
 
     @Test
-    public void testHttp2() throws Exception {
-        final String hostname = "127.0.0.1";
-        final int port = appRule.getLocalPort();
+    void testHttp2() throws Exception {
+        assertResponse(client.GET("https://localhost:" + appRule.getLocalPort() + "/api/test"));
+    }
 
-        final FuturePromise<Session> sessionPromise = new FuturePromise<>();
-        client.connect(sslContextFactory, new InetSocketAddress(hostname, port),
-                new ServerSessionListener.Adapter(), sessionPromise);
-        final Session session = sessionPromise.get(5, TimeUnit.SECONDS);
-
-        final MetaData.Request request = new MetaData.Request("GET",
-                new HttpURI("https://" + hostname + ":" + port + "/api/test"),
-                HttpVersion.HTTP_2, new HttpFields());
-
-        final ResponseListener listener = new ResponseListener();
-        session.newStream(new HeadersFrame(request, null, true), new Promise.Adapter<>(), listener);
-        assertThat(listener.getResponse()).isEqualTo(FakeApplication.HELLO_WORLD);
+    @Test
+    void testHttp2ManyRequests() throws Exception {
+        performManyAsyncRequests(client, "https://localhost:" + appRule.getLocalPort() + "/api/test");
     }
 }

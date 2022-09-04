@@ -3,24 +3,33 @@ package io.dropwizard.hibernate;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.hibernate4.Hibernate4Module;
-import com.google.common.collect.ImmutableList;
+import com.fasterxml.jackson.datatype.hibernate5.Hibernate5Module;
 import io.dropwizard.Configuration;
 import io.dropwizard.db.DataSourceFactory;
+import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import org.hibernate.SessionFactory;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyList;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class HibernateBundleTest {
     private final DataSourceFactory dbConfig = new DataSourceFactory();
-    private final ImmutableList<Class<?>> entities = ImmutableList.<Class<?>>of(Person.class);
+    private final List<Class<?>> entities = Collections.singletonList(Person.class);
     private final SessionFactoryFactory factory = mock(SessionFactoryFactory.class);
     private final SessionFactory sessionFactory = mock(SessionFactory.class);
     private final Configuration configuration = mock(Configuration.class);
@@ -34,20 +43,22 @@ public class HibernateBundleTest {
         }
     };
 
-    @Before
-    @SuppressWarnings("unchecked")
-    public void setUp() throws Exception {
+    @BeforeEach
+    void setUp() throws Exception {
         when(environment.healthChecks()).thenReturn(healthChecks);
         when(environment.jersey()).thenReturn(jerseyEnvironment);
+        when(jerseyEnvironment.getResourceConfig()).thenReturn(new DropwizardResourceConfig());
+
 
         when(factory.build(eq(bundle),
                            any(Environment.class),
                            any(DataSourceFactory.class),
-                           anyList())).thenReturn(sessionFactory);
+                           anyList(),
+                           eq("hibernate"))).thenReturn(sessionFactory);
     }
 
     @Test
-    public void addsHibernateSupportToJackson() throws Exception {
+    void addsHibernateSupportToJackson() throws Exception {
         final ObjectMapper objectMapperFactory = mock(ObjectMapper.class);
 
         final Bootstrap<?> bootstrap = mock(Bootstrap.class);
@@ -58,18 +69,18 @@ public class HibernateBundleTest {
         final ArgumentCaptor<Module> captor = ArgumentCaptor.forClass(Module.class);
         verify(objectMapperFactory).registerModule(captor.capture());
 
-        assertThat(captor.getValue()).isInstanceOf(Hibernate4Module.class);
+        assertThat(captor.getValue()).isInstanceOf(Hibernate5Module.class);
     }
 
     @Test
-    public void buildsASessionFactory() throws Exception {
+    void buildsASessionFactory() throws Exception {
         bundle.run(configuration, environment);
 
-        verify(factory).build(bundle, environment, dbConfig, entities);
+        verify(factory).build(bundle, environment, dbConfig, entities, "hibernate");
     }
 
     @Test
-    public void registersATransactionalListener() throws Exception {
+    void registersATransactionalListener() throws Exception {
         bundle.run(configuration, environment);
 
         final ArgumentCaptor<UnitOfWorkApplicationListener> captor =
@@ -78,7 +89,7 @@ public class HibernateBundleTest {
     }
 
     @Test
-    public void registersASessionFactoryHealthCheck() throws Exception {
+    void registersASessionFactoryHealthCheck() throws Exception {
         dbConfig.setValidationQuery("SELECT something");
 
         bundle.run(configuration, environment);
@@ -89,11 +100,37 @@ public class HibernateBundleTest {
 
         assertThat(captor.getValue().getSessionFactory()).isEqualTo(sessionFactory);
 
-        assertThat(captor.getValue().getValidationQuery()).isEqualTo("SELECT something");
+        assertThat(captor.getValue().getValidationQuery()).isEqualTo(Optional.of("SELECT something"));
     }
 
     @Test
-    public void hasASessionFactory() throws Exception {
+    void registersACustomNameOfHealthCheckAndDBPoolMetrics() throws Exception {
+        final HibernateBundle<Configuration> customBundle = new HibernateBundle<Configuration>(entities, factory) {
+            @Override
+            public DataSourceFactory getDataSourceFactory(Configuration configuration) {
+                return dbConfig;
+            }
+
+            @Override
+            protected String name() {
+                return "custom-hibernate";
+            }
+        };
+        when(factory.build(eq(customBundle),
+                any(Environment.class),
+                any(DataSourceFactory.class),
+                anyList(),
+                eq("custom-hibernate"))).thenReturn(sessionFactory);
+
+        customBundle.run(configuration, environment);
+
+        final ArgumentCaptor<SessionFactoryHealthCheck> captor =
+                ArgumentCaptor.forClass(SessionFactoryHealthCheck.class);
+        verify(healthChecks).register(eq("custom-hibernate"), captor.capture());
+    }
+
+    @Test
+    void hasASessionFactory() throws Exception {
         bundle.run(configuration, environment);
 
         assertThat(bundle.getSessionFactory()).isEqualTo(sessionFactory);

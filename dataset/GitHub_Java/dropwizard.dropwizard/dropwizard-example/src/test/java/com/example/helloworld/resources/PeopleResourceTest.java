@@ -1,72 +1,100 @@
 package com.example.helloworld.resources;
-import static org.fest.assertions.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
 
 import com.example.helloworld.core.Person;
 import com.example.helloworld.db.PersonDAO;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableList;
-import io.dropwizard.jackson.Jackson;
-import io.dropwizard.testing.junit.ResourceTestRule;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Test;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import io.dropwizard.testing.junit5.ResourceExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.mockito.MockitoAnnotations;
 
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.util.Collections;
 import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link PeopleResource}.
  */
+@ExtendWith(DropwizardExtensionsSupport.class)
 public class PeopleResourceTest {
-    @Captor ArgumentCaptor<Person> personCaptor;
-    private static final PersonDAO dao = mock(PersonDAO.class);
-
-    private static final ObjectMapper MAPPER = Jackson.newObjectMapper();
-
-    @ClassRule
-    public static final ResourceTestRule resources = ResourceTestRule.builder()
-            .addResource(new PeopleResource(dao))
+    private static final PersonDAO PERSON_DAO = mock(PersonDAO.class);
+    public static final ResourceExtension RESOURCES = ResourceExtension.builder()
+            .addResource(new PeopleResource(PERSON_DAO))
             .build();
-
+    private ArgumentCaptor<Person> personCaptor = ArgumentCaptor.forClass(Person.class);
     private Person person;
 
-    @Before
-    public void setup() {
-        MockitoAnnotations.initMocks(this);
+    @BeforeEach
+    void setUp() {
         person = new Person();
         person.setFullName("Full Name");
-        person.setJobTitle("job title");
+        person.setJobTitle("Job Title");
+        person.setYearBorn(1995);
     }
 
-    @After
-    public void tearDown() {
-        reset(dao);
-    }
-
-    @Test
-    public void createPerson() throws JsonProcessingException {
-        resources.client().resource("/people")
-                .type(MediaType.APPLICATION_JSON_TYPE)
-                .post(person);
-
-        verify(dao).create(personCaptor.capture());
-        assertThat(MAPPER.writeValueAsString(personCaptor.getValue()))
-                .isEqualTo(MAPPER.writeValueAsString(person));
+    @AfterEach
+    void tearDown() {
+        reset(PERSON_DAO);
     }
 
     @Test
-    public void listPeople() throws Exception {
-        when(dao.findAll()).thenReturn(ImmutableList.of(person));
-        List people = resources.client().resource("/people").get(List.class);
+    void createPerson() {
+        when(PERSON_DAO.create(any(Person.class))).thenReturn(person);
+        final Response response = RESOURCES.target("/people")
+                .request(MediaType.APPLICATION_JSON_TYPE)
+                .post(Entity.entity(person, MediaType.APPLICATION_JSON_TYPE));
 
-        assertThat(MAPPER.writeValueAsString(people))
-                .isEqualTo(MAPPER.writeValueAsString(ImmutableList.of(person)));
-        verify(dao).findAll();
+        assertThat(response.getStatusInfo()).isEqualTo(Response.Status.OK);
+        verify(PERSON_DAO).create(personCaptor.capture());
+        assertThat(personCaptor.getValue()).isEqualTo(person);
+    }
+
+    @Test
+    void createPersonFailureMinYearBorn() {
+        person.setYearBorn(-1);
+
+        final Response response = RESOURCES.target("/people")
+                .request(MediaType.APPLICATION_JSON_TYPE)
+                .post(Entity.entity(person, MediaType.APPLICATION_JSON_TYPE));
+
+        assertThat(response.getStatusInfo()).isNotEqualTo(Response.Status.OK);
+        assertThat(response.readEntity(String.class)).contains("yearBorn must be greater than or equal to 0");
+    }
+
+    @Test
+    void createPersonFailureMaxYearBorn() {
+        person.setYearBorn(10000);
+
+        final Response response = RESOURCES.target("/people")
+                .request(MediaType.APPLICATION_JSON_TYPE)
+                .post(Entity.entity(person, MediaType.APPLICATION_JSON_TYPE));
+
+        assertThat(response.getStatusInfo()).isNotEqualTo(Response.Status.OK);
+        assertThat(response.readEntity(String.class)).contains("yearBorn must be less than or equal to 9999");
+    }
+
+    @Test
+    void listPeople() throws Exception {
+        final List<Person> people = Collections.singletonList(person);
+        when(PERSON_DAO.findAll()).thenReturn(people);
+
+        final List<Person> response = RESOURCES.target("/people")
+            .request().get(new GenericType<List<Person>>() {
+            });
+
+        verify(PERSON_DAO).findAll();
+        assertThat(response).containsAll(people);
     }
 }

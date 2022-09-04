@@ -1,14 +1,14 @@
 package io.dropwizard.validation;
 
-import com.google.common.collect.ImmutableList;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.validation.Valid;
 import javax.validation.Validator;
+import java.util.Collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SuppressWarnings({"FieldMayBeFinal","MethodMayBeStatic","UnusedDeclaration"})
+@SuppressWarnings({"FieldMayBeFinal", "MethodMayBeStatic", "UnusedDeclaration"})
 public class MethodValidatorTest {
     public static class SubExample {
         @ValidationMethod(message = "also needs something special")
@@ -35,12 +35,12 @@ public class MethodValidatorTest {
     private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    public void complainsAboutMethodsWhichReturnFalse() throws Exception {
-        final ImmutableList<String> errors =
+    void complainsAboutMethodsWhichReturnFalse() throws Exception {
+        final Collection<String> errors =
                 ConstraintViolations.format(validator.validate(new Example()));
 
         assertThat(errors)
                 .containsOnly("must have a false thing",
-                              "subExample also needs something special");
+                              "also needs something special");
     }
 }

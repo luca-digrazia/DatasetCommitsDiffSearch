@@ -1,10 +1,9 @@
 package io.dropwizard.jersey.params;
 
 
-import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -17,30 +16,30 @@ public class NonEmptyStringParamProviderTest extends AbstractJerseyTest {
 
     @Override
     protected Application configure() {
-        return DropwizardResourceConfig.forTesting(new MetricRegistry())
+        return DropwizardResourceConfig.forTesting()
                 .register(NonEmptyStringParamResource.class);
     }
 
     @Test
-    public void shouldReturnDefaultMessageWhenNonExistent() {
+    void shouldReturnDefaultMessageWhenNonExistent() {
         String response = target("/non-empty/string").request().get(String.class);
         assertThat(response).isEqualTo("Hello");
     }
 
     @Test
-    public void shouldReturnDefaultMessageWhenEmptyString() {
+    void shouldReturnDefaultMessageWhenEmptyString() {
         String response = target("/non-empty/string").queryParam("message", "").request().get(String.class);
         assertThat(response).isEqualTo("Hello");
     }
 
     @Test
-    public void shouldReturnDefaultMessageWhenNull() {
+    void shouldReturnDefaultMessageWhenNull() {
         String response = target("/non-empty/string").queryParam("message").request().get(String.class);
         assertThat(response).isEqualTo("Hello");
     }
 
     @Test
-    public void shouldReturnMessageWhenSpecified() {
+    void shouldReturnMessageWhenSpecified() {
         String response = target("/non-empty/string").queryParam("message", "Goodbye").request().get(String.class);
         assertThat(response).isEqualTo("Goodbye");
     }

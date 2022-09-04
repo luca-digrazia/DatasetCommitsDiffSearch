@@ -1,40 +1,53 @@
 package com.example.app1;
 
-import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Configuration;
 import io.dropwizard.client.JerseyClientBuilder;
+import io.dropwizard.client.JerseyClientConfiguration;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit.DropwizardAppRule;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
+import io.dropwizard.testing.junit5.DropwizardAppExtension;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import io.dropwizard.util.Duration;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
+import static org.awaitility.Awaitility.await;
 
+@ExtendWith(DropwizardExtensionsSupport.class)
 public class App1Test {
-    @ClassRule
-    public static final DropwizardAppRule<Configuration> RULE =
-        new DropwizardAppRule<>(App1.class, ResourceHelpers.resourceFilePath("app1/config.yml"));
+    public static final DropwizardAppExtension<Configuration> RULE =
+        new DropwizardAppExtension<>(App1.class, ResourceHelpers.resourceFilePath("app1/config.yml"));
 
     private static Client client;
 
-    @BeforeClass
+    @BeforeAll
     public static void setup() {
+        final JerseyClientConfiguration config = new JerseyClientConfiguration();
+        // Avoid flakiness with default timeouts in CI builds
+        config.setTimeout(Duration.seconds(5));
         client = new JerseyClientBuilder(RULE.getEnvironment())
             .withProvider(new CustomJsonProvider(Jackson.newObjectMapper()))
+            .using(config)
             .build("test client");
     }
 
     @Test
-    public void custom204OnEmptyOptional() {
+    void custom204OnEmptyOptional() {
         final Client client = new JerseyClientBuilder(RULE.getEnvironment()).build("test client 1");
         final String url = String.format("http://localhost:%d/empty-optional", RULE.getLocalPort());
         final Response response = client.target(url).request().get();
@@ -42,7 +55,7 @@ public class App1Test {
     }
 
     @Test
-    public void custom404OnViewRenderMissingMustacheTemplate() {
+    void custom404OnViewRenderMissingMustacheTemplate() {
         final Client client = new JerseyClientBuilder(RULE.getEnvironment()).build("test client 2");
         final String url = String.format("http://localhost:%d/view-with-missing-tpl", RULE.getLocalPort());
 
@@ -51,7 +64,27 @@ public class App1Test {
     }
 
     @Test
-    public void customJsonProvider() {
+    void earlyEofTest() throws IOException, InterruptedException {
+        // Only eof test so we ensure it's false before test
+        ((App1)RULE.getApplication()).wasEofExceptionHit = false;
+
+        final URL url = new URL(String.format("http://localhost:%d/mapper", RULE.getLocalPort()));
+        final HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
+        conn.setFixedLengthStreamingMode(100000);
+
+        conn.getOutputStream().write("{".getBytes(StandardCharsets.UTF_8));
+        conn.disconnect();
+
+        await().atMost(5, TimeUnit.SECONDS)
+                .until(() -> ((App1) RULE.getApplication()).wasEofExceptionHit);
+        assertThat(((App1) RULE.getApplication()).wasEofExceptionHit).isTrue();
+    }
+
+    @Test
+    void customJsonProvider() {
         final String url = String.format("http://localhost:%d/mapper", RULE.getLocalPort());
         final String response = client.target(url)
             .request()
@@ -61,7 +94,7 @@ public class App1Test {
     }
 
     @Test
-    public void customJsonProviderMissingHeader() {
+    void customJsonProviderMissingHeader() {
         final String url = String.format("http://localhost:%d/mapper", RULE.getLocalPort());
         final Response response = client.target(url)
             .request()
@@ -70,29 +103,29 @@ public class App1Test {
     }
 
     @Test
-    public void customJsonProviderClient() {
+    void customJsonProviderClient() {
         final String url = String.format("http://localhost:%d/mapper", RULE.getLocalPort());
         final String response = client.target(url)
             .request()
-            .post(Entity.json(ImmutableMap.of("check", "mate")), String.class);
+            .post(Entity.json(Collections.singletonMap("check", "mate")), String.class);
         assertThat(response).isEqualTo("/** A Dropwizard specialty */\n" +
             "{\"check\":\"mate\",\"hello\":\"world\"}");
     }
 
     @Test
-    public void customJsonProviderRoundtrip() {
+    void customJsonProviderRoundtrip() {
         final String url = String.format("http://localhost:%d/mapper", RULE.getLocalPort());
         final GenericType<Map<String, String>> typ = new GenericType<Map<String, String>>() {
         };
 
         final Map<String, String> response = client.target(url)
             .request()
-            .post(Entity.json(ImmutableMap.of("check", "mate")), typ);
+            .post(Entity.json(Collections.singletonMap("check", "mate")), typ);
         assertThat(response).containsExactly(entry("check", "mate"), entry("hello", "world"));
     }
 
     @Test
-    public void customBodyWriterTest() {
+    void customBodyWriterTest() {
         final String url = String.format("http://localhost:%d/custom-class", RULE.getLocalPort());
         final String response = client.target(url)
             .request()

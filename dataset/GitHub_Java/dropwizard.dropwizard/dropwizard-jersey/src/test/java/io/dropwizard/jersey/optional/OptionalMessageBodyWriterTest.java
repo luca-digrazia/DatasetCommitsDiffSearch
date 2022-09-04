@@ -1,9 +1,8 @@
 package io.dropwizard.jersey.optional;
 
-import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
@@ -18,19 +17,19 @@ import javax.ws.rs.core.Response;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class OptionalMessageBodyWriterTest extends AbstractJerseyTest {
 
     @Override
     protected Application configure() {
-        return DropwizardResourceConfig.forTesting(new MetricRegistry())
+        return DropwizardResourceConfig.forTesting()
                 .register(new EmptyOptionalExceptionMapper())
                 .register(OptionalReturnResource.class);
     }
 
     @Test
-    public void presentOptionalsReturnTheirValue() throws Exception {
+    void presentOptionalsReturnTheirValue() {
         assertThat(target("optional-return")
                 .queryParam("id", "woo").request()
                 .get(String.class))
@@ -38,7 +37,7 @@ public class OptionalMessageBodyWriterTest extends AbstractJerseyTest {
     }
 
     @Test
-    public void presentOptionalsReturnTheirValueWithResponse() throws Exception {
+    void presentOptionalsReturnTheirValueWithResponse() {
         assertThat(target("optional-return/response-wrapped")
                 .queryParam("id", "woo").request()
                 .get(String.class))
@@ -46,14 +45,10 @@ public class OptionalMessageBodyWriterTest extends AbstractJerseyTest {
     }
 
     @Test
-    public void absentOptionalsThrowANotFound() throws Exception {
-        try {
-            target("optional-return").request().get(String.class);
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-        } catch (WebApplicationException e) {
-            assertThat(e.getResponse().getStatus())
-                    .isEqualTo(404);
-        }
+    void absentOptionalsThrowANotFound() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> target("optional-return").request().get(String.class))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(404));
     }
 
     @Path("optional-return")

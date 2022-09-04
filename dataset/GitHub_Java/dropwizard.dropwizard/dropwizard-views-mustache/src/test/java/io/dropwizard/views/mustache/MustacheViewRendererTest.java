@@ -1,25 +1,31 @@
 package io.dropwizard.views.mustache;
 
 import com.codahale.metrics.MetricRegistry;
-import com.sun.jersey.api.client.UniformInterfaceException;
-import com.sun.jersey.api.core.DefaultResourceConfig;
-import com.sun.jersey.test.framework.AppDescriptor;
-import com.sun.jersey.test.framework.JerseyTest;
-import com.sun.jersey.test.framework.LowLevelAppDescriptor;
-import io.dropwizard.logging.LoggingFactory;
+import io.dropwizard.jersey.DropwizardResourceConfig;
+import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.views.ViewMessageBodyWriter;
-import org.junit.Test;
+import io.dropwizard.views.ViewRenderExceptionMapper;
+import io.dropwizard.views.ViewRenderer;
+import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.test.JerseyTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
+import java.util.Collections;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class MustacheViewRendererTest extends JerseyTest {
     static {
-        LoggingFactory.bootstrap();
+        BootstrapLogging.bootstrap();
     }
 
     @Path("/test/")
@@ -42,40 +48,87 @@ public class MustacheViewRendererTest extends JerseyTest {
         public BadView showBad() {
             return new BadView();
         }
+
+        @GET
+        @Path("/error")
+        public ErrorView showError() {
+            return new ErrorView();
+        }
     }
 
     @Override
-    protected AppDescriptor configure() {
-        final DefaultResourceConfig config = new DefaultResourceConfig();
-        config.getSingletons().add(new ViewMessageBodyWriter(new MetricRegistry()));
-        config.getSingletons().add(new ExampleResource());
-        return new LowLevelAppDescriptor.Builder(config).build();
+    @BeforeEach
+    public void setUp() throws Exception {
+        super.setUp();
+    }
+
+    @Override
+    @AfterEach
+    public void tearDown() throws Exception {
+        super.tearDown();
+    }
+
+    @Override
+    protected Application configure() {
+        ResourceConfig config = DropwizardResourceConfig.forTesting();
+        final ViewRenderer renderer = new MustacheViewRenderer();
+        config.register(new ViewMessageBodyWriter(new MetricRegistry(), Collections.singletonList(renderer)));
+        config.register(new ViewRenderExceptionMapper());
+        config.register(new ExampleResource());
+        return config;
     }
 
     @Test
-    public void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
-        final String response = client().resource(getBaseURI() + "test/absolute").get(String.class);
-        assertThat(response)
-                .isEqualTo("Woop woop. yay\n");
+    void rendersViewsWithAbsoluteTemplatePaths() throws Exception {
+        final String response = target("/test/absolute").request().get(String.class);
+        assertThat(response).isEqualTo("Woop woop. yay\n");
     }
 
     @Test
-    public void rendersViewsWithRelativeTemplatePaths() throws Exception {
-        final String response = client().resource(getBaseURI() + "test/relative").get(String.class);
-        assertThat(response)
-                .isEqualTo("Ok.\n");
+    void rendersViewsWithRelativeTemplatePaths() throws Exception {
+        final String response = target("/test/relative").request().get(String.class);
+        assertThat(response).isEqualTo("Ok.\n");
     }
 
     @Test
-    public void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
+    void returnsA500ForViewsWithBadTemplatePaths() throws Exception {
         try {
-            client().resource(getBaseURI() + "test/bad").get(String.class);
-        } catch (UniformInterfaceException e) {
+            target("/test/bad").request().get(String.class);
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
             assertThat(e.getResponse().getStatus())
                     .isEqualTo(500);
 
-            assertThat(e.getResponse().getEntity(String.class))
-                    .isEqualTo("<html><head><title>Missing Template</title></head><body><h1>Missing Template</h1><p>Template /woo-oo-ahh.txt.mustache not found.</p></body></html>");
+            assertThat(e.getResponse().readEntity(String.class))
+                    .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG);
         }
+    }
+
+    @Test
+    void returnsA500ForViewsThatCantCompile() throws Exception {
+        try {
+            target("/test/error").request().get(String.class);
+            failBecauseExceptionWasNotThrown(WebApplicationException.class);
+        } catch (WebApplicationException e) {
+            assertThat(e.getResponse().getStatus())
+                    .isEqualTo(500);
+
+            assertThat(e.getResponse().readEntity(String.class))
+                .isEqualTo(ViewRenderExceptionMapper.TEMPLATE_ERROR_MSG);
+        }
+    }
+
+    @Test
+    void cacheByDefault() {
+        MustacheViewRenderer mustacheViewRenderer = new MustacheViewRenderer();
+        mustacheViewRenderer.configure(Collections.emptyMap());
+        assertThat(mustacheViewRenderer.isUseCache()).isTrue();
+    }
+
+    @Test
+    void canDisableCache() {
+        MustacheViewRenderer mustacheViewRenderer = new MustacheViewRenderer();
+        mustacheViewRenderer.configure(Collections.singletonMap("cache", "false"));
+        assertThat(mustacheViewRenderer.isUseCache()).isFalse();
     }
 }

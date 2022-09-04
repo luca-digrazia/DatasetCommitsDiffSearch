@@ -1,22 +1,22 @@
 package io.dropwizard.jetty;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.io.Resources;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.util.Duration;
+import io.dropwizard.util.Resources;
 import io.dropwizard.validation.BaseValidator;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlets.PushCacheFilter;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.servlet.DispatcherType;
 import java.io.File;
+import java.util.Arrays;
 import java.util.EnumSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.verify;
 public class ServerPushFilterFactoryTest {
 
     @Test
-    public void testLoadConfiguration() throws Exception {
+    void testLoadConfiguration() throws Exception {
         final ServerPushFilterFactory serverPush = new YamlConfigurationFactory<>(
                 ServerPushFilterFactory.class, BaseValidator.newValidator(),
                 Jackson.newObjectMapper(), "dw-server-push")
@@ -37,7 +37,7 @@ public class ServerPushFilterFactoryTest {
     }
 
     @Test
-    public void testDefaultConfiguration() {
+    void testDefaultConfiguration() {
         final ServerPushFilterFactory serverPush = new ServerPushFilterFactory();
         assertThat(serverPush.isEnabled()).isFalse();
         assertThat(serverPush.getAssociatePeriod()).isEqualTo(Duration.seconds(4));
@@ -47,7 +47,7 @@ public class ServerPushFilterFactoryTest {
     }
 
     @Test
-    public void testDontAddFilterByDefault() {
+    void testDontAddFilterByDefault() {
         final ServerPushFilterFactory serverPush = new ServerPushFilterFactory();
 
         ServletContextHandler servletContextHandler = mock(ServletContextHandler.class);
@@ -57,10 +57,10 @@ public class ServerPushFilterFactoryTest {
     }
 
     @Test
-    public void testAddFilter() {
+    void testAddFilter() {
         final ServerPushFilterFactory serverPush = new ServerPushFilterFactory();
-        serverPush.setRefererHosts(ImmutableList.of("dropwizard.io", "dropwizard.github.io"));
-        serverPush.setRefererPorts(ImmutableList.of(8444, 8445));
+        serverPush.setRefererHosts(Arrays.asList("dropwizard.io", "dropwizard.github.io"));
+        serverPush.setRefererPorts(Arrays.asList(8444, 8445));
         serverPush.setEnabled(true);
 
         ServletContextHandler servletContextHandler = mock(ServletContextHandler.class);
@@ -75,7 +75,7 @@ public class ServerPushFilterFactoryTest {
     }
 
     @Test
-    public void testRefererHostsAndPortsAreNotSet() {
+    void testRefererHostsAndPortsAreNotSet() {
         final ServerPushFilterFactory serverPush = new ServerPushFilterFactory();
         serverPush.setEnabled(true);
 

@@ -1,43 +1,71 @@
 package io.dropwizard.jersey.errors;
 
-import com.codahale.metrics.MetricRegistry;
+import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.logging.LoggingFactory;
-import org.glassfish.jersey.test.JerseyTest;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-public class LoggingExceptionMapperTest extends JerseyTest {
-    static {
-        LoggingFactory.bootstrap();
-    }
+public class LoggingExceptionMapperTest extends AbstractJerseyTest {
 
     @Override
     protected Application configure() {
-        return DropwizardResourceConfig.forTesting(new MetricRegistry())
+        return DropwizardResourceConfig.forTesting()
                 .register(DefaultLoggingExceptionMapper.class)
                 .register(DefaultJacksonMessageBodyProvider.class)
                 .register(ExceptionResource.class);
     }
 
     @Test
-    public void returnsAnErrorMessage() throws Exception {
-        try {
-            target("/exception/").request(MediaType.APPLICATION_JSON).get(String.class);
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-        } catch (WebApplicationException e) {
-            final Response response = e.getResponse();
+    void returnsAnErrorMessage() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> target("/exception/").request(MediaType.APPLICATION_JSON).get(String.class))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
+            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class)).startsWith("{\"code\":500,\"message\":"
+                + "\"There was an error processing your request. It has been logged (ID "));
+    }
 
-            assertThat(response.getStatus()).isEqualTo(500);
-            assertThat(response.readEntity(String.class)).startsWith("{\"code\":500,\"message\":"
-                    + "\"There was an error processing your request. It has been logged (ID ");
-        }
+    @Test
+    void handlesJsonMappingException() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> target("/exception/json-mapping-exception").request(MediaType.APPLICATION_JSON).get(String.class))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(500))
+            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class)).startsWith("{\"code\":500,\"message\":"
+                + "\"There was an error processing your request. It has been logged (ID "));
+    }
+
+    @Test
+    void handlesMethodNotAllowedWithHeaders() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> target("/exception/json-mapping-exception")
+            .request(MediaType.APPLICATION_JSON)
+            .post(Entity.json("A"), String.class))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(405))
+            .satisfies(e -> assertThat(e.getResponse().getAllowedMethods()).containsOnly("GET", "OPTIONS"))
+            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class))
+                .isEqualTo("{\"code\":405,\"message\":\"HTTP 405 Method Not Allowed\"}"));
+    }
+
+    @Test
+    void formatsWebApplicationException() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> target("/exception/web-application-exception").request(MediaType.APPLICATION_JSON).get(String.class))
+            .satisfies(e -> assertThat(e.getResponse().getStatus()).isEqualTo(400))
+            .satisfies(e -> assertThat(e.getResponse().readEntity(String.class))
+                .isEqualTo("{\"code\":400,\"message\":\"KAPOW\"}"));
+    }
+
+    @Test
+    void handlesRedirectInWebApplicationException() {
+        String responseText = target("/exception/web-application-exception-with-redirect")
+            .request(MediaType.APPLICATION_JSON)
+            .get(String.class);
+        assertThat(responseText).isEqualTo("{\"status\":\"OK\"}");
     }
 }

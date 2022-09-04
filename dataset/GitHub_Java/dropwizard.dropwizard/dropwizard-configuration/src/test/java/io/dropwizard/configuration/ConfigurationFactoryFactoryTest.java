@@ -1,36 +1,69 @@
 package io.dropwizard.configuration;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import io.dropwizard.configuration.ConfigurationFactoryTest.Example;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.dropwizard.configuration.BaseConfigurationFactoryTest.Example;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.util.Resources;
+import io.dropwizard.validation.BaseValidator;
 
+import org.junit.jupiter.api.Test;
+
+import javax.validation.Validator;
 import java.io.File;
 
-import javax.validation.Validation;
-import javax.validation.Validator;
-
-import org.junit.Before;
-import org.junit.Test;
-
-import com.google.common.io.Resources;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 
 public class ConfigurationFactoryFactoryTest {
-        
-    private final ConfigurationFactoryFactory<Example> factoryFactory = new DefaultConfigurationFactoryFactory<Example>();
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
-    private File validFile;    
-    
-    @Before
-    public void setUp() throws Exception {
-        this.validFile = new File(Resources.getResource("factory-test-valid.yml").toURI());
+
+    private final ConfigurationFactoryFactory<Example> factoryFactory = new DefaultConfigurationFactoryFactory<>();
+    private final Validator validator = BaseValidator.newValidator();
+
+    @Test
+    void createDefaultFactory() throws Exception {
+        File validFile = new File(Resources.getResource("factory-test-valid.yml").toURI());
+        ConfigurationFactory<Example> factory =
+            factoryFactory.create(Example.class, validator, Jackson.newObjectMapper(), "dw");
+        final Example example = factory.build(validFile);
+        assertThat(example.getName())
+            .isEqualTo("Coda Hale");
     }
-            
-     @Test
-     public void createDefaultFactory() throws Exception {
-         ConfigurationFactory<Example> factory = factoryFactory.create(Example.class, validator, Jackson.newObjectMapper(), "dw");         
-         final Example example = factory.build(validFile);
-         assertThat(example.getName())
-                 .isEqualTo("Coda Hale");
-     }
+
+    @Test
+    void createDefaultFactoryFailsUnknownProperty() throws Exception {
+        File validFileWithUnknownProp = new File(
+            Resources.getResource("factory-test-unknown-property.yml").toURI());
+        ConfigurationFactory<Example> factory =
+            factoryFactory.create(Example.class, validator, Jackson.newObjectMapper(), "dw");
+
+        assertThatExceptionOfType(ConfigurationException.class)
+            .isThrownBy(() -> factory.build(validFileWithUnknownProp))
+            .withMessageContaining("Unrecognized field at: trait");
+    }
+
+    @Test
+    void createFactoryAllowingUnknownProperties() throws Exception {
+        ConfigurationFactoryFactory<Example> customFactory = new PassThroughConfigurationFactoryFactory();
+        File validFileWithUnknownProp = new File(
+            Resources.getResource("factory-test-unknown-property.yml").toURI());
+        ConfigurationFactory<Example> factory =
+            customFactory.create(
+                Example.class,
+                validator,
+                Jackson.newObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES),
+                "dw");
+        Example example = factory.build(validFileWithUnknownProp);
+        assertThat(example.getName())
+            .isEqualTo("Mighty Wizard");
+    }
+
+    private static final class PassThroughConfigurationFactoryFactory
+            extends DefaultConfigurationFactoryFactory<Example> {
+        @Override
+        protected ObjectMapper configureObjectMapper(ObjectMapper objectMapper) {
+            return objectMapper;
+        }
+    }
 }

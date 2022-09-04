@@ -4,14 +4,17 @@ import io.dropwizard.Configuration;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.setup.JerseyContainerHolder;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
+import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.setup.Environment;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.thread.ThreadPool;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests that the {@link JerseyEnvironment#getUrlPattern()} is set by the following priority order:
@@ -33,51 +36,36 @@ public class AbstractServerFactoryTest {
     private static final String RUN_SET_PATTERN = "/set/from/run/*";
     private static final String YAML_SET_PATTERN = "/set/from/yaml/*";
 
-    @Before
-    public void before() {
-        when(this.environment.jersey()).thenReturn(this.jerseyEnvironment);
+    @BeforeEach
+    void before() {
+        when(environment.jersey()).thenReturn(jerseyEnvironment);
+        when(environment.getApplicationContext()).thenReturn(new MutableServletContextHandler());
     }
 
     @Test
-    public void usesYamlDefinedPattern() {
-        this.serverFactory.setJerseyRootPath(YAML_SET_PATTERN);
-        this.jerseyEnvironment.setUrlPattern(RUN_SET_PATTERN);
+    void usesYamlDefinedPattern() {
+        serverFactory.setJerseyRootPath(YAML_SET_PATTERN);
+        jerseyEnvironment.setUrlPattern(RUN_SET_PATTERN);
 
-        this.serverFactory.build(this.environment);
+        serverFactory.build(environment);
 
-        assertThat(this.jerseyEnvironment.getUrlPattern()).isEqualTo(YAML_SET_PATTERN);
+        assertThat(jerseyEnvironment.getUrlPattern()).isEqualTo(YAML_SET_PATTERN);
     }
 
     @Test
-    public void usesRunDefinedPatternWhenNoYaml() {
-        this.jerseyEnvironment.setUrlPattern(RUN_SET_PATTERN);
+    void usesRunDefinedPatternWhenNoYaml() {
+        jerseyEnvironment.setUrlPattern(RUN_SET_PATTERN);
 
-        this.serverFactory.build(this.environment);
+        serverFactory.build(environment);
 
-        assertThat(this.jerseyEnvironment.getUrlPattern()).isEqualTo(RUN_SET_PATTERN);
+        assertThat(jerseyEnvironment.getUrlPattern()).isEqualTo(RUN_SET_PATTERN);
     }
 
     @Test
-    public void usesDefaultPatternWhenNoneSet() {
-        this.serverFactory.build(this.environment);
+    void usesDefaultPatternWhenNoneSet() {
+        serverFactory.build(environment);
 
-        assertThat(this.jerseyEnvironment.getUrlPattern()).isEqualTo(DEFAULT_PATTERN);
-    }
-
-    @Test
-    public void yamlPatternEndsWithSlashStar() {
-        assertPatternEndsWithSlashStar("/missing/slash/star");
-    }
-
-    @Test
-    public void yamlPatternEndsWithStar() {
-        assertPatternEndsWithSlashStar("/missing/star/");
-    }
-
-    private void assertPatternEndsWithSlashStar(String jerseyRootPath) {
-        this.serverFactory.setJerseyRootPath(jerseyRootPath);
-        this.serverFactory.build(this.environment);
-        assertThat(this.jerseyEnvironment.getUrlPattern()).endsWith("/*");
+        assertThat(jerseyEnvironment.getUrlPattern()).isEqualTo(DEFAULT_PATTERN);
     }
 
     /**
@@ -90,7 +78,7 @@ public class AbstractServerFactoryTest {
             // mimics the current default + simple server factory build() methods
             ThreadPool threadPool = createThreadPool(environment.metrics());
             Server server = buildServer(environment.lifecycle(), threadPool);
-            this.createAppServlet(server,
+            createAppServlet(server,
                                   environment.jersey(),
                                   environment.getObjectMapper(),
                                   environment.getValidator(),
@@ -98,6 +86,11 @@ public class AbstractServerFactoryTest {
                                   environment.getJerseyServletContainer(),
                                   environment.metrics());
             return server;
+        }
+
+        @Override
+        public void configure(Environment environment) {
+            // left blank intentionally
         }
     }
 }

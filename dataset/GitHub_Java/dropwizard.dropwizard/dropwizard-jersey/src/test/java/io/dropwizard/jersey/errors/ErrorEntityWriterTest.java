@@ -1,30 +1,31 @@
 package io.dropwizard.jersey.errors;
 
-import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
 import org.glassfish.jersey.test.ServletDeploymentContext;
+import org.glassfish.jersey.test.TestProperties;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.glassfish.jersey.test.spi.TestContainerException;
 import org.glassfish.jersey.test.spi.TestContainerFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class ErrorEntityWriterTest extends AbstractJerseyTest {
 
     public static class ErrorEntityWriterTestResourceConfig extends DropwizardResourceConfig {
         public ErrorEntityWriterTestResourceConfig() {
-            super(true, new MetricRegistry());
+            super();
 
+            property(TestProperties.CONTAINER_PORT, "0");
             register(DefaultLoggingExceptionMapper.class);
             register(DefaultJacksonMessageBodyProvider.class);
             register(ExceptionResource.class);
@@ -51,21 +52,17 @@ public class ErrorEntityWriterTest extends AbstractJerseyTest {
     }
 
     @Test
-    public void formatsErrorsAsHtml() {
-
-        try {
-            target("/exception/html-exception")
+    void formatsErrorsAsHtml() {
+        assertThatExceptionOfType(WebApplicationException.class)
+            .isThrownBy(() -> target("/exception/html-exception")
                 .request(MediaType.TEXT_HTML_TYPE)
-                .get(String.class);
-
-            failBecauseExceptionWasNotThrown(WebApplicationException.class);
-
-        } catch (WebApplicationException e) {
-            final Response response = e.getResponse();
-            assertThat(response.getStatus()).isEqualTo(400);
-            assertThat(response.getMediaType()).isEqualTo(MediaType.TEXT_HTML_TYPE);
-            assertThat(response.readEntity(String.class)).isEqualTo("<!DOCTYPE html><html><body>BIFF</body></html>");
-        }
+                .get(String.class))
+            .satisfies(e -> {
+                final Response response = e.getResponse();
+                assertThat(response.getStatus()).isEqualTo(400);
+                assertThat(response.getMediaType()).isEqualTo(MediaType.TEXT_HTML_TYPE);
+                assertThat(response.readEntity(String.class)).isEqualTo("<!DOCTYPE html><html><body>BIFF</body></html>");
+            });
     }
 
 }

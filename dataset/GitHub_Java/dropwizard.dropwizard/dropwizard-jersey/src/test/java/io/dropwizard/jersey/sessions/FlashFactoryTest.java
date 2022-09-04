@@ -1,18 +1,16 @@
 package io.dropwizard.jersey.sessions;
 
-import com.codahale.metrics.MetricRegistry;
+import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.logging.LoggingFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.glassfish.jersey.test.DeploymentContext;
-import org.glassfish.jersey.test.JerseyTest;
 import org.glassfish.jersey.test.ServletDeploymentContext;
 import org.glassfish.jersey.test.grizzly.GrizzlyWebTestContainerFactory;
 import org.glassfish.jersey.test.spi.TestContainerException;
 import org.glassfish.jersey.test.spi.TestContainerFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.Invocation;
@@ -23,10 +21,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class FlashFactoryTest extends JerseyTest {
-    static {
-        LoggingFactory.bootstrap();
-    }
+public class FlashFactoryTest extends AbstractJerseyTest {
 
     @Override
     protected TestContainerFactory getTestContainerFactory()
@@ -34,10 +29,9 @@ public class FlashFactoryTest extends JerseyTest {
         return new GrizzlyWebTestContainerFactory();
     }
 
-
     @Override
     protected DeploymentContext configureDeployment() {
-        final ResourceConfig rc = DropwizardResourceConfig.forTesting(new MetricRegistry());
+        final ResourceConfig rc = DropwizardResourceConfig.forTesting();
 
         return ServletDeploymentContext.builder(rc)
                 .initParam(ServletProperties.JAXRS_APPLICATION_CLASS, DropwizardResourceConfig.class.getName())
@@ -46,7 +40,7 @@ public class FlashFactoryTest extends JerseyTest {
     }
 
     @Test
-    public void passesInHttpSessions() throws Exception {
+    void passesInHttpSessions() throws Exception {
         Response firstResponse = target("/flash").request(MediaType.TEXT_PLAIN)
                 .post(Entity.entity("Mr. Peeps", MediaType.TEXT_PLAIN));
 

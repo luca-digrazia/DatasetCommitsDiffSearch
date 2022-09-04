@@ -1,14 +1,16 @@
 package io.dropwizard.validation;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import javax.validation.Validation;
+import javax.validation.Valid;
 import javax.validation.Validator;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 import static io.dropwizard.validation.ConstraintViolations.format;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class OneOfValidatorTest {
     @SuppressWarnings("UnusedDeclaration")
@@ -21,29 +23,42 @@ public class OneOfValidatorTest {
 
         @OneOf(value = {"one", "two", "three"}, ignoreWhitespace = true)
         private String whitespaceInsensitive = "one";
+
+        @Valid
+        private List<@OneOf({"one", "two", "three"}) String> basicList = Collections.singletonList("one");
     }
 
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    public void allowsExactElements() throws Exception {
+    void allowsExactElements() throws Exception {
         assertThat(format(validator.validate(new Example())))
                 .isEmpty();
     }
 
     @Test
-    public void doesNotAllowOtherElements() throws Exception {
-        assumeTrue("en".equals(Locale.getDefault().getLanguage()));
+    void doesNotAllowOtherElements() throws Exception {
+        assumeTrue("en".equals(Locale.getDefault().getLanguage()),
+                "This test executes when the defined language is English ('en'). If not, it is skipped.");
 
         final Example example = new Example();
         example.basic = "four";
 
         assertThat(format(validator.validate(example)))
-                .containsOnly("basic must be one of [one, two, three] (was four)");
+                .containsOnly("basic must be one of [one, two, three]");
     }
 
     @Test
-    public void optionallyIgnoresCase() throws Exception {
+    void doesNotAllowBadElementsInList() {
+        final Example example = new Example();
+        example.basicList = Collections.singletonList("four");
+
+        assertThat(format(validator.validate(example)))
+            .containsOnly("basicList[0].<list element> must be one of [one, two, three]");
+    }
+
+    @Test
+    void optionallyIgnoresCase() throws Exception {
         final Example example = new Example();
         example.caseInsensitive = "ONE";
 
@@ -52,7 +67,7 @@ public class OneOfValidatorTest {
     }
 
     @Test
-    public void optionallyIgnoresWhitespace() throws Exception {
+    void optionallyIgnoresWhitespace() throws Exception {
         final Example example = new Example();
         example.whitespaceInsensitive = "   one  ";
 
