@@ -35,6 +35,7 @@ public class UnitTestTypeTestCase {
     public void testUnitMode() throws InterruptedException {
         ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
         TestStatus ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(2L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed());

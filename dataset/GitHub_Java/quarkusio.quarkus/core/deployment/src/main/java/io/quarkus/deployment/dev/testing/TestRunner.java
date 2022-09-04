@@ -20,15 +20,17 @@ import org.junit.platform.engine.FilterResult;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.UniqueId;
 import org.junit.platform.launcher.PostDiscoveryFilter;
-import org.opentest4j.TestAbortedException;
 
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.deployment.dev.ClassScanResult;
 import io.quarkus.deployment.dev.DevModeContext;
+import io.quarkus.deployment.dev.RuntimeUpdatesProcessor;
+import io.quarkus.dev.testing.TestWatchedFiles;
+import io.quarkus.runtime.configuration.HyphenateEnumConverter;
 
 public class TestRunner {
 
-    private static final Logger log = Logger.getLogger(TestRunner.class);
+    private static final Logger log = Logger.getLogger("io.quarkus.test");
     private static final AtomicLong COUNTER = new AtomicLong();
 
     private final TestSupport testSupport;
@@ -55,6 +57,7 @@ public class TestRunner {
     String appPropertiesExcludeTags;
     String appPropertiesIncludePattern;
     String appPropertiesExcludePattern;
+    String appPropertiesTestType;
 
     public TestRunner(TestSupport testSupport, DevModeContext devModeContext, CuratedApplication testApplication) {
         this.testSupport = testSupport;
@@ -74,18 +77,21 @@ public class TestRunner {
     }
 
     public void runFailedTests() {
-        runTests(null, true);
+        runTests(null, true, false);
     }
 
     public void runTests(ClassScanResult classScanResult) {
-        runTests(classScanResult, false);
+        runTests(classScanResult, false, false);
     }
 
-    private void runTests(ClassScanResult classScanResult, boolean reRunFailures) {
+    /**
+     *
+     * @param classScanResult The changed classes
+     * @param reRunFailures If failures should be re-run
+     * @param runningQueued If this is running queued up changes, so we expect 'testsRunning' to be true
+     */
+    private void runTests(ClassScanResult classScanResult, boolean reRunFailures, boolean runningQueued) {
         if (compileProblem != null) {
-            return;
-        }
-        if (testApplication == null) {
             return;
         }
         if (disabled) {
@@ -99,7 +105,7 @@ public class TestRunner {
             return;
         }
         synchronized (TestRunner.this) {
-            if (testsRunning) {
+            if (testsRunning && !runningQueued) {
                 if (reRunFailures) {
                     log.error("Not re-running failed tests, as tests are already in progress.");
                     return;
@@ -133,14 +139,15 @@ public class TestRunner {
                                 if (testsQueued) {
                                     testsQueued = false;
                                     run = true;
+                                } else {
+                                    testsRunning = false;
                                 }
                                 current = queuedChanges;
                                 queuedChanges = null;
                             }
-                            testsRunning = run;
                         }
                         if (run) {
-                            runTests(current);
+                            runTests(current, true, true);
                         }
                     }
                 } catch (Throwable t) {
@@ -203,12 +210,12 @@ public class TestRunner {
                     .setTestState(testSupport.testState)
                     .setTestClassUsages(testClassUsages)
                     .setTestApplication(testApplication)
-                    .setDisplayInConsole(testSupport.displayTestOutput)
                     .setIncludeTags(testSupport.includeTags)
                     .setExcludeTags(testSupport.excludeTags)
                     .setInclude(testSupport.include)
                     .setExclude(testSupport.exclude)
-                    .setFailingTestsOnly(testSupport.failingTestsOnly);
+                    .setTestType(testSupport.testType)
+                    .setFailingTestsOnly(classScanResult != null && testSupport.brokenOnlyMode); //broken only mode is only when changes are made, not for forced runs
             if (reRunFailures) {
                 Set<UniqueId> ids = new HashSet<>();
                 for (Map.Entry<String, TestClassResult> e : testSupport.testRunResults.getCurrentFailing().entrySet()) {
@@ -230,7 +237,11 @@ public class TestRunner {
                 @Override
                 public void runComplete(TestRunResults results) {
                     testSupport.testRunResults = results;
+                }
 
+                @Override
+                public void noTests(TestRunResults results) {
+                    testSupport.testRunResults = results;
                 }
             });
             runner = builder
@@ -242,6 +253,10 @@ public class TestRunner {
         runner.runTests();
         synchronized (this) {
             runner = null;
+        }
+        Map<String, Boolean> watched = TestWatchedFiles.retrieveWatchedFilePaths();
+        if (watched != null) {
+            RuntimeUpdatesProcessor.INSTANCE.setWatchedFilePaths(watched, true);
         }
         if (disabled) {
             return;
@@ -278,6 +293,7 @@ public class TestRunner {
                 String excludeTags = p.getProperty("quarkus.test.exclude-tags");
                 String includePattern = p.getProperty("quarkus.test.include-pattern");
                 String excludePattern = p.getProperty("quarkus.test.exclude-pattern");
+                String testType = p.getProperty("quarkus.test.type");
                 if (!firstRun) {
                     if (!Objects.equals(includeTags, appPropertiesIncludeTags)) {
                         if (includeTags == null) {
@@ -309,11 +325,19 @@ public class TestRunner {
                             testSupport.exclude = Pattern.compile(excludePattern);
                         }
                     }
+                    if (!Objects.equals(testType, appPropertiesTestType)) {
+                        if (testType == null) {
+                            testSupport.testType = TestType.ALL;
+                        } else {
+                            testSupport.testType = new HyphenateEnumConverter<>(TestType.class).convert(testType);
+                        }
+                    }
                 }
                 appPropertiesIncludeTags = includeTags;
                 appPropertiesExcludeTags = excludeTags;
                 appPropertiesIncludePattern = includePattern;
                 appPropertiesExcludePattern = excludePattern;
+                appPropertiesTestType = testType;
                 break;
             }
         }
@@ -329,19 +353,24 @@ public class TestRunner {
                     throw new RuntimeException(e);
                 }
             }
-            if (disabled) {
-                throw new TestAbortedException("Tests are disabled");
-            }
         }
     }
 
-    public synchronized void testCompileFailed(Throwable e) {
-        compileProblem = e;
-        log.error("Test compile failed", e);
+    public void testCompileFailed(Throwable e) {
+        synchronized (this) {
+            compileProblem = e;
+        }
+
+        for (TestListener i : testSupport.testListeners) {
+            i.testCompileFailed(e.getMessage());
+        }
     }
 
     public synchronized void testCompileSucceeded() {
         compileProblem = null;
+        for (TestListener i : testSupport.testListeners) {
+            i.testCompileSucceeded();
+        }
     }
 
     public boolean isRunning() {

@@ -39,6 +39,7 @@ public class TestRunnerSmokeTestCase {
     public void checkTestsAreRun() throws InterruptedException {
         ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
         TestStatus ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(3L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
@@ -70,6 +71,7 @@ public class TestRunnerSmokeTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(2L, ts.getTestsFailed());
         Assertions.assertEquals(2L, ts.getTestsPassed());
@@ -87,6 +89,7 @@ public class TestRunnerSmokeTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
@@ -102,6 +105,7 @@ public class TestRunnerSmokeTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(2L, ts.getTestsPassed());
@@ -118,6 +122,7 @@ public class TestRunnerSmokeTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed());
@@ -134,57 +139,10 @@ public class TestRunnerSmokeTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed());
-        Assertions.assertEquals(0L, ts.getTestsSkipped());
-        Assertions.assertEquals(0L, ts.getTotalTestsFailed());
-        Assertions.assertEquals(2L, ts.getTotalTestsPassed());
-        Assertions.assertEquals(0L, ts.getTotalTestsSkipped());
-
-        //now test compile errors
-        test.modifySourceFile(HelloResource.class, new Function<String, String>() {
-            @Override
-            public String apply(String s) {
-                return s.replaceAll("\"hello", "\"hello\" world");
-            }
-        });
-        //we just sleep here
-        Thread.sleep(1000);
-        test.modifySourceFile(HelloResource.class, new Function<String, String>() {
-            @Override
-            public String apply(String s) {
-                return s.replaceAll("\"hello\" world", "\"hello world");
-            }
-        });
-        ts = utils.waitForNextCompletion();
-
-        Assertions.assertEquals(2L, ts.getTestsFailed());
-        Assertions.assertEquals(0L, ts.getTestsPassed());
-        Assertions.assertEquals(0L, ts.getTestsSkipped());
-        Assertions.assertEquals(2L, ts.getTotalTestsFailed());
-        Assertions.assertEquals(0L, ts.getTotalTestsPassed());
-        Assertions.assertEquals(0L, ts.getTotalTestsSkipped());
-
-        //now test compile errors for the test itself
-        test.modifyTestSourceFile(SimpleET.class, new Function<String, String>() {
-            @Override
-            public String apply(String s) {
-                return s.replaceAll("\"hello", "\"hello\" world");
-            }
-        });
-        //we just sleep here
-        Thread.sleep(1000);
-        test.modifyTestSourceFile(SimpleET.class, new Function<String, String>() {
-            @Override
-            public String apply(String s) {
-                return s.replaceAll("\"hello\" world", "\"hello world");
-            }
-        });
-        ts = utils.waitForNextCompletion();
-
-        Assertions.assertEquals(0L, ts.getTestsFailed());
-        Assertions.assertEquals(2L, ts.getTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
         Assertions.assertEquals(0L, ts.getTotalTestsFailed());
         Assertions.assertEquals(2L, ts.getTotalTestsPassed());

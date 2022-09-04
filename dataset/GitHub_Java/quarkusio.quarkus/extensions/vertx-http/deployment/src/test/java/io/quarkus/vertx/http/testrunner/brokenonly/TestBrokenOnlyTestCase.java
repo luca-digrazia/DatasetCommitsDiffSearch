@@ -38,6 +38,7 @@ public class TestBrokenOnlyTestCase {
     public void testBrokenOnlyMode() throws InterruptedException {
         ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
         TestStatus ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
@@ -53,6 +54,7 @@ public class TestBrokenOnlyTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed()); //passing test should not have been run
@@ -65,6 +67,7 @@ public class TestBrokenOnlyTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
@@ -78,6 +81,7 @@ public class TestBrokenOnlyTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed());

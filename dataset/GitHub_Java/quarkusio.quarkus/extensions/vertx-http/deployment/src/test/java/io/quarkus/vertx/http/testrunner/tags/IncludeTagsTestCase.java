@@ -38,6 +38,7 @@ public class IncludeTagsTestCase {
     public void checkTestsAreRun() throws InterruptedException {
         ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
         TestStatus ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(2L, ts.getTestsPassed());
@@ -50,6 +51,7 @@ public class IncludeTagsTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
@@ -62,6 +64,7 @@ public class IncludeTagsTestCase {
             }
         });
         ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(5L, ts.getTestsPassed());

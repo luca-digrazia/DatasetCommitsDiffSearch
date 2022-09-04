@@ -37,6 +37,7 @@ public class TestParameterizedTestCase {
     public void testParameterizedTests() throws InterruptedException {
         ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
         TestStatus ts = utils.waitForNextCompletion();
+        ;
 
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(4L, ts.getTestsPassed());
