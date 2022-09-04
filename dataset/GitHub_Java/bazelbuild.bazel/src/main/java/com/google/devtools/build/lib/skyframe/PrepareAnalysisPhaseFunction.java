@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
@@ -33,14 +33,13 @@ import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.events.ErrorSensingEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.server.FailureDetails.BuildConfiguration.Code;
 import com.google.devtools.build.lib.skyframe.PrepareAnalysisPhaseValue.PrepareAnalysisPhaseKey;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -57,7 +56,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -80,12 +78,10 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
       throws InterruptedException, PrepareAnalysisPhaseFunctionException {
     PrepareAnalysisPhaseKey options = (PrepareAnalysisPhaseKey) key.argument();
 
-    BuildOptions targetOptions = options.getOptions();
-    BuildOptionsView hostTransitionOptionsView =
-        new BuildOptionsView(targetOptions, HostTransition.INSTANCE.requiresOptionFragments());
+    BuildOptions targetOptions = defaultBuildOptions.applyDiff(options.getOptionsDiff());
     BuildOptions hostOptions =
         targetOptions.get(CoreOptions.class).useDistinctHostConfiguration
-            ? HostTransition.INSTANCE.patch(hostTransitionOptionsView, env.getListener())
+            ? HostTransition.INSTANCE.patch(targetOptions, env.getListener())
             : targetOptions;
 
     ImmutableSortedSet<Class<? extends Fragment>> allFragments =
@@ -98,21 +94,24 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
       return null;
     }
 
-    List<BuildOptions> topLevelBuildOptions =
-        getTopLevelBuildOptions(targetOptions, options.getMultiCpu());
-
+    BuildConfigurationValue.Key hostConfigurationKey = null;
     ImmutableList.Builder<BuildConfigurationValue.Key> targetConfigurationKeysBuilder =
-        ImmutableList.builderWithExpectedSize(topLevelBuildOptions.size());
-    BuildConfigurationValue.Key hostConfigurationKey;
+        ImmutableList.builder();
     try {
       hostConfigurationKey =
           BuildConfigurationValue.keyWithPlatformMapping(
-              platformMappingValue, defaultBuildOptions, allFragments, hostOptions);
+              platformMappingValue,
+              defaultBuildOptions,
+              allFragments,
+              BuildOptions.diffForReconstruction(defaultBuildOptions, hostOptions));
       for (BuildOptions buildOptions :
           getTopLevelBuildOptions(targetOptions, options.getMultiCpu())) {
         targetConfigurationKeysBuilder.add(
             BuildConfigurationValue.keyWithPlatformMapping(
-                platformMappingValue, defaultBuildOptions, allFragments, buildOptions));
+                platformMappingValue,
+                defaultBuildOptions,
+                allFragments,
+                BuildOptions.diffForReconstruction(defaultBuildOptions, buildOptions)));
       }
     } catch (OptionsParsingException e) {
       throw new PrepareAnalysisPhaseFunctionException(new InvalidConfigurationException(e));
@@ -130,17 +129,16 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     Map<SkyKey, SkyValue> configs = env.getValues(targetConfigurationKeys);
 
     // We only report invalid options for the target configurations, and abort if there's an error.
-    ErrorSensingEventHandler<Void> nosyEventHandler =
-        ErrorSensingEventHandler.withoutPropertyValueTracking(env.getListener());
-    targetConfigurationKeys.stream()
-        .map(configs::get)
-        .filter(Objects::nonNull)
+    ErrorSensingEventHandler nosyEventHandler = new ErrorSensingEventHandler(env.getListener());
+    targetConfigurationKeys
+        .stream()
+        .map(k -> configs.get(k))
+        .filter(Predicates.notNull())
         .map(v -> ((BuildConfigurationValue) v).getConfiguration())
         .forEach(config -> config.reportInvalidOptions(nosyEventHandler));
     if (nosyEventHandler.hasErrors()) {
       throw new PrepareAnalysisPhaseFunctionException(
-          new InvalidConfigurationException(
-              "Build options are invalid", Code.INVALID_BUILD_OPTIONS));
+          new InvalidConfigurationException("Build options are invalid"));
     }
 
     // We get the list of labels from the TargetPatternPhaseValue, so we are reasonably certain that
@@ -243,8 +241,13 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
 
     LinkedHashSet<TargetAndConfiguration> result = new LinkedHashSet<>();
     for (TargetAndConfiguration originalNode : nodes) {
-      // If the configuration couldn't be determined (e.g. loading phase error), use the original.
-      result.add(successfullyEvaluatedTargets.getOrDefault(originalNode, originalNode));
+      if (successfullyEvaluatedTargets.containsKey(originalNode)) {
+        // The configuration was successfully trimmed.
+        result.add(successfullyEvaluatedTargets.get(originalNode));
+      } else {
+        // Either the configuration couldn't be determined (e.g. loading phase error) or it's null.
+        result.add(originalNode);
+      }
     }
     return result;
   }
@@ -271,7 +274,7 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     }
 
     // Get the fragments needed for dynamic configuration nodes.
-    List<SkyKey> transitiveFragmentSkyKeys = new ArrayList<>();
+    final List<SkyKey> transitiveFragmentSkyKeys = new ArrayList<>();
     Map<Label, ImmutableSortedSet<Class<? extends Fragment>>> fragmentsMap = new HashMap<>();
     Set<Label> labelsWithErrors = new HashSet<>();
     for (DependencyKey key : keys) {
@@ -289,19 +292,21 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     }
     for (DependencyKey key : keys) {
       if (!depsToEvaluate.contains(key)) {
-        continue; // No fragments to compute here.
-      }
-      TransitiveTargetKey targetKey = TransitiveTargetKey.of(key.getLabel());
-      try {
-        TransitiveTargetValue ttv = (TransitiveTargetValue) fragmentsResult.get(targetKey).get();
-        fragmentsMap.put(
-            key.getLabel(),
-            ImmutableSortedSet.copyOf(
-                BuildConfiguration.lexicalFragmentSorter,
-                ttv.getTransitiveConfigFragments().toSet()));
-      } catch (NoSuchThingException e) {
-        // We silently skip any labels with errors - they'll be reported in the analysis phase.
-        labelsWithErrors.add(key.getLabel());
+        // No fragments to compute here.
+      } else {
+        TransitiveTargetKey targetKey = TransitiveTargetKey.of(key.getLabel());
+        try {
+          TransitiveTargetValue ttv =
+              (TransitiveTargetValue) fragmentsResult.get(targetKey).get();
+          fragmentsMap.put(
+              key.getLabel(),
+              ImmutableSortedSet.copyOf(
+                  BuildConfiguration.lexicalFragmentSorter,
+                  ttv.getTransitiveConfigFragments().toSet()));
+        } catch (NoSuchThingException e) {
+          // We silently skip any labels with errors - they'll be reported in the analysis phase.
+          labelsWithErrors.add(key.getLabel());
+        }
       }
     }
 
@@ -337,7 +342,10 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
         for (BuildOptions toOption : toOptions) {
           configSkyKeys.add(
               BuildConfigurationValue.keyWithPlatformMapping(
-                  platformMappingValue, defaultBuildOptions, depFragments, toOption));
+                  platformMappingValue,
+                  defaultBuildOptions,
+                  depFragments,
+                  BuildOptions.diffForReconstruction(defaultBuildOptions, toOption)));
         }
       }
     }
@@ -367,7 +375,10 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
         for (BuildOptions toOption : toOptions) {
           SkyKey configKey =
               BuildConfigurationValue.keyWithPlatformMapping(
-                  platformMappingValue, defaultBuildOptions, depFragments, toOption);
+                  platformMappingValue,
+                  defaultBuildOptions,
+                  depFragments,
+                  BuildOptions.diffForReconstruction(defaultBuildOptions, toOption));
           BuildConfigurationValue configValue =
               ((BuildConfigurationValue) configsResult.get(configKey));
           // configValue will be null here if there was an exception thrown during configuration
@@ -392,7 +403,7 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
    * {@link PrepareAnalysisPhaseFunction#compute}.
    */
   private static final class PrepareAnalysisPhaseFunctionException extends SkyFunctionException {
-    PrepareAnalysisPhaseFunctionException(InvalidConfigurationException e) {
+    public PrepareAnalysisPhaseFunctionException(InvalidConfigurationException e) {
       super(e, Transience.PERSISTENT);
     }
   }
