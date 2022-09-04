@@ -3,14 +3,16 @@ package io.dropwizard.client;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.CharStreams;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.dropwizard.jackson.Jackson;
-import io.dropwizard.util.Duration;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.protocol.HttpContext;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
+import org.glassfish.jersey.client.rx.RxClient;
+import org.glassfish.jersey.client.rx.java8.RxCompletionStageInvoker;
 import org.glassfish.jersey.logging.LoggingFeature;
 import org.junit.After;
 import org.junit.Before;
@@ -23,6 +25,7 @@ import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -193,10 +196,6 @@ public class JerseyClientIntegrationTest {
     }
 
     private void postRequest(JerseyClientConfiguration configuration) {
-        // Avoid flakiness with CI by increasing timeouts
-        configuration.setTimeout(Duration.seconds(10));
-        configuration.setConnectionTimeout(Duration.seconds(10));
-
         ExecutorService executor = Executors.newSingleThreadExecutor();
         Client jersey = new JerseyClientBuilder(new MetricRegistry())
                 .using(executor, JSON_MAPPER)
@@ -240,7 +239,8 @@ public class JerseyClientIntegrationTest {
 
         InputStream requestBody = gzip ? new GZIPInputStream(httpExchange.getRequestBody()) :
                 httpExchange.getRequestBody();
-        assertThat(JSON_MAPPER.readTree(requestBody)).isEqualTo(JSON_MAPPER.createObjectNode()
+        String body = CharStreams.toString(new InputStreamReader(requestBody, StandardCharsets.UTF_8));
+        assertThat(JSON_MAPPER.readTree(body)).isEqualTo(JSON_MAPPER.createObjectNode()
                 .put("email", "john@doe.me")
                 .put("name", "John Doe"));
     }
@@ -374,9 +374,9 @@ public class JerseyClientIntegrationTest {
         httpServer.start();
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        Client jersey = new JerseyClientBuilder(new MetricRegistry())
+        RxClient<RxCompletionStageInvoker> jersey = new JerseyClientBuilder(new MetricRegistry())
             .using(executor, JSON_MAPPER)
-            .build("test-jersey-client");
+            .buildRx("test-jersey-client", RxCompletionStageInvoker.class);
         String uri = "http://127.0.0.1:" + httpServer.getAddress().getPort() + "/test";
         final List<CompletableFuture<String>> requests = new ArrayList<>();
         for (int i = 0; i < 25; i++) {

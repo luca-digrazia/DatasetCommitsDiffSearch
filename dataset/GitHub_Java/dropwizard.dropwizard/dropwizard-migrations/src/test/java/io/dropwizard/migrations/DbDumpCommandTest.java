@@ -1,11 +1,15 @@
 package io.dropwizard.migrations;
 
-import io.dropwizard.util.Resources;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.io.Resources;
 import net.jcip.annotations.NotThreadSafe;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -22,8 +26,6 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -33,8 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @NotThreadSafe
 public class DbDumpCommandTest extends AbstractMigrationTest {
 
-    private static final List<String> ATTRIBUTE_NAMES = Arrays.asList("columns", "foreign-keys", "indexes",
-            "primary-keys", "sequences", "tables", "unique-constraints", "views");
+    private static final ImmutableList<String> ATTRIBUTE_NAMES = ImmutableList.of("columns", "foreign-keys", "indexes",
+        "primary-keys", "sequences", "tables", "unique-constraints", "views");
     private static DocumentBuilder xmlParser;
 
     private final DbDumpCommand<TestMigrationConfiguration> dumpCommand =
@@ -42,21 +44,21 @@ public class DbDumpCommandTest extends AbstractMigrationTest {
     private final ByteArrayOutputStream baos = new ByteArrayOutputStream();
     private TestMigrationConfiguration existedDbConf;
 
-    @BeforeAll
+    @BeforeClass
     public static void initXmlParser() throws Exception {
         xmlParser = DocumentBuilderFactory.newInstance().newDocumentBuilder();
     }
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         final String existedDbPath = new File(Resources.getResource("test-db.mv.db").toURI()).getAbsolutePath();
-        final String existedDbUrl = "jdbc:h2:" + existedDbPath.substring(0, existedDbPath.length() - ".mv.db".length());
+        final String existedDbUrl = "jdbc:h2:" + StringUtils.removeEnd(existedDbPath, ".mv.db");
         existedDbConf = createConfiguration(existedDbUrl);
         dumpCommand.setOutputStream(new PrintStream(baos));
     }
 
     @Test
-    void testDumpSchema() throws Exception {
+    public void testDumpSchema() throws Exception {
         dumpCommand.run(null, new Namespace(ATTRIBUTE_NAMES.stream()
             .collect(Collectors.toMap(a -> a, b -> true))), existedDbConf);
 
@@ -65,7 +67,7 @@ public class DbDumpCommandTest extends AbstractMigrationTest {
     }
 
     @Test
-    void testDumpSchemaAndData() throws Exception {
+    public void testDumpSchemaAndData() throws Exception {
         dumpCommand.run(null, new Namespace(Stream.concat(ATTRIBUTE_NAMES.stream(), Stream.of("data"))
             .collect(Collectors.toMap(a -> a, b -> true))), existedDbConf);
 
@@ -75,24 +77,24 @@ public class DbDumpCommandTest extends AbstractMigrationTest {
     }
 
     @Test
-    void testDumpOnlyData() throws Exception {
-        dumpCommand.run(null, new Namespace(Collections.singletonMap("data", true)), existedDbConf);
+    public void testDumpOnlyData() throws Exception {
+        dumpCommand.run(null, new Namespace(ImmutableMap.of("data", true)), existedDbConf);
 
         final Element changeSet = getFirstElement(toXmlDocument(baos).getDocumentElement(), "changeSet");
         assertInsertData(changeSet);
     }
 
     @Test
-    void testWriteToFile() throws Exception {
+    public void testWriteToFile() throws Exception {
         final File file = File.createTempFile("migration", ".xml");
-        dumpCommand.run(null, new Namespace(Collections.singletonMap("output", file.getAbsolutePath())), existedDbConf);
+        dumpCommand.run(null, new Namespace(ImmutableMap.of("output", file.getAbsolutePath())), existedDbConf);
         // Check that file is exist, and has some XML content (no reason to make a full-blown XML assertion)
         assertThat(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8))
             .startsWith("<?xml version=\"1.1\" encoding=\"UTF-8\" standalone=\"no\"?>");
     }
 
     @Test
-    void testHelpPage() throws Exception {
+    public void testHelpPage() throws Exception {
         createSubparser(dumpCommand).printHelp(new PrintWriter(new OutputStreamWriter(baos, UTF_8), true));
         assertThat(baos.toString(UTF_8)).isEqualTo(String.format(
                 "usage: db dump [-h] [--migrations MIGRATIONS-FILE] [--catalog CATALOG]%n" +

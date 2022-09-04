@@ -1,11 +1,8 @@
 package io.dropwizard.migrations;
 
 import com.google.common.collect.ImmutableMap;
-import io.dropwizard.db.DataSourceFactory;
-import io.dropwizard.db.DatabaseConfiguration;
 import net.jcip.annotations.NotThreadSafe;
 import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import org.junit.Before;
@@ -13,7 +10,10 @@ import org.junit.Test;
 import org.skife.jdbi.v2.DBI;
 import org.skife.jdbi.v2.Handle;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.util.List;
 import java.util.Map;
 
@@ -23,24 +23,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class DbMigrateCommandTest extends AbstractMigrationTest {
 
     private DbMigrateCommand<TestMigrationConfiguration> migrateCommand = new DbMigrateCommand<>(
-            new DatabaseConfiguration<TestMigrationConfiguration>() {
-                @Override
-                public DataSourceFactory getDataSourceFactory(TestMigrationConfiguration configuration) {
-                    return configuration.getDataSource();
-                }
-            }, TestMigrationConfiguration.class);
+        TestMigrationConfiguration::getDataSource, TestMigrationConfiguration.class, "migrations.xml");
     private TestMigrationConfiguration conf;
     private String databaseUrl;
 
     @Before
     public void setUp() throws Exception {
-        databaseUrl = "jdbc:h2:" + createTempFile();
+        databaseUrl = getDatabaseUrl();
         conf = createConfiguration(databaseUrl);
     }
 
     @Test
     public void testRun() throws Exception {
-        migrateCommand.run(null, new Namespace(ImmutableMap.<String, Object>of()), conf);
+        migrateCommand.run(null, new Namespace(ImmutableMap.of()), conf);
         try (Handle handle = new DBI(databaseUrl, "sa", "").open()) {
             final List<Map<String, Object>> rows = handle.select("select * from persons");
             assertThat(rows).hasSize(1);
@@ -62,7 +57,7 @@ public class DbMigrateCommandTest extends AbstractMigrationTest {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         migrateCommand.setOutputStream(new PrintStream(baos));
         migrateCommand.run(null, new Namespace(ImmutableMap.of("dry-run", (Object) true)), conf);
-        assertThat(baos.toString("UTF-8")).startsWith(String.format(
+        assertThat(baos.toString(UTF_8)).startsWith(String.format(
                 "-- *********************************************************************%n" +
                 "-- Update Database Script%n" +
                 "-- *********************************************************************%n"));
@@ -70,43 +65,38 @@ public class DbMigrateCommandTest extends AbstractMigrationTest {
 
     @Test
     public void testPrintHelp() throws Exception {
-        final boolean shouldWidthDetect = ArgumentParsers.getTerminalWidthDetection();
-        try {
-            ArgumentParsers.setTerminalWidthDetection(false);
-            final Subparser subparser = ArgumentParsers.newArgumentParser("db")
-                    .addSubparsers()
-                    .addParser(migrateCommand.getName())
-                    .description(migrateCommand.getDescription());
-            migrateCommand.configure(subparser);
+        final Subparser subparser = ArgumentParsers.newFor("db")
+                .terminalWidthDetection(false)
+                .build()
+                .addSubparsers()
+                .addParser(migrateCommand.getName())
+                .description(migrateCommand.getDescription());
+        migrateCommand.configure(subparser);
 
-            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            subparser.printHelp(new PrintWriter(baos, true));
-
-            assertThat(baos.toString("UTF-8")).isEqualTo(String.format(
-                    "usage: db migrate [-h] [--migrations MIGRATIONS-FILE] [--catalog CATALOG]%n" +
-                    "          [--schema SCHEMA] [-n] [-c COUNT] [-i CONTEXTS] [file]%n" +
-                    "%n" +
-                    "Apply all pending change sets.%n" +
-                    "%n" +
-                    "positional arguments:%n" +
-                    "  file                   application configuration file%n" +
-                    "%n" +
-                    "optional arguments:%n" +
-                    "  -h, --help             show this help message and exit%n" +
-                    "  --migrations MIGRATIONS-FILE%n" +
-                    "                         the file containing  the  Liquibase migrations for%n" +
-                    "                         the application%n" +
-                    "  --catalog CATALOG      Specify  the   database   catalog   (use  database%n" +
-                    "                         default if omitted)%n" +
-                    "  --schema SCHEMA        Specify the database schema  (use database default%n" +
-                    "                         if omitted)%n" +
-                    "  -n, --dry-run          output the DDL to stdout, don't run it%n" +
-                    "  -c COUNT, --count COUNT%n" +
-                    "                         only apply the next N change sets%n" +
-                    "  -i CONTEXTS, --include CONTEXTS%n" +
-                    "                         include change sets from the given context%n"));
-        } finally {
-            ArgumentParsers.setTerminalWidthDetection(shouldWidthDetect);
-        }
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        subparser.printHelp(new PrintWriter(new OutputStreamWriter(baos, UTF_8), true));
+        assertThat(baos.toString(UTF_8)).isEqualTo(String.format(
+                        "usage: db migrate [-h] [--migrations MIGRATIONS-FILE] [--catalog CATALOG]%n" +
+                        "          [--schema SCHEMA] [-n] [-c COUNT] [-i CONTEXTS] [file]%n" +
+                        "%n" +
+                        "Apply all pending change sets.%n" +
+                        "%n" +
+                        "positional arguments:%n" +
+                        "  file                   application configuration file%n" +
+                        "%n" +
+                        "named arguments:%n" +
+                        "  -h, --help             show this help message and exit%n" +
+                        "  --migrations MIGRATIONS-FILE%n" +
+                        "                         the file containing  the  Liquibase migrations for%n" +
+                        "                         the application%n" +
+                        "  --catalog CATALOG      Specify  the   database   catalog   (use  database%n" +
+                        "                         default if omitted)%n" +
+                        "  --schema SCHEMA        Specify the database schema  (use database default%n" +
+                        "                         if omitted)%n" +
+                        "  -n, --dry-run          output the DDL to stdout, don't run it%n" +
+                        "  -c COUNT, --count COUNT%n" +
+                        "                         only apply the next N change sets%n" +
+                        "  -i CONTEXTS, --include CONTEXTS%n" +
+                        "                         include change sets from the given context%n"));
     }
 }

@@ -1,33 +1,31 @@
 package io.dropwizard.http2;
 
+import com.google.common.net.HttpHeaders;
 import io.dropwizard.Configuration;
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import io.dropwizard.testing.junit.DropwizardAppRule;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.http2.client.HTTP2Client;
 import org.eclipse.jetty.http2.client.HTTP2ClientConnectionFactory;
 import org.eclipse.jetty.http2.client.http.HttpClientTransportOverHTTP2;
 import org.glassfish.jersey.client.JerseyClient;
 import org.glassfish.jersey.client.JerseyClientBuilder;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 
-import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class Http2CIntegrationTest  extends AbstractHttp2Test {
-
-    public DropwizardAppExtension<Configuration> appRule = new DropwizardAppExtension<>(
+    @Rule
+    public DropwizardAppRule<Configuration> appRule = new DropwizardAppRule<>(
             FakeApplication.class, ResourceHelpers.resourceFilePath("test-http2c.yml"));
 
-    @BeforeEach
+    @Before
     @Override
     public void setUp() throws Exception {
         final HTTP2Client http2Client = new HTTP2Client();
@@ -36,14 +34,14 @@ public class Http2CIntegrationTest  extends AbstractHttp2Test {
         client.start();
     }
 
-    @AfterEach
+    @After
     @Override
     public void tearDown() throws Exception {
         client.stop();
     }
 
     @Test
-    void testHttp11() {
+    public void testHttp11() {
         final String hostname = "127.0.0.1";
         final int port = appRule.getLocalPort();
         final JerseyClient http11Client = new JerseyClientBuilder().build();
@@ -56,12 +54,12 @@ public class Http2CIntegrationTest  extends AbstractHttp2Test {
     }
 
     @Test
-    void testHttp2c() throws Exception {
+    public void testHttp2c() throws Exception {
         assertResponse(client.GET("http://localhost:" + appRule.getLocalPort() + "/api/test"));
     }
 
     @Test
-    void testHttp2cManyRequests() throws Exception {
+    public void testHttp2cManyRequests() throws Exception {
         performManyAsyncRequests(client, "http://localhost:" + appRule.getLocalPort() + "/api/test");
     }
 }

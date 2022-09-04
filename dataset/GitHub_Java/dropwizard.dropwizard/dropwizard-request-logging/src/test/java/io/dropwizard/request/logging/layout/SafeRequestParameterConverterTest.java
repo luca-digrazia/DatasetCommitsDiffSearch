@@ -2,14 +2,16 @@ package io.dropwizard.request.logging.layout;
 
 import ch.qos.logback.access.spi.AccessEvent;
 import ch.qos.logback.access.spi.ServerAdapter;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterators;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.Mockito;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.Collections;
+import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,25 +21,27 @@ public class SafeRequestParameterConverterTest {
     private final HttpServletRequest httpServletRequest = Mockito.mock(HttpServletRequest.class);
     private AccessEvent accessEvent;
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         accessEvent = new AccessEvent(httpServletRequest, Mockito.mock(HttpServletResponse.class),
             Mockito.mock(ServerAdapter.class));
 
-        safeRequestParameterConverter.setOptionList(Collections.singletonList("name"));
+        safeRequestParameterConverter.setOptionList(ImmutableList.of("name"));
         safeRequestParameterConverter.start();
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         safeRequestParameterConverter.stop();
     }
 
     @Test
-    void testConvertOneParameter() throws Exception {
+    public void testConvertOneParameter() throws Exception {
         Mockito.when(httpServletRequest.getParameterValues("name")).thenReturn(new String[]{"Alice"});
+        final ArrayList<String> parameterNames = new ArrayList<>();
+        parameterNames.add("name");
         Mockito.when(httpServletRequest.getParameterNames())
-                .thenReturn(Collections.enumeration(Collections.singleton("name")));
+            .thenReturn(Iterators.asEnumeration(parameterNames.iterator()));
 
         // Invoked by AccessEvent#prepareForDeferredProcessing
         accessEvent.buildRequestParameterMap();
@@ -49,10 +53,12 @@ public class SafeRequestParameterConverterTest {
     }
 
     @Test
-    void testConvertSeveralParameters() throws Exception {
+    public void testConvertSeveralParameters() throws Exception {
         Mockito.when(httpServletRequest.getParameterValues("name")).thenReturn(new String[]{"Alice", "Bob"});
+        final ArrayList<String> parameterNames = new ArrayList<>();
+        parameterNames.add("name");
         Mockito.when(httpServletRequest.getParameterNames())
-                .thenReturn(Collections.enumeration(Collections.singleton("name")));
+            .thenReturn(Iterators.asEnumeration(parameterNames.iterator()));
 
         // Invoked by AccessEvent#prepareForDeferredProcessing
         accessEvent.buildRequestParameterMap();
@@ -62,4 +68,11 @@ public class SafeRequestParameterConverterTest {
         final String value = safeRequestParameterConverter.convert(accessEvent);
         assertThat(value).isEqualTo("[Alice, Bob]");
     }
+
+    @Test
+    public void testGetUnknownParameter() {
+        final String value = safeRequestParameterConverter.convert(accessEvent);
+        assertThat(value).isEqualTo("-");
+    }
+
 }

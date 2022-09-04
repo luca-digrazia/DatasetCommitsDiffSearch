@@ -1,14 +1,13 @@
 package io.dropwizard.jersey.setup;
 
 import com.google.common.base.Function;
-import com.sun.jersey.api.core.ResourceConfig;
-import com.sun.jersey.core.spi.scanning.PackageNamesScanner;
-import com.sun.jersey.spi.container.servlet.ServletContainer;
 import io.dropwizard.jersey.DropwizardResourceConfig;
+import org.glassfish.jersey.server.ResourceConfig;
 
 import javax.annotation.Nullable;
+import javax.servlet.Servlet;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 public class JerseyEnvironment {
     private final JerseyContainerHolder holder;
@@ -24,7 +23,7 @@ public class JerseyEnvironment {
         holder.setContainer(null);
     }
 
-    public void replace(Function<ResourceConfig, ServletContainer> replace) {
+    public void replace(Function<ResourceConfig, Servlet> replace) {
         holder.setContainer(replace.apply(config));
     }
 
@@ -34,7 +33,7 @@ public class JerseyEnvironment {
      * @param component a Jersey singleton component
      */
     public void register(Object component) {
-        config.getSingletons().add(checkNotNull(component));
+        config.register(requireNonNull(component));
     }
 
     /**
@@ -44,7 +43,7 @@ public class JerseyEnvironment {
      * @param componentClass a Jersey component class
      */
     public void register(Class<?> componentClass) {
-        config.getClasses().add(checkNotNull(componentClass));
+        config.register(requireNonNull(componentClass));
     }
 
     /**
@@ -54,27 +53,27 @@ public class JerseyEnvironment {
      * @param packages array of package names
      */
     public void packages(String... packages) {
-        config.init(new PackageNamesScanner(checkNotNull(packages)));
+        config.packages(requireNonNull(packages));
     }
 
     /**
      * Enables the Jersey feature with the given name.
      *
      * @param featureName the name of the feature to be enabled
-     * @see com.sun.jersey.api.core.ResourceConfig
+     * @see org.glassfish.jersey.server.ResourceConfig
      */
     public void enable(String featureName) {
-        config.getFeatures().put(checkNotNull(featureName), Boolean.TRUE);
+        config.property(requireNonNull(featureName), Boolean.TRUE);
     }
 
     /**
      * Disables the Jersey feature with the given name.
      *
      * @param featureName the name of the feature to be disabled
-     * @see com.sun.jersey.api.core.ResourceConfig
+     * @see org.glassfish.jersey.server.ResourceConfig
      */
     public void disable(String featureName) {
-        config.getFeatures().put(checkNotNull(featureName), Boolean.FALSE);
+        config.property(requireNonNull(featureName), Boolean.FALSE);
     }
 
     /**
@@ -82,19 +81,20 @@ public class JerseyEnvironment {
      *
      * @param name  the name of the Jersey property
      * @param value the value of the Jersey property
-     * @see com.sun.jersey.api.core.ResourceConfig
+     * @see org.glassfish.jersey.server.ResourceConfig
      */
     public void property(String name, @Nullable Object value) {
-        config.getProperties().put(checkNotNull(name), value);
+        config.property(requireNonNull(name), value);
     }
 
     /**
      * Gets the given Jersey property.
      *
      * @param name the name of the Jersey property
-     * @see com.sun.jersey.api.core.ResourceConfig
+     * @see org.glassfish.jersey.server.ResourceConfig
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
+    @Nullable
     public <T> T getProperty(String name) {
         return (T) config.getProperties().get(name);
     }
@@ -104,10 +104,17 @@ public class JerseyEnvironment {
     }
 
     public void setUrlPattern(String urlPattern) {
-        config.setUrlPattern(urlPattern);
+        String normalizedUrlPattern = urlPattern;
+        if (!normalizedUrlPattern.endsWith("*") && !normalizedUrlPattern.endsWith("/")) {
+            normalizedUrlPattern += "/";
+        }
+        if (!normalizedUrlPattern.endsWith("*")) {
+            normalizedUrlPattern += "*";
+        }
+        config.setUrlPattern(normalizedUrlPattern);
     }
 
-    public ResourceConfig getResourceConfig() {
+    public DropwizardResourceConfig getResourceConfig() {
         return config;
     }
 }

@@ -88,7 +88,6 @@ public class ConsoleReporterFactory extends BaseFormattedReporterFactory {
                               .formattedFor(getLocale())
                               .formattedFor(getTimeZone())
                               .outputTo(getOutput().get())
-                              .disabledMetricAttributes(getDisabledAttributes())
                               .build();
     }
 }
