@@ -28,7 +28,7 @@ public interface BootstrapConstants {
 
     String DESCRIPTOR_PATH = DESCRIPTOR_FILE_NAME;
 
-    String META_INF = "META-INF";
+    String QUARKUS = "quarkus";
 
     String PROP_DEPLOYMENT_ARTIFACT = "deployment-artifact";
 }
