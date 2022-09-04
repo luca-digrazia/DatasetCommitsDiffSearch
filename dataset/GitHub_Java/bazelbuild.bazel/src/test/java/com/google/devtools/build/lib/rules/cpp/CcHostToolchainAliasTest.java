@@ -17,10 +17,7 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -34,34 +31,28 @@ public class CcHostToolchainAliasTest extends BuildViewTestCase {
     scratch.file("a/BUILD", "cc_host_toolchain_alias(name='current_cc_host_toolchain')");
 
     ConfiguredTarget target = getConfiguredTarget("//a:current_cc_host_toolchain");
-    CcToolchainProvider toolchainProvider =
-        (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
+    CcToolchainProvider toolchainProvider = target.get(CcToolchainProvider.PROVIDER);
 
-    assertThat(toolchainProvider.isHostConfiguration()).isTrue();
+    assertThat(toolchainProvider.isToolConfiguration()).isTrue();
   }
 
   @Test
   public void testThatHostCrosstoolTopCommandLineArgumentWorks() throws Exception {
-
     scratch.file(
-        "t/BUILD",
+        "b/BUILD",
+        "load(':cc_toolchain_config.bzl', 'cc_toolchain_config')",
         "cc_toolchain_suite(",
         "  name = 'my_custom_toolchain_suite',",
         "  toolchains = {",
+        "    'k8': '//b:toolchain_b',",
         "    'k8|gcc-4.4.0': '//b:toolchain_b',",
         "    'k8|compiler': '//b:toolchain_b',",
         "    'x64_windows|windows_msys64': '//b:toolchain_b',",
         "    'darwin|compiler': '//b:toolchain_b',",
-
-        "})");
-
-    scratch.file("t/CROSSTOOL", AnalysisMock.get().ccSupport().readCrosstoolFile());
-
-    scratch.file(
-        "b/BUILD",
+        "})",
         "cc_toolchain(",
         "    name = 'toolchain_b',",
-        "    cpu = 'ED-E',",
+        "    toolchain_config = ':mock_config',",
         "    all_files = ':banana',",
         "    ar_files = ':empty',",
         "    as_files = ':empty',",
@@ -69,15 +60,34 @@ public class CcHostToolchainAliasTest extends BuildViewTestCase {
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
         "    strip_files = ':empty',",
-        "    objcopy_files = ':empty',",
-        "    dynamic_runtime_libs = [':empty'],",
-        "    static_runtime_libs = [':empty'])");
+        "    objcopy_files = ':empty')",
+        "cc_toolchain_config(name='mock_config')");
+
+    scratch.file(
+        "b/cc_toolchain_config.bzl",
+        "def _impl(ctx):",
+        "    return cc_common.create_cc_toolchain_config_info(",
+        "                ctx = ctx,",
+        "                toolchain_identifier = 'custom_toolchain',",
+        "                host_system_name = 'mock-system-name-for-k8',",
+        "                target_system_name = 'mock-target-system-name-for-k8',",
+        "                target_cpu = 'k8',",
+        "                target_libc = 'mock-libc-for-k8',",
+        "                compiler = 'mock-compiler-for-k8',",
+        "                abi_libc_version = 'mock-abi-libc-for-k8',",
+        "                abi_version = 'mock-abi-version-for-k8')",
+        "cc_toolchain_config = rule(",
+        "    implementation = _impl,",
+        "    attrs = {},",
+        "    provides = [CcToolchainConfigInfo],",
+        ")");
+
     scratch.file("a/BUILD", "cc_host_toolchain_alias(name='current_cc_host_toolchain')");
 
-    useConfiguration("--host_crosstool_top=//t:my_custom_toolchain_suite");
+    useConfiguration("--host_crosstool_top=//b:my_custom_toolchain_suite", "--host_cpu=k8");
     ConfiguredTarget target = getConfiguredTarget("//a:current_cc_host_toolchain");
 
-    assertThat(target.getLabel())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//t:my_custom_toolchain_suite"));
+    CcToolchainProvider ccToolchainProvider = target.get(CcToolchainProvider.PROVIDER);
+    assertThat(ccToolchainProvider.getToolchainIdentifier()).isEqualTo("custom_toolchain");
   }
 }
