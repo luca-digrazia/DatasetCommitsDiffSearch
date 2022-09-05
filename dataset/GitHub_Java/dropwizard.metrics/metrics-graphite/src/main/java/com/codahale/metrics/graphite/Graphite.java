@@ -1,8 +1,5 @@
 package com.codahale.metrics.graphite;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import javax.net.SocketFactory;
 
 import java.io.*;
@@ -29,8 +26,6 @@ public class Graphite implements GraphiteSender {
     private Socket socket;
     private Writer writer;
     private int failures;
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(Graphite.class);
 
     /**
      * Creates a new client which connects to the given address using the default
@@ -164,19 +159,12 @@ public class Graphite implements GraphiteSender {
                 writer.close();
             }
         } catch (IOException ex) {
-            LOGGER.debug("Error closing writer", ex);
-        } finally {
-            this.writer = null;
-        }
-
-        try {
             if (socket != null) {
                 socket.close();
             }
-        } catch (IOException ex) {
-            LOGGER.debug("Error closing socket", ex);
         } finally {
             this.socket = null;
+            this.writer = null;
         }
     }
 

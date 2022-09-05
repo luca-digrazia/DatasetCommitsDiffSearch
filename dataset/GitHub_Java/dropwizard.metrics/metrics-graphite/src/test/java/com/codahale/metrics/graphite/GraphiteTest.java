@@ -103,7 +103,7 @@ public class GraphiteTest {
         graphite.connect();
         graphite.close();
 
-        verify(socket, times(2)).close();
+        verify(socket).close();
     }
 
     @Test
