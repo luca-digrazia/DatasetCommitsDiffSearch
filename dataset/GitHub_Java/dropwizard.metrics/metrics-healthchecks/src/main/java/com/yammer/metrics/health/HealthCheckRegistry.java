@@ -51,14 +51,7 @@ public class HealthCheckRegistry {
         return Collections.unmodifiableSortedSet(new TreeSet<String>(healthChecks.keySet()));
     }
 
-    /**
-     * Runs the health check with the given name.
-     *
-     * @param name    the health check's name
-     * @return the result of the health check
-     * @throws NoSuchElementException if there is no health check with the given name
-     */
-    public HealthCheck.Result runHealthCheck(String name) throws NoSuchElementException {
+    public HealthCheck.Result runHealthCheck(String name) {
         final HealthCheck healthCheck = healthChecks.get(name);
         if (healthCheck == null) {
             throw new NoSuchElementException("No health check named " + name + " exists");
