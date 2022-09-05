@@ -18,7 +18,7 @@ import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.PrintingEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.EvaluationContext;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.io.OutErr;
 
@@ -29,12 +29,17 @@ import java.util.Set;
  * An apparatus for reporting / collecting events.
  */
 public class EventCollectionApparatus {
+
+  private Set<EventKind> customMask;
+
   /**
    * Determine which events the {@link #collector()} created by this apparatus
    * will collect. Default: {@link EventKind#ERRORS_AND_WARNINGS}.
    */
   public EventCollectionApparatus(Set<EventKind> mask) {
-    eventCollector = new EventCollector(mask);
+    this.customMask = mask;
+
+    eventCollector = new EventCollector(customMask);
     reporter = new Reporter(eventCollector);
     printingEventHandler = new PrintingEventHandler(EventKind.ERRORS_AND_WARNINGS_AND_OUTPUT);
     reporter.addHandler(printingEventHandler);
@@ -62,9 +67,9 @@ public class EventCollectionApparatus {
    */
   public void setFailFast(boolean failFast) {
     if (failFast) {
-      reporter.addHandler(Environment.FAIL_FAST_HANDLER);
+      reporter.addHandler(EvaluationContext.FAIL_FAST_HANDLER);
     } else {
-      reporter.removeHandler(Environment.FAIL_FAST_HANDLER);
+      reporter.removeHandler(EvaluationContext.FAIL_FAST_HANDLER);
     }
   }
 
