@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 
-import junit.framework.TestCase;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -33,10 +31,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * This is a specialization of {@link TestCase} that's useful for implementing tests of the
- * "foundation" library.
+ * This is a specialization of {@link ChattyAssertsTestCase} that's useful for
+ * implementing tests of the "foundation" library.
  */
-public abstract class FoundationTestCase extends TestCase {
+public abstract class FoundationTestCase extends ChattyAssertsTestCase {
 
   protected Path rootDirectory;
 
@@ -48,7 +46,7 @@ public abstract class FoundationTestCase extends TestCase {
   protected Reporter reporter;
   protected EventCollector eventCollector;
 
-  protected Scratch scratch;
+  private Scratch scratch;
 
 
   // Individual tests can opt-out of this handler if they expect an error, by
@@ -73,11 +71,10 @@ public abstract class FoundationTestCase extends TestCase {
   protected void setUp() throws Exception {
     super.setUp();
     scratch = new Scratch(createFileSystem());
-    outputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/");
-    rootDirectory = scratch.dir("/" + TestConstants.TEST_WORKSPACE_DIRECTORY);
-    scratchFile(rootDirectory.getRelative("WORKSPACE").getPathString());
+    outputBase = scratchDir("/usr/local/google/_blaze_jrluser/FAKEMD5/");
+    rootDirectory = scratchDir("/" + TestConstants.TEST_WORKSPACE_DIRECTORY);
     copySkylarkFilesIfExist();
-    actionOutputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/action_out/");
+    actionOutputBase = scratchDir("/usr/local/google/_blaze_jrluser/FAKEMD5/action_out/");
     eventCollector = new EventCollector(EventKind.ERRORS_AND_WARNINGS);
     reporter = new Reporter(eventCollector);
     reporter.addHandler(failFastHandler);
@@ -94,7 +91,7 @@ public abstract class FoundationTestCase extends TestCase {
     scratchFile(rootDirectory.getRelative("devtools/blaze/rules/BUILD").getPathString());
     scratchFile(rootDirectory.getRelative("rules/BUILD").getPathString());
     copySkylarkFilesIfExist("devtools/blaze/rules/staging", "devtools/blaze/rules/staging");
-    copySkylarkFilesIfExist("devtools/blaze/bazel/tools/build_rules", "rules");
+    copySkylarkFilesIfExist("devtools/blaze/bazel/base_workspace/tools/build_rules", "rules");
   }
 
   private void copySkylarkFilesIfExist(String from, String to) throws IOException {
@@ -151,6 +148,13 @@ public abstract class FoundationTestCase extends TestCase {
   }
 
   /**
+   * Deletes the specified scratch file, using the same specification as {@link Path#delete}.
+   */
+  protected boolean deleteScratchFile(String pathName) throws IOException {
+    return scratch.deleteFile(pathName);
+  }
+
+  /**
    * Create a scratch file in the given filesystem, with the given pathName,
    * consisting of a set of lines. The method returns a Path instance for the
    * scratch file.
@@ -168,6 +172,35 @@ public abstract class FoundationTestCase extends TestCase {
   protected Path scratchFile(FileSystem fs, String pathName, byte[] content)
       throws IOException {
     return scratch.file(fs, pathName, content);
+  }
+
+  /**
+   * Create a directory in the scratch filesystem, with the given path name.
+   */
+  public Path scratchDir(String pathName) throws IOException {
+    return scratch.dir(pathName);
+  }
+
+  /**
+   * If "expectedSuffix" is not a suffix of "actual", fails with an informative
+   * assertion.
+   */
+  protected void assertEndsWith(String expectedSuffix, String actual) {
+    if (!actual.endsWith(expectedSuffix)) {
+      fail("\"" + actual + "\" does not end with "
+           + "\"" + expectedSuffix + "\"");
+    }
+  }
+
+  /**
+   * If "expectedPrefix" is not a prefix of "actual", fails with an informative
+   * assertion.
+   */
+  protected void assertStartsWith(String expectedPrefix, String actual) {
+    if (!actual.startsWith(expectedPrefix)) {
+      fail("\"" + actual + "\" does not start with "
+           + "\"" + expectedPrefix + "\"");
+    }
   }
 
   // Mix-in assertions:

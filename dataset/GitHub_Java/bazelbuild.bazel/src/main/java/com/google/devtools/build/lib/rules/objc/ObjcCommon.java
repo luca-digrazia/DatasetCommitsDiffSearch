@@ -179,10 +179,6 @@ public final class ObjcCommon {
       return ruleContext.getPrerequisiteArtifacts("resources", Mode.TARGET).list();
     }
 
-    ImmutableList<Artifact> structuredResources() {
-      return ruleContext.getPrerequisiteArtifacts("structured_resources", Mode.TARGET).list();
-    }
-
     ImmutableList<Artifact> datamodels() {
       return ruleContext.getPrerequisiteArtifacts("datamodels", Mode.TARGET).list();
     }
@@ -371,9 +367,7 @@ public final class ObjcCommon {
             .addAll(GENERAL_RESOURCE_FILE, attributes.resources())
             .addAll(GENERAL_RESOURCE_FILE, attributes.strings())
             .addAll(GENERAL_RESOURCE_FILE, attributes.xibs())
-            .addAll(BUNDLE_FILE, BundleableFile.flattenedRawResourceFiles(attributes.resources()))
-            .addAll(BUNDLE_FILE,
-                BundleableFile.structuredRawResourceFiles(attributes.structuredResources()))
+            .addAll(BUNDLE_FILE, BundleableFile.nonCompiledResourceFiles(attributes.resources()))
             .addAll(BUNDLE_FILE,
                 Iterables.transform(compiledResources, CompiledResourceFile.TO_BUNDLED))
             .addAll(XCASSETS_DIR,
@@ -590,8 +584,6 @@ public final class ObjcCommon {
   }
 
   /**
-   * Returns a {@link RuleConfiguredTargetBuilder}.
-   *
    * @param filesToBuild files to build for this target. These also become the data runfiles. Note
    *     that this method may add more files to create the complete list of files to build for this
    *     target.
@@ -600,7 +592,7 @@ public final class ObjcCommon {
    *     present whenever {@code objc_} rules may depend on this target.
    * @param maybeJ2ObjcSrcsProvider the {@link J2ObjcSrcsProvider} for this target.
    */
-  public RuleConfiguredTargetBuilder configuredTargetBuilder(NestedSet<Artifact> filesToBuild,
+  public ConfiguredTarget configuredTarget(NestedSet<Artifact> filesToBuild,
       Optional<XcodeProvider> maybeTargetProvider, Optional<ObjcProvider> maybeExportedProvider,
       Optional<XcTestAppProvider> maybeXcTestAppProvider,
       Optional<J2ObjcSrcsProvider> maybeJ2ObjcSrcsProvider) {
@@ -631,25 +623,6 @@ public final class ObjcCommon {
     for (J2ObjcSrcsProvider j2ObjcSrcsProvider : maybeJ2ObjcSrcsProvider.asSet()) {
       target.addProvider(J2ObjcSrcsProvider.class, j2ObjcSrcsProvider);
     }
-    return target;
-  }
-
-  /**
-   * Creates a {@link ConfiguredTarget}.
-   *
-   * @param filesToBuild files to build for this target. These also become the data runfiles. Note
-   *     that this method may add more files to create the complete list of files to build for this
-   *     target.
-   * @param maybeTargetProvider the provider for this target.
-   * @param maybeExportedProvider the {@link ObjcProvider} for this target. This should generally be
-   *     present whenever {@code objc_} rules may depend on this target.
-   * @param maybeJ2ObjcSrcsProvider the {@link J2ObjcSrcsProvider} for this target.
-   */
-  public ConfiguredTarget configuredTarget(NestedSet<Artifact> filesToBuild,
-      Optional<XcodeProvider> maybeTargetProvider, Optional<ObjcProvider> maybeExportedProvider,
-      Optional<XcTestAppProvider> maybeXcTestAppProvider,
-      Optional<J2ObjcSrcsProvider> maybeJ2ObjcSrcsProvider) {
-    return configuredTargetBuilder(filesToBuild, maybeTargetProvider, maybeExportedProvider,
-        maybeXcTestAppProvider, maybeJ2ObjcSrcsProvider).build();
+    return target.build();
   }
 }

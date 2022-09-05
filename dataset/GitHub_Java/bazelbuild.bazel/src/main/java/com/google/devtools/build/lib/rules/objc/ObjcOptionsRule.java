@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,16 +18,21 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PLIST_TYPE;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
 
 /**
  * Rule definition for {@code objc_options}.
  */
+@BlazeRule(name = "objc_options",
+    factoryClass = ObjcOptions.class,
+    ancestors = {
+        BaseRuleClasses.BaseRule.class,
+        ObjcRuleClasses.CoptsRule.class })
 public class ObjcOptionsRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -42,19 +47,10 @@ public class ObjcOptionsRule implements RuleDefinition {
         infoplist files to merge with the final binary's infoplist. This
         corresponds to a single file <i>appname</i>-Info.plist in Xcode
         projects.
-        <i>(List of <a href="../build-ref.html#labels">labels</a>; optional)</i>
+        <i>(List of <a href="build-ref.html#labels">labels</a>; optional)</i>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("infoplists", BuildType.LABEL_LIST)
+        .add(attr("infoplists", Type.LABEL_LIST)
             .allowedFileTypes(PLIST_TYPE))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("objc_options")
-        .factoryClass(ObjcOptions.class)
-        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.CoptsRule.class)
         .build();
   }
 }

@@ -15,20 +15,25 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 
 /**
  * Rule definition for ios_extension_binary.
  */
+@BlazeRule(name = "ios_extension_binary",
+    factoryClass = IosExtensionBinary.class,
+    ancestors = {
+        BaseRuleClasses.BaseRule.class,
+        ObjcRuleClasses.LinkingRule.class,
+        ObjcRuleClasses.XcodegenRule.class })
 public class IosExtensionBinaryRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class)
         /*<!-- #BLAZE_RULE(ios_extension_binary).IMPLICIT_OUTPUTS -->
         <ul>
          <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
@@ -36,16 +41,6 @@ public class IosExtensionBinaryRule implements RuleDefinition {
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(XcodeSupport.PBXPROJ)
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("ios_extension_binary")
-        .factoryClass(IosExtensionBinary.class)
-        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.LinkingRule.class,
-            ObjcRuleClasses.XcodegenRule.class)
         .build();
   }
 }

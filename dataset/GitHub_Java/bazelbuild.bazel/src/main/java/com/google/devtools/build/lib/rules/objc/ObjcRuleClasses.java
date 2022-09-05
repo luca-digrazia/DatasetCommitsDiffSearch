@@ -390,19 +390,18 @@ public class ObjcRuleClasses {
   }
 
   /**
-   * Common attributes for {@code objc_*} rules that can be input to compilation (i.e. can be
-   * dependencies of other compiling rules).
+   * Common attributes for {@code objc_*} rules that contain linkable content.
    */
-  @BlazeRule(name = "$objc_compile_dependency_rule",
+  @BlazeRule(name = "$objc_compile_input_rule",
       type = RuleClassType.ABSTRACT,
       ancestors = {
           ResourcesRule.class,
           SdkFrameworksDependerRule.class })
-  public static class CompileDependencyRule implements RuleDefinition {
+  public static class CompileInputRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          /* <!-- #BLAZE_RULE($objc_compile_dependency_rule).ATTRIBUTE(hdrs) -->
+          /* <!-- #BLAZE_RULE($objc_compile_input_rule).ATTRIBUTE(hdrs) -->
           The list of Objective-C files that are included as headers by source
           files in this rule or by users of this library.
           ${SYNOPSIS}
@@ -410,7 +409,7 @@ public class ObjcRuleClasses {
           .add(attr("hdrs", LABEL_LIST)
               .direct_compile_time_input()
               .allowedFileTypes(FileTypeSet.ANY_FILE))
-          /* <!-- #BLAZE_RULE($objc_compile_dependency_rule).ATTRIBUTE(includes) -->
+          /* <!-- #BLAZE_RULE($objc_compile_input_rule).ATTRIBUTE(includes) -->
           List of <code>#include/#import</code> search paths to add to this target
           and all depending targets.
           ${SYNOPSIS}
@@ -425,7 +424,7 @@ public class ObjcRuleClasses {
           actual client root.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("includes", Type.STRING_LIST))
-          /* <!-- #BLAZE_RULE($objc_compile_dependency_rule).ATTRIBUTE(sdk_includes) -->
+          /* <!-- #BLAZE_RULE($objc_compile_input_rule).ATTRIBUTE(sdk_includes) -->
           List of <code>#include/#import</code> search paths to add to this target
           and all depending targets, where each path is relative to
           <code>$(SDKROOT)/usr/include</code>.
@@ -442,7 +441,7 @@ public class ObjcRuleClasses {
   @BlazeRule(name = "$objc_compiling_rule",
       type = RuleClassType.ABSTRACT,
       ancestors = {
-          CompileDependencyRule.class,
+          CompileInputRule.class,
           OptionsRule.class,
           CoptsRule.class })
   public static class CompilingRule implements RuleDefinition {
@@ -532,7 +531,7 @@ public class ObjcRuleClasses {
    */
   @BlazeRule(name = "$objc_alwayslink_rule",
       type = RuleClassType.ABSTRACT,
-      ancestors = { CompileDependencyRule.class, })
+      ancestors = { ObjcRuleClasses.CompileInputRule.class, })
   public static class AlwaysLinkRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {

@@ -47,7 +47,7 @@ public class ObjcBinaryRule implements RuleDefinition {
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(
-            ImplicitOutputsFunction.fromFunctions(ReleaseBundlingSupport.IPA, XcodeSupport.PBXPROJ))
+            ImplicitOutputsFunction.fromFunctions(ApplicationSupport.IPA, XcodeSupport.PBXPROJ))
         .build();
   }
 }

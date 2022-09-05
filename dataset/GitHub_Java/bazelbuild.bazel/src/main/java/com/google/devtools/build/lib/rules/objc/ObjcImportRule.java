@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -27,11 +28,16 @@ import com.google.devtools.build.lib.util.FileType;
 /**
  * Rule definition for {@code objc_import}.
  */
+@BlazeRule(name = "objc_import",
+    factoryClass = ObjcImport.class,
+    ancestors = {
+        BaseRuleClasses.BaseRule.class,
+        ObjcRuleClasses.AlwaysLinkRule.class,
+        ObjcRuleClasses.XcodegenRule.class })
 public class ObjcImportRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class)
         /*<!-- #BLAZE_RULE(objc_import).IMPLICIT_OUTPUTS -->
         <ul>
          <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
@@ -48,16 +54,6 @@ public class ObjcImportRule implements RuleDefinition {
             .mandatory()
             .nonEmpty()
             .allowedFileTypes(FileType.of(".a")))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("objc_import")
-        .factoryClass(ObjcImport.class)
-        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.AlwaysLinkRule.class,
-            ObjcRuleClasses.XcodegenRule.class)
         .build();
   }
 }
