@@ -167,15 +167,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   @Override
-  public Collection<Target> getFwdDeps(Iterable<Target> targets) {
-    Set<Target> result = new HashSet<>();
-    for (Target target : targets) {
-      result.addAll(getFwdDeps(target));
-    }
-    return result;
-  }
-
-  @Override
   public Collection<Target> getReverseDeps(final Target target) {
     return Collections2.filter(getRawReverseDeps(target), new Predicate<Target>() {
       @Override
@@ -184,15 +175,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
             || getAllowedDeps((Rule) parent).contains(target.getLabel());
       }
     });
-  }
-
-  @Override
-  public Collection<Target> getReverseDeps(Iterable<Target> targets) {
-    Set<Target> result = new HashSet<>();
-    for (Target target : targets) {
-      result.addAll(getReverseDeps(target));
-    }
-    return result;
   }
 
   @Override
