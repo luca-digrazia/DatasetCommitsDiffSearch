@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -151,20 +150,13 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
     assertThat(Joiner.on(" ").join(arguments))
         .matches(
-            ".* -L[^ ]*some-dir(?= ).* -L[^ ]*some-other-dir(?= ).* "
-                + "-lbar -lqux(?= ).* -ldl -lutil .*");
+            ".* -L[^ ]*some-dir(?= ).* -L[^ ]*some-other-dir -lbar -lqux(?= ).* -ldl -lutil .*");
     assertThat(Joiner.on(" ").join(arguments))
         .matches(".* -Wl,-rpath[^ ]*some-dir(?= ).* -Wl,-rpath[^ ]*some-other-dir .*");
   }
 
   @Test
   public void testCompilesTestSourcesIntoDynamicLibrary() throws Exception {
-    if (OS.getCurrent() == OS.WINDOWS) {
-      // Skip the test on Windows.
-      // TODO(bazel-team): maybe we should move that test that doesn't work with MSVC toolchain to
-      // its own suite with a TestSpec?
-      return;
-    }
     scratch.file("x/BUILD", "cc_test(name = 'a', srcs = ['a.cc'])");
     scratch.file("x/a.cc", "int main() {}");
     useConfiguration("--experimental_link_dynamic_binaries_separately");
@@ -512,7 +504,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             .setInterfaceOutput(scratchArtifact("FakeInterfaceOutput.ifso"));
 
     List<String> commandLine = builder.build().getCommandLine();
-    assertThat(commandLine).hasSize(6);
+    assertThat(commandLine.size()).isGreaterThan(6);
     assertThat(commandLine.get(0)).endsWith("custom/crosstool/scripts/link_dynamic_library.sh");
     assertThat(commandLine.get(1)).isEqualTo("yes");
     assertThat(commandLine.get(2)).isEqualTo("tools/interface_so_builder");
