@@ -23,6 +23,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -32,7 +33,6 @@ import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DeletingNodeVisitor;
 import com.google.devtools.build.skyframe.InvalidatingNodeVisitor.DirtyingInvalidationState;
@@ -69,7 +69,7 @@ public class EagerInvalidatorTest {
   protected AtomicReference<InvalidatingNodeVisitor<?>> visitor = new AtomicReference<>();
   protected DirtyKeyTrackerImpl dirtyKeyTracker;
 
-  private IntVersion graphVersion = IntVersion.of(0);
+  private IntVersion graphVersion = new IntVersion(0);
 
   @After
   public void assertNoTrackedErrors() {
@@ -388,43 +388,41 @@ public class EagerInvalidatorTest {
     eval(/*keepGoing=*/false, parent);
     final Thread mainThread = Thread.currentThread();
     final AtomicReference<SkyKey> badKey = new AtomicReference<>();
-    EvaluationProgressReceiver receiver =
-        new EvaluationProgressReceiver() {
-          @Override
-          public void invalidated(SkyKey skyKey, InvalidationState state) {
-            if (skyKey.equals(child)) {
-              // Interrupt on the very first invalidate
-              mainThread.interrupt();
-            } else if (!skyKey.functionName().equals(NODE_TYPE)) {
-              // All other invalidations should have the GraphTester's key type.
-              // Exceptions thrown here may be silently dropped, so keep track of errors ourselves.
-              badKey.set(skyKey);
-            }
-            try {
-              assertTrue(
-                  visitor.get().getInterruptionLatchForTestingOnly().await(2, TimeUnit.HOURS));
-            } catch (InterruptedException e) {
-              // We may well have thrown here because by the time we try to await, the main
-              // thread is already interrupted.
-            }
-          }
+    EvaluationProgressReceiver receiver = new EvaluationProgressReceiver() {
+      @Override
+      public void invalidated(SkyKey skyKey, InvalidationState state) {
+        if (skyKey.equals(child)) {
+          // Interrupt on the very first invalidate
+          mainThread.interrupt();
+        } else if (!skyKey.functionName().equals(NODE_TYPE)) {
+          // All other invalidations should have the GraphTester's key type.
+          // Exceptions thrown here may be silently dropped, so keep track of errors ourselves.
+          badKey.set(skyKey);
+        }
+        try {
+          assertTrue(visitor.get().awaitInterruptionForTestingOnly(2, TimeUnit.HOURS));
+        } catch (InterruptedException e) {
+          // We may well have thrown here because by the time we try to await, the main thread is
+          // already interrupted.
+        }
+      }
 
-          @Override
-          public void enqueueing(SkyKey skyKey) {
-            throw new UnsupportedOperationException();
-          }
+      @Override
+      public void enqueueing(SkyKey skyKey) {
+        throw new UnsupportedOperationException();
+      }
 
-          @Override
-          public void computed(SkyKey skyKey, long elapsedTimeNanos) {
-            throw new UnsupportedOperationException();
-          }
+      @Override
+      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+        throw new UnsupportedOperationException();
+      }
 
-          @Override
-          public void evaluated(
-              SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
-            throw new UnsupportedOperationException();
-          }
-        };
+      @Override
+      public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
+          EvaluationState state) {
+        throw new UnsupportedOperationException();
+      }
+    };
     try {
       invalidateWithoutError(receiver, child);
       fail();
