@@ -6,12 +6,10 @@ import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.validate.SimpleValidateResults;
 import org.hswebframework.web.validate.ValidationException;
-import org.hswebframework.web.validator.LogicPrimaryKeyValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import javax.annotation.PostConstruct;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
 import java.util.Set;
@@ -31,8 +29,6 @@ public abstract class AbstractService<E extends Entity, PK> implements CreateEnt
 
     protected EntityFactory entityFactory;
 
-    protected LogicPrimaryKeyValidator logicPrimaryKeyValidator;
-
     @Autowired(required = false)
     public void setValidator(Validator validator) {
         this.validator = validator;
@@ -41,11 +37,6 @@ public abstract class AbstractService<E extends Entity, PK> implements CreateEnt
     @Autowired(required = false)
     public void setEntityFactory(EntityFactory entityFactory) {
         this.entityFactory = entityFactory;
-    }
-
-    @Autowired(required = false)
-    public void setLogicPrimaryKeyValidator(LogicPrimaryKeyValidator logicPrimaryKeyValidator) {
-        this.logicPrimaryKeyValidator = logicPrimaryKeyValidator;
     }
 
     protected Class<E> entityType;
@@ -65,7 +56,6 @@ public abstract class AbstractService<E extends Entity, PK> implements CreateEnt
         return null != entityFactory;
     }
 
-    @Override
     public Class<E> getEntityInstanceType() {
         return entityFactory.getInstanceType(getEntityType());
     }
@@ -112,7 +102,7 @@ public abstract class AbstractService<E extends Entity, PK> implements CreateEnt
         validate(() -> validator.validateProperty(data, property, groups));
     }
 
-    protected <T> void tryValidate(Class<T> type, String property, Object value, Class... groups) {
+    protected void tryValidate(Class type, String property, Object value, Class... groups) {
         validate(() -> validator.validateValue(type, property, value, groups));
     }
 
@@ -128,9 +118,8 @@ public abstract class AbstractService<E extends Entity, PK> implements CreateEnt
         SimpleValidateResults results = new SimpleValidateResults();
         validatorSetFunction.get()
                 .forEach(violation -> results.addResult(violation.getPropertyPath().toString(), violation.getMessage()));
-        if (!results.isSuccess()) {
+        if (!results.isSuccess())
             throw new ValidationException(results);
-        }
     }
 
     public static void assertNotNull(Object data) {
@@ -138,9 +127,7 @@ public abstract class AbstractService<E extends Entity, PK> implements CreateEnt
     }
 
     public static void assertNotNull(Object data, String message) {
-        if (null == data) {
-            throw new NotFoundException(message);
-        }
+        if (null == data) throw new NotFoundException(message);
     }
 
 
