@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,16 +25,17 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
-import java.io.OutputStream;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * Tests for the UnionFileSystem, both of generic FileSystem functionality
@@ -64,8 +65,8 @@ public class UnionFileSystemTest extends SymlinkAwareFileSystemTest {
 
   private UnionFileSystem createDefaultUnionFileSystem(boolean readOnly) {
     return new UnionFileSystem(ImmutableMap.<PathFragment, FileSystem>of(
-        PathFragment.create("/in"), inDelegate,
-        PathFragment.create("/out"), outDelegate),
+        new PathFragment("/in"), inDelegate,
+        new PathFragment("/out"), outDelegate),
         defaultDelegate, readOnly);
   }
 
@@ -123,8 +124,8 @@ public class UnionFileSystemTest extends SymlinkAwareFileSystemTest {
   @Test
   public void testPrefixDelegation() throws Exception {
     unionfs = new UnionFileSystem(ImmutableMap.<PathFragment, FileSystem>of(
-              PathFragment.create("/foo"), inDelegate,
-              PathFragment.create("/foo/bar"), outDelegate), defaultDelegate);
+              new PathFragment("/foo"), inDelegate,
+              new PathFragment("/foo/bar"), outDelegate), defaultDelegate);
 
     assertSame(inDelegate, unionfs.getDelegate(unionfs.getPath("/foo/foo.txt")));
     assertSame(outDelegate, unionfs.getDelegate(unionfs.getPath("/foo/bar/foo.txt")));
@@ -220,7 +221,7 @@ public class UnionFileSystemTest extends SymlinkAwareFileSystemTest {
     outStream.close();
 
     Path outFoo = unionfs.getPath("/out/foo");
-    unionfs.createSymbolicLink(outFoo, PathFragment.create("../in/bar.txt"));
+    unionfs.createSymbolicLink(outFoo, new PathFragment("../in/bar.txt"));
     assertTrue(unionfs.stat(outFoo, false).isSymbolicLink());
 
     try {
@@ -253,8 +254,8 @@ public class UnionFileSystemTest extends SymlinkAwareFileSystemTest {
   @Test
   public void testWithinDirectoryMapping() throws Exception {
     unionfs = new UnionFileSystem(ImmutableMap.<PathFragment, FileSystem>of(
-        PathFragment.create("/fruit/a"), inDelegate,
-        PathFragment.create("/fruit/b"), outDelegate), defaultDelegate);
+        new PathFragment("/fruit/a"), inDelegate,
+        new PathFragment("/fruit/b"), outDelegate), defaultDelegate);
     assertTrue(unionfs.createDirectory(unionfs.getPath("/fruit")));
     assertTrue(defaultDelegate.getPath("/fruit").isDirectory());
     assertTrue(inDelegate.getPath("/fruit").createDirectory());
@@ -309,7 +310,7 @@ public class UnionFileSystemTest extends SymlinkAwareFileSystemTest {
   @Test
   public void testCreateParentsAcrossMapping() throws Exception {
     unionfs = new UnionFileSystem(ImmutableMap.<PathFragment, FileSystem>of(
-        PathFragment.create("/out/dir"), outDelegate), defaultDelegate, false);
+        new PathFragment("/out/dir"), outDelegate), defaultDelegate, false);
     Path outDir = unionfs.getPath("/out/dir/biz/bang");
     FileSystemUtils.createDirectoryAndParents(outDir);
     assertTrue(outDir.isDirectory());

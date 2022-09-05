@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 package com.google.devtools.build.lib.vfs;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringTrie;
 
 import java.io.IOException;
@@ -160,7 +160,7 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively() {
+  public boolean supportsSymbolicLinks() {
     return true;
   }
 
@@ -248,15 +248,9 @@ public class UnionFileSystem extends FileSystem {
   }
 
   @Override
-  protected boolean isSpecialFile(Path path, boolean followSymlinks) {
-    FileSystem delegate = getDelegate(path);
-    return delegate.isSpecialFile(adjustPath(path, delegate), followSymlinks);
-  }
-
-  @Override
   protected void createSymbolicLink(Path linkPath, PathFragment targetFragment) throws IOException {
     checkModifiable();
-    if (!supportsSymbolicLinksNatively()) {
+    if (!supportsSymbolicLinks()) {
       throw new UnsupportedOperationException(
           "Attempted to create a symlink, but symlink support is disabled.");
     }
