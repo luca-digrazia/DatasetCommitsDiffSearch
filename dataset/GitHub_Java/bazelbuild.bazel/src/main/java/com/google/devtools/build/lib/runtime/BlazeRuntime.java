@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.runtime;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
@@ -44,13 +43,10 @@ import com.google.devtools.build.lib.profiler.Profiler.ProfiledTaskKinds;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
-import com.google.devtools.build.lib.runtime.commands.InfoItem;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
-import com.google.devtools.build.lib.server.AfUnixServer;
 import com.google.devtools.build.lib.server.RPCServer;
 import com.google.devtools.build.lib.server.signal.InterruptSignalHandler;
 import com.google.devtools.build.lib.shell.JavaSubprocessFactory;
@@ -124,11 +120,6 @@ public final class BlazeRuntime {
   private final PackageFactory packageFactory;
   private final ConfigurationFactory configurationFactory;
   private final ConfiguredRuleClassProvider ruleClassProvider;
-  // For bazel info.
-  private final ImmutableMap<String, InfoItem> infoItems;
-  // For bazel query.
-  private final QueryEnvironmentFactory queryEnvironmentFactory;
-  private final ImmutableList<QueryFunction> queryFunctions;
 
   private final AtomicInteger storedExitCode = new AtomicInteger();
 
@@ -139,6 +130,7 @@ public final class BlazeRuntime {
   @Nullable
   private final InvocationPolicy invocationPolicy;
   private final String defaultsPackageContent;
+  private final QueryEnvironmentFactory queryEnvironmentFactory;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final String productName;
 
@@ -147,18 +139,12 @@ public final class BlazeRuntime {
 
   private BlazeRuntime(
       QueryEnvironmentFactory queryEnvironmentFactory,
-      ImmutableList<QueryFunction> queryFunctions,
-      PackageFactory pkgFactory,
-      ConfiguredRuleClassProvider ruleClassProvider,
-      ConfigurationFactory configurationFactory,
-      ImmutableMap<String, InfoItem> infoItems,
-      Clock clock,
-      OptionsProvider startupOptionsProvider,
-      Iterable<BlazeModule> blazeModules,
+      PackageFactory pkgFactory, ConfiguredRuleClassProvider ruleClassProvider,
+      ConfigurationFactory configurationFactory, Clock clock,
+      OptionsProvider startupOptionsProvider, Iterable<BlazeModule> blazeModules,
       SubscriberExceptionHandler eventBusExceptionHandler,
       ProjectFile.Provider projectFileProvider,
-      InvocationPolicy invocationPolicy,
-      Iterable<BlazeCommand> commands,
+      InvocationPolicy invocationPolicy, Iterable<BlazeCommand> commands,
       String productName) {
     // Server state
     this.blazeModules = blazeModules;
@@ -170,11 +156,9 @@ public final class BlazeRuntime {
 
     this.ruleClassProvider = ruleClassProvider;
     this.configurationFactory = configurationFactory;
-    this.infoItems = infoItems;
     this.clock = clock;
     this.startupOptionsProvider = startupOptionsProvider;
     this.queryEnvironmentFactory = queryEnvironmentFactory;
-    this.queryFunctions = queryFunctions;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
 
     this.defaultsPackageContent =
@@ -295,10 +279,6 @@ public final class BlazeRuntime {
     return queryEnvironmentFactory;
   }
 
-  public ImmutableList<QueryFunction> getQueryFunctions() {
-    return queryFunctions;
-  }
-
   /**
    * Returns the package factory.
    */
@@ -321,10 +301,6 @@ public final class BlazeRuntime {
    */
   public ConfiguredRuleClassProvider getRuleClassProvider() {
     return ruleClassProvider;
-  }
-
-  public ImmutableMap<String, InfoItem> getInfoItems() {
-    return infoItems;
   }
 
   public Iterable<BlazeModule> getBlazeModules() {
@@ -801,23 +777,17 @@ public final class BlazeRuntime {
 
     BlazeServerStartupOptions startupOptions =
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class);
-    if (startupOptions.commandPort != -1) {
-      try {
-        // This is necessary so that Bazel kind of works during bootstrapping, at which time the
-        // gRPC server is not compiled in so that we don't need gRPC for bootstrapping.
-        Class<?> factoryClass = Class.forName(
-            "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
+    try {
+      // This is necessary so that Bazel kind of works during bootstrapping, at which time the
+      // gRPC server is not compiled in so that we don't need gRPC for bootstrapping.
+      Class<?> factoryClass = Class.forName(
+          "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
       RPCServer.Factory factory = (RPCServer.Factory) factoryClass.getConstructor().newInstance();
       return factory.create(commandExecutor, runtime.getClock(),
           startupOptions.commandPort, runtime.getServerDirectory(),
           startupOptions.maxIdleSeconds);
-      } catch (ReflectiveOperationException | IllegalArgumentException e) {
-        throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
-      }
-    } else {
-      return AfUnixServer.newServerWith(runtime.getClock(), commandExecutor,
-          runtime.getServerDirectory(), runtime.workspace.getWorkspace(),
-          startupOptions.maxIdleSeconds);
+    } catch (ReflectiveOperationException | IllegalArgumentException e) {
+      throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
     }
   }
 
@@ -1123,11 +1093,9 @@ public final class BlazeRuntime {
 
       return new BlazeRuntime(
           serverBuilder.getQueryEnvironmentFactory(),
-          serverBuilder.getQueryFunctions(),
           packageFactory,
           ruleClassProvider,
           configurationFactory,
-          serverBuilder.getInfoItems(),
           clock,
           startupOptionsProvider,
           ImmutableList.copyOf(blazeModules),

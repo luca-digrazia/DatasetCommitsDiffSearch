@@ -15,11 +15,13 @@
 package com.google.testing.junit.runner.sharding;
 
 import com.google.testing.junit.runner.sharding.api.ShardingFilterFactory;
-import java.util.Collection;
-import java.util.Locale;
-import javax.inject.Inject;
+
 import org.junit.runner.Description;
 import org.junit.runner.manipulation.Filter;
+
+import java.util.Collection;
+
+import javax.inject.Inject;
 
 /**
  * A factory for test sharding filters.
@@ -95,7 +97,7 @@ public class ShardingFilters {
     }
     ShardingFilterFactory shardingFilterFactory;
     try {
-      shardingFilterFactory = ShardingStrategy.valueOf(strategy.toUpperCase(Locale.ENGLISH));
+      shardingFilterFactory = ShardingStrategy.valueOf(strategy.toUpperCase());
     } catch (IllegalArgumentException e) {
       try {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
