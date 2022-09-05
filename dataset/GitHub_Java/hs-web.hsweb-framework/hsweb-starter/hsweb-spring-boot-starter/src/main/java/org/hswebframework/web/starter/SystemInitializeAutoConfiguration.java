@@ -127,20 +127,18 @@ public class SystemInitializeAutoConfiguration implements CommandLineRunner, Bea
                 break;
             case mysql:
                 String engine = environment.getProperty("mysql.engine");
-                if (StringUtils.hasText(engine)) {
-                    metaData = new MysqlRDBDatabaseMetaData(engine);
-                } else {
-                    metaData = new MysqlRDBDatabaseMetaData();
-                }
+
+                metaData = new MysqlRDBDatabaseMetaData();
                 metaData.setParser(new MysqlTableMetaParser(sqlExecutor));
+                if (StringUtils.hasText(engine)) {
+                    ((MysqlRDBDatabaseMetaData) metaData).setEngine(engine);
+                }
                 break;
             default:
                 metaData = new H2RDBDatabaseMetaData();
                 metaData.setParser(new H2TableMetaParser(sqlExecutor));
                 break;
         }
-        metaData.init();
-
         SimpleDatabase database = new SimpleDatabase(metaData, sqlExecutor);
         database.setAutoParse(true);
         SystemInitialize initialize = new SystemInitialize(sqlExecutor, database, version);
