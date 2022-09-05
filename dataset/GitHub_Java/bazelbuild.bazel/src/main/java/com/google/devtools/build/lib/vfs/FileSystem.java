@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,20 +142,18 @@ public abstract class FileSystem {
     try {
       Path canonicalPath = path.resolveSymbolicLinks();
       Path mountTable = path.getRelative("/proc/mounts");
-      try (InputStreamReader reader = new InputStreamReader(mountTable.getInputStream(),
-          ISO_8859_1)) {
-        for (String line : CharStreams.readLines(reader)) {
-          String[] words = line.split("\\s+");
-          if (words.length >= 3) {
-            if (!words[1].startsWith("/")) {
-              continue;
-            }
-            Path mountPoint = path.getFileSystem().getPath(words[1]);
-            int segmentCount = mountPoint.asFragment().segmentCount();
-            if (canonicalPath.startsWith(mountPoint) && segmentCount > bestMountPointSegmentCount) {
-              bestMountPointSegmentCount = segmentCount;
-              fileSystem = words[2];
-            }
+      for (String line : CharStreams.readLines(new InputStreamReader(mountTable.getInputStream(),
+                                                                     ISO_8859_1))) {
+        String[] words = line.split("\\s+");
+        if (words.length >= 3) {
+          if (!words[1].startsWith("/")) {
+            continue;
+          }
+          Path mountPoint = path.getFileSystem().getPath(words[1]);
+          int segmentCount = mountPoint.asFragment().segmentCount();
+          if (canonicalPath.startsWith(mountPoint) && segmentCount > bestMountPointSegmentCount) {
+            bestMountPointSegmentCount = segmentCount;
+            fileSystem = words[2];
           }
         }
       }
@@ -364,7 +362,6 @@ public abstract class FileSystem {
       volatile Boolean isFile;
       volatile Boolean isDirectory;
       volatile Boolean isSymbolicLink;
-      volatile Boolean isSpecial;
       volatile long size = -1;
       volatile long mtime = -1;
 
@@ -386,12 +383,6 @@ public abstract class FileSystem {
       public boolean isSymbolicLink() {
         if (isSymbolicLink == null)  { isSymbolicLink = FileSystem.this.isSymbolicLink(path); }
         return isSymbolicLink;
-      }
-
-      @Override
-      public boolean isSpecialFile() {
-        if (isSpecial == null)  { isSpecial = FileSystem.this.isSpecialFile(path, followSymlinks); }
-        return isSpecial;
       }
 
       @Override
@@ -462,12 +453,6 @@ public abstract class FileSystem {
   protected abstract boolean isFile(Path path, boolean followSymlinks);
 
   /**
-   * Returns true iff {@code path} denotes a special file.
-   * See {@link Path#isSpecialFile(Symlinks)} for specification.
-   */
-  protected abstract boolean isSpecialFile(Path path, boolean followSymlinks);
-
-  /**
    * Creates a symbolic link. See {@link Path#createSymbolicLink(Path)} for
    * specification.
    *
@@ -520,8 +505,6 @@ public abstract class FileSystem {
   protected static Dirent.Type direntFromStat(FileStatus stat) {
     if (stat == null) {
       return Type.UNKNOWN;
-    } else if (stat.isSpecialFile()) {
-        return Type.UNKNOWN;
     } else if (stat.isFile()) {
       return Type.FILE;
     } else if (stat.isDirectory()) {

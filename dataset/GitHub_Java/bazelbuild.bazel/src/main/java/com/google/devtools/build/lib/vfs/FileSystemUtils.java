@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -799,10 +799,7 @@ public class FileSystemUtils {
    * methods are not efficient and should not be used for large amounts of data!
    */
 
-  /**
-   * Decodes the given byte array assumed to be encoded with ISO-8859-1 encoding (isolatin1).
-   */
-  public static char[] convertFromLatin1(byte[] content) {
+  private static char[] convertFromLatin1(byte[] content) {
     char[] latin1 = new char[content.length];
     for (int i = 0; i < latin1.length; i++) { // yeah, latin1 is this easy! :-)
       latin1[i] = (char) (0xff & content[i]);
@@ -956,30 +953,8 @@ public class FileSystemUtils {
     byte[] buffer = new byte[limit];
     try (InputStream inputStream = byteSource.openBufferedStream()) {
       int read = ByteStreams.read(inputStream, buffer, 0, limit);
-      return read == limit ? buffer : Arrays.copyOf(buffer, read);
+      return Arrays.copyOf(buffer, read);
     }
-  }
-
-  /**
-   * Reads the given file {@code path}, assumed to have size {@code fileSize}, and does a sanity
-   * check on the number of bytes read.
-   *
-   * <p>Use this method when you already know the size of the file. The sanity check is intended to
-   * catch issues where filesystems incorrectly truncate files.
-   *
-   * @throws IOException if there was an error, or if fewer than {@code fileSize} bytes were read.
-   */
-  public static byte[] readWithKnownFileSize(Path path, long fileSize) throws IOException {
-    if (fileSize > Integer.MAX_VALUE) {
-      throw new IOException("Cannot read file with size larger than 2GB");
-    }
-    int fileSizeInt = (int) fileSize;
-    byte[] bytes = readContentWithLimit(path, fileSizeInt);
-    if (fileSizeInt > bytes.length) {
-      throw new IOException("Unexpected short read from file '" + path
-          + "' (expected " + fileSizeInt + ", got " + bytes.length + " bytes)");
-    }
-    return bytes;
   }
 
   /**

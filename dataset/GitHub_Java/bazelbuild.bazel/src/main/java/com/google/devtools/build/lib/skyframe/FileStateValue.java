@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,13 +115,6 @@ public abstract class FileStateValue implements SkyValue {
     throw new IllegalStateException();
   }
 
-  @Override
-  public String toString() {
-    return prettyPrint();
-  }
-
-  abstract String prettyPrint();
-
   /**
    * Implementation of {@link FileStateValue} for files that exist.
    *
@@ -219,12 +212,9 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public String prettyPrint() {
-      String contents = digest != null
-          ? String.format("digest of ", Arrays.toString(digest))
-          : contentsProxy.prettyPrint();
-      String extra = mtime != -1 ? String.format(" and mtime of %d", mtime) : "";
-      return String.format("regular file with size of %d and %s%s", size, contents, extra);
+    public String toString() {
+      return "[size: " + size + " " + (mtime != -1 ? "mtime: " + mtime : "")
+          + (digest != null ? "digest: " + Arrays.toString(digest) : contentsProxy) + "]";
     }
   }
 
@@ -242,7 +232,7 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public String prettyPrint() {
+    public String toString() {
       return "directory";
     }
 
@@ -292,7 +282,7 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public String prettyPrint() {
+    public String toString() {
       return "symlink to " + symlinkTarget;
     }
   }
@@ -311,8 +301,8 @@ public abstract class FileStateValue implements SkyValue {
     }
 
     @Override
-    public String prettyPrint() {
-      return "nonexistent path";
+    public String toString() {
+      return "nonexistent";
     }
 
     // This object is normally a singleton, but deserialization produces copies.

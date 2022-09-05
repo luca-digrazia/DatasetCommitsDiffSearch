@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1113,7 +1113,7 @@ public class Path implements Comparable<Path>, Serializable {
       previousb = b;
       a = a.getParentDirectory();
       b = b.getParentDirectory();
-    } while (!a.equals(b)); // This has to happen eventually.
+    } while (a != b); // This has to happen eventually.
     return previousa.name.compareTo(previousb.name);
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ import java.util.List;
  */
 // Not final only for testing.
 @ThreadSafe
-public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
+public class UnixFileSystem extends AbstractFileSystem {
 
   public static final UnixFileSystem INSTANCE = new UnixFileSystem();
   /**
@@ -61,9 +61,6 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
 
     @Override
     public boolean isSymbolicLink() { return status.isSymbolicLink(); }
-
-    @Override
-    public boolean isSpecialFile() { return isFile() && !status.isRegularFile(); }
 
     @Override
     public long getSize() { return status.getSize(); }
@@ -228,6 +225,20 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
+  protected boolean isDirectory(Path path, boolean followSymlinks) {
+    FileStatus stat = statNullable(path, followSymlinks);
+    return stat != null && stat.isDirectory();
+  }
+
+  @Override
+  protected boolean isFile(Path path, boolean followSymlinks) {
+    // Note, FileStatus.isFile means *regular* file whereas Path.isFile may
+    // mean special file too, so we don't return FileStatus.isFile here.
+    FileStatus status = statNullable(path, followSymlinks);
+    return status != null && !(status.isSymbolicLink() || status.isDirectory());
+  }
+
+  @Override
   protected boolean isReadable(Path path) throws IOException {
     return (statInternal(path, true).getPermissions() & 0400) != 0;
   }
@@ -363,14 +374,20 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
+  protected boolean isSymbolicLink(Path path) {
+    FileStatus stat = statNullable(path, false);
+    return stat != null && stat.isSymbolicLink();
+  }
+
+  @Override
   protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     synchronized (path) {
       if (newTime == -1L) { // "now"
-        FilesystemUtils.utime(path.toString(), true, 0);
+        FilesystemUtils.utime(path.toString(), true, 0, 0);
       } else {
         // newTime > MAX_INT => -ve unixTime
         int unixTime = (int) (newTime / 1000);
-        FilesystemUtils.utime(path.toString(), false, unixTime);
+        FilesystemUtils.utime(path.toString(), false, unixTime, unixTime);
       }
     }
   }
