@@ -824,12 +824,7 @@ public final class Command {
     log.finer(status.toString());
 
     try {
-      if (Thread.interrupted()) {
-        outErr.cancel();
-        Thread.currentThread().interrupt();
-      } else {
-        outErr.waitForCompletion();
-      }
+      outErr.waitForCompletion();
     } catch (IOException ioe) {
       CommandResult noOutputResult =
         new CommandResult(CommandResult.EMPTY_OUTPUT,
