@@ -1,6 +1,5 @@
 package org.hswebframework.web.workflow.service.imp;
 
-import org.activiti.engine.impl.persistence.entity.ExecutionEntity;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
 import org.hswebframework.ezorm.rdb.RDBTable;
@@ -27,11 +26,12 @@ import org.hswebframework.web.workflow.service.request.SaveFormRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.sql.JDBCType;
-import java.util.*;
+import java.util.Date;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * @author zhouhao
@@ -129,12 +129,11 @@ public class WorkFlowFormServiceImpl extends AbstractFlowableService implements 
     protected void acceptStartProcessFormData(ProcessInstance instance,
                                               Map<String, Object> formData) {
 
-        String processDefinitionName = ((ExecutionEntity) instance).getProcessDefinition().getName();
-
         formData.put("id", instance.getBusinessKey());
         formData.put("processDefineId", instance.getProcessDefinitionId());
         formData.put("processDefineKey", instance.getProcessDefinitionKey());
-        formData.put("processDefineName", processDefinitionName);
+        formData.put("processDefineName", instance.getProcessDefinitionName());
+        formData.put("processDefineVersion", instance.getProcessDefinitionVersion());
         formData.put("processInstanceId", instance.getProcessInstanceId());
 
     }
@@ -223,8 +222,21 @@ public class WorkFlowFormServiceImpl extends AbstractFlowableService implements 
             processDefineName.setProperty("read-only", true);
             processDefineName.setComment("流程定义Name");
             table.addColumn(processDefineName);
-        }
-        //----------processDefineVersion--------------
+        }//----------processDefineVersion--------------
+        {
+            RDBColumnMetaData processDefineVersion = new RDBColumnMetaData();
+            processDefineVersion.setJavaType(Integer.class);
+            processDefineVersion.setJdbcType(JDBCType.INTEGER);
+            processDefineVersion.setLength(32);
+            processDefineVersion.setPrecision(32);
+            processDefineVersion.setScale(0);
+            processDefineVersion.setName("proc_def_ver");
+            processDefineVersion.setAlias("processDefineVersion");
+            processDefineVersion.setDataType(dialect.buildDataType(processDefineVersion));
+            processDefineVersion.setProperty("read-only", true);
+            processDefineVersion.setComment("流程定义版本");
+            table.addColumn(processDefineVersion);
+        }//----------processDefineVersion--------------
         {
             RDBColumnMetaData processInstanceId = new RDBColumnMetaData();
             processInstanceId.setJavaType(String.class);
