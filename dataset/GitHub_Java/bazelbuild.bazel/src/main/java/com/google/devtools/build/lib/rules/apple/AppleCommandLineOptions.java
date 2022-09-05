@@ -35,9 +35,6 @@ import java.util.List;
  */
 public class AppleCommandLineOptions extends FragmentOptions {
 
-  @VisibleForTesting
-  public static final String DEFAULT_MINIMUM_IOS = "7.0";
-
   @Option(
     name = "xcode_version",
     defaultValue = "null",
@@ -86,33 +83,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
     help = "Specifies the version of the Mac OS X SDK to use to build Mac OS X applications."
   )
   public DottedVersion macOsXSdkVersion;
-
-  @Option(
-      name = "ios_minimum_os",
-      defaultValue = DEFAULT_MINIMUM_IOS,
-      category = "flags",
-      converter = DottedVersionConverter.class,
-      help = "Minimum compatible iOS version for target simulators and devices."
-  )
-  public DottedVersion iosMinimumOs;
-
-  @Option(
-      name = "watchos_minimum_os",
-      defaultValue = "null",
-      category = "flags",
-      converter = DottedVersionConverter.class,
-      help = "Minimum compatible watchOS version for target simulators and devices."
-  )
-  public DottedVersion watchosMinimumOs;
-
-  @Option(
-      name = "tvos_minimum_os",
-      defaultValue = "null",
-      category = "flags",
-      converter = DottedVersionConverter.class,
-      help = "Minimum compatible tvOS version for target simulators and devices."
-  )
-  public DottedVersion tvosMinimumOs;
 
   @VisibleForTesting public static final String DEFAULT_IOS_SDK_VERSION = "8.4";
   @VisibleForTesting public static final String DEFAULT_WATCHOS_SDK_VERSION = "2.0";
@@ -227,17 +197,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
     }
   }
 
-  @Option(
-    name = "xcode_toolchain",
-    defaultValue = "null",
-    category = "flags",
-    help = "The identifier of an Xcode toolchain to use for builds. Currently only the toolchains "
-           + "that ship with Xcode are supported. For example, in addition to the default toolchain"
-           + " Xcode 8 has 'com.apple.dt.toolchain.Swift_2_3' which can be used for building legacy"
-           + " Swift code."
-  )
-  public String xcodeToolchain;
-
   @Option(name = "apple_bitcode",
       converter = AppleBitcodeMode.Converter.class,
       // TODO(blaze-team): Default to embedded_markers when fully implemented.
@@ -295,13 +254,13 @@ public class AppleCommandLineOptions extends FragmentOptions {
 
     private final String mode;
     private final ImmutableList<String> featureNames;
-    private final ImmutableList<String> clangFlags;
+    private final ImmutableList<String> compilerFlags;
 
     private AppleBitcodeMode(
-        String mode, ImmutableList<String> featureNames, String... clangFlags) {
+        String mode, ImmutableList<String> featureNames, String... compilerFlags) {
       this.mode = mode;
       this.featureNames = featureNames;
-      this.clangFlags = ImmutableList.copyOf(clangFlags);
+      this.compilerFlags = ImmutableList.copyOf(compilerFlags);
     }
 
     @Override
@@ -314,12 +273,9 @@ public class AppleCommandLineOptions extends FragmentOptions {
       return featureNames;
     }
 
-    /**
-     * Returns the flags that should be added to compile and link actions to use this
-     * bitcode setting.
-     */
-    public ImmutableList<String> getCompileAndLinkFlags() {
-      return clangFlags;
+    /** Returns the flags that should be added to compile actions to use this bitcode setting. */
+    public ImmutableList<String> getCompilerFlags() {
+      return compilerFlags;
     }
 
     /**

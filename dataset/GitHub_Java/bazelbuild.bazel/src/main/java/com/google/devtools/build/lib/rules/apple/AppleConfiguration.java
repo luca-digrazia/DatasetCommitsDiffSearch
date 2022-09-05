@@ -68,12 +68,9 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private static final DottedVersion MINIMUM_BITCODE_XCODE_VERSION = DottedVersion.fromString("7");
 
   private final DottedVersion iosSdkVersion;
-  private final DottedVersion iosMinimumOs;
-  private final DottedVersion watchosSdkVersion;
-  private final DottedVersion watchosMinimumOs;
-  private final DottedVersion tvosSdkVersion;
-  private final DottedVersion tvosMinimumOs;
-  private final DottedVersion macosXSdkVersion;
+  private final DottedVersion watchOsSdkVersion;
+  private final DottedVersion tvOsSdkVersion;
+  private final DottedVersion macOsXSdkVersion;
   private final String iosCpu;
   private final String appleSplitCpu;
   private final PlatformType applePlatformType;
@@ -84,31 +81,22 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> tvosCpus;
   private final AppleBitcodeMode bitcodeMode;
   private final Label xcodeConfigLabel;
-  @Nullable private final String xcodeToolchain;
   @Nullable private final Label defaultProvisioningProfileLabel;
   private final boolean disableNativeSwiftRules;
 
   AppleConfiguration(AppleCommandLineOptions appleOptions,
       Optional<DottedVersion> xcodeVersionOverride,
       DottedVersion iosSdkVersion,
-      DottedVersion watchosSdkVersion,
-      DottedVersion watchosMinimumOs,
-      DottedVersion tvosSdkVersion,
-      DottedVersion tvosMinimumOs,
-      DottedVersion macosXSdkVersion) {
+      DottedVersion watchOsSdkVersion,
+      DottedVersion tvOsSdkVersion,
+      DottedVersion macOsXSdkVersion) {
     this.iosSdkVersion = Preconditions.checkNotNull(iosSdkVersion, "iosSdkVersion");
-    this.iosMinimumOs = Preconditions.checkNotNull(appleOptions.iosMinimumOs, "iosMinimumOs");
-    this.watchosSdkVersion =
-        Preconditions.checkNotNull(watchosSdkVersion, "watchOsSdkVersion");
-    this.watchosMinimumOs =
-        Preconditions.checkNotNull(watchosMinimumOs, "watchOsMinimumOs");
-    this.tvosSdkVersion =
-        Preconditions.checkNotNull(tvosSdkVersion, "tvOsSdkVersion");
-    this.tvosMinimumOs =
-        Preconditions.checkNotNull(tvosMinimumOs, "tvOsMinimumOs");
-
-    this.macosXSdkVersion =
-        Preconditions.checkNotNull(macosXSdkVersion, "macOsXSdkVersion");
+    this.watchOsSdkVersion =
+        Preconditions.checkNotNull(watchOsSdkVersion, "watchOsSdkVersion");
+    this.tvOsSdkVersion =
+        Preconditions.checkNotNull(tvOsSdkVersion, "tvOsSdkVersion");
+    this.macOsXSdkVersion =
+        Preconditions.checkNotNull(macOsXSdkVersion, "macOsXSdkVersion");
 
     this.xcodeVersion = Preconditions.checkNotNull(xcodeVersionOverride);
     this.iosCpu = Preconditions.checkNotNull(appleOptions.iosCpu, "iosCpu");
@@ -128,39 +116,8 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     this.xcodeConfigLabel =
         Preconditions.checkNotNull(appleOptions.xcodeVersionConfig, "xcodeConfigLabel");
     this.defaultProvisioningProfileLabel = appleOptions.defaultProvisioningProfile;
-    this.xcodeToolchain = appleOptions.xcodeToolchain;
     this.disableNativeSwiftRules = appleOptions.disableNativeSwiftRules;
   }
-
-  /**
-   * Returns the minimum iOS version supported by binaries and libraries. Any dependencies on newer
-   * iOS version features or libraries will become weak dependencies which are only loaded if the
-   * runtime OS supports them.
-   */
-  @SkylarkCallable(name = "ios_minimum_os", structField = true,
-      doc = "The minimum compatible iOS version for target simulators and devices.")
-  public DottedVersion getMinimumOs() {
-    // TODO(bazel-team): Deprecate in favor of getMinimumOsForPlatformType(IOS).
-    return iosMinimumOs;
-  }
-
-  @SkylarkCallable(
-      name = "minimum_os_for_platform_type",
-      doc = "The minimum compatible OS version for target simulator and devices for a particular "
-          + "platform type.")
-  public DottedVersion getMinimumOsForPlatformType(PlatformType platformType) {
-    switch (platformType) {
-      case IOS:
-        return iosMinimumOs;
-      case TVOS:
-        return tvosMinimumOs;
-      case WATCHOS:
-        return watchosMinimumOs;
-      default:
-        throw new IllegalArgumentException("Unhandled platform: " + platformType);
-    }
-  }
-
 
   /**
    * Returns the SDK version for ios SDKs (whether they be for simulator or device). This is
@@ -184,12 +141,12 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
         return iosSdkVersion;
       case TVOS_DEVICE:
       case TVOS_SIMULATOR:
-        return tvosSdkVersion;
+        return tvOsSdkVersion;
       case WATCHOS_DEVICE:
       case WATCHOS_SIMULATOR:
-        return watchosSdkVersion;
+        return watchOsSdkVersion;
       case MACOS_X:
-        return macosXSdkVersion;
+        return macOsXSdkVersion;
     }
     throw new AssertionError();
 
@@ -259,7 +216,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     // evaluated for the current configuration xcode version, this would break users who build
     // cc_* rules without specifying both xcode_version and macosx_sdk_version build options.
     if (platform != Platform.MACOS_X) {
-        String sdkVersion = getSdkVersionForPlatform(platform).toStringWithMinimumComponents(2);
+        String sdkVersion = getSdkVersionForPlatform(platform).toString();
         builder.put(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME, sdkVersion)
             .put(AppleConfiguration.APPLE_SDK_PLATFORM_ENV_NAME, platform.getNameInPlist());
     }
@@ -521,17 +478,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     return Joiner.on('-').join(components);
   }
 
-  /** Returns the identifier for an Xcode toolchain to use with tools. */
-  @SkylarkCallable(
-    name = "xcode_toolchain",
-    doc = "Identifier for the custom Xcode toolchain to use in build or None if not specified",
-    allowReturnNones = true,
-    structField = true
-  )
-  public String getXcodeToolchain() {
-    return xcodeToolchain;
-  }
-
   /**
    * Whether the native Swift support should be disabled. Used to deprecate said functionality.
    */
@@ -551,22 +497,15 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
 
       DottedVersion iosSdkVersion = (appleOptions.iosSdkVersion != null)
           ? appleOptions.iosSdkVersion : xcodeVersionProperties.getDefaultIosSdkVersion();
-      // TODO(cparsons): Look into ios_minimum_os matching the defaulting behavior of the other
-      // platforms.
       DottedVersion watchosSdkVersion = (appleOptions.watchOsSdkVersion != null)
           ? appleOptions.watchOsSdkVersion : xcodeVersionProperties.getDefaultWatchosSdkVersion();
-      DottedVersion watchosMinimumOsVersion = (appleOptions.watchosMinimumOs != null)
-          ? appleOptions.watchosMinimumOs : watchosSdkVersion;
       DottedVersion tvosSdkVersion = (appleOptions.tvOsSdkVersion != null)
           ? appleOptions.tvOsSdkVersion : xcodeVersionProperties.getDefaultTvosSdkVersion();
-      DottedVersion tvosMinimumOsVersion = (appleOptions.tvosMinimumOs != null)
-          ? appleOptions.tvosMinimumOs : tvosSdkVersion;
       DottedVersion macosxSdkVersion = (appleOptions.macOsXSdkVersion != null)
           ? appleOptions.macOsXSdkVersion : xcodeVersionProperties.getDefaultMacosxSdkVersion();
       AppleConfiguration configuration =
           new AppleConfiguration(appleOptions, xcodeVersionProperties.getXcodeVersion(),
-              iosSdkVersion, watchosSdkVersion, watchosMinimumOsVersion,
-              tvosSdkVersion, tvosMinimumOsVersion, macosxSdkVersion);
+              iosSdkVersion, watchosSdkVersion, tvosSdkVersion, macosxSdkVersion);
 
       validate(configuration);
       return configuration;
