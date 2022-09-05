@@ -99,7 +99,7 @@ public class WeightedSnapshot extends Snapshot {
             return values[values.length - 1];
         }
 
-        return values[posx];
+        return values[(int) posx];
     }
 
     /**
