@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,41 +16,24 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
 
 import java.util.List;
 
 /**
- * Command-line options for J2ObjC translation of Java source code to ObjC.
- * These command line options are used by Java rules that can be transpiled
- * (specifically, J2ObjCAspects thereof).
+ * Command-line Options for J2ObjC translation of Java source code to ObjC.
  */
 public class J2ObjcCommandLineOptions extends FragmentOptions {
   @Option(name = "j2objc_translation_flags",
       converter = Converters.CommaSeparatedOptionListConverter.class,
       allowMultiple = true,
       defaultValue = "",
-      category = "flags",
-      help = "Additional options to pass to the J2ObjC tool."
+      category = "undocumented",
+      help = "Specifies the translation flags for the J2ObjC transpiler."
       )
   public List<String> translationFlags;
-
-  @Option(name = "j2objc_dead_code_removal",
-      defaultValue = "false",
-      category = "undocumented",
-      help = "Whether to perform J2ObjC dead code removal to strip unused code from the final app "
-          + "bundle."
-      )
-  public boolean removeDeadCode;
-
-  @Option(name = "explicit_jre_deps",
-      defaultValue = "false",
-      category = "flags",
-      help = "Requires JRE dependencies to be declared in j2objc_library's jre_deps attribute."
-      )
-  public boolean explicitJreDeps;
 
   @Override
   public void addAllLabels(Multimap<String, Label> labelMap) {}
