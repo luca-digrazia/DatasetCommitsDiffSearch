@@ -89,9 +89,7 @@ public class DefaultSqlParamBuilder {
     protected Map<String, Object> createConfig(String resultMapId) {
         ResultMap resultMaps = ResultMapsUtils.getResultMap(resultMapId);
         Map<String, Object> fieldConfig = new HashMap<>();
-        List<ResultMapping> resultMappings=new ArrayList<>(resultMaps.getResultMappings());
-        resultMappings.addAll(resultMaps.getIdResultMappings());
-        resultMappings.forEach(resultMapping -> {
+        resultMaps.getResultMappings().forEach(resultMapping -> {
             if (resultMapping.getNestedQueryId() == null) {
                 Map<String, Object> config = new HashMap<>();
                 config.put("jdbcType", resultMapping.getJdbcType());
@@ -99,6 +97,13 @@ public class DefaultSqlParamBuilder {
                 config.put("property", resultMapping.getProperty());
                 fieldConfig.put(resultMapping.getColumn(), config);
             }
+        });
+        resultMaps.getIdResultMappings().forEach(resultMapping -> {
+            Map<String, Object> config = new HashMap<>();
+            config.put("jdbcType", resultMapping.getJdbcType());
+            config.put("javaType", getJavaType(resultMapping.getJavaType()));
+            config.put("property", resultMapping.getProperty());
+            fieldConfig.put(resultMapping.getColumn(), config);
         });
         return fieldConfig;
     }
