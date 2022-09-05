@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -105,10 +106,8 @@ public final class CommandInterruptionTest {
       if (!commandStateHandoff.compareAndSet(null, newHandoff)) {
         throw new AssertionError("Another command is already starting at this time?!");
       }
-      @SuppressWarnings("unused") // static analysis wants us to check future return values
-      Future<?> ignoredCommandResult =
-          executor.submit(
-              new RunCommandThroughDispatcher(dispatcher, newHandoff, expectInterruption));
+      executor.submit(
+          new RunCommandThroughDispatcher(dispatcher, newHandoff, expectInterruption));
       return newHandoff.get();
     }
   }
@@ -116,11 +115,11 @@ public final class CommandInterruptionTest {
   /** Callable to run the above command on a different thread. */
   private static final class RunCommandThroughDispatcher implements Callable<Integer> {
     private final BlazeCommandDispatcher dispatcher;
-    private final SettableFuture<CommandState> commandStateHandoff;
+    private final Future<CommandState> commandStateHandoff;
     private final boolean expectInterruption;
 
     public RunCommandThroughDispatcher(
-        BlazeCommandDispatcher dispatcher, SettableFuture<CommandState> commandStateHandoff,
+        BlazeCommandDispatcher dispatcher, Future<CommandState> commandStateHandoff,
         boolean expectInterruption) {
       this.dispatcher = dispatcher;
       this.commandStateHandoff = commandStateHandoff;
@@ -128,37 +127,17 @@ public final class CommandInterruptionTest {
     }
 
     @Override
-    public Integer call() throws Exception {
-      int result;
-      try {
-        result = dispatcher.exec(
-            ImmutableList.of(
-                "snooze",
-                expectInterruption ? "--expect_interruption" : "--noexpect_interruption"),
-            BlazeCommandDispatcher.LockingMode.ERROR_OUT,
-            "CommandInterruptionTest",
-            OutErr.SYSTEM_OUT_ERR);
-      } catch (Exception throwable) {
-        if (commandStateHandoff.isDone()) {
-          commandStateHandoff.get().completeWithFailure(throwable);
-        } else {
-          commandStateHandoff.setException(
-              new IllegalStateException(
-                  "The command failed with an exception before WaitForCompletionCommand started.",
-                  throwable));
-        }
-        throw throwable;
-      }
-
-      if (commandStateHandoff.isDone()) {
-        commandStateHandoff.get().completeWithExitCode(result);
-      } else {
-        commandStateHandoff.setException(
-            new IllegalStateException(
-                "The command failed with exit code "
-                    + result
-                    + " before WaitForCompletionCommand started."));
-      }
+    public Integer call()
+        throws ShutdownBlazeServerException, InterruptedException, ExecutionException {
+      int result = dispatcher.exec(
+          ImmutableList.of(
+              "snooze",
+              expectInterruption ? "--expect_interruption" : "--noexpect_interruption"),
+          BlazeCommandDispatcher.LockingMode.ERROR_OUT,
+          "CommandInterruptionTest",
+          OutErr.SYSTEM_OUT_ERR);
+      // TODO(mstaib): replace with Futures.getDone when Bazel uses Guava 20.0
+      commandStateHandoff.get().completeWithExitCode(result);
       return result;
     }
   }
@@ -209,22 +188,6 @@ public final class CommandInterruptionTest {
     }
 
     /**
-     * Marks the Future associated with this CommandState as having failed with the given exit code,
-     * then waits at the barrier for the test thread to catch up.
-     */
-    private void completeWithFailure(Throwable throwable) {
-      result.setException(throwable);
-      if (!isTestShuttingDown.get()) {
-        // Wait at the barrier for the test to assert on status, unless the test is shutting down.
-        try {
-          barrier.await();
-        } catch (InterruptedException | BrokenBarrierException ex) {
-          // this is fine, we're only doing this for the test thread's benefit anyway
-        }
-      }
-    }
-
-    /**
      * Waits for an exit code to come from the test, either INTERRUPTED via thread interruption, or
      * a test-specified exit code via requestExitWith(). If expectInterruption was set,
      * a single interruption will be ignored.
@@ -252,7 +215,7 @@ public final class CommandInterruptionTest {
           // the same time.
         }
 
-        if (SENTINEL.equals(exitCode)) {
+        if (exitCode == SENTINEL) {
           // The test just wants us to go wait at the barrier for an assertion.
           try {
             barrier.await();
@@ -315,15 +278,8 @@ public final class CommandInterruptionTest {
     public void assertNotFinishedYet()
         throws InterruptedException, ExecutionException, BrokenBarrierException {
       synchronizeWithCommand();
-      if (result.isDone()) {
-        try {
-          throw new AssertionError(
-              "The command should not have been finished, but it finished with exit code "
-              + result.get());
-        } catch (Throwable ex) {
-          throw new AssertionError("The command should not have been finished, but it threw", ex);
-        }
-      }
+      assertWithMessage("The command should not have been finished, but it was.")
+          .that(result.isDone()).isFalse();
     }
 
     /** Asserts that both commands were executed on the same thread. */
