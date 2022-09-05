@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,11 +45,6 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
-  public boolean hasNoSandbox() {
-    return spawn.hasNoSandbox();
-  }
-
-  @Override
   public ImmutableList<Artifact> getFilesetManifests() {
     return spawn.getFilesetManifests();
   }
@@ -85,11 +80,6 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
-  public Iterable<? extends ActionInput> getToolFiles() {
-    return spawn.getToolFiles();
-  }
-
-  @Override
   public Iterable<? extends ActionInput> getInputFiles() {
     return spawn.getInputFiles();
   }
@@ -100,12 +90,7 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
-  public Collection<PathFragment> getOptionalOutputFiles() {
-    return spawn.getOptionalOutputFiles();
-  }
-
-  @Override
-  public ActionExecutionMetadata getResourceOwner() {
+  public ActionMetadata getResourceOwner() {
     return spawn.getResourceOwner();
   }
 

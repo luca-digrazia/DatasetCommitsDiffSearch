@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -27,11 +26,6 @@ public class EmptyRunfilesSupplier implements RunfilesSupplier {
   public static final EmptyRunfilesSupplier INSTANCE = new EmptyRunfilesSupplier();
 
   private EmptyRunfilesSupplier() {}
-
-  @Override
-  public Iterable<Artifact> getArtifacts() {
-    return ImmutableList.<Artifact>of();
-  }
 
   @Override
   public ImmutableSet<PathFragment> getRunfilesDirs() {
