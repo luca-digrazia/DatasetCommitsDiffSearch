@@ -81,8 +81,6 @@ import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionRule;
-import com.google.devtools.build.lib.rules.objc.J2ObjcCommandLineOptions;
-import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.objc.ObjcBinaryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcBuildInfoFactory;
 import com.google.devtools.build.lib.rules.objc.ObjcBundleLibraryRule;
@@ -182,8 +180,7 @@ public class BazelRuleClassProvider {
           CppOptions.class,
           JavaOptions.class,
           PythonOptions.class,
-          ObjcCommandLineOptions.class,
-          J2ObjcCommandLineOptions.class
+          ObjcCommandLineOptions.class
       );
 
   /**
@@ -309,6 +306,5 @@ public class BazelRuleClassProvider {
     builder.addConfigurationFragment(new JvmConfigurationLoader(JAVA_CPU_SUPPLIER));
     builder.addConfigurationFragment(new JavaConfigurationLoader(JAVA_CPU_SUPPLIER));
     builder.addConfigurationFragment(new ObjcConfigurationLoader());
-    builder.addConfigurationFragment(new J2ObjcConfiguration.Loader());
   }
 }
