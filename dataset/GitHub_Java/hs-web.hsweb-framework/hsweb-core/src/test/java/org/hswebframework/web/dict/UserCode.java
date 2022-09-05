@@ -8,7 +8,7 @@ import lombok.Getter;
 @AllArgsConstructor
 @Dict(id = "UserCode")
 @JSONType(deserializer = EnumDict.EnumDictJSONDeserializer.class)
-public enum UserCode implements EnumDict<String> {
+public enum UserCode implements EnumDict {
 
     SIMPLE("SIMPLE", "TEXT", "测试"),
     TEST("TEST", "TEST", "测试"),

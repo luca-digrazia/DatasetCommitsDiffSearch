@@ -3,22 +3,22 @@ package org.hswebframework.web.dao.mybatis.mapper;
 import lombok.AllArgsConstructor;
 import org.hswebframework.ezorm.core.param.Term;
 import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
-import org.hswebframework.ezorm.rdb.render.Sql;
 import org.hswebframework.ezorm.rdb.render.SqlAppender;
 import org.hswebframework.ezorm.rdb.render.dialect.Dialect;
 import org.hswebframework.ezorm.rdb.render.dialect.Dialect.TermTypeMapper;
 import org.hswebframework.web.dict.EnumDict;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @AllArgsConstructor
 @SuppressWarnings("all")
-public class EnumDicInTermTypeMapper implements TermTypeMapper {
+public abstract class EnumDicInTermTypeMapper implements TermTypeMapper {
 
     protected Dialect dialect;
 
     protected boolean not;
+
+    protected boolean anyIn = false;
 
     protected boolean support(RDBColumnMetaData column) {
         Class type = column.getJavaType();
@@ -31,21 +31,31 @@ public class EnumDicInTermTypeMapper implements TermTypeMapper {
     @Override
     public SqlAppender accept(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
         Class type = column.getJavaType();
+        if(type==null){
+            return buildNotSupport(wherePrefix,term,column,tableAlias);
+        }
         Object value = term.getValue();
         if (type.isArray()) {
             Class componentType = type.getComponentType();
             if (support(column)) {
-                EnumDict[] newValue = param2list(value)
-                        .stream().map(v -> EnumDict.find(componentType, v).orElse(null))
-                        .filter(Objects::nonNull)
-                        .toArray(EnumDict[]::new);
-                long bit = EnumDict.toBit(newValue);
-                term.setValue(bit);
+                if(componentType.getEnumConstants().length<64){
+                    EnumDict[] newValue = param2list(value)
+                            .stream().map(v -> EnumDict.find(componentType, v).orElse(null))
+                            .filter(Objects::nonNull)
+                            .toArray(EnumDict[]::new);
+                    long bit = EnumDict.toMask(newValue);
+                    term.setValue(bit);
+                }else{
+                    //枚举数量大于等于64,无法使用位运算
+                    // TODO: 2018/4/25 尝试查询字典中间表
+                    buildNotSupport(wherePrefix,term,column,tableAlias);
+                }
+
             } else {
                 return buildNotSupport(wherePrefix, term, column, tableAlias);
-
             }
         } else {
+            //类型不是数组
 //            if (support(column)) {
 //                if (value instanceof Collection) {
 //                    value = ((Collection) value).iterator().next();
@@ -64,8 +74,9 @@ public class EnumDicInTermTypeMapper implements TermTypeMapper {
     protected SqlAppender buildNotSupport(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
         List<Object> values = param2list(term.getValue());
         term.setValue(values);
+        String columnName = dialect.buildColumnName(tableAlias, column.getName());
         SqlAppender appender = new SqlAppender();
-        appender.add(dialect.buildColumnName(tableAlias, column.getAlias()), not ? " NOT" : " ").add("IN(");
+        appender.add(columnName, not ? " NOT" : " ").add("IN(");
         for (int i = 0; i < values.size(); i++) {
             appender.add("#{", wherePrefix, ".value[", i, "]}", ",");
         }
@@ -74,10 +85,7 @@ public class EnumDicInTermTypeMapper implements TermTypeMapper {
         return appender;
     }
 
-    protected SqlAppender build(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
-        return new SqlAppender()
-                .add(dialect.buildColumnName(tableAlias, column.getName()), not ? "!=" : "=", "#{", wherePrefix, ".value}");
-    }
+    protected abstract SqlAppender build(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias);
 
 
     protected List<Object> param2list(Object value) {

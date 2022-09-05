@@ -21,7 +21,10 @@ import org.springframework.util.ClassUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
-import java.sql.*;
+import java.sql.CallableStatement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 
 import static org.springframework.util.StringUtils.tokenizeToStringArray;
@@ -119,7 +122,6 @@ public class EnumDictHandlerRegister {
     @MappedJdbcTypes({JdbcType.VARCHAR, JdbcType.BIT,
             JdbcType.BOOLEAN, JdbcType.NUMERIC,
             JdbcType.TINYINT, JdbcType.INTEGER,
-            JdbcType.SMALLINT,
             JdbcType.BIGINT, JdbcType.DECIMAL,
             JdbcType.CHAR})
     static class EnumDictHandler<T extends Enum & EnumDict> implements TypeHandler<T> {

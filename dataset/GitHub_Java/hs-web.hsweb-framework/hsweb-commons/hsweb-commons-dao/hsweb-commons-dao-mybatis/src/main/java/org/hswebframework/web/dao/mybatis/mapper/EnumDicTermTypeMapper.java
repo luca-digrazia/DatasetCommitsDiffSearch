@@ -30,6 +30,9 @@ public class EnumDicTermTypeMapper implements TermTypeMapper {
     @Override
     public SqlAppender accept(String wherePrefix, Term term, RDBColumnMetaData column, String tableAlias) {
         Class type = column.getJavaType();
+        if(type==null){
+            return build(wherePrefix,term,column,tableAlias);
+        }
         Object value = term.getValue();
         if (type.isArray()) {
             Class componentType = type.getComponentType();
@@ -38,7 +41,7 @@ public class EnumDicTermTypeMapper implements TermTypeMapper {
                         .stream().map(v -> EnumDict.find(componentType, v).orElse(null))
                         .filter(Objects::nonNull)
                         .toArray(EnumDict[]::new);
-                long bit = EnumDict.toBit(newValue);
+                long bit = EnumDict.toMask(newValue);
                 term.setValue(bit);
             }
         } else {
