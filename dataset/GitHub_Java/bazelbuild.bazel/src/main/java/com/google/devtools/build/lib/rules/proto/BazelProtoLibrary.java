@@ -54,7 +54,6 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
         SupportData.create(
             Predicates.<TransitiveInfoCollection>alwaysTrue() /* nonWeakDepsPredicate */,
             protoSources,
-            null /* protosInDirectDeps */,
             transitiveImports,
             !protoSources.isEmpty());
 

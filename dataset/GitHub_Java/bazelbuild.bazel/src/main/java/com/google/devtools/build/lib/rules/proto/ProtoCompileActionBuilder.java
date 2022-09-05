@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.LazyString;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -286,9 +285,7 @@ public class ProtoCompileActionBuilder {
     result.add(ruleContext.getFragment(ProtoConfiguration.class).protocOpts());
 
     // Add include maps
-    result.add(
-        new ProtoCommandLineArgv(
-            null /* protosInDirectDependencies */, supportData.getTransitiveImports()));
+    result.add(new ProtoCommandLineArgv(supportData.getTransitiveImports()));
 
     for (Artifact src : supportData.getDirectProtoSources()) {
       result.addPath(src.getRootRelativePath());
@@ -309,15 +306,10 @@ public class ProtoCompileActionBuilder {
    * Static inner class since these objects live into the execution phase and so they must not keep
    * alive references to the surrounding analysis-phase objects.
    */
-  @VisibleForTesting
-  static class ProtoCommandLineArgv extends CustomCommandLine.CustomMultiArgv {
-    @Nullable private final Iterable<Artifact> protosInDirectDependencies;
+  private static class ProtoCommandLineArgv extends CustomCommandLine.CustomMultiArgv {
     private final Iterable<Artifact> transitiveImports;
 
-    ProtoCommandLineArgv(
-        @Nullable Iterable<Artifact> protosInDirectDependencies,
-        Iterable<Artifact> transitiveImports) {
-      this.protosInDirectDependencies = protosInDirectDependencies;
+    ProtoCommandLineArgv(Iterable<Artifact> transitiveImports) {
       this.transitiveImports = transitiveImports;
     }
 
@@ -327,13 +319,6 @@ public class ProtoCompileActionBuilder {
       for (Artifact artifact : transitiveImports) {
         builder.add(
             "-I" + artifact.getRootRelativePathString() + "=" + artifact.getExecPathString());
-      }
-      if (protosInDirectDependencies != null) {
-        ArrayList<String> rootRelativePaths = new ArrayList<>();
-        for (Artifact directDependency : protosInDirectDependencies) {
-          rootRelativePaths.add(directDependency.getRootRelativePathString());
-        }
-        builder.add("--direct_dependencies=" + Joiner.on(":").join(rootRelativePaths));
       }
       return builder.build();
     }
@@ -440,8 +425,6 @@ public class ProtoCompileActionBuilder {
    * Note {@code toolchainInvocations} is ordered, and affects the order in which plugins are
    * called. As some plugins rely on output from other plugins, their order matters.
    *
-   * @param toolchainInvocations See {@link #createCommandLineFromToolchains}.
-   * @param allowServices If false, the compilation will break if any .proto file has service
    * @return a command-line to pass to proto-compiler.
    */
   @VisibleForTesting
@@ -487,9 +470,7 @@ public class ProtoCompileActionBuilder {
     cmdLine.add(protocOpts);
 
     // Add include maps
-    cmdLine.add(
-        new ProtoCommandLineArgv(
-            supportData.getProtosInDirectDeps(), supportData.getTransitiveImports()));
+    cmdLine.add(new ProtoCommandLineArgv(supportData.getTransitiveImports()));
 
     for (Artifact src : supportData.getDirectProtoSources()) {
       cmdLine.addPath(src.getRootRelativePath());
