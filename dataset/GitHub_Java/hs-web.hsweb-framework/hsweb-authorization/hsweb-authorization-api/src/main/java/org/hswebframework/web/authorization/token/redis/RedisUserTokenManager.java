@@ -41,12 +41,12 @@ public class RedisUserTokenManager implements UserTokenManager {
     @SuppressWarnings("all")
     public RedisUserTokenManager(ReactiveRedisConnectionFactory connectionFactory) {
         this(new ReactiveRedisTemplate<>(connectionFactory,
-                                         RedisSerializationContext.newSerializationContext()
-                                                                  .key((RedisSerializer) RedisSerializer.string())
-                                                                  .value(RedisSerializer.java())
-                                                                  .hashKey(RedisSerializer.string())
-                                                                  .hashValue(RedisSerializer.java())
-                                                                  .build()
+                RedisSerializationContext.newSerializationContext()
+                        .key((RedisSerializer) RedisSerializer.string())
+                        .value(RedisSerializer.java())
+                        .hashKey(RedisSerializer.string())
+                        .hashValue(RedisSerializer.java())
+                        .build()
         ));
     }
 
@@ -105,45 +105,37 @@ public class RedisUserTokenManager implements UserTokenManager {
     @Override
     public Mono<Integer> totalUser() {
 
-        return operations
-                .scan(ScanOptions
-                              .scanOptions()
-                              .match("*user-token-user:*")
-                              .build())
-                .count()
-                .map(Long::intValue);
+        return totalToken();
     }
 
     @Override
     public Mono<Integer> totalToken() {
-        return operations
-                .scan(ScanOptions
-                              .scanOptions()
-                              .match("*user-token:*")
-                              .build())
+        return operations.scan(ScanOptions
+                .scanOptions()
+                .match("user-token:*")
+                .build())
                 .count()
                 .map(Long::intValue);
     }
 
     @Override
     public Flux<UserToken> allLoggedUser() {
-        return operations
-                .scan(ScanOptions
-                              .scanOptions()
-                              .match("*user-token:*")
-                              .build())
-                .map(val -> String.valueOf(val).substring(11))
+        return operations.scan(ScanOptions
+                .scanOptions()
+                .match("user-token:*")
+                .build())
+                .map(String::valueOf)
                 .flatMap(this::getByToken);
     }
 
     @Override
     public Mono<Void> signOutByUserId(String userId) {
-        return this
-                .getByUserId(userId)
+        String key = getUserRedisKey(userId);
+        return getByUserId(key)
                 .flatMap(userToken -> operations
                         .delete(getTokenRedisKey(userToken.getToken()))
                         .then(onTokenRemoved(userToken)))
-                .then(operations.delete(getUserRedisKey(userId)))
+                .then(operations.delete(key))
                 .then();
     }
 
@@ -252,13 +244,11 @@ public class RedisUserTokenManager implements UserTokenManager {
     public Mono<Void> checkExpiredToken() {
 
         return operations
-                .scan(ScanOptions.scanOptions().match("*user-token-user:*").build())
+                .scan(ScanOptions.scanOptions().match("user-token-user:*").build())
                 .map(String::valueOf)
-                .flatMap(key -> userTokenMapping
-                        .members(key)
+                .flatMap(key -> userTokenMapping.members(key)
                         .map(String::valueOf)
-                        .flatMap(token -> operations
-                                .hasKey(getTokenRedisKey(token))
+                        .flatMap(token -> operations.hasKey(getTokenRedisKey(token))
                                 .flatMap(exists -> {
                                     if (!exists) {
                                         return userTokenMapping.remove(key, token);
