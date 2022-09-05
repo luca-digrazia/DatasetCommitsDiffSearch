@@ -81,7 +81,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -120,8 +119,6 @@ import javax.xml.parsers.ParserConfigurationException;
  * and dimensions.
  */
 public class ResourceShrinker {
-
-  private static final Logger logger = Logger.getLogger(ResourceShrinker.class.getName());
 
   public static final int TYPICAL_RESOURCE_COUNT = 200;
   private final List<String> resourcePackages;
@@ -208,7 +205,7 @@ public class ResourceShrinker {
           String folder = file.getParentFile().getName();
           ResourceFolderType folderType = ResourceFolderType.getFolderType(folder);
           if (folderType != null && folderType != ResourceFolderType.VALUES) {
-            logger.fine("Deleted unused resource " + file);
+            System.out.println("Deleted unused resource " + file);
             assert skip != null;
             skip.add(file);
           } else {
@@ -235,7 +232,7 @@ public class ResourceShrinker {
       if (root != null && TAG_RESOURCES.equals(root.getTagName())) {
         List<String> removed = Lists.newArrayList();
         stripUnused(root, removed);
-        logger.info("Removed " + removed.size() + " unused resources from " + file + ":\n  "
+        System.out.println("Removed " + removed.size() + " unused resources from " + file + ":\n  "
             + Joiner.on(", ").join(removed));
         String formatted = XmlPrettyPrinter.prettyPrint(document, xml.endsWith("\n"));
         rewritten.put(file, formatted);
@@ -414,8 +411,7 @@ public class ResourceShrinker {
         roots.add(resource);
       }
     }
-    logger.fine(String.format("The root reachable resources are: %s",
-        Joiner.on(",\n   ").join(roots)));
+    System.out.println("The root reachable resources are: " + Joiner.on(",\n   ").join(roots));
     Map<Resource, Boolean> seen = new IdentityHashMap<>(resources.size());
     for (Resource root : roots) {
       visit(root, seen);
@@ -445,7 +441,7 @@ public class ResourceShrinker {
   private void dumpReferences() {
     for (Resource resource : resources) {
       if (resource.references != null) {
-        logger.info(resource + " => " + resource.references);
+        System.out.println(resource + " => " + resource.references);
       }
     }
   }
@@ -458,9 +454,9 @@ public class ResourceShrinker {
     }
     List<String> strings = new ArrayList<String>(mStrings);
     Collections.sort(strings);
-    logger.fine(String.format("android.content.res.Resources#getIdentifier present: %s",
-        mFoundGetIdentifier));
-    logger.fine("Referenced Strings:");
+    System.out.println("android.content.res.Resources#getIdentifier present: "
+        + mFoundGetIdentifier);
+    System.out.println("Referenced Strings:");
     for (String s : strings) {
       s = s.trim().replace("\n", "\\n");
       if (s.length() > 40) {
@@ -468,9 +464,8 @@ public class ResourceShrinker {
       } else if (s.isEmpty()) {
         continue;
       }
-      logger.fine("  " + s);
+      System.out.println("  " + s);
     }
-
     Set<String> names = Sets.newHashSetWithExpectedSize(50);
     for (Map<String, Resource> map : typeToName.values()) {
       names.addAll(map.keySet());
@@ -530,7 +525,7 @@ public class ResourceShrinker {
           }
           Resource resource = getResource(type, name);
           if (resource != null) {
-            logger.fine("Marking " + resource + " used because it "
+            System.out.println("Marking " + resource + " used because it "
                 + "matches string pool constant " + string);
           }
           markReachable(resource);
@@ -542,7 +537,7 @@ public class ResourceShrinker {
         for (Map<String, Resource> map : typeToName.values()) {
           Resource resource = map.get(string);
           if (resource != null) {
-            logger.fine("Marking " + resource + " used because it "
+            System.out.println("Marking " + resource + " used because it "
                 + "matches string pool constant " + string);
           }
           markReachable(resource);
