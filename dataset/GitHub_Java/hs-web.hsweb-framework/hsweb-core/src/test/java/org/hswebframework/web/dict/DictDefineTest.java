@@ -31,21 +31,15 @@ public class DictDefineTest {
 
         Assert.assertEquals(UserCode.SIMPLE, find(UserCode.class, UserCode.SIMPLE.getText()).orElse(null));
 
-        long bit = toBit( UserCode.values());
+        long bit = toBit(UserCode.class, UserCode.values());
 
-        System.out.println(bitIn(bit,UserCode.SIMPLE,UserCode.TEST,UserCode.SIMPLE));
-
-        long bit2=toBit(UserCode.SIMPLE,UserCode.CODE0,UserCode.SIMPLE);
-
-        Assert.assertTrue(bitInAny(bit2,UserCode.SIMPLE,UserCode.CODE4,UserCode.CODE0));
-        Assert.assertFalse(bitInAny(bit2,UserCode.CODE1,UserCode.CODE4,UserCode.CODE5));
+        System.out.println(bit);
 
         for (UserCode userCode : UserCode.values()) {
             Assert.assertTrue(userCode.in(bit));
         }
 
         List<UserCode> codes = getByBit(UserCode.class, bit);
-
 
     }
 

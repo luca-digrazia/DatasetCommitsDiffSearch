@@ -89,7 +89,7 @@ public class EnumDictHandlerRegister {
         @Override
         public void setParameter(PreparedStatement ps, int i, Object[] parameter, JdbcType jdbcType) throws SQLException {
             T[] ts = ((T[]) parameter);
-            ps.setLong(i, EnumDict.toBit(ts));
+            ps.setLong(i, EnumDict.toBit(type, ts));
         }
 
         @Override
@@ -130,11 +130,7 @@ public class EnumDictHandlerRegister {
 
         @Override
         public void setParameter(PreparedStatement ps, int i, T parameter, JdbcType jdbcType) throws SQLException {
-            if(parameter==null){
-                ps.setNull(i,jdbcType.TYPE_CODE);
-            }else {
-                ps.setObject(i, parameter.getValue());
-            }
+            ps.setObject(i, parameter.getValue());
         }
 
         @Override
