@@ -46,6 +46,7 @@ public class MetricRegistry {
         }
     }
 
+    private final Clock clock;
     private final ConcurrentMap<String, Metric> metrics;
     private final List<MetricRegistryListener> listeners;
     private final String name;
@@ -56,10 +57,21 @@ public class MetricRegistry {
      * @param name the name of the registry
      */
     public MetricRegistry(String name) {
+        this(name, Clock.defaultClock());
+    }
+
+    /**
+     * Creates a new {@link MetricRegistry} with the given name and {@link Clock} instance.
+     *
+     * @param name  the name of the registry
+     * @param clock a {@link Clock} instance
+     */
+    public MetricRegistry(String name, Clock clock) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("A registry needs a name");
         }
         this.name = name;
+        this.clock = clock;
         this.metrics = new ConcurrentHashMap<String, Metric>();
         this.listeners = new CopyOnWriteArrayList<MetricRegistryListener>();
     }
@@ -293,6 +305,10 @@ public class MetricRegistry {
         return getMetrics(Timer.class, filter);
     }
 
+    Clock getClock() {
+        return clock;
+    }
+
     @SuppressWarnings("unchecked")
     private <T extends Metric> T getOrAdd(String name, MetricBuilder<T> builder) {
         final Metric metric = metrics.get(name);
@@ -300,7 +316,7 @@ public class MetricRegistry {
             return (T) metric;
         } else if (metric == null) {
             try {
-                return register(name, builder.newMetric());
+                return register(name, builder.newMetric(this));
             } catch (IllegalArgumentException e) {
                 final Metric added = metrics.get(name);
                 if (builder.isInstance(added)) {
@@ -383,7 +399,7 @@ public class MetricRegistry {
     private interface MetricBuilder<T extends Metric> {
         MetricBuilder<Counter> COUNTERS = new MetricBuilder<Counter>() {
             @Override
-            public Counter newMetric() {
+            public Counter newMetric(MetricRegistry registry) {
                 return new Counter();
             }
 
@@ -395,7 +411,7 @@ public class MetricRegistry {
 
         MetricBuilder<Histogram> HISTOGRAMS = new MetricBuilder<Histogram>() {
             @Override
-            public Histogram newMetric() {
+            public Histogram newMetric(MetricRegistry registry) {
                 return new Histogram(SampleType.BIASED);
             }
 
@@ -407,8 +423,8 @@ public class MetricRegistry {
 
         MetricBuilder<Meter> METERS = new MetricBuilder<Meter>() {
             @Override
-            public Meter newMetric() {
-                return new Meter();
+            public Meter newMetric(MetricRegistry registry) {
+                return new Meter(registry.getClock());
             }
 
             @Override
@@ -419,8 +435,8 @@ public class MetricRegistry {
 
         MetricBuilder<Timer> TIMERS = new MetricBuilder<Timer>() {
             @Override
-            public Timer newMetric() {
-                return new Timer();
+            public Timer newMetric(MetricRegistry registry) {
+                return new Timer(registry.getClock());
             }
 
             @Override
@@ -429,7 +445,7 @@ public class MetricRegistry {
             }
         };
 
-        T newMetric();
+        T newMetric(MetricRegistry registry);
 
         boolean isInstance(Metric metric);
     }
