@@ -56,6 +56,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.cpp.CcLibrary;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
@@ -420,7 +421,7 @@ public class BazelCppRuleClasses {
           </p>
           <ul>
             <li>C and C++ source files: <code>.c</code>, <code>.cc</code>, <code>.cpp</code>,
-              <code>.cxx</code>, <code>.c++</code, <code>.C</code></li>
+              <code>.cxx</code>, <code>.C</code></li>
             <li>C and C++ header files: <code>.h</code>, <code>.hh</code>, <code>.hpp</code>,
               <code>.hxx</code>, <code>.inc</code></li>
             <li>Assembler with C preprocessor: <code>.S</code></li>
@@ -766,7 +767,25 @@ public class BazelCppRuleClasses {
   public static final class CcLibraryRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+      SafeImplicitOutputsFunction implicitOutputsFunction = new SafeImplicitOutputsFunction() {
+        @Override
+        public Iterable<String> getImplicitOutputs(AttributeMap rule) {
+          boolean alwaysLink = rule.get("alwayslink", Type.BOOLEAN);
+          boolean linkstatic = rule.get("linkstatic", Type.BOOLEAN);
+          SafeImplicitOutputsFunction staticLib = fromTemplates(
+              alwaysLink
+                  ? "%{dirname}lib%{basename}.lo"
+                  : "%{dirname}lib%{basename}.a");
+          SafeImplicitOutputsFunction allLibs =
+              linkstatic || CcLibrary.appearsToHaveNoObjectFiles(rule)
+              ? staticLib
+              : fromFunctions(staticLib, CC_LIBRARY_DYNAMIC_LIB);
+          return allLibs.getImplicitOutputs(rule);
+        }
+      };
+
       return builder
+          .setImplicitOutputsFunction(implicitOutputsFunction)
           // TODO: Google cc_library overrides documentation for:
           // deps, data, linkopts, defines, srcs; override here too?
 
@@ -883,20 +902,16 @@ cc_library(
   not <code>baz.h</code>.
 </p>
 
-<table class="table table-striped table-bordered table-condensed">
-  <thead>
-    <tr><th>Including file</th><th>Allowed inclusions</th></tr>
-  </thead>
-  <tbody>
-    <tr><td>foo.h</td><td>bar.h</td></tr>
-    <tr><td>foo.cc</td><td>foo.h bar.h</td></tr>
-    <tr><td>bar.h</td><td>bar-impl.h baz.h</td></tr>
-    <tr><td>bar-impl.h</td><td>bar.h baz.h</td></tr>
-    <tr><td>bar.cc</td><td>bar.h bar-impl.h baz.h</td></tr>
-    <tr><td>baz.h</td><td>baz-impl.h</td></tr>
-    <tr><td>baz-impl.h</td><td>baz.h</td></tr>
-    <tr><td>baz.cc</td><td>baz.h baz-impl.h</td></tr>
-  </tbody>
+<table class="grid">
+  <tr><th>Including file</th><th>Allowed inclusions</th></tr>
+  <tr><td>foo.h</td><td>bar.h</td></tr>
+  <tr><td>foo.cc</td><td>foo.h bar.h</td></tr>
+  <tr><td>bar.h</td><td>bar-impl.h baz.h</td></tr>
+  <tr><td>bar-impl.h</td><td>bar.h baz.h</td></tr>
+  <tr><td>bar.cc</td><td>bar.h bar-impl.h baz.h</td></tr>
+  <tr><td>baz.h</td><td>baz-impl.h</td></tr>
+  <tr><td>baz-impl.h</td><td>baz.h</td></tr>
+  <tr><td>baz.cc</td><td>baz.h baz-impl.h</td></tr>
 </table>
 
 <p>
