@@ -152,7 +152,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -340,9 +339,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Predicate<PathFragment> allowedMissingInputs) {
     ConfiguredRuleClassProvider ruleClassProvider =
         (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
-    // TODO(janakr): use this semaphore to bound memory usage for SkyFunctions besides
-    // ConfiguredTargetFunction that may have a large temporary memory blow-up.
-    Semaphore cpuBoundSemaphore = new Semaphore(ResourceUsage.getAvailableProcessors());
     // We use an immutable map builder for the nice side effect that it throws if a duplicate key
     // is inserted.
     ImmutableMap.Builder<SkyFunctionName, SkyFunction> map = ImmutableMap.builder();
@@ -397,10 +393,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.TARGET_MARKER, new TargetMarkerFunction());
     map.put(SkyFunctions.TRANSITIVE_TARGET, new TransitiveTargetFunction(ruleClassProvider));
     map.put(SkyFunctions.TRANSITIVE_TRAVERSAL, new TransitiveTraversalFunction());
-    map.put(
-        SkyFunctions.CONFIGURED_TARGET,
-        new ConfiguredTargetFunction(
-            new BuildViewProvider(), ruleClassProvider, cpuBoundSemaphore));
+    map.put(SkyFunctions.CONFIGURED_TARGET,
+        new ConfiguredTargetFunction(new BuildViewProvider(), ruleClassProvider));
     map.put(SkyFunctions.ASPECT, new AspectFunction(new BuildViewProvider(), ruleClassProvider));
     map.put(SkyFunctions.LOAD_SKYLARK_ASPECT, new ToplevelSkylarkAspectFunction());
     map.put(SkyFunctions.POST_CONFIGURED_TARGET,
@@ -1467,12 +1461,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public abstract void invalidateTransientErrors();
 
   /** Configures a given set of configured targets. */
-  EvaluationResult<ActionLookupValue> configureTargets(
+  public EvaluationResult<ActionLookupValue> configureTargets(
       EventHandler eventHandler,
       List<ConfiguredTargetKey> values,
       List<AspectValueKey> aspectKeys,
-      boolean keepGoing,
-      int numThreads)
+      boolean keepGoing)
       throws InterruptedException {
     checkActive();
 
@@ -1480,7 +1473,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     for (AspectValueKey aspectKey : aspectKeys) {
       keys.add(aspectKey.getSkyKey());
     }
-    return buildDriver.evaluate(keys, keepGoing, numThreads, eventHandler);
+    // Make sure to not run too many analysis threads. This can cause memory thrashing.
+    return buildDriver.evaluate(keys, keepGoing, ResourceUsage.getAvailableProcessors(),
+        eventHandler);
   }
 
   /**
