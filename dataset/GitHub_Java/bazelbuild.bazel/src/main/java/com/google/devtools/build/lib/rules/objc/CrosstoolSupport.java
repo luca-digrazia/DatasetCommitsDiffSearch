@@ -130,7 +130,6 @@ public class CrosstoolSupport {
    *
    * @param common the common instance that hsould be queried in the construction of a fully link
    *     action
-   * @return providers that should be exported by the calling rule implementation
    */
   public void registerFullyLinkAction(ObjcCommon common) throws InterruptedException {
     Artifact fullyLinkedArchive =
@@ -179,7 +178,7 @@ public class CrosstoolSupport {
     if (ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
       activatedCrosstoolSelectables.add("pch");
     }
-
+ 
     return toolchain.getFeatures().getFeatureConfiguration(activatedCrosstoolSelectables.build());
   }
 
@@ -196,8 +195,7 @@ public class CrosstoolSupport {
         (pchHdr != null) ? ImmutableList.<Artifact>of(pchHdr) : ImmutableList.<Artifact>of();
     return new CcLibraryHelper(
             ruleContext,
-            new ObjcCppSemantics(
-                common.getObjcProvider(), ruleContext.getFragment(ObjcConfiguration.class)),
+            new ObjcCppSemantics(common.getObjcProvider()),
             featureConfiguration,
             CcLibraryHelper.SourceCategory.CC_AND_OBJC)
         .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
