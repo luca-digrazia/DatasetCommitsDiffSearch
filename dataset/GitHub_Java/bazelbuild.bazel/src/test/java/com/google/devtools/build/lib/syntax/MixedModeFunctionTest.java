@@ -1,4 +1,4 @@
-// Copyright 2006 Google Inc. All Rights Reserved.
+// Copyright 2006-2015 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -65,7 +66,7 @@ public class MixedModeFunctionTest extends AbstractEvaluationTestCase {
         eval(callExpression, env);
         fail();
       } catch (EvalException e) {
-        assertEquals(expectedOutput, e.getMessage());
+        assertThat(e).hasMessage(expectedOutput);
       }
     }
   }

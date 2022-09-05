@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,12 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
-import java.util.Arrays;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
 
 /**
  * Tests for the {@link CommandBuilder} class.
@@ -37,14 +39,12 @@ public class CommandBuilderTest {
   }
 
   private void assertArgv(CommandBuilder builder, String... expected) {
-    assertThat(builder.build().getCommandLineElements())
-        .asList()
-        .containsExactlyElementsIn(Arrays.asList(expected))
-        .inOrder();
+    assertThat(Arrays.asList(builder.build().getCommandLineElements())).containsExactlyElementsIn(
+        Arrays.asList(expected)).inOrder();
   }
 
   private void assertWinCmdArgv(CommandBuilder builder, String expected) {
-    assertArgv(builder, "CMD.EXE", "/S", "/E:ON", "/V:ON", "/D", "/C", expected);
+    assertArgv(builder, "CMD.EXE", "/S", "/E:ON", "/V:ON", "/D", "/C", "\"" + expected + "\"");
   }
 
   private void assertFailure(CommandBuilder builder, String expected) {

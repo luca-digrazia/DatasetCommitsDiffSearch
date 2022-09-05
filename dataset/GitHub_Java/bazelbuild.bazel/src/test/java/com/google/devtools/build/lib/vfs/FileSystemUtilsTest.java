@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
+
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.vfs.FileSystemUtils.appendWithoutExtension;
 import static com.google.devtools.build.lib.vfs.FileSystemUtils.commonAncestor;
@@ -67,7 +68,7 @@ public class FileSystemUtilsTest {
   private Path workingDir;
 
   @Before
-  public final void initializeFileSystem() throws Exception  {
+  public void setUp() throws Exception {
     clock = new ManualClock();
     fileSystem = new InMemoryFileSystem(clock);
     workingDir = fileSystem.getPath("/workingDir");

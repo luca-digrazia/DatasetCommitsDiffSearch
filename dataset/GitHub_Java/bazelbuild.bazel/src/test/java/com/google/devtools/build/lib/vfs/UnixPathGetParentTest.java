@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,14 +37,14 @@ public class UnixPathGetParentTest {
   private Path testRoot;
 
   @Before
-  public final void createTestRoot() throws Exception  {
+  public void setUp() throws Exception {
     unixFs = FileSystems.initDefaultAsNative();
     testRoot = unixFs.getPath(TestUtils.tmpDir()).getRelative("UnixPathGetParentTest");
     FileSystemUtils.createDirectoryAndParents(testRoot);
   }
 
   @After
-  public final void deleteTestRoot() throws Exception  {
+  public void tearDown() throws Exception {
     FileSystemUtils.deleteTree(testRoot); // (comment out during debugging)
   }
 

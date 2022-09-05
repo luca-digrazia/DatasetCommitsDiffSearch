@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ public class RootTest {
     Path rootDir = scratch.dir("/exec/root");
     Root root = Root.asDerivedRoot(execRoot, rootDir);
     assertFalse(root.isSourceRoot());
-    assertEquals(PathFragment.create("root"), root.getExecPath());
+    assertEquals(new PathFragment("root"), root.getExecPath());
     assertEquals(rootDir, root.getPath());
     assertEquals("/exec/root[derived]", root.toString());
   }

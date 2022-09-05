@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,7 +39,7 @@ public class LoadTest {
   private File tempFile;
 
   @Before
-  public final void createTempFile() throws Exception  {
+  public void setUp() throws IOException {
     // enable all log statements to ensure there are no problems with
     // logging code
     Logger.getLogger("com.google.devtools.build.lib.shell.Command").setLevel(Level.FINEST);
@@ -60,7 +61,7 @@ public class LoadTest {
   }
 
   @After
-  public final void deleteTempFile() throws Exception  {
+  public void tearDown() throws Exception {
     tempFile.delete();
   }
 

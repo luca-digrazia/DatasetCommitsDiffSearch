@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,32 +17,24 @@ package com.google.devtools.build.lib.testutil;
 import static com.google.common.truth.Truth.assertWithMessage;
 
 /**
- * Test thread implementation that allows the use of assertions within spawned threads.
+ * Test thread implementation that allows the use of assertions within
+ * spawned threads.
  *
- * <p>Main test method must call {@link TestThread#joinAndAssertState(long)} for each spawned test
- * thread.
+ * Main test method must call {@link TestThread#joinAndAssertState(long)}
+ * for each spawned test thread.
  */
-public final class TestThread extends Thread {
-  private final TestRunnable runnable;
+public abstract class TestThread extends Thread {
+  Throwable testException = null;
+  boolean isSucceeded = false;
 
-  private Throwable testException = null;
-  private boolean isSucceeded = false;
+  /**
+   * Specific test thread implementation overrides this method.
+   */
+  abstract public void runTest() throws Exception;
 
-  /** Same as a {@link Runnable} but allowed to throw any exception. */
-  @FunctionalInterface
-  public interface TestRunnable {
-    void run() throws Exception;
-  }
-
-  /** Constructs a new test thread that will run the given runnable. */
-  public TestThread(TestRunnable runnable) {
-    this.runnable = runnable;
-  }
-
-  @Override
-  public void run() {
+  @Override public final void run() {
     try {
-      runnable.run();
+      runTest();
       isSucceeded = true;
     } catch (Exception | AssertionError e) {
       testException = e;

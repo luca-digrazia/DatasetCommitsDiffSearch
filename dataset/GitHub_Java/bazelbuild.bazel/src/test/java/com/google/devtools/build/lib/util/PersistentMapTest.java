@@ -18,8 +18,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.util.FsApparatus;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -75,7 +75,7 @@ public class PersistentMapTest {
     }
   }
 
-  private Scratch scratch = new Scratch();
+  private FsApparatus scratch = FsApparatus.newInMemory();
 
   private PersistentStringMap map;
   private Path mapFile;
@@ -83,8 +83,8 @@ public class PersistentMapTest {
 
   @Before
   public void setUp() throws Exception {
-    mapFile = scratch.resolve("/tmp/map.txt");
-    journalFile = scratch.resolve("/tmp/journal.txt");
+    mapFile = scratch.fs().getPath("/tmp/map.txt");
+    journalFile = scratch.fs().getPath("/tmp/journal.txt");
     createMap();
   }
 

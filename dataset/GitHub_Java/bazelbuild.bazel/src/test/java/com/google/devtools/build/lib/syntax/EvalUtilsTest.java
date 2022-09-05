@@ -66,7 +66,7 @@ public class EvalUtilsTest {
     assertEquals("List",  EvalUtils.getDataTypeName(makeList(1, 2, 3)));
     assertEquals("dict",  EvalUtils.getDataTypeName(makeDict()));
     assertEquals("FilesetEntry",  EvalUtils.getDataTypeName(makeFilesetEntry()));
-    assertEquals("NoneType", EvalUtils.getDataTypeName(Environment.NONE));
+    assertEquals("None", EvalUtils.getDataTypeName(Environment.NONE));
   }
 
   @Test

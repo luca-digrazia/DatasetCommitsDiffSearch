@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ public class ExecutableSymlinkActionTest {
   private Executor executor;
 
   @Before
-  public final void createExecutor() throws Exception  {
+  public void setUp() throws Exception {
     final Path inputDir = scratch.dir("/in");
     inputRoot = Root.asDerivedRoot(inputDir);
     outputRoot = Root.asDerivedRoot(scratch.dir("/out"));

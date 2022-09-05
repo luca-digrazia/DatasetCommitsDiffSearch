@@ -236,6 +236,12 @@ public abstract class FileSystemTest {
     return (savedTime <= testTime);
   }
 
+  Path getTestFile() throws IOException {
+    Path tempPath = absolutize("test-file");
+    FileSystemUtils.createEmptyFile(tempPath);
+    return tempPath;
+  }
+
   protected Path absolutize(String relativePathName) {
     return workingDir.getRelative(relativePathName);
   }
@@ -940,7 +946,7 @@ public abstract class FileSystemTest {
   }
 
   @Test
-  public void testOutputStreamThrowExceptionOnDirectory() throws Exception {
+  public void testInpuStreamThrowExceptionOnDirectory() throws Exception {
     try {
       xEmptyDirectory.getOutputStream();
       fail("The Exception was not thrown!");
@@ -950,7 +956,7 @@ public abstract class FileSystemTest {
   }
 
   @Test
-  public void testInputStreamThrowExceptionOnDirectory() throws Exception {
+  public void testOutputStreamThrowExceptionOnDirectory() throws Exception {
     try {
       xEmptyDirectory.getInputStream();
       fail("The Exception was not thrown!");

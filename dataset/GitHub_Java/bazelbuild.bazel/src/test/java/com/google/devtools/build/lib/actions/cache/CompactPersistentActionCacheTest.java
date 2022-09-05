@@ -14,8 +14,6 @@
 package com.google.devtools.build.lib.actions.cache;
 
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -160,25 +158,6 @@ public class CompactPersistentActionCacheTest {
     entry.toString();
     entry.getFileDigest();
     entry.toString();
-  }
-
-  private void assertToStringIsntTooBig(int numRecords) throws Exception {
-    for (int i = 0; i < numRecords; i++) {
-      putKey(Integer.toString(i));
-    }
-    String val = cache.toString();
-    assertThat(val).startsWith("Action cache (" + numRecords + " records):\n");
-    assertWithMessage(val).that(val.length()).isAtMost(2000);
-    // Cache was too big to print out fully.
-    if (numRecords > 10) {
-      assertThat(val).endsWith("...");
-    }
-  }
-
-  @Test
-  public void testToStringIsntTooBig() throws Exception {
-    assertToStringIsntTooBig(3);
-    assertToStringIsntTooBig(3000);
   }
 
   private static void assertKeyEquals(ActionCache cache1, ActionCache cache2, String key) {

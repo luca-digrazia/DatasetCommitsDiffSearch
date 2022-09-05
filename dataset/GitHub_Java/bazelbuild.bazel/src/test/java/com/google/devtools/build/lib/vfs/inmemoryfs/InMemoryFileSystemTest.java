@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -394,8 +394,8 @@ public class InMemoryFileSystemTest extends ScopeEscapableFileSystemTest {
   public void testEloop() throws Exception {
     Path a = testFS.getPath("/a");
     Path b = testFS.getPath("/b");
-    a.createSymbolicLink(PathFragment.create("b"));
-    b.createSymbolicLink(PathFragment.create("a"));
+    a.createSymbolicLink(new PathFragment("b"));
+    b.createSymbolicLink(new PathFragment("a"));
     try {
       a.stat();
     } catch (IOException e) {
@@ -406,7 +406,7 @@ public class InMemoryFileSystemTest extends ScopeEscapableFileSystemTest {
   @Test
   public void testEloopSelf() throws Exception {
     Path a = testFS.getPath("/a");
-    a.createSymbolicLink(PathFragment.create("a"));
+    a.createSymbolicLink(new PathFragment("a"));
     try {
       a.stat();
     } catch (IOException e) {

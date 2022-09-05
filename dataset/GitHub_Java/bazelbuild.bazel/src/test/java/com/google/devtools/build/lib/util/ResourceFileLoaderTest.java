@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
 package com.google.devtools.build.lib.util;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import java.io.IOException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
 
 /**
  * A test for {@link ResourceFileLoader}.
@@ -31,7 +33,7 @@ public class ResourceFileLoaderTest {
   public void loader() throws IOException {
     String message = ResourceFileLoader.loadResource(
         ResourceFileLoaderTest.class, "ResourceFileLoaderTest.message");
-    assertThat(message).isEqualTo("Hello, world.");
+    assertEquals("Hello, world.", message);
   }
 
   @Test

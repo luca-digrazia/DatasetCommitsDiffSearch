@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,20 +134,19 @@ public class ConcurrentMultimapWithHeadElementTest {
     private final AtomicInteger actionCount = new AtomicInteger(0);
 
     private StressTester() {
-      super(/*concurrent=*/true, 200, 1, TimeUnit.SECONDS,
+      super(/*concurrent=*/true, 200, 200, 1, TimeUnit.SECONDS,
           /*failFastOnException=*/true, /*failFastOnInterrupt=*/true, "action-graph-test");
     }
 
     private void addAndRemove(final Boolean key, final Integer add, final Integer remove) {
-      execute(
-          new Runnable() {
-            @Override
-            public void run() {
-              assertNotNull(multimap.putAndGet(key, add));
-              multimap.remove(key, remove);
-              doRandom();
-            }
-          });
+      enqueue(new Runnable() {
+        @Override
+        public void run() {
+          assertNotNull(multimap.putAndGet(key, add));
+          multimap.remove(key, remove);
+          doRandom();
+        }
+      });
     }
 
     private Integer getRandomInt() {
@@ -163,7 +162,7 @@ public class ConcurrentMultimapWithHeadElementTest {
     }
 
     private void work() throws InterruptedException {
-      awaitQuiescence(/*interruptWorkers=*/ true);
+      work(/*failFastOnInterrupt=*/true);
     }
   }
 

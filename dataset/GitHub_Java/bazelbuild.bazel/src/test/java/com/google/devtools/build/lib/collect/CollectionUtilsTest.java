@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,11 @@
 package com.google.devtools.build.lib.collect;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -23,13 +28,15 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link CollectionUtils}.
@@ -49,37 +56,37 @@ public class CollectionUtilsTest {
   }
 
   private static void assertDups(List<Integer> collection, Set<Integer> dups) {
-    assertThat(CollectionUtils.duplicatedElementsOf(collection)).isEqualTo(dups);
+    assertEquals(dups, CollectionUtils.duplicatedElementsOf(collection));
   }
 
   @Test
   public void testIsImmutable() throws Exception {
-    assertThat(CollectionUtils.isImmutable(ImmutableList.of(1, 2, 3))).isTrue();
-    assertThat(CollectionUtils.isImmutable(ImmutableSet.of(1, 2, 3))).isTrue();
+    assertTrue(CollectionUtils.isImmutable(ImmutableList.of(1, 2, 3)));
+    assertTrue(CollectionUtils.isImmutable(ImmutableSet.of(1, 2, 3)));
 
     NestedSet<Integer> ns = NestedSetBuilder.<Integer>compileOrder()
         .add(1).add(2).add(3).build();
-    assertThat(CollectionUtils.isImmutable(ns)).isTrue();
+    assertTrue(CollectionUtils.isImmutable(ns));
 
     NestedSet<Integer> ns2 = NestedSetBuilder.<Integer>linkOrder().add(1).add(2).add(3).build();
-    assertThat(CollectionUtils.isImmutable(ns2)).isTrue();
+    assertTrue(CollectionUtils.isImmutable(ns2));
 
-    Iterable<Integer> chain = IterablesChain.<Integer>builder().addElement(1).build();
+    IterablesChain<Integer> chain = IterablesChain.<Integer>builder().addElement(1).build();
 
-    assertThat(CollectionUtils.isImmutable(chain)).isTrue();
+    assertTrue(CollectionUtils.isImmutable(chain));
 
-    assertThat(CollectionUtils.isImmutable(Lists.newArrayList())).isFalse();
-    assertThat(CollectionUtils.isImmutable(Lists.newLinkedList())).isFalse();
-    assertThat(CollectionUtils.isImmutable(Sets.newHashSet())).isFalse();
-    assertThat(CollectionUtils.isImmutable(Sets.newLinkedHashSet())).isFalse();
+    assertFalse(CollectionUtils.isImmutable(Lists.newArrayList()));
+    assertFalse(CollectionUtils.isImmutable(Lists.newLinkedList()));
+    assertFalse(CollectionUtils.isImmutable(Sets.newHashSet()));
+    assertFalse(CollectionUtils.isImmutable(Sets.newLinkedHashSet()));
 
     // The result of Iterables.concat() actually is immutable, but we have no way of checking if
     // a given Iterable comes from concat().
-    assertThat(CollectionUtils.isImmutable(Iterables.concat(ns, ns2))).isFalse();
+    assertFalse(CollectionUtils.isImmutable(Iterables.concat(ns, ns2)));
 
     // We can override the check by using the ImmutableIterable wrapper.
-    assertThat(CollectionUtils.isImmutable(ImmutableIterable.from(Iterables.concat(ns, ns2))))
-        .isTrue();
+    assertTrue(CollectionUtils.isImmutable(
+        ImmutableIterable.from(Iterables.concat(ns, ns2))));
   }
 
   @Test
@@ -98,12 +105,12 @@ public class CollectionUtilsTest {
   @Test
   public void testMakeImmutable() throws Exception {
     Iterable<Integer> immutableList = ImmutableList.of(1, 2, 3);
-    assertThat(CollectionUtils.makeImmutable(immutableList)).isSameAs(immutableList);
+    assertSame(immutableList, CollectionUtils.makeImmutable(immutableList));
 
     Iterable<Integer> mutableList = Lists.newArrayList(1, 2, 3);
     Iterable<Integer> converted = CollectionUtils.makeImmutable(mutableList);
-    assertThat(converted).isNotSameAs(mutableList);
-    assertThat(ImmutableList.copyOf(converted)).isEqualTo(mutableList);
+    assertNotSame(mutableList, converted);
+    assertEquals(mutableList, ImmutableList.copyOf(converted));
   }
 
   private static enum Small { ALPHA, BRAVO }
@@ -132,7 +139,7 @@ public class CollectionUtilsTest {
     for (int i = 0; i < maxBits; i++) {
       EnumSet<T> set = CollectionUtils.fromBits(i, clazz);
       int back = CollectionUtils.toBits(set);
-      assertThat(i).isEqualTo(back); // Assert that a roundtrip is idempotent
+      assertEquals(back, i);  // Assert that a roundtrip is idempotent
       allSets.add(set);
     }
 
@@ -141,12 +148,12 @@ public class CollectionUtilsTest {
 
   @Test
   public void testEnumBitfields() throws Exception {
-    assertThat(CollectionUtils.<Small>toBits()).isEqualTo(0);
-    assertThat(CollectionUtils.fromBits(0, Small.class)).isEqualTo(EnumSet.noneOf(Small.class));
-    assertThat(CollectionUtils.toBits(Small.ALPHA, Small.BRAVO)).isEqualTo(3);
-    assertThat(CollectionUtils.toBits(Medium.TWO, Medium.FOUR)).isEqualTo(10);
-    assertThat(CollectionUtils.fromBits(192, Medium.class))
-        .isEqualTo(EnumSet.of(Medium.SEVEN, Medium.EIGHT));
+    assertEquals(0, CollectionUtils.<Small>toBits());
+    assertEquals(EnumSet.noneOf(Small.class), CollectionUtils.fromBits(0, Small.class));
+    assertEquals(3, CollectionUtils.toBits(Small.ALPHA, Small.BRAVO));
+    assertEquals(10, CollectionUtils.toBits(Medium.TWO, Medium.FOUR));
+    assertEquals(EnumSet.of(Medium.SEVEN, Medium.EIGHT),
+        CollectionUtils.fromBits(192, Medium.class));
 
     assertAllDifferent(Small.class);
     assertAllDifferent(Medium.class);

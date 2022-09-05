@@ -43,14 +43,12 @@ public class BlazeTestUtils {
 
     Path runfiles = directories.getFileSystem().getPath(BlazeTestUtils.runfilesDir());
     // Copy over everything in embedded_scripts.
+    Path embeddedScripts = runfiles.getRelative(TestConstants.EMBEDDED_SCRIPTS_PATH);
     Collection<Path> files = new ArrayList<>();
-    for (String embeddedScriptPath : TestConstants.EMBEDDED_SCRIPTS_PATHS) {
-      Path embeddedScripts = runfiles.getRelative(embeddedScriptPath);
-      if (embeddedScripts.exists()) {
-        files.addAll(embeddedScripts.getDirectoryEntries());
-      } else {
-        System.err.println("test does not have " + embeddedScripts);
-      }
+    if (embeddedScripts.exists()) {
+      files.addAll(embeddedScripts.getDirectoryEntries());
+    } else {
+      System.err.println("test does not have " + embeddedScripts);
     }
 
     for (Path fromFile : files) {

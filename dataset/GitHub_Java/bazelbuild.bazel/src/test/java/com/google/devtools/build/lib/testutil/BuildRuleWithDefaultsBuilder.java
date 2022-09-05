@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,15 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.testutil;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -57,7 +56,7 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
    */
   private String getDummyFileLabel(String rulePkg, String filePkg, String extension,
       Type<?> attrType) {
-    boolean isInput = (attrType == BuildType.LABEL || attrType == BuildType.LABEL_LIST);
+    boolean isInput = (attrType == Type.LABEL || attrType == Type.LABEL_LIST);
     String fileName = (isInput ? "dummy_input" : "dummy_output") + extension;
     generateFiles.add(filePkg + "/" + fileName);
     if (rulePkg.equals(filePkg)) {
@@ -75,20 +74,20 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
     BuildRuleWithDefaultsBuilder builder = new BuildRuleWithDefaultsBuilder(
         referencedRuleClass.getName(), referencedRuleName, ruleClassMap, generateFiles,
         generateRules);
-    builder.populateAttributes(rulePkg, true);
+    builder.popuplateAttributes(rulePkg, true);
     generateRules.put(referencedRuleClass.getName(), builder);
     return referencedRuleName;
   }
 
-  public BuildRuleWithDefaultsBuilder populateLabelAttribute(String pkg, Attribute attribute) {
-    return populateLabelAttribute(pkg, pkg, attribute);
+  public BuildRuleWithDefaultsBuilder popuplateLabelAttribute(String pkg, Attribute attribute) {
+    return popuplateLabelAttribute(pkg, pkg, attribute);
   }
 
   /**
    * Populates the label type attribute with generated values. Populates with a file if possible, or
    * generates an appropriate rule. Note, that the rules are always generated in the same package.
    */
-  public BuildRuleWithDefaultsBuilder populateLabelAttribute(String rulePkg, String filePkg,
+  public BuildRuleWithDefaultsBuilder popuplateLabelAttribute(String rulePkg, String filePkg,
       Attribute attribute) {
     Type<?> attrType = attribute.getType();
     String label = null;
@@ -122,7 +121,7 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
       }
     }
     if (label != null) {
-      if (attrType == BuildType.LABEL_LIST || attrType == BuildType.OUTPUT_LIST) {
+      if (attrType == Type.LABEL_LIST || attrType == Type.OUTPUT_LIST) {
         addMultiValueAttributes(attribute.getName(), label);
       } else {
         setSingleValueAttribute(attribute.getName(), label);
@@ -152,41 +151,39 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
     return null;
   }
 
-  public BuildRuleWithDefaultsBuilder populateStringListAttribute(Attribute attribute) {
+  public BuildRuleWithDefaultsBuilder popuplateStringListAttribute(Attribute attribute) {
     addMultiValueAttributes(attribute.getName(), "x");
     return this;
   }
 
-  public BuildRuleWithDefaultsBuilder populateStringAttribute(Attribute attribute) {
+  public BuildRuleWithDefaultsBuilder popuplateStringAttribute(Attribute attribute) {
     setSingleValueAttribute(attribute.getName(), "x");
     return this;
   }
 
-  public BuildRuleWithDefaultsBuilder populateBooleanAttribute(Attribute attribute) {
+  public BuildRuleWithDefaultsBuilder popuplateBooleanAttribute(Attribute attribute) {
     setSingleValueAttribute(attribute.getName(), "false");
     return this;
   }
 
-  public BuildRuleWithDefaultsBuilder populateIntegerAttribute(Attribute attribute) {
+  public BuildRuleWithDefaultsBuilder popuplateIntegerAttribute(Attribute attribute) {
     setSingleValueAttribute(attribute.getName(), 1);
     return this;
   }
 
-  public BuildRuleWithDefaultsBuilder populateAttributes(String rulePkg, boolean heuristics) {
+  public BuildRuleWithDefaultsBuilder popuplateAttributes(String rulePkg, boolean heuristics) {
     for (Attribute attribute : ruleClass.getAttributes()) {
       if (attribute.isMandatory()) {
-        if (attribute.getType() == BuildType.LABEL_LIST
-            || attribute.getType() == BuildType.OUTPUT_LIST) {
+        if (attribute.getType() == Type.LABEL_LIST || attribute.getType() == Type.OUTPUT_LIST) {
           if (attribute.isNonEmpty()) {
-            populateLabelAttribute(rulePkg, attribute);
+            popuplateLabelAttribute(rulePkg, attribute);
           } else {
             // TODO(bazel-team): actually here an empty list would be fine, but BuildRuleBuilder
             // doesn't support that, and it makes little sense anyway
-            populateLabelAttribute(rulePkg, attribute);
+            popuplateLabelAttribute(rulePkg, attribute);
           }
-        } else if (attribute.getType() == BuildType.LABEL
-            || attribute.getType() == BuildType.OUTPUT) {
-          populateLabelAttribute(rulePkg, attribute);
+        } else if (attribute.getType() == Type.LABEL || attribute.getType() == Type.OUTPUT) {
+          popuplateLabelAttribute(rulePkg, attribute);
         } else {
           // Non label type attributes
           if (attribute.getAllowedValues() instanceof AllowedValueSet) {
@@ -194,13 +191,13 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
                 ((AllowedValueSet) attribute.getAllowedValues()).getAllowedValues();
             setSingleValueAttribute(attribute.getName(), allowedValues.iterator().next());
           } else if (attribute.getType() == Type.STRING) {
-            populateStringAttribute(attribute);
+            popuplateStringAttribute(attribute);
           } else if (attribute.getType() == Type.BOOLEAN) {
-            populateBooleanAttribute(attribute);
+            popuplateBooleanAttribute(attribute);
           } else if (attribute.getType() == Type.INTEGER) {
-            populateIntegerAttribute(attribute);
+            popuplateIntegerAttribute(attribute);
           } else if (attribute.getType() == Type.STRING_LIST) {
-            populateStringListAttribute(attribute);
+            popuplateStringListAttribute(attribute);
           }
         }
         // TODO(bazel-team): populate for other data types
@@ -214,11 +211,11 @@ public class BuildRuleWithDefaultsBuilder extends BuildRuleBuilder {
   // Heuristics which might help to generate valid rules.
   // This is a bit hackish, but it helps some generated ruleclasses to pass analysis phase.
   private void populateAttributesHeuristics(String rulePkg, Attribute attribute) {
-    if (attribute.getName().equals("srcs") && attribute.getType() == BuildType.LABEL_LIST) {
+    if (attribute.getName().equals("srcs") && attribute.getType() == Type.LABEL_LIST) {
       // If there is a srcs attribute it might be better to populate it even if it's not mandatory
-      populateLabelAttribute(rulePkg, attribute);
+      popuplateLabelAttribute(rulePkg, attribute);
     } else if (attribute.getName().equals("main_class") && attribute.getType() == Type.STRING) {
-      populateStringAttribute(attribute);
+      popuplateStringAttribute(attribute);
     }
   }
 

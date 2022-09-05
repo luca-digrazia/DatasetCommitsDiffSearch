@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 
@@ -218,7 +219,7 @@ public class RecursiveGlobTest {
           .globInterruptible();
       fail();
     } catch (IllegalArgumentException e) {
-      assertThat(e.getMessage()).containsMatch("recursive wildcard must be its own segment");
+      MoreAsserts.assertContainsRegex("recursive wildcard must be its own segment", e.getMessage());
     }
   }
 

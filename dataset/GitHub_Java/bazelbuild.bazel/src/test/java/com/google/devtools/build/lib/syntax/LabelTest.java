@@ -19,7 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -53,14 +53,9 @@ public class LabelTest {
       assertEquals("foo/bar", l.getPackageName());
       assertEquals("bar", l.getName());
     }
-    {
-      Label l = Label.parseAbsolute("//:bar");
-      assertEquals("", l.getPackageName());
-      assertEquals("bar", l.getName());
-    }
   }
 
-  private static String parseCommandLine(String label, String prefix) throws LabelSyntaxException {
+  private static String parseCommandLine(String label, String prefix) throws SyntaxException {
     return Label.parseCommandLineLabel(label, new PathFragment(prefix)).toString();
   }
 
@@ -91,7 +86,7 @@ public class LabelTest {
     try {
       parseCommandLine("//absolute:A+bad%syntax", "");
       fail();
-    } catch (LabelSyntaxException e) {
+    } catch (SyntaxException e) {
       // Expected exception
     }
   }
@@ -112,25 +107,25 @@ public class LabelTest {
     try {
       base.getRelative("/p1/p2:target");
       fail();
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       /* ok */
     }
     try {
       base.getRelative("quux:");
       fail();
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       /* ok */
     }
     try {
       base.getRelative(":");
       fail();
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       /* ok */
     }
     try {
       base.getRelative("::");
       fail();
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       /* ok */
     }
   }
@@ -186,7 +181,7 @@ public class LabelTest {
     try {
       Label.parseAbsolute(label);
       fail("Label '" + label + "' did not contain a syntax error");
-    } catch (LabelSyntaxException e) {
+    } catch (SyntaxException e) {
       assertContainsRegex(Pattern.quote(expectedError), e.getMessage());
     }
   }
@@ -239,6 +234,8 @@ public class LabelTest {
                       "//foo/./baz:baz");
     assertSyntaxError(BAD_PACKAGE_CHARS,
                       "//./bar/baz:baz");
+    assertSyntaxError(BAD_PACKAGE_CHARS,
+                      "//.:foo");
     assertSyntaxError("target names may not contain '.' as a path segment",
                       "//foo:bar/./baz");
     assertSyntaxError("target names may not contain '.' as a path segment",
@@ -260,6 +257,7 @@ public class LabelTest {
   public void testSomeOtherBadLabels() throws Exception {
     assertSyntaxError("package names may not end with '/'",
                       "//foo/:bar");
+    assertSyntaxError("empty package name", "//:foo");
     assertSyntaxError("package names may not start with '/'", "///p:foo");
     assertSyntaxError("package names may not contain '//' path separators",
                       "//a//b:foo");
@@ -343,22 +341,22 @@ public class LabelTest {
 
   @Test
   public void testRepoLabel() throws Exception {
-    Label label = Label.parseAbsolute("@foo//bar/baz:bat/boo");
+    Label label = Label.parseRepositoryLabel("@foo//bar/baz:bat/boo");
     assertEquals("@foo//bar/baz:bat/boo", label.toString());
   }
 
   @Test
   public void testNoRepo() throws Exception {
-    Label label = Label.parseAbsolute("//bar/baz:bat/boo");
+    Label label = Label.parseRepositoryLabel("//bar/baz:bat/boo");
     assertEquals("//bar/baz:bat/boo", label.toString());
   }
 
   @Test
   public void testInvalidRepo() throws Exception {
     try {
-      Label.parseAbsolute("foo//bar/baz:bat/boo");
+      Label.parseRepositoryLabel("foo//bar/baz:bat/boo");
       fail();
-    } catch (LabelSyntaxException e) {
+    } catch (SyntaxException e) {
       assertThat(e).hasMessage("invalid repository name 'foo': workspace name must start with '@'");
     }
   }

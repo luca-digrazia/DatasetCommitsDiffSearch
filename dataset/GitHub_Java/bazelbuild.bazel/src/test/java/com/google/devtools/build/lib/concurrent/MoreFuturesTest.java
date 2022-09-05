@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,12 +47,12 @@ public class MoreFuturesTest {
   private ExecutorService executorService;
 
   @Before
-  public final void createExecutor() throws Exception  {
+  public void setUp() throws Exception {
     executorService = Executors.newFixedThreadPool(5);
   }
 
   @After
-  public final void shutdownExecutor() throws Exception  {
+  public void tearDown() throws Exception {
     MoreExecutors.shutdownAndAwaitTermination(executorService, TestUtils.WAIT_TIMEOUT_SECONDS,
         TimeUnit.SECONDS);
 

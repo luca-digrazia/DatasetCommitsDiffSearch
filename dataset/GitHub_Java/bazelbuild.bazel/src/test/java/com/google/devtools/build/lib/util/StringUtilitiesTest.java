@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,17 +18,24 @@ import static com.google.devtools.build.lib.util.StringUtilities.combineKeys;
 import static com.google.devtools.build.lib.util.StringUtilities.joinLines;
 import static com.google.devtools.build.lib.util.StringUtilities.layoutTable;
 import static com.google.devtools.build.lib.util.StringUtilities.prettyPrintBytes;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Maps;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** A test for {@link StringUtilities}. */
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * A test for {@link StringUtilities}.
+ */
 @RunWith(JUnit4.class)
 public class StringUtilitiesTest {
 
@@ -41,13 +48,13 @@ public class StringUtilitiesTest {
 
   @Test
   public void twoLinesGetjoinedNicely() {
-    assertThat(joinLines("line 1", "line 2")).isEqualTo("line 1\nline 2");
+    assertEquals("line 1\nline 2", joinLines("line 1", "line 2"));
   }
 
   @Test
   public void aTrailingNewlineIsAvailableWhenYouNeedIt() {
-    assertThat(joinLines("two lines", "with trailing newline", ""))
-        .isEqualTo("two lines\nwith trailing newline\n");
+    assertEquals("two lines\nwith trailing newline\n",
+        joinLines("two lines", "with trailing newline", ""));
   }
 
   // Tests of StringUtilities.combineKeys()
@@ -55,7 +62,7 @@ public class StringUtilitiesTest {
   /** Simple sanity test of format */
   @Test
   public void combineKeysFormat() {
-    assertThat(combineKeys("a", "b!c", "<d>")).isEqualTo("<a><b!!c><!<d!>>");
+    assertEquals("<a><b!!c><!<d!>>", combineKeys("a", "b!c", "<d>"));
   }
 
   /**
@@ -111,9 +118,11 @@ public class StringUtilitiesTest {
 
   @Test
   public void replaceAllLiteral() throws Exception {
-    assertThat(StringUtilities.replaceAllLiteral("bababa", "ba", "ab")).isEqualTo("ababab");
+    assertEquals("ababab",
+                 StringUtilities.replaceAllLiteral("bababa", "ba", "ab"));
     assertThat(StringUtilities.replaceAllLiteral("bababa", "ba", "")).isEmpty();
-    assertThat(StringUtilities.replaceAllLiteral("bababa", "", "ab")).isEqualTo("bababa");
+    assertEquals("bababa",
+        StringUtilities.replaceAllLiteral("bababa", "", "ab"));
   }
 
   @Test
@@ -123,8 +132,9 @@ public class StringUtilitiesTest {
     data.put("bang", "baz");
     data.put("lengthy key", "lengthy value");
 
-    assertThat(layoutTable(data))
-        .isEqualTo(joinLines("bang: baz", "foo: bar", "lengthy key: lengthy value"));
+    assertEquals(joinLines("bang: baz",
+                           "foo: bar",
+                           "lengthy key: lengthy value"), layoutTable(data));
   }
 
   @Test
@@ -147,45 +157,39 @@ public class StringUtilitiesTest {
     };
     double x = 2.3456;
     for (int ii = 0; ii < expected.length; ++ii) {
-      assertThat(prettyPrintBytes((long) x)).isEqualTo(expected[ii]);
+      assertEquals(expected[ii], prettyPrintBytes((long) x));
       x = x * 10.0;
     }
   }
 
   @Test
   public void sanitizeControlChars() {
-    assertThat(StringUtilities.sanitizeControlChars("\000")).isEqualTo("<?>");
-    assertThat(StringUtilities.sanitizeControlChars("\001")).isEqualTo("<?>");
-    assertThat(StringUtilities.sanitizeControlChars("\r")).isEqualTo("\\r");
-    assertThat(StringUtilities.sanitizeControlChars(" abc123")).isEqualTo(" abc123");
+    assertEquals("<?>", StringUtilities.sanitizeControlChars("\000"));
+    assertEquals("<?>", StringUtilities.sanitizeControlChars("\001"));
+    assertEquals("\\r", StringUtilities.sanitizeControlChars("\r"));
+    assertEquals(" abc123", StringUtilities.sanitizeControlChars(" abc123"));
   }
 
   @Test
   public void containsSubarray() {
-    assertThat(StringUtilities.containsSubarray("abcde".toCharArray(), "ab".toCharArray()))
-        .isTrue();
-    assertThat(StringUtilities.containsSubarray("abcde".toCharArray(), "de".toCharArray()))
-        .isTrue();
-    assertThat(StringUtilities.containsSubarray("abcde".toCharArray(), "bc".toCharArray()))
-        .isTrue();
-    assertThat(StringUtilities.containsSubarray("abcde".toCharArray(), "".toCharArray())).isTrue();
+    assertTrue(StringUtilities.containsSubarray("abcde".toCharArray(), "ab".toCharArray()));
+    assertTrue(StringUtilities.containsSubarray("abcde".toCharArray(), "de".toCharArray()));
+    assertTrue(StringUtilities.containsSubarray("abcde".toCharArray(), "bc".toCharArray()));
+    assertTrue(StringUtilities.containsSubarray("abcde".toCharArray(), "".toCharArray()));
   }
 
   @Test
   public void notContainsSubarray() {
-    assertThat(StringUtilities.containsSubarray("abc".toCharArray(), "abcd".toCharArray()))
-        .isFalse();
-    assertThat(StringUtilities.containsSubarray("abc".toCharArray(), "def".toCharArray()))
-        .isFalse();
-    assertThat(StringUtilities.containsSubarray("abcde".toCharArray(), "bd".toCharArray()))
-        .isFalse();
+    assertFalse(StringUtilities.containsSubarray("abc".toCharArray(), "abcd".toCharArray()));
+    assertFalse(StringUtilities.containsSubarray("abc".toCharArray(), "def".toCharArray()));
+    assertFalse(StringUtilities.containsSubarray("abcde".toCharArray(), "bd".toCharArray()));
   }
 
   @Test
   public void toPythonStyleFunctionName() {
-    assertThat(StringUtilities.toPythonStyleFunctionName("a")).isEqualTo("a");
-    assertThat(StringUtilities.toPythonStyleFunctionName("aB")).isEqualTo("a_b");
-    assertThat(StringUtilities.toPythonStyleFunctionName("aBC")).isEqualTo("a_b_c");
-    assertThat(StringUtilities.toPythonStyleFunctionName("aBcD")).isEqualTo("a_bc_d");
+    assertEquals("a", StringUtilities.toPythonStyleFunctionName("a"));
+    assertEquals("a_b", StringUtilities.toPythonStyleFunctionName("aB"));
+    assertEquals("a_b_c", StringUtilities.toPythonStyleFunctionName("aBC"));
+    assertEquals("a_bc_d", StringUtilities.toPythonStyleFunctionName("aBcD"));
   }
 }

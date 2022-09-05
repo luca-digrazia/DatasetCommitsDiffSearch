@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -372,53 +372,6 @@ public class AbstractQueueVisitorTest {
     assertTrue(executor.isShutdown());
   }
 
-  @Test
-  public void javaErrorConsideredCriticalNoMatterWhat() throws Exception {
-    ThreadPoolExecutor executor = new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS,
-        new LinkedBlockingQueue<Runnable>());
-    QueueVisitorWithoutCriticalError visitor = new QueueVisitorWithoutCriticalError(executor);
-    final CountDownLatch latch = new CountDownLatch(1);
-    final AtomicBoolean sleepFinished = new AtomicBoolean(false);
-    final AtomicBoolean sleepInterrupted = new AtomicBoolean(false);
-    final Error error = new Error("bad!");
-    Runnable errorRunnable = new Runnable() {
-      @Override
-      public void run() {
-        try {
-          latch.await(TestUtils.WAIT_TIMEOUT_MILLISECONDS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException expected) {
-          // Should only happen if the test itself is interrupted.
-        }
-        throw error;
-      }
-    };
-    Runnable sleepRunnable = new Runnable() {
-      @Override
-      public void run() {
-        latch.countDown();
-        try {
-          Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
-          sleepFinished.set(true);
-        } catch (InterruptedException unexpected) {
-          sleepInterrupted.set(true);
-        }
-      }
-    };
-    visitor.enqueue(errorRunnable);
-    visitor.enqueue(sleepRunnable);
-    Error thrownError = null;
-    // Interrupt workers on a critical error. That way we can test that visitor.work doesn't wait
-    // for all workers to finish if one of them already had a critical error.
-    try {
-      visitor.work(/*interruptWorkers=*/true);
-    } catch (Error e) {
-      thrownError = e;
-    }
-    assertTrue(sleepInterrupted.get());
-    assertFalse(sleepFinished.get());
-    assertEquals(error, thrownError);
-  }
-
   private Runnable throwingRunnable() {
     return new Runnable() {
       @Override
@@ -474,7 +427,7 @@ public class AbstractQueueVisitorTest {
     private final Object lock = new Object();
 
     public CountingQueueVisitor() {
-      super(5, 3L, TimeUnit.SECONDS, THREAD_NAME);
+      super(5, 5, 3L, TimeUnit.SECONDS, THREAD_NAME);
     }
 
     public CountingQueueVisitor(ThreadPoolExecutor executor) {
@@ -505,15 +458,15 @@ public class AbstractQueueVisitorTest {
     private final static String THREAD_NAME = "BlazeTest ConcreteQueueVisitor";
 
     public ConcreteQueueVisitor() {
-      super(5, 3L, TimeUnit.SECONDS, THREAD_NAME);
+      super(5, 5, 3L, TimeUnit.SECONDS, THREAD_NAME);
     }
 
     public ConcreteQueueVisitor(boolean failFast) {
-      super(true, 5, 3L, TimeUnit.SECONDS, failFast, THREAD_NAME);
+      super(true, 5, 5, 3L, TimeUnit.SECONDS, failFast, THREAD_NAME);
     }
 
     public ConcreteQueueVisitor(boolean failFast, boolean failFastOnInterrupt) {
-      super(true, 5, 3L, TimeUnit.SECONDS, failFast, failFastOnInterrupt, THREAD_NAME);
+      super(true, 5, 5, 3L, TimeUnit.SECONDS, failFast, failFastOnInterrupt, THREAD_NAME);
     }
 
     public ConcreteQueueVisitor(ThreadPoolExecutor executor, boolean failFast,
@@ -529,24 +482,12 @@ public class AbstractQueueVisitorTest {
   private static class QueueVisitorWithCriticalError extends AbstractQueueVisitor {
 
     public QueueVisitorWithCriticalError(ThreadPoolExecutor executor) {
-      super(/*concurrent=*/ true, executor, true, /*failFastOnException=*/ false, true);
+      super(executor, false);
     }
 
     @Override
-    protected ErrorClassification classifyError(Throwable e) {
-      return ErrorClassification.CRITICAL;
-    }
-  }
-
-  private static class QueueVisitorWithoutCriticalError extends AbstractQueueVisitor {
-
-    public QueueVisitorWithoutCriticalError(ThreadPoolExecutor executor) {
-      super(/*concurrent=*/ true, executor, true, /*failFastOnException=*/ false, true);
-    }
-
-    @Override
-    protected ErrorClassification classifyError(Throwable e) {
-      return ErrorClassification.NOT_CRITICAL;
+    protected boolean isCriticalError(Throwable e) {
+      return true;
     }
   }
 }

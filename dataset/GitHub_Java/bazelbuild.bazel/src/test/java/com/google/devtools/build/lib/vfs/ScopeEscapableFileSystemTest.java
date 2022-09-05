@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,7 +85,6 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
     @Override protected boolean isWritable(Path path) { throw re(); }
     @Override protected boolean isDirectory(Path path, boolean followSymlinks) { throw re(); }
     @Override protected boolean isFile(Path path, boolean followSymlinks) { throw re(); }
-    @Override protected boolean isSpecialFile(Path path, boolean followSymlinks) { throw re(); }
     @Override protected boolean isExecutable(Path path) { throw re(); }
     @Override protected boolean exists(Path path, boolean followSymlinks) {throw re(); }
     @Override protected boolean isSymbolicLink(Path path) { throw re(); }
@@ -121,8 +120,11 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
   private Path dirLink;
   private PathFragment dirLinkTarget;
 
+  @Override
   @Before
-  public final void createLinks() throws Exception  {
+  public void setUp() throws Exception {
+    super.setUp();
+
     Preconditions.checkState(
         testFS instanceof ScopeEscapableFileSystem, "Not ScopeEscapable: %s", testFS);
     ((ScopeEscapableFileSystem) testFS).enableScopeChecking(false);
