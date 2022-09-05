@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestTargetUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -117,7 +116,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
     EventHandler parseFailureListener = new ParseFailureListenerImpl(eventHandler, eventBus);
     // Determine targets to build:
     ResolvedTargets<Target> targets = getTargetsToBuild(parseFailureListener,
-        targetPatterns, options.compileOneDependency, options.buildTagFilterList, keepGoing);
+        targetPatterns, options.compileOneDependency, keepGoing);
 
     ImmutableSet<Target> filteredTargets = targets.getFilteredTargets();
 
@@ -175,13 +174,9 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
       }
     }
 
-    eventBus.post(
-        new TargetParsingCompleteEvent(
-            targets.getTargets(),
-            filteredTargets,
-            testFilteredTargets,
-            timer.stop().elapsed(TimeUnit.MILLISECONDS),
-            targetPatterns));
+    eventBus.post(new TargetParsingCompleteEvent(targets.getTargets(),
+        filteredTargets, testFilteredTargets,
+        timer.stop().elapsed(TimeUnit.MILLISECONDS)));
 
     if (targets.hasError()) {
       eventHandler.handle(Event.warn("Target pattern parsing failed. Continuing anyway"));
@@ -257,22 +252,14 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
    */
   private ResolvedTargets<Target> getTargetsToBuild(EventHandler eventHandler,
       List<String> targetPatterns, boolean compileOneDependency,
-      List<String> buildTagFilterList, boolean keepGoing)
-      throws TargetParsingException, InterruptedException {
-    ResolvedTargets<Target> evaluated =
+      boolean keepGoing) throws TargetParsingException, InterruptedException {
+    ResolvedTargets<Target> result =
         targetPatternEvaluator.parseTargetPatternList(eventHandler, targetPatterns,
             FilteringPolicies.FILTER_MANUAL, keepGoing);
-
-    ResolvedTargets<Target> result = ResolvedTargets.<Target>builder()
-        .merge(evaluated)
-        .filter(TargetUtils.tagFilter(buildTagFilterList))
-        .build();
-
     if (compileOneDependency) {
       return new CompileOneDependencyTransformer(packageManager)
           .transformCompileOneDependency(eventHandler, result);
     }
-
     return result;
   }
 

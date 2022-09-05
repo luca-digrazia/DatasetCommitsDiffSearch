@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.MissingDiffD
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.UnionDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFilesKnowledge;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.FileType;
-import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -109,8 +108,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
       PathFragment blacklistedPackagePrefixesFile,
-      String productName,
-      CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy) {
+      String productName) {
     super(
         evaluatorSupplier,
         pkgFactory,
@@ -124,8 +122,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         extraPrecomputedValues,
         false,
         blacklistedPackagePrefixesFile,
-        productName,
-        crossRepositoryLabelViolationStrategy);
+        productName);
     this.diffAwarenessManager = new DiffAwarenessManager(diffAwarenessFactories);
     this.customDirtinessCheckers = customDirtinessCheckers;
   }
@@ -142,8 +139,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      String productName,
-      CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy) {
+      String productName) {
     return create(
         pkgFactory,
         directories,
@@ -157,8 +153,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         extraPrecomputedValues,
         customDirtinessCheckers,
         /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT,
-        productName,
-        crossRepositoryLabelViolationStrategy);
+        productName);
   }
 
   private static SequencedSkyframeExecutor create(
@@ -174,8 +169,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
       PathFragment blacklistedPackagePrefixesFile,
-      String productName,
-      CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy) {
+      String productName) {
     SequencedSkyframeExecutor skyframeExecutor =
         new SequencedSkyframeExecutor(
             InMemoryMemoizingEvaluator.SUPPLIER,
@@ -191,8 +185,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             extraPrecomputedValues,
             customDirtinessCheckers,
             blacklistedPackagePrefixesFile,
-            productName,
-            crossRepositoryLabelViolationStrategy);
+            productName);
     skyframeExecutor.init();
     return skyframeExecutor;
   }
@@ -218,8 +211,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         ImmutableList.<PrecomputedValue.Injected>of(),
         ImmutableList.<SkyValueDirtinessChecker>of(),
         blacklistedPackagePrefixesFile,
-        productName,
-        CrossRepositoryLabelViolationStrategy.ERROR);
+        productName);
   }
 
   @Override
@@ -257,18 +249,12 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   @Override
-  public void sync(
-      EventHandler eventHandler,
-      PackageCacheOptions packageCacheOptions,
-      Path outputBase,
-      Path workingDirectory,
-      String defaultsPackageContents,
-      UUID commandId,
-      Map<String, String> clientEnv,
+  public void sync(EventHandler eventHandler, PackageCacheOptions packageCacheOptions,
+      Path outputBase, Path workingDirectory, String defaultsPackageContents, UUID commandId,
       TimestampGranularityMonitor tsgm)
-      throws InterruptedException, AbruptExitException {
+          throws InterruptedException, AbruptExitException {
     super.sync(eventHandler, packageCacheOptions, outputBase, workingDirectory,
-        defaultsPackageContents, commandId, clientEnv, tsgm);
+        defaultsPackageContents, commandId, tsgm);
     handleDiffs(eventHandler, packageCacheOptions.checkOutputFiles);
   }
 

@@ -26,7 +26,6 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
@@ -621,10 +620,9 @@ public class LoadingPhaseRunnerTest {
           7,
           analysisMock.getDefaultsPackageContent(),
           UUID.randomUUID(),
-          ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(clock));
-      loadingPhaseRunner =
-          skyframeExecutor.getLoadingPhaseRunner(pkgFactory.getRuleClassNames(), useNewImpl);
+      loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
+          pkgFactory.getRuleClassNames(), useNewImpl);
       this.options = Options.getDefaults(LoadingOptions.class);
     }
 

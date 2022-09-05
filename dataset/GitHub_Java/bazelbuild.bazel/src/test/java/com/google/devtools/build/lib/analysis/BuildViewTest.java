@@ -856,7 +856,6 @@ public class BuildViewTest extends BuildViewTestBase {
    */
   @Test
   public void testPostProcessedConfigurableAttributes() throws Exception {
-    useConfiguration("--cpu=k8");
     reporter.removeHandler(failFastHandler); // Expect errors from action conflicts.
     scratch.file("conflict/BUILD",
         "config_setting(name = 'a', values = {'test_arg': 'a'})",
