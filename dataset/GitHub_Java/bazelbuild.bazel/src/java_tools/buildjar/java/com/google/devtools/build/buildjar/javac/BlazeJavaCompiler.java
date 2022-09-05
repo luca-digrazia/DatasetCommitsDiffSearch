@@ -82,12 +82,12 @@ public class BlazeJavaCompiler extends JavaCompiler {
   public Env<AttrContext> attribute(Env<AttrContext> env) {
     Env<AttrContext> result = super.attribute(env);
     // don't run plugins if there were compilation errors
-    boolean errors = errorCount() > 0;
+    if (errorCount() > 0) {
+      return result;
+    }
     // Iterate over all plugins, calling their postAttribute methods
     for (BlazeJavaCompilerPlugin plugin : plugins) {
-      if (!errors || plugin.runOnAttributionErrors()) {
-        plugin.postAttribute(result);
-      }
+      plugin.postAttribute(result);
     }
 
     return result;

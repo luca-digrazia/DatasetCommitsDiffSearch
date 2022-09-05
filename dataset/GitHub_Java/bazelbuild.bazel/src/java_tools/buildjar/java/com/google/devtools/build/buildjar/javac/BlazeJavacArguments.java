@@ -65,6 +65,7 @@ public abstract class BlazeJavacArguments {
   public static Builder builder() {
     return new AutoValue_BlazeJavacArguments.Builder()
         .classPath(ImmutableList.of())
+        .classOutput(null)
         .bootClassPath(ImmutableList.of())
         .javacOptions(ImmutableList.of())
         .sourceFiles(ImmutableList.of())

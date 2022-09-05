@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.buildjar;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.buildjar.javac.BlazeJavacResult;
 import com.google.devtools.build.buildjar.javac.FormattedDiagnostic;
 import com.google.devtools.build.buildjar.javac.JavacRunner;
@@ -61,7 +62,7 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
 
     // If javac errored out because of missing entries on the classpath, give it another try.
     // TODO(bazel-team): check performance impact of additional retries.
-    if (shouldFallBack(result)) {
+    if (!result.javacResult().isOK() && hasRecognizedError(result.diagnostics())) {
       // TODO(cushon): warn for transitive classpath fallback
 
       // Reset output directories
@@ -73,30 +74,20 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
     return result;
   }
 
-  private static boolean shouldFallBack(BlazeJavacResult result) {
-    if (result.javacResult().isOK()) {
-      return false;
-    }
-    for (FormattedDiagnostic diagnostic : result.diagnostics()) {
-      if (hasRecognizedError(diagnostic.getFormatted())) {
-        return true;
-      }
-    }
-    if (result.output().contains("com.sun.tools.javac.code.Symbol$CompletionFailure")) {
-      return true;
-    }
-    return false;
-  }
-
   private static final Pattern MISSING_PACKAGE =
       Pattern.compile("error: package ([\\p{javaJavaIdentifierPart}\\.]+) does not exist");
 
-  private static boolean hasRecognizedError(String output) {
+  private boolean hasRecognizedError(ImmutableList<FormattedDiagnostic> diagnostics) {
     // TODO(cushon): usage diagnostic codes instead
-    return output.contains("error: cannot access")
-        || output.contains("error: cannot find symbol")
-        || MISSING_PACKAGE.matcher(output).find()
-        // TODO(cushon): -Xdoclint:reference is probably a bad idea
-        || output.contains("error: reference not found");
+    for (FormattedDiagnostic diagnostic : diagnostics) {
+      String message = diagnostic.getFormatted();
+      return message.contains("error: cannot access")
+          || message.contains("error: cannot find symbol")
+          || message.contains("com.sun.tools.javac.code.Symbol$CompletionFailure")
+          || MISSING_PACKAGE.matcher(message).find()
+          // TODO(cushon): -Xdoclint:reference is probably a bad idea
+          || message.contains("error: reference not found");
+    }
+    return false;
   }
 }
