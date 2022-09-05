@@ -19,10 +19,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /**
  * A representation of the concept "this transitive info provider builds these files".
@@ -30,12 +28,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
  * <p>Every transitive info collection contains at least this provider.
  */
 @Immutable
-@SkylarkModule(
-  name = "file_provider",
-  doc = "An interface for rules that provide files.",
-  category = SkylarkModuleCategory.PROVIDER
-)
-@AutoCodec
+@SkylarkModule(name = "file_provider", doc = "An interface for rules that provide files.")
 public final class FileProvider implements TransitiveInfoProvider {
   public static final FileProvider EMPTY =
       new FileProvider(NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER));
