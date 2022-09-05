@@ -487,13 +487,11 @@ public final class CcCommon {
         compilationOutputs.getObjectFiles(CppHelper.usePic(ruleContext, false)));
   }
 
-  InstrumentedFilesProvider getInstrumentedFilesProvider(Iterable<Artifact> files,
-      boolean withBaselineCoverage) {
+  InstrumentedFilesProvider getInstrumentedFilesProvider(Iterable<Artifact> files) {
     return cppConfiguration.isLipoContextCollector()
         ? InstrumentedFilesProviderImpl.EMPTY
         : InstrumentedFilesCollector.collect(
-            ruleContext, CppRuleClasses.INSTRUMENTATION_SPEC, CC_METADATA_COLLECTOR, files,
-            withBaselineCoverage);
+            ruleContext, CppRuleClasses.INSTRUMENTATION_SPEC, CC_METADATA_COLLECTOR, files);
   }
 
   /**
