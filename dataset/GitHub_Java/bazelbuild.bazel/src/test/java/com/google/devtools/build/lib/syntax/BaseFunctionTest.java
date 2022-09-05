@@ -31,7 +31,13 @@ import java.util.TreeMap;
  * between the outer call(posargs, kwargs, ast, env) and the inner call(args, ast, env).
  */
 @RunWith(JUnit4.class)
-public class BaseFunctionTest extends EvaluationTestCase {
+public class BaseFunctionTest extends AbstractEvaluationTestCase {
+
+  private Environment singletonEnv(String id, Object value) {
+    Environment env = new Environment();
+    env.update(id, value);
+    return env;
+  }
 
   /**
    * Handy implementation of {@link BaseFunction} that returns all its args as a list.
@@ -50,16 +56,15 @@ public class BaseFunctionTest extends EvaluationTestCase {
 
   private void checkBaseFunction(BaseFunction func, String callExpression, String expectedOutput)
       throws Exception {
-    setUp();
-    update(func.getName(), func);
+    Environment env = singletonEnv(func.getName(), func);
 
     if (expectedOutput.charAt(0) == '[') { // a tuple => expected to pass
       assertEquals("Wrong output for " + callExpression,
-          expectedOutput, eval(callExpression).toString());
+          expectedOutput, eval(callExpression, env).toString());
 
     } else { // expected to fail with an exception
       try {
-        eval(callExpression);
+        eval(callExpression, env);
         fail();
       } catch (EvalException e) {
         assertEquals("Wrong exception for " + callExpression,
@@ -133,24 +138,26 @@ public class BaseFunctionTest extends EvaluationTestCase {
   @Test
   @SuppressWarnings("unchecked")
   public void testKwParam() throws Exception {
-    eval("def foo(a, b, c=3, d=4, *args, e, f, g=7, h=8, **kwargs):\n"
+    Environment env = new SkylarkEnvironment(syntaxEvents.collector());
+    exec(parseFileForSkylark(
+        "def foo(a, b, c=3, d=4, *args, e, f, g=7, h=8, **kwargs):\n"
         + "  return (a, b, c, d, e, f, g, h, args, kwargs)\n"
         + "v1 = foo(1, 2, e=5, f=6)\n"
         + "v2 = foo(1, *['x', 'y', 'z', 't'], h=9, e=5, f=6, i=0)\n"
         + "def bar(**kwargs):\n"
         + "  return kwargs\n"
         + "b1 = bar(name='foo', type='jpg', version=42)\n"
-        + "b2 = bar()\n");
+        + "b2 = bar()\n"), env);
 
-    assertThat(Printer.repr(lookup("v1")))
+    assertThat(EvalUtils.prettyPrintValue(env.lookup("v1")))
         .isEqualTo("(1, 2, 3, 4, 5, 6, 7, 8, (), {})");
-    assertThat(Printer.repr(lookup("v2")))
+    assertThat(EvalUtils.prettyPrintValue(env.lookup("v2")))
         .isEqualTo("(1, \"x\", \"y\", \"z\", 5, 6, 7, 9, (\"t\",), {\"i\": 0})");
 
     // NB: the conversion to a TreeMap below ensures the keys are sorted.
-    assertThat(Printer.repr(
-        new TreeMap<String, Object>((Map<String, Object>) lookup("b1"))))
+    assertThat(EvalUtils.prettyPrintValue(
+        new TreeMap<String, Object>((Map<String, Object>) env.lookup("b1"))))
         .isEqualTo("{\"name\": \"foo\", \"type\": \"jpg\", \"version\": 42}");
-    assertThat(Printer.repr(lookup("b2"))).isEqualTo("{}");
+    assertThat(EvalUtils.prettyPrintValue(env.lookup("b2"))).isEqualTo("{}");
   }
 }

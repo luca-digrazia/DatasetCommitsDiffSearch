@@ -58,7 +58,7 @@ import javax.annotation.Nullable;
 // Provide optimized argument frobbing depending of FunctionSignature and CallerSignature
 // (that FuncallExpression must supply), optimizing for the all-positional and all-keyword cases.
 // Also, use better pure maps to minimize map O(n) re-creation events when processing keyword maps.
-public abstract class BaseFunction {
+public abstract class BaseFunction implements Function {
 
   // The name of the function
   private final String name;
@@ -396,31 +396,22 @@ public abstract class BaseFunction {
   }
 
   /**
-   * Returns the environment for the scope of this function.
-   *
-   * <p>Since this is a BaseFunction, we don't create a new environment.
-   */
-  @SuppressWarnings("unused") // For the exception
-  protected Environment getOrCreateChildEnvironment(Environment parent) throws EvalException {
-    return parent;
-  }
-
-  /**
    * The outer calling convention to a BaseFunction.
    *
    * @param args a list of all positional arguments (as in *starArg)
    * @param kwargs a map for key arguments (as in **kwArgs)
    * @param ast the expression for this function's definition
-   * @param parentEnv the lexical Environment for the function call
+   * @param env the lexical Environment for the function call
    * @return the value resulting from evaluating the function with the given arguments
    * @throws construction of EvalException-s containing source information.
    */
+  @Override
   public Object call(@Nullable List<Object> args,
       @Nullable Map<String, Object> kwargs,
       @Nullable FuncallExpression ast,
-      @Nullable Environment parentEnv)
+      @Nullable Environment env)
       throws EvalException, InterruptedException {
-    Environment env = getOrCreateChildEnvironment(parentEnv);
+
     Preconditions.checkState(isConfigured(), "Function %s was not configured", getName());
 
     // ast is null when called from Java (as there's no Skylark call site).
@@ -431,21 +422,9 @@ public abstract class BaseFunction {
 
     try {
       return call(arguments, ast, env);
-    } catch (EvalExceptionWithStackTrace ex) {
-      throw updateStackTrace(ex, loc);
-    } catch (EvalException | RuntimeException | InterruptedException ex) {
-      throw updateStackTrace(new EvalExceptionWithStackTrace(ex, Location.BUILTIN), loc);
+    } catch (ConversionException e) {
+      throw new EvalException(loc, e.getMessage());
     }
-  }
-
-  /**
-   * Adds an entry for the current function to the stack trace of the exception.
-   */
-  private EvalExceptionWithStackTrace updateStackTrace(
-      EvalExceptionWithStackTrace ex, Location location) {
-    ex.registerFunction(this);
-    ex.setLocation(location);
-    return ex;
   }
 
   /**
@@ -454,21 +433,19 @@ public abstract class BaseFunction {
    *
    * @param args an array of argument values sorted as per the signature.
    * @param ast the source code for the function if user-defined
-   * @param env the lexical environment of the function call
+   * @param ast the lexical environment of the function call
    */
   // Don't make it abstract, so that subclasses may be defined that @Override the outer call() only.
-  protected Object call(Object[] args,
+  public Object call(Object[] args,
       @Nullable FuncallExpression ast, @Nullable Environment env)
       throws EvalException, ConversionException, InterruptedException {
-    throw new EvalException(
-        (ast == null) ? Location.BUILTIN : ast.getLocation(),
+    throw new EvalException(ast.getLocation(),
         String.format("function %s not implemented", getName()));
   }
 
   /**
    * Render this object in the form of an equivalent Python function signature.
    */
-  @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append(getName());
@@ -498,67 +475,5 @@ public abstract class BaseFunction {
     // this function is called after the signature was initialized
     Preconditions.checkState(signature != null);
     enforcedArgumentTypes = signature.getTypes();
-  }
-
-  protected boolean hasSelfArgument() {
-    Class<?> clazz = getObjectType();
-    if (clazz == null) {
-      return false;
-    }
-    List<SkylarkType> types = signature.getTypes();
-    ImmutableList<String> names = signature.getSignature().getNames();
-
-    return (!types.isEmpty() && types.get(0).canBeCastTo(clazz))
-        || (!names.isEmpty() && names.get(0).equals("self"));
-  }
-
-  protected String getObjectTypeString() {
-    Class<?> clazz = getObjectType();
-    if (clazz == null) {
-      return "";
-    }
-    return EvalUtils.getDataTypeNameFromClass(clazz, false) + ".";
-  }
-
-  /**
-   * Returns [class.]function (depending on whether func belongs to a class).
-   */
-  public String getFullName() {
-    return String.format("%s%s", getObjectTypeString(), getName());
-  }
-
-  /**
-   * Returns the signature as "[className.]methodName(name1: paramType1, name2: paramType2, ...)"
-   * or "[className.]methodName(paramType1, paramType2, ...)", depending on the value of showNames.
-   */
-  public String getShortSignature(boolean showNames) {
-    StringBuilder builder = new StringBuilder();
-    boolean hasSelf = hasSelfArgument();
-
-    builder.append(getFullName()).append("(");
-    signature.toStringBuilder(builder, showNames, false, false, hasSelf);
-    builder.append(")");
-
-    return builder.toString();
-  }
-
-  /**
-   * Prints the types of the first {@code howManyArgsToPrint} given arguments as
-   * "(type1, type2, ...)"
-   */
-  protected String printTypeString(Object[] args, int howManyArgsToPrint) {
-    StringBuilder builder = new StringBuilder();
-    builder.append("(");
-
-    int start = hasSelfArgument() ? 1 : 0;
-    for (int pos = start; pos < howManyArgsToPrint; ++pos) {
-      builder.append(EvalUtils.getDataTypeName(args[pos]));
-
-      if (pos < howManyArgsToPrint - 1) {
-        builder.append(", ");
-      }
-    }  
-    builder.append(")");
-    return builder.toString();
   }
 }
