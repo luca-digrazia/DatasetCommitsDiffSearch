@@ -85,8 +85,14 @@ public abstract class BazelJavaBuilder {
       } catch (IOException e) {
         e.printStackTrace();
         return 1;
+      } finally {
+        // JavaBuilder doesn't close certain file handles. We have to migrate to using the real
+        // Jsr199 API instead of just calling the Main method of Javac in order to fix this, for
+        // now let's just invoke GC.
+        System.gc();
       }
     }
+
     return 0;
   }
 
