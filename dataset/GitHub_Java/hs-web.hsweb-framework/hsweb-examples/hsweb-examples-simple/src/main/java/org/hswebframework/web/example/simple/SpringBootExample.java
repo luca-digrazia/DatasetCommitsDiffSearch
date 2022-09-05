@@ -18,20 +18,24 @@
 package org.hswebframework.web.example.simple;
 
 import com.alibaba.fastjson.JSON;
+import org.hsweb.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
+import org.hsweb.ezorm.rdb.executor.SqlExecutor;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.simple.SimpleFieldFilterDataAccessConfig;
-import org.hswebframework.web.commons.entity.DataStatus;
+import org.hswebframework.web.authorization.simple.SimpleFiledScopeDataAccessConfig;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
+import org.hswebframework.web.dao.datasource.DataSourceHolder;
+import org.hswebframework.web.dao.datasource.DatabaseType;
 import org.hswebframework.web.entity.authorization.*;
+import org.hswebframework.web.entity.authorization.bind.BindPermissionRoleEntity;
 import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
 import org.hswebframework.web.entity.organizational.*;
 import org.hswebframework.web.loggin.aop.EnableAccessLogger;
 import org.hswebframework.web.logging.AccessLoggerListener;
 import org.hswebframework.web.organizational.authorization.access.DataAccessType;
 import org.hswebframework.web.organizational.authorization.simple.SimpleScopeDataAccessConfig;
-import org.hswebframework.web.service.authorization.AuthorizationSettingService;
 import org.hswebframework.web.service.authorization.PermissionService;
 import org.hswebframework.web.service.authorization.RoleService;
 import org.hswebframework.web.service.authorization.UserService;
@@ -43,10 +47,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.web.multipart.MultipartFile;
 import springfox.documentation.builders.ApiInfoBuilder;
 import springfox.documentation.builders.PathSelectors;
@@ -61,11 +67,13 @@ import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import javax.sql.DataSource;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.stream.Stream;
 
 /**
@@ -79,8 +87,7 @@ import java.util.stream.Stream;
 @EnableCaching
 @EnableAspectJAutoProxy
 @EnableAccessLogger
-public class SpringBootExample
-        implements CommandLineRunner {
+public class SpringBootExample implements CommandLineRunner {
 
     @Bean
     public AccessLoggerListener accessLoggerListener() {
@@ -120,6 +127,23 @@ public class SpringBootExample
     }
 
 
+    @Bean
+    @ConditionalOnMissingBean(SqlExecutor.class)
+    public SqlExecutor sqlExecutor(DataSource dataSource) {
+        DataSourceHolder.install(dataSource, DatabaseType.h2);
+        return new AbstractJdbcSqlExecutor() {
+            @Override
+            public Connection getConnection() {
+                return DataSourceUtils.getConnection(dataSource);
+            }
+
+            @Override
+            public void releaseConnection(Connection connection) throws SQLException {
+                DataSourceUtils.releaseConnection(connection, dataSource);
+            }
+        };
+
+    }
 
     @Autowired
     UserService       userService;
@@ -139,80 +163,61 @@ public class SpringBootExample
     @Autowired
     PersonService         personService;
 
-    @Autowired
-    AuthorizationSettingService authorizationSettingService;
 
     public static void main(String[] args) {
         SpringApplication.run(SpringBootExample.class);
     }
 
-    //    @Override
+    @Override
     public void run(String... strings) throws Exception {
         //只能查询自己创建的数据
         DataAccessEntity accessEntity = new DataAccessEntity();
         accessEntity.setType(DataAccessConfig.DefaultType.OWN_CREATED);
         accessEntity.setAction(Permission.ACTION_QUERY);
-        accessEntity.setDescribe("只能查询自己创建的数据");
 
         //只能修改自己创建的数据
         DataAccessEntity updateAccessEntity = new DataAccessEntity();
         updateAccessEntity.setType(DataAccessConfig.DefaultType.OWN_CREATED);
         updateAccessEntity.setAction(Permission.ACTION_UPDATE);
-        updateAccessEntity.setDescribe("只能修改自己的数据");
+
         //不能查询password
         DataAccessEntity denyQueryFields = new DataAccessEntity();
-        denyQueryFields.setType(DataAccessConfig.DefaultType.DENY_FIELDS);
+        denyQueryFields.setType(DataAccessConfig.DefaultType.ALLOW_FIELDS);
         denyQueryFields.setAction(Permission.ACTION_QUERY);
         denyQueryFields.setConfig(JSON.toJSONString(new SimpleFieldFilterDataAccessConfig("password")));
-        denyQueryFields.setDescribe("不能查询密码");
+
         //不能修改password
         DataAccessEntity denyUpdateFields = new DataAccessEntity();
-        denyUpdateFields.setType(DataAccessConfig.DefaultType.DENY_FIELDS);
+        denyUpdateFields.setType(DataAccessConfig.DefaultType.ALLOW_FIELDS);
         denyUpdateFields.setAction(Permission.ACTION_UPDATE);
         denyUpdateFields.setConfig(JSON.toJSONString(new SimpleFieldFilterDataAccessConfig("password")));
-        denyUpdateFields.setDescribe("不能直接修改密码");
+
         //只能查看自己部门的数据
         DataAccessEntity onlyDepartmentData = new DataAccessEntity();
         onlyDepartmentData.setType(DataAccessType.DEPARTMENT_SCOPE);
         onlyDepartmentData.setAction(Permission.ACTION_QUERY);
         onlyDepartmentData.setConfig(JSON.toJSONString(new SimpleScopeDataAccessConfig(DataAccessType.SCOPE_TYPE_CHILDREN)));
-        onlyDepartmentData.setDescribe("只能查看自己部门的数据");
 
-        //创建权限
+
         PermissionEntity permission = entityFactory.newInstance(PermissionEntity.class);
         permission.setName("测试");
         permission.setId("test");
-        permission.setStatus(DataStatus.STATUS_ENABLED);
+        permission.setStatus((byte) 1);
         permission.setActions(ActionEntity.create(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
-        permission.setSupportDataAccessTypes(Arrays.asList("*"));
+        permission.setDataAccess(Arrays.asList(accessEntity, updateAccessEntity, denyUpdateFields, denyUpdateFields, onlyDepartmentData));
         permissionService.insert(permission);
 
-        //角色
-        RoleEntity roleEntity = entityFactory.newInstance(RoleEntity.class);
+        BindPermissionRoleEntity<PermissionRoleEntity> roleEntity = entityFactory.newInstance(BindPermissionRoleEntity.class);
+        SimplePermissionRoleEntity permissionRoleEntity = new SimplePermissionRoleEntity();
+        permissionRoleEntity.setRoleId("admin");
+        permissionRoleEntity.setPermissionId("test");
+        permissionRoleEntity.setActions(Arrays.asList(Permission.ACTION_QUERY, Permission.ACTION_UPDATE));
+        permissionRoleEntity.setDataAccesses(permission.getDataAccess());
         roleEntity.setId("admin");
         roleEntity.setName("test");
+        roleEntity.setPermissions(Arrays.asList(permissionRoleEntity));
         roleService.insert(roleEntity);
 
-        /*            权限设置        */
-        AuthorizationSettingEntity settingEntity = entityFactory.newInstance(AuthorizationSettingEntity.class);
-
-        settingEntity.setType("role"); //绑定到角色
-        settingEntity.setSettingFor(roleEntity.getId());
-
-        settingEntity.setDescribe("测试");
-        //权限配置详情
-        AuthorizationSettingDetailEntity detailEntity = entityFactory.newInstance(AuthorizationSettingDetailEntity.class);
-        detailEntity.setPermissionId(permission.getId());
-        detailEntity.setMerge(true);
-        detailEntity.setPriority(1L);
-        detailEntity.setActions(new HashSet<>(Arrays.asList(Permission.ACTION_QUERY, Permission.ACTION_UPDATE)));
-        detailEntity.setDataAccesses(Arrays.asList(accessEntity, updateAccessEntity, denyQueryFields, denyUpdateFields, onlyDepartmentData));
-
-        settingEntity.setDetails(Arrays.asList(detailEntity));
-
-        authorizationSettingService.insert(settingEntity);
-
-        //关联角色给用户
         BindRoleUserEntity userEntity = entityFactory.newInstance(BindRoleUserEntity.class);
         userEntity.setId("admin");
         userEntity.setName("admin");
@@ -227,21 +232,21 @@ public class SpringBootExample
         OrganizationalEntity org = entityFactory.newInstance(OrganizationalEntity.class);
 
         org.setName("测试机构");
-        org.setStatus(DataStatus.STATUS_ENABLED);
+        org.setEnabled(true);
         org.setId("test");
         org.setParentId("-1");
 
         organizationalService.insert(org);
 
         DepartmentEntity department = entityFactory.newInstance(DepartmentEntity.class);
-        department.setStatus(DataStatus.STATUS_ENABLED);
+        department.setEnabled(true);
         department.setOrgId("test");
         department.setId("test");
         department.setName("部门");
         department.setParentId("-1");
 
         DepartmentEntity department2 = entityFactory.newInstance(DepartmentEntity.class);
-        department2.setStatus(DataStatus.STATUS_ENABLED);
+        department2.setEnabled(true);
         department2.setOrgId("test");
         department2.setId("test2");
         department2.setName("部门2");
@@ -268,5 +273,7 @@ public class SpringBootExample
         personEntity.setPersonUser(personUserEntity);
 
         personService.insert(personEntity);
+
+
     }
 }
