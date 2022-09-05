@@ -373,9 +373,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     // Do not use on the command line.
     // The idea is that once this option works, we'll flip the default value in a config file, then
     // once it is proven that it works, remove it from Bazel and said config file.
-    // This is now on by default and the flag is a noop and will be removed in a future release.
     @Option(name = "experimental_use_rclass_generator",
-        defaultValue = "true",
+        defaultValue = "false",
         category = "undocumented",
         help = "Use the specialized R class generator to build the final app and lib R classes.")
     public boolean useRClassGenerator;
@@ -481,6 +480,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean useRexToCompressDexFiles;
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
   private final boolean useAndroidResourceShrinking;
+  private final boolean useRClassGenerator;
   private final boolean useParallelResourceProcessing;
   private final AndroidManifestMerger manifestMerger;
   private final ApkSigningMethod apkSigningMethod;
@@ -506,6 +506,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.desugarJava8 = options.desugarJava8;
     this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
     this.useAndroidResourceShrinking = options.useAndroidResourceShrinking;
+    this.useRClassGenerator = options.useRClassGenerator;
     this.useParallelResourceProcessing = options.useParallelResourceProcessing;
     this.manifestMerger = options.manifestMerger;
     this.apkSigningMethod = options.apkSigningMethod;
@@ -578,6 +579,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useAndroidResourceShrinking() {
     return useAndroidResourceShrinking;
+  }
+
+  public boolean useRClassGenerator() {
+    return useRClassGenerator;
   }
 
   public boolean useParallelResourceProcessing() {
