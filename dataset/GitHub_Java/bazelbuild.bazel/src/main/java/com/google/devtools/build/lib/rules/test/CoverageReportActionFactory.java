@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 
 import java.util.Collection;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -60,13 +61,15 @@ public interface CoverageReportActionFactory {
   }
 
   /**
-   * Returns a CoverageReportActionsWrapper. May return null if it's not necessary to create
-   * such Actions based on the input parameters and some other data available to the factory
-   * implementation, such as command line options.
+   * Returns a CoverageReportActionsWrapper. May return null if
+   * it's not necessary to create such Actions based on the input parameters
+   * and some other data available to the factory implementation, such as
+   * command line arguments.
    */
+
   @Nullable
   public CoverageReportActionsWrapper createCoverageReportActionsWrapper(
       Collection<ConfiguredTarget> targetsToTest,
-      Iterable<Artifact> baselineCoverageArtifacts,
+      Set<Artifact> baselineCoverageArtifacts,
       ArtifactFactory artifactFactory, ArtifactOwner artifactOwner);
 }

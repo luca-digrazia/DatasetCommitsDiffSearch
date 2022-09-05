@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
@@ -74,6 +73,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
@@ -699,6 +699,25 @@ public class BuildView {
     }
   }
 
+  /**
+   * Skyframe implementation of {@link PackageRootResolver}.
+   *
+   * <p> Note: you should not use this class inside of any SkyFunction.
+   */
+  @VisibleForTesting
+  public static final class SkyframePackageRootResolver implements PackageRootResolver {
+    private final SkyframeExecutor executor;
+
+    public SkyframePackageRootResolver(SkyframeExecutor executor) {
+      this.executor = executor;
+    }
+
+    @Override
+    public Map<PathFragment, Root> findPackageRoots(Iterable<PathFragment> execPaths) {
+      return executor.getArtifactRoots(execPaths);
+    }
+  }
+
   private AnalysisResult createResult(LoadingResult loadingResult,
       TopLevelArtifactContext topLevelOptions, BuildView.Options viewOptions,
       Collection<ConfiguredTarget> configuredTargets, boolean analysisSuccessful)
@@ -748,18 +767,17 @@ public class BuildView {
         artifactsToBuild, parallelTests, exclusiveTests, topLevelOptions);
   }
 
-  private static NestedSet<Artifact> getBaselineCoverageArtifacts(
+  private static ImmutableSet<Artifact> getBaselineCoverageArtifacts(
       Collection<ConfiguredTarget> configuredTargets) {
-    NestedSetBuilder<Artifact> baselineCoverageArtifacts = NestedSetBuilder.stableOrder();
+    Set<Artifact> baselineCoverageArtifacts = Sets.newHashSet();
     for (ConfiguredTarget target : configuredTargets) {
-      TopLevelArtifactProvider provider = target.getProvider(TopLevelArtifactProvider.class);
+      BaselineCoverageArtifactsProvider provider =
+          target.getProvider(BaselineCoverageArtifactsProvider.class);
       if (provider != null) {
-        baselineCoverageArtifacts.addTransitive(provider.getOutputGroup(
-            TopLevelArtifactProvider.BASELINE_COVERAGE
-        ));
+        baselineCoverageArtifacts.addAll(provider.getBaselineCoverageArtifacts());
       }
     }
-    return baselineCoverageArtifacts.build();
+    return ImmutableSet.copyOf(baselineCoverageArtifacts);
   }
 
   private void addExtraActionsIfRequested(BuildView.Options viewOptions,
