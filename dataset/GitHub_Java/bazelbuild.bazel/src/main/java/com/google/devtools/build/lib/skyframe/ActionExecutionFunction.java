@@ -180,7 +180,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // must use that other action's value, provided here, since it is populated with metadata
     // for the outputs.
     if (inputArtifactData == null) {
-      return skyframeActionExecutor.executeAction(action, null, -1, null);
+      return skyframeActionExecutor.executeAction(action, null, null, -1, null);
     }
     ContinuationState state;
     if (action.discoversInputs()) {
@@ -229,8 +229,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         skyframeActionExecutor.constructActionExecutionContext(fileAndMetadataCache,
             metadataHandler);
     boolean inputsDiscoveredDuringActionExecution = false;
-    ActionExecutionValue result;
-    Token token;
     try {
       if (action.discoversInputs()) {
         if (!state.hasDiscoveredInputs()) {
@@ -264,13 +262,13 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       }
       // Clear state before actual execution of action. It will never be needed again because
       // skyframeActionExecutor is guaranteed to have a result after this.
-      token = state.token;
+      Token token = state.token;
       if (action.discoversInputs()) {
         removeState(action);
       }
       state = null;
-      result = skyframeActionExecutor.executeAction(action,
-          fileAndMetadataCache, actionStartTime, actionExecutionContext);
+      return skyframeActionExecutor.executeAction(action, fileAndMetadataCache, token,
+          actionStartTime, actionExecutionContext);
     } finally {
       try {
         actionExecutionContext.getFileOutErr().close();
@@ -281,8 +279,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         declareAdditionalDependencies(env, action);
       }
     }
-    skyframeActionExecutor.afterExecution(action, fileAndMetadataCache, token);
-    return result;
   }
 
   private static Map<Artifact, FileArtifactValue> addDiscoveredInputs(
