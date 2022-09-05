@@ -33,7 +33,6 @@ import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationS
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
-import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
 import java.util.ArrayList;
@@ -94,7 +93,7 @@ public final class ParallelEvaluator implements Evaluator {
   private final Receiver<Collection<SkyKey>> inflightKeysReceiver;
 
   private final ParallelEvaluatorContext evaluatorContext;
-  private final CycleDetector cycleDetector;
+  private final SimpleCycleDetector cycleDetector = new SimpleCycleDetector();
 
   public ParallelEvaluator(
       ProcessableGraph graph,
@@ -125,7 +124,6 @@ public final class ParallelEvaluator implements Evaluator {
             dirtyKeyTracker,
             createEvaluateRunnable(),
             threadCount);
-    cycleDetector = new SimpleCycleDetector();
   }
 
   public ParallelEvaluator(
@@ -140,11 +138,9 @@ public final class ParallelEvaluator implements Evaluator {
       @Nullable EvaluationProgressReceiver progressReceiver,
       DirtyKeyTracker dirtyKeyTracker,
       Receiver<Collection<SkyKey>> inflightKeysReceiver,
-      ForkJoinPool forkJoinPool,
-      CycleDetector cycleDetector) {
+      ForkJoinPool forkJoinPool) {
     this.graph = graph;
     this.inflightKeysReceiver = inflightKeysReceiver;
-    this.cycleDetector = cycleDetector;
     Preconditions.checkState(storeErrorsAlongsideValues || keepGoing);
     this.dirtyKeyTracker = Preconditions.checkNotNull(dirtyKeyTracker);
     evaluatorContext =
@@ -345,7 +341,7 @@ public final class ParallelEvaluator implements Evaluator {
             throw SchedulerException.ofError(state.getErrorInfo(), skyKey);
           }
           evaluatorContext.signalValuesAndEnqueueIfReady(
-              skyKey, reverseDeps, state.getVersion(), EnqueueParentBehavior.ENQUEUE);
+              skyKey, reverseDeps, state.getVersion(), /*enqueueParents=*/ true);
           return DirtyOutcome.ALREADY_PROCESSED;
         case NEEDS_REBUILDING:
           maybeMarkRebuilding(state);
@@ -429,11 +425,7 @@ public final class ParallelEvaluator implements Evaluator {
               state,
               errorInfo,
               /*isDirectlyTransient=*/ reifiedBuilderException.isTransient());
-          env.commit(
-              state,
-               evaluatorContext.keepGoing()
-                   ? EnqueueParentBehavior.ENQUEUE
-                   : EnqueueParentBehavior.SIGNAL);
+          env.commit(state, /*enqueueParents=*/ evaluatorContext.keepGoing());
           if (!shouldFailFast) {
             return;
           }
@@ -471,7 +463,7 @@ public final class ParallelEvaluator implements Evaluator {
             graph.getBatch(skyKey, Reason.RDEP_ADDITION, env.getNewlyRequestedDeps()),
             oldDeps,
             env);
-          env.commit(state, EnqueueParentBehavior.ENQUEUE);
+        env.commit(state, /*enqueueParents=*/true);
         return;
       }
 
@@ -538,10 +530,10 @@ public final class ParallelEvaluator implements Evaluator {
             skyKey,
             state,
             env.getChildErrorInfos());
-          // If the child error was catastrophic, committing this parent to the graph is not
-          // necessary, but since we don't do error bubbling in catastrophes, it doesn't violate any
-          // invariants either.
-          env.commit(state, EnqueueParentBehavior.ENQUEUE);
+        // If the child error was catastrophic, committing this parent to the graph is not
+        // necessary, but since we don't do error bubbling in catastrophes, it doesn't violate any
+        // invariants either.
+        env.commit(state, /*enqueueParents=*/ true);
         return;
       }
 

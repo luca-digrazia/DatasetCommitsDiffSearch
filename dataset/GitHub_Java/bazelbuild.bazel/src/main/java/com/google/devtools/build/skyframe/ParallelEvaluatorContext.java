@@ -36,12 +36,6 @@ import javax.annotation.Nullable;
  * <p>Also used during cycle detection.
  */
 class ParallelEvaluatorContext {
-  enum EnqueueParentBehavior {
-    ENQUEUE,
-    SIGNAL,
-    NO_ACTION
-  }
-
   private final QueryableGraph graph;
   private final Version graphVersion;
   private final ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions;
@@ -139,34 +133,27 @@ class ParallelEvaluatorContext {
    * cycles).
    */
   void signalValuesAndEnqueueIfReady(
-      SkyKey skyKey, Iterable<SkyKey> keys, Version version, EnqueueParentBehavior enqueueParents)
+      SkyKey skyKey, Iterable<SkyKey> keys, Version version, boolean enqueueParents)
       throws InterruptedException {
     // No fields of the entry are needed here, since we're just enqueuing for evaluation, but more
     // importantly, these hints are not respected for not-done nodes. If they are, we may need to
     // alter this hint.
     Map<SkyKey, ? extends NodeEntry> batch = graph.getBatch(skyKey, Reason.SIGNAL_DEP, keys);
-    switch (enqueueParents) {
-      case ENQUEUE:
-        for (SkyKey key : keys) {
-          NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
-          if (entry.signalDep(version)) {
-            getVisitor().enqueueEvaluation(key);
-          }
+    if (enqueueParents) {
+      for (SkyKey key : keys) {
+        NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
+        if (entry.signalDep(version)) {
+          getVisitor().enqueueEvaluation(key);
         }
-        return;
-      case SIGNAL:
-        for (SkyKey key : keys) {
-          NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
-          if (!entry.isDone()) {
-            // In cycles, we can have parents that are already done.
-            entry.signalDep(version);
-          }
+      }
+    } else {
+      for (SkyKey key : keys) {
+        NodeEntry entry = Preconditions.checkNotNull(batch.get(key), key);
+        if (!entry.isDone()) {
+          // In cycles, we can have parents that are already done.
+          entry.signalDep(version);
         }
-        return;
-      case NO_ACTION:
-        return;
-      default:
-        throw new IllegalStateException(enqueueParents + ", " + skyKey);
+      }
     }
   }
 

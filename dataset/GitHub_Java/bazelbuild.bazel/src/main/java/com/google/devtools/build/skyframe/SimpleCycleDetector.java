@@ -25,7 +25,6 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.skyframe.ParallelEvaluatorContext.EnqueueParentBehavior;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -42,11 +41,10 @@ import javax.annotation.Nullable;
  * Depth-first implementation of cycle detection after a {@link ParallelEvaluator} evaluation has
  * completed with at least one root unfinished.
  */
-class SimpleCycleDetector implements CycleDetector {
+class SimpleCycleDetector {
   private static final Logger logger = Logger.getLogger(SimpleCycleDetector.class.getName());
 
-  @Override
-  public void checkForCycles(
+  void checkForCycles(
       Iterable<SkyKey> badRoots,
       EvaluationResult.Builder<?> result,
       ParallelEvaluatorContext evaluatorContext)
@@ -163,7 +161,7 @@ class SimpleCycleDetector implements CycleDetector {
                 evaluatorContext);
         env.setError(
             entry, ErrorInfo.fromChildErrors(key, errorDeps), /*isDirectlyTransient=*/ false);
-        env.commit(entry, EnqueueParentBehavior.SIGNAL);
+        env.commit(entry, /*enqueueParents=*/ false);
       } else {
         entry = evaluatorContext.getGraph().get(null, Reason.CYCLE_CHECKING, key);
       }
@@ -222,7 +220,7 @@ class SimpleCycleDetector implements CycleDetector {
           // Add in this cycle.
           allErrors.add(ErrorInfo.fromCycle(cycleInfo));
           env.setError(entry, ErrorInfo.fromChildErrors(key, allErrors), /*isTransient=*/ false);
-          env.commit(entry, EnqueueParentBehavior.SIGNAL);
+          env.commit(entry, /*enqueueParents=*/ false);
           continue;
         } else {
           // We need to return right away in the noKeepGoing case, so construct the cycle (with the
