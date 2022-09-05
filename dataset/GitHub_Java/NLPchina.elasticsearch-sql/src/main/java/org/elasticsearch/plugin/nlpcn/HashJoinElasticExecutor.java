@@ -14,7 +14,6 @@ import org.elasticsearch.search.internal.InternalSearchHit;
 import org.elasticsearch.search.internal.InternalSearchHits;
 import org.nlpcn.es4sql.domain.Field;
 import org.nlpcn.es4sql.query.HashJoinElasticRequestBuilder;
-import org.nlpcn.es4sql.query.TableInJoinRequestBuilder;
 
 import java.io.IOException;
 import java.util.*;
@@ -71,8 +70,7 @@ public class HashJoinElasticExecutor {
     }
 
     public void run() throws IOException {
-        TableInJoinRequestBuilder firstTableRequest = requestBuilder.getFirstTable();
-        SearchHits firstTableHits = firstTableRequest.getRequestBuilder().get().getHits();
+        SearchHits firstTableHits = requestBuilder.getFirstTableRequest().get().getHits();
         Map<String,List<InternalSearchHit>> comparisonKeyToSearchHits = new HashMap<>();
         List<Map.Entry<Field, Field>> t1ToT2FieldsComparison = requestBuilder.getT1ToT2FieldsComparison();
         int ids = 1;
@@ -87,7 +85,7 @@ public class HashJoinElasticExecutor {
             InternalSearchHit searchHit = new InternalSearchHit(ids, hit.id(), new StringText(hit.getType()), hit.getFields());
             searchHit.sourceRef(hit.getSourceRef());
 
-            onlyReturnedFields(searchHit.sourceAsMap(), firstTableRequest.getReturnedFields());
+            onlyReturnedFields(searchHit.sourceAsMap(), requestBuilder.getFirstTableReturnedField());
             ids++;
             currentSearchHits.add(searchHit);
         }
@@ -95,9 +93,7 @@ public class HashJoinElasticExecutor {
 
         ids = 0;
         List<InternalSearchHit> finalResult = new ArrayList<>();
-        TableInJoinRequestBuilder secondTableRequest = requestBuilder.getSecondTable();
-
-        SearchHits secondTableHits = secondTableRequest.getRequestBuilder().get().getHits();
+        SearchHits secondTableHits = requestBuilder.getSecondTableRequest().get().getHits();
         for(SearchHit secondTableHit : secondTableHits){
 
             String key = getComparisonKey(t1ToT2FieldsComparison,secondTableHit,false);
@@ -106,7 +102,7 @@ public class HashJoinElasticExecutor {
             //TODO decide what to do according to left join. now assume regular join.
             if(searchHits!=null && searchHits.size() > 0){
                 for(InternalSearchHit matchingHit : searchHits){
-                    onlyReturnedFields(secondTableHit.sourceAsMap(), secondTableRequest.getReturnedFields());
+                    onlyReturnedFields(secondTableHit.sourceAsMap(), requestBuilder.getSecondTableReturnedField());
 
                     //todo: decide which id to put or type. or maby its ok this way. just need to doc.
                     InternalSearchHit searchHit = new InternalSearchHit(ids, matchingHit.id() + "|" + secondTableHit.getId(), new StringText(matchingHit.getType() + "|" + secondTableHit.getType()), matchingHit.getFields());
@@ -135,7 +131,7 @@ public class HashJoinElasticExecutor {
             if(firstTable) name = t1ToT2.getKey().getName();
             else name = t1ToT2.getValue().getName();
 
-            Object data = deepSearchInMap(sourceAsMap, name);
+            Object data = deepSearchInMap(sourceAsMap,name);
             if(data == null)
                 key+="|null|";
             else
@@ -145,8 +141,8 @@ public class HashJoinElasticExecutor {
     }
 
     private void mergeSourceAndAddAliases(SearchHit secondTableHit, InternalSearchHit searchHit) {
-        Map<String,Object> results = mapWithAliases(searchHit.getSource(), requestBuilder.getFirstTable().getAlias());
-        results.putAll(mapWithAliases(secondTableHit.getSource(), requestBuilder.getSecondTable().getAlias()));
+        Map<String,Object> results = mapWithAliases(searchHit.getSource(), requestBuilder.getFirstTableAlias());
+        results.putAll(mapWithAliases(secondTableHit.getSource(), requestBuilder.getSecondTableAlias()));
         searchHit.getSource().clear();
         searchHit.getSource().putAll(results);
     }
