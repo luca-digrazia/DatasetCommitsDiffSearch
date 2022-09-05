@@ -9,7 +9,7 @@ import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -76,7 +76,7 @@ public class MetricsServletContextListenerTest extends AbstractServletTest {
                 .isEqualTo(allowedOrigin);
         assertThat(response.getContent())
                 .isEqualTo("{" +
-                        "\"version\":\"3.1.3\"," +
+                        "\"version\":\"3.0.0\"," +
                         "\"gauges\":{" +
                         "\"g1\":{\"value\":100}" +
                         "}," +
@@ -106,7 +106,7 @@ public class MetricsServletContextListenerTest extends AbstractServletTest {
                 .isEqualTo(allowedOrigin);
         assertThat(response.getContent())
                 .isEqualTo(String.format("{%n" +
-                        "  \"version\" : \"3.1.3\",%n" +
+                        "  \"version\" : \"3.0.0\",%n" +
                         "  \"gauges\" : {%n" +
                         "    \"g1\" : {%n" +
                         "      \"value\" : 100%n" +
