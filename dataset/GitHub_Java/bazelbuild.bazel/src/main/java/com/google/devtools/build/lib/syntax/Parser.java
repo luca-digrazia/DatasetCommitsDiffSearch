@@ -705,28 +705,37 @@ class Parser {
                                  start, token.right);
   }
 
-  // Equivalent to 'exprlist' rule in Python grammar.
-  // loop_variables ::= primary_with_suffix ( ',' primary_with_suffix )* ','?
-  private Expression parseForLoopVariables() {
-    // We cannot reuse parseExpression because it would parse the 'in' operator.
-    // e.g.  "for i in e: pass"  -> we want to parse only "i" here.
+  // loop_variables ::= '(' variables ')'
+  //                  | variables
+  // variables ::= ident (',' ident)*
+  private Ident parseForLoopVariables() {
     int start = token.left;
-    Expression e1 = parsePrimaryWithSuffix();
-    if (token.kind != TokenKind.COMMA) {
-      return e1;
+    boolean hasParen = false;
+    if (token.kind == TokenKind.LPAREN) {
+      hasParen = true;
+      nextToken();
     }
 
-    // It's a tuple
-    List<Expression> tuple = new ArrayList<>();
-    tuple.add(e1);
+    // TODO(bazel-team): allow multiple variables in the core Blaze language too.
+    Ident firstIdent = parseIdent();
+    boolean multipleVariables = false;
+
     while (token.kind == TokenKind.COMMA) {
-      expect(TokenKind.COMMA);
-      if (EXPR_LIST_TERMINATOR_SET.contains(token.kind)) {
-        break;
-      }
-      tuple.add(parsePrimaryWithSuffix());
+      multipleVariables = true;
+      nextToken();
+      parseIdent();
     }
-    return setLocation(ListLiteral.makeTuple(tuple), start, token.right);
+
+    if (hasParen) {
+      expect(TokenKind.RPAREN);
+    }
+
+    int end = token.right;
+    if (multipleVariables && !parsePython) {
+      reportError(lexer.createLocation(start, end),
+          "For loops with multiple variables are not yet supported");
+    }
+    return multipleVariables ? makeErrorExpression(start, end) : firstIdent;
   }
 
   // list_maker ::= '[' ']'
@@ -757,11 +766,11 @@ class Parser {
           new ListComprehension(expression);
         do {
           nextToken();
-          Expression loopVar = parseForLoopVariables();
+          Ident ident = parseForLoopVariables();
           if (token.kind == TokenKind.IN) {
             nextToken();
             Expression listExpression = parseExpression();
-            listComprehension.add(loopVar, listExpression);
+            listComprehension.add(ident, listExpression);
           } else {
             break;
           }
@@ -815,7 +824,7 @@ class Parser {
     if (token.kind == TokenKind.FOR) {
       // Dict comprehension
       nextToken();
-      Expression loopVar = parseForLoopVariables();
+      Ident loopVar = parseForLoopVariables();
       expect(TokenKind.IN);
       Expression listExpression = parseExpression();
       expect(TokenKind.RBRACE);
@@ -1135,12 +1144,12 @@ class Parser {
   private void parseForStatement(List<Statement> list) {
     int start = token.left;
     expect(TokenKind.FOR);
-    Expression loopVar = parseForLoopVariables();
+    Ident ident = parseIdent();
     expect(TokenKind.IN);
     Expression collection = parseExpression();
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
-    Statement stmt = new ForStatement(loopVar, collection, block);
+    Statement stmt = new ForStatement(ident, collection, block);
     list.add(setLocation(stmt, start, token.right));
   }
 

@@ -844,28 +844,50 @@ public class ParserTest extends AbstractParserTestCase {
   }
 
   @Test
+  public void testForLoopMultipleVariablesFail() throws Exception {
+    // For loops with multiple variables are not allowed, when parsePython is not set
+    syntaxEvents.setFailFast(false);
+    List<Statement> stmts = parseFile(
+        "[ i for i, j, k in [(1, 2, 3)] ]\n",
+        false /* no parsePython */);
+    assertThat(stmts).hasSize(1);
+    syntaxEvents.assertContainsEvent("For loops with multiple variables are not yet supported");
+  }
+
+  @Test
   public void testForLoopMultipleVariables() throws Exception {
-    List<Statement> stmts1 = parseFile("[ i for i, j, k in [(1, 2, 3)] ]\n");
+    // For loops with multiple variables is ok, when parsePython is set
+    List<Statement> stmts1 = parseFile(
+        "[ i for i, j, k in [(1, 2, 3)] ]\n",
+        true /* parsePython */);
     assertThat(stmts1).hasSize(1);
 
-    List<Statement> stmts2 = parseFile("[ i for i, j in [(1, 2, 3)] ]\n");
+    List<Statement> stmts2 = parseFile(
+        "[ i for i, j in [(1, 2, 3)] ]\n",
+        true /* parsePython */);
     assertThat(stmts2).hasSize(1);
 
-    List<Statement> stmts3 = parseFile("[ i for (i, j, k) in [(1, 2, 3)] ]\n");
+    List<Statement> stmts3 = parseFile(
+        "[ i for (i, j, k) in [(1, 2, 3)] ]\n",
+        true /* parsePython */);
     assertThat(stmts3).hasSize(1);
   }
 
   @Test
   public void testForLoopBadSyntax() throws Exception {
     syntaxEvents.setFailFast(false);
-    parseFile("[1 for (a, b, c in var]\n");
+    parseFile(
+        "[1 for (a, b, c in var]\n",
+        false /* no parsePython */);
     syntaxEvents.assertContainsEvent("syntax error");
   }
 
   @Test
   public void testForLoopBadSyntax2() throws Exception {
     syntaxEvents.setFailFast(false);
-    parseFile("[1 for in var]\n");
+    parseFile(
+        "[1 for () in var]\n",
+        false /* no parsePython */);
     syntaxEvents.assertContainsEvent("syntax error");
   }
 
