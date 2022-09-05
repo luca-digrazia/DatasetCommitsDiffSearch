@@ -14,23 +14,18 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
-import com.google.common.base.Ascii;
 import com.google.devtools.build.lib.bazel.repository.downloader.ProxyHelper;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
-import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.io.IOException;
-import java.net.URL;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -43,6 +38,11 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.transport.NetRCCredentialsProvider;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Clones a Git repository, checks out the provided branch, tag, or commit, and
@@ -93,41 +93,35 @@ public class GitCloner {
   }
 
   public static SkyValue clone(
-      Rule rule,
-      Path outputDirectory,
-      ExtendedEventHandler eventHandler,
+      Rule rule, Path outputDirectory, EventHandler eventHandler,
       Map<String, String> clientEnvironment)
       throws RepositoryFunctionException {
-    WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
-    if (mapper.isAttributeValueExplicitlySpecified("commit")
-        == mapper.isAttributeValueExplicitlySpecified("tag")) {
+    AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
+    if ((mapper.has("commit", Type.STRING) == mapper.has("tag", Type.STRING))
+        && (mapper.get("commit", Type.STRING).isEmpty()
+            == mapper.get("tag", Type.STRING).isEmpty())) {
       throw new RepositoryFunctionException(
           new EvalException(rule.getLocation(), "One of either commit or tag must be defined"),
           Transience.PERSISTENT);
     }
 
-    GitRepositoryDescriptor descriptor;
     String startingPoint;
-    try {
-      if (mapper.isAttributeValueExplicitlySpecified("commit")) {
-        startingPoint = mapper.get("commit", Type.STRING);
-      } else {
-        startingPoint = "tags/" + mapper.get("tag", Type.STRING);
-      }
-
-      descriptor = new GitRepositoryDescriptor(
-          mapper.get("remote", Type.STRING),
-          startingPoint,
-          mapper.get("init_submodules", Type.BOOLEAN),
-          outputDirectory);
-    } catch (EvalException e) {
-      throw new RepositoryFunctionException(e, Transience.PERSISTENT);
+    if (mapper.has("commit", Type.STRING) && !mapper.get("commit", Type.STRING).isEmpty()) {
+      startingPoint = mapper.get("commit", Type.STRING);
+    } else {
+      startingPoint = "tags/" + mapper.get("tag", Type.STRING);
     }
 
+    GitRepositoryDescriptor descriptor = new GitRepositoryDescriptor(
+        mapper.get("remote", Type.STRING),
+        startingPoint,
+        mapper.get("init_submodules", Type.BOOLEAN),
+        outputDirectory);
+
     // Setup proxy if remote is http or https
-    if (descriptor.remote != null && Ascii.toLowerCase(descriptor.remote).startsWith("http")) {
+    if (descriptor.remote != null && descriptor.remote.startsWith("http")) {
       try {
-        new ProxyHelper(clientEnvironment).createProxyIfNeeded(new URL(descriptor.remote));
+        ProxyHelper.createProxyIfNeeded(descriptor.remote, clientEnvironment);
       } catch (IOException ie) {
         throw new RepositoryFunctionException(ie, Transience.TRANSIENT);
       }
@@ -145,17 +139,14 @@ public class GitCloner {
           throw new RepositoryFunctionException(e, Transience.TRANSIENT);
         }
       }
-      git =
-          Git.cloneRepository()
-              .setURI(descriptor.remote)
-              .setCredentialsProvider(new NetRCCredentialsProvider())
-              .setDirectory(descriptor.directory.getPathFile())
-              .setCloneSubmodules(false)
-              .setNoCheckout(true)
-              .setProgressMonitor(
-                  new GitProgressMonitor(
-                      descriptor.remote, "Cloning " + descriptor.remote, eventHandler))
-              .call();
+      git = Git.cloneRepository()
+          .setURI(descriptor.remote)
+          .setCredentialsProvider(new NetRCCredentialsProvider())
+          .setDirectory(descriptor.directory.getPathFile())
+          .setCloneSubmodules(false)
+          .setNoCheckout(true)
+          .setProgressMonitor(new GitProgressMonitor("Cloning " + descriptor.remote, eventHandler))
+          .call();
       git.checkout()
           .setCreateBranch(true)
           .setName("bazel-checkout")
@@ -172,7 +163,7 @@ public class GitCloner {
         git.submoduleUpdate()
             .setProgressMonitor(
                 new GitProgressMonitor(
-                    descriptor.remote, "Cloning submodules for " + descriptor.remote, eventHandler))
+                    "Cloning submodules for " + descriptor.remote, eventHandler))
             .call();
       }
     } catch (InvalidRemoteException e) {
