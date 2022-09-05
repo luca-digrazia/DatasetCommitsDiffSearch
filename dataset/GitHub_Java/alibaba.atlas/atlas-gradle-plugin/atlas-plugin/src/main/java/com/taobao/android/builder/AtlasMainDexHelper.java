@@ -31,16 +31,7 @@ public class AtlasMainDexHelper {
     private Map<QualifiedContent,List<File>>mainDexAchives = new HashMap<>();
 
     public void addMainDexJars(Set<BuildAtlasEnvTask.FileIdentity>maindexs){
-        mainDexJar.clear();
         mainDexJar.addAll(maindexs);
-    }
-
-    public void addAllMainDexJars(Collection<File>maindexs) {
-        mainDexJar.clear();
-        for (File file : maindexs) {
-            mainDexJar.add(new BuildAtlasEnvTask.FileIdentity(file.getName(), file, false, false));
-
-        }
     }
 
     public void addAwbDexJars(Set<BuildAtlasEnvTask.FileIdentity>awbDexs){
@@ -139,9 +130,7 @@ public class AtlasMainDexHelper {
     public Collection<File> getAllMainDexJars() {
         Set<File>allMainDexJars = new HashSet<>();
         for (BuildAtlasEnvTask.FileIdentity fileIdentity:mainDexJar){
-            if (fileIdentity.file.exists()) {
-                allMainDexJars.add(fileIdentity.file);
-            }
+            allMainDexJars.add(fileIdentity.file);
         }
         return allMainDexJars;
     }

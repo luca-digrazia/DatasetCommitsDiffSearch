@@ -4,16 +4,17 @@ import android.databinding.tool.DataBindingBuilder;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
 import com.android.build.api.transform.QualifiedContent;
+import com.android.build.api.transform.Transform;
+import com.android.build.gradle.api.ApplicationVariant;
 import com.android.build.gradle.api.BaseVariantOutput;
 import com.android.build.gradle.internal.ApkDataUtils;
 import com.android.build.gradle.internal.ExtraModelInfo;
 import com.android.build.gradle.internal.LoggerWrapper;
-import com.android.build.gradle.internal.aapt.AaptGeneration;
+import com.android.build.gradle.internal.TaskManager;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.dsl.PackagingOptions;
 import com.android.build.gradle.internal.pipeline.TransformTask;
 import com.android.build.gradle.internal.process.GradleJavaProcessExecutor;
-import com.android.build.gradle.internal.scope.TaskOutputHolder;
 import com.android.build.gradle.internal.scope.VariantScope;
 import com.android.build.gradle.internal.tasks.databinding.DataBindingMergeArtifactsTransform;
 import com.android.build.gradle.internal.transforms.*;
@@ -22,28 +23,31 @@ import com.android.build.gradle.options.IntegerOption;
 import com.android.build.gradle.options.ProjectOptions;
 import com.android.builder.core.AtlasBuilder;
 import com.android.builder.core.DefaultDexOptions;
+import com.android.builder.core.DexOptions;
 import com.android.builder.core.ErrorReporter;
 import com.android.builder.dexing.DexMergerTool;
 import com.android.builder.dexing.DexingType;
 import com.android.builder.utils.FileCache;
-import com.android.ide.common.process.JavaProcessExecutor;
-import com.android.utils.FileUtils;
+import com.google.common.collect.ImmutableList;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.hook.dex.DexByteCodeConverterHook;
 import com.taobao.android.builder.tasks.manager.transform.TransformManager;
 import com.taobao.android.builder.tasks.transform.dex.AtlasDexArchiveBuilderTransform;
 import com.taobao.android.builder.tasks.transform.dex.AtlasDexMergerTransform;
+import com.taobao.android.builder.tasks.transform.dex.AtlasExternalLibsMergerTransform;
 import com.taobao.android.builder.tasks.transform.dex.AtlasMultiDexListTransform;
 import com.taobao.android.builder.tools.ReflectUtils;
 import com.taobao.android.builder.tools.multidex.FastMultiDexer;
+import org.gradle.api.Action;
+import org.gradle.api.GradleException;
+import org.gradle.api.Task;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.api.logging.Logging;
 
 import java.io.File;
-import java.nio.file.Path;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import static com.google.common.base.Verify.verifyNotNull;
 
@@ -84,8 +88,6 @@ public class TransformReplacer {
                     variantContext.getScope().getVariantConfiguration().getBuildType().isDebuggable());
             atlasDexArchiveBuilderTransform.setTransformTask(transformTask);
             ReflectUtils.updateField(transformTask,"transform",atlasDexArchiveBuilderTransform);
-
-
         }
 
     }
@@ -106,9 +108,9 @@ public class TransformReplacer {
 
     @Nullable
     private FileCache getUserDexCache(boolean isMinifiedEnabled, boolean preDexLibraries) {
-//        if (!preDexLibraries || isMinifiedEnabled) {
-//            return null;
-//        }
+        if (!preDexLibraries || isMinifiedEnabled) {
+            return null;
+        }
         return getUserIntermediatesCache();
     }
 
@@ -205,20 +207,14 @@ public class TransformReplacer {
 
         List<TransformTask> baseTransforms = TransformManager.findTransformTaskByTransformType(
                 variantContext, ProGuardTransform.class);
-        List<TransformTask> nextTransformTasks = TransformManager.findTransformTaskByTransformType(
-                variantContext, DexArchiveBuilderTransform.class);
 
         for (TransformTask transformTask : baseTransforms) {
+
             AtlasProguardTransform newTransform = new AtlasProguardTransform(variantContext);
-            newTransform.oldTransform = (ProGuardTransform) transformTask.getTransform();
-            for (TransformTask nextTransformTask:nextTransformTasks) {
-                if (nextTransformTask.getVariantName().equals(transformTask.getVariantName())) {
-                    newTransform.nextTransformTask = nextTransformTask;
-                }
-            }
+
             ReflectUtils.updateField(transformTask, "transform",
                     newTransform);
-
+            newTransform.oldTransform = (ProGuardTransform) transformTask.getTransform();
 //
         }
     }
@@ -259,7 +255,6 @@ public class TransformReplacer {
             MergeJavaResourcesTransform transform = (MergeJavaResourcesTransform) transformTask.getTransform();
             PackagingOptions packagingOptions = (PackagingOptions) ReflectUtils.getField(transform,"packagingOptions");
             packagingOptions.exclude("**.aidl");
-            packagingOptions.exclude("**.cfg");
             Set<? super QualifiedContent.Scope> mergeScopes = (Set<? super QualifiedContent.Scope>) ReflectUtils.getField(transform,"mergeScopes");
             Set<QualifiedContent.ContentType> mergedType = (Set<QualifiedContent.ContentType>) ReflectUtils.getField(transform,"mergedType");
             String name = (String) ReflectUtils.getField(transform,"name");
@@ -267,65 +262,6 @@ public class TransformReplacer {
             ReflectUtils.updateField(transformTask, "transform",
                     atlasMergeJavaResourcesTransform);
         }
-
-    }
-
-    public void replaceFixStackFramesTransform(BaseVariantOutput vod) {
-        List<TransformTask> baseTransforms = TransformManager.findTransformTaskByTransformType(
-                variantContext, FixStackFramesTransform.class);
-        for (TransformTask transformTask:baseTransforms){
-            FixStackFramesTransform transform = (FixStackFramesTransform) transformTask.getTransform();
-
-            AtlasFixStackFramesTransform atlasFixStackFramesTransform = new AtlasFixStackFramesTransform(variantContext.getAppVariantOutputContext(ApkDataUtils.get(vod)),(Supplier<List<File>>) ReflectUtils.getField(transform,"androidJarClasspath"),(List<Path>) ReflectUtils.getField(transform,"compilationBootclasspath"),(FileCache) ReflectUtils.getField(transform,"userCache"));
-            atlasFixStackFramesTransform.oldTransform = transform;
-            ReflectUtils.updateField(transformTask, "transform",
-                    atlasFixStackFramesTransform);
-        }
-    }
-
-    public void replaceDesugarTransform(BaseVariantOutput vod) {
-        List<TransformTask> baseTransforms = TransformManager.findTransformTaskByTransformType(
-                variantContext, DesugarTransform.class);
-        for (TransformTask transformTask:baseTransforms){
-            DesugarTransform transform = (DesugarTransform) transformTask.getTransform();
-            AtlasDesugarTransform atlasDesugarTransform = new AtlasDesugarTransform(
-                    variantContext.getAppVariantOutputContext(ApkDataUtils.get(vod)),
-                    (Supplier<List<File>>) ReflectUtils.getField(transform,"androidJarClasspath"),
-                    (List) ReflectUtils.getField(transform,"compilationBootclasspath"),
-                    variantContext.getScope().getGlobalScope().getBuildCache(),
-                    (int)ReflectUtils.getField(transform,"minSdk"),
-                    (JavaProcessExecutor)ReflectUtils.getField(transform,"executor"),
-                    (boolean)ReflectUtils.getField(transform,"verbose"),
-                    (boolean)ReflectUtils.getField(transform,"enableGradleWorkers"),
-                    (Path)ReflectUtils.getField(transform,"tmpDir"));
-            atlasDesugarTransform.oldTransform = transform;
-            ReflectUtils.updateField(transformTask, "transform",
-                    atlasDesugarTransform);
-        }
-    }
-
-    public void replaceShrinkResourcesTransform() {
-        File shrinkerOutput =
-                FileUtils.join(
-                        variantContext.getScope().getGlobalScope().getIntermediatesDir(),
-                        "res_stripped",
-                        variantContext.getScope().getVariantConfiguration().getDirName());
-        List<TransformTask> baseTransforms = TransformManager.findTransformTaskByTransformType(
-                variantContext, ShrinkResourcesTransform.class);
-        for (TransformTask transform:baseTransforms){
-            ShrinkResourcesTransform oldTransform = (ShrinkResourcesTransform) transform.getTransform();
-            ResourcesShrinker resourcesShrinker = new ResourcesShrinker(oldTransform,variantContext.getVariantData(),
-                    variantContext.getScope().getOutput(TaskOutputHolder.TaskOutputType.PROCESSED_RES),
-                    shrinkerOutput,
-                    AaptGeneration.fromProjectOptions(variantContext.getScope().getGlobalScope().getProjectOptions()),
-                    variantContext.getScope().getOutput(TaskOutputHolder.TaskOutputType.SPLIT_LIST),
-                    variantContext.getProject().getLogger(),
-                    variantContext);
-            ReflectUtils.updateField(transform, "transform",
-                    resourcesShrinker);
-
-        }
-
 
     }
 }

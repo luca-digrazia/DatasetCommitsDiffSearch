@@ -109,12 +109,8 @@ public class AtlasMultiDexListTransform extends BaseProguardAction {
         }
         FastMultiDexer fastMultiDexer = (FastMultiDexer) AtlasBuildContext.androidBuilderMap.get(variantScope.getGlobalScope().getProject()).multiDexer;
 
-        Collection<File>files = fastMultiDexer.repackageJarList(inputs, mainDexListFile,variantScope.getVariantData().getName().equals("release"));
+        fastMultiDexer.repackageJarList(inputs, mainDexListFile);
 
-        if (files!= null && files.size() > 0){
-            AtlasBuildContext.atlasMainDexHelper.addAllMainDexJars(files);
-
-        }
     }
 
 }
