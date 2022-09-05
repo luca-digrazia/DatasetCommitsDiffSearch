@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.packages.Type.INTEGER;
 import static com.google.devtools.build.lib.packages.Type.LABEL;
 import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castList;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 
@@ -73,7 +72,6 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -148,8 +146,6 @@ public class SkylarkRuleClassFunctions {
           .add(attr("shard_count", INTEGER).value(-1))
           .add(attr("local", BOOLEAN).value(false).taggable()
               .nonconfigurable("policy decision: this should be consistent across configurations"))
-          .add(attr("args", STRING_LIST)
-              .nonconfigurable("policy decision: should be consistent across configurations"))
           .add(attr("$test_runtime", LABEL_LIST).cfg(HOST).value(ImmutableList.of(
               labelCache.getUnchecked("//tools/test:runtime"))))
           .add(attr(":run_under", LABEL).cfg(DATA).value(RUN_UNDER))
@@ -285,8 +281,6 @@ public class SkylarkRuleClassFunctions {
     // This is fine since we don't modify the builder from here.
     private final RuleClass.Builder builder;
     private final RuleClassType type;
-    private PathFragment skylarkFile;
-    private String ruleClassName;
 
     public RuleFunction(Builder builder, RuleClassType type) {
       super("rule", FunctionSignature.KWARGS);
@@ -300,10 +294,7 @@ public class SkylarkRuleClassFunctions {
     public Object call(Object[] args, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException, ConversionException {
       try {
-        if (ruleClassName == null || skylarkFile == null) {
-          throw new EvalException(ast.getLocation(),
-              "Invalid rule class hasn't been exported by a Skylark file");
-        }
+        String ruleClassName = ast.getFunction().getName();
         if (ruleClassName.startsWith("_")) {
           throw new EvalException(ast.getLocation(), "Invalid rule class name '" + ruleClassName
               + "', cannot be private");
@@ -321,33 +312,9 @@ public class SkylarkRuleClassFunctions {
       }
     }
 
-    /**
-     * Export a RuleFunction from a Skylark file with a given name.
-     */
-    void export(PathFragment skylarkFile, String ruleClassName) {
-      this.skylarkFile = skylarkFile;
-      this.ruleClassName = ruleClassName;
-    }
-
     @VisibleForTesting
     RuleClass.Builder getBuilder() {
       return builder;
-    }
-  }
-
-  public static void exportRuleFunctions(SkylarkEnvironment env, PathFragment skylarkFile) {
-    for (String name : env.getDirectVariableNames()) {
-      try {
-        Object value = env.lookup(name);
-        if (value instanceof RuleFunction) {
-          RuleFunction function = (RuleFunction) value;
-          if (function.skylarkFile == null) {
-            function.export(skylarkFile, name);
-          }
-        }
-      } catch (NoSuchVariableException e) {
-        throw new AssertionError(e);
-      }
     }
   }
 
