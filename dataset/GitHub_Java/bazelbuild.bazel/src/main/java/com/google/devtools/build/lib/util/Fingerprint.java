@@ -28,7 +28,8 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 
 /**
- * Simplified wrapper for MD5 message digests.
+ * Simplified wrapper for MD5 message digests. See also
+ * com.google.math.crypto.MD5HMAC for a similar interface.
  *
  * @see java.security.MessageDigest
  */
@@ -66,6 +67,7 @@ public final class Fingerprint {
    * <p>This method has the side-effect of resetting the underlying digest computer.
    *
    * @return the MD5 digest as a 32-character string of hexadecimal digits
+   * @see com.google.math.crypto.MD5HMAC#toString()
    */
   public String hexDigestAndReset() {
     return hexDigest(digestAndReset());
@@ -85,6 +87,25 @@ public final class Fingerprint {
       b.append("0123456789abcdef".charAt(n & 0xF));
     }
     return b.toString();
+  }
+
+  /**
+   * Override of Object.toString to return a string for the MD5 digest without
+   * finalizing the digest computation. Calling hexDigest() instead will
+   * finalize the digest computation.
+   *
+   * @return the string returned by hexDigest()
+   */
+  @Override
+  public String toString() {
+    try {
+      // MD5 does support cloning, so this should not fail
+      return hexDigest(((MessageDigest) md.clone()).digest());
+    } catch (CloneNotSupportedException e) {
+      // MessageDigest does not support cloning,
+      // so just return the toString() on the MessageDigest.
+      return md.toString();
+    }
   }
 
   /**
