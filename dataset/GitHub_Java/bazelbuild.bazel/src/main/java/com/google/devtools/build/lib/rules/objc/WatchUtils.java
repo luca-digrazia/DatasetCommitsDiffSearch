@@ -24,30 +24,49 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.XcodeprojBuildSetting;
 
 /**
- * Contains support methods for common processing and generating of watch extension and
- * application bundles.
+ * Contains support methods for common processing and generating of watch extension and application
+ * bundles.
  */
+// TODO(b/30503590): Refactor this into a support class -- such classes are better than this static
+// utility.
 final class WatchUtils {
+
+  @VisibleForTesting
+  /** Bundle directory format for watch applications for watch OS 2. */
+  static final String WATCH2_APP_BUNDLE_DIR_FORMAT = "Watch/%s.app";
 
   /**
    * Supported Apple watch OS versions.
    */
   enum WatchOSVersion {
-    OS1(XcodeProductType.WATCH_OS1_APPLICATION, XcodeProductType.WATCH_OS1_EXTENSION,
-        "WatchKitSupport");
+    OS1(
+        XcodeProductType.WATCH_OS1_APPLICATION,
+        XcodeProductType.WATCH_OS1_EXTENSION,
+        ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT,
+        "WatchKitSupport"),
+    OS2(
+        XcodeProductType.WATCH_OS2_APPLICATION,
+        XcodeProductType.WATCH_OS2_EXTENSION,
+        WATCH2_APP_BUNDLE_DIR_FORMAT,
+        "WatchKitSupport2");
 
     private final XcodeProductType applicationXcodeProductType;
     private final XcodeProductType extensionXcodeProductType;
+    private final String applicationBundleDirFormat;
     private final String watchKitSupportDirName;
 
-    WatchOSVersion(XcodeProductType applicationXcodeProductType,
+    WatchOSVersion(
+        XcodeProductType applicationXcodeProductType,
         XcodeProductType extensionXcodeProductType,
+        String applicationBundleDirFormat,
         String watchKitSupportDirName) {
       this.applicationXcodeProductType = applicationXcodeProductType;
       this.extensionXcodeProductType = extensionXcodeProductType;
+      this.applicationBundleDirFormat = applicationBundleDirFormat;
       this.watchKitSupportDirName = watchKitSupportDirName;
     }
     
@@ -63,6 +82,11 @@ final class WatchUtils {
      */
     XcodeProductType getExtensionXcodeProductType() {
       return extensionXcodeProductType;
+    }
+
+    /** Returns the bundle directory format of the watch application relative to its container. */
+    String getApplicationBundleDirFormat() {
+      return applicationBundleDirFormat;
     }
 
     /**
@@ -92,13 +116,13 @@ final class WatchUtils {
   }
 
   /**
-   * Watch Extension are not accepted by Apple below version 8.2. While applications built with a
-   * minimum iOS version of less than 8.2 may contain watch extension in their bundle, the
+   * Watch Extension are not accepted by Apple below iOS version 8.2. While applications built with
+   * a minimum iOS version of less than 8.2 may contain watch extension in their bundle, the
    * extension itself needs to be built with 8.2 or higher. This logic overrides (if necessary)
    * any flag-set minimum iOS version for extensions only so that this requirement is not
    * violated.
    */
-  static DottedVersion determineMinimumOsVersion(DottedVersion fromFlag) {
+  static DottedVersion determineMinimumIosVersion(DottedVersion fromFlag) {
     return Ordering.natural().max(fromFlag, MINIMUM_OS_VERSION);
   }
 
@@ -128,7 +152,7 @@ final class WatchUtils {
         // 1. Copy WK stub binary to watchKitSupportPath.
         "mkdir -p " + watchKitSupportPath,
         "&&",
-        String.format("cp %s %s", WATCH_KIT_STUB_PATH, watchKitSupportPath),
+        String.format("cp -f %s %s", WATCH_KIT_STUB_PATH, watchKitSupportPath),
         // 2. cd to working directory.
         "&&",
         "cd " + workingDirectory,
@@ -139,12 +163,15 @@ final class WatchUtils {
             watchSupportZip.getFilename(),
             watchKitSupportDirName));
 
-    ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext,
-        ruleContext.getFragment(AppleConfiguration.class).getBundlingPlatform())
-        .setProgressMessage("Copying Watchkit support to app bundle")
-        .setShellCommand(ImmutableList.of("/bin/bash", "-c", Joiner.on(" ").join(command)))
-        .addOutput(watchSupportZip)
-        .build(ruleContext));
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ruleContext.registerAction(
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(
+                appleConfiguration,
+                appleConfiguration.getMultiArchPlatform(PlatformType.WATCHOS))
+            .setProgressMessage("Copying Watchkit support to app bundle")
+            .setShellCommand(ImmutableList.of("/bin/bash", "-c", Joiner.on(" ").join(command)))
+            .addOutput(watchSupportZip)
+            .build(ruleContext));
 
     objcProviderBuilder.add(ROOT_MERGE_ZIP, watchSupportZip(ruleContext));
   }
@@ -164,8 +191,9 @@ final class WatchUtils {
     xcodeSettings.add(
         XcodeprojBuildSetting.newBuilder()
             .setName("IPHONEOS_DEPLOYMENT_TARGET")
-            .setValue(determineMinimumOsVersion(
-                ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs()).toString())
+            .setValue(determineMinimumIosVersion(
+                ruleContext.getFragment(AppleConfiguration.class)
+                    .getMinimumOsForPlatformType(PlatformType.IOS)).toString())
             .build());
     return xcodeSettings.build();
   }
