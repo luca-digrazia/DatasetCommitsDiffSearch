@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
-import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
@@ -120,12 +119,10 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.rules.extra.ExtraAction;
 import com.google.devtools.build.lib.rules.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
-import com.google.devtools.build.lib.skyframe.ActionLookupValue;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
@@ -229,8 +226,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
             analysisMock.getProductName(),
-            CrossRepositoryLabelViolationStrategy.ERROR,
-            ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD));
+            CrossRepositoryLabelViolationStrategy.ERROR);
     packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 7;
@@ -1065,10 +1061,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         packageRelativePath,
         owner.getConfiguration().getBinDirectory(RepositoryName.MAIN),
         (AspectValue.AspectKey)
-            ActionLookupValue.key(AspectValue.createAspectKey(
-                owner.getLabel(), owner.getConfiguration(),
-                new AspectDescriptor(creatingAspectFactory, parameters), owner.getConfiguration()
-            ))
+            AspectValue.key(
+                    owner.getLabel(),
+                    owner.getConfiguration(),
+                    owner.getConfiguration(),
+                    creatingAspectFactory,
+                    parameters)
                 .argument());
   }
 
@@ -1141,10 +1139,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         owner.getConfiguration().getGenfilesDirectory(
             owner.getTarget().getLabel().getPackageIdentifier().getRepository()),
         (AspectValue.AspectKey)
-            ActionLookupValue.key(AspectValue.createAspectKey(
-                owner.getLabel(), owner.getConfiguration(),
-                new AspectDescriptor(creatingAspectFactory, params), owner.getConfiguration()
-            ))
+            AspectValue.key(
+                    owner.getLabel(),
+                    owner.getConfiguration(),
+                    owner.getConfiguration(),
+                    creatingAspectFactory,
+                    params)
                 .argument());
   }
 
