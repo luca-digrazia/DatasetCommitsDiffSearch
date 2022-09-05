@@ -182,7 +182,7 @@ public final class TestActionBuilder {
     PathFragment targetName = new PathFragment(ruleContext.getLabel().getName());
     BuildConfiguration config = ruleContext.getConfiguration();
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
-    Root root = config.getTestLogsDirectory(ruleContext.getRule().getRepository());
+    Root root = config.getTestLogsDirectory();
 
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     inputsBuilder.addTransitive(
@@ -241,35 +241,27 @@ public final class TestActionBuilder {
 
     for (int run = 0; run < runsPerTest; run++) {
       // Use a 1-based index for user friendliness.
-      String testRunDir =
-          runsPerTest > 1 ? String.format("run_%d_of_%d", run + 1, runsPerTest) : "";
+      String runSuffix =
+          runsPerTest > 1 ? String.format("_run_%d_of_%d", run + 1, runsPerTest) : "";
       for (int shard = 0; shard < shardRuns; shard++) {
-        String shardRunDir =
-            (shardRuns > 1 ? String.format("shard_%d_of_%d", shard + 1, shards) : "");
-        if (testRunDir.isEmpty()) {
-          shardRunDir = shardRunDir.isEmpty() ? "" : shardRunDir + PathFragment.SEPARATOR_CHAR;
-        } else {
-          testRunDir += PathFragment.SEPARATOR_CHAR;
-          shardRunDir = shardRunDir.isEmpty() ? testRunDir : shardRunDir + "_" + testRunDir;
-        }
-        Artifact testLog =
-            ruleContext.getPackageRelativeArtifact(
-                targetName.getRelative(shardRunDir + "test.log"), root);
-        Artifact cacheStatus =
-            ruleContext.getPackageRelativeArtifact(
-                targetName.getRelative(shardRunDir + "test.cache_status"), root);
+        String suffix = (shardRuns > 1 ? String.format("_shard_%d_of_%d", shard + 1, shards) : "")
+            + runSuffix;
+        Artifact testLog = ruleContext.getPackageRelativeArtifact(
+            targetName.getRelative("test" + suffix + ".log"), root);
+        Artifact cacheStatus = ruleContext.getPackageRelativeArtifact(
+            targetName.getRelative("test" + suffix + ".cache_status"), root);
 
         Artifact coverageArtifact = null;
         if (collectCodeCoverage) {
           coverageArtifact = ruleContext.getPackageRelativeArtifact(
-              targetName.getRelative(shardRunDir + "coverage.dat"), root);
+              targetName.getRelative("coverage" + suffix + ".dat"), root);
           coverageArtifacts.add(coverageArtifact);
         }
 
         Artifact microCoverageArtifact = null;
         if (collectCodeCoverage && config.isMicroCoverageEnabled()) {
           microCoverageArtifact = ruleContext.getPackageRelativeArtifact(
-              targetName.getRelative(shardRunDir + "coverage.micro.dat"), root);
+              targetName.getRelative("coverage" + suffix + ".micro.dat"), root);
         }
 
         env.registerAction(new TestRunnerAction(
@@ -283,10 +275,7 @@ public final class TestActionBuilder {
     }
     // TODO(bazel-team): Passing the reportGenerator to every TestParams is a bit strange.
     Artifact reportGenerator = null;
-    if (config.isCodeCoverageEnabled()) {
-      // It's not enough to add this if the rule has coverage enabled because the command line may
-      // contain rules with baseline coverage but no test rules that have coverage enabled, and in
-      // that case, we still need the report generator.
+    if (collectCodeCoverage) {
       reportGenerator = ruleContext.getPrerequisiteArtifact(
           "$coverage_report_generator", Mode.HOST);
     }

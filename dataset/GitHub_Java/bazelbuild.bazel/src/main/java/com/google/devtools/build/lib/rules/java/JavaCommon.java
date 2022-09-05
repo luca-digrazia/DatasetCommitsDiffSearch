@@ -51,12 +51,14 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -174,13 +176,8 @@ public class JavaCommon {
    * Creates an action to aggregate all metadata artifacts into a single
    * &lt;target_name&gt;_instrumented.jar file.
    */
-  public static void createInstrumentedJarAction(
-      RuleContext ruleContext,
-      JavaSemantics semantics,
-      List<Artifact> metadataArtifacts,
-      Artifact instrumentedJar,
-      String mainClass)
-      throws InterruptedException {
+  public static void createInstrumentedJarAction(RuleContext ruleContext, JavaSemantics semantics,
+      List<Artifact> metadataArtifacts, Artifact instrumentedJar, String mainClass) {
     // In Jacoco's setup, metadata artifacts are real jars.
     new DeployArchiveBuilder(semantics, ruleContext)
         .setOutputJar(instrumentedJar)
@@ -264,6 +261,7 @@ public class JavaCommon {
    * (deprecated behaviour for android_library only)
    */
   public JavaCompilationArgs collectJavaCompilationArgs(boolean recursive, boolean isNeverLink,
+      Iterable<SourcesJavaCompilationArgsProvider> compilationArgsFromSources,
       boolean srcLessDepsExport) {
     ClasspathType type = isNeverLink ? ClasspathType.COMPILE_ONLY : ClasspathType.BOTH;
     JavaCompilationArgs.Builder builder = JavaCompilationArgs.builder()
@@ -273,7 +271,8 @@ public class JavaCommon {
     if (recursive || srcLessDepsExport) {
       builder
           .addTransitiveTargets(targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY), recursive, type)
-          .addTransitiveTargets(getRuntimeDeps(ruleContext), recursive, ClasspathType.RUNTIME_ONLY);
+          .addTransitiveTargets(getRuntimeDeps(ruleContext), recursive, ClasspathType.RUNTIME_ONLY)
+          .addSourcesTransitiveCompilationArgs(compilationArgsFromSources, recursive, type);
     }
     return builder.build();
   }
@@ -351,24 +350,14 @@ public class JavaCommon {
   /**
    * Collects transitive source jars for the current rule.
    *
-   * @param targetSrcJars The source jar artifacts corresponding to the output of the current rule.
+   * @param targetSrcJar The source jar artifact corresponding to the output of the current rule.
    * @return A nested set containing all of the source jar artifacts on which the current rule
    *         transitively depends.
    */
-  public NestedSet<Artifact> collectTransitiveSourceJars(Artifact... targetSrcJars) {
-    return collectTransitiveSourceJars(ImmutableList.copyOf(targetSrcJars));
-  }
+  public NestedSet<Artifact> collectTransitiveSourceJars(Artifact targetSrcJar) {
+    NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
 
-  /**
-   * Collects transitive source jars for the current rule.
-   *
-   * @param targetSrcJars The source jar artifacts corresponding to the output of the current rule.
-   * @return A nested set containing all of the source jar artifacts on which the current rule
-   *         transitively depends.
-   */
-  public NestedSet<Artifact> collectTransitiveSourceJars(Iterable<Artifact> targetSrcJars) {
-    NestedSetBuilder<Artifact> builder = NestedSetBuilder.<Artifact>stableOrder()
-        .addAll(targetSrcJars);
+    builder.add(targetSrcJar);
     for (JavaSourceJarsProvider dep : getDependencies(JavaSourceJarsProvider.class)) {
       builder.addTransitive(dep.getTransitiveSourceJars());
     }
@@ -399,8 +388,6 @@ public class JavaCommon {
         usesAnnotationProcessing,
         genClassJar,
         genSourceJar,
-        getProcessorClasspathJars(),
-        getProcessorClassNames(),
         classJarsBuilder.build(),
         sourceJarsBuilder.build()
     );
@@ -608,14 +595,6 @@ public class JavaCommon {
     return targetsTreatedAsDeps.get(type);
   }
 
-  /**
-   * Returns the default dependencies for the given classpath context.
-   */
-  public static ImmutableList<TransitiveInfoCollection> defaultDeps(RuleContext ruleContext,
-      JavaSemantics semantics, ClasspathType type) {
-    return collectTargetsTreatedAsDeps(ruleContext, semantics, type);
-  }
-
   private static ImmutableList<TransitiveInfoCollection> collectTargetsTreatedAsDeps(
       RuleContext ruleContext, JavaSemantics semantics, ClasspathType type) {
     ImmutableList.Builder<TransitiveInfoCollection> builder = new Builder<>();
@@ -638,36 +617,21 @@ public class JavaCommon {
     return builder.build();
   }
 
-  public void addTransitiveInfoProviders(
-      RuleConfiguredTargetBuilder builder,
-      JavaSkylarkApiProvider.Builder skylarkApiProvider,
-      NestedSet<Artifact> filesToBuild,
-      @Nullable Artifact classJar) {
-    addTransitiveInfoProviders(
-        builder, skylarkApiProvider, filesToBuild, classJar, JAVA_COLLECTION_SPEC);
+  public void addTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
+      NestedSet<Artifact> filesToBuild, @Nullable Artifact classJar) {
+    addTransitiveInfoProviders(builder, filesToBuild, classJar, JAVA_COLLECTION_SPEC);
   }
 
-  public void addTransitiveInfoProviders(
-      RuleConfiguredTargetBuilder builder,
-      JavaSkylarkApiProvider.Builder skylarkApiProvider,
-      NestedSet<Artifact> filesToBuild,
-      @Nullable Artifact classJar,
+  public void addTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
+      NestedSet<Artifact> filesToBuild, @Nullable Artifact classJar,
       InstrumentationSpec instrumentationSpec) {
-
-    JavaCompilationInfoProvider compilationInfoProvider = createCompilationInfoProvider();
-    JavaExportsProvider exportsProvider = collectTransitiveExports();
-
-    skylarkApiProvider
-        .setCompilationInfoProvider(compilationInfoProvider)
-        .setExportsProvider(exportsProvider);
-
     builder
-        .add(
-            InstrumentedFilesProvider.class,
+        .add(InstrumentedFilesProvider.class,
             getInstrumentationFilesProvider(ruleContext, filesToBuild, instrumentationSpec))
-        .add(JavaExportsProvider.class, exportsProvider)
+        .add(JavaExportsProvider.class, collectTransitiveExports())
+        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(classJar))
-        .add(JavaCompilationInfoProvider.class, compilationInfoProvider);
+        .add(JavaCompilationInfoProvider.class, createCompilationInfoProvider());
   }
 
   private static InstrumentedFilesProvider getInstrumentationFilesProvider(RuleContext ruleContext,
@@ -682,11 +646,8 @@ public class JavaCommon {
         /*withBaselineCoverage*/!TargetUtils.isTestRule(ruleContext.getTarget()));
   }
 
-  public void addGenJarsProvider(
-      RuleConfiguredTargetBuilder builder,
-      JavaSkylarkApiProvider.Builder javaSkylarkApiProvider,
-      @Nullable Artifact genClassJar,
-      @Nullable Artifact genSourceJar) {
+  public void addGenJarsProvider(RuleConfiguredTargetBuilder builder,
+      @Nullable Artifact genClassJar, @Nullable Artifact genSourceJar) {
     JavaGenJarsProvider genJarsProvider = collectTransitiveGenJars(
         javaCompilationHelper.usesAnnotationProcessing(),
         genClassJar, genSourceJar);
@@ -695,7 +656,6 @@ public class JavaCommon {
     genJarsBuilder.addTransitive(genJarsProvider.getTransitiveGenClassJars());
     genJarsBuilder.addTransitive(genJarsProvider.getTransitiveGenSourceJars());
 
-    javaSkylarkApiProvider.setGenJarsProvider1(genJarsProvider);
     builder
         .add(JavaGenJarsProvider.class, genJarsProvider)
         .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genJarsBuilder.build());
@@ -723,6 +683,12 @@ public class JavaCommon {
         .build();
     attributes.addRuntimeClassPathEntries(args.getRuntimeJars());
     attributes.addInstrumentationMetadataEntries(args.getInstrumentationMetadata());
+  }
+
+  public static Iterable<SourcesJavaCompilationArgsProvider> compilationArgsFromSources(
+      RuleContext ruleContext) {
+    return ruleContext.getPrerequisites("srcs", Mode.TARGET,
+        SourcesJavaCompilationArgsProvider.class);
   }
 
   /**
@@ -825,8 +791,8 @@ public class JavaCommon {
    * @return the value of the neverlink attribute.
    */
   public static final boolean isNeverLink(RuleContext ruleContext) {
-    return ruleContext.getRule().isAttrDefined("neverlink", Type.BOOLEAN)
-        && ruleContext.attributes().get("neverlink", Type.BOOLEAN);
+    return ruleContext.getRule().isAttrDefined("neverlink", Type.BOOLEAN) &&
+        ruleContext.attributes().get("neverlink", Type.BOOLEAN);
   }
 
   private static NestedSet<Artifact> getFilesToCompile(Artifact classJar) {
@@ -856,7 +822,7 @@ public class JavaCommon {
   public NestedSet<Artifact> getCompileTimeClasspath() {
     return classpathFragment.getCompileTimeClasspath();
   }
-
+  
   public RuleContext getRuleContext() {
     return ruleContext;
   }

@@ -786,15 +786,11 @@ public final class BuildConfiguration {
             + "By default, licenses are not checked.")
     public boolean checkLicenses;
 
-    @Option(
-      name = "enforce_constraints",
-      defaultValue = "true",
-      category = "undocumented",
-      help =
-          "Checks the environments each target is compatible with and reports errors if any "
-              + "target has dependencies that don't support the same environments",
-      oldName = "experimental_enforce_constraints"
-    )
+    @Option(name = "experimental_enforce_constraints",
+        defaultValue = "true",
+        category = "undocumented",
+        help = "Checks the environments each target is compatible with and reports errors if any "
+            + "target has dependencies that don't support the same environments")
     public boolean enforceConstraints;
 
     @Option(name = "experimental_action_listener",
