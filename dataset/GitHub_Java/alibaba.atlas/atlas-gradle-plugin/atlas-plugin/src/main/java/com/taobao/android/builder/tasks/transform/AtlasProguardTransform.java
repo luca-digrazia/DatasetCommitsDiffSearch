@@ -270,7 +270,6 @@ public class AtlasProguardTransform extends ProGuardTransform {
     static boolean firstTime = true;
 
     List<File> defaultProguardFiles = new ArrayList<>();
-    private List<File> nonConsumerProguardFiles = new ArrayList<>();
 
     @Override
     public Set<ContentType> getOutputTypes() {
@@ -283,19 +282,12 @@ public class AtlasProguardTransform extends ProGuardTransform {
     public AtlasProguardTransform(AppVariantContext appVariantContext) {
         super(appVariantContext.getScope());
         this.appVariantContext = appVariantContext;
-
         this.buildConfig = appVariantContext.getAtlasExtension().getTBuildConfig();
     }
 
 
     @Override
-    public boolean isCacheable() {
-        return false;
-    }
-
-    @Override
     public void transform(TransformInvocation invocation) throws TransformException {
-
         firstTime =true;
         ConfigurableFileCollection oldConfigurableFileCollection = (ConfigurableFileCollection) ReflectUtils.getField(ProguardConfigurable.class, oldTransform,
                 "configurationFiles");
@@ -306,8 +298,6 @@ public class AtlasProguardTransform extends ProGuardTransform {
                     appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
         }else {
                     defaultProguardFiles.addAll(oldConfigurableFileCollection.getFiles());
-            nonConsumerProguardFiles.addAll(
-                appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
 
         }
         List<AwbBundle> awbBundles = AtlasBuildContext.androidDependencyTrees.get(
@@ -467,8 +457,6 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
         Profiler.enter("executeproguard");
         BundleProguarder.execute(appVariantContext, input);
-        transformInput(input);
-
         Profiler.release();
 
         for (File jar : unProguardJars) {
@@ -495,19 +483,11 @@ public class AtlasProguardTransform extends ProGuardTransform {
 
     }
 
-    private static void transformInput(Input input) {
-        if (input.maindexFileTransform.size() == 0){
-            return;
-        }else {
-            AtlasBuildContext.atlasMainDexHelper.updateMainDexFiles2(input.maindexFileTransform);
-        }
-    }
-
 
     @Override
     public void applyConfigurationFile(File file) throws IOException, ParseException {
         //appVariantContext.getVariantConfiguration().getProguardFiles(false, new ArrayList<>());
-        if (buildConfig.isLibraryProguardKeepOnly() && !nonConsumerProguardFiles.contains(file)) {
+        if (!defaultProguardFiles.contains(file) && buildConfig.isLibraryProguardKeepOnly()) {
             appVariantContext.getProject().getLogger().info("applyConfigurationFile keep only :" + file);
             applyLibConfigurationFile(file);
             return;
