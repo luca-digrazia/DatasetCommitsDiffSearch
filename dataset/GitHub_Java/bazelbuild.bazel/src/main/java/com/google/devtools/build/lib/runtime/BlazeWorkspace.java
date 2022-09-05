@@ -23,8 +23,6 @@ import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.CompactPersistentActionCache;
 import com.google.devtools.build.lib.actions.cache.NullActionCache;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
-import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
@@ -58,8 +56,6 @@ public final class BlazeWorkspace {
 
   private final BlazeRuntime runtime;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
-  private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
-  private final BinTools binTools;
 
   private final BlazeDirectories directories;
   private final SkyframeExecutor skyframeExecutor;
@@ -70,13 +66,9 @@ public final class BlazeWorkspace {
   private Range<Long> lastExecutionRange = null;
 
   public BlazeWorkspace(BlazeRuntime runtime, BlazeDirectories directories,
-      SkyframeExecutor skyframeExecutor, SubscriberExceptionHandler eventBusExceptionHandler,
-      WorkspaceStatusAction.Factory workspaceStatusActionFactory, BinTools binTools) {
+      SkyframeExecutor skyframeExecutor, SubscriberExceptionHandler eventBusExceptionHandler) {
     this.runtime = runtime;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
-    this.workspaceStatusActionFactory = workspaceStatusActionFactory;
-    this.binTools = binTools;
-
     this.directories = directories;
     this.skyframeExecutor = skyframeExecutor;
 
@@ -96,14 +88,6 @@ public final class BlazeWorkspace {
 
   public SkyframeExecutor getSkyframeExecutor() {
     return skyframeExecutor;
-  }
-
-  public WorkspaceStatusAction.Factory getWorkspaceStatusActionFactory() {
-    return workspaceStatusActionFactory;
-  }
-
-  public BinTools getBinTools() {
-    return binTools;
   }
 
   /**

@@ -482,9 +482,10 @@ public class BlazeCommandDispatcher {
       throws OptionsParsingException {
     if (!rcfileOptions.isEmpty()) {
       String inherited = commandToParse.equals(originalCommand) ? "" : "Inherited ";
-      rcfileNotes.add("Reading options for '" + originalCommand +
-          "' from " + rcfile + ":\n" +
-          "  " + inherited + "'" + commandToParse + "' options: "
+      String source = rcfile.equals("client") ? "Options provided by the client"
+          : "Reading options for '" + originalCommand + "' from " + rcfile;
+      rcfileNotes.add(source + ":\n"
+          + "  " + inherited + "'" + commandToParse + "' options: "
         + Joiner.on(' ').join(rcfileOptions));
       optionsParser.parse(OptionPriority.RC_FILE, rcfile, rcfileOptions);
     }
@@ -635,7 +636,7 @@ public class BlazeCommandDispatcher {
     EventHandler eventHandler;
     if (eventOptions.experimentalUi) {
       // The experimental event handler is not to be rate limited.
-      return new ExperimentalEventHandler(outErr, eventOptions, runtime.getClock());
+      return new ExperimentalEventHandler(outErr, eventOptions);
     } else if ((eventOptions.useColor() || eventOptions.useCursorControl())) {
       eventHandler = new FancyTerminalEventHandler(outErr, eventOptions);
     } else {
