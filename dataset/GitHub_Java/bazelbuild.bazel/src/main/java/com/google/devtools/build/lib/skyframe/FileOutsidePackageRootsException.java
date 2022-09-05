@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,18 +18,17 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import java.io.IOException;
 
 /**
- * <p>This is an implementation detail of {@link FileFunction} to signal attempt to evaluate a file
- * outside of known/allowed directory structures.
- *
- * <p>Extends {@link IOException} to ensure it is properly handled by consumers of
- * {@link FileValue}.
+ * Exception thrown to signal reference to file outside of known/allowed directory structures.
+ * Extends IOException to ensure it is properly handled by skyframe.
  */
 // TODO(bazel-team): Don't piggyback on existing handling of IOExceptions and instead implement
 // the desired semantics.
-class FileOutsidePackageRootsException extends IOException {
+public class FileOutsidePackageRootsException extends IOException {
 
-  /** @param outsidePath the {@link RootedPath} that triggered this exception. */
-  public FileOutsidePackageRootsException(RootedPath outsidePath) {
-    super("Encountered reference to external mutable " + outsidePath);
+  /**
+   * @param outsideRoots the {@link RootedPath} that triggered this exception.
+   */
+  public FileOutsidePackageRootsException(RootedPath outsideRoots) {
+    super("Encountered reference to external mutable " + outsideRoots);
   }
 }

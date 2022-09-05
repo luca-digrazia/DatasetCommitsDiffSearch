@@ -1516,15 +1516,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  public int getOutputDirtyFilesAndClear() {
-    int result = outputDirtyFiles;
-    outputDirtyFiles = 0;
-    return result;
+  public int getOutputDirtyFiles() {
+    return outputDirtyFiles;
   }
 
-  public int getModifiedFilesDuringPreviousBuildAndClear() {
-    int result = modifiedFilesDuringPreviousBuild;
-    modifiedFilesDuringPreviousBuild = 0;
-    return result;
+  public int getModifiedFilesDuringPreviousBuild() {
+    return modifiedFilesDuringPreviousBuild;
   }
 }

@@ -14,9 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.packages.ExternalPackage;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -26,13 +24,14 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Common utilities for dealing with files outside the package roots. */
-public class ExternalFilesHelper {
+class ExternalFilesHelper {
 
   private final AtomicReference<PathPackageLocator> pkgLocator;
   private final Set<Path> immutableDirs;
   private final boolean errorOnExternalFiles;
 
-  public ExternalFilesHelper(AtomicReference<PathPackageLocator> pkgLocator) {
+  @VisibleForTesting
+  ExternalFilesHelper(AtomicReference<PathPackageLocator> pkgLocator) {
     this(pkgLocator, ImmutableSet.<Path>of(), /*errorOnExternalFiles=*/false);
   }
 
@@ -61,7 +60,7 @@ public class ExternalFilesHelper {
     // A file inside the package roots.
     INTERNAL_FILE,
 
-    // A file outside the package roots that users of ExternalFilesHelper may pretend is immutable.
+    // A file outside the package roots that we may pretend is immutable.
     EXTERNAL_IMMUTABLE_FILE,
 
     // A file outside the package roots about which we may make no other assumptions.
@@ -93,10 +92,8 @@ public class ExternalFilesHelper {
    * Potentially adds a dependency on build_id to env if this instance is configured
    * with errorOnExternalFiles=false and rootedPath is an external mutable file.
    * If errorOnExternalFiles=true and rootedPath is an external mutable file then
-   * a FileOutsidePackageRootsException is thrown. If the file is an external file that is
-   * referenced by the WORKSPACE, it gets a dependency on the //external package (and, thus,
-   * WORKSPACE file changes). This method is a no-op for any rootedPaths that fall within the known
-   * package roots.
+   * a FileOutsidePackageRootsException is thrown. This method is a no-op for any
+   * rootedPaths that fall within the known package roots.
    *
    * @param rootedPath
    * @param env
@@ -130,9 +127,6 @@ public class ExternalFilesHelper {
       } else {
         throw new FileOutsidePackageRootsException(rootedPath);
       }
-    } else if (getFileType(rootedPath) == FileType.EXTERNAL_IMMUTABLE_FILE) {
-      Preconditions.checkNotNull(
-          env.getValue(PackageValue.key(ExternalPackage.PACKAGE_IDENTIFIER)));
     }
   }
 }

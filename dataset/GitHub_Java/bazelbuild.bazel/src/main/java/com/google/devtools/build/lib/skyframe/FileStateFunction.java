@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A {@link SkyFunction} for {@link FileStateValue}s.
@@ -31,10 +30,10 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class FileStateFunction implements SkyFunction {
 
-  private final AtomicReference<TimestampGranularityMonitor> tsgm;
+  private final TimestampGranularityMonitor tsgm;
   private final ExternalFilesHelper externalFilesHelper;
 
-  public FileStateFunction(AtomicReference<TimestampGranularityMonitor> tsgm,
+  public FileStateFunction(TimestampGranularityMonitor tsgm,
       ExternalFilesHelper externalFilesHelper) {
     this.tsgm = tsgm;
     this.externalFilesHelper = externalFilesHelper;
@@ -49,7 +48,7 @@ public class FileStateFunction implements SkyFunction {
       if (env.valuesMissing()) {
         return null;
       }
-      return FileStateValue.create(rootedPath, tsgm.get());
+      return FileStateValue.create(rootedPath, tsgm);
     } catch (FileOutsidePackageRootsException e) {
       throw new FileStateFunctionException(e);
     } catch (IOException e) {
