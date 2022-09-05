@@ -1,7 +1,7 @@
 package org.hswebframework.web.datasource;
 
-import org.hswebframework.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
-import org.hswebframework.ezorm.rdb.executor.SQL;
+import org.hsweb.ezorm.rdb.executor.AbstractJdbcSqlExecutor;
+import org.hsweb.ezorm.rdb.executor.SQL;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,16 +38,7 @@ public class DefaultJdbcExecutor extends AbstractJdbcSqlExecutor {
         if (logger.isDebugEnabled()) {
             logger.debug("Releasing DataSource ({}) JDBC Connection [{}]", getDatasourceId(), connection);
         }
-        try {
-            DataSourceUtils.doReleaseConnection(connection, DataSourceHolder.currentDataSource().getNative());
-        } catch (SQLException e) {
-            logger.error(e.getMessage(), e);
-            try {
-                connection.close();
-            } catch (Exception e2) {
-                logger.error(e2.getMessage(), e2);
-            }
-        }
+        DataSourceUtils.releaseConnection(connection, DataSourceHolder.currentDataSource().getNative());
     }
 
     @Override
