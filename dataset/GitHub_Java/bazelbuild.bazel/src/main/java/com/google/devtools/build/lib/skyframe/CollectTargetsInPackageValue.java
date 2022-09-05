@@ -16,10 +16,8 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
-import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.io.Serializable;
 
 /** Singleton result of {@link CollectTargetsInPackageFunction}. */
 public class CollectTargetsInPackageValue implements SkyValue {
@@ -31,15 +29,15 @@ public class CollectTargetsInPackageValue implements SkyValue {
    * Creates a key for evaluation of {@link CollectTargetsInPackageFunction}. See that class's
    * comment for what callers should have done beforehand.
    */
-  public static SkyKey key(PackageIdentifier packageId, FilteringPolicy filteringPolicy) {
-    return LegacySkyKey.create(
+  static SkyKey key(PackageIdentifier packageId, FilteringPolicy filteringPolicy) {
+    return SkyKey.create(
         SkyFunctions.COLLECT_TARGETS_IN_PACKAGE,
         CollectTargetsInPackageKey.create(packageId, filteringPolicy));
   }
 
   /** {@link SkyKey} argument. */
   @AutoValue
-  public abstract static class CollectTargetsInPackageKey implements Serializable {
+  public abstract static class CollectTargetsInPackageKey {
     public static CollectTargetsInPackageKey create(
         PackageIdentifier packageId, FilteringPolicy filteringPolicy) {
       return new AutoValue_CollectTargetsInPackageValue_CollectTargetsInPackageKey(

@@ -19,16 +19,17 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
+import net.bytebuddy.implementation.bytecode.StackManipulation;
 
 /**
  * A base class for Skylark functions, whether builtin or user-defined.
@@ -403,6 +404,15 @@ public abstract class BaseFunction implements SkylarkValue {
     return parent;
   }
 
+  public static final StackManipulation call =
+      ByteCodeUtils.invoke(
+          BaseFunction.class,
+          "call",
+          List.class,
+          Map.class,
+          FuncallExpression.class,
+          Environment.class);
+
   /**
    * The outer calling convention to a BaseFunction.
    *
@@ -568,7 +578,7 @@ public abstract class BaseFunction implements SkylarkValue {
   }
 
   @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append("<function " + getName() + ">");
+  public void write(Appendable buffer, char quotationMark) {
+    Printer.append(buffer, "<function " + getName() + ">");
   }
 }

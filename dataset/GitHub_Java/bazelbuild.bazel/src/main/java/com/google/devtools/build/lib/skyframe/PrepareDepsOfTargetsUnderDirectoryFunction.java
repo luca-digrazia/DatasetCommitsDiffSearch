@@ -81,7 +81,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunction implements SkyFunction {
                   CollectTargetsInPackageValue.key(
                       PackageIdentifier.create(
                           recursivePkgKey.getRepository(),
-                          recursivePkgKey.getRootedPath().getRootRelativePath()),
+                          recursivePkgKey.getRootedPath().getRelativePath()),
                       filteringPolicy)),
               keysToRequest);
     }

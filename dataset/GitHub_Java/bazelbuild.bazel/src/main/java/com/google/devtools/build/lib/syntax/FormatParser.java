@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import java.util.List;
 import java.util.Map;
 
@@ -91,10 +90,9 @@ public final class FormatParser {
       History history,
       StringBuilder output)
       throws EvalException {
-    BasePrinter printer = Printer.getPrinter(output);
     if (has(chars, pos + 1, '{')) {
       // Escaped brace -> output and move to char after right brace
-      printer.append("{");
+      output.append("{");
       return 1;
     }
 
@@ -121,7 +119,7 @@ public final class FormatParser {
     }
 
     // Format object for output
-    printer.str(value);
+    output.append(Printer.str(value));
 
     // Advances the current position to the index of the closing brace of the
     // replacement field. Due to the definition of the enclosing for() loop,

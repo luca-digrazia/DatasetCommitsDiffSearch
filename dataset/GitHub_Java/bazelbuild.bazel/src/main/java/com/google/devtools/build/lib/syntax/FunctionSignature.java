@@ -16,8 +16,8 @@ package com.google.devtools.build.lib.syntax;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Interner;
+import com.google.common.collect.Interners;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
@@ -71,7 +71,7 @@ public abstract class FunctionSignature implements Serializable {
    */
   @AutoValue
   public abstract static class Shape implements Serializable {
-    private static final Interner<Shape> interner = BlazeInterners.newWeakInterner();
+    private static final Interner<Shape> interner = Interners.newWeakInterner();
 
     /** Create a function signature */
     public static Shape create(
@@ -154,8 +154,7 @@ public abstract class FunctionSignature implements Serializable {
   }
 
   /** Names of a FunctionSignature */
-  private static final Interner<ImmutableList<String>> namesInterner =
-      BlazeInterners.newWeakInterner();
+  private static final Interner<ImmutableList<String>> namesInterner = Interners.newWeakInterner();
 
   /** Intern a list of names */
   public static ImmutableList<String> names(List<String> names) {
@@ -169,8 +168,7 @@ public abstract class FunctionSignature implements Serializable {
   }
 
   // Interner
-  private static final Interner<FunctionSignature> signatureInterner =
-      BlazeInterners.newWeakInterner();
+  private static final Interner<FunctionSignature> signatureInterner = Interners.newWeakInterner();
 
   /**
    * Signatures proper.

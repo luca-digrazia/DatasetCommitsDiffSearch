@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.skyframe.RecursivePkgValue.RecursivePkgKey;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -50,15 +51,15 @@ public class RecursivePkgFunction implements SkyFunction {
   }
 
   private class MyTraversalFunction
-      extends RecursiveDirectoryTraversalFunction<MyPackageDirectoryConsumer, RecursivePkgValue> {
+      extends RecursiveDirectoryTraversalFunction<MyVisitor, RecursivePkgValue> {
 
     private MyTraversalFunction() {
       super(directories);
     }
 
     @Override
-    protected MyPackageDirectoryConsumer getInitialConsumer() {
-      return new MyPackageDirectoryConsumer();
+    protected MyVisitor getInitialVisitor() {
+      return new MyVisitor();
     }
 
     @Override
@@ -69,30 +70,23 @@ public class RecursivePkgFunction implements SkyFunction {
     }
 
     @Override
-    protected RecursivePkgValue aggregateWithSubdirectorySkyValues(
-        MyPackageDirectoryConsumer consumer, Map<SkyKey, SkyValue> subdirectorySkyValues) {
+    protected RecursivePkgValue aggregateWithSubdirectorySkyValues(MyVisitor visitor,
+        Map<SkyKey, SkyValue> subdirectorySkyValues) {
       // Aggregate the transitive subpackages.
       for (SkyValue childValue : subdirectorySkyValues.values()) {
-        consumer.addTransitivePackages(((RecursivePkgValue) childValue).getPackages());
+        visitor.addTransitivePackages(((RecursivePkgValue) childValue).getPackages());
       }
-      return consumer.createRecursivePkgValue();
+      return visitor.createRecursivePkgValue();
     }
   }
 
-  private static class MyPackageDirectoryConsumer
-      implements RecursiveDirectoryTraversalFunction.PackageDirectoryConsumer {
+  private static class MyVisitor implements RecursiveDirectoryTraversalFunction.Visitor {
 
     private final NestedSetBuilder<String> packages = new NestedSetBuilder<>(Order.STABLE_ORDER);
 
     @Override
-    public void notePackage(PathFragment pkgPath) {
-      packages.add(pkgPath.getPathString());
-    }
-
-    @Override
-    public void notePackageError(NoSuchPackageException e) {
-      // Nothing to do because the RecursiveDirectoryTraversalFunction has already emitted an error
-      // event.
+    public void visitPackageValue(Package pkg, Environment env) {
+      packages.add(pkg.getName());
     }
 
     void addTransitivePackages(NestedSet<String> transitivePackages) {

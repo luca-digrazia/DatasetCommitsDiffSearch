@@ -875,11 +875,11 @@ public final class Environment implements Freezable {
   /** A read-only Environment.Frame with global constants in it only */
   static final Frame CONSTANTS_ONLY = createConstantsGlobals();
 
-  /** A read-only Environment.Frame with initial globals */
-  public static final Frame DEFAULT_GLOBALS = createDefaultGlobals();
+  /** A read-only Environment.Frame with initial globals for the BUILD language */
+  public static final Frame BUILD = createBuildGlobals();
 
-  /** To be removed when all call-sites are updated. */
-  public static final Frame SKYLARK = DEFAULT_GLOBALS;
+  /** A read-only Environment.Frame with initial globals for Skylark */
+  public static final Frame SKYLARK = createSkylarkGlobals();
 
   private static Environment.Frame createConstantsGlobals() {
     try (Mutability mutability = Mutability.create("CONSTANTS")) {
@@ -889,11 +889,20 @@ public final class Environment implements Freezable {
     }
   }
 
-  private static Environment.Frame createDefaultGlobals() {
+  private static Environment.Frame createBuildGlobals() {
     try (Mutability mutability = Mutability.create("BUILD")) {
       Environment env = Environment.builder(mutability).build();
       Runtime.setupConstants(env);
-      Runtime.setupMethodEnvironment(env, MethodLibrary.defaultGlobalFunctions);
+      Runtime.setupMethodEnvironment(env, MethodLibrary.buildGlobalFunctions);
+      return env.getGlobals();
+    }
+  }
+
+  private static Environment.Frame createSkylarkGlobals() {
+    try (Mutability mutability = Mutability.create("SKYLARK")) {
+      Environment env = Environment.builder(mutability).setSkylark().build();
+      Runtime.setupConstants(env);
+      Runtime.setupMethodEnvironment(env, MethodLibrary.skylarkGlobalFunctions);
       return env.getGlobals();
     }
   }

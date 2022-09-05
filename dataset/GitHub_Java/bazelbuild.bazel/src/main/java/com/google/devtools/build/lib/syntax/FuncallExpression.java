@@ -208,6 +208,13 @@ public final class FuncallExpression extends Expression {
 
   private final int numPositionalArgs;
 
+  /**
+   * Note: the grammar definition restricts the function value in a function
+   * call expression to be a global identifier; however, the representation of
+   * values in the interpreter is flexible enough to allow functions to be
+   * arbitrary expressions. In any case, the "func" expression is always
+   * evaluated, so functions and variables share a common namespace.
+   */
   public FuncallExpression(@Nullable Expression obj, Identifier func,
                            List<Argument.Passed> args) {
     this.obj = obj;
@@ -216,6 +223,13 @@ public final class FuncallExpression extends Expression {
     this.numPositionalArgs = countPositionalArguments();
   }
 
+  /**
+   * Note: the grammar definition restricts the function value in a function
+   * call expression to be a global identifier; however, the representation of
+   * values in the interpreter is flexible enough to allow functions to be
+   * arbitrary expressions. In any case, the "func" expression is always
+   * evaluated, so functions and variables share a common namespace.
+   */
   public FuncallExpression(Identifier func, List<Argument.Passed> args) {
     this(null, func, args);
   }
@@ -438,8 +452,7 @@ public final class FuncallExpression extends Expression {
         if (!param.isAssignableFrom(value.getClass())) {
           return ArgumentListConversionResult.fromError(
               String.format(
-                  "Cannot convert parameter at position %d from type %s to type %s",
-                  i, EvalUtils.getDataTypeName(value), param.toString()));
+                  "Cannot convert parameter at position %d to type %s", i, param.toString()));
         }
         builder.add(value);
         i++;

@@ -58,7 +58,11 @@ public final class FlowStatement extends Statement {
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {}
+  void validate(ValidationEnvironment env) throws EvalException {
+    if (!env.isInsideLoop()) {
+      throw new EvalException(getLocation(), kind.name + " statement must be inside a for loop");
+    }
+  }
 
   @Override
   public String toString() {

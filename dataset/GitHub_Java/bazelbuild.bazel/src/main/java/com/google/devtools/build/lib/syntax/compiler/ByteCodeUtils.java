@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax.compiler;
 
+import com.google.devtools.build.lib.syntax.compiler.Jump.PrimitiveComparison;
+import java.util.List;
 import net.bytebuddy.description.method.MethodDescription.ForLoadedMethod;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.description.type.generic.GenericTypeDescription;
@@ -20,10 +22,9 @@ import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
 import net.bytebuddy.implementation.bytecode.ByteCodeAppender.Compound;
 import net.bytebuddy.implementation.bytecode.Removal;
 import net.bytebuddy.implementation.bytecode.StackManipulation;
+import net.bytebuddy.implementation.bytecode.constant.IntegerConstant;
 import net.bytebuddy.implementation.bytecode.member.FieldAccess;
 import net.bytebuddy.implementation.bytecode.member.MethodInvocation;
-
-import java.util.List;
 
 /**
  * Various utility methods for byte code generation.
@@ -59,7 +60,7 @@ public class ByteCodeUtils {
    * <p>Exists just because {@link Compound} does not have a constructor taking a list.
    */
   public static ByteCodeAppender compoundAppender(List<ByteCodeAppender> code) {
-    return new Compound(code.toArray(new ByteCodeAppender[code.size()]));
+    return new Compound(code.toArray(new ByteCodeAppender[0]));
   }
 
   /**
@@ -67,6 +68,34 @@ public class ByteCodeUtils {
    */
   public static StackManipulation getField(Class<?> clazz, String field) {
     return FieldAccess.forField(ReflectionUtils.getField(clazz, field)).getter();
+  }
+
+  /**
+   * Build a {@link StackManipulation} that logically negates an integer on the stack.
+   *
+   * <p>Java byte code does not have an instruction for this, so this produces a conditional jump
+   * which puts 0/1 on the stack.
+   */
+  public static StackManipulation intLogicalNegation() {
+    return intToPrimitiveBoolean(PrimitiveComparison.NOT_EQUAL);
+  }
+
+  /**
+   * Build a {@link StackManipulation} that converts an integer to 0/1 depending on a comparison
+   * with 0.
+   */
+  public static StackManipulation intToPrimitiveBoolean(PrimitiveComparison operator) {
+    LabelAdder afterLabel = new LabelAdder();
+    LabelAdder putFalseLabel = new LabelAdder();
+    return new StackManipulation.Compound(
+        Jump.ifIntOperandToZero(operator).to(putFalseLabel),
+        // otherwise put "false" on the stack and jump to end
+        IntegerConstant.ONE,
+        Jump.to(afterLabel.getLabel()),
+        // add label for "else" and put "true" on the stack
+        putFalseLabel,
+        IntegerConstant.ZERO,
+        afterLabel);
   }
 
   /**
