@@ -75,8 +75,9 @@ public final class LoadStatement extends Statement {
     if (!importPath.isAbsolute() && importPath.segmentCount() > 1) {
       throw new EvalException(getLocation(), String.format(PATH_ERROR_MSG, importPath));
     }
+    // TODO(bazel-team): implement semantical check.
     for (Ident symbol : symbols) {
-      env.declare(symbol.getName(), getLocation());
+      env.update(symbol.getName(), SkylarkType.UNKNOWN, getLocation());
     }
   }
 }

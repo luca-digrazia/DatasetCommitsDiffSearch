@@ -15,8 +15,8 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
+import com.google.devtools.build.lib.packages.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.skyframe.ASTFileLookupValue.ASTLookupInputException;
 import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
@@ -58,14 +58,6 @@ public class SkylarkImportLookupValue implements SkyValue {
     return dependency;
   }
 
-  private static void checkInputArgument(PathFragment astFilePathFragment)
-      throws ASTLookupInputException {
-    if (astFilePathFragment.isAbsolute()) {
-      throw new ASTLookupInputException(String.format(
-          "Input file '%s' cannot be an absolute path.", astFilePathFragment));
-    }
-  }
-
   @VisibleForTesting
   static SkyKey key(PackageIdentifier pkgIdentifier) throws ASTLookupInputException {
     return key(pkgIdentifier.getRepository(), pkgIdentifier.getPackageFragment());
@@ -87,7 +79,7 @@ public class SkylarkImportLookupValue implements SkyValue {
   private static SkyKey key(RepositoryName repo, PathFragment fileToImport)
       throws ASTLookupInputException {
     // Skylark import lookup keys need to be valid AST file lookup keys.
-    checkInputArgument(fileToImport);
+    ASTFileLookupValue.checkInputArgument(fileToImport);
     return new SkyKey(
         SkyFunctions.SKYLARK_IMPORTS_LOOKUP,
         new PackageIdentifier(repo, fileToImport));
