@@ -9,14 +9,14 @@ import java.lang.management.ThreadMXBean;
 public abstract class Clock {
 
     /**
-     * Returns the current time tick.
+     * Gets the current time tick
      *
      * @return time tick in nanoseconds
      */
     public abstract long tick();
 
     /**
-     * Returns the current time in milliseconds.
+     * Gets the current time in milliseconds
      *
      * @return time in milliseconds
      */
@@ -26,15 +26,13 @@ public abstract class Clock {
 
     /**
      * The default clock to use.
-     *
-     * @see UserTimeClock
      */
-    public static final Clock DEFAULT = new UserTimeClock();
+    public static final Clock DEFAULT = new UserTime();
 
     /**
-     * A clock implementation which returns the current time in epoch nanoseconds.
+     * Default implementation, uses {@link System#nanoTime()}.
      */
-    public static class UserTimeClock extends Clock {
+    public static class UserTime extends Clock {
         @Override
         public long tick() {
             return System.nanoTime();
@@ -42,9 +40,9 @@ public abstract class Clock {
     }
 
     /**
-     * A clock implementation which returns the current thread's CPU time.
+     * Another implementation, uses {@link ThreadMXBean#getCurrentThreadCpuTime()}
      */
-    public static class CpuTimeClock extends Clock {
+    public static class CpuTime extends Clock {
         private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
 
         @Override
