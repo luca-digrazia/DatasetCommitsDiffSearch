@@ -17,11 +17,13 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
+import com.google.common.base.Throwables;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
 import com.google.common.collect.Sets;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
@@ -54,6 +56,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -115,7 +118,20 @@ public class PackageDeserializer {
 
   // Cache label deserialization across all instances- PackgeDeserializers need to be created on
   // demand due to initialiation constraints wrt the setting of static members.
-  private static final Interner<Label> LABEL_INTERNER = Interners.newWeakInterner();
+  private static final LoadingCache<String, Label> labelCache =
+      CacheBuilder.newBuilder()
+        .weakValues()
+        .build(
+            new CacheLoader<String, Label>() {
+              @Override
+              public Label load(String labelString) throws PackageDeserializationException {
+                try {
+                  return Label.parseAbsolute(labelString);
+                } catch (LabelSyntaxException e) {
+                  throw new PackageDeserializationException("Invalid label: " + e.getMessage(), e);
+                }
+              }
+            });
 
   /** Class encapsulating state for a single package deserialization. */
   private static class DeserializationContext {
@@ -287,10 +303,10 @@ public class PackageDeserializer {
 
   private static Label deserializeLabel(String labelName) throws PackageDeserializationException {
     try {
-      return LABEL_INTERNER.intern(Label.parseAbsolute(labelName));
-    } catch (LabelSyntaxException e) {
-      throw new PackageDeserializationException(
-          "Invalid label '" + labelName + "':" + e.getMessage(), e);
+      return labelCache.get(labelName);
+    } catch (ExecutionException e) {
+      Throwables.propagateIfInstanceOf(e.getCause(), PackageDeserializationException.class);
+      throw new IllegalStateException("Failed to decode label: " + labelName, e);
     }
   }
 
