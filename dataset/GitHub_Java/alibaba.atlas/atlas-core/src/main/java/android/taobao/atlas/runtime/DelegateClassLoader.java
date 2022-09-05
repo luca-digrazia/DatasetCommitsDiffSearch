@@ -208,8 +208,11 @@
 
 package android.taobao.atlas.runtime;
 
-import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import android.content.ComponentName;
 import android.content.pm.PackageInfo;
@@ -218,105 +221,156 @@ import android.os.Looper;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleImpl;
+import android.taobao.atlas.framework.MbundleImpl;
+import android.taobao.atlas.util.BundleLock;
 import android.taobao.atlas.util.FileUtils;
 import org.osgi.framework.Bundle;
 
 import android.taobao.atlas.framework.Framework;
 import android.util.Log;
 
-public class DelegateClassLoader extends ClassLoader {
-    
-    public DelegateClassLoader(ClassLoader cl){
-        super(cl);
+import dalvik.system.PathClassLoader;
+import org.osgi.framework.BundleException;
+
+public class DelegateClassLoader extends PathClassLoader {
+
+    private ReadWriteLock mReadWirteLock = new ReentrantReadWriteLock();
+
+    public DelegateClassLoader(ClassLoader cl) {
+        super(".", cl);
+    }
+
+    public void addDexPath(String dexPath) {
+        try {
+            Method addDexMethod = findMethod(getParent(), "addDexPath", new Class[]{String.class});
+            addDexMethod.setAccessible(true);
+            addDexMethod.invoke(getParent(), dexPath);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
     public Class<?> loadClass(String className) throws ClassNotFoundException {
+        String location;
+        if ((location = AtlasBundleInfoManager.instance().getBundleForComponet(className)) == null) {
+            return super.loadClass(className);
+        }
+
+        installMbundleWithDependency(location);
+
         return super.loadClass(className);
+
+    }
+
+    public void installMbundleWithDependency(String location) throws ClassNotFoundException {
+        if (AtlasBundleInfoManager.instance().isMbundle(location)) {
+            List<String> bundles = AtlasBundleInfoManager.instance().getBundleInfo(location).getTotalDependency();
+            for (String bundle : bundles) {
+                if (bundle == null || AtlasBundleInfoManager.instance().getBundleInfo(bundle) == null) {
+                    continue;
+                }
+                if (!AtlasBundleInfoManager.instance().getBundleInfo(bundle).isMBundle()) {
+                    throw new ClassNotFoundException(location + " Mbundle can not has dependency bundle--> " + bundle);
+                }
+                installMbundle(bundle);
+            }
+        }
+    }
+
+
+    public void installMbundle(String location) {
+        try {
+            BundleLock.WriteLock(location);
+            if (Atlas.getInstance().getBundle(location) == null) {
+                BundleImpl bundle = new MbundleImpl(location);
+                bundle.start();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            BundleLock.WriteUnLock(location);
+        }
+
     }
 
     @Override
     protected Class<?> findClass(String className) throws ClassNotFoundException {
-        if(className.contains("dexmerge")){
-            Log.e("AtlasBridgeApplcation","find : "+className);
-        }
         Class<?> clazz = null;
-        try {
-            clazz = loadFromInstalledBundles(className,false);
-        }catch(Throwable e){
+        if (Thread.currentThread().getId() != Looper.getMainLooper().getThread().getId()) {
+            BundleUtil.checkBundleStateSyncOnChildThread(className);
+        } else {
+            BundleUtil.checkBundleStateSyncOnUIThread(className);
+        }
+        clazz = loadFromInstalledBundles(className, true);
+        if (clazz != null)
+            return clazz;
 
-        }finally {
-            if (clazz == null) {
-                if (Thread.currentThread().getId() != Looper.getMainLooper().getThread().getId()) {
-                    BundleUtil.checkBundleStateSyncOnChildThread(className);
+        ComponentName comp = new ComponentName(RuntimeVariables.androidApplication.getPackageName(), className);
+        if (isProvider(comp)) {
+            return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeProvider");
+        } else if (isReceiver(comp)) {
+            return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeReceiver");
+        }
+
+        throw new ClassNotFoundException("Can't find class " + className + printExceptionInfo());
+    }
+
+    private String printExceptionInfo() {
+        StringBuilder sb = new StringBuilder("installed bundles: ");
+        List<Bundle> bundles = Framework.getBundles();
+        if (bundles != null && !bundles.isEmpty()) {
+            for (Bundle b : Framework.getBundles()) {
+                /*
+                 *  As the UTCrash handle would filter "com.ut", we do a small trick
+                 *  here to translate them to upper case to avoid "com.ut" bundle
+                 *  not found info missed.
+                 */
+                if (b.getLocation().contains("com.ut")) {
+                    sb.append(b.getLocation().toUpperCase());
                 } else {
-                    BundleUtil.checkBundleStateSyncOnUIThread(className);
-                }
-                clazz = loadFromInstalledBundles(className, true);
-                if (clazz != null)
-                    return clazz;
-
-                if (clazz == null && className.contains("MsgProvider")) {
-                    return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeProvider");
+                    sb.append(b.getLocation());
                 }
 
-                throw new ClassNotFoundException("Can't find class " + className + printExceptionInfo());
-            }else{
-                return clazz;
+                sb.append(":");
             }
         }
-    }
-    
-    private String printExceptionInfo(){
-    	StringBuilder sb = new StringBuilder("installed bundles: ");
-    	List<Bundle> bundles = Framework.getBundles();
-    	if (bundles != null && !bundles.isEmpty()) {
-    		for (Bundle b : Framework.getBundles()) {
-    			/*
-    			 *  As the UTCrash handle would filter "com.ut", we do a small trick
-    			 *  here to translate them to upper case to avoid "com.ut" bundle
-    			 *  not found info missed.
-    			 */
-    			if (b.getLocation().contains("com.ut")){
-    				sb.append(b.getLocation().toUpperCase());
-    			}else{
-    				sb.append(b.getLocation());
-    			}
-    			
-    			sb.append(":");
-    		}
-    	}
-    	return sb.toString();
+        return sb.toString();
     }
 
-    static Class<?> loadFromInstalledBundles(String className,boolean safe)
+    static Class<?> loadFromInstalledBundles(String className, boolean safe)
             throws ClassNotFoundException {
         Class<?> clazz = null;
         List<Bundle> bundles = Framework.getBundles();
         String bundleName = AtlasBundleInfoManager.instance().getBundleForComponet(className);
         BundleImpl bundle = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
-        if(bundle!=null){
-            if(!Framework.isDeubgMode()) {
+        if (bundle != null) {
+            if (!Framework.isDeubgMode()) {
                 bundle.optDexFile();
             }
             bundle.startBundle();
             ClassLoader classloader = bundle.getClassLoader();
+            // if (bundle != null && bundle.checkValidate()) {
             try {
                 if (classloader != null) {
                     clazz = classloader.loadClass(className);
-                    if (clazz != null) {
+                    if (clazz != null && bundle.checkValidate()) {
                         return clazz;
                     }
                 }
             } catch (ClassNotFoundException e) {
             }
-            if((Thread.currentThread().getId() == Looper.getMainLooper().getThread().getId())){
+            // } else {
+            //
+            // }
+
+            if ((Thread.currentThread().getId() == Looper.getMainLooper().getThread().getId())) {
                 Throwable ex = new Throwable();
                 ex.fillInStackTrace();
                 Log.e("MainThreadFindClass", String.format("can not findClass %s from %s in UI thread ", className, bundle));
                 ex.printStackTrace();
             }
-            if(safe) {
+            if (safe) {
                 ComponentName component = new ComponentName(RuntimeVariables.androidApplication.getPackageName(), className);
                 if (isProvider(component)) {
                     return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeProvider");
@@ -337,10 +391,10 @@ public class DelegateClassLoader extends ClassLoader {
         if (bundles != null && !bundles.isEmpty()) {
             for (Bundle b : Framework.getBundles()) {
                 bundle = (BundleImpl) b;
-                if(bundle.getArchive().isDexOpted()){
+                if (bundle.getArchive().isDexOpted()) {
                     ClassLoader classloader = bundle.getClassLoader();
                     try {
-                        if (classloader != null) {
+                        if (classloader != null && bundle.checkValidate()) {
                             clazz = classloader.loadClass(className);
                             if (clazz != null) {
                                 return clazz;
@@ -354,13 +408,13 @@ public class DelegateClassLoader extends ClassLoader {
         return clazz;
     }
 
-    private static int getPackageVersion(){
+    private static int getPackageVersion() {
         PackageInfo packageInfo = null;
         // 获取当前的版本号
         try {
             PackageManager packageManager = RuntimeVariables.androidApplication.getPackageManager();
             packageInfo = packageManager.getPackageInfo(RuntimeVariables.androidApplication.getPackageName(), 0);
-        }catch (Exception e) {
+        } catch (Exception e) {
             // 不可能发生
             packageInfo = new PackageInfo();
         }
@@ -368,9 +422,9 @@ public class DelegateClassLoader extends ClassLoader {
         return packageInfo.versionCode;
     }
 
-    private static boolean isReceiver(ComponentName component){
+    private static boolean isReceiver(ComponentName component) {
         try {
-            if(RuntimeVariables.androidApplication.getPackageManager().getReceiverInfo(component,PackageManager.GET_RECEIVERS)!=null){
+            if (RuntimeVariables.androidApplication.getPackageManager().getReceiverInfo(component, PackageManager.GET_RECEIVERS) != null) {
                 return true;
             }
         } catch (PackageManager.NameNotFoundException e) {
@@ -379,9 +433,9 @@ public class DelegateClassLoader extends ClassLoader {
         return false;
     }
 
-    private static boolean isProvider(ComponentName component){
+    private static boolean isProvider(ComponentName component) {
         try {
-            if(RuntimeVariables.androidApplication.getPackageManager().getProviderInfo(component,PackageManager.GET_PROVIDERS)!=null){
+            if (RuntimeVariables.androidApplication.getPackageManager().getProviderInfo(component, PackageManager.GET_PROVIDERS) != null) {
                 return true;
             }
         } catch (PackageManager.NameNotFoundException e) {
@@ -389,6 +443,22 @@ public class DelegateClassLoader extends ClassLoader {
         }
 
         return false;
+    }
+
+    public static Method findMethod(Object instance, String methodName, Class[] args) throws NoSuchMethodException {
+        for (Class<?> clazz = instance.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
+            try {
+                Method method = clazz.getDeclaredMethod(methodName, args);
+                if (!method.isAccessible()) {
+                    method.setAccessible(true);
+                }
+                return method;
+            } catch (NoSuchMethodException e) {
+                // ignore and search next
+            }
+        }
+
+        throw new NoSuchMethodException("Field " + methodName + " not found in " + instance.getClass());
     }
 
 }

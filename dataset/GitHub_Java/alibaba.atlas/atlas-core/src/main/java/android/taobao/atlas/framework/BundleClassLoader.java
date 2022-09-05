@@ -315,11 +315,8 @@ public final class BundleClassLoader extends BaseDexClassLoader {
             return false;
         }
         if (!archive.isDexOpted()) {
-            archive.optDexFile();
-            if (!archive.isDexOpted()) {
-                Log.e("BundleClassLoader", "dexopt is failed: " + location);
-                return false;
-            }
+            Log.e("BundleClassLoader", "dexopt is failed: " + location);
+            return false;
         }
         List<String> dependencies = AtlasBundleInfoManager.instance().getBundleInfo(location).getTotalDependency();
         for (String bundleName : dependencies) {
@@ -327,6 +324,7 @@ public final class BundleClassLoader extends BaseDexClassLoader {
             if (dependencyBundle == null && AtlasBundleInfoManager.instance().isMbundle(bundleName)){
                 RuntimeVariables.delegateClassLoader.installMbundle(bundleName);
                 continue;
+
 
             }
             if (dependencyBundle == null || dependencyBundle.getArchive() == null || !dependencyBundle.getArchive()

@@ -210,10 +210,13 @@ package android.taobao.atlas.framework;
 
 import android.os.*;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
+import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.runtime.LowDiskException;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.util.ApkUtils;
+import android.taobao.atlas.util.BundleLock;
 import android.taobao.atlas.util.FileUtils;
+import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.util.Log;
 import android.util.Pair;
@@ -224,9 +227,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Created by guanjie on 16/2/22.
@@ -273,22 +279,14 @@ public class BundleInstaller implements Callable{
                         BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
                         if (impl == null || !impl.checkValidate()) {
                             Log.d("BundleInstaller", "idle install bundle : " + bundleName);
-                            BundleInstallerFetcher.obtainInstaller().installTransitivelySync(new String[]{bundleName});
-                            if (listener != null) {
-                                listener.onFinished();
-                            }
+                            BundleInstallerFetcher.obtainInstaller().installTransitivelyAsync(new String[]{bundleName},listener);
                             return true;
                         }
                     }
                     return true;
                 }
             };
-            sBundleHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    Looper.myQueue().addIdleHandler(sIdleHandler);
-                }
-            });
+            Looper.myQueue().addIdleHandler(sIdleHandler);
         }
     }
 
@@ -367,6 +365,20 @@ public class BundleInstaller implements Callable{
         if(location!=null){
             release();
             mTransitive = true;
+            mLocation = location;
+            try {
+                installBundleInternal(true);
+            }catch(Throwable e){
+                e.printStackTrace();
+                BundleInstallerFetcher.recycle(this);
+            }
+        }
+    }
+
+    public void installSync(String[] location){
+        if(location!=null){
+            release();
+            mTransitive = false;
             mLocation = location;
             try {
                 installBundleInternal(true);
@@ -488,7 +500,7 @@ public class BundleInstaller implements Callable{
                     synchronized (this) {
                         deliveryTask(sync);
                         Log.d("BundleInstaller", "call wait:" + this);
-                        this.wait(20000);
+                        wait(30000);
                         BundleInstallerFetcher.recycle(this);
                     }
                 }
@@ -537,74 +549,131 @@ public class BundleInstaller implements Callable{
     }
 
     public Bundle getInstalledBundle(String bundleName){
+        // boolean lockSuccess = false;
         Bundle bundle = Framework.getBundle(bundleName);
-        if(bundle==null){
-            bundle = Framework.restoreFromExistedBundle(bundleName);
+        if (bundle == null) {
+            try {
+                /*lockSuccess = */
+                BundleLock./*Read*/WriteLock(bundleName/*location*/);
+                bundle = Framework.getBundle(bundleName);
+                if (bundle == null) {
+                    bundle = Framework.restoreFromExistedBundle(bundleName);
+                }
+            } finally {
+                // if (lockSuccess) {
+                try {
+                    BundleLock./*Read*/WriteUnLock(bundleName/*location*/);
+                } catch (Throwable e) {
+                }
+                // }
+            }
         }
-        if(bundle==null && BaselineInfoManager.instance().isChanged(bundleName)){
-            throw new RuntimeException("restore existed bundle failed");
+        if(bundle==null && (BaselineInfoManager.instance().isDexPatched(bundleName) || BaselineInfoManager.instance().isUpdated(bundleName))){
+            Log.e("BundleInstaller","restore existed bundle failed : "+bundleName);
         }
         return bundle;
     }
 
     @Override
     public synchronized Void call() throws Exception {
-        Bundle bundle = null;
-        if(!mTransitive) {
-            for(int x=0; x<mLocation.length; x++) {
-                if (FileUtils.getUsableSpace(Environment.getDataDirectory()) >= 5) {
-                    if (mBundleSourceInputStream != null && mBundleSourceInputStream.length>x && mBundleSourceInputStream[x]!=null) {
-                        if ((bundle = getInstalledBundle(mLocation[x])) == null) {
-                            bundle = Framework.installNewBundle(mLocation[x], mBundleSourceInputStream[x]);
+        try {
+            Bundle bundle = null;
+            if (!mTransitive) {
+                for (int x = 0; x < mLocation.length; x++) {
+                    if (AtlasBundleInfoManager.instance().isMbundle(mLocation[x])){
+                        if (Framework.getBundle(mLocation[x]) == null) {
+                            RuntimeVariables.delegateClassLoader.installMbundle(mLocation[x]);
                         }
-                        if (bundle != null) {
-                            ((BundleImpl) bundle).optDexFile();
-                        }
-                    } else if (mBundleSourceFile != null && mBundleSourceFile.length>x && mBundleSourceFile[x]!=null) {
-                        if ((bundle = getInstalledBundle(mLocation[x])) == null) {
-                            bundle = Framework.installNewBundle(mLocation[x], mBundleSourceFile[x]);
-                        }
-                        if (bundle != null) {
-                            ((BundleImpl) bundle).optDexFile();
-                        }
-                    } else {
-                        if ((bundle = getInstalledBundle(mLocation[x])) == null && AtlasBundleInfoManager.instance().isInternalBundle(mLocation[x])) {
-                            bundle = installBundleFromApk(mLocation[x]);
-                            if (bundle != null) {
-                                ((BundleImpl) bundle).optDexFile();
-                            }
-                        }
+                        continue;
                     }
-                } else {
-                    throw new LowDiskException("no enough space");
-                }
-            }
-        }else{
-            for(int x=0; x<mLocation.length; x++) {
-                List<String> bundlesForInstall = AtlasBundleInfoManager.instance().getBundleInfo(mLocation[x]).getTotalDependency();
-                Log.e("BundleInstaller",mLocation[x]+"-->"+bundlesForInstall.toString());
-                for (String bundleName : bundlesForInstall) {
-                    if ((bundle = getInstalledBundle(bundleName)) == null) {
-                        if (FileUtils.getUsableSpace(Environment.getDataDirectory()) >= 5) {
-                            //has enough space
-                            if(AtlasBundleInfoManager.instance().isInternalBundle(bundleName)) {
-                                bundle = installBundleFromApk(bundleName);
-                                if (bundle != null) {
-                                    ((BundleImpl) bundle).optDexFile();
+                    if (FileUtils.getUsableSpace(Environment.getDataDirectory()) >= 5) {
+                        if (mBundleSourceInputStream != null && mBundleSourceInputStream.length > x
+                            && mBundleSourceInputStream[x] != null) {
+                            if ((bundle = getInstalledBundle(mLocation[x])) == null) {
+                                if ((BaselineInfoManager.instance().isDexPatched(mLocation[x]) || BaselineInfoManager
+                                    .instance().isUpdated(mLocation[x]))) {
+                                    continue;
                                 }
+                                bundle = Framework.installNewBundle(mLocation[x], mBundleSourceInputStream[x]);
+                            }
+                            if (bundle != null) {
+                                ((BundleImpl)bundle).optDexFile();
+                            }
+                        } else if (mBundleSourceFile != null && mBundleSourceFile.length > x
+                            && mBundleSourceFile[x] != null) {
+                            if ((bundle = getInstalledBundle(mLocation[x])) == null) {
+                                if ((BaselineInfoManager.instance().isDexPatched(mLocation[x]) || BaselineInfoManager
+                                    .instance().isUpdated(mLocation[x]))) {
+                                    continue;
+                                }
+                                bundle = Framework.installNewBundle(mLocation[x], mBundleSourceFile[x]);
+                            }
+                            if (bundle != null) {
+                                ((BundleImpl)bundle).optDexFile();
                             }
                         } else {
-                            throw new LowDiskException("no enough space");
+                            if ((bundle = getInstalledBundle(mLocation[x])) == null && AtlasBundleInfoManager.instance()
+                                .isInternalBundle(mLocation[x])) {
+                                if ((BaselineInfoManager.instance().isDexPatched(mLocation[x]) || BaselineInfoManager
+                                    .instance().isUpdated(mLocation[x]))) {
+                                    continue;
+                                }
+                                bundle = installBundleFromApk(mLocation[x]);
+                                if (bundle != null) {
+                                    ((BundleImpl)bundle).optDexFile();
+                                }
+                            }
                         }
                     } else {
-                        if (bundle!=null && ((BundleImpl) bundle).getArchive()!=null && !((BundleImpl) bundle).getArchive().isDexOpted()) {
-                            ((BundleImpl) bundle).optDexFile();
+                        throw new LowDiskException("no enough space");
+                    }
+                }
+            } else {
+                for (int x = 0; x < mLocation.length; x++) {
+                    List<String> bundlesForInstall = AtlasBundleInfoManager.instance().getBundleInfo(mLocation[x])
+                        .getTotalDependency();
+                    Log.e("BundleInstaller",
+                        mLocation[x] + "-->" + bundlesForInstall.toString() + ", thread=" + Thread.currentThread());
+                    for (String bundleName : bundlesForInstall) {
+                        if (AtlasBundleInfoManager.instance().isMbundle(bundleName)){
+                            if (Framework.getBundle(bundleName) == null){
+                                RuntimeVariables.delegateClassLoader.installMbundle(bundleName);
+                            }
+                            continue;
+                        }
+                        if ((bundle = getInstalledBundle(bundleName)) == null) {
+                            if ((BaselineInfoManager.instance().isDexPatched(bundleName) || BaselineInfoManager
+                                .instance().isUpdated(bundleName))) {
+                                continue;
+                            }
+                            if (FileUtils.getUsableSpace(Environment.getDataDirectory()) >= 5) {
+                                //has enough space
+                                if (AtlasBundleInfoManager.instance().isInternalBundle(bundleName)) {
+                                    bundle = installBundleFromApk(bundleName);
+                                    if (bundle != null) {
+                                        ((BundleImpl)bundle).optDexFile();
+                                    }
+                                }
+                            } else {
+                                throw new LowDiskException("no enough space");
+                            }
+                        } else {
+                            if (bundle != null && ((BundleImpl)bundle).getArchive() != null && !((BundleImpl)bundle)
+                                .getArchive().isDexOpted()) {
+                                ((BundleImpl)bundle).optDexFile();
+                            }
                         }
                     }
                 }
             }
+            return null;
+        } catch (Exception e) {
+            // e.printStackTrace();
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("mLocation", mLocation);
+            AtlasMonitor.getInstance().report(AtlasMonitor.INSTALL, detail, e);
+            throw e;
         }
-        return null;
     }
 
     /////////////////////////////util/////////////////
@@ -614,6 +683,11 @@ public class BundleInstaller implements Callable{
 
     /**
      * 获取bundle源文件地址
+     *
+     * bundle finding order by follwing paths:
+     * 1) ${getApplicationInfo().dataDir}/lib/
+     * 2) ${getApplicationInfo().nativeLibraryDir}
+     * 3) apk's "lib/armeabi" path.
      * @param location
      */
     private void findBundleSource(String location) throws IOException{
@@ -623,16 +697,48 @@ public class BundleInstaller implements Callable{
         String bundleFileName = String.format("lib%s.so",location.replace(".","_"));
         String bundlePath = String.format("%s/lib/%s", dataDir,bundleFileName);
         File bundleFile = new File(bundlePath);
-        if(bundleFile.exists() && AtlasBundleInfoManager.instance().isInternalBundle(location)){
+        if(!bundleFile.exists()){
+            bundleFile = new File(RuntimeVariables.androidApplication.getApplicationInfo().nativeLibraryDir,bundleFileName);
+        }
+        if(isBundleFileMatched(location,bundleFile,bundleFileName)){
             mTmpBundleSourceFile = bundleFile;
+            Log.e("BundleInstaller","find valid bundle : "+bundleFile.getAbsolutePath());
         }else{
-            if(ApkUtils.getApk()!=null){
+            try {
+                mTmpBundleSourceInputStream = RuntimeVariables.originalResources.getAssets().open(bundleFileName);
+            }catch(Throwable e){
+            }
+            if(mTmpBundleSourceInputStream==null && ApkUtils.getApk()!=null){
                 ZipEntry entry = ApkUtils.getApk().getEntry("lib/armeabi/" + bundleFileName);
                 if(entry!=null) {
                     mTmpBundleSourceInputStream = ApkUtils.getApk().getInputStream(entry);
                 }
             }
         }
+    }
+
+    private boolean isBundleFileMatched(String location,File file,String bundleFileName){
+        if(!file.exists() || !AtlasBundleInfoManager.instance().isInternalBundle(location)){
+            return false;
+        }
+        BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(location);
+        if(info!=null && info.getSize()>0 && info.getSize()!=file.length()){
+            Log.e("BundleInstaller","wanted size: "+info.getSize()+"| realSize: "+file.length());
+            return false;
+        }
+        if(info==null && info.getSize()<=0){
+            try {
+                ZipFile apkZip = ApkUtils.getApk();
+                ZipEntry entry = apkZip.getEntry("lib/armeabi/" + bundleFileName);
+                if (entry == null) {
+                    entry = apkZip.getEntry("assets/" + bundleFileName);
+                }
+                if (entry != null && entry.getSize() != file.length()) {
+                    return false;
+                }
+            }catch(Throwable e){}
+        }
+        return true;
     }
 
     private Bundle installBundleFromApk(String bundleName) throws Exception{
@@ -643,7 +749,11 @@ public class BundleInstaller implements Callable{
         }else if(mTmpBundleSourceInputStream!=null){
             bundle = Framework.installNewBundle(bundleName,mTmpBundleSourceInputStream);
         }else{
-            throw new IOException("can not find bundle source file");
+            IOException e = new IOException("can not find bundle source file");
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("installBundleFromApk",bundleName);
+            AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLE_SOURCE_MISMATCH, detail, e);
+            throw e;
         }
         return bundle;
     }

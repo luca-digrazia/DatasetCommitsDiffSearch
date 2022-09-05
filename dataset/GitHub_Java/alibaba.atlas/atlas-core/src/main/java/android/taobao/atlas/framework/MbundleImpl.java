@@ -1,15 +1,11 @@
 package android.taobao.atlas.framework;
 
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
-import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.framework.bundlestorage.BundleArchive;
-import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.util.Log;
 import org.osgi.framework.BundleException;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * MbundleImpl
@@ -39,13 +35,7 @@ public class MbundleImpl extends BundleImpl{
     public boolean checkValidate() {
         List<String>bundles = AtlasBundleInfoManager.instance().getBundleInfo(location).getTotalDependency();
         for (String bundle:bundles) {
-            BundleListing.BundleInfo bundleInfo = AtlasBundleInfoManager.instance().getBundleInfo(bundle);
-            if (bundleInfo!= null && !bundleInfo.isMBundle()){
-                Map<String,Object> detailMap = new HashMap<>();
-                detailMap.put("source",location);
-                detailMap.put("dependency",bundle);
-                detailMap.put("method","checkValidate()");
-                AtlasMonitor.getInstance().report(AtlasMonitor.BUNDLE_DEPENDENCY_ERROR, detailMap, new IllegalArgumentException());
+            if (!AtlasBundleInfoManager.instance().getBundleInfo(bundle).isMBundle()){
                 Log.e("MbundleImpl",this.location+" Mbundle can not dependency bundle--> "+bundle);
             }else {
                 BundleImpl dependencyBundle = (BundleImpl)Atlas.getInstance().getBundle(bundle);
