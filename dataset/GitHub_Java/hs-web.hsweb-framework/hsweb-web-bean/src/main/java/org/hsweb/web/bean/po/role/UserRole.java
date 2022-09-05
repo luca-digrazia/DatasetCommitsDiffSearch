@@ -11,41 +11,17 @@ import javax.validation.constraints.NotNull;
  */
 public class UserRole extends GenericPo<String> {
     private static final long serialVersionUID = 8910856253780046561L;
-    //主键
-    @NotNull
-    @NotEmpty
-    private String u_id;
 
     //用户主键
-    @NotNull
     @NotEmpty
     private String user_id;
 
     //角色主键
-    @NotNull
     @NotEmpty
     private String role_id;
 
     //角色实例
     private transient Role role;
-
-    /**
-     * 获取 主键
-     *
-     * @return String 主键
-     */
-    public String getU_id() {
-        if (this.u_id == null)
-            return "";
-        return this.u_id;
-    }
-
-    /**
-     * 设置 主键
-     */
-    public void setU_id(String u_id) {
-        this.u_id = u_id;
-    }
 
     /**
      * 获取 用户主键
