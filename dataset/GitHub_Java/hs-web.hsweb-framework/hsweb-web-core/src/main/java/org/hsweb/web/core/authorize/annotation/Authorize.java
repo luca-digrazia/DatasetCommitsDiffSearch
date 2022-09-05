@@ -52,13 +52,23 @@ public @interface Authorize {
      *
      * @return
      */
+    @Deprecated
     boolean api() default false;
 
     /**
      * 可匿名访问
-     * @return 是否可匿名访问,匿名访问将不用登录
+     *
+     * @return 是否可匿名访问, 匿名访问将不用登录
      */
     boolean anonymous() default false;
+
+    /**
+     * 是否合并类上的注解
+     *
+     * @return 是否合并类上的注解
+     */
+    boolean merge() default true;
+
     /**
      * 验证模式，在使用多个验证条件时有效
      *
