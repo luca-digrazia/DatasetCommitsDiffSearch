@@ -1280,15 +1280,7 @@ public class CppCompileAction extends AbstractAction
       List<String> commandLine = new ArrayList<>();
 
       // first: The command name.
-      if (!featureConfiguration.actionIsConfigured(actionName)) {
-        commandLine.add(cppConfiguration.getToolPathFragment(Tool.GCC).getPathString());
-      } else {
-        commandLine.add(
-            featureConfiguration
-                .getToolForAction(actionName)
-                .getToolPath(cppConfiguration.getCrosstoolTopPathFragment())
-                .getPathString());
-      }
+      commandLine.add(cppConfiguration.getToolPathFragment(Tool.GCC).getPathString());
 
       // second: The compiler options.
       commandLine.addAll(getCompilerOptions());

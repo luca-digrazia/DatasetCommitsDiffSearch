@@ -559,7 +559,8 @@ public final class CppModel {
     if (fake) {
       boolean usePic = !generateNoPicAction;
       createFakeSourceAction(outputName, result, env, builder, outputExtension,
-          dependencyFileExtension, addObject, ccRelativeName, sourceArtifact.getExecPath(), usePic);
+          dependencyFileExtension, addObject, ccRelativeName, sourceArtifact.getExecPath(), usePic,
+          generateDwo);
     } else {
       // Create PIC compile actions (same as non-PIC, but use -fPIC and
       // generate .pic.o, .pic.d, .pic.gcno instead of .o, .d, .gcno.)
@@ -658,7 +659,7 @@ public final class CppModel {
   private void createFakeSourceAction(PathFragment outputName, CcCompilationOutputs.Builder result,
       AnalysisEnvironment env, CppCompileActionBuilder builder, String outputExtension,
       String dependencyFileExtension, boolean addObject, PathFragment ccRelativeName,
-      PathFragment execPath, boolean usePic) {
+      PathFragment execPath, boolean usePic, boolean generateDwo) {
     if (usePic) {
       outputExtension = ".pic" + outputExtension;
       dependencyFileExtension = ".pic" + dependencyFileExtension;
@@ -673,8 +674,9 @@ public final class CppModel {
         .setDotdFile(outputName, dependencyFileExtension)
         .setTempOutputFile(tempOutputName);
 
-    setupBuildVariables(builder, usePic, ccRelativeName, execPath, /*gcnoFile*/ null,
-        /*dwoFile*/ null);
+    Artifact dwoFile = generateDwo ? getDwoFile(outputFile) : null;
+    builder.setDwoFile(dwoFile);
+    setupBuildVariables(builder, usePic, ccRelativeName, execPath, null, dwoFile);
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction action = builder.build();
     env.registerAction(action);

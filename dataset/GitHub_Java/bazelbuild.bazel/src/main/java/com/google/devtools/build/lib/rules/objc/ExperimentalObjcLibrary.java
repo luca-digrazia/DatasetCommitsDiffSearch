@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -80,10 +79,10 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     }
 
     private void addFrameworkVariables(Builder builder) {
-      ValueSequence.Builder frameworkSequence = new ValueSequence.Builder();
-      AppleConfiguration appleConfig = ruleContext.getFragment(AppleConfiguration.class);
+       ValueSequence.Builder frameworkSequence = new ValueSequence.Builder();
       for (String framework :
-          CompilationSupport.commonFrameworkNames(objcProvider, appleConfig)) {
+          CompilationSupport.commonFrameworkNames(
+              objcProvider, ruleContext.getFragment(AppleConfiguration.class))) {
         frameworkSequence.addValue(framework);
       }
       builder.addSequence(FRAMEWORKS_VARIABLE_NAME, frameworkSequence.build());
@@ -117,8 +116,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
 
     ObjcCommon common = common(ruleContext, compilationAttributes, compilationArtifacts);
 
-    Collection<Artifact> arcSources = Sets.newHashSet(compilationArtifacts.getSrcs());
-    Collection<Artifact> nonArcSources = Sets.newHashSet(compilationArtifacts.getNonArcSrcs());
+    Collection<Artifact> sources = Sets.newHashSet(compilationArtifacts.getSrcs());
     Collection<Artifact> privateHdrs = Sets.newHashSet(compilationArtifacts.getPrivateHdrs());
     Collection<Artifact> publicHdrs = Sets.newHashSet(compilationAttributes.hdrs());
 
@@ -128,8 +126,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
                 new ObjcCppSemantics(common.getObjcProvider()),
                 getFeatureConfiguration(ruleContext),
                 CcLibraryHelper.SourceCategory.CC_AND_OBJC)
-            .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
-            .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
+            .addSources(sources)
             .addSources(privateHdrs)
             .enableCompileProviders()
             .addPublicHeaders(publicHdrs)
@@ -168,10 +165,7 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     if (ObjcCommon.shouldUseObjcModules(ruleContext)) {
       activatedCrosstoolSelectables.add(OBJC_MODULE_FEATURE_NAME);
     }
-
-    activatedCrosstoolSelectables.addAll(
-        ruleContext.getFragment(AppleConfiguration.class).getBitcodeMode().getFeatureNames());
-
+    
     // We create a module map by default to allow for swift interop.
     activatedCrosstoolSelectables.add(CppRuleClasses.MODULE_MAPS);
     activatedCrosstoolSelectables.add(CppRuleClasses.COMPILE_ACTION_FLAGS_IN_FLAG_SET);
