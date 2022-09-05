@@ -137,15 +137,12 @@ public abstract class JavaHelper {
     return rootRelativePath.relativeTo(prefix);
   }
 
-  /** Returns the artifacts required to invoke {@code javahome} relative binary in the action. */
+  /**
+   * Returns the artifacts required to invoke {@code javahome} relative binary
+   * in the action.
+   */
   public static NestedSet<Artifact> getHostJavabaseInputs(RuleContext ruleContext) {
-    return getHostJavabaseInputs(ruleContext, "");
-  }
-
-  /** Returns the artifacts required to invoke {@code javahome} relative binary in the action. */
-  public static NestedSet<Artifact> getHostJavabaseInputs(
-      RuleContext ruleContext, String implicitAttributesSuffix) {
-    return AnalysisUtils.getMiddlemanFor(ruleContext, ":host_jdk" + implicitAttributesSuffix);
+    return AnalysisUtils.getMiddlemanFor(ruleContext, ":host_jdk");
   }
 
   /**
