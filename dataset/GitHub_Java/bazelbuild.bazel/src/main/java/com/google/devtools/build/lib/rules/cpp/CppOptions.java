@@ -211,13 +211,6 @@ public class CppOptions extends FragmentOptions {
           + " to enable all modes and 'no' to disable all modes.")
   public List<CompilationMode> fissionModes;
 
-  @Option(name = "build_test_dwp",
-          defaultValue = "false",
-          category = "semantics",
-          help = "If enabled, when building C++ tests statically and with fission the .dwp file "
-          + " for the test binary will be automatically built as well.")
-  public boolean buildTestDwp;
-
   @Option(name = "dynamic_mode",
           defaultValue = "default",
           converter = DynamicModeConverter.class,
@@ -251,16 +244,6 @@ public class CppOptions extends FragmentOptions {
             + "network and disk I/O load (and thus, continuous build cycle times) by a lot.  "
             + "NOTE: use of this flag REQUIRES --distinct_host_configuration.")
   public boolean skipStaticOutputs;
-  
-  @Option(
-    name = "process_headers_in_dependencies",
-    defaultValue = "false",
-    category = "semantics",
-    help =
-        "When building a target //a:a, process headers in all targets that //a:a depends "
-            + "on (if header processing is enabled for the toolchain)."
-  )
-  public boolean processHeadersInDependencies;
 
   @Option(name = "copt",
           allowMultiple = true,

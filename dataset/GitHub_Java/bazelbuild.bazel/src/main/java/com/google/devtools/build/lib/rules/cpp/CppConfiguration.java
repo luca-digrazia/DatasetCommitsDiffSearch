@@ -1530,27 +1530,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   public boolean skipStaticOutputs() {
     return cppOptions.skipStaticOutputs;
   }
-  
-  /**
-   * Returns whether we are processing headers in dependencies of built C++ targets.
-   */
-  public boolean processHeadersInDependencies() {
-    return cppOptions.processHeadersInDependencies;
-  }
 
   /**
    * Returns true if Fission is specified for this build and supported by the crosstool.
    */
   public boolean useFission() {
     return cppOptions.fissionModes.contains(compilationMode) && supportsFission();
-  }
-
-  /**
-   * Returns true if Fission is enabled for this build and the user requested automatic building
-   * of .dwp files for C++ test targets.
-   */
-  public boolean shouldBuildTestDwp() {
-    return useFission() && cppOptions.buildTestDwp;
   }
 
   /**
@@ -1813,11 +1798,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
           Event.warn(
               "Fission is not supported by this crosstool. Please use a supporting "
                   + "crosstool to enable fission"));
-    }
-    if (cppOptions.buildTestDwp && !useFission()) {
-      reporter.handle(Event.warn("Test dwp file requested, but Fission is not enabled. To "
-          + "generate a dwp for the test executable, use '--fission=yes' with a toolchain "
-          + "that supports Fission and build statically."));
     }
   }
 
