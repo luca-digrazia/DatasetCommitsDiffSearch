@@ -49,15 +49,6 @@ public interface ThinNodeEntry {
   void removeReverseDep(SkyKey reverseDep);
 
   /**
-   * Removes a reverse dependency.
-   *
-   * <p>May only be called if this entry is not done (i.e. {@link #isDone} is false) and
-   * {@param reverseDep} is present in {@link #getReverseDeps}
-   */
-  @ThreadSafe
-  void removeInProgressReverseDep(SkyKey reverseDep);
-
-  /**
    * Returns a copy of the set of reverse dependencies. Note that this introduces a potential
    * check-then-act race; {@link #removeReverseDep} may fail for a key that is returned here.
    */
@@ -89,11 +80,11 @@ public interface ThinNodeEntry {
    * the caller will only ever want to call {@code markDirty()} a second time if a transition from a
    * dirty-unchanged state to a dirty-changed state is required.
    *
-   * @return true if the node was previously clean, and false if it was already dirty. If it was
-   * already dirty, the caller should abort its handling of this node, since another thread is
-   * already dealing with it.
+   * @return The direct deps of this entry, or null if the entry has already been marked
+   * dirty. In the latter case, the caller should abort its handling of this node, since another
+   * thread is already dealing with it.
    */
   @Nullable
   @ThreadSafe
-  boolean markDirty(boolean isChanged);
+  Iterable<SkyKey> markDirty(boolean isChanged);
 }
