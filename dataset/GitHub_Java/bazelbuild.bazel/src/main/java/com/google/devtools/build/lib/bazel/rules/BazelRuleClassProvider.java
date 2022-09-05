@@ -204,12 +204,13 @@ public class BazelRuleClassProvider {
   }
 
   /**
-   * List of all build option classes in Bazel.
+   * List of all build option classes in Blaze.
    */
-  // TODO(bazel-team): merge BuildOptions.of into RuleClassProvider.
+  // TODO(bazel-team): make this private, remove from tests, then BuildOptions.of can be merged
+  // into RuleClassProvider.
   @VisibleForTesting
   @SuppressWarnings("unchecked")
-  private static final ImmutableList<Class<? extends FragmentOptions>> BUILD_OPTIONS =
+  public static final ImmutableList<Class<? extends FragmentOptions>> BUILD_OPTIONS =
       ImmutableList.of(
           BuildConfiguration.Options.class,
           CppOptions.class,
@@ -231,8 +232,6 @@ public class BazelRuleClassProvider {
         .setPrelude("//tools/build_rules:prelude_bazel")
         .setRunfilesPrefix("")
         .setPrerequisiteValidator(new BazelPrerequisiteValidator());
-
-    builder.addBuildOptions(BUILD_OPTIONS);
 
     for (Class<? extends FragmentOptions> fragmentOptions : BUILD_OPTIONS) {
       builder.addConfigurationOptions(fragmentOptions);

@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -64,7 +63,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
         RuleFactory.createAndAddRule(
             pkgBuilder,
             provider.getRuleClassMap().get("cc_library"),
-            new BuildLangTypedAttributeValuesMap(attributeValues),
+            attributeValues,
             new Reporter(),
             /*ast=*/ null,
             LOCATION_42,
@@ -123,7 +122,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
         RuleFactory.createAndAddRule(
             pkgBuilder,
             provider.getRuleClassMap().get("bind"),
-            new BuildLangTypedAttributeValuesMap(attributeValues),
+            attributeValues,
             new Reporter(),
             /*ast=*/ null,
             Location.fromFileAndOffsets(myPkgPath.asFragment(), 42, 42),
@@ -147,7 +146,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
       RuleFactory.createAndAddRule(
           pkgBuilder,
           provider.getRuleClassMap().get("bind"),
-          new BuildLangTypedAttributeValuesMap(attributeValues),
+          attributeValues,
           new Reporter(),
           /*ast=*/ null,
           LOCATION_42,
@@ -174,7 +173,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
       RuleFactory.createAndAddRule(
           pkgBuilder,
           provider.getRuleClassMap().get("cc_library"),
-          new BuildLangTypedAttributeValuesMap(attributeValues),
+          attributeValues,
           new Reporter(),
           /*ast=*/ null,
           Location.fromFileAndOffsets(myPkgPath.asFragment(), 42, 42),
@@ -212,7 +211,7 @@ public class RuleFactoryTest extends PackageLoadingTestCase {
       RuleFactory.createAndAddRule(
           pkgBuilder,
           provider.getRuleClassMap().get("genrule"),
-          new BuildLangTypedAttributeValuesMap(attributeValues),
+          attributeValues,
           new Reporter(),
           /*ast=*/ null,
           Location.fromFileAndOffsets(myPkgPath.asFragment(), 42, 42),

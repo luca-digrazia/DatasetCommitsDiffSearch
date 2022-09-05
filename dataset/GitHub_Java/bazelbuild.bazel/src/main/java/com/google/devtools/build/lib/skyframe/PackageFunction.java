@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -48,11 +49,10 @@ import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.Skylar
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -339,10 +339,10 @@ public class PackageFunction implements SkyFunction {
     PackageValue workspace = null;
     try {
       workspace = (PackageValue) env.getValueOrThrow(workspaceKey, IOException.class,
-      FileSymlinkException.class, InconsistentFilesystemException.class,
-      EvalException.class, SkylarkImportFailedException.class);
+          FileSymlinkException.class, InconsistentFilesystemException.class,
+          EvalException.class);
     } catch (IOException | FileSymlinkException | InconsistentFilesystemException
-          | EvalException | SkylarkImportFailedException e) {
+        | EvalException e) {
       throw new PackageFunctionException(new BadWorkspaceFileException(e.getMessage()),
           Transience.PERSISTENT);
     }
@@ -535,7 +535,7 @@ public class PackageFunction implements SkyFunction {
     if (astAfterPreprocessing.containsAstParsingErrors) {
       importResult =
           new SkylarkImportResult(
-              ImmutableMap.<String, Extension>of(),
+              ImmutableMap.<PathFragment, Extension>of(),
               ImmutableList.<Label>of());
     } else {
       importResult =
@@ -562,11 +562,11 @@ public class PackageFunction implements SkyFunction {
       Environment env,
       SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining)
       throws PackageFunctionException, InterruptedException {
-    ImmutableList<SkylarkImport> imports = buildFileAST.getImports();
-    Map<String, Extension> importMap = Maps.newHashMapWithExpectedSize(imports.size());
+    ImmutableList<LoadStatement> loadStmts = buildFileAST.getImports();
+    Map<PathFragment, Extension> importMap = Maps.newHashMapWithExpectedSize(loadStmts.size());
     ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
-    ImmutableMap<String, Label> importPathMap;
-
+    ImmutableMap<PathFragment, Label> importPathMap;
+    
     // Find the labels corresponding to the load statements.
     Label labelForCurrBuildFile;
     try {
@@ -577,11 +577,12 @@ public class PackageFunction implements SkyFunction {
     }
     try {
       importPathMap = SkylarkImportLookupFunction.findLabelsForLoadStatements(
-          imports, labelForCurrBuildFile, env);
+          loadStmts, labelForCurrBuildFile, env);
       if (importPathMap == null) {
         return null;
       }
     } catch (SkylarkImportFailedException e) {
+      env.getListener().handle(Event.error(Location.fromFile(buildFilePath), e.getMessage()));
       throw new PackageFunctionException(
           new BuildFileContainsErrorsException(packageId, e.getMessage()), Transience.PERSISTENT);
     }
@@ -634,29 +635,30 @@ public class PackageFunction implements SkyFunction {
 
       }
     } catch (SkylarkImportFailedException e) {
+      env.getListener().handle(Event.error(Location.fromFile(buildFilePath), e.getMessage()));
       throw new PackageFunctionException(
           new BuildFileContainsErrorsException(packageId, e.getMessage()), Transience.PERSISTENT);
     } catch (InconsistentFilesystemException e) {
       throw new PackageFunctionException(
           new InternalInconsistentFilesystemException(packageId, e), Transience.PERSISTENT);
     }
-
+    
     if (valuesMissing) {
       // Some imports are unavailable.
       return null;
     }
-
+    
     // Process the loaded imports.
-    for (Entry<String, Label> importEntry : importPathMap.entrySet()) {
-      String importString = importEntry.getKey();
+    for (Entry<PathFragment, Label> importEntry : importPathMap.entrySet()) {
+      PathFragment importPath = importEntry.getKey();
       Label importLabel = importEntry.getValue();
       SkyKey keyForLabel = SkylarkImportLookupValue.key(importLabel, inWorkspace);
       SkylarkImportLookupValue importLookupValue =
           (SkylarkImportLookupValue) skylarkImportMap.get(keyForLabel);
-      importMap.put(importString, importLookupValue.getEnvironmentExtension());
+      importMap.put(importPath, importLookupValue.getEnvironmentExtension());
       fileDependencies.add(importLookupValue.getDependency());
     }
-
+    
     return new SkylarkImportResult(importMap, transitiveClosureOfLabels(fileDependencies.build()));
   }
 
@@ -847,6 +849,8 @@ public class PackageFunction implements SkyFunction {
                   ? FileSystemUtils.readContent(buildFilePath)
                   : FileSystemUtils.readWithKnownFileSize(buildFilePath, buildFileValue.getSize());
             } catch (IOException e) {
+              env.getListener().handle(Event.error(Location.fromFile(buildFilePath),
+                  e.getMessage()));
               // Note that we did this work, so we should conservatively report this error as
               // transient.
               throw new PackageFunctionException(new BuildFileContainsErrorsException(
@@ -856,9 +860,12 @@ public class PackageFunction implements SkyFunction {
               preprocessingResult = packageFactory.preprocess(buildFilePath, packageId,
                   buildFileBytes, globber);
             } catch (IOException e) {
+              env.getListener().handle(Event.error(
+                  Location.fromFile(buildFilePath),
+                  "preprocessing failed: " + e.getMessage()));
               throw new PackageFunctionException(
-                  new BuildFileContainsErrorsException(
-                      packageId, "preprocessing failed" + e.getMessage(), e), Transience.TRANSIENT);
+                  new BuildFileContainsErrorsException(packageId, "preprocessing failed", e),
+                  Transience.TRANSIENT);
             }
           } else {
             ParserInputSource replacementSource =
@@ -894,7 +901,7 @@ public class PackageFunction implements SkyFunction {
         // If the globber was used to evaluate globs during preprocessing, it's important that we
         // reuse that globber during BUILD file evaluation for two reasons: (i) correctness, since
         // Skyframe deps are added after the fact (ii) performance, in the case that globs were
-        // fetched lazily during preprocessing. See Preprocessor.Factory#considersGlobs.
+        // fetched lazily during preprocessing.
         Globber globber = astAfterPreprocessing.globber != null
             ? astAfterPreprocessing.globber
             : packageFactory.createLegacyGlobber(buildFilePath.getParentDirectory(),
@@ -963,10 +970,10 @@ public class PackageFunction implements SkyFunction {
 
   /** A simple value class to store the result of the Skylark imports.*/
   static final class SkylarkImportResult {
-    final Map<String, Extension> importMap;
+    final Map<PathFragment, Extension> importMap;
     final ImmutableList<Label> fileDependencies;
     private SkylarkImportResult(
-        Map<String, Extension> importMap,
+        Map<PathFragment, Extension> importMap,
         ImmutableList<Label> fileDependencies) {
       this.importMap = importMap;
       this.fileDependencies = fileDependencies;

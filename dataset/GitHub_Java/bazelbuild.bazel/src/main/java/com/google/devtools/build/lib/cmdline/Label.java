@@ -13,19 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.cmdline;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ComparisonChain;
 import com.google.devtools.build.lib.cmdline.LabelValidator.BadLabelException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintableValue;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkPrintableValue;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-import java.io.IOException;
 import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
@@ -66,10 +66,9 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
     }
     try {
       LabelValidator.PackageAndTarget labelParts = LabelValidator.parseAbsoluteLabel(absName);
-      PackageIdentifier pkgIdWithoutRepo =
-          validate(labelParts.getPackageName(), labelParts.getTargetName());
+      validate(labelParts.getPackageName(), labelParts.getTargetName());
       return new Label(
-          PackageIdentifier.create(repo, pkgIdWithoutRepo.getPackageFragment()),
+          PackageIdentifier.create(repo, new PathFragment(labelParts.getPackageName())),
           labelParts.getTargetName());
     } catch (BadLabelException e) {
       throw new LabelSyntaxException(e.getMessage());
@@ -170,8 +169,8 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
   }
 
   /**
-   * Validates the given package name and returns a canonical {@link PackageIdentifier} instance
-   * if it is valid. Otherwise it throws a SyntaxException.
+   * Validates the given package name and returns a canonical PathFragment instance if it is valid.
+   * Otherwise it throws a SyntaxException.
    */
   private static PackageIdentifier validate(String packageIdentifier, String name)
       throws LabelSyntaxException {
@@ -450,33 +449,15 @@ public final class Label implements Comparable<Label>, Serializable, SkylarkPrin
 
   @Override
   public void write(Appendable buffer, char quotationMark) {
-    // We don't use the Skylark Printer class here to avoid creating a circular dependency.
-    //
     // TODO(bazel-team): make the representation readable Label(//foo),
     // and isolate the legacy functions that want the unreadable variant.
-    try {
-      // There is no need to escape the contents of the Label since characters that might otherwise
-      // require escaping are disallowed.
-      buffer.append(quotationMark);
-      buffer.append(toString());
-      buffer.append(quotationMark);
-    } catch (IOException e) {
-      // This function will only be used with in-memory Appendables, hence we should never get here.
-      throw new AssertionError(e);
-    }
+    Printer.write(buffer, toString(), quotationMark);
   }
 
   @Override
   public void print(Appendable buffer, char quotationMark) {
-    // We don't use the Skylark Printer class here to avoid creating a circular dependency.
-    //
     // TODO(bazel-team): make the representation readable Label(//foo),
     // and isolate the legacy functions that want the unreadable variant.
-    try {
-      buffer.append(toString());
-    } catch (IOException e) {
-      // This function will only be used with in-memory Appendables, hence we should never get here.
-      throw new AssertionError(e);
-    }
+    Printer.append(buffer, toString());
   }
 }

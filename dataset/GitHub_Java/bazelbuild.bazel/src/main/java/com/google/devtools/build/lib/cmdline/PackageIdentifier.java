@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.cmdline;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -22,7 +23,6 @@ import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
@@ -33,6 +33,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
@@ -286,9 +287,10 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
   private final PathFragment pkgName;
 
   private PackageIdentifier(RepositoryName repository, PathFragment pkgName) {
-    this.repository = Preconditions.checkNotNull(repository);
-    this.pkgName = Canonicalizer.fragments().intern(
-            Preconditions.checkNotNull(pkgName).normalize());
+    Preconditions.checkNotNull(repository);
+    Preconditions.checkNotNull(pkgName);
+    this.repository = repository;
+    this.pkgName = Canonicalizer.fragments().intern(pkgName.normalize());
   }
 
   public static PackageIdentifier parse(String input) throws LabelSyntaxException {
@@ -299,7 +301,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
       repo = input.substring(0, packageStartPos);
       packageName = input.substring(packageStartPos + 2);
     } else if (input.startsWith("@")) {
-      throw new LabelSyntaxException("starts with a '@' but does not contain '//'");
+      throw new LabelSyntaxException("invalid package name '" + input + "'");
     } else if (packageStartPos == 0) {
       repo = PackageIdentifier.DEFAULT_REPOSITORY;
       packageName = input.substring(2);
@@ -363,7 +365,7 @@ public final class PackageIdentifier implements Comparable<PackageIdentifier>, S
 
   @Override
   public int hashCode() {
-    return 31 * repository.hashCode() + pkgName.hashCode();
+    return Objects.hash(repository, pkgName);
   }
 
   @Override
