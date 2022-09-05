@@ -89,7 +89,7 @@ public class TestAction extends AbstractAction {
   }
 
   @Override
-  public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
+  public Collection<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext) {
     Preconditions.checkState(discoversInputs(), this);
     return ImmutableList.of();
   }
