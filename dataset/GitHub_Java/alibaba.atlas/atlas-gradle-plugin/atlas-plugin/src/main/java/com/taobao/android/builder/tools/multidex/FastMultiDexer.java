@@ -241,7 +241,6 @@ import com.android.dx.merge.CollisionPolicy;
 import com.android.dx.merge.DexMerger;
 import com.google.common.base.Joiner;
 import com.taobao.android.builder.extension.MultiDexConfig;
-import com.taobao.android.builder.extension.TBuildConfig;
 import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.concurrent.ExecutorServicesHelper;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
@@ -263,7 +262,7 @@ import static com.android.builder.model.AndroidProject.FD_OUTPUTS;
  */
 public class FastMultiDexer implements MultiDexer {
 
-    public static final int MAX_FIELD_IDS = 65530;
+    public static final int MAX_FIELD_IDS = 64000;
 
     private static final Logger logger = LoggerFactory.getLogger(FastMultiDexer.class);
 
@@ -407,29 +406,22 @@ public class FastMultiDexer implements MultiDexer {
             throw new GradleException(e.getMessage(), e);
         }
 
-        TBuildConfig tBuildConfig = appVariantContext.getAtlasExtension().getTBuildConfig();
-
         HashSet handleList = new HashSet<String>();
-        Set<String> headClasses = new HashSet<>();
 
-        headClasses.add(applicationName);
-        headClasses.add("android.taobao.atlas.bridge.BridgeApplicationDelegate");
-        headClasses.addAll(multiDexConfig.getFirstDexClasses());
+        addRefClazz(classPool, applicationName, mainDexList, handleList);
 
-        String preLaunchStr = tBuildConfig.getPreLaunch();
+        String preLaunchStr = appVariantContext.getAtlasExtension().getTBuildConfig().getPreLaunch();
+
         if (!org.apache.commons.lang3.StringUtils.isEmpty(preLaunchStr)) {
             String[] launchArray = preLaunchStr.split("\\|");
             if (launchArray.length > 0) {
                 for (String launchItem : launchArray) {
                     String[] launchInfo = launchItem.split(":");
                     String clazzName = launchInfo[0];
-                    headClasses.add(clazzName);
+
+                    addRefClazz(classPool, clazzName, mainDexList, handleList);
                 }
             }
-        }
-
-        for (String headClass : headClasses) {
-            addRefClazz(classPool, headClass, mainDexList, handleList);
         }
 
         //get manifest
