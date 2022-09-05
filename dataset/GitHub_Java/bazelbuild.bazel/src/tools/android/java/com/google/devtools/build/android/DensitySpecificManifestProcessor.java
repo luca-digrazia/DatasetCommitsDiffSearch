@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,6 @@ public class DensitySpecificManifestProcessor {
       .put("hdpi", "hdpi")
       .put("xhdpi", "xhdpi")
       .put("400dpi", "400")
-      .put("420dpi", "420")
       .put("xxhdpi", "480")
       .put("560dpi", "560")
       .put("xxxhdpi", "640").build();
