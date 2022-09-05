@@ -115,7 +115,7 @@ public final class FilesetEntryFunction implements SkyFunction {
       ResolvedFile resolvedRoot = rftv.getResolvedRoot().get();
 
       // Handle dangling symlinks gracefully be returning empty results.
-      if (!resolvedRoot.getType().exists()) {
+      if (!resolvedRoot.type.exists()) {
         return FilesetEntryValue.EMPTY;
       }
 
@@ -130,7 +130,7 @@ public final class FilesetEntryFunction implements SkyFunction {
       Iterable<ResolvedFile> results = null;
 
       if (direct.isRecursive()
-          || (resolvedRoot.getType().isDirectory() && !resolvedRoot.getType().isSymlink())) {
+          || (resolvedRoot.type.isDirectory() && !resolvedRoot.type.isSymlink())) {
         // The traversal is recursive (requested for an entire FilesetEntry.srcdir) or it was
         // requested for a FilesetEntry.files entry which turned out to be a directory. We need to
         // create an output symlink for every file in it and all of its subdirectories. Only
@@ -182,7 +182,7 @@ public final class FilesetEntryFunction implements SkyFunction {
         }
 
         // Metadata field must be present. It can only be absent when stripped by tests.
-        String metadata = Integer.toHexString(f.getMetadata().get().hashCode());
+        String metadata = Integer.toHexString(f.metadata.get().hashCode());
         maybeStoreSymlink(linkName, targetName, metadata, t.getDestPath(), outputSymlinks);
       }
     }
