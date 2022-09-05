@@ -11,7 +11,6 @@ import org.elasticsearch.common.joda.time.format.DateTimeFormatter;
 import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.highlight.HighlightField;
 import org.junit.Assert;
 import org.junit.Test;
 import org.nlpcn.es4sql.domain.Select;
@@ -846,21 +845,6 @@ public class QueryTest {
 //
 //    }
 
-
-    @Test
-    public void highlightPreTagsAndPostTags() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        String query = String.format("select /*! HIGHLIGHT(phrase,pre_tags : ['<b>'], post_tags : ['</b>']  ) */ " +
-                "* from %s/phrase " +
-                "where phrase like 'fox' " +
-                "order by _score",TEST_INDEX);
-        SearchHits hits = query(query);
-        for (SearchHit hit : hits){
-            HighlightField phrase = hit.getHighlightFields().get("phrase");
-            String highlightPhrase = phrase.getFragments()[0].string();
-            Assert.assertTrue(highlightPhrase.contains("<b>fox</b>"));
-        }
-
-    }
 
     private SearchHits query(String query) throws SqlParseException, SQLFeatureNotSupportedException, SQLFeatureNotSupportedException {
         SearchDao searchDao = MainTestSuite.getSearchDao();
