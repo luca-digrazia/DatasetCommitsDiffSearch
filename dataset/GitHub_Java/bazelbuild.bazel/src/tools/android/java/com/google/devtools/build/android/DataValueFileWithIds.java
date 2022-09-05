@@ -13,17 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.SdkConstants;
-import com.android.resources.ResourceType;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 import com.google.devtools.build.android.xml.IdXmlResourceValue;
+
+import com.android.SdkConstants;
+import com.android.resources.ResourceType;
+
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+
 import javax.xml.stream.XMLEventReader;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
@@ -69,17 +72,13 @@ public class DataValueFileWithIds {
         }
       }
       eventReader.close();
-    } catch (XMLStreamException e) {
-      throw new XMLStreamException(source + ": " + e.getMessage(), e.getLocation(), e);
-    } catch (RuntimeException e) {
-      throw new RuntimeException("Error parsing " + source, e);
     }
     ImmutableSet<String> idResources = newIds.build();
     overwritingConsumer.consume(fileKey, DataValueFile.of(source));
     for (String id : idResources) {
       combiningConsumer.consume(
           fqnFactory.create(ResourceType.ID, id),
-          DataResourceXml.createWithNoNamespace(source, IdXmlResourceValue.of()));
+          DataResourceXml.of(source, IdXmlResourceValue.of()));
     }
   }
 
