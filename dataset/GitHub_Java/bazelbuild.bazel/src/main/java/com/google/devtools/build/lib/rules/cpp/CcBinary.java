@@ -223,21 +223,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           ruleContext.getConfiguration().getBinDirectory()));
     }
 
-    // Store immutable context for use in other *_binary rules that are implemented by
-    // linking the interpreter (Java, Python, etc.) together with native deps.
+    // store immutable context now, recreate builder later
     CppLinkAction.Context linkContext = new CppLinkAction.Context(linkActionBuilder);
-
-    if (featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
-      linkActionBuilder.setLTOIndexing(true);
-      CppLinkAction indexAction = linkActionBuilder.build();
-      ruleContext.registerAction(indexAction);
-
-      for (LTOBackendArtifacts ltoArtifacts : indexAction.getAllLTOBackendArtifacts()) {
-        ltoArtifacts.scheduleLTOBackendAction(ruleContext);
-      }
-
-      linkActionBuilder.setLTOIndexing(false);
-    }
 
     CppLinkAction linkAction = linkActionBuilder.build();
     ruleContext.registerAction(linkAction);
