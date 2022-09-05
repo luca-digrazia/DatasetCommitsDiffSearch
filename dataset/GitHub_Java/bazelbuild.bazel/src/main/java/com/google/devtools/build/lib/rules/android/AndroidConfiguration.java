@@ -431,7 +431,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       Options host = (Options) super.getHost(fallback);
       host.androidCrosstoolTop = androidCrosstoolTop;
       host.sdk = sdk;
-      host.fatApkCpus = ImmutableList.<String>of(); // Fat APK archs don't apply to the host.
       return host;
     }
 

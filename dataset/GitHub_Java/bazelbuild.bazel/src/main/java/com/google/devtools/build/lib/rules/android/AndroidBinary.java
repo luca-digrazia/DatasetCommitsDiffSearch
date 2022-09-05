@@ -20,7 +20,6 @@ import static com.google.common.collect.Iterables.filter;
 import static com.google.devtools.build.lib.analysis.OutputGroupProvider.INTERNAL_SUFFIX;
 
 import com.google.common.base.Function;
-import com.google.common.base.Functions;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -347,10 +346,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         true /* isBinary */);
     ruleContext.assertNoErrors();
 
-    Function<Artifact, Artifact> derivedJarFunction =
-        collectDesugaredJars(ruleContext, androidCommon, androidSemantics, resourceClasses);
     Artifact deployJar = createDeployJar(ruleContext, javaSemantics, androidCommon, resourceClasses,
-        derivedJarFunction);
+        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR));
 
     Artifact proguardMapping = ruleContext.getPrerequisiteArtifact(
         "proguard_apply_mapping", Mode.TARGET);
@@ -359,7 +356,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext,
         filesBuilder,
         deployJar,
-        derivedJarFunction,
         /* isBinaryJarFiltered */ false,
         javaCommon,
         androidCommon,
@@ -382,7 +378,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       NestedSetBuilder<Artifact> filesBuilder,
       Artifact binaryJar,
-      Function<Artifact, Artifact> derivedJarFunction,
       boolean isBinaryJarFiltered,
       JavaCommon javaCommon,
       AndroidCommon androidCommon,
@@ -434,49 +429,18 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 isBinaryJarFiltered,
                 androidCommon,
                 resourceApk.getMainDexProguardConfig(),
-                resourceClasses,
-                derivedJarFunction);
-
-    Artifact finalDexes;
-    Artifact finalProguardMap;
-
-    if (ruleContext.getFragment(AndroidConfiguration.class).useRexToCompressDexFiles()
-        || (ruleContext.attributes().get("rewrite_dexes_with_rex", Type.BOOLEAN))) {
-      finalDexes = getDxArtifact(ruleContext, "rexed_dexes.zip");
-      Builder rexActionBuilder = new SpawnAction.Builder();
-      rexActionBuilder
-          .setExecutable(ruleContext.getExecutablePrerequisite("$rex_wrapper", Mode.HOST))
-          .setMnemonic("Rex")
-          .setProgressMessage("Rexing dex files")
-          .addArgument("--dex_input")
-          .addInputArgument(dexingOutput.classesDexZip)
-          .addArgument("--dex_output")
-          .addOutputArgument(finalDexes);
-      if (proguardOutput.getMapping() != null) {
-        finalProguardMap = getDxArtifact(ruleContext, "rexed_proguard.map");
-        rexActionBuilder
-            .addArgument("--proguard_input_map")
-            .addInputArgument(proguardOutput.getMapping())
-            .addArgument("--proguard_output_map")
-            .addOutputArgument(finalProguardMap);
-      } else {
-        finalProguardMap = proguardOutput.getMapping();
-      }
-      ruleContext.registerAction(rexActionBuilder.build(ruleContext));
-    } else {
-      finalDexes = dexingOutput.classesDexZip;
-      finalProguardMap = proguardOutput.getMapping();
-    }
+                resourceClasses);
 
     ApkSigningMethod signingMethod =
         ruleContext.getFragment(AndroidConfiguration.class).getApkSigningMethod();
+
     Artifact unsignedApk =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
     Artifact zipAlignedApk =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_APK);
 
     ApkActionsBuilder.create("apk", signingMethod)
-        .setClassesDex(finalDexes)
+        .setClassesDex(dexingOutput.classesDexZip)
         .setResourceApk(resourceApk.getArtifact())
         .setJavaResourceZip(dexingOutput.javaResourceJar)
         .setNativeLibs(nativeLibs)
@@ -711,9 +675,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         builder, ruleContext, javaCommon, androidCommon, jarToDex);
 
     if (proguardOutput.getMapping() != null) {
-      builder.add(
-          ProguardMappingProvider.class,
-          ProguardMappingProvider.create(finalProguardMap, proguardOutput.getProtoMapping()));
+      builder.add(ProguardMappingProvider.class,
+          ProguardMappingProvider.create(
+              proguardOutput.getMapping(), proguardOutput.getProtoMapping()));
     }
 
     return builder
@@ -848,19 +812,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .addRuntimeClassPathEntries(provider.getJavaCompilationArgs().getRuntimeJars())
         .build();
 
-    Function<Artifact, Artifact> desugaredJars = Functions.identity();
-    if (AndroidCommon.getAndroidConfig(ruleContext).desugarJava8()) {
-      desugaredJars =
-          collectDesugaredJarsFromAttributes(ruleContext, ImmutableList.of(attribute))
-              .build()
-              .collapseToFunction();
-    }
     Artifact stubDeployJar = getDxArtifact(ruleContext,
         split ? "split_stub_deploy.jar" : "stub_deploy.jar");
     new DeployArchiveBuilder(javaSemantics, ruleContext)
         .setOutputJar(stubDeployJar)
         .setAttributes(attributes)
-        .setDerivedJarFunction(desugaredJars)
         .build();
 
     Artifact stubDex = getDxArtifact(ruleContext,
@@ -885,10 +841,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ResourceApk resourceApk,
       NativeLibs nativeLibs,
       Artifact debugKeystore) {
-    // TODO(bazel-team): Sufficient to use resourceClasses.getRuntimeClasspathForArchive?
-    // Deleting getArchiveInputs could simplify the implementation of DeployArchiveBuidler.build()
+
     Iterable<Artifact> jars = IterablesChain.concat(
-        DeployArchiveBuilder.getArchiveInputs(resourceClasses), androidCommon.getRuntimeJars());
+        resourceClasses.getArchiveInputs(true), androidCommon.getRuntimeJars());
 
     // The resources jars from android_library rules contain stub ids, so filter those out of the
     // transitive jars.
@@ -926,15 +881,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       JavaSemantics javaSemantics,
       AndroidCommon common,
       JavaTargetAttributes attributes,
-      Function<Artifact, Artifact> derivedJarFunction)
+      Artifact deployJar)
       throws InterruptedException {
-    Artifact deployJar =
-        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR);
     new DeployArchiveBuilder(javaSemantics, ruleContext)
         .setOutputJar(deployJar)
         .setAttributes(attributes)
         .addRuntimeJars(common.getRuntimeJars())
-        .setDerivedJarFunction(derivedJarFunction)
         .build();
     return deployJar;
   }
@@ -1110,8 +1062,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       boolean isBinaryJarFiltered,
       AndroidCommon common,
       @Nullable Artifact mainDexProguardSpec,
-      JavaTargetAttributes attributes,
-      Function<Artifact, Artifact> derivedJarFunction)
+      JavaTargetAttributes attributes)
       throws InterruptedException, RuleErrorException {
     List<String> dexopts = ruleContext.getTokenizedStringListAttr("dexopts");
     MultidexMode multidexMode = getMultidexMode(ruleContext);
@@ -1150,8 +1101,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         Artifact classesDex = getDxArtifact(ruleContext, "classes.dex.zip");
         Artifact jarToDex = getDxArtifact(ruleContext, "classes.jar");
         createShuffleJarAction(ruleContext, true, (Artifact) null, ImmutableList.of(jarToDex),
-            common, inclusionFilterJar, dexopts, androidSemantics, attributes, derivedJarFunction,
-            (Artifact) null);
+            common, inclusionFilterJar, dexopts, androidSemantics, attributes, (Artifact) null);
         createDexMergerAction(ruleContext, "off", jarToDex, classesDex, (Artifact) null, dexopts);
         return new DexingOutput(classesDex, binaryJar, ImmutableList.of(classesDex));
       } else {
@@ -1189,7 +1139,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 dexopts,
                 androidSemantics,
                 attributes,
-                derivedJarFunction,
                 mainDexList);
 
         List<Artifact> shardDexes = new ArrayList<>(dexShards);
@@ -1236,8 +1185,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         if (incrementalDexing.contains(AndroidBinaryType.MULTIDEX_UNSHARDED)) {
           Artifact jarToDex = AndroidBinary.getDxArtifact(ruleContext, "classes.jar");
           createShuffleJarAction(ruleContext, true, (Artifact) null, ImmutableList.of(jarToDex),
-              common, inclusionFilterJar, dexopts, androidSemantics, attributes, derivedJarFunction,
-              (Artifact) null);
+              common, inclusionFilterJar, dexopts, androidSemantics, attributes, (Artifact) null);
           createDexMergerAction(ruleContext, "minimal", jarToDex, classesDex, mainDexList, dexopts);
         } else {
           // Because the dexer also places resources into this zip, we also need to create a cleanup
@@ -1335,58 +1283,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
    * Returns a {@link DexArchiveProvider} of all transitively generated dex archives as well as dex
    * archives for the Jars produced by the binary target itself.
    */
-  public static Function<Artifact, Artifact> collectDesugaredJars(
-      RuleContext ruleContext,
-      AndroidCommon common,
-      AndroidSemantics semantics,
-      JavaTargetAttributes attributes) {
-    if (!AndroidCommon.getAndroidConfig(ruleContext).desugarJava8()) {
-      return Functions.identity();
-    }
-    AndroidRuntimeJarProvider.Builder result =
-        collectDesugaredJarsFromAttributes(
-            ruleContext, semantics.getAttributesWithJavaRuntimeDeps(ruleContext));
-    for (Artifact jar : common.getJarsProducedForRuntime()) {
-      // Create dex archives next to all Jars produced by AndroidCommon for this rule.  We need to
-      // do this (instead of placing dex archives into the _dx subdirectory like DexArchiveAspect)
-      // because for "legacy" ResourceApks, AndroidCommon produces Jars per resource dependency that
-      // can theoretically have duplicate basenames, so they go into special directories, and we
-      // piggyback on that naming scheme here by placing dex archives into the same directories.
-      PathFragment jarPath = jar.getRootRelativePath();
-      Artifact desugared =
-          DexArchiveAspect.desugar(
-              ruleContext,
-              jar,
-              attributes.getBootClassPath(),
-              attributes.getCompileTimeClassPath(),
-              ruleContext.getDerivedArtifact(
-                  jarPath.replaceName(jarPath.getBaseName() + "_desugared.jar"), jar.getRoot()));
-      result.addDesugaredJar(jar, desugared);
-    }
-    return result.build().collapseToFunction();
-  }
-
-  private static AndroidRuntimeJarProvider.Builder collectDesugaredJarsFromAttributes(
-      RuleContext ruleContext, ImmutableList<String> attributes) {
-    AndroidRuntimeJarProvider.Builder result = new AndroidRuntimeJarProvider.Builder();
-    for (String attr : attributes) {
-      // Use all available AndroidRuntimeJarProvider from attributes that carry runtime dependencies
-      result.addTransitiveProviders(
-          ruleContext.getPrerequisites(attr, Mode.TARGET, AndroidRuntimeJarProvider.class));
-    }
-    return result;
-  }
-
-  /**
-   * Returns a {@link DexArchiveProvider} of all transitively generated dex archives as well as dex
-   * archives for the Jars produced by the binary target itself.
-   */
   private static Function<Artifact, Artifact> collectDexArchives(
       RuleContext ruleContext,
       AndroidCommon common,
       List<String> dexopts,
       AndroidSemantics semantics,
-      Function<Artifact, Artifact> derivedJarFunction) {
+      JavaTargetAttributes attributes) {
     DexArchiveProvider.Builder result = new DexArchiveProvider.Builder();
     for (String attr : semantics.getAttributesWithJavaRuntimeDeps(ruleContext)) {
       // Use all available DexArchiveProviders from attributes that carry runtime dependencies
@@ -1402,10 +1304,22 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       // can theoretically have duplicate basenames, so they go into special directories, and we
       // piggyback on that naming scheme here by placing dex archives into the same directories.
       PathFragment jarPath = jar.getRootRelativePath();
+      Artifact jarToDex = jar;
+      if (AndroidCommon.getAndroidConfig(ruleContext).desugarJava8()) {
+        // desugar jars first if desired...
+        jarToDex =
+            DexArchiveAspect.desugar(
+                ruleContext,
+                jar,
+                attributes.getBootClassPath(),
+                attributes.getCompileTimeClassPath(),
+                ruleContext.getDerivedArtifact(
+                    jarPath.replaceName(jarPath.getBaseName() + "_desugared.jar"), jar.getRoot()));
+      }
       Artifact dexArchive =
           DexArchiveAspect.createDexArchiveAction(
               ruleContext,
-              derivedJarFunction.apply(jar),
+              jarToDex,
               incrementalDexopts,
               ruleContext.getDerivedArtifact(
                   jarPath.replaceName(jarPath.getBaseName() + ".dex.zip"), jar.getRoot()));
@@ -1424,7 +1338,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       List<String> dexopts,
       AndroidSemantics semantics,
       JavaTargetAttributes attributes,
-      Function<Artifact, Artifact> derivedJarFunction,
       @Nullable Artifact mainDexList)
       throws InterruptedException {
     checkArgument(mainDexList == null || shards.size() > 1);
@@ -1468,10 +1381,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         // there should be very few or no Jar files that still end up in shards.  The dexing
         // step below will have to deal with those in addition to merging .dex files together.
         classpath = Iterables.transform(classpath,
-            collectDexArchives(ruleContext, common, dexopts, semantics, derivedJarFunction));
+            collectDexArchives(ruleContext, common, dexopts, semantics, attributes));
         shardCommandLine.add("--split_dexed_classes");
-      } else {
-        classpath = Iterables.transform(classpath, derivedJarFunction);
       }
       shardCommandLine.addBeforeEachExecPath("--input_jar", classpath);
       shardAction.addInputs(classpath);
