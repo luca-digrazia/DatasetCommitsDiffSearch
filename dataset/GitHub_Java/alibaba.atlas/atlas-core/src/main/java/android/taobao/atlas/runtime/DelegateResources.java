@@ -218,7 +218,6 @@ import android.content.res.XmlResourceParser;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
-import android.os.Build.VERSION;
 import android.taobao.atlas.hack.AndroidHack;
 import android.taobao.atlas.hack.AtlasHacks;
 import android.taobao.atlas.util.ApkUtils;
@@ -234,7 +233,6 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.*;
 
@@ -248,11 +246,11 @@ public class DelegateResources extends Resources {
     private static AssetManagerProcessor sAssetManagerProcessor;
     private static ResourcesProcessor    sResourcesProcessor;
     private static ResourceIdFetcher     sResourcesFetcher;
-    private static final ArrayList<String> sFailedAsssetPath = new ArrayList<String>();
+    private static ArrayList<String> sFailedAsssetPath = new ArrayList<String>();
 
     private static String sKernalPathPath = null;
     private static String sAssetsPatchDir = null;
-    private final HashMap<String, Resources> bundleResourceWalkRound = new HashMap<>();
+    private HashMap<String,Resources> bundleResourceWalkRound = new HashMap<>();
     private static ColorStateList walkroundStateList;
 
 
@@ -281,10 +279,9 @@ public class DelegateResources extends Resources {
             boolean flag = (this==RuntimeVariables.delegateResources);
             Log.e("DelegateResources","compare:"+(this==RuntimeVariables.delegateResources));
             getValue(id,value,true);
-            int assetCookie = value.assetCookie;
-            Log.e("DelegateResources", String.format("ID: %s|cookie: %s|string: %s", id, assetCookie, value.string));
+            Log.e("DelegateResources",String.format("ID: %s|cookie: %s|string: %s",id,value.assetCookie,value.string));
             try {
-                String assetsPath = getGetCookieName(getAssets(), assetCookie);
+                String assetsPath = (String) AssetManager.class.getMethod("getCookieName", int.class).invoke(getAssets(), value.assetCookie);
                 Log.e("DelegateResources","target Path: "+assetsPath);
                 if(!new File(assetsPath).exists()){
                     Log.e("DelegateResources","target Path is not exist");
@@ -306,7 +303,6 @@ public class DelegateResources extends Resources {
         return result;
     }
 
-    @Override
     public Drawable getDrawable(int id, Theme theme) throws NotFoundException {
         Drawable result = null;
         NotFoundException exception = null;
@@ -319,7 +315,7 @@ public class DelegateResources extends Resources {
             TypedValue value = new TypedValue();
             getValue(id,value,true);
             try {
-                String assetsPath = getGetCookieName(getAssets(), value.assetCookie);
+                String assetsPath = (String) AssetManager.class.getMethod("getCookieName", int.class).invoke(getAssets(), value.assetCookie);
                 Resources res = getBackupResources(assetsPath);
                 if(res!=null){
                     Drawable drawable = res.getDrawable(id,theme);
@@ -829,13 +825,14 @@ public class DelegateResources extends Resources {
             ArrayList<String> assetPaths = new ArrayList<String>();
             try {
                 if (Build.VERSION.SDK_INT >= 28) {
-                    Method method = AssetManager.class.getDeclaredMethod("getApkAssets");
+                    Method method = manager.getClass().getDeclaredMethod("getApkAssets");
                     method.setAccessible(true);
                     final Object/*ApkAssets*/[] apkAssets = ((Object[]) method.invoke(manager));
                     int assetsPathCount = apkAssets.length;
                     for (int x = 0; x < assetsPathCount; x++) {
-                        Object apkAsset = apkAssets[x];
-                        String assetsPath = (String)apkAsset.getClass().getMethod("getAssetPath").invoke(apkAsset);
+                        String assetsPath = (String) apkAssets[x].getClass()
+                                .getMethod("getAssetPath")
+                                .invoke(apkAssets[x]);
                         if ((sDefaultAssetPathList == null) || (!TextUtils.isEmpty(assetsPath)
                                 && !sDefaultAssetPathList.containsKey(assetsPath))) {
                             assetPaths.add(assetsPath);
@@ -847,7 +844,8 @@ public class DelegateResources extends Resources {
                     int assetsPathCount = (Integer) method.invoke(manager);
                     for (int x = 0; x < assetsPathCount; x++) {
                         // Cookies map to string blocks starting at 1
-                        String assetsPath = getGetCookieName(manager, x + 1);
+                        String assetsPath = (String) manager.getClass().getMethod("getCookieName",
+                                int.class).invoke(manager, x + 1);
                         if ((sDefaultAssetPathList == null) || (!TextUtils.isEmpty(assetsPath)
                                 && !sDefaultAssetPathList.containsKey(assetsPath))) {
                             assetPaths.add(assetsPath);
@@ -863,19 +861,6 @@ public class DelegateResources extends Resources {
         }
     }
 
-    public static String getGetCookieName(AssetManager manager, int i)
-        throws IllegalAccessException, InvocationTargetException, NoSuchMethodException {
-        if (VERSION.SDK_INT >= 28) {
-            Method method = AssetManager.class.getDeclaredMethod("getApkAssets");
-            method.setAccessible(true);
-            final Object/*ApkAssets*/[] apkAssets = ((Object[])method.invoke(manager));
-            Object apkAsset = apkAssets[i - 1];
-            return (String)apkAsset.getClass().getMethod("getAssetPath").invoke(apkAsset);
-        } else {
-            return (String)AssetManager.class.getMethod("getCookieName", int.class).invoke(manager, i);
-        }
-
-    }
 
     /**
      * process resources with new AssetManager
