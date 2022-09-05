@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.analysis.RedirectChaser;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
@@ -290,12 +289,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Enables resource shrinking for android_binary APKs that use proguard.")
     public boolean useAndroidResourceShrinking;
 
-    @Option(name = "experimental_use_proguard_previous_obfuscation_map",
-        defaultValue = "false",
-        category = "undocumented",
-        help = "Enables the use of an obfuscation map when generating the main dex jar file")
-    public boolean useProguardPreviousObfuscationMap;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (androidCrosstoolTop != null) {
@@ -331,13 +324,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Override
     public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      AndroidConfiguration.Options androidOptions =
-          buildOptions.get(AndroidConfiguration.Options.class);
-      Label androidSdk = RedirectChaser.followRedirects(env, androidOptions.sdk, "android_sdk");
-      if (androidSdk == null) {
-        return null;
-      }
-      return new AndroidConfiguration(buildOptions.get(Options.class), androidSdk);
+      return new AndroidConfiguration(buildOptions.get(Options.class));
     }
 
     @Override
@@ -365,10 +352,9 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> targetDexoptsThatPreventIncrementalDexing;
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
   private final boolean useAndroidResourceShrinking;
-  private final boolean useProguardPreviousObfuscationMap;
 
-  AndroidConfiguration(Options options, Label androidSdk) {
-    this.sdk = androidSdk;
+  AndroidConfiguration(Options options) {
+    this.sdk = options.sdk;
     this.incrementalNativeLibs = options.incrementalNativeLibs;
     this.strictDeps = options.strictDeps;
     this.legacyNativeSupport = options.legacyNativeSupport;
@@ -388,7 +374,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         ImmutableList.copyOf(options.nonIncrementalPerTargetDexopts);
     this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
     this.useAndroidResourceShrinking = options.useAndroidResourceShrinking;
-    this.useProguardPreviousObfuscationMap = options.useProguardPreviousObfuscationMap;
   }
 
   public String getCpu() {
@@ -459,10 +444,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useAndroidResourceShrinking() {
     return useAndroidResourceShrinking;
-  }
-
-  public boolean useProguardPreviousObfuscationMap() {
-    return useProguardPreviousObfuscationMap;
   }
 
   @Override
