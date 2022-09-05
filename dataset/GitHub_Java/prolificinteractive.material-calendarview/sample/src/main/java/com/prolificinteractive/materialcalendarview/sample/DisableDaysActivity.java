@@ -10,7 +10,7 @@ import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
 
 import java.util.Calendar;
 
-import butterknife.BindView;
+import butterknife.Bind;
 import butterknife.ButterKnife;
 
 /**
@@ -18,7 +18,7 @@ import butterknife.ButterKnife;
  */
 public class DisableDaysActivity extends AppCompatActivity {
 
-    @BindView(R.id.calendarView)
+    @Bind(R.id.calendarView)
     MaterialCalendarView widget;
 
     @Override
@@ -34,7 +34,7 @@ public class DisableDaysActivity extends AppCompatActivity {
         widget.addDecorator(new EnableOneToTenDecorator());
 
         Calendar calendar = Calendar.getInstance();
-        widget.setSelectedDate(calendar);
+        widget.setSelectedDate(calendar.getTime());
 
         Calendar instance1 = Calendar.getInstance();
         instance1.set(instance1.get(Calendar.YEAR), Calendar.JANUARY, 1);
@@ -43,8 +43,8 @@ public class DisableDaysActivity extends AppCompatActivity {
         instance2.set(instance2.get(Calendar.YEAR) + 2, Calendar.OCTOBER, 31);
 
         widget.state().edit()
-                .setMinimumDate(instance1)
-                .setMaximumDate(instance2)
+                .setMinimumDate(instance1.getTime())
+                .setMaximumDate(instance2.getTime())
                 .commit();
     }
 

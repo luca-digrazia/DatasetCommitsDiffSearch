@@ -14,7 +14,7 @@ import com.prolificinteractive.materialcalendarview.sample.decorators.OneDayDeco
 
 import java.util.Calendar;
 
-import butterknife.BindView;
+import butterknife.Bind;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 
@@ -25,7 +25,7 @@ public class SwappableBasicActivityDecorated extends AppCompatActivity implement
 
     private final OneDayDecorator oneDayDecorator = new OneDayDecorator();
 
-    @BindView(R.id.calendarView)
+    @Bind(R.id.calendarView)
     MaterialCalendarView widget;
 
     @Override
@@ -39,7 +39,7 @@ public class SwappableBasicActivityDecorated extends AppCompatActivity implement
 
 
         Calendar instance = Calendar.getInstance();
-        widget.setSelectedDate(instance);
+        widget.setSelectedDate(instance.getTime());
 
         Calendar instance1 = Calendar.getInstance();
         instance1.set(instance1.get(Calendar.YEAR), Calendar.JANUARY, 1);
@@ -48,8 +48,8 @@ public class SwappableBasicActivityDecorated extends AppCompatActivity implement
         instance2.set(instance2.get(Calendar.YEAR), Calendar.DECEMBER, 31);
 
         widget.state().edit()
-                .setMinimumDate(instance1)
-                .setMaximumDate(instance2)
+                .setMinimumDate(instance1.getTime())
+                .setMaximumDate(instance2.getTime())
                 .commit();
 
         widget.addDecorators(

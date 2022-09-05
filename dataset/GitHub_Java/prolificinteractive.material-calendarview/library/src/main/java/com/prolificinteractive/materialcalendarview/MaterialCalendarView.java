@@ -1049,18 +1049,12 @@ public class MaterialCalendarView extends ViewGroup {
     protected void onRestoreInstanceState(Parcelable state) {
         SavedState ss = (SavedState) state;
         super.onRestoreInstanceState(ss.getSuperState());
-        newState()
-                .setFirstDayOfWeek(ss.firstDayOfWeek)
-                .setCalendarDisplayMode(ss.calendarMode)
-                .setMinimumDate(ss.minDate)
-                .setMaximumDate(ss.maxDate)
-                .commit();
-
         setSelectionColor(ss.color);
         setDateTextAppearance(ss.dateTextAppearance);
         setWeekDayTextAppearance(ss.weekDayTextAppearance);
         setShowOtherDates(ss.showOtherDates);
         setAllowClickDaysOutsideCurrentMonth(ss.allowClickDaysOutsideCurrentMonth);
+        setRangeDates(ss.minDate, ss.maxDate);
         clearSelection();
         for (CalendarDay calendarDay : ss.selectedDates) {
             setDateSelected(calendarDay, true);
@@ -1071,6 +1065,13 @@ public class MaterialCalendarView extends ViewGroup {
         setSelectionMode(ss.selectionMode);
         setDynamicHeightEnabled(ss.dynamicHeightEnabled);
         setCurrentDate(ss.currentMonth);
+
+        newState()
+                .setFirstDayOfWeek(ss.firstDayOfWeek)
+                .setCalendarDisplayMode(ss.calendarMode)
+                .setMinimumDate(ss.minDate)
+                .setMaximumDate(ss.maxDate)
+                .commit();
     }
 
     @Override
@@ -1652,16 +1653,10 @@ public class MaterialCalendarView extends ViewGroup {
         return pager.isPagingEnabled();
     }
 
-    /**
-     * Preserve the current parameters of the Material Calendar View.
-     */
     public State state() {
         return state;
     }
 
-    /**
-     * Initialize the parameters from scratch.
-     */
     public StateBuilder newState() {
         return new StateBuilder();
     }
@@ -1679,9 +1674,6 @@ public class MaterialCalendarView extends ViewGroup {
             maxDate = builder.maxDate;
         }
 
-        /**
-         * Modify parameters from current state.
-         */
         public StateBuilder edit() {
             return new StateBuilder(this);
         }
