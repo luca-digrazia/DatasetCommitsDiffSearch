@@ -68,8 +68,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 
-import org.junit.Before;
-
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -128,9 +126,11 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected AnalysisTestUtil.DummyWorkspaceStatusActionFactory workspaceStatusActionFactory;
   private PathPackageLocator pkgLocator;
   private AnalysisMock analysisMock;
+  protected boolean enableLoading = true;
 
-  @Before
-  public final void createMocks() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
     analysisMock = AnalysisMock.get();
     pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory));
     directories = new BlazeDirectories(outputBase, outputBase, rootDirectory);
@@ -251,7 +251,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     LoadingResult loadingResult = loadingPhaseRunner
         .execute(reporter, eventBus, ImmutableList.copyOf(labels), loadingOptions,
-            buildOptions.getAllLabels(), viewOptions.keepGoing, isLoadingEnabled(),
+            buildOptions.getAllLabels(), viewOptions.keepGoing, enableLoading,
             /*determineTests=*/false, /*callback=*/null);
 
     BuildRequestOptions requestOptions = optionsParser.getOptions(BuildRequestOptions.class);
@@ -267,7 +267,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
             reporter,
             eventBus,
-            isLoadingEnabled());
+            enableLoading);
   }
 
   protected void update(FlagBuilder config, String... labels) throws Exception {
@@ -362,5 +362,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   protected void clearAnalysisResult() {
     analysisResult = null;
+  }
+
+  protected void disableLoading() {
+    enableLoading = false;
   }
 }

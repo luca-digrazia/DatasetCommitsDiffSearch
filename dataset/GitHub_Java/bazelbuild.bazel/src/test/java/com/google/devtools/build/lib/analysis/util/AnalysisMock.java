@@ -13,11 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
@@ -67,11 +68,7 @@ public abstract class AnalysisMock {
 
   public abstract Collection<String> getOptionOverrides();
 
-  public abstract MockCcSupport ccSupport();
-
-  public void setupCcSupport(MockToolsConfig config) throws IOException {
-    get().ccSupport().setup(config);
-  }
+  public abstract ImmutableList<Class<? extends FragmentOptions>> getBuildOptions();
 
   public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(BlazeDirectories directories) {
     // Some tests require the local_repository rule so we need the appropriate SkyFunctions.
@@ -80,9 +77,11 @@ public abstract class AnalysisMock {
     ImmutableMap<String, RepositoryFunction> repositoryHandlers = ImmutableMap.of(
         LocalRepositoryRule.NAME, localRepositoryFunction);
 
-    return ImmutableMap.<SkyFunctionName, SkyFunction>of(
+    return ImmutableMap.of(
         SkyFunctions.REPOSITORY,
-        new RepositoryDelegatorFunction(directories, repositoryHandlers, new AtomicBoolean(true)));
+        new RepositoryDelegatorFunction(directories, repositoryHandlers, new AtomicBoolean(true)),
+        localRepositoryFunction.getSkyFunctionName(),
+        localRepositoryFunction);
   }
 
   public static class Delegate extends AnalysisMock {
@@ -113,14 +112,13 @@ public abstract class AnalysisMock {
     }
 
     @Override
-    public MockCcSupport ccSupport() {
-      return delegate.ccSupport();
-    }
-
-    @Override
     public Collection<String> getOptionOverrides() {
       return delegate.getOptionOverrides();
     }
 
+    @Override
+    public ImmutableList<Class<? extends FragmentOptions>> getBuildOptions() {
+      return delegate.getBuildOptions();
+    }
   }
 }
