@@ -3,7 +3,8 @@ package com.alibaba.druid.pool;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
+import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.xpack.client.PreBuiltXPackTransportClient;
 
 import java.io.InputStream;
 import java.io.Reader;
@@ -12,9 +13,8 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.sql.*;
-import java.util.Calendar;
-import java.util.Map;
-import java.util.Properties;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.Executor;
 
 /**
@@ -23,16 +23,27 @@ import java.util.concurrent.Executor;
 public class ElasticSearchConnection implements Connection {
 
     private Client client;
+    //关闭标识
+    private boolean closeStatus = true;
 
-    public ElasticSearchConnection(String jdbcUrl) {
-        String hostAndPort = jdbcUrl.split("/")[2];
-        String host = hostAndPort.split(":")[0];
-        String port = hostAndPort.split(":")[1];
-        Settings settings = Settings.builder().put("client.transport.ignore_cluster_name", true).build();
-        Connection conn = null;
+    public ElasticSearchConnection(String jdbcUrl, Properties info) {
+
+        Settings.Builder builder = Settings.builder();
+        info.forEach((k, v) -> builder.put(k.toString(), v.toString()));
+        Settings settings = builder.build();
         try {
-            client = TransportClient.builder().settings(settings).build().
-                    addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName(host), Integer.parseInt(port)));
+            TransportClient transportClient = new PreBuiltXPackTransportClient(settings);
+
+            String hostAndPortArrayStr = jdbcUrl.split("/")[2];
+            String[] hostAndPortArray = hostAndPortArrayStr.split(",");
+
+            for (String hostAndPort : hostAndPortArray) {
+                String host = hostAndPort.split(":")[0];
+                String port = hostAndPort.split(":")[1];
+                transportClient.addTransportAddress(new TransportAddress(InetAddress.getByName(host), Integer.parseInt(port)));
+            }
+            client = transportClient;
+            closeStatus = false;
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
@@ -337,7 +348,6 @@ public class ElasticSearchConnection implements Connection {
 
             @Override
             public void close() throws SQLException {
-
             }
 
             @Override
@@ -579,12 +589,14 @@ public class ElasticSearchConnection implements Connection {
 
     @Override
     public void close() throws SQLException {
+        this.getClient().close();
+        closeStatus = true;
 
     }
 
     @Override
     public boolean isClosed() throws SQLException {
-        return false;
+        return closeStatus;
     }
 
     @Override
