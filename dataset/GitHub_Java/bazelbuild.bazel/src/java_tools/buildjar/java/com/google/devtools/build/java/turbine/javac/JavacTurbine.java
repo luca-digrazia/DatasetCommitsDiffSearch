@@ -216,7 +216,7 @@ public class JavacTurbine implements AutoCloseable {
           CLASSPATH_JOINER.join(actualClasspath), compileResult.success());
     }
 
-    out.print(compileResult.output());
+    out.println(compileResult.output());
     return result;
   }
 
