@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageP
 import com.google.devtools.build.lib.util.BatchCallback;
 import com.google.devtools.build.lib.util.BatchCallback.NullCallback;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.util.ThreadSafeBatchCallback;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -45,10 +44,11 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.annotation.Nullable;
 
 /**
@@ -177,17 +177,16 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
     }
 
     @Override
-    public ResolvedTargets<Void> getTargetsInPackage(
-        String originalPattern, PackageIdentifier packageIdentifier, boolean rulesOnly)
-        throws TargetParsingException, InterruptedException {
+    public ResolvedTargets<Void> getTargetsInPackage(String originalPattern,
+        PackageIdentifier packageIdentifier, boolean rulesOnly) throws TargetParsingException {
       FilteringPolicy policy =
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
       return getTargetsInPackage(originalPattern, packageIdentifier, policy);
     }
 
-    private ResolvedTargets<Void> getTargetsInPackage(
-        String originalPattern, PackageIdentifier packageIdentifier, FilteringPolicy policy)
-        throws TargetParsingException, InterruptedException {
+    private ResolvedTargets<Void> getTargetsInPackage(String originalPattern,
+        PackageIdentifier packageIdentifier, FilteringPolicy policy)
+        throws TargetParsingException {
       try {
         Package pkg = packageProvider.getPackage(env.getListener(), packageIdentifier);
         ResolvedTargets<Target> packageTargets =
@@ -210,7 +209,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
     }
 
     @Override
-    public boolean isPackage(PackageIdentifier packageIdentifier) throws InterruptedException {
+    public boolean isPackage(PackageIdentifier packageIdentifier) {
       return packageProvider.isPackage(env.getListener(), packageIdentifier);
     }
 
@@ -260,27 +259,6 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
           throw new MissingDepException();
         }
       }
-    }
-
-    @Override
-    public <E extends Exception> void findTargetsBeneathDirectoryPar(
-        RepositoryName repository,
-        String originalPattern,
-        String directory,
-        boolean rulesOnly,
-        ImmutableSet<PathFragment> excludedSubdirectories,
-        ThreadSafeBatchCallback<Void, E> callback,
-        Class<E> exceptionClass,
-        ForkJoinPool forkJoinPool)
-        throws TargetParsingException, E, InterruptedException {
-      findTargetsBeneathDirectory(
-          repository,
-          originalPattern,
-          directory,
-          rulesOnly,
-          excludedSubdirectories,
-          callback,
-          exceptionClass);
     }
   }
 }

@@ -113,8 +113,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      PathFragment blacklistedPackagePrefixesFile,
-      String productName) {
+      PathFragment blacklistedPackagePrefixesFile) {
     super(
         evaluatorSupplier,
         pkgFactory,
@@ -127,8 +126,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         extraSkyFunctions,
         extraPrecomputedValues,
         false,
-        blacklistedPackagePrefixesFile,
-        productName);
+        blacklistedPackagePrefixesFile);
     this.diffAwarenessManager = new DiffAwarenessManager(diffAwarenessFactories);
     this.customDirtinessCheckers = customDirtinessCheckers;
   }
@@ -144,8 +142,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
-      Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      String productName) {
+      Iterable<SkyValueDirtinessChecker> customDirtinessCheckers) {
     return create(
         pkgFactory,
         directories,
@@ -158,8 +155,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         extraSkyFunctions,
         extraPrecomputedValues,
         customDirtinessCheckers,
-        /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT,
-        productName);
+        /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT);
   }
 
   private static SequencedSkyframeExecutor create(
@@ -174,8 +170,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      PathFragment blacklistedPackagePrefixesFile,
-      String productName) {
+      PathFragment blacklistedPackagePrefixesFile) {
     SequencedSkyframeExecutor skyframeExecutor =
         new SequencedSkyframeExecutor(
             InMemoryMemoizingEvaluator.SUPPLIER,
@@ -190,8 +185,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             extraSkyFunctions,
             extraPrecomputedValues,
             customDirtinessCheckers,
-            blacklistedPackagePrefixesFile,
-            productName);
+            blacklistedPackagePrefixesFile);
     skyframeExecutor.init();
     return skyframeExecutor;
   }
@@ -202,8 +196,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       WorkspaceStatusAction.Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
-      PathFragment blacklistedPackagePrefixesFile,
-      String productName) {
+      PathFragment blacklistedPackagePrefixesFile) {
     return create(
         pkgFactory,
         directories,
@@ -216,8 +209,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         ImmutableMap.<SkyFunctionName, SkyFunction>of(),
         ImmutableList.<PrecomputedValue.Injected>of(),
         ImmutableList.<SkyValueDirtinessChecker>of(),
-        blacklistedPackagePrefixesFile,
-        productName);
+        blacklistedPackagePrefixesFile);
   }
 
   @Override

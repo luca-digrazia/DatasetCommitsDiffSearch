@@ -33,7 +33,7 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionExecutionContextFactory;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
@@ -54,7 +54,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
-import com.google.devtools.build.lib.analysis.MergedConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
@@ -310,8 +310,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         binTools,
         (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider());
     this.artifactFactory.set(skyframeBuildView.getArtifactFactory());
-    this.externalFilesHelper = new ExternalFilesHelper(
-        pkgLocator, this.errorOnExternalFiles, directories);
+    this.externalFilesHelper = new ExternalFilesHelper(pkgLocator, this.errorOnExternalFiles);
   }
 
   private ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions(
@@ -634,7 +633,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             artifactFactory.get(), WorkspaceStatusValue.ARTIFACT_OWNER, buildId));
   }
 
-  public void injectCoverageReportData(ImmutableList<ActionAnalysisMetadata> actions) {
+  public void injectCoverageReportData(ImmutableList<Action> actions) {
     PrecomputedValue.COVERAGE_REPORT_KEY.set(injectable(), actions);
   }
 
@@ -1037,8 +1036,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * {@link SkyframeActionExecutor#findAndStoreArtifactConflicts} to do the work, since any
    * conflicts found will only be reported during execution.
    */
-  ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException>
-      findArtifactConflicts() throws InterruptedException {
+  ImmutableMap<Action, SkyframeActionExecutor.ConflictException> findArtifactConflicts()
+      throws InterruptedException {
     if (skyframeBuildView.isSomeConfiguredTargetEvaluated()
         || skyframeBuildView.isSomeConfiguredTargetInvalidated()) {
       // This operation is somewhat expensive, so we only do it if the graph might have changed in
@@ -1198,7 +1197,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         configuredAspects.add(((AspectValue) result.get(aspectKey)).getConfiguredAspect());
       }
 
-      cts.put(key, MergedConfiguredTarget.of(configuredTarget, configuredAspects));
+      cts.put(key, RuleConfiguredTarget.mergeAspects(configuredTarget, configuredAspects));
     }
 
     return cts.build();
@@ -1384,7 +1383,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   public EvaluationResult<PostConfiguredTargetValue> postConfigureTargets(
       EventHandler eventHandler, List<ConfiguredTargetKey> values, boolean keepGoing,
-      ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException> badActions)
+      ImmutableMap<Action, SkyframeActionExecutor.ConflictException> badActions)
           throws InterruptedException {
     checkActive();
     PrecomputedValue.BAD_ACTIONS.set(injectable(), badActions);
@@ -1464,7 +1463,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   /**
    * Returns the generating action of a given artifact ({@code null} if it's a source artifact).
    */
-  private ActionAnalysisMetadata getGeneratingAction(EventHandler eventHandler, Artifact artifact)
+  private Action getGeneratingAction(EventHandler eventHandler, Artifact artifact)
       throws InterruptedException {
     if (artifact.isSourceArtifact()) {
       return null;
@@ -1498,11 +1497,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public ActionGraph getActionGraph(final EventHandler eventHandler) {
     return new ActionGraph() {
       @Override
-      public ActionAnalysisMetadata getGeneratingAction(final Artifact artifact) {
+      public Action getGeneratingAction(final Artifact artifact) {
         try {
-          return callUninterruptibly(new Callable<ActionAnalysisMetadata>() {
+          return callUninterruptibly(new Callable<Action>() {
             @Override
-            public ActionAnalysisMetadata call() throws InterruptedException {
+            public Action call() throws InterruptedException {
               return SkyframeExecutor.this.getGeneratingAction(eventHandler, artifact);
             }
           });
@@ -1727,7 +1726,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
           TestFilter.forOptions(options, eventHandler, ruleClassNames));
       EvaluationResult<TargetPatternPhaseValue> evalResult;
       LoadingProgressReceiver loadingProgressReceiver = new LoadingProgressReceiver();
-      eventBus.post(new LoadingPhaseStartedEvent(loadingProgressReceiver, numPackagesLoaded));
+      eventBus.post(new LoadingPhaseStartedEvent(loadingProgressReceiver));
       progressReceiver.loadingProgressReceiver = loadingProgressReceiver;
       try {
         evalResult =
