@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
+
 import javax.annotation.Nullable;
 
 /**
@@ -68,7 +69,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
 
   @Override
   public CppConfiguration create(ConfigurationEnvironment env, BuildOptions options)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
     CppConfigurationParameters params = createParameters(env, options);
     if (params == null) {
       return null;
@@ -112,8 +113,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
 
   @Nullable
   protected CppConfigurationParameters createParameters(
-      ConfigurationEnvironment env, BuildOptions options)
-      throws InvalidConfigurationException, InterruptedException {
+      ConfigurationEnvironment env, BuildOptions options) throws InvalidConfigurationException {
     BlazeDirectories directories = env.getBlazeDirectories();
     if (directories == null) {
       return null;
@@ -188,9 +188,13 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
             crosstoolTopLabel, toolchain.getTargetCpu(), toolchain.getCompiler()));
       }
     } else {
-      throw new InvalidConfigurationException(String.format(
-          "The specified --crosstool_top '%s' is not a valid cc_toolchain_suite rule",
-          crosstoolTopLabel));
+      try {
+        ccToolchainLabel = crosstoolTopLabel.getRelative("cc-compiler-" + toolchain.getTargetCpu());
+      } catch (LabelSyntaxException e) {
+        throw new InvalidConfigurationException(String.format(
+            "'%s' is not a valid CPU. It should only consist of characters valid in labels",
+            toolchain.getTargetCpu()));
+      }
     }
 
     Target ccToolchain;
