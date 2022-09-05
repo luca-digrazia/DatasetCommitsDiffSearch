@@ -104,7 +104,7 @@ public class Graphite implements GraphiteSender {
 
     @Override
     public void connect() throws IllegalStateException, IOException {
-        if (isConnected()) {
+        if (socket != null) {
             throw new IllegalStateException("Already connected");
         }
         InetSocketAddress address = this.address;
