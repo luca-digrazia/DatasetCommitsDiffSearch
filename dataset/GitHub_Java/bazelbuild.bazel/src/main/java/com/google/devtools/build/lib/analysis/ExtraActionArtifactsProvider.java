@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 public final class ExtraActionArtifactsProvider implements TransitiveInfoProvider {
   public static final ExtraActionArtifactsProvider EMPTY =
       new ExtraActionArtifactsProvider(
-          NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
+          ImmutableList.<Artifact>of(),
           NestedSetBuilder.<ExtraArtifactSet>emptySet(Order.STABLE_ORDER));
 
   /**
@@ -64,28 +64,23 @@ public final class ExtraActionArtifactsProvider implements TransitiveInfoProvide
 
     @Override
     public boolean equals(Object other) {
-      return other == this
-          || (other instanceof ExtraArtifactSet
-              && label.equals(((ExtraArtifactSet) other).getLabel()));
-    }
-  }
+      if (other == this) {
+        return true;
+      }
 
-  public static ExtraActionArtifactsProvider create(NestedSet<Artifact> extraActionArtifacts,
-      NestedSet<ExtraArtifactSet> transitiveExtraActionArtifacts) {
-    if (extraActionArtifacts.isEmpty() && transitiveExtraActionArtifacts.isEmpty()) {
-      return EMPTY;
+      if (!(other instanceof ExtraArtifactSet)) {
+        return false;
+      }
+
+      return label.equals(((ExtraArtifactSet) other).getLabel());
     }
-    return new ExtraActionArtifactsProvider(extraActionArtifacts, transitiveExtraActionArtifacts);
   }
 
   /** The outputs of the extra actions associated with this target. */
-  private final NestedSet<Artifact> extraActionArtifacts;
-  private final NestedSet<ExtraArtifactSet> transitiveExtraActionArtifacts;
+  private final ImmutableList<Artifact> extraActionArtifacts;
+  private final NestedSet<ExtraArtifactSet> transitiveExtraActionArtifacts;;
 
-  /**
-   * Use {@link #create} instead.
-   */
-  private ExtraActionArtifactsProvider(NestedSet<Artifact> extraActionArtifacts,
+  public ExtraActionArtifactsProvider(ImmutableList<Artifact> extraActionArtifacts,
       NestedSet<ExtraArtifactSet> transitiveExtraActionArtifacts) {
     this.extraActionArtifacts = extraActionArtifacts;
     this.transitiveExtraActionArtifacts = transitiveExtraActionArtifacts;
@@ -94,7 +89,7 @@ public final class ExtraActionArtifactsProvider implements TransitiveInfoProvide
   /**
    * The outputs of the extra actions associated with this target.
    */
-  public NestedSet<Artifact> getExtraActionArtifacts() {
+  public ImmutableList<Artifact> getExtraActionArtifacts() {
     return extraActionArtifacts;
   }
 
