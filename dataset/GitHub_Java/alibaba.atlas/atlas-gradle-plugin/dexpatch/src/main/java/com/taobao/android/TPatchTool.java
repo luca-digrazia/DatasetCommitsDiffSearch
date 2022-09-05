@@ -210,7 +210,16 @@ package com.taobao.android;
 
 import java.io.*;
 import java.sql.Date;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.Attributes;
@@ -233,7 +242,6 @@ import com.taobao.android.object.DexDiffInfo;
 import com.taobao.android.object.DiffType;
 import com.taobao.android.object.PatchBundleInfo;
 import com.taobao.android.object.PatchInfo;
-import com.taobao.android.reader.*;
 import com.taobao.android.task.ExecutorServicesHelper;
 import com.taobao.android.tpatch.builder.PatchFileBuilder;
 import com.taobao.android.tpatch.manifest.AndroidManifestDiffFactory;
@@ -246,8 +254,6 @@ import com.taobao.android.tpatch.utils.PathUtils;
 import com.taobao.android.utils.CommandUtils;
 import com.taobao.android.utils.PathMatcher;
 import com.taobao.android.utils.Profiler;
-import com.taobao.checker.Checker;
-import com.taobao.checker.PatchChecker;
 import com.taobao.update.UpdateInfo;
 import org.antlr.runtime.RecognitionException;
 import org.apache.commons.io.FileUtils;
@@ -320,10 +326,6 @@ public class TPatchTool extends BasePatchTool {
     }
 
     private List<String> versionList = new ArrayList<>();
-
-    public static Map<String,LinkedHashMap>bundleInfos = new HashMap<>();
-
-    private boolean dexPatch;
 
     private Map<String, Map<String, ClassDef>> bundleClassMap = new ConcurrentHashMap<String, Map<String, ClassDef>>();
 
@@ -399,9 +401,6 @@ public class TPatchTool extends BasePatchTool {
         Profiler.enter("prepare");
         isTpatch = true;
         pName = productName;
-        if (baseApkBO.getVersionName().equals(newApkBO.getVersionName())){
-            dexPatch = true;
-        }
         File hisPatchJsonFile = new File(outPatchJson.getParentFile(),"patchs-"+newApkBO.getVersionName()+".json");
         hisTpatchFolder = new File(outPatchDir.getParentFile().getParentFile().getParentFile().getParentFile(),
                                    "hisTpatch");
@@ -527,23 +526,18 @@ public class TPatchTool extends BasePatchTool {
             testForBuildPatchInfos.setPatches(patchInfos);
             testForBuildPatchInfos.setDiffBundleDex(buildPatchInfos.isDiffBundleDex());
             for(PatchInfo patchInfo:buildPatchInfos.getPatches()){
-                if (patchInfo.getTargetVersion().equals(buildPatchInfos.getBaseVersion())){
+                if (patchInfo.getPatchVersion().equals(buildPatchInfos.getBaseVersion())){
                     patchInfos.add(patchInfo);
                 }
             }
             FileUtils.writeStringToFile(hisPatchJsonFile, JSON.toJSONString(testForBuildPatchInfos));
         }
-        Map<String,List<String>>map = new HashMap<>();
+
         for (PatchInfo patchInfo : buildPatchInfos.getPatches()) {
             UpdateInfo updateInfo = new UpdateInfo(patchInfo, buildPatchInfos.getBaseVersion());
-             System.out.println("start to check:"+patchInfo.getTargetVersion()+"......");
-            List<PatchChecker.ReasonMsg> msgs = new PatchChecker(updateInfo,bundleInfos.get(patchInfo.getTargetVersion()),new File(outPatchDir,patchInfo.getFileName())).check();
-             map.put(patchInfo.getFileName(),msgToString(msgs));
             File updateJson = new File(outPatchDir, "update-" + patchInfo.getTargetVersion() + ".json");
             FileUtils.writeStringToFile(updateJson, JSON.toJSONString(updateInfo, true));
         }
-        File checkFile = new File(outPatchDir,"patch-check.json");
-        FileUtils.writeStringToFile(checkFile, JSON.toJSONString(map, true));
         Profiler.release();
 
         Profiler.enter("cleanworkspace");
@@ -573,14 +567,6 @@ public class TPatchTool extends BasePatchTool {
         logger.warning(Profiler.dump());
         //        FileUtils.deleteDirectory(unzipFolder);
         return patchFile;
-    }
-
-    private List<String> msgToString(List<Checker.ReasonMsg> msgs) {
-        List<String>ss = new ArrayList<>();
-        for (Checker.ReasonMsg reasonMsg:msgs){
-            ss.add(reasonMsg.toString());
-        }
-        return ss;
     }
 
     private boolean isBundleFile(File file) {
@@ -678,7 +664,7 @@ public class TPatchTool extends BasePatchTool {
      */
     private void processBundleFiles(File newBundleFile,
                                     File baseBundleFile,
-                                    File patchTmpDir) throws Exception {
+                                    File patchTmpDir) throws IOException, RecognitionException, PatchException {
         String bundleName = FilenameUtils.getBaseName(newBundleFile.getName());
         File destPatchBundleDir = new File(patchTmpDir, bundleName);
         final File newBundleUnzipFolder = new File(newBundleFile.getParentFile(), bundleName);
@@ -716,7 +702,7 @@ public class TPatchTool extends BasePatchTool {
 
     private void doBundlePatch(File newBundleFile, File baseBundleFile, File patchTmpDir, String bundleName,
                                File destPatchBundleDir, File newBundleUnzipFolder, File baseBundleUnzipFolder)
-        throws Exception {
+        throws IOException, RecognitionException, PatchException {
         // 解压文件
         // 判断dex的差异性
         CommandUtils.exec(patchTmpDir,
@@ -730,9 +716,6 @@ public class TPatchTool extends BasePatchTool {
                              destDex,
                              tmpDexFolder,
                              false);
-        if (dexPatch){
-            return;
-        }
 
         // 比较其他资源文件的差异性
         Collection<File> newBundleResFiles = FileUtils.listFiles(newBundleUnzipFolder,
@@ -854,7 +837,7 @@ public class TPatchTool extends BasePatchTool {
                                       File baseApkUnzipFolder,
                                       File destDex,
                                       File tmpDexFile,
-                                      boolean mainDex) throws Exception {
+                                      boolean mainDex) throws IOException, RecognitionException, PatchException {
         List<File> dexs = Lists.newArrayList();
         // 比较主bundle的dex
         if (!tmpDexFile.exists()) {
@@ -890,17 +873,6 @@ public class TPatchTool extends BasePatchTool {
         }
 
         FileUtils.deleteDirectory(tmpDexFile);
-        if (mainDex){
-            bundleInfos.put(newApkBO.getVersionName(),new AtlasFrameworkPropertiesReader(
-                    new MethodReader(
-                            new ClassReader(
-                                    new DexReader(destDex))),null).read("Landroid/taobao/atlas/framework/FrameworkProperties;","<clinit>"));
-            bundleInfos.put(baseApkBO.getVersionName(),new AtlasFrameworkPropertiesReader(
-                    new MethodReader(
-                            new ClassReader(
-                                    new DexReader(baseDexFiles))),bundleInfos.get(newApkBO.getVersionName())).read("Landroid/taobao/atlas/framework/FrameworkProperties;","<clinit>"));
-
-        }
         return destDex;
     }
 
@@ -1006,9 +978,6 @@ public class TPatchTool extends BasePatchTool {
                                                       File newApkUnzipFolder,
                                                       PatchInfo curPatchInfo,
                                                       String patchHistoryUrl) throws IOException, PatchException {
-        if (dexPatch){
-            return new BuildPatchInfos();
-        }
         BuildPatchInfos historyBuildPatchInfos = null;
         String response = null;
         if (!StringUtils.isEmpty(patchHistoryUrl)) {
@@ -1326,32 +1295,26 @@ public class TPatchTool extends BasePatchTool {
     }
 
     public static void main(String[] args) {
+        ApkBO baseApkBo = new ApkBO(new File("/Users/lilong/Downloads/taobao-android-debug.apk"), "aa", "1.0.0");
+        ApkBO newApkB0 = new ApkBO(new File("/Users/lilong/Downloads/tpatch-diff.apk"), "aa", "2.0.0");
+        TPatchTool tPatchTool = new TPatchTool(baseApkBo, newApkB0, true);
         try {
-            ZipFile zipFile = new ZipFile(new File("/Users/lilong/Downloads/patch-6.10.8@6.10.5.tpatch"));
-            Enumeration<? extends ZipEntry> enumeration = zipFile.entries();
-            while (enumeration.hasMoreElements()){
-                ZipEntry zipEntry = enumeration.nextElement();
-                if (zipEntry.getName().startsWith("lib"+"com.etao.feimagesearch".replace(".","_"))){
-                    System.out.println("xxx");
-                };
-            }
-        } catch (IOException e) {
+            tPatchTool.doPatch(new File("/Users/lilong/Downloads/ccc"), true, null, true, null, null);
+        } catch (Exception e) {
             e.printStackTrace();
         }
-
-
-//        File file = new File("/Users/lilong/Downloads/patch-6.9.5.51215@6.9.5.3/libcom_taobao_maindex.zip");
-//        try {
-//            LinkedHashMap<String, BundleListing.BundleInfo> atlasFrameworkPropertiesReader = new AtlasFrameworkPropertiesReader(
-//                    new MethodReader(
-//                            new ClassReader(
-//                                    new DexReader(file))),null).read("Landroid/taobao/atlas/framework/FrameworkProperties;","<clinit>");
-//            System.out.println(atlasFrameworkPropertiesReader.values());
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
+        File dexFile = new File("/Users/lilong/Downloads/libcom_aligame_gamecenter_api_base/classes.dex");
+        File newDexFile = new File("/Users/lilong/Downloads/libcom_aligame_gamecenter_api_diff/classes.dex");
+        TPatchDexTool tPatchDexTool = new TPatchDexTool(dexFile, newDexFile, 19, false);
+        try {
+            tPatchDexTool.createTPatchDex(new File("/Users/lilong/Downloads/libcom_aligame_gamecenter_api_diff/a.dex"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (PatchException e) {
+            e.printStackTrace();
+        } catch (RecognitionException e) {
+            e.printStackTrace();
+        }
     }
-
-
 
 }

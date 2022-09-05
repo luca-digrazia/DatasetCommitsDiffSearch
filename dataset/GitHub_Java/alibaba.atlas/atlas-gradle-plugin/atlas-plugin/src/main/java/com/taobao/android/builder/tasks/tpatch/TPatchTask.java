@@ -251,7 +251,7 @@ import java.util.concurrent.Callable;
 import static com.android.build.gradle.internal.api.ApContext.APK_FILE_MD5;
 
 /**
- * Dynamic deployment of the tpatch build task
+ * 动态部署tpatch构建任务
  * Created by wuzhong
  */
 public class TPatchTask extends BaseTask {
@@ -271,12 +271,12 @@ public class TPatchTask extends BaseTask {
         signingConfig = getSigningConfig();
         outPatchFolder = getOutPatchFolder();
 
-        //the bundle List Copied to the outpatchFoulder
+        //把 bundle List 复制到 outpatchFoulder
         new File(outPatchFolder,appVariantContext.bundleListCfg.getName()).delete();
         outPatchFolder.mkdirs();
         FileUtils.copyFileToDirectory(appVariantContext.bundleListCfg, outPatchFolder);
 
-        // Get the container version
+        // 获取容器版本
         String baseApkVersion = patchContext.getBaseVersionName();
         String newApkVersion = patchContext.versionName;
 
@@ -312,7 +312,7 @@ public class TPatchTask extends BaseTask {
 
         List<Pair<BundleBO, BundleBO>> remoteBundles = new ArrayList<>();
 
-        //Get the remote bundle
+        //获取远程的bundle
         for (AwbBundle awbBundle : AtlasBuildContext.awbBundleMap.values()) {
             if (awbBundle.isRemote) {
 
@@ -376,6 +376,7 @@ public class TPatchTask extends BaseTask {
                                patchContext.appSignName);
             getLogger().info("finish  do patch");
 
+            //resignBaseApk(baseApkVersion, apkFileList);
 
             FileUtils.forceDelete(patchContext.newApk);
 
@@ -560,7 +561,7 @@ public class TPatchTask extends BaseTask {
         public boolean writeBuildInfo;
 
         /**
-         * Decide whether to diff the bundle's dex file
+         * 判断是否对bundle的dex文件进行diff操作
          */
         public boolean diffBundleDex;
 
@@ -574,7 +575,7 @@ public class TPatchTask extends BaseTask {
         public Set<ArtifactBundleInfo> artifactBundleInfos;
 
         /**
-         * patchDirectories that need to be excluded
+         * patch需要排除的目录
          */
         public String excludeFiles;
 
