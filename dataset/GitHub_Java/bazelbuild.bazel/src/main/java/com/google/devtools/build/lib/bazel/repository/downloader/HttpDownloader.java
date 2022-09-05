@@ -14,11 +14,11 @@
 
 package com.google.devtools.build.lib.bazel.repository.downloader;
 
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
-import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache.KeyType;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
@@ -31,8 +31,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -51,14 +49,9 @@ public class HttpDownloader {
   private static final double LOG_OF_KB = Math.log(1024);
 
   private final ScheduledExecutorService scheduler;
-  private Location ruleUrlAttributeLocation;
 
-  protected final RepositoryCache repositoryCache;
-
-  public HttpDownloader(RepositoryCache repositoryCache) {
+  public HttpDownloader() {
     this.scheduler = Executors.newScheduledThreadPool(1);
-    this.ruleUrlAttributeLocation = null;
-    this.repositoryCache = repositoryCache;
   }
 
   public Path download(
@@ -69,8 +62,6 @@ public class HttpDownloader {
     String sha256;
     String type;
     try {
-      ruleUrlAttributeLocation = rule.getAttributeLocation("url");
-
       url = mapper.get("url", Type.STRING);
       sha256 = mapper.get("sha256", Type.STRING);
       type = mapper.isAttributeValueExplicitlySpecified("type")
@@ -91,45 +82,39 @@ public class HttpDownloader {
 
   /**
    * Attempt to download a file from the repository's URL. Returns the path to the file downloaded.
-   *
-   * If the SHA256 checksum and path to the repository cache is specified, attempt
-   * to load the file from the RepositoryCache. If it doesn't exist, proceed to
-   * download the file and load it into the cache prior to returning the value.
    */
   public Path download(
       String urlString, String sha256, String type, Path outputDirectory,
       EventHandler eventHandler, Map<String, String> clientEnv)
-          throws IOException, InterruptedException, RepositoryFunctionException {
-    Path destination = getDownloadDestination(urlString, type, outputDirectory);
+          throws IOException, InterruptedException {
+    URL url = new URL(urlString);
+    Path destination;
+    if (type == null) {
+      destination = outputDirectory;
+    } else {
+      String filename = new PathFragment(url.getPath()).getBaseName();
+      if (filename.isEmpty()) {
+        filename = "temp";
+      } else if (!type.isEmpty()) {
+        filename += "." + type;
+      }
+      destination = outputDirectory.getRelative(filename);
+    }
 
-    // Used to decide whether to cache the download at the end of this method.
-    boolean isCaching = false;
-
-    if (RepositoryCache.KeyType.SHA256.isValid(sha256)) {
+    if (!sha256.isEmpty()) {
       try {
-        String currentSha256 = RepositoryCache.getChecksum(KeyType.SHA256, destination);
+        String currentSha256 = getHash(Hashing.sha256().newHasher(), destination);
         if (currentSha256.equals(sha256)) {
           // No need to download.
           return destination;
         }
       } catch (IOException e) {
-        // Ignore error trying to hash. We'll attempt to retrieve from cache or just download again.
-      }
-
-      if (repositoryCache.isEnabled()) {
-        isCaching = true;
-
-        Path cachedDestination = repositoryCache.get(sha256, destination, KeyType.SHA256);
-        if (cachedDestination != null) {
-          // Cache hit!
-          return cachedDestination;
-        }
+        // Ignore error trying to hash. We'll just download again.
       }
     }
 
     AtomicInteger totalBytes = new AtomicInteger(0);
     final ScheduledFuture<?> loggerHandle = getLoggerHandle(totalBytes, eventHandler, urlString);
-    final URL url = new URL(urlString);
 
     try (OutputStream out = destination.getOutputStream();
          HttpConnection connection = HttpConnection.createAndConnect(url, clientEnv)) {
@@ -160,36 +145,26 @@ public class HttpDownloader {
       }, 0, TimeUnit.SECONDS);
     }
 
-    if (!sha256.isEmpty()) {
-      RepositoryCache.assertFileChecksum(sha256, destination, KeyType.SHA256);
-    }
-
-    if (isCaching) {
-      repositoryCache.put(sha256, destination, KeyType.SHA256);
-    }
-
+    compareHashes(destination, sha256);
     return destination;
   }
 
-  private Path getDownloadDestination(String urlString, String type, Path outputDirectory)
-      throws RepositoryFunctionException {
-    URI uri = null;
-    try {
-      uri = new URI(urlString);
-    } catch (URISyntaxException e) {
-      throw new RepositoryFunctionException(
-          new EvalException(ruleUrlAttributeLocation, e), Transience.PERSISTENT);
+  private void compareHashes(Path destination, String sha256) throws IOException {
+    if (sha256.isEmpty()) {
+      return;
     }
-    if (type == null) {
-      return outputDirectory;
-    } else {
-      String filename = new PathFragment(uri.getPath()).getBaseName();
-      if (filename.isEmpty()) {
-        filename = "temp";
-      } else if (!type.isEmpty()) {
-        filename += "." + type;
-      }
-      return outputDirectory.getRelative(filename);
+    String downloadedSha256;
+    try {
+      downloadedSha256 = getHash(Hashing.sha256().newHasher(), destination);
+    } catch (IOException e) {
+      throw new IOException(
+          "Could not hash file " + destination + ": " + e.getMessage() + ", expected SHA-256 of "
+              + sha256 + ")");
+    }
+    if (!downloadedSha256.equals(sha256)) {
+      throw new IOException(
+          "Downloaded file at " + destination + " has SHA-256 of " + downloadedSha256
+              + ", does not match expected SHA-256 (" + sha256 + ")");
     }
   }
 
@@ -210,7 +185,7 @@ public class HttpDownloader {
     return scheduler.scheduleAtFixedRate(logger, 0, 1, TimeUnit.SECONDS);
   }
 
-  private String formatSize(int bytes) {
+  private static String formatSize(int bytes) {
     if (bytes < KB) {
       return bytes + "B";
     }
@@ -222,4 +197,22 @@ public class HttpDownloader {
         + (UNITS.charAt(logBaseUnitOfBytes) + "B");
   }
 
+  public static String getHash(Hasher hasher, Path path) throws IOException {
+    byte byteBuffer[] = new byte[BUFFER_SIZE];
+    try (InputStream stream = path.getInputStream()) {
+      int numBytesRead = stream.read(byteBuffer);
+      while (numBytesRead != -1) {
+        if (numBytesRead != 0) {
+          // If more than 0 bytes were read, add them to the hash.
+          hasher.putBytes(byteBuffer, 0, numBytesRead);
+        }
+        numBytesRead = stream.read(byteBuffer);
+      }
+    }
+    return hasher.hash().toString();
+  }
+
+  public void setRepositoryCache(@SuppressWarnings("unused") RepositoryCache repositoryCache) {
+    // TODO(jingwen): Implement repository cache bridge
+  }
 }
