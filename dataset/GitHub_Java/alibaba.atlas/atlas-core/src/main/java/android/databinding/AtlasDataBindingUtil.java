@@ -30,19 +30,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import org.osgi.framework.Bundle;
-
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
-
-import static android.taobao.atlas.runtime.DelegateResources.getGetCookieName;
+import java.io.File;
 
 /**
  * Utility class to create {@link ViewDataBinding} from layouts.
  */
 public class AtlasDataBindingUtil {
-    private static final HashMap<String, Object> sMappers = new HashMap();
+    private static HashMap<String, Object> sMappers = new HashMap();
     private static DataBindingComponent sDefaultComponent = null;
 
     /**
@@ -367,8 +364,7 @@ public class AtlasDataBindingUtil {
         {
             String className = null;
             String bundleLocation = null;
-            AssetManager assets = resource.getAssets();
-            String assetsPath = getGetCookieName(assets, cookie);
+            String assetsPath = (String)AssetManager.class.getMethod("getCookieName", new Class[] { Integer.TYPE }).invoke(resource.getAssets(), new Object[] { Integer.valueOf(cookie) });
             if (assetsPath.endsWith(".zip"))
             {
                 bundleLocation = substringBetween(assetsPath,"/storage/","/");
