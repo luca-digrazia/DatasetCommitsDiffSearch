@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
 import com.google.devtools.build.android.AndroidResourceClassWriter;
-import com.google.devtools.build.android.DataSource;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
@@ -30,6 +29,7 @@ import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml.XmlType;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -110,7 +110,7 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
 
   @Override
   public void write(
-      FullyQualifiedName key, DataSource source, AndroidDataWritingVisitor mergedDataWriter) {
+      FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
     ValuesResourceDefinition definition =
         mergedDataWriter
             .define(key)
@@ -143,11 +143,11 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
   }
 
   @Override
-  public int serializeTo(int sourceId, Namespaces namespaces, OutputStream output)
+  public int serializeTo(Path source, Namespaces namespaces, OutputStream output)
       throws IOException {
     return XmlResourceValues.serializeProtoDataValue(
         output,
-        XmlResourceValues.newSerializableDataValueBuilder(sourceId)
+        XmlResourceValues.newSerializableDataValueBuilder(source)
             .setXmlValue(
                 SerializeFormat.DataValueXml.newBuilder()
                     .setType(XmlType.STYLEABLE)

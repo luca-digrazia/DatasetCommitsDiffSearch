@@ -13,12 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.ide.common.res2.MergingException;
 import com.google.common.base.MoreObjects;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.protobuf.CodedOutputStream;
+
+import com.android.ide.common.res2.MergingException;
+
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.FileSystem;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -29,24 +32,22 @@ import java.util.Objects;
  */
 public class DataValueFile implements DataResource, DataAsset {
 
-  private final DataSource source;
+  private final Path source;
 
-  private DataValueFile(DataSource source) {
+  private DataValueFile(Path source) {
     this.source = source;
   }
 
   public static DataValueFile of(Path source) {
-    return of(DataSource.of(source));
-  }
-
-  public static DataValueFile of(DataSource source) {
     return new DataValueFile(source);
   }
+
   /**
    * Creates a {@link DataValueFile} from a {@link SerializeFormat.DataValue}.
    */
-  public static DataValueFile from(Path source) {
-    return of(source);
+  public static DataValueFile from(
+      SerializeFormat.DataValue protoValue, FileSystem currentFileSystem) {
+    return of(currentFileSystem.getPath(protoValue.getSource().getFilename()));
   }
 
   @Override
@@ -69,27 +70,27 @@ public class DataValueFile implements DataResource, DataAsset {
   }
 
   @Override
-  public DataSource source() {
+  public Path source() {
     return source;
   }
 
   @Override
   public void writeAsset(RelativeAssetPath key, AndroidDataWritingVisitor mergedDataWriter)
       throws IOException {
-    mergedDataWriter.copyAsset(source.getPath(), key.toPathString());
+    mergedDataWriter.copyAsset(source, key.toPathString());
   }
 
   @Override
   public void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter)
       throws IOException, MergingException {
-    mergedDataWriter.copyResource(source.getPath(), key.toPathString(source.getPath()));
+    mergedDataWriter.copyResource(source, key.toPathString(source));
   }
 
   @Override
-  public int serializeTo(DataKey key, DataSourceTable sourceTable, OutputStream output)
-      throws IOException {
+  public int serializeTo(DataKey key, OutputStream output) throws IOException {
     SerializeFormat.DataValue.Builder builder = SerializeFormat.DataValue.newBuilder();
-    SerializeFormat.DataValue value = builder.setSourceId(sourceTable.getSourceId(source)).build();
+    SerializeFormat.DataValue value =
+        builder.setSource(builder.getSourceBuilder().setFilename(source.toString())).build();
     value.writeDelimitedTo(output);
     return CodedOutputStream.computeUInt32SizeNoTag(value.getSerializedSize())
         + value.getSerializedSize();

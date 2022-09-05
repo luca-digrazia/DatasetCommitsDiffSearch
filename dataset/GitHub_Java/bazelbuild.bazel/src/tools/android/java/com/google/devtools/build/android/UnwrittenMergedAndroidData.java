@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.ide.common.res2.MergingException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
+
+import com.android.ide.common.res2.MergingException;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map.Entry;
@@ -53,10 +55,8 @@ public class UnwrittenMergedAndroidData {
   public MergedAndroidData write(AndroidDataWriter mergedDataWriter)
       throws IOException, MergingException {
     try {
-      primary.writeAssetsTo(mergedDataWriter);
-      primary.writeResourcesTo(mergedDataWriter);
-      transitive.writeAssetsTo(mergedDataWriter);
-      transitive.writeResourcesTo(mergedDataWriter);
+      writeParsedAndroidData(primary, mergedDataWriter);
+      writeParsedAndroidData(transitive, mergedDataWriter);
       return new MergedAndroidData(
           mergedDataWriter.resourceDirectory(),
           mergedDataWriter.assetDirectory(),
@@ -68,11 +68,40 @@ public class UnwrittenMergedAndroidData {
     }
   }
 
+  private void writeParsedAndroidData(
+      ParsedAndroidData resources, AndroidDataWritingVisitor mergedDataWriter)
+      throws IOException, MergingException {
+    for (Entry<DataKey, DataAsset> entry : resources.iterateAssetEntries()) {
+      // TODO(corysmith): Resolve the nit of casting to a RelativeAssetPath by sorting
+      // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
+      // MergeConflict.
+      entry.getValue().writeAsset((RelativeAssetPath) entry.getKey(), mergedDataWriter);
+    }
+    for (Entry<DataKey, DataResource> entry : resources.iterateDataResourceEntries()) {
+      // TODO(corysmith): Resolve the nit of casting to a FullyQualifiedName by sorting
+      // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
+      // MergeConflict.
+      entry.getValue().writeResource((FullyQualifiedName) entry.getKey(), mergedDataWriter);
+    }
+  }
+
   public void writeResourceClass(AndroidResourceClassWriter resourceClassWriter)
       throws IOException {
-    primary.writeResourcesTo(resourceClassWriter);
-    transitive.writeResourcesTo(resourceClassWriter);
+    writeResourceClassItems(primary, resourceClassWriter);
+    writeResourceClassItems(transitive, resourceClassWriter);
     resourceClassWriter.flush();
+  }
+
+  private void writeResourceClassItems(
+      ParsedAndroidData resources, AndroidResourceClassWriter resourceClassWriter)
+      throws IOException {
+    for (Entry<DataKey, DataResource> entry : resources.iterateDataResourceEntries()) {
+      // TODO(corysmith): Resolve the nit of casting to a FullyQualifiedName by sorting
+      // out the type structure and generics of DataKey, ParsedAndroidData, AndroidDataMerger and
+      // MergeConflict.
+      entry.getValue()
+          .writeResourceToClass((FullyQualifiedName) entry.getKey(), resourceClassWriter);
+    }
   }
 
   @Override
@@ -122,7 +151,8 @@ public class UnwrittenMergedAndroidData {
     for (Entry<DataKey, DataAsset> entry : primary.iterateAssetEntries()) {
       serializer.queueForSerialization(entry.getKey(), entry.getValue());
     }
-    primary.serializeAssetsTo(serializer);
-    primary.serializeResourcesTo(serializer);
+    for (Entry<DataKey, DataResource> entry : primary.iterateDataResourceEntries()) {
+      serializer.queueForSerialization(entry.getKey(), entry.getValue());
+    }
   }
 }

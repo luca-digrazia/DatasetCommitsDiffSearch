@@ -13,15 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
+import com.android.ide.common.res2.MergingException;
+
+import java.io.IOException;
 
 /**
  * Represents an Android Resource parsed from an xml or binary file.
  */
 public interface DataResource extends DataValue {
-  /** Write as a resource using the supplied {@link AndroidDataWritingVisitor}. */
+  /**
+   * Write as a resource using the supplied {@link AndroidDataWritingVisitor}.
+   */
   void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter)
-      throws MergingException;
+      throws IOException, MergingException;
 
   /**
    * Combines these resource together and returns a single resource.
@@ -38,7 +42,4 @@ public interface DataResource extends DataValue {
   void writeResourceToClass(
       FullyQualifiedName key,
       AndroidResourceClassWriter resourceClassWriter);
-  
-  /** Overwrite another {@link DataResource}. */
-  DataResource overwrite(DataResource other);
 }

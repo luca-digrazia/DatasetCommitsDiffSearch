@@ -20,13 +20,13 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
 import com.google.devtools.build.android.AndroidResourceClassWriter;
-import com.google.devtools.build.android.DataSource;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -119,7 +119,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
 
   @Override
   public void write(
-      FullyQualifiedName key, DataSource source, AndroidDataWritingVisitor mergedDataWriter) {
+      FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
     ValuesResourceDefinition definition = mergedDataWriter.define(key).derivedFrom(source)
         .startTag(arrayType.tagName)
         .named(key)
@@ -138,11 +138,11 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
   }
 
   @Override
-  public int serializeTo(int sourceId, Namespaces namespaces, OutputStream output)
+  public int serializeTo(Path source, Namespaces namespaces, OutputStream output)
       throws IOException {
     return XmlResourceValues.serializeProtoDataValue(
         output,
-        XmlResourceValues.newSerializableDataValueBuilder(sourceId)
+        XmlResourceValues.newSerializableDataValueBuilder(source)
             .setXmlValue(
                 SerializeFormat.DataValueXml.newBuilder()
                     .addAllListValue(values)
