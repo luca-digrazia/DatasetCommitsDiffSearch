@@ -160,28 +160,27 @@ public final class AspectDefinition {
       return ImmutableMultimap.of();
     }
     RuleClass ruleClass = ((Rule) to).getRuleClassObject();
-    AdvertisedProviderSet providers = ruleClass.getAdvertisedProviders();
-    return visitAspectsIfRequired((Rule) from, attribute,
-        providers, dependencyFilter);
+    ImmutableSet<Class<?>> providers = ruleClass.getAdvertisedProviders();
+    return visitAspectsIfRequired((Rule) from, attribute, ruleClass.canHaveAnyProvider(),
+        toStringSet(providers), dependencyFilter);
   }
 
   /**
    * Returns the attribute -&gt; set of labels that are provided by aspects of attribute.
    */
   public static ImmutableMultimap<Attribute, Label> visitAspectsIfRequired(
-      Rule from, Attribute attribute,
-      AdvertisedProviderSet advertisedProviders,
+      Rule from, Attribute attribute, boolean canHaveAnyProvider, Set<String> advertisedProviders,
       DependencyFilter dependencyFilter) {
     SetMultimap<Attribute, Label> result = LinkedHashMultimap.create();
     for (Aspect candidateClass : attribute.getAspects(from)) {
       // Check if target satisfies condition for this aspect (has to provide all required
       // TransitiveInfoProviders)
-      if (!advertisedProviders.canHaveAnyProvider()) {
-        ImmutableList<ImmutableSet<Class<?>>> providerNamesList =
-            candidateClass.getDefinition().getRequiredProviders();
+      if (!canHaveAnyProvider) {
+        ImmutableList<ImmutableSet<String>> providerNamesList =
+            candidateClass.getDefinition().getRequiredProviderNames();
 
-        for (ImmutableSet<Class<?>> providerNames : providerNamesList) {
-          if (advertisedProviders.getNativeProviders().containsAll(providerNames)) {
+        for (ImmutableSet<String> providerNames : providerNamesList) {
+          if (advertisedProviders.containsAll(providerNames)) {
             addAllAttributesOfAspect(from, result, candidateClass, dependencyFilter);
             break;
           }

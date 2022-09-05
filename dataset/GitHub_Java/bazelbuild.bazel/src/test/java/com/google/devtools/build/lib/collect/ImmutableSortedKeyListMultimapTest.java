@@ -13,8 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect;
 
-import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultiset;
@@ -49,9 +52,9 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll("bar", Arrays.asList(4, 5));
     builder.putAll("foo", Arrays.asList(6, 7));
     Multimap<String, Integer> multimap = builder.build();
-    assertThat(multimap).valuesForKey("foo").containsExactly(1, 2, 3, 6, 7).inOrder();
-    assertThat(multimap).valuesForKey("bar").containsExactly(4, 5).inOrder();
-    assertThat(multimap).hasSize(7);
+    assertEquals(Arrays.asList(1, 2, 3, 6, 7), multimap.get("foo"));
+    assertEquals(Arrays.asList(4, 5), multimap.get("bar"));
+    assertEquals(7, multimap.size());
   }
 
   @Test
@@ -62,9 +65,9 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll("bar", 4, 5);
     builder.putAll("foo", 6, 7);
     Multimap<String, Integer> multimap = builder.build();
-    assertThat(multimap).valuesForKey("foo").containsExactly(1, 2, 3, 6, 7).inOrder();
-    assertThat(multimap).valuesForKey("bar").containsExactly(4, 5).inOrder();
-    assertThat(multimap).hasSize(7);
+    assertEquals(Arrays.asList(1, 2, 3, 6, 7), multimap.get("foo"));
+    assertEquals(Arrays.asList(4, 5), multimap.get("bar"));
+    assertEquals(7, multimap.size());
   }
 
   @Test
@@ -83,9 +86,9 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll(toPut);
     builder.putAll(moreToPut);
     Multimap<String, Integer> multimap = builder.build();
-    assertThat(multimap).valuesForKey("foo").containsExactly(1, 2, 3, 6, 7).inOrder();
-    assertThat(multimap).valuesForKey("bar").containsExactly(4, 5).inOrder();
-    assertThat(multimap).hasSize(7);
+    assertEquals(Arrays.asList(1, 2, 3, 6, 7), multimap.get("foo"));
+    assertEquals(Arrays.asList(4, 5), multimap.get("bar"));
+    assertEquals(7, multimap.size());
   }
 
   @Test
@@ -96,9 +99,9 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll("bar", 4, 5);
     builder.putAll("foo", 1, 6, 7);
     ImmutableSortedKeyListMultimap<String, Integer> multimap = builder.build();
-    assertThat(multimap).valuesForKey("foo").containsExactly(1, 2, 3, 1, 6, 7).inOrder();
-    assertThat(multimap).valuesForKey("bar").containsExactly(4, 5).inOrder();
-    assertThat(multimap).hasSize(8);
+    assertEquals(Arrays.asList(1, 2, 3, 1, 6, 7), multimap.get("foo"));
+    assertEquals(Arrays.asList(4, 5), multimap.get("bar"));
+    assertEquals(8, multimap.size());
   }
 
   @Test
@@ -109,9 +112,9 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll("bar", 4, 5);
     builder.put("foo", 1);
     ImmutableSortedKeyListMultimap<String, Integer> multimap = builder.build();
-    assertThat(multimap).valuesForKey("foo").containsExactly(1, 2, 3, 1).inOrder();
-    assertThat(multimap).valuesForKey("bar").containsExactly(4, 5).inOrder();
-    assertThat(multimap).hasSize(6);
+    assertEquals(Arrays.asList(1, 2, 3, 1), multimap.get("foo"));
+    assertEquals(Arrays.asList(4, 5), multimap.get("bar"));
+    assertEquals(6, multimap.size());
   }
 
   @Test
@@ -132,9 +135,9 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll(toPut);
     builder.putAll(moreToPut);
     Multimap<String, Integer> multimap = builder.build();
-    assertThat(multimap).valuesForKey("foo").containsExactly(1, 2, 1, 6, 7, 2).inOrder();
-    assertThat(multimap).valuesForKey("bar").containsExactly(4, 5, 4).inOrder();
-    assertThat(multimap).hasSize(9);
+    assertEquals(Arrays.asList(1, 2, 1, 6, 7, 2), multimap.get("foo"));
+    assertEquals(Arrays.asList(4, 5, 4), multimap.get("bar"));
+    assertEquals(9, multimap.size());
   }
 
   @Test
@@ -143,10 +146,22 @@ public class ImmutableSortedKeyListMultimapTest {
     toPut.put("foo", null);
     ImmutableSortedKeyListMultimap.Builder<String, Integer> builder
         = ImmutableSortedKeyListMultimap.builder();
-    assertThrows(NullPointerException.class, () -> builder.put(null, 1));
-    assertThrows(NullPointerException.class, () -> builder.putAll(null, Arrays.asList(1, 2, 3)));
-    assertThrows(NullPointerException.class, () -> builder.putAll(null, 1, 2, 3));
-    assertThrows(NullPointerException.class, () -> builder.putAll(toPut));
+    try {
+      builder.put(null, 1);
+      fail();
+    } catch (NullPointerException expected) {}
+    try {
+      builder.putAll(null, Arrays.asList(1, 2, 3));
+      fail();
+    } catch (NullPointerException expected) {}
+    try {
+      builder.putAll(null, 1, 2, 3);
+      fail();
+    } catch (NullPointerException expected) {}
+    try {
+      builder.putAll(toPut);
+      fail();
+    } catch (NullPointerException expected) {}
   }
 
   @Test
@@ -155,11 +170,22 @@ public class ImmutableSortedKeyListMultimapTest {
     toPut.put(null, 1);
     ImmutableSortedKeyListMultimap.Builder<String, Integer> builder
         = ImmutableSortedKeyListMultimap.builder();
-    assertThrows(NullPointerException.class, () -> builder.put("foo", null));
-    assertThrows(
-        NullPointerException.class, () -> builder.putAll("foo", Arrays.asList(1, null, 3)));
-    assertThrows(NullPointerException.class, () -> builder.putAll("foo", 1, null, 3));
-    assertThrows(NullPointerException.class, () -> builder.putAll(toPut));
+    try {
+      builder.put("foo", null);
+      fail();
+    } catch (NullPointerException expected) {}
+    try {
+      builder.putAll("foo", Arrays.asList(1, null, 3));
+      fail();
+    } catch (NullPointerException expected) {}
+    try {
+      builder.putAll("foo", 1, null, 3);
+      fail();
+    } catch (NullPointerException expected) {}
+    try {
+      builder.putAll(toPut);
+      fail();
+    } catch (NullPointerException expected) {}
   }
 
   @Test
@@ -169,8 +195,8 @@ public class ImmutableSortedKeyListMultimapTest {
     input.put("bar", 2);
     input.put("foo", 3);
     Multimap<String, Integer> multimap = ImmutableSortedKeyListMultimap.copyOf(input);
-    assertThat(input).isEqualTo(multimap);
-    assertThat(multimap).isEqualTo(input);
+    assertEquals(multimap, input);
+    assertEquals(input, multimap);
   }
 
   @Test
@@ -181,54 +207,60 @@ public class ImmutableSortedKeyListMultimapTest {
     input.put("foo", 3);
     input.put("foo", 1);
     Multimap<String, Integer> multimap = ImmutableSortedKeyListMultimap.copyOf(input);
-    assertThat(input).isEqualTo(multimap);
-    assertThat(multimap).isEqualTo(input);
+    assertEquals(multimap, input);
+    assertEquals(input, multimap);
   }
 
   @Test
   public void copyOfEmpty() {
     ListMultimap<String, Integer> input = ArrayListMultimap.create();
     Multimap<String, Integer> multimap = ImmutableSortedKeyListMultimap.copyOf(input);
-    assertThat(input).isEqualTo(multimap);
-    assertThat(multimap).isEqualTo(input);
+    assertEquals(multimap, input);
+    assertEquals(input, multimap);
   }
 
   @Test
   public void copyOfImmutableListMultimap() {
     Multimap<String, Integer> multimap = createMultimap();
-    assertThat(ImmutableSortedKeyListMultimap.copyOf(multimap)).isSameAs(multimap);
+    assertSame(multimap, ImmutableSortedKeyListMultimap.copyOf(multimap));
   }
 
   @Test
   public void copyOfNullKey() {
     ListMultimap<String, Integer> input = ArrayListMultimap.create();
     input.put(null, 1);
-    assertThrows(NullPointerException.class, () -> ImmutableSortedKeyListMultimap.copyOf(input));
+    try {
+      ImmutableSortedKeyListMultimap.copyOf(input);
+      fail();
+    } catch (NullPointerException expected) {}
   }
 
   @Test
   public void copyOfNullValue() {
     ListMultimap<String, Integer> input = ArrayListMultimap.create();
     input.putAll("foo", Arrays.asList(1, null, 3));
-    assertThrows(NullPointerException.class, () -> ImmutableSortedKeyListMultimap.copyOf(input));
+    try {
+      ImmutableSortedKeyListMultimap.copyOf(input);
+      fail();
+    } catch (NullPointerException expected) {}
   }
 
   @Test
   public void emptyMultimapReads() {
     Multimap<String, Integer> multimap = ImmutableSortedKeyListMultimap.of();
-    assertThat(multimap).doesNotContainKey("foo");
-    assertThat(multimap.containsValue(1)).isFalse();
-    assertThat(multimap).doesNotContainEntry("foo", 1);
-    assertThat(multimap.entries()).isEmpty();
-    assertThat(multimap.equals(ArrayListMultimap.create())).isTrue();
-    assertThat(multimap).valuesForKey("foo").isEqualTo(Collections.emptyList());
-    assertThat(multimap.hashCode()).isEqualTo(0);
-    assertThat(multimap).isEmpty();
-    assertThat(multimap.keys()).isEqualTo(HashMultiset.create());
-    assertThat(multimap).isEmpty();
-    assertThat(multimap).isEmpty();
-    assertThat(multimap).isEmpty();
-    assertThat(multimap.toString()).isEqualTo("{}");
+    assertFalse(multimap.containsKey("foo"));
+    assertFalse(multimap.containsValue(1));
+    assertFalse(multimap.containsEntry("foo", 1));
+    assertTrue(multimap.entries().isEmpty());
+    assertTrue(multimap.equals(ArrayListMultimap.create()));
+    assertEquals(Collections.emptyList(), multimap.get("foo"));
+    assertEquals(0, multimap.hashCode());
+    assertTrue(multimap.isEmpty());
+    assertEquals(HashMultiset.create(), multimap.keys());
+    assertEquals(Collections.emptySet(), multimap.keySet());
+    assertEquals(0, multimap.size());
+    assertTrue(multimap.values().isEmpty());
+    assertEquals("{}", multimap.toString());
   }
 
   @Test
@@ -246,17 +278,17 @@ public class ImmutableSortedKeyListMultimapTest {
   @Test
   public void multimapReads() {
     Multimap<String, Integer> multimap = createMultimap();
-    assertThat(multimap).containsKey("foo");
-    assertThat(multimap).doesNotContainKey("cat");
-    assertThat(multimap.containsValue(1)).isTrue();
-    assertThat(multimap.containsValue(5)).isFalse();
-    assertThat(multimap).containsEntry("foo", 1);
-    assertThat(multimap).doesNotContainEntry("cat", 1);
-    assertThat(multimap).doesNotContainEntry("foo", 5);
-    assertThat(multimap.entries()).isNotEmpty();
-    assertThat(multimap).hasSize(3);
-    assertThat(multimap).isNotEmpty();
-    assertThat(multimap.toString()).isEqualTo("{bar=[2], foo=[1, 3]}");
+    assertTrue(multimap.containsKey("foo"));
+    assertFalse(multimap.containsKey("cat"));
+    assertTrue(multimap.containsValue(1));
+    assertFalse(multimap.containsValue(5));
+    assertTrue(multimap.containsEntry("foo", 1));
+    assertFalse(multimap.containsEntry("cat", 1));
+    assertFalse(multimap.containsEntry("foo", 5));
+    assertFalse(multimap.entries().isEmpty());
+    assertEquals(3, multimap.size());
+    assertFalse(multimap.isEmpty());
+    assertEquals("{bar=[2], foo=[1, 3]}", multimap.toString());
   }
 
   @Test
@@ -294,12 +326,12 @@ public class ImmutableSortedKeyListMultimapTest {
     builder.putAll("foo", Arrays.asList(1, 2, 3));
     builder.putAll("bar", Arrays.asList(4, 5));
     Map<String, Collection<Integer>> map = builder.build().asMap();
-    assertThat(map).containsEntry("foo", Arrays.asList(1, 2, 3));
-    assertThat(map).containsEntry("bar", Arrays.asList(4, 5));
-    assertThat(map).hasSize(2);
-    assertThat(map).containsKey("foo");
-    assertThat(map).containsKey("bar");
-    assertThat(map).doesNotContainKey("notfoo");
+    assertEquals(Arrays.asList(1, 2, 3), map.get("foo"));
+    assertEquals(Arrays.asList(4, 5), map.get("bar"));
+    assertEquals(2, map.size());
+    assertTrue(map.containsKey("foo"));
+    assertTrue(map.containsKey("bar"));
+    assertFalse(map.containsKey("notfoo"));
   }
 
   @Test
@@ -314,6 +346,6 @@ public class ImmutableSortedKeyListMultimapTest {
         .add(new SimpleImmutableEntry<String, Collection<Integer>>("foo", Arrays.asList(1, 2, 3)))
         .add(new SimpleImmutableEntry<String, Collection<Integer>>("bar", Arrays.asList(4, 5)))
         .build();
-    assertThat(set).isEqualTo(other);
+    assertEquals(other, set);
   }
 }
