@@ -425,8 +425,7 @@ public abstract class RepositoryFunction {
       RepositoryName repositoryName, @Nullable String ruleClassName, Environment env)
       throws RepositoryFunctionException {
     Rule rule = getRule(repositoryName.strippedName(), env);
-    Preconditions.checkState(
-        rule == null || ruleClassName == null || rule.getRuleClass().equals(ruleClassName),
+    Preconditions.checkState(ruleClassName == null || rule.getRuleClass().equals(ruleClassName),
         "Got %s, was expecting a %s", rule, ruleClassName);
     return rule;
   }

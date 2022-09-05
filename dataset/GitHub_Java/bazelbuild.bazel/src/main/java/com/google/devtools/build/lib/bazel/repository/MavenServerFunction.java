@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryNotFoundException;
 import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Path;
@@ -60,7 +59,10 @@ public class MavenServerFunction implements SkyFunction {
   private static final String USER_KEY = "user";
   private static final String SYSTEM_KEY = "system";
 
-  public MavenServerFunction() {
+  private final BlazeDirectories directories;
+
+  public MavenServerFunction(BlazeDirectories directories) {
+    this.directories = directories;
   }
 
   @Nullable
@@ -68,15 +70,14 @@ public class MavenServerFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws SkyFunctionException {
     String repository = (String) skyKey.argument();
-    Rule repositoryRule = null;
+    Rule repositoryRule;
     try {
-      repositoryRule = RepositoryFunction.getRule(repository, env);
+       repositoryRule = RepositoryFunction.getRule(repository, env);
+       if (repositoryRule == null) {
+         return null;
+       }
     } catch (RepositoryNotFoundException ex) {
-      // Ignored. We throw a new one below.
-    }
-    BlazeDirectories directories = PrecomputedValue.BLAZE_DIRECTORIES.get(env);
-    if (env.valuesMissing()) {
-      return null;
+      repositoryRule = null;
     }
     String serverName;
     String url;
@@ -85,7 +86,7 @@ public class MavenServerFunction implements SkyFunction {
         && repositoryRule.getRuleClass().equals(MavenServerRule.NAME);
     if (!foundRepoRule) {
       if (repository.equals(MavenServerValue.DEFAULT_ID)) {
-        settingsFiles = getDefaultSettingsFile(directories, env);
+        settingsFiles = getDefaultSettingsFile(env);
         serverName = MavenServerValue.DEFAULT_ID;
         url = MavenConnector.getMavenCentralRemote().getUrl();
       } else {
@@ -99,7 +100,7 @@ public class MavenServerFunction implements SkyFunction {
       url = mapper.get("url", Type.STRING);
       if (!mapper.has("settings_file", Type.STRING)
           || mapper.get("settings_file", Type.STRING).isEmpty()) {
-        settingsFiles = getDefaultSettingsFile(directories, env);
+        settingsFiles = getDefaultSettingsFile(env);
       } else {
         PathFragment settingsFilePath = new PathFragment(mapper.get("settings_file", Type.STRING));
         RootedPath settingsPath = RootedPath.toRootedPath(
@@ -174,8 +175,7 @@ public class MavenServerFunction implements SkyFunction {
     return new MavenServerValue(serverName, url, server, fingerprintBytes);
   }
 
-  private Map<String, FileValue> getDefaultSettingsFile(
-      BlazeDirectories directories, Environment env) {
+  private Map<String, FileValue> getDefaultSettingsFile(Environment env) {
     // The system settings file is at $M2_HOME/conf/settings.xml.
     String m2Home = System.getenv("M2_HOME");
     ImmutableList.Builder<SkyKey> settingsFilesBuilder = ImmutableList.builder();
@@ -199,11 +199,11 @@ public class MavenServerFunction implements SkyFunction {
       settingsFilesBuilder.add(userKey);
     }
 
-    ImmutableList<SkyKey> settingsFiles = settingsFilesBuilder.build();
+    ImmutableList settingsFiles = settingsFilesBuilder.build();
     if (settingsFiles.isEmpty()) {
       return ImmutableMap.of();
     }
-    Map<SkyKey, SkyValue> values = env.getValues(settingsFiles);
+    Map<SkyKey, SkyValue> values = env.getValues(settingsFilesBuilder.build());
     ImmutableMap.Builder<String, FileValue> settingsBuilder = ImmutableMap.builder();
     for (Map.Entry<SkyKey, SkyValue> entry : values.entrySet()) {
       if (entry.getValue() == null) {
