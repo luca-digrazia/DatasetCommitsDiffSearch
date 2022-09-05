@@ -21,10 +21,9 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.ParseFailureListener;
 import com.google.devtools.build.lib.skyframe.PrepareDepsOfPatternsValue.TargetPatternSequence;
-import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -62,7 +61,7 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
     EventHandler eventHandler = env.getListener();
     boolean handlerIsParseFailureListener = eventHandler instanceof ParseFailureListener;
 
-    ResolvedTargets.Builder<Label> builder = ResolvedTargets.builder();
+    ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
     for (SkyKey key : patternSkyKeys) {
       try {
         // The only exception type throwable by TargetPatternFunction is TargetParsingException.
@@ -70,8 +69,8 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
         // TargetParsingException when get is called.
         TargetPatternValue resultValue = Preconditions.checkNotNull(
             (TargetPatternValue) targetPatternValuesByKey.get(key).get());
-        ResolvedTargets<Label> results = resultValue.getTargets();
-        if (((TargetPatternKey) key.argument()).isNegative()) {
+        ResolvedTargets<Target> results = resultValue.getTargets();
+        if (((TargetPatternValue.TargetPattern) key.argument()).isNegative()) {
           builder.filter(Predicates.not(Predicates.in(results.getTargets())));
         } else {
           builder.merge(results);
@@ -81,11 +80,11 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
         handleTargetParsingException(eventHandler, handlerIsParseFailureListener, key, e);
       }
     }
-    ResolvedTargets<Label> resolvedTargets = builder.build();
+    ResolvedTargets<Target> resolvedTargets = builder.build();
 
     List<SkyKey> targetKeys = new ArrayList<>();
-    for (Label target : resolvedTargets.getTargets()) {
-      targetKeys.add(TransitiveTargetValue.key(target));
+    for (Target target : resolvedTargets.getTargets()) {
+      targetKeys.add(TransitiveTargetValue.key(target.getLabel()));
     }
 
     // TransitiveTargetFunction can produce exceptions of types NoSuchPackageException and
@@ -102,7 +101,7 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
 
   private static void handleTargetParsingException(EventHandler eventHandler,
       boolean handlerIsParseFailureListener, SkyKey key, TargetParsingException e) {
-    TargetPatternKey pattern = (TargetPatternKey) key.argument();
+    TargetPatternValue.TargetPattern pattern = (TargetPatternValue.TargetPattern) key.argument();
     String rawPattern = pattern.getPattern();
     String errorMessage = e.getMessage();
     eventHandler.handle(Event.error("Skipping '" + rawPattern + "': " + errorMessage));

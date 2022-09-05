@@ -37,7 +37,8 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
   }
 
   @ThreadSafe
-  public static SkyKey key(ImmutableList<String> patterns, FilteringPolicy policy, String offset) {
+  public static SkyKey key(ImmutableList<String> patterns, FilteringPolicy policy,
+      String offset) {
     return new SkyKey(SkyFunctions.PREPARE_DEPS_OF_PATTERNS,
         new TargetPatternSequence(patterns, policy, offset));
   }
@@ -49,8 +50,8 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
     private final FilteringPolicy policy;
     private final String offset;
 
-    private TargetPatternSequence(ImmutableList<String> patterns, FilteringPolicy policy,
-        String offset) {
+    public TargetPatternSequence(ImmutableList<String> patterns,
+        FilteringPolicy policy, String offset) {
       this.patterns = patterns;
       this.policy = policy;
       this.offset = offset;
