@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.buildtool.BuildTool;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.events.Reporter;
@@ -153,11 +154,10 @@ import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
 /**
- * The BlazeRuntime class encapsulates the immutable configuration of the current instance. These
- * runtime settings and services are available to most parts of any Blaze application for the
- * duration of the batch run or server lifetime.
- *
- * <p>The parts specific to the current command are stored in {@link CommandEnvironment}.
+ * The BlazeRuntime class encapsulates the runtime settings and services that
+ * are available to most parts of any Blaze application for the duration of the
+ * batch run or server lifetime. A single instance of this runtime will exist
+ * and will be passed around as needed.
  */
 public final class BlazeRuntime {
   public static final String DO_NOT_BUILD_FILE_NAME = "DO_NOT_BUILD_HERE";
@@ -177,6 +177,7 @@ public final class BlazeRuntime {
   private final SkyframeExecutor skyframeExecutor;
 
   private final Reporter reporter;
+  private EventBus eventBus;
   private final LoadingPhaseRunner loadingPhaseRunner;
   private final PackageFactory packageFactory;
   private final PackageRootResolver packageRootResolver;
@@ -186,6 +187,7 @@ public final class BlazeRuntime {
   private ActionCache actionCache;
   private final TimestampGranularityMonitor timestampGranularityMonitor;
   private final Clock clock;
+  private final BuildTool buildTool;
 
   private OutputService outputService;
 
@@ -268,6 +270,8 @@ public final class BlazeRuntime {
 
     this.eventBusExceptionHandler = eventBusExceptionHandler;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
+    this.buildTool = new BuildTool(this);
+    initEventBus();
 
     if (inWorkspace()) {
       writeOutputBaseReadmeFile();
@@ -307,22 +311,26 @@ public final class BlazeRuntime {
     return outputFileSystem;
   }
 
-  public CommandEnvironment initCommand() {
-    EventBus eventBus = new EventBus(eventBusExceptionHandler);
-    skyframeExecutor.setEventBus(eventBus);
-    return new CommandEnvironment(this, eventBus);
+  @VisibleForTesting
+  public void initEventBus() {
+    setEventBus(new EventBus(eventBusExceptionHandler));
   }
 
   private void clearEventBus() {
     // EventBus does not have an unregister() method, so this is how we release memory associated
     // with handlers.
-    skyframeExecutor.setEventBus(null);
+    setEventBus(null);
+  }
+
+  private void setEventBus(EventBus eventBus) {
+    this.eventBus = eventBus;
+    skyframeExecutor.setEventBus(eventBus);
   }
 
   /**
    * Conditionally enable profiling.
    */
-  private final boolean initProfiler(CommandEnvironment env, CommonCommandOptions options,
+  private final boolean initProfiler(CommonCommandOptions options,
       UUID buildID, long execStartTimeNanos) {
     OutputStream out = null;
     boolean recordFullProfilerData = false;
@@ -334,7 +342,7 @@ public final class BlazeRuntime {
 
         recordFullProfilerData = options.recordFullProfilerData;
         out = new BufferedOutputStream(profilePath.getOutputStream(), 1024 * 1024);
-        env.getReporter().handle(Event.info("Writing profile data to '" + profilePath + "'"));
+        getReporter().handle(Event.info("Writing profile data to '" + profilePath + "'"));
         profiledTasks = ProfiledTaskKinds.ALL;
       } else if (options.alwaysProfileSlowOperations) {
         recordFullProfilerData = false;
@@ -349,7 +357,7 @@ public final class BlazeRuntime {
         return true;
       }
     } catch (IOException e) {
-      env.getReporter().handle(Event.error("Error while creating profile file: " + e.getMessage()));
+      getReporter().handle(Event.error("Error while creating profile file: " + e.getMessage()));
     }
     return false;
   }
@@ -509,6 +517,13 @@ public final class BlazeRuntime {
     return reporter;
   }
 
+  /**
+   * Returns the current event bus. Only valid within the scope of a single Blaze command.
+   */
+  public EventBus getEventBus() {
+    return eventBus;
+  }
+
   public BinTools getBinTools() {
     return binTools;
   }
@@ -525,6 +540,13 @@ public final class BlazeRuntime {
    */
   public PackageFactory getPackageFactory() {
     return packageFactory;
+  }
+
+  /**
+   * Returns the build tool.
+   */
+  public BuildTool getBuildTool() {
+    return buildTool;
   }
 
   public ImmutableList<OutputFormatter> getQueryOutputFormatters() {
@@ -680,12 +702,12 @@ public final class BlazeRuntime {
    * @param options The CommonCommandOptions used by every command.
    * @throws AbruptExitException if this command is unsuitable to be run as specified
    */
-  void beforeCommand(Command command, CommandEnvironment env, OptionsParser optionsParser,
+  void beforeCommand(Command command, OptionsParser optionsParser,
       CommonCommandOptions options, long execStartTimeNanos)
       throws AbruptExitException {
     commandStartTime -= options.startupTime;
 
-    env.getEventBus().post(new GotOptionsEvent(startupOptionsProvider,
+    eventBus.post(new GotOptionsEvent(startupOptionsProvider,
         optionsParser));
     throwPendingException();
 
@@ -731,7 +753,7 @@ public final class BlazeRuntime {
     // Conditionally enable profiling
     // We need to compensate for launchTimeNanos (measurements taken outside of the jvm).
     long startupTimeNanos = options.startupTime * 1000000L;
-    if (initProfiler(env, options, this.getCommandId(), execStartTimeNanos - startupTimeNanos)) {
+    if (initProfiler(options, this.getCommandId(), execStartTimeNanos - startupTimeNanos)) {
       Profiler profiler = Profiler.instance();
 
       // Instead of logEvent() we're calling the low level function to pass the timings we took in
@@ -748,7 +770,7 @@ public final class BlazeRuntime {
       try {
         MemoryProfiler.instance().start(memoryProfilePath.getOutputStream());
       } catch (IOException e) {
-        env.getReporter().handle(
+        getReporter().handle(
             Event.error("Error while creating memory profile file: " + e.getMessage()));
       }
     }
@@ -780,8 +802,7 @@ public final class BlazeRuntime {
       module.handleOptions(optionsParser);
     }
 
-    env.getEventBus().post(
-        new CommandStartEvent(command.name(), commandId, clientEnv, workingDirectory));
+    eventBus.post(new CommandStartEvent(command.name(), commandId, clientEnv, workingDirectory));
     // Initialize exit code to dummy value for afterCommand.
     storedExitCode.set(ExitCode.RESERVED.getNumericExitCode());
   }
@@ -790,8 +811,8 @@ public final class BlazeRuntime {
    * Hook method called by the BlazeCommandDispatcher right before the dispatch
    * of each command ends (while its outcome can still be modified).
    */
-  ExitCode precompleteCommand(CommandEnvironment env, ExitCode originalExit) {
-    env.getEventBus().post(new CommandPrecompleteEvent(originalExit));
+  ExitCode precompleteCommand(ExitCode originalExit) {
+    eventBus.post(new CommandPrecompleteEvent(originalExit));
     // If Blaze did not suffer an infrastructure failure, check for errors in modules.
     ExitCode exitCode = originalExit;
     if (!originalExit.isInfrastructureFailure() && pendingException != null) {
@@ -812,7 +833,7 @@ public final class BlazeRuntime {
       // thread won the race (unlikely, but possible), this may be incorrectly logged as a success.
       return;
     }
-    skyframeExecutor.getEventBus().post(new CommandCompleteEvent(exitCode));
+    eventBus.post(new CommandCompleteEvent(exitCode));
   }
 
   /**
@@ -820,9 +841,9 @@ public final class BlazeRuntime {
    * command.
    */
   @VisibleForTesting
-  public void afterCommand(CommandEnvironment env, int exitCode) {
+  public void afterCommand(int exitCode) {
     // Remove any filters that the command might have added to the reporter.
-    env.getReporter().setOutputFilter(OutputFilter.OUTPUT_EVERYTHING);
+    getReporter().setOutputFilter(OutputFilter.OUTPUT_EVERYTHING);
 
     notifyCommandComplete(exitCode);
 
@@ -836,7 +857,7 @@ public final class BlazeRuntime {
       Profiler.instance().stop();
       MemoryProfiler.instance().stop();
     } catch (IOException e) {
-      env.getReporter().handle(Event.error("Error while writing profile file: " + e.getMessage()));
+      getReporter().handle(Event.error("Error while writing profile file: " + e.getMessage()));
     }
   }
 

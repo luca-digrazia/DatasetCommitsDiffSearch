@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@ package com.google.devtools.build.lib.actions;
 import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -265,7 +265,7 @@ public class ResourceManager {
   private void acquired(ActionMetadata owner) {
     if (eventBus != null) {
       // Null only in tests.
-      eventBus.post(ActionStatusMessage.runningStrategy(owner, "unknown"));
+      eventBus.post(ActionStatusMessage.runningStrategy(owner));
     }
   }
 
