@@ -93,9 +93,4 @@ public class MetricsRegistryTest {
 
         verify(listener, never()).onMetricAdded(new MetricName(MetricsRegistryTest.class, "counter2"), counter2);
     }
-
-    @Test
-    public void metricsCanBeRemoved() throws Exception {
-
-    }
 }
