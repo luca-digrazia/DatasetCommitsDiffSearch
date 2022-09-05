@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.google.common.io.ByteStreams;
@@ -27,12 +29,13 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Authenticator;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
 import java.net.Proxy;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +44,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
@@ -48,11 +53,7 @@ import javax.annotation.Nullable;
  * Helper class for downloading a file from a URL.
  */
 public class HttpDownloader {
-  private static final int MAX_REDIRECTS = 20;
   private static final int BUFFER_SIZE = 32 * 1024;
-  private static final int KB = 1024;
-  private static final String UNITS = " KMGTPEY";
-  private static final double LOG_OF_KB = Math.log(1024);
 
   private final String urlString;
   private final String sha256;
@@ -102,34 +103,26 @@ public class HttpDownloader {
     }
     Path destination = outputDirectory.getRelative(filename);
 
-    if (!sha256.isEmpty()) {
-      try {
-        String currentSha256 = getHash(Hashing.sha256().newHasher(), destination);
-        if (currentSha256.equals(sha256)) {
-          // No need to download.
-          return destination;
-        }
-      } catch (IOException e) {
-        // Ignore error trying to hash. We'll just download again.
+    try {
+      String currentSha256 = getHash(Hashing.sha256().newHasher(), destination);
+      if (currentSha256.equals(sha256)) {
+        // No need to download.
+        return destination;
       }
+    } catch (IOException e) {
+      // Ignore error trying to hash. We'll just download again.
     }
 
     AtomicInteger totalBytes = new AtomicInteger(0);
     final ScheduledFuture<?> loggerHandle = getLoggerHandle(totalBytes);
 
     try (OutputStream out = destination.getOutputStream();
-         HttpConnection connection = HttpConnection.createAndConnect(url)) {
-      InputStream inputStream = connection.getInputStream();
+         InputStream in = getInputStream(url)) {
       int read;
       byte[] buf = new byte[BUFFER_SIZE];
-      while ((read = inputStream.read(buf)) > 0) {
+      while ((read = in.read(buf)) > 0) {
         totalBytes.addAndGet(read);
         out.write(buf, 0, read);
-      }
-      if (connection.getContentLength() != -1
-          && totalBytes.get() != connection.getContentLength()) {
-        throw new IOException("Expected " + formatSize(connection.getContentLength()) + ", got "
-            + formatSize(totalBytes.get()));
       }
     } catch (IOException e) {
       throw new IOException(
@@ -143,14 +136,6 @@ public class HttpDownloader {
       }, 0, TimeUnit.SECONDS);
     }
 
-    compareHashes(destination);
-    return destination;
-  }
-
-  private void compareHashes(Path destination) throws IOException {
-    if (sha256.isEmpty()) {
-      return;
-    }
     String downloadedSha256;
     try {
       downloadedSha256 = getHash(Hashing.sha256().newHasher(), destination);
@@ -164,10 +149,15 @@ public class HttpDownloader {
           "Downloaded file at " + destination + " has SHA-256 of " + downloadedSha256
               + ", does not match expected SHA-256 (" + sha256 + ")");
     }
+    return destination;
   }
 
   private ScheduledFuture<?> getLoggerHandle(final AtomicInteger totalBytes) {
     final Runnable logger = new Runnable() {
+      private static final int KB = 1024;
+      private static final String UNITS = " KMGTPEY";
+      private final double logOfKb = Math.log(1024);
+
       @Override
       public void run() {
         try {
@@ -178,128 +168,102 @@ public class HttpDownloader {
               "Error generating download progress: " + e.getMessage()));
         }
       }
+
+      private String formatSize(int bytes) {
+        if (bytes < KB) {
+          return bytes + "B";
+        }
+        int logBaseUnitOfBytes = (int) (Math.log(bytes) / logOfKb);
+        if (logBaseUnitOfBytes < 0 || logBaseUnitOfBytes >= UNITS.length()) {
+          return bytes + "B";
+        }
+        return (int) (bytes / Math.pow(KB, logBaseUnitOfBytes))
+            + (UNITS.charAt(logBaseUnitOfBytes) + "B");
+      }
     };
     return scheduler.scheduleAtFixedRate(logger, 0, 1, TimeUnit.SECONDS);
   }
 
-  private static String formatSize(int bytes) {
-    if (bytes < KB) {
-      return bytes + "B";
+  private InputStream getInputStream(URL url) throws IOException {
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection(
+        createProxyIfNeeded(url.getProtocol()));
+    connection.setInstanceFollowRedirects(true);
+    connection.connect();
+    if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+      return connection.getInputStream();
     }
-    int logBaseUnitOfBytes = (int) (Math.log(bytes) / LOG_OF_KB);
-    if (logBaseUnitOfBytes < 0 || logBaseUnitOfBytes >= UNITS.length()) {
-      return bytes + "B";
-    }
-    return (int) (bytes / Math.pow(KB, logBaseUnitOfBytes))
-        + (UNITS.charAt(logBaseUnitOfBytes) + "B");
+
+    InputStream errorStream = connection.getErrorStream();
+    throw new IOException(connection.getResponseCode() + ": "
+        + new String(ByteStreams.toByteArray(errorStream), StandardCharsets.UTF_8));
   }
 
-  private static class HttpConnection implements Closeable {
-    private final InputStream inputStream;
-    private final int contentLength;
+  private static Proxy createProxyIfNeeded(String protocol) throws IOException {
+    if (protocol.equals("https")) {
+      return createProxy(System.getenv("HTTPS_PROXY"));
+    } else if (protocol.equals("http")) {
+      return createProxy(System.getenv("HTTP_PROXY"));
+    }
+    return Proxy.NO_PROXY;
+  }
 
-    private HttpConnection(InputStream inputStream, int contentLength) {
-      this.inputStream = inputStream;
-      this.contentLength = contentLength;
+  @VisibleForTesting
+  static Proxy createProxy(String proxyAddress) throws IOException {
+    if (Strings.isNullOrEmpty(proxyAddress)) {
+      return Proxy.NO_PROXY;
     }
 
-    public InputStream getInputStream() {
-      return inputStream;
+    // Here there be dragons.
+    Pattern urlPattern =
+        Pattern.compile("^(https?)://(?:([^:@]+?)(?::([^@]+?))?@)?(?:[^:]+)(?::(\\d+))?$");
+    Matcher matcher = urlPattern.matcher(proxyAddress);
+    if (!matcher.matches()) {
+      throw new IOException("Proxy address " + proxyAddress + " is not a valid URL");
     }
 
-    /**
-     * @return The length of the response, or -1 if unknown.
-     */
-    public int getContentLength() {
-      return contentLength;
+    String protocol = matcher.group(1);
+    final String username = matcher.group(2);
+    final String password = matcher.group(3);
+    String port = matcher.group(4);
+
+    boolean https;
+    switch (protocol) {
+      case "https":
+        https = true;
+        break;
+      case "http":
+        https = false;
+        break;
+      default:
+        throw new IOException("Invalid proxy protocol for " + proxyAddress);
     }
 
-    @Override
-    public void close() throws IOException {
-      inputStream.close();
-    }
-
-    private static int parseContentLength(HttpURLConnection connection) {
-      String length;
-      try {
-        length = connection.getHeaderField("Content-Length");
-        if (length == null) {
-          return -1;
-        }
-        return Integer.parseInt(length);
-      } catch (NumberFormatException e) {
-        return -1;
+    if (username != null) {
+      if (password == null) {
+        throw new IOException("No password given for proxy " + proxyAddress);
       }
+      System.setProperty(protocol + ".proxyUser", username);
+      System.setProperty(protocol + ".proxyPassword", password);
+
+      Authenticator.setDefault(
+          new Authenticator() {
+            public PasswordAuthentication getPasswordAuthentication() {
+              return new PasswordAuthentication(username, password.toCharArray());
+            }
+          });
     }
 
-    public static HttpConnection createAndConnect(URL url) throws IOException {
-      int retries = MAX_REDIRECTS;
-      Proxy proxy = ProxyHelper.createProxyIfNeeded(url.toString());
-      do {
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection(proxy);
-        try {
-          connection.connect();
-        } catch (IllegalArgumentException e) {
-          throw new IOException("Failed to connect to " + url + " : " + e.getMessage(), e);
-        }
-
-        int statusCode = connection.getResponseCode();
-        switch (statusCode) {
-          case HttpURLConnection.HTTP_OK:
-            return new HttpConnection(connection.getInputStream(), parseContentLength(connection));
-          case HttpURLConnection.HTTP_MOVED_PERM:
-          case HttpURLConnection.HTTP_MOVED_TEMP:
-            url = tryGetLocation(statusCode, connection);
-            connection.disconnect();
-            break;
-          case -1:
-            throw new IOException("An HTTP error occured");
-          default:
-            throw new IOException(String.format("%s %s: %s",
-                connection.getResponseCode(),
-                connection.getResponseMessage(),
-                readBody(connection)));
-          }
-      } while (retries-- > 0);
-      throw new IOException("Maximum redirects (" + MAX_REDIRECTS + ") exceeded");
+    if (port == null) {
+      return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyAddress, https ? 443 : 80));
     }
 
-    private static URL tryGetLocation(int statusCode, HttpURLConnection connection)
-        throws IOException {
-      String newLocation = connection.getHeaderField("Location");
-      if (newLocation == null) {
-        throw new IOException(
-            "Remote returned " + statusCode + " but did not return location header.");
-      }
-
-      URL newUrl;
-      try {
-        newUrl = new URL(newLocation);
-      } catch (MalformedURLException e) {
-        throw new IOException("Remote returned invalid location header: " + newLocation);
-      }
-
-      String newProtocol = newUrl.getProtocol();
-      if (!("http".equals(newProtocol) || "https".equals(newProtocol))) {
-        throw new IOException(
-            "Remote returned invalid location header: " + newLocation);
-      }
-
-      return newUrl;
-    }
-
-    private static String readBody(HttpURLConnection connection) throws IOException {
-      InputStream errorStream = connection.getErrorStream();
-      if (errorStream != null) {
-        return new String(ByteStreams.toByteArray(errorStream), StandardCharsets.UTF_8);
-      }
-
-      InputStream responseStream = connection.getInputStream();
-      if (responseStream != null) {
-        return new String(ByteStreams.toByteArray(responseStream), StandardCharsets.UTF_8);
-      }
-
-      return null;
+    try {
+      return new Proxy(
+          Proxy.Type.HTTP,
+          new InetSocketAddress(
+              proxyAddress.substring(0, proxyAddress.lastIndexOf(':')), Integer.parseInt(port)));
+    } catch (NumberFormatException e) {
+      throw new IOException("Error parsing proxy port: " + proxyAddress);
     }
   }
 
