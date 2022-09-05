@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
@@ -84,6 +83,18 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     // runfiles.
     builder.addArtifacts(ccLinkingOutputs.getLibrariesForRunfiles(linkingStatically && !neverLink));
     builder.add(context, CppRunfilesProvider.runfilesFunction(linkingStatically));
+    if (context.getRule().isAttrDefined("implements", Type.LABEL_LIST)) {
+      builder.addTargets(context.getPrerequisites("implements", Mode.TARGET),
+          RunfilesProvider.DEFAULT_RUNFILES);
+      builder.addTargets(context.getPrerequisites("implements", Mode.TARGET),
+          CppRunfilesProvider.runfilesFunction(linkingStatically));
+    }
+    if (context.getRule().isAttrDefined("implementation", Type.LABEL_LIST)) {
+      builder.addTargets(context.getPrerequisites("implementation", Mode.TARGET),
+          RunfilesProvider.DEFAULT_RUNFILES);
+      builder.addTargets(context.getPrerequisites("implementation", Mode.TARGET),
+          CppRunfilesProvider.runfilesFunction(linkingStatically));
+    }
 
     builder.addDataDeps(context);
 
@@ -115,26 +126,44 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext);
     final CcCommon common = new CcCommon(ruleContext, featureConfiguration);
 
-    CcLibraryHelper helper =
-        new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
-            .fromCommon(common)
-
-            .addLinkopts(common.getLinkopts())
-            .addPublicHeaders(common.getHeaders())
-            .enableCcNativeLibrariesProvider()
-            .enableCompileProviders()
-            .enableInterfaceSharedObjects()
-            // Generate .a and .so outputs even without object files to fulfill the rule class contract
-            // wrt. implicit output files, if the contract says so. Behavior here differs between Bazel
-            // and Blaze.
-            .setGenerateLinkActionsIfEmpty(
-                ruleContext.getRule().getRuleClassObject().getImplicitOutputsFunction()
-                    != ImplicitOutputsFunction.NONE)
-            .setLinkType(linkType)
-            .setNeverLink(neverLink);
-
+    CcLibraryHelper helper = new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
+        .setLinkType(linkType)
+        .enableCcNativeLibrariesProvider()
+        .enableInterfaceSharedObjects()
+        .enableCompileProviders()
+        // Generate .a and .so outputs even without object files to fulfill the rule class contract
+        // wrt. implicit output files.
+        .setGenerateLinkActionsIfEmpty(true)
+        .setNeverLink(neverLink)
+        .setHeadersCheckingMode(common.determineHeadersCheckingMode())
+        .addCopts(common.getCopts())
+        .setNoCopts(common.getNoCopts())
+        .addLinkopts(common.getLinkopts())
+        .addDefines(common.getDefines())
+        .addCompilationPrerequisites(common.getSharedLibrariesFromSrcs())
+        .addCompilationPrerequisites(common.getStaticLibrariesFromSrcs())
+        .addSources(common.getCAndCppSources())
+        .addPublicHeaders(common.getHeaders())
+        .addObjectFiles(common.getObjectFilesFromSrcs(false))
+        .addPicObjectFiles(common.getObjectFilesFromSrcs(true))
+        .addPicIndependentObjectFiles(common.getLinkerScripts())
+        .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
+        .addSystemIncludeDirs(common.getSystemIncludeDirs())
+        .addIncludeDirs(common.getIncludeDirs())
+        .addLooseIncludeDirs(common.getLooseIncludeDirs())
+        .setEmitHeaderTargetModuleMaps(
+            ruleContext.getRule().getRuleClass().equals("cc_public_library"));
+    
     if (collectLinkstamp) {
       helper.addLinkstamps(ruleContext.getPrerequisites("linkstamp", Mode.TARGET));
+    }
+
+    if (ruleContext.getRule().isAttrDefined("implements", Type.LABEL_LIST)) {
+      helper.addDeps(ruleContext.getPrerequisites("implements", Mode.TARGET));
+    }
+
+    if (ruleContext.getRule().isAttrDefined("implementation", Type.LABEL_LIST)) {
+      helper.addDeps(ruleContext.getPrerequisites("implementation", Mode.TARGET));
     }
 
     PathFragment soImplFilename = null;
@@ -258,6 +287,8 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         .add(RunfilesProvider.class, RunfilesProvider.withData(staticRunfiles, sharedRunfiles))
         // Remove this?
         .add(CppRunfilesProvider.class, new CppRunfilesProvider(staticRunfiles, sharedRunfiles))
+        .add(ImplementedCcPublicLibrariesProvider.class,
+            new ImplementedCcPublicLibrariesProvider(getImplementedCcPublicLibraries(ruleContext)))
         .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, artifactsToForce)
         .addOutputGroup(OutputGroupProvider.BASELINE_COVERAGE, BaselineCoverageAction
                 .getBaselineCoverageArtifacts(ruleContext,
@@ -318,6 +349,14 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
              + "You may need to add an explicit '.cc' file to 'srcs'. "
              + "Alternatively, add 'linkstatic=1' to suppress this warning");
       }
+    }
+  }
+
+  private static ImmutableList<Label> getImplementedCcPublicLibraries(RuleContext context) {
+    if (context.attributes().has("implements", Type.LABEL_LIST)) {
+      return ImmutableList.copyOf(context.attributes().get("implements", Type.LABEL_LIST));
+    } else {
+      return ImmutableList.of();
     }
   }
 
