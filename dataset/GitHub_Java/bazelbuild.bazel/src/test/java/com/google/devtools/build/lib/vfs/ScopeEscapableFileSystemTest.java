@@ -22,8 +22,8 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -74,13 +74,8 @@ public abstract class ScopeEscapableFileSystemTest extends SymlinkAwareFileSyste
       return ans != null ? ans.asFragment() : null;
     }
 
-    @Override public boolean supportsModifications() {
-      return true;
-    }
-
-    @Override public boolean supportsSymbolicLinksNatively() {
-      return true;
-    }
+    @Override public boolean supportsModifications() { return true; }
+    @Override public boolean supportsSymbolicLinks() { return true; }
 
     private static RuntimeException re() {
       return new RuntimeException("This method should not be called in this context");

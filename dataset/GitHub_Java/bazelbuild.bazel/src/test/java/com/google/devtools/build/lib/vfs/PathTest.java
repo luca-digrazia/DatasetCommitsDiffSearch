@@ -25,6 +25,12 @@ import com.google.common.testing.EqualsTester;
 import com.google.common.testing.GcFinalization;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
@@ -32,10 +38,6 @@ import java.io.ObjectOutputStream;
 import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.List;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * A test for {@link Path}.
@@ -179,11 +181,11 @@ public class PathTest {
   public void testGetRelativeWithFragmentWorks() {
     Path dir = filesystem.getPath("/first/x");
     assertEquals("/first/x/y",
-                 dir.getRelative(PathFragment.create("y")).toString());
+                 dir.getRelative(new PathFragment("y")).toString());
     assertEquals("/first/x/x",
-                 dir.getRelative(PathFragment.create("./x")).toString());
+                 dir.getRelative(new PathFragment("./x")).toString());
     assertEquals("/first/y",
-                 dir.getRelative(PathFragment.create("../y")).toString());
+                 dir.getRelative(new PathFragment("../y")).toString());
 
   }
 
@@ -191,7 +193,7 @@ public class PathTest {
   public void testGetRelativeWithAbsoluteFragmentWorks() {
     Path root = filesystem.getPath("/first/x");
     assertEquals("/x/y",
-                 root.getRelative(PathFragment.create("/x/y")).toString());
+                 root.getRelative(new PathFragment("/x/y")).toString());
   }
 
   @Test
@@ -238,14 +240,14 @@ public class PathTest {
   @Test
   public void testSiblingNonEquivalenceFragment() {
     assertNotSame(
-        root.getRelative(PathFragment.create("aSingleSegment")),
-        root.getRelative(PathFragment.create("aDifferentSegment")));
+        root.getRelative(new PathFragment("aSingleSegment")),
+        root.getRelative(new PathFragment("aDifferentSegment")));
   }
 
   @Test
   public void testHashCodeStableAcrossGarbageCollections() {
     Path parent = filesystem.getPath("/a");
-    PathFragment childFragment = PathFragment.create("b");
+    PathFragment childFragment = new PathFragment("b");
     Path child = parent.getRelative(childFragment);
     WeakReference<Path> childRef = new WeakReference<>(child);
     int childHashCode1 = childRef.get().hashCode();
@@ -302,20 +304,8 @@ public class PathTest {
     }
   }
 
-  @Test
-  public void testAbsolutePathRoot() {
-    assertEquals("/", new Path(null).toString());
-  }
-
-  @Test
-  public void testAbsolutePath() {
-    Path segment = new Path(null, "bar.txt",
-      new Path(null, "foo", new Path(null)));
-    assertEquals("/foo/bar.txt", segment.toString());
-  }
-
   private void assertAsFragmentWorks(String expected) {
-    assertEquals(PathFragment.create(expected), filesystem.getPath(expected).asFragment());
+    assertEquals(new PathFragment(expected), filesystem.getPath(expected).asFragment());
   }
 
   private void assertGetRelativeWorks(String expected, String relative) {
@@ -324,7 +314,7 @@ public class PathTest {
   }
 
   private void assertRelativeToWorks(String expected, String relative, String original) {
-    assertEquals(PathFragment.create(expected),
+    assertEquals(new PathFragment(expected),
                  filesystem.getPath(relative).relativeTo(filesystem.getPath(original)));
   }
 }

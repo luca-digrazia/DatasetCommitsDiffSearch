@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.testing.EqualsTester;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,16 +37,15 @@ public class UnixPathEqualityTest {
   private FileSystem unixFs;
 
   @Before
-  public void setUp() throws Exception {
+  public final void initializeFileSystem() throws Exception  {
     unixFs = new UnixFileSystem();
     otherUnixFs = new UnixFileSystem();
     assertTrue(unixFs != otherUnixFs);
   }
 
   private void assertTwoWayEquals(Object obj1, Object obj2) {
-    assertTrue(obj1.equals(obj2));
-    assertTrue(obj2.equals(obj1));
-    assertEquals(obj1.hashCode(), obj2.hashCode());
+    assertEquals(obj2, obj1);
+    new EqualsTester().addEqualityGroup(obj1, obj2).testEquals();
   }
 
   private void assertTwoWayNotEquals(Object obj1, Object obj2) {
