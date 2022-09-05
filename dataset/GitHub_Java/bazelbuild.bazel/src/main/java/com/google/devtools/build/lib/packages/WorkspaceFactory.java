@@ -16,33 +16,27 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.devtools.build.lib.syntax.Runtime.NONE;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.Builder;
-import com.google.devtools.build.lib.packages.Package.LegacyBuilder;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
-import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.vfs.Path;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Map;
 
 import javax.annotation.Nullable;
@@ -51,17 +45,8 @@ import javax.annotation.Nullable;
  * Parser for WORKSPACE files.  Fills in an ExternalPackage.Builder
  */
 public class WorkspaceFactory {
-  public static final String BIND = "bind";
-
-  private final LegacyBuilder builder;
-  private final StoredEventHandler localReporter;
-
-  private final Path installDir;
-  private final Path workspaceDir;
-  private final Mutability mutability;
-
-  private final ImmutableMap<String, BaseFunction> workspaceFunctions;
-  private final ImmutableList<EnvironmentExtension> environmentExtensions;
+  private final Builder builder;
+  private final Environment environment;
 
   /**
    * @param builder a builder for the Workspace
@@ -69,10 +54,8 @@ public class WorkspaceFactory {
    * @param mutability the Mutability for the current evaluation context
    */
   public WorkspaceFactory(
-      LegacyBuilder builder,
-      RuleClassProvider ruleClassProvider,
-      ImmutableList<EnvironmentExtension> environmentExtensions,
-      Mutability mutability) {
+      Builder builder, RuleClassProvider ruleClassProvider,
+      ImmutableList<EnvironmentExtension> environmentExtensions, Mutability mutability) {
     this(builder, ruleClassProvider, environmentExtensions, mutability, null, null);
   }
 
@@ -86,118 +69,62 @@ public class WorkspaceFactory {
    * @param workspaceDir the workspace directory
    */
   public WorkspaceFactory(
-      LegacyBuilder builder,
+      Builder builder,
       RuleClassProvider ruleClassProvider,
       ImmutableList<EnvironmentExtension> environmentExtensions,
       Mutability mutability,
       @Nullable Path installDir,
       @Nullable Path workspaceDir) {
     this.builder = builder;
-    this.localReporter = new StoredEventHandler();
-    this.mutability = mutability;
-    this.installDir = installDir;
-    this.workspaceDir = workspaceDir;
-    this.environmentExtensions = environmentExtensions;
-    this.workspaceFunctions = createWorkspaceFunctions(ruleClassProvider);
+    this.environment = createWorkspaceEnv(builder, ruleClassProvider, environmentExtensions,
+        mutability, installDir, workspaceDir);
   }
 
-  // State while parsing the WORKSPACE file.
-  // We store them so we can pause the parsing and load skylark imports from the
-  // WorkspaceFileFunction. Loading skylark imports require access to the .skyframe package
-  // which this package cannot depend on.
-  private BuildFileAST buildFileAST = null;
-  private Environment.Builder environmentBuilder = null;
-  private ParserInputSource source = null;
-
-  /**
-   * Parses the given WORKSPACE file without resolving skylark imports.
-   *
-   * <p>Called by com.google.devtools.build.workspace.Resolver from
-   * //src/tools/generate_workspace.</p>
-   */
-  public void parse(ParserInputSource source) throws InterruptedException, IOException {
-    // This method is split in 2 so WorkspaceFileFunction can call the two parts separately and
-    // do the Skylark load imports in between. We can't load skylark imports from
-    // generate_workspace at the moment because it doesn't have access to skyframe, but that's okay
-    // because most people are just using it to resolve Maven dependencies.
-    parseWorkspaceFile(source);
-    execute();
-  }
-
-  /**
-   * Parses the WORKSPACE file, generating the AST.
-   * @throws IOException if parsing fails.
-   */
-  public void parseWorkspaceFile(ParserInputSource source) throws IOException {
-    this.source = source;
+  public void parse(ParserInputSource source)
+      throws InterruptedException {
+    StoredEventHandler localReporter = new StoredEventHandler();
+    BuildFileAST buildFileAST;
     buildFileAST = BuildFileAST.parseBuildFile(source, localReporter, false);
     if (buildFileAST.containsErrors()) {
-      environmentBuilder = null;
-      throw new IOException("Failed to parse " + source.getPath());
+      localReporter.handle(Event.error("WORKSPACE file could not be parsed"));
+    } else {
+      if (!buildFileAST.exec(environment, localReporter)) {
+        localReporter.handle(Event.error("Error evaluating WORKSPACE file " + source.getPath()));
+      }
     }
-    environmentBuilder = Environment.builder(mutability)
-        .setGlobals(Environment.BUILD)
-        .setEventHandler(localReporter);
-  }
-
-  /**
-   * Actually runs through the AST, calling the functions in the WORKSPACE file and adding rules
-   * to the //external package.
-   */
-  public void execute() throws InterruptedException {
-    Preconditions.checkNotNull(environmentBuilder);
-    Environment workspaceEnv = environmentBuilder.setLoadingPhase().build();
-    addWorkspaceFunctions(workspaceEnv);
-    if (!buildFileAST.exec(workspaceEnv, localReporter)) {
-      localReporter.handle(Event.error("Error evaluating WORKSPACE file " + source.getPath()));
-    }
-    environmentBuilder = null;
-    buildFileAST = null;
-    source = null;
 
     builder.addEvents(localReporter.getEvents());
     if (localReporter.hasErrors()) {
       builder.setContainsErrors();
     }
-    localReporter.clear();
-  }
-
-  public BuildFileAST getBuildFileAST() {
-    return buildFileAST;
-  }
-
-  public void setImportedExtensions(Map<String, Extension> importedExtensions) {
-    environmentBuilder.setImportedExtensions(importedExtensions);
   }
 
   // TODO(bazel-team): use @SkylarkSignature annotations on a BuiltinFunction.Factory
   // for signature + documentation of this and other functions in this file.
-  private static BuiltinFunction newWorkspaceNameFunction() {
-    return new BuiltinFunction(
-        "workspace", FunctionSignature.namedOnly("name"), BuiltinFunction.USE_AST_ENV) {
-      public Object invoke(String name, FuncallExpression ast, Environment env)
-          throws EvalException {
+  private static BuiltinFunction newWorkspaceNameFunction(final Builder builder) {
+    return new BuiltinFunction("workspace",
+        FunctionSignature.namedOnly("name"), BuiltinFunction.USE_LOC) {
+      public Object invoke(String name, Location loc) throws EvalException {
         String errorMessage = LabelValidator.validateTargetName(name);
         if (errorMessage != null) {
-          throw new EvalException(ast.getLocation(), errorMessage);
+          throw new EvalException(loc, errorMessage);
         }
-
-        PackageFactory.getContext(env, ast).pkgBuilder.setWorkspaceName(name);
+        builder.setWorkspaceName(name);
         return NONE;
       }
     };
   }
 
-  private static BuiltinFunction newBindFunction(final RuleFactory ruleFactory) {
+  private static BuiltinFunction newBindFunction(
+      final RuleFactory ruleFactory, final Builder builder) {
     return new BuiltinFunction(
-        "bind", FunctionSignature.namedOnly(1, "name", "actual"), BuiltinFunction.USE_AST_ENV) {
-      public Object invoke(String name, String actual, FuncallExpression ast, Environment env)
+        "bind", FunctionSignature.namedOnly(1, "name", "actual"), BuiltinFunction.USE_LOC) {
+      public Object invoke(String name, String actual, Location loc)
           throws EvalException, InterruptedException {
         Label nameLabel = null;
         try {
           nameLabel = Label.parseAbsolute("//external:" + name);
           try {
-            LegacyBuilder builder = PackageFactory.getContext(env, ast).pkgBuilder;
             RuleClass ruleClass = ruleFactory.getRuleClass("bind");
             builder
                 .externalPackageData()
@@ -206,16 +133,16 @@ public class WorkspaceFactory {
                     ruleClass,
                     nameLabel,
                     actual == null ? null : Label.parseAbsolute(actual),
-                    ast.getLocation());
+                    loc);
           } catch (
               RuleFactory.InvalidRuleException | Package.NameConflictException
                       | LabelSyntaxException
                   e) {
-            throw new EvalException(ast.getLocation(), e.getMessage());
+            throw new EvalException(loc, e.getMessage());
           }
 
         } catch (LabelSyntaxException e) {
-          throw new EvalException(ast.getLocation(), e.getMessage());
+          throw new EvalException(loc, e.getMessage());
         }
         return NONE;
       }
@@ -227,13 +154,12 @@ public class WorkspaceFactory {
    * specified package context.
    */
   private static BuiltinFunction newRuleFunction(
-      final RuleFactory ruleFactory, final String ruleClassName) {
+      final RuleFactory ruleFactory, final Builder builder, final String ruleClassName) {
     return new BuiltinFunction(
         ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_AST_ENV) {
       public Object invoke(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
           throws EvalException, InterruptedException {
         try {
-          Builder builder = PackageFactory.getContext(env, ast).pkgBuilder;
           RuleClass ruleClass = ruleFactory.getRuleClass(ruleClassName);
           RuleClass bindRuleClass = ruleFactory.getRuleClass("bind");
           builder
@@ -249,25 +175,22 @@ public class WorkspaceFactory {
     };
   }
 
-  private static ImmutableMap<String, BaseFunction> createWorkspaceFunctions(
-      RuleClassProvider ruleClassProvider) {
-    ImmutableMap.Builder<String, BaseFunction> mapBuilder = ImmutableMap.builder();
+  private Environment createWorkspaceEnv(
+      Builder builder,
+      RuleClassProvider ruleClassProvider,
+      ImmutableList<EnvironmentExtension> environmentExtensions,
+      Mutability mutability,
+      Path installDir,
+      Path workspaceDir) {
+    Environment workspaceEnv = Environment.builder(mutability)
+        .setGlobals(Environment.BUILD)
+        .setLoadingPhase()
+        .build();
     RuleFactory ruleFactory = new RuleFactory(ruleClassProvider);
-    mapBuilder.put(BIND, newBindFunction(ruleFactory));
-    for (String ruleClass : ruleFactory.getRuleClassNames()) {
-      if (!ruleClass.equals(BIND)) {
-        BaseFunction ruleFunction = newRuleFunction(ruleFactory, ruleClass);
-        mapBuilder.put(ruleClass, ruleFunction);
-      }
-    }
-    return mapBuilder.build();
-  }
-
-  private void addWorkspaceFunctions(Environment workspaceEnv) {
     try {
-      workspaceEnv.update("workspace", newWorkspaceNameFunction());
-      for (Map.Entry<String, BaseFunction> function : workspaceFunctions.entrySet()) {
-        workspaceEnv.update(function.getKey(), function.getValue());
+      for (String ruleClass : ruleFactory.getRuleClassNames()) {
+        BaseFunction ruleFunction = newRuleFunction(ruleFactory, builder, ruleClass);
+        workspaceEnv.update(ruleClass, ruleFunction);
       }
       if (installDir != null) {
         workspaceEnv.update("__embedded_dir__", installDir.getPathString());
@@ -277,39 +200,16 @@ public class WorkspaceFactory {
       }
       File jreDirectory = new File(System.getProperty("java.home"));
       workspaceEnv.update("DEFAULT_SERVER_JAVABASE", jreDirectory.getParentFile().toString());
+      workspaceEnv.update("bind", newBindFunction(ruleFactory, builder));
+      workspaceEnv.update("workspace", newWorkspaceNameFunction(builder));
 
       for (EnvironmentExtension extension : environmentExtensions) {
         extension.updateWorkspace(workspaceEnv);
       }
-      workspaceEnv.setupDynamic(
-          PackageFactory.PKG_CONTEXT,
-          new PackageFactory.PackageContext(builder, null, localReporter));
+
+      return workspaceEnv;
     } catch (EvalException e) {
       throw new AssertionError(e);
     }
-  }
-
-  private static ClassObject newNativeModule(
-      ImmutableMap<String, BaseFunction> workspaceFunctions) {
-    ImmutableMap.Builder<String, Object> builder = new ImmutableMap.Builder<>();
-    for (String nativeFunction : Runtime.getFunctionNames(SkylarkNativeModule.class)) {
-      builder.put(nativeFunction, Runtime.getFunction(SkylarkNativeModule.class, nativeFunction));
-    }
-    for (Map.Entry<String, BaseFunction> function : workspaceFunctions.entrySet()) {
-      builder.put(function.getKey(), function.getValue());
-    }
-
-    return new ClassObject.SkylarkClassObject(builder.build(), "no native function or rule '%s'");
-  }
-
-  public static ClassObject newNativeModule(RuleClassProvider ruleClassProvider) {
-    return newNativeModule(createWorkspaceFunctions(ruleClassProvider));
-  }
-
-  /**
-   * @return a list of events that have occurred while parsing the WORKSPACE file.
-   */
-  public ImmutableList<Event> getEvents() {
-    return localReporter.getEvents();
   }
 }

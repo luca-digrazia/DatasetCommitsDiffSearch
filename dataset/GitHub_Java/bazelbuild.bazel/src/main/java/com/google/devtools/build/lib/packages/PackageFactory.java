@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.GlobCache.BadGlobException;
 import com.google.devtools.build.lib.packages.License.DistributionType;
-import com.google.devtools.build.lib.packages.Preprocessor.AstAfterPreprocessing;
 import com.google.devtools.build.lib.syntax.AssignmentStatement;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
@@ -997,43 +996,15 @@ public final class PackageFactory {
       CachingPackageLocator locator,
       RuleVisibility defaultVisibility,
       Globber globber) throws InterruptedException {
-    StoredEventHandler localReporterForParsing = new StoredEventHandler();
+    StoredEventHandler localReporter = new StoredEventHandler();
     // Run the lexer and parser with a local reporter, so that errors from other threads do not
-    // show up below.
-    BuildFileAST buildFileAST = parseBuildFile(packageId, preprocessingResult.result,
-        preludeStatements, localReporterForParsing);
-    AstAfterPreprocessing astAfterPreprocessing =
-        new AstAfterPreprocessing(preprocessingResult, buildFileAST, localReporterForParsing);
-    return createPackageFromPreprocessingAst(
-        externalPkg,
-        packageId,
-        buildFile,
-        astAfterPreprocessing,
-        imports,
-        skylarkFileDependencies,
-        defaultVisibility,
-        globber);
-  }
-
-  public static BuildFileAST parseBuildFile(PackageIdentifier packageId, ParserInputSource in,
-      List<Statement> preludeStatements, EventHandler eventHandler) {
+    // show up below. Merge the local and global reporters afterwards.
     // Logged messages are used as a testability hook tracing the parsing progress
     LOG.fine("Starting to parse " + packageId);
     BuildFileAST buildFileAST = BuildFileAST.parseBuildFile(
-        in, preludeStatements, eventHandler, false);
+        preprocessingResult.result, preludeStatements, localReporter, false);
     LOG.fine("Finished parsing of " + packageId);
-    return buildFileAST;
-  }
 
-  public Package.LegacyBuilder createPackageFromPreprocessingAst(
-      Package externalPkg,
-      PackageIdentifier packageId,
-      Path buildFile,
-      Preprocessor.AstAfterPreprocessing astAfterPreprocessing,
-      Map<PathFragment, Extension> imports,
-      ImmutableList<Label> skylarkFileDependencies,
-      RuleVisibility defaultVisibility,
-      Globber globber) throws InterruptedException {
     MakeEnvironment.Builder makeEnv = new MakeEnvironment.Builder();
     if (platformSetRegexps != null) {
       makeEnv.setPlatformSetRegexps(platformSetRegexps);
@@ -1041,17 +1012,17 @@ public final class PackageFactory {
     try {
       // At this point the package is guaranteed to exist.  It may have parse or
       // evaluation errors, resulting in a diminished number of rules.
-      prefetchGlobs(packageId, astAfterPreprocessing.ast, astAfterPreprocessing.preprocessed,
+      prefetchGlobs(packageId, buildFileAST, preprocessingResult.preprocessed,
           buildFile, globber, defaultVisibility, makeEnv);
       return evaluateBuildFile(
           externalPkg,
           packageId,
-          astAfterPreprocessing.ast,
+          buildFileAST,
           buildFile,
           globber,
-          astAfterPreprocessing.allEvents,
+          Iterables.concat(preprocessingEvents, localReporter.getEvents()),
           defaultVisibility,
-          astAfterPreprocessing.containsPreprocessingErrors,
+          preprocessingResult.containsErrors,
           makeEnv,
           imports,
           skylarkFileDependencies);
