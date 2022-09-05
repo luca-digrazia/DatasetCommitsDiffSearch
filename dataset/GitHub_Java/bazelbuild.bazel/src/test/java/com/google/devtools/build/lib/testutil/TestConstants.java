@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.testutil;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 
 /**
  * Various constants required by the tests.
@@ -24,8 +23,6 @@ public class TestConstants {
   private TestConstants() {
   }
 
-  public static final String PRODUCT_NAME = "bazel";
-
   /**
    * A list of all embedded binaries that go into the regular Bazel binary.
    */
@@ -33,19 +30,23 @@ public class TestConstants {
       "build_interface_so",
       "build-runfiles",
       "namespace-sandbox",
-      "process-wrapper",
-      "xcode-locator");
+      "process-wrapper");
 
   /**
    * Location in the bazel repo where embedded binaries come from.
    */
   public static final ImmutableList<String> EMBEDDED_SCRIPTS_PATHS = ImmutableList.of(
-      "io_bazel/src/main/tools");
+      "src/main/tools");
+
+  /**
+   * Path within runfiles tree for finding everything else.
+   */
+  public static final String RUNFILES_PREFIX = "DOES-NOT-WORK-YET";
 
   /**
    * Default workspace name.
    */
-  public static final String WORKSPACE_NAME = "__main__";
+  public static final String WORKSPACE_NAME = "";
 
   /**
    * Name of a class with an INSTANCE field of type AnalysisMock to be used for analysis tests.
@@ -56,7 +57,7 @@ public class TestConstants {
   /**
    * Directory where we can find bazel's Java tests, relative to a test's runfiles directory.
    */
-  public static final String JAVATESTS_ROOT = "io_bazel/src/test/java/";
+  public static final String JAVATESTS_ROOT = "src/test/java/";
 
   public static final String TEST_RULE_CLASS_PROVIDER =
       "com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider";
@@ -71,10 +72,4 @@ public class TestConstants {
   public static final String TOOLS_REPOSITORY = "@bazel_tools";
 
   public static final String TOOLS_REPOSITORY_PATH = "tools/cpp";
-
-  public static final ImmutableList<String> DOCS_RULES_PATHS = ImmutableList.of(
-      "src/main/java/com/google/devtools/build/lib/rules");
-
-  public static final InvocationPolicy TEST_INVOCATION_POLICY =
-      InvocationPolicy.getDefaultInstance();
 }
