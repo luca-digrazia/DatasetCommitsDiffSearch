@@ -35,7 +35,10 @@ import org.hswebframework.web.service.authorization.AuthorizationSettingService;
 import org.hswebframework.web.service.authorization.PermissionService;
 import org.hswebframework.web.service.authorization.RoleService;
 import org.hswebframework.web.service.authorization.UserService;
-import org.hswebframework.web.service.organizational.*;
+import org.hswebframework.web.service.organizational.DepartmentService;
+import org.hswebframework.web.service.organizational.OrganizationalService;
+import org.hswebframework.web.service.organizational.PersonService;
+import org.hswebframework.web.service.organizational.PositionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -86,12 +89,10 @@ public class SpringBootExample
                 ServletResponse.class,
                 InputStream.class,
                 OutputStream.class,
-                MultipartFile.class,
-                MultipartFile[].class
+                MultipartFile.class
         };
         return loggerInfo -> System.out.println("有请求啦:" + JSON.toJSONString(loggerInfo.toSimpleMap(obj -> {
-            if (Stream.of(excludes).anyMatch(aClass -> aClass.isInstance(obj)))
-                return obj.getClass().getName();
+            if (Stream.of(excludes).anyMatch(aClass -> aClass.isInstance(obj))) return obj.getClass().getName();
             return JSON.toJSONString(obj);
         })));
     }
@@ -119,6 +120,7 @@ public class SpringBootExample
     }
 
 
+
     @Autowired
     UserService       userService;
     @Autowired
@@ -140,14 +142,10 @@ public class SpringBootExample
     @Autowired
     AuthorizationSettingService authorizationSettingService;
 
-    @Autowired
-    RelationInfoService relationInfoService;
-
     public static void main(String[] args) {
         SpringApplication.run(SpringBootExample.class);
     }
 
-    // main
     //    @Override
     public void run(String... strings) throws Exception {
         //只能查询自己创建的数据
@@ -270,16 +268,5 @@ public class SpringBootExample
         personEntity.setPersonUser(personUserEntity);
 
         personService.insert(personEntity);
-
-        RelationInfoEntity relationInfo = relationInfoService.createEntity();
-
-        relationInfo.setRelationFrom(personEntity.getId());
-        relationInfo.setRelationTo("zhangsan");
-        relationInfo.setRelationTypeFrom("person");
-        relationInfo.setRelationTypeTo("person");
-        relationInfo.setStatus(DataStatus.STATUS_ENABLED);
-        relationInfo.setRelationId("leader");
-        relationInfoService.insert(relationInfo);
-
     }
 }
