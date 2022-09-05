@@ -1,17 +1,16 @@
 package org.hsweb.web.controller.user;
 
-import org.hsweb.web.bean.common.UpdateParam;
-import org.hsweb.web.core.authorize.annotation.Authorize;
+import org.hsweb.web.authorize.annotation.Authorize;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.controller.GenericController;
-import org.hsweb.web.core.exception.NotFoundException;
-import org.hsweb.web.core.logger.annotation.AccessLogger;
-import org.hsweb.web.core.message.ResponseMessage;
+import org.hsweb.web.exception.NotFoundException;
+import org.hsweb.web.logger.annotation.AccessLogger;
+import org.hsweb.web.message.ResponseMessage;
 import org.hsweb.web.service.user.UserService;
+import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -50,18 +49,15 @@ public class UserController extends GenericController<User, String> {
         return super.info(id).exclude(User.class, "password", "modules");
     }
 
+    @Override
     @AccessLogger("禁用")
-    @RequestMapping(value = "/{id}/disable", method = RequestMethod.PUT)
-    public ResponseMessage disable(@PathVariable("id") String id) throws Exception {
-        getService().disableUser(id);
-        return ResponseMessage.ok();
+    public ResponseMessage delete(@PathVariable("id") String id) throws Exception {
+        User user = getService().selectByPk(id);
+        if (user == null) throw new NotFoundException("用户不存在!");
+        user.setStatus(-1);
+        getService().update(user);
+        return ResponseMessage.ok( "禁用成功");
     }
 
-    @AccessLogger("启用")
-    @RequestMapping(value = "/{id}/enable", method = RequestMethod.PUT)
-    public ResponseMessage enable(@PathVariable("id") String id) throws Exception {
-        getService().enableUser(id);
-        return ResponseMessage.ok();
-    }
 
 }

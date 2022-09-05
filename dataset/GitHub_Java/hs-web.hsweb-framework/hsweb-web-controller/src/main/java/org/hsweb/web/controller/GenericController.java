@@ -1,19 +1,18 @@
 package org.hsweb.web.controller;
 
 import com.alibaba.fastjson.JSON;
-import org.hsweb.web.core.authorize.annotation.Authorize;
+import org.hsweb.web.authorize.annotation.Authorize;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.po.GenericPo;
-import org.hsweb.web.core.exception.BusinessException;
-import org.hsweb.web.core.exception.NotFoundException;
-import org.hsweb.web.core.logger.annotation.AccessLogger;
-import org.hsweb.web.core.message.ResponseMessage;
+import org.hsweb.web.exception.BusinessException;
+import org.hsweb.web.logger.annotation.AccessLogger;
+import org.hsweb.web.message.ResponseMessage;
 import org.hsweb.web.service.GenericService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.hsweb.commons.ClassUtils;
+import org.webbuilder.utils.common.ClassUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,7 +62,7 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(method = RequestMethod.GET)
     @AccessLogger("查询列表")
     @Authorize(action = "R")
-    public ResponseMessage list(QueryParam param) {
+    public ResponseMessage list(QueryParam param) throws Exception {
         // 获取条件查询
         Object data;
         if (!param.isPaging())//不分页
@@ -85,7 +84,7 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(value = "/{id}", method = RequestMethod.GET)
     @AccessLogger("查询明细")
     @Authorize(action = "R")
-    public ResponseMessage info(@PathVariable("id") PK id) {
+    public ResponseMessage info(@PathVariable("id") PK id) throws Exception {
         PO po = getService().selectByPk(id);
         if (po == null)
             throw new BusinessException("data is not found!", 404);
@@ -102,7 +101,7 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(value = "/total", method = RequestMethod.GET)
     @AccessLogger("查询总数")
     @Authorize(action = "R")
-    public ResponseMessage total(QueryParam param) {
+    public ResponseMessage total(QueryParam param) throws Exception {
         // 获取条件查询
         return ResponseMessage.ok(getService().total(param));
     }
@@ -117,7 +116,7 @@ public abstract class GenericController<PO, PK> {
     @AccessLogger("新增")
     @Authorize(action = "C")
     @ResponseStatus(HttpStatus.CREATED)
-    public ResponseMessage add(@RequestBody PO object) {
+    public ResponseMessage add(@RequestBody PO object) throws Exception {
         PK pk = getService().insert(object);
         return ResponseMessage.created(pk);
     }
@@ -131,9 +130,9 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(value = "/{id}", method = RequestMethod.DELETE)
     @AccessLogger("删除")
     @Authorize(action = "D")
-    public ResponseMessage delete(@PathVariable("id") PK id) {
+    public ResponseMessage delete(@PathVariable("id") PK id) throws Exception {
         PO old = getService().selectByPk(id);
-        if (old == null) throw new NotFoundException("data is not found!");
+        if (old == null) throw new BusinessException("data is not found!", 404);
         int number = getService().delete(id);
         return ResponseMessage.ok(number);
     }
@@ -147,11 +146,11 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(value = "/{id}", method = RequestMethod.PUT)
     @AccessLogger("修改")
     @Authorize(action = "U")
-    public ResponseMessage update(@PathVariable("id") PK id, @RequestBody(required = true) PO object) {
+    public ResponseMessage update(@PathVariable("id") PK id, @RequestBody(required = true) PO object) throws Exception {
         PO old = getService().selectByPk(id);
-        if (old == null) throw new NotFoundException("data is not found!");
+        if (old == null) throw new BusinessException("data is not found!", 404);
         if (object instanceof GenericPo) {
-            ((GenericPo) object).setId(id);
+            ((GenericPo) object).setU_id(id);
         }
         int number = getService().update(object);
         return ResponseMessage.ok(number);
@@ -166,7 +165,7 @@ public abstract class GenericController<PO, PK> {
     @RequestMapping(method = RequestMethod.PUT)
     @AccessLogger("批量修改")
     @Authorize(action = "U")
-    public ResponseMessage update(@RequestBody(required = true) String json) {
+    public ResponseMessage update(@RequestBody(required = true) String json) throws Exception {
         int number;
         if (json.startsWith("[")) {
             List<PO> datas = JSON.parseArray(json, getPOType());

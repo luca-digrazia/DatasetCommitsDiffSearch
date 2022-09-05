@@ -17,36 +17,27 @@ public class GenericPo<PK> implements Serializable {
     /**
      * 主键
      */
-    private PK id;
+    private PK u_id;
 
-    public PK getId() {
-        return id;
+    public PK getU_id() {
+        return u_id;
     }
 
-    public void setId(PK id) {
-        this.id = id;
-    }
+    private Map<String, Object> customAttr = new LinkedHashMap<>();
 
-    /**
-     * 自定义属性
-     */
-    private Map<String, Object> properties;
-
-    public <T> T setProperty(String attr, T value) {
-        if (properties == null) properties = new LinkedHashMap<>();
-        properties.put(attr, value);
+    public <T> T attr(String attr, T value) {
+        customAttr.put(attr, value);
         return value;
     }
 
-    public <T> T getProperty(String attr) {
-        if (properties == null) return null;
-        return ((T) properties.get(attr));
+    public <T> T attr(String attr) {
+        return ((T) customAttr.get(attr));
     }
 
     @Override
     public int hashCode() {
-        if (getId() == null) return 0;
-        return getId().hashCode();
+        if (getU_id() == null) return 0;
+        return getU_id().hashCode();
     }
 
     @Override
@@ -55,6 +46,9 @@ public class GenericPo<PK> implements Serializable {
         return this.hashCode() == obj.hashCode();
     }
 
+    public void setU_id(PK u_id) {
+        this.u_id = u_id;
+    }
 
     /**
      * 创建一个主键
@@ -65,11 +59,11 @@ public class GenericPo<PK> implements Serializable {
         return MD5.encode(UUID.randomUUID().toString());
     }
 
-    public Map<String, Object> getProperties() {
-        return properties;
+    public Map<String, Object> getCustomAttr() {
+        return customAttr;
     }
 
-    public void setProperties(Map<String, Object> properties) {
-        this.properties = properties;
+    public void setCustomAttr(Map<String, Object> customAttr) {
+        this.customAttr = customAttr;
     }
 }
