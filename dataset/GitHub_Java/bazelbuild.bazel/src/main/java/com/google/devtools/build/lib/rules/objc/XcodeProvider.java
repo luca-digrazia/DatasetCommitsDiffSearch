@@ -73,13 +73,13 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   public static final class Builder {
     private Label label;
     private final NestedSetBuilder<String> propagatedUserHeaderSearchPaths =
-        NestedSetBuilder.linkOrder();
+        NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<String> nonPropagatedUserHeaderSearchPaths =
-        NestedSetBuilder.linkOrder();
+        NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<String> propagatedHeaderSearchPaths =
-        NestedSetBuilder.linkOrder();
+        NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<String> nonPropagatedHeaderSearchPaths =
-        NestedSetBuilder.linkOrder();
+        NestedSetBuilder.stableOrder();
     private Optional<Artifact> bundleInfoplist = Optional.absent();
     // Dependencies must be in link order because XCode observes the dependency ordering for
     // binary linking.
@@ -524,11 +524,11 @@ public final class XcodeProvider implements TransitiveInfoProvider {
 
   private TargetControl targetControl() {
     String buildFilePath = label.getPackageFragment().getSafePathString() + "/BUILD";
-    NestedSet<String> userHeaderSearchPaths = NestedSetBuilder.<String>linkOrder()
+    NestedSet<String> userHeaderSearchPaths = NestedSetBuilder.<String>stableOrder()
         .addTransitive(propagatedUserHeaderSearchPaths)
         .addTransitive(nonPropagatedUserHeaderSearchPaths)
         .build();
-    NestedSet<String> headerSearchPaths = NestedSetBuilder.<String>linkOrder()
+    NestedSet<String> headerSearchPaths = NestedSetBuilder.<String>stableOrder()
         .addTransitive(propagatedHeaderSearchPaths)
         .addTransitive(nonPropagatedHeaderSearchPaths)
         .build();
