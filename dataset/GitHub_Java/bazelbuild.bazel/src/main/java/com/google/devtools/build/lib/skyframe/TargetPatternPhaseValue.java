@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -52,23 +52,15 @@ public final class TargetPatternPhaseValue implements SkyValue {
   private final ImmutableSet<Target> filteredTargets;
   private final ImmutableSet<Target> testFilteredTargets;
 
-  // These two fields are only for the purposes of generating the TargetParsingCompleteEvent.
-  // TODO(ulfjack): Support EventBus event posting in Skyframe, and remove this code again.
-  private final ImmutableSet<Target> originalTargets;
-  private final ImmutableSet<Target> testSuiteTargets;
-
   TargetPatternPhaseValue(ImmutableSet<Target> targets, @Nullable ImmutableSet<Target> testsToRun,
       boolean hasError, boolean hasPostExpansionError, ImmutableSet<Target> filteredTargets,
-      ImmutableSet<Target> testFilteredTargets, ImmutableSet<Target> originalTargets,
-      ImmutableSet<Target> testSuiteTargets) {
+      ImmutableSet<Target> testFilteredTargets) {
     this.targets = Preconditions.checkNotNull(targets);
     this.testsToRun = testsToRun;
     this.hasError = hasError;
     this.hasPostExpansionError = hasPostExpansionError;
     this.filteredTargets = Preconditions.checkNotNull(filteredTargets);
     this.testFilteredTargets = Preconditions.checkNotNull(testFilteredTargets);
-    this.originalTargets = Preconditions.checkNotNull(originalTargets);
-    this.testSuiteTargets = Preconditions.checkNotNull(testSuiteTargets);
   }
 
   public ImmutableSet<Target> getTargets() {
@@ -94,14 +86,6 @@ public final class TargetPatternPhaseValue implements SkyValue {
 
   public ImmutableSet<Target> getTestFilteredTargets() {
     return testFilteredTargets;
-  }
-
-  public ImmutableSet<Target> getOriginalTargets() {
-    return originalTargets;
-  }
-
-  public ImmutableSet<Target> getTestSuiteTargets() {
-    return testSuiteTargets;
   }
 
   public LoadingResult toLoadingResult() {

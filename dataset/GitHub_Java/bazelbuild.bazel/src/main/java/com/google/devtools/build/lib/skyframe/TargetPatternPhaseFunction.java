@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -22,17 +23,13 @@ import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.pkgcache.CompileOneDependencyTransformer;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
-import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageProvider.MissingDepException;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue.TargetPatternList;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternSkyKeyOrException;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -212,20 +209,11 @@ final class TargetPatternPhaseFunction implements SkyFunction {
       }
     }
 
-    ResolvedTargets<Target> result = builder.build();
     if (compileOneDependency) {
-      TargetProvider targetProvider = new EnvironmentBackedRecursivePackageProvider(env);
-      try {
-        return new CompileOneDependencyTransformer(targetProvider)
-            .transformCompileOneDependency(env.getListener(), result);
-      } catch (MissingDepException e) {
-        return null;
-      } catch (TargetParsingException e) {
-        env.getListener().handle(Event.error(e.getMessage()));
-        return ResolvedTargets.failed();
-      }
+      // TODO(ulfjack): Add support for compile_one_dependency before hooking this up.
+      throw new UnsupportedOperationException();
     }
-    return result;
+    return builder.build();
   }
 
   /**
