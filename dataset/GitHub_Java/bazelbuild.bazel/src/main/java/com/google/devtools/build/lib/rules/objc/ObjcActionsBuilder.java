@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.IosSdkCommands.BIN_DIR;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.ASSET_CATALOG;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FORCE_LOAD_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.FRAMEWORK_DIR;
@@ -27,12 +28,15 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteSource;
 import com.google.devtools.build.lib.actions.Action;
@@ -46,12 +50,17 @@ import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.util.LazyString;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.xcode.common.TargetDeviceFamily;
+import com.google.devtools.build.xcode.util.Interspersing;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos;
 
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import javax.annotation.CheckReturnValue;
 
@@ -91,12 +100,12 @@ final class ObjcActionsBuilder {
   static final PathFragment IBTOOL = new PathFragment(IosSdkCommands.IBTOOL_PATH);
   static final PathFragment DSYMUTIL = new PathFragment(BIN_DIR + "/dsymutil");
   static final PathFragment LIPO = new PathFragment(BIN_DIR + "/lipo");
-  static final ImmutableList<String> CLANG_COVERAGE_FLAGS =
-      ImmutableList.of("-fprofile-arcs", "-ftest-coverage", "-fprofile-dir=./coverage_output");
+  static final ImmutableList<String> CLANG_COVERAGE_FLAGS = ImmutableList.<String>of(
+      "-fprofile-arcs", "-ftest-coverage", "-fprofile-dir=./coverage_output");
 
   // TODO(bazel-team): Reference a rule target rather than a jar file when Darwin runfiles work
   // better.
-  static SpawnAction.Builder spawnJavaOnDarwinActionBuilder(Artifact deployJarArtifact) {
+  private static SpawnAction.Builder spawnJavaOnDarwinActionBuilder(Artifact deployJarArtifact) {
     return spawnOnDarwinActionBuilder()
         .setExecutable(JAVA)
         .addExecutableArguments("-jar", deployJarArtifact.getExecPathString())
@@ -263,6 +272,75 @@ final class ObjcActionsBuilder {
         .build(context));
   }
 
+  /**
+   * Creates actions to convert all files specified by the strings attribute into binary format.
+   */
+  private static Iterable<Action> convertStringsActions(
+      ActionConstructionContext context,
+      ObjcRuleClasses.Tools baseTools,
+      StringsFiles stringsFiles) {
+    ImmutableList.Builder<Action> result = new ImmutableList.Builder<>();
+    for (CompiledResourceFile stringsFile : stringsFiles) {
+      final Artifact original = stringsFile.getOriginal();
+      final Artifact bundled = stringsFile.getBundled().getBundled();
+      result.add(new SpawnAction.Builder()
+          .setMnemonic("ConvertStringsPlist")
+          .setExecutable(baseTools.plmerge())
+          .setCommandLine(new CommandLine() {
+            @Override
+            public Iterable<String> arguments() {
+              return ImmutableList.of("--source_file", original.getExecPathString(),
+                  "--out_file", bundled.getExecPathString());
+            }
+          })
+          .addInput(original)
+          .addOutput(bundled)
+          .build(context));
+    }
+    return result.build();
+  }
+
+  private Action[] ibtoolzipAction(ObjcRuleClasses.Tools baseTools, String mnemonic, Artifact input,
+      Artifact zipOutput, String archiveRoot) {
+    return spawnJavaOnDarwinActionBuilder(baseTools.actooloribtoolzipDeployJar())
+        .setMnemonic(mnemonic)
+        .setCommandLine(new CustomCommandLine.Builder()
+            // The next three arguments are positional, i.e. they don't have flags before them.
+            .addPath(zipOutput.getExecPath())
+            .add(archiveRoot)
+            .addPath(IBTOOL)
+
+            .add("--minimum-deployment-target").add(objcConfiguration.getMinimumOs())
+            .addPath(input.getExecPath())
+            .build())
+        .addOutput(zipOutput)
+        .addInput(input)
+        .build(context);
+  }
+
+  /**
+   * Creates actions to convert all files specified by the xibs attribute into nib format.
+   */
+  private Iterable<Action> convertXibsActions(ObjcRuleClasses.Tools baseTools, XibFiles xibFiles) {
+    ImmutableList.Builder<Action> result = new ImmutableList.Builder<>();
+    for (Artifact original : xibFiles) {
+      Artifact zipOutput = intermediateArtifacts.compiledXibFileZip(original);
+      String archiveRoot = BundleableFile.flatBundlePath(
+          FileSystemUtils.replaceExtension(original.getExecPath(), ".nib"));
+      result.add(ibtoolzipAction(baseTools, "XibCompile", original, zipOutput, archiveRoot));
+    }
+    return result.build();
+  }
+
+  /**
+   * Outputs of an {@code actool} action besides the zip file.
+   */
+  static final class ExtraActoolOutputs extends IterableWrapper<Artifact> {
+    ExtraActoolOutputs(Artifact... extraActoolOutputs) {
+      super(extraActoolOutputs);
+    }
+  }
+
   static final class ExtraActoolArgs extends IterableWrapper<String> {
     ExtraActoolArgs(Iterable<String> args) {
       super(args);
@@ -273,6 +351,105 @@ final class ObjcActionsBuilder {
     }
   }
 
+  void registerActoolzipAction(
+      ObjcRuleClasses.Tools tools,
+      ObjcProvider provider,
+      Artifact zipOutput,
+      Artifact partialInfoPlist,
+      ExtraActoolArgs extraActoolArgs,
+      Set<TargetDeviceFamily> families) {
+    // TODO(bazel-team): Do not use the deploy jar explicitly here. There is currently a bug where
+    // we cannot .setExecutable({java_binary target}) and set REQUIRES_DARWIN in the execution info.
+    // Note that below we set the archive root to the empty string. This means that the generated
+    // zip file will be rooted at the bundle root, and we have to prepend the bundle root to each
+    // entry when merging it with the final .ipa file.
+    register(spawnJavaOnDarwinActionBuilder(tools.actooloribtoolzipDeployJar())
+        .setMnemonic("AssetCatalogCompile")
+        .addTransitiveInputs(provider.get(ASSET_CATALOG))
+        .addOutput(zipOutput)
+        .addOutput(partialInfoPlist)
+        .setCommandLine(actoolzipCommandLine(
+            objcConfiguration,
+            provider,
+            zipOutput,
+            partialInfoPlist,
+            extraActoolArgs,
+            ImmutableSet.copyOf(families)))
+        .build(context));
+  }
+
+  private static CommandLine actoolzipCommandLine(
+      final ObjcConfiguration objcConfiguration,
+      final ObjcProvider provider,
+      final Artifact zipOutput,
+      final Artifact partialInfoPlist,
+      final ExtraActoolArgs extraActoolArgs,
+      final ImmutableSet<TargetDeviceFamily> families) {
+    return new CommandLine() {
+      @Override
+      public Iterable<String> arguments() {
+        ImmutableList.Builder<String> args = new ImmutableList.Builder<String>()
+            // The next three arguments are positional, i.e. they don't have flags before them.
+            .add(zipOutput.getExecPathString())
+            .add("") // archive root
+            .add(IosSdkCommands.ACTOOL_PATH)
+            .add("--platform")
+            .add(objcConfiguration.getPlatform().getLowerCaseNameInPlist())
+            .add("--output-partial-info-plist").add(partialInfoPlist.getExecPathString())
+            .add("--minimum-deployment-target").add(objcConfiguration.getMinimumOs());
+        for (TargetDeviceFamily targetDeviceFamily : families) {
+          args.add("--target-device").add(targetDeviceFamily.name().toLowerCase(Locale.US));
+        }
+        return args
+            .addAll(PathFragment.safePathStrings(provider.get(XCASSETS_DIR)))
+            .addAll(extraActoolArgs)
+            .build();
+      }
+    };
+  }
+
+  void registerIbtoolzipAction(ObjcRuleClasses.Tools tools, Artifact input, Artifact outputZip) {
+    String archiveRoot = BundleableFile.flatBundlePath(input.getExecPath()) + "c";
+    register(ibtoolzipAction(tools, "StoryboardCompile", input, outputZip, archiveRoot));
+  }
+
+  @VisibleForTesting
+  static Iterable<String> commonMomczipArguments(ObjcConfiguration configuration) {
+    return ImmutableList.of(
+        "-XD_MOMC_SDKROOT=" + IosSdkCommands.sdkDir(configuration),
+        "-XD_MOMC_IOS_TARGET_VERSION=" + configuration.getMinimumOs(),
+        "-MOMC_PLATFORMS", configuration.getPlatform().getLowerCaseNameInPlist(),
+        "-XD_MOMC_TARGET_VERSION=10.6");
+  }
+
+  private static Iterable<Action> momczipActions(ActionConstructionContext context,
+      ObjcRuleClasses.Tools baseTools, final ObjcConfiguration objcConfiguration,
+      Iterable<Xcdatamodel> datamodels) {
+    ImmutableList.Builder<Action> result = new ImmutableList.Builder<>();
+    for (Xcdatamodel datamodel : datamodels) {
+      final Artifact outputZip = datamodel.getOutputZip();
+      final String archiveRoot = datamodel.archiveRootForMomczip();
+      final String container = datamodel.getContainer().getSafePathString();
+      result.add(spawnJavaOnDarwinActionBuilder(baseTools.momczipDeployJar())
+          .setMnemonic("MomCompile")
+          .addOutput(outputZip)
+          .addInputs(datamodel.getInputs())
+          .setCommandLine(new CommandLine() {
+            @Override
+            public Iterable<String> arguments() {
+              return new ImmutableList.Builder<String>()
+                  .add(outputZip.getExecPathString())
+                  .add(archiveRoot)
+                  .add(IosSdkCommands.MOMC_PATH)
+                  .addAll(commonMomczipArguments(objcConfiguration))
+                  .add(container)
+                  .build();
+            }
+          })
+          .build(context));
+    }
+    return result.build();
+  }
 
   private static final String FRAMEWORK_SUFFIX = ".framework";
 
@@ -308,6 +485,15 @@ final class ObjcActionsBuilder {
     }
 
     /*
+     * Returns an ExtraLinkArgs with the parameter prepended to this instance's contents. This
+     * function does not modify this instance.
+     */
+    @CheckReturnValue
+    public ExtraLinkArgs prependedWith(Iterable<String> extraLinkArgs) {
+      return new ExtraLinkArgs(Iterables.concat(extraLinkArgs, this));
+    }
+
+    /*
      * Returns an ExtraLinkArgs with the parameter appended to this instance's contents. This
      * function does not modify this instance.
      */
@@ -318,6 +504,10 @@ final class ObjcActionsBuilder {
   }
 
   static final class ExtraLinkInputs extends IterableWrapper<Artifact> {
+    ExtraLinkInputs(Iterable<Artifact> inputs) {
+      super(inputs);
+    }
+
     ExtraLinkInputs(Artifact... inputs) {
       super(inputs);
     }
@@ -413,6 +603,22 @@ final class ObjcActionsBuilder {
         .addTransitiveInputs(objcProvider.get(FRAMEWORK_FILE))
         .addInputs(extraLinkInputs)
         .build(context));
+  }
+
+  static final class StringsFiles extends IterableWrapper<CompiledResourceFile> {
+    StringsFiles(Iterable<CompiledResourceFile> files) {
+      super(files);
+    }
+  }
+
+  /**
+   * Registers actions for resource conversion.
+   */
+  void registerResourceActions(ObjcRuleClasses.Tools baseTools, StringsFiles stringsFiles,
+      XibFiles xibFiles, Iterable<Xcdatamodel> datamodels) {
+    registerAll(convertStringsActions(context, baseTools, stringsFiles));
+    registerAll(convertXibsActions(baseTools, xibFiles));
+    registerAll(momczipActions(context, baseTools, objcConfiguration, datamodels));
   }
 
   static LazyString joinExecPaths(final Iterable<Artifact> artifacts) {
