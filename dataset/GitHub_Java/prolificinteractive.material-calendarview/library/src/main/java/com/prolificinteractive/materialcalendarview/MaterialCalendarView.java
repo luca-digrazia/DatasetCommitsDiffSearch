@@ -672,7 +672,7 @@ public class MaterialCalendarView extends FrameLayout {
      *
      * @param visible Boolean indicating if the topbar is visible
      */
-    public void setTopbarVisible(boolean visible) {
+    public void setTopbarVisibility(boolean visible) {
         if (visible)
             topbar.setVisibility(View.VISIBLE);
         else
