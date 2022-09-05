@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,11 +32,11 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -389,15 +389,11 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         // Sadly, even if we discovered inputs, sometimes the action runs and discovers more inputs.
         // Technically, this means our pre-execution input discovery is buggy, but it turns out this
         // is impractical to fix.
-        if (env.valuesMissing()) {
-          // Any new inputs should already have been built -- this is a check that our input
-          // discovery code is not missing too much. It may have to be removed if further input
-          // discovery quirks are found.
-          Set<Artifact> missingArtifacts =
-              Maps.filterValues(metadataFoundDuringActionExecution, Predicates.isNull()).keySet();
-          throw new IllegalStateException(
-              "Missing artifacts: " + missingArtifacts + ", " + state + action);
-        }
+        // Any new inputs should already have been built -- this is a check that our input
+        // discovery code is not missing too much. It may have to be removed if further input
+        // discovery quirks are found.
+        Preconditions.checkState(!env.valuesMissing(), "%s %s %s",
+            action, metadataFoundDuringActionExecution, state);
         Set<FileArtifactValue> knownMetadata =
             ImmutableSet.copyOf(state.inputArtifactData.values());
         ImmutableSet.Builder<Artifact> discoveredInputBuilder =
