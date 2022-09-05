@@ -176,7 +176,7 @@ public final class BuildTool {
               + "'test' right now!");
         }
       }
-      configurations = env.getSkyframeExecutor().createConfigurations(
+      configurations = runtime.getSkyframeExecutor().createConfigurations(
             env.getReporter(), runtime.getConfigurationFactory(), buildOptions,
             env.getDirectories(), request.getMultiCpus(), request.getViewOptions().keepGoing);
 
@@ -204,7 +204,7 @@ public final class BuildTool {
 
       // Execution phase.
       if (needsExecutionPhase(request.getBuildOptions())) {
-        env.getSkyframeExecutor().injectTopLevelContext(request.getTopLevelArtifactContext());
+        runtime.getSkyframeExecutor().injectTopLevelContext(request.getTopLevelArtifactContext());
         executionTool.executeBuild(request.getId(), analysisResult, result,
             configurations, transformPackageRoots(analysisResult.getPackageRoots()));
       }
@@ -228,7 +228,7 @@ public final class BuildTool {
         // Delete dirty nodes to ensure that they do not accumulate indefinitely.
         long versionWindow = request.getViewOptions().versionWindowForDirtyNodeGc;
         if (versionWindow != -1) {
-          env.getSkyframeExecutor().deleteOldNodes(versionWindow);
+          runtime.getSkyframeExecutor().deleteOldNodes(versionWindow);
         }
 
         if (executionTool != null) {
@@ -413,11 +413,11 @@ public final class BuildTool {
 
       @Override
       public void notifyVisitedPackages(Set<PackageIdentifier> visitedPackages) {
-        env.getSkyframeExecutor().updateLoadedPackageSet(visitedPackages);
+        runtime.getSkyframeExecutor().updateLoadedPackageSet(visitedPackages);
       }
     };
 
-    LoadingPhaseRunner loadingPhaseRunner = env.getSkyframeExecutor().getLoadingPhaseRunner(
+    LoadingPhaseRunner loadingPhaseRunner = runtime.getSkyframeExecutor().getLoadingPhaseRunner(
         runtime.getPackageFactory().getRuleClassNames(),
         request.getLoadingOptions().useSkyframeTargetPatternEvaluator);
     LoadingResult result = loadingPhaseRunner.execute(getReporter(),
@@ -464,7 +464,7 @@ public final class BuildTool {
     Profiler.instance().markPhase(ProfilePhase.ANALYZE);
 
     BuildView view = new BuildView(env.getDirectories(), runtime.getRuleClassProvider(),
-        env.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
+        runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
     AnalysisResult analysisResult =
         view.update(
             loadingResult,

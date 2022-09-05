@@ -72,8 +72,7 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
 
     TestActionContext testStrategy =
         new StandaloneTestStrategy(
-            buildRequest, env.getBlazeWorkspace().getBinTools(), env.getClientEnv(),
-            env.getWorkspace());
+            buildRequest, env.getRuntime().getBinTools(), env.getClientEnv(), env.getWorkspace());
 
     Builder<ActionContext> strategiesBuilder = ImmutableList.builder();
 

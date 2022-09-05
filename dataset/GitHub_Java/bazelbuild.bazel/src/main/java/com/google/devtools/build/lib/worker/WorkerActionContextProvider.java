@@ -14,12 +14,10 @@
 package com.google.devtools.build.lib.worker;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
-import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.ActionContextProvider;
+import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.rules.test.TestActionContext;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 
 /**
@@ -30,22 +28,21 @@ final class WorkerActionContextProvider extends ActionContextProvider {
 
   public WorkerActionContextProvider(
       CommandEnvironment env, BuildRequest buildRequest, WorkerPool workers) {
-    ImmutableMultimap.Builder<String, String> extraFlags = ImmutableMultimap.builder();
-    extraFlags.putAll(buildRequest.getOptions(WorkerOptions.class).workerExtraFlags);
+    boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
+    int maxRetries = buildRequest.getOptions(WorkerOptions.class).workerMaxRetries;
 
-    WorkerSpawnStrategy workerSpawnStrategy =
-        new WorkerSpawnStrategy(
-            env.getExecRoot(),
-            workers,
-            buildRequest.getOptions(ExecutionOptions.class).verboseFailures,
-            extraFlags.build());
-    TestActionContext workerTestStrategy =
-        new WorkerTestStrategy(env, buildRequest, workers, extraFlags.build());
-    this.strategies = ImmutableList.of(workerSpawnStrategy, workerTestStrategy);
+    this.strategies =
+        ImmutableList.<ActionContext>of(
+            new WorkerSpawnStrategy(
+                env.getDirectories(),
+                buildRequest,
+                workers,
+                verboseFailures,
+                maxRetries));
   }
 
   @Override
-  public Iterable<? extends ActionContext> getActionContexts() {
+  public Iterable<ActionContext> getActionContexts() {
     return strategies;
   }
 }

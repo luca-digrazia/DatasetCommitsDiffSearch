@@ -85,7 +85,7 @@ public class SandboxModule extends BlazeModule {
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
-    return "build".equals(command.name())
+    return command.builds()
         ? ImmutableList.<Class<? extends OptionsBase>>of(SandboxOptions.class)
         : ImmutableList.<Class<? extends OptionsBase>>of();
   }

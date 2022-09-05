@@ -122,9 +122,7 @@ public class WorkerModule extends BlazeModule {
 
   @Subscribe
   public void buildComplete(BuildCompleteEvent event) {
-    if (workers != null && buildRequest != null
-        && buildRequest.getOptions(WorkerOptions.class) != null
-        && buildRequest.getOptions(WorkerOptions.class).workerQuitAfterBuild) {
+    if (workers != null && buildRequest.getOptions(WorkerOptions.class).workerQuitAfterBuild) {
       if (verbose) {
         env
             .getReporter()

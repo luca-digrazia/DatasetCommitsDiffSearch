@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
+import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -124,6 +125,7 @@ public final class CleanCommand implements BlazeCommand {
   private void actuallyClean(CommandEnvironment env,
       Path outputBase, Options cleanOptions, String symlinkPrefix) throws IOException,
       ShutdownBlazeServerException, CommandException, ExecException, InterruptedException {
+    BlazeRuntime runtime = env.getRuntime();
     if (env.getOutputService() != null) {
       env.getOutputService().clean();
     }
@@ -160,7 +162,7 @@ public final class CleanCommand implements BlazeCommand {
         .build().execute();
     } else {
       LOG.info("Output cleaning...");
-      env.getBlazeWorkspace().clearCaches();
+      runtime.clearCaches();
       // In order to be sure that we delete everything, delete the workspace directory both for
       // --deep_execroot and for --nodeep_execroot.
       for (String directory : new String[] {
