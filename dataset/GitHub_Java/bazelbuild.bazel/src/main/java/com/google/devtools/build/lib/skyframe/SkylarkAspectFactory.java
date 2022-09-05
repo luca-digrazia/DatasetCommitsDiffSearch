@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.SkylarkAspect;
+import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext.Kind;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
@@ -41,9 +41,11 @@ import java.util.Map;
  */
 public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
+  private final String name;
   private final SkylarkAspect skylarkAspect;
 
-  public SkylarkAspectFactory(SkylarkAspect skylarkAspect) {
+  public SkylarkAspectFactory(String name, SkylarkAspect skylarkAspect) {
+    this.name = name;
     this.skylarkAspect = skylarkAspect;
   }
 
@@ -84,8 +86,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
           return null;
         }
 
-        ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(
-            skylarkAspect.getName(), ruleContext);
+        ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(name, ruleContext);
 
         SkylarkClassObject struct = (SkylarkClassObject) aspectSkylarkObject;
         Location loc = struct.getCreationLoc();
@@ -125,7 +126,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     if (e instanceof EvalExceptionWithStackTrace) {
       ((EvalExceptionWithStackTrace) e)
           .registerPhantomFuncall(
-              String.format("%s(...)", skylarkAspect.getName()),
+              String.format("%s(...)", name),
               base.getTarget().getAssociatedRule().getLocation(),
               skylarkAspect.getImplementation());
     }

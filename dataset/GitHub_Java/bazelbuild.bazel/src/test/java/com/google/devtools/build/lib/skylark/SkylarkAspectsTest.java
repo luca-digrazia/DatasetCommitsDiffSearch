@@ -93,11 +93,9 @@ public class SkylarkAspectsTest extends BuildViewTestCase {
         "test/aspect.bzl",
         "def _impl(target, ctx):",
         "   s = set([target.label])",
-        "   c = set([ctx.rule.kind])",
         "   for i in ctx.rule.attr.deps:",
         "       s += i.target_labels",
-        "       c += i.rule_kinds",
-        "   return struct(target_labels = s, rule_kinds = c)",
+        "   return struct(target_labels = s)",
         "",
         "MyAspect = aspect(",
         "   implementation=_impl,",
@@ -151,10 +149,6 @@ public class SkylarkAspectsTest extends BuildViewTestCase {
                   }
                 }))
         .containsExactly("//test:xxx", "//test:yyy");
-    Object ruleKinds = skylarkProviders.getValue("rule_kinds");
-    assertThat(ruleKinds).isInstanceOf(SkylarkNestedSet.class);
-    assertThat((SkylarkNestedSet) ruleKinds).containsExactly("java_library");
-
   }
 
   @Test
