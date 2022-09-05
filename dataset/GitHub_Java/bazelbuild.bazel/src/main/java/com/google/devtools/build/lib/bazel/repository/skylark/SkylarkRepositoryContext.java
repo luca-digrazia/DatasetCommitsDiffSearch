@@ -34,10 +34,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Skylark API for the repository_rule's context.
@@ -55,7 +51,6 @@ public class SkylarkRepositoryContext {
   private final Rule rule;
   private final Path outputDirectory;
   private final SkylarkClassObject attrObject;
-  private final SkylarkOS osObject;
 
   /**
    * In native code, private values start with $. In Skylark, private values start with _, because
@@ -69,12 +64,12 @@ public class SkylarkRepositoryContext {
   }
 
   /**
-   * Create a new context (ctx) object for a skylark repository rule ({@code rule} argument).
+   * Create a new context (ctx) object for a skylark repository rule ({@code rule} argument). The
+   * environment
    */
-  SkylarkRepositoryContext(Rule rule, Path outputDirectory, Map<String, String> env) {
+  SkylarkRepositoryContext(Rule rule, Path outputDirectory) {
     this.rule = rule;
     this.outputDirectory = outputDirectory;
-    this.osObject = new SkylarkOS(env);
     AggregatingAttributeMapper attrs = AggregatingAttributeMapper.of(rule);
     ImmutableMap.Builder<String, Object> attrBuilder = new ImmutableMap.Builder<>();
     for (String name : attrs.getAttributeNames()) {
@@ -126,7 +121,6 @@ public class SkylarkRepositoryContext {
   )
   public void symlink(SkylarkPath from, SkylarkPath to) throws RepositoryFunctionException {
     try {
-      checkInOutputDirectory(to);
       to.path.createSymbolicLink(from.path);
     } catch (IOException e) {
       throw new RepositoryFunctionException(
@@ -134,72 +128,6 @@ public class SkylarkRepositoryContext {
               "Could not create symlink from " + from + " to " + to + ": " + e.getMessage(), e),
           Transience.TRANSIENT);
     }
-  }
-
-  private void checkInOutputDirectory(SkylarkPath path) throws RepositoryFunctionException {
-    if (!path.path.getPathString().startsWith(outputDirectory.getPathString())) {
-      throw new RepositoryFunctionException(
-          new IOException("Cannot write outside of the output directory for path " + path),
-          Transience.TRANSIENT);
-    }
-  }
-
-  @SkylarkCallable(name = "file", documented = false)
-  public void createFile(SkylarkPath path) throws RepositoryFunctionException {
-    createFile(path, "");
-  }
-
-  @SkylarkCallable(
-    name = "file",
-    doc = "Generate a file in the output directory with the provided content"
-  )
-  public void createFile(SkylarkPath path, String content) throws RepositoryFunctionException {
-    try {
-      checkInOutputDirectory(path);
-      makeDirectories(path.path);
-      try (OutputStream stream = path.path.getOutputStream()) {
-        stream.write(content.getBytes(StandardCharsets.UTF_8));
-      }
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-    }
-  }
-
-  // Create parent directories for the given path
-  private void makeDirectories(Path path) throws IOException {
-    if (!path.isRootDirectory()) {
-      Path parent = path.getParentDirectory();
-      if (!parent.exists()) {
-        makeDirectories(path.getParentDirectory());
-        parent.createDirectory();
-      }
-    }
-  }
-
-  @SkylarkCallable(
-    name = "os",
-    structField = true,
-    doc = "A struct to access information from the system "
-  )
-  public SkylarkOS getOS() {
-    return osObject;
-  }
-
-  @SkylarkCallable(
-    name = "execute",
-    doc =
-        "Executes the command given by the list of arguments. The execution time of the command"
-            + " is limited by <code>timeout</code> (in seconds, default 600 seconds). This method"
-            + " returns an <code>exec_result</code> structure containing the output of the"
-            + " command."
-  )
-  public SkylarkExecutionResult execute(List<Object> arguments, long timeout) throws EvalException {
-    return SkylarkExecutionResult.execute(arguments, timeout / 1000);
-  }
-
-  @SkylarkCallable(name = "execute", documented = false)
-  public SkylarkExecutionResult execute(List<Object> arguments) throws EvalException {
-    return SkylarkExecutionResult.execute(arguments, 600000);
   }
 
   @SkylarkCallable(
@@ -210,9 +138,8 @@ public class SkylarkRepositoryContext {
   )
   public Object which(String program) throws EvalException {
     if (program.contains("/") || program.contains("\\")) {
-      throw new EvalException(
-          Location.BUILTIN,
-          "Program argument of which() may not contains a / or a \\ ('" + program + "' given)");
+       throw new EvalException(Location.BUILTIN,
+           "Program argument of which() may not contains a / or a \\ ('" + program + "' given)");
     }
     for (String p : pathEnv) {
       PathFragment fragment = new PathFragment(p);
