@@ -20,9 +20,11 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintableValue;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.Formattable;
 import java.util.Formatter;
+import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
 import java.util.MissingFormatWidthException;
@@ -441,7 +443,8 @@ public final class Printer {
    * @param arguments positional arguments.
    * @return the formatted string.
    */
-  public static Formattable formattable(final String pattern, Object... arguments) {
+  public static Formattable formattable(final String pattern, Object... arguments)
+      throws IllegalFormatException {
     final ImmutableList<Object> args = ImmutableList.copyOf(arguments);
     return new Formattable() {
         @Override
@@ -463,7 +466,8 @@ public final class Printer {
    * @param arguments a tuple containing positional arguments.
    * @return the formatted string.
    */
-  public static String format(String pattern, Object... arguments) {
+  public static String format(String pattern, Object... arguments)
+      throws IllegalFormatException {
     return formatToString(pattern, ImmutableList.copyOf(arguments));
   }
 
@@ -474,7 +478,8 @@ public final class Printer {
    * @param arguments a tuple containing positional arguments.
    * @return the formatted string.
    */
-  public static String formatToString(String pattern, List<?> arguments) {
+  public static String formatToString(String pattern, List<?> arguments)
+      throws IllegalFormatException {
     return formatTo(new StringBuilder(), pattern, arguments).toString();
   }
 
@@ -488,7 +493,8 @@ public final class Printer {
    * @return the buffer, in fluent style.
    */
   // TODO(bazel-team): support formatting arguments, and more complex Python patterns.
-  public static Appendable formatTo(Appendable buffer, String pattern, List<?> arguments) {
+  public static Appendable formatTo(Appendable buffer, String pattern, List<?> arguments)
+      throws IllegalFormatException {
     // N.B. MissingFormatWidthException is the only kind of IllegalFormatException
     // whose constructor can take and display arbitrary error message, hence its use below.
 
