@@ -1143,10 +1143,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * different sysroots, or the sysroot is the same as the default sysroot, then
    * this method returns <code>null</code>.
    */
-  @SkylarkCallable(name = "sysroot", structField = true,
-      doc = "Returns the sysroot to be used. If the toolchain compiler does not support "
-      + "different sysroots, or the sysroot is the same as the default sysroot, then "
-      + "this method returns <code>None</code>.")
   public PathFragment getSysroot() {
     return sysroot;
   }
@@ -1164,13 +1160,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * Returns the default options to use for compiling C, C++, and assembler.
    * This is just the options that should be used for all three languages.
    * There may be additional C-specific or C++-specific options that should be used,
-   * in addition to the ones returned by this method.
+   * in addition to the ones returned by this method;
    */
-  @SkylarkCallable(name = "compiler_options",
-      doc = "Returns the default options to use for compiling C, C++, and assembler. "
-      + "This is just the options that should be used for all three languages. "
-      + "There may be additional C-specific or C++-specific options that should be used, "
-      + "in addition to the ones returned by this method")
   public List<String> getCompilerOptions(Collection<String> features) {
     return compilerFlags.evaluate(features);
   }
@@ -1180,10 +1171,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * C. These should be go on the command line after the common options
    * returned by {@link #getCompilerOptions}.
    */
-  @SkylarkCallable(name = "c_options", structField = true,
-      doc = "Returns the list of additional C-specific options to use for compiling C. "
-      + "These should be go on the command line after the common options returned by "
-      + "<code>compiler_options</code>")
   public List<String> getCOptions() {
     return cOptions;
   }
@@ -1193,10 +1180,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * C++. These should be go on the command line after the common options
    * returned by {@link #getCompilerOptions}.
    */
-  @SkylarkCallable(name = "cxx_options",
-      doc = "Returns the list of additional C++-specific options to use for compiling C++. "
-      + "These should be go on the command line after the common options returned by "
-      + "<code>compiler_options</code>")
   public List<String> getCxxOptions(Collection<String> features) {
     return cxxFlags.evaluate(features);
   }
@@ -1205,9 +1188,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * Returns the default list of options which cannot be filtered by BUILD
    * rules. These should be appended to the command line after filtering.
    */
-  @SkylarkCallable(name = "unfiltered_compiler_options",
-      doc = "Returns the default list of options which cannot be filtered by BUILD "
-      + "rules. These should be appended to the command line after filtering.")
   public List<String> getUnfilteredCompilerOptions(Collection<String> features) {
     return unfilteredCompilerFlags.evaluate(features);
   }
@@ -1219,9 +1199,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * @see Link
    */
   // TODO(bazel-team): Clean up the linker options computation!
-  @SkylarkCallable(name = "link_options", structField = true,
-      doc = "Returns the set of command-line linker options, including any flags "
-      + "inferred from the command-line options.")
   public List<String> getLinkOptions() {
     return linkOptions;
   }
@@ -1670,8 +1647,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   /**
    * Returns the GNU System Name
    */
-  @SkylarkCallable(name = "target_gnu_system_name", structField = true,
-      doc = "The GNU System Name.")
   public String getTargetGnuSystemName() {
     return targetSystemName;
   }
