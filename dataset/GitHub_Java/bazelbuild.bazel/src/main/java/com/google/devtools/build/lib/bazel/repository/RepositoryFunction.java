@@ -26,7 +26,7 @@ import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.skyframe.FileSymlinkException;
+import com.google.devtools.build.lib.skyframe.FileSymlinkCycleException;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
 import com.google.devtools.build.lib.skyframe.PackageValue;
@@ -157,11 +157,11 @@ public abstract class RepositoryFunction implements SkyFunction {
     FileValue buildFileValue;
     try {
       buildFileValue = (FileValue) env.getValueOrThrow(buildFileKey, IOException.class,
-          FileSymlinkException.class, InconsistentFilesystemException.class);
+          FileSymlinkCycleException.class, InconsistentFilesystemException.class);
       if (buildFileValue == null) {
         return null;
       }
-    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
+    } catch (IOException | FileSymlinkCycleException | InconsistentFilesystemException e) {
       throw new RepositoryFunctionException(
           new IOException("Cannot lookup " + buildFile + ": " + e.getMessage()),
           Transience.TRANSIENT);
@@ -171,6 +171,11 @@ public abstract class RepositoryFunction implements SkyFunction {
     if (createSymbolicLink(buildFilePath, buildFileTarget, env) == null) {
       return null;
     }
+
+    if (buildFileValue == null) {
+      return null;
+    }
+
     return RepositoryValue.createNew(directoryValue, buildFileValue);
   }
 
@@ -196,19 +201,19 @@ public abstract class RepositoryFunction implements SkyFunction {
    * .external-repository/
    *   x/
    *     WORKSPACE
-   *     BUILD -> &lt;build_root&gt;/x.BUILD
+   *     BUILD -> <build_root>/x.BUILD
    *     z -> /some/path/to/y/z
    *     w -> /some/path/to/y/w
    *     v -> /some/path/to/y/v
    * </pre>
    */
   public static boolean symlinkLocalRepositoryContents(
-      Path repositoryDirectory, Path targetDirectory, Environment env)
+      FileValue repositoryDirectory, Path targetDirectory, Environment env)
       throws RepositoryFunctionException {
     try {
       for (Path target : targetDirectory.getDirectoryEntries()) {
         Path symlinkPath =
-            repositoryDirectory.getRelative(target.getBaseName());
+            repositoryDirectory.realRootedPath().asPath().getRelative(target.getBaseName());
         if (createSymbolicLink(symlinkPath, target, env) == null) {
           return false;
         }
@@ -236,8 +241,8 @@ public abstract class RepositoryFunction implements SkyFunction {
         from, PathFragment.EMPTY_FRAGMENT));
     try {
       return (FileValue) env.getValueOrThrow(outputDirectoryKey, IOException.class,
-          FileSymlinkException.class, InconsistentFilesystemException.class);
-    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
+          FileSymlinkCycleException.class, InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkCycleException | InconsistentFilesystemException e) {
       throw new RepositoryFunctionException(
           new IOException(String.format("Could not access %s: %s", from, e.getMessage())),
           Transience.PERSISTENT);
@@ -264,7 +269,7 @@ public abstract class RepositoryFunction implements SkyFunction {
     } catch (NoSuchPackageException e) {
       throw new RepositoryFunctionException(
           new BuildFileNotFoundException(
-              ExternalPackage.PACKAGE_IDENTIFIER, "Could not load //external package"),
+              ExternalPackage.NAME, "Could not load //external package"),
           Transience.PERSISTENT);
     }
     if (packageValue == null) {
@@ -275,7 +280,7 @@ public abstract class RepositoryFunction implements SkyFunction {
     if (rule == null) {
       throw new RepositoryFunctionException(
           new BuildFileContainsErrorsException(
-              ExternalPackage.PACKAGE_IDENTIFIER,
+              ExternalPackage.NAME,
               "The repository named '" + repositoryName + "' could not be resolved"),
           Transience.PERSISTENT);
     }
@@ -296,8 +301,8 @@ public abstract class RepositoryFunction implements SkyFunction {
     FileValue value;
     try {
       value = (FileValue) env.getValueOrThrow(outputDirectoryKey, IOException.class,
-          FileSymlinkException.class, InconsistentFilesystemException.class);
-    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
+          FileSymlinkCycleException.class, InconsistentFilesystemException.class);
+    } catch (IOException | FileSymlinkCycleException | InconsistentFilesystemException e) {
       throw new RepositoryFunctionException(
           new IOException("Could not access " + repositoryDirectory + ": " + e.getMessage()),
           Transience.PERSISTENT);

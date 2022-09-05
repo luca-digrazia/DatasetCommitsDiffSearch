@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.bazel.rules.python.BazelPyBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyTestRule;
-import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses;
@@ -67,7 +66,6 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
-import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
@@ -186,7 +184,6 @@ public class BazelRuleClassProvider {
           CppOptions.class,
           JavaOptions.class,
           PythonOptions.class,
-          BazelPythonConfiguration.Options.class,
           ObjcCommandLineOptions.class,
           J2ObjcCommandLineOptions.class
       );
@@ -203,7 +200,6 @@ public class BazelRuleClassProvider {
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
     builder
         .addBuildInfoFactory(new BazelJavaBuildInfoFactory())
-        .addBuildInfoFactory(new CppBuildInfo())
         .addBuildInfoFactory(new ObjcBuildInfoFactory())
         .setConfigurationCollectionFactory(new BazelConfigurationCollection())
         .setPrerequisiteValidator(new BazelPrerequisiteValidator())
@@ -314,7 +310,6 @@ public class BazelRuleClassProvider {
     builder.addConfigurationFragment(new CppConfigurationLoader(
         Functions.<String>identity()));
     builder.addConfigurationFragment(new PythonConfigurationLoader(Functions.<String>identity()));
-    builder.addConfigurationFragment(new BazelPythonConfiguration.Loader());
     builder.addConfigurationFragment(new JvmConfigurationLoader(JAVA_CPU_SUPPLIER));
     builder.addConfigurationFragment(new JavaConfigurationLoader(JAVA_CPU_SUPPLIER));
     builder.addConfigurationFragment(new ObjcConfigurationLoader());

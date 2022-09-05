@@ -25,14 +25,12 @@ import com.google.devtools.build.lib.bazel.commands.FetchCommand;
 import com.google.devtools.build.lib.bazel.repository.HttpArchiveFunction;
 import com.google.devtools.build.lib.bazel.repository.HttpDownloadFunction;
 import com.google.devtools.build.lib.bazel.repository.HttpJarFunction;
-import com.google.devtools.build.lib.bazel.repository.JarFunction;
 import com.google.devtools.build.lib.bazel.repository.LocalRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenJarFunction;
 import com.google.devtools.build.lib.bazel.repository.NewHttpArchiveFunction;
 import com.google.devtools.build.lib.bazel.repository.NewLocalRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.bazel.repository.RepositoryFunction;
-import com.google.devtools.build.lib.bazel.repository.ZipFunction;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryFunction;
@@ -135,9 +133,7 @@ public class BazelRepositoryModule extends BlazeModule {
         new RepositoryDelegatorFunction(directories, repositoryHandlers, isFetch));
 
     // Helper SkyFunctions.
-    builder.put(SkyFunctionName.create(HttpDownloadFunction.NAME), new HttpDownloadFunction());
-    builder.put(JarFunction.NAME, new JarFunction());
-    builder.put(ZipFunction.NAME, new ZipFunction());
+    builder.put(SkyFunctionName.computed(HttpDownloadFunction.NAME), new HttpDownloadFunction());
     return builder.build();
   }
 }

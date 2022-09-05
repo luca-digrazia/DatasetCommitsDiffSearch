@@ -38,7 +38,7 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
 
   @Override
   public SkyFunctionName getSkyFunctionName() {
-    return SkyFunctionName.create(NewHttpArchiveRule.NAME);
+    return SkyFunctionName.computed(NewHttpArchiveRule.NAME);
   }
 
   @Nullable
@@ -75,21 +75,18 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
     }
 
     // Decompress.
-    DecompressorValue decompressed;
+    Path decompressedDirectory;
     try {
-      decompressed = (DecompressorValue) env.getValueOrThrow(
-          DecompressorValue.key(rule.getTargetKind(), rule.getName(),
-              downloadedFileValue.getPath(), outputDirectory), IOException.class);
-      if (decompressed == null) {
-        return null;
-      }
-    } catch (IOException e) {
+      decompressedDirectory = DecompressorFactory.create(
+          rule.getTargetKind(), rule.getName(), downloadedFileValue.getPath(), outputDirectory)
+          .decompress();
+    } catch (DecompressorFactory.DecompressorException e) {
       throw new RepositoryFunctionException(
           new IOException(e.getMessage()), Transience.TRANSIENT);
     }
 
     // Add WORKSPACE and BUILD files.
-    createWorkspaceFile(decompressed.getDirectory(), rule);
+    createWorkspaceFile(decompressedDirectory, rule);
     return symlinkBuildFile(rule, getWorkspace(), repositoryDirectory, env);
   }
 }
