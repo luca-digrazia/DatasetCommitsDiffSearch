@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,12 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
+
+import junit.framework.TestCase;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,7 +31,7 @@ import java.util.Arrays;
  * Tests for {@link com.google.devtools.build.lib.collect.nestedset.NestedSet}.
  */
 @RunWith(JUnit4.class)
-public class NestedSetImplTest {
+public class NestedSetImplTest extends TestCase {
   @SafeVarargs
   private static NestedSetBuilder<String> nestedSetBuilder(String... directMembers) {
     NestedSetBuilder<String> builder = NestedSetBuilder.stableOrder();

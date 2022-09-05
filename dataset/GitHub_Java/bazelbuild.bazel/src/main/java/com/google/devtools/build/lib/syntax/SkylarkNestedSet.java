@@ -212,7 +212,7 @@ public final class SkylarkNestedSet implements Iterable<Object> {
 
   @Override
   public String toString() {
-    return Printer.repr(this);
+    return EvalUtils.prettyPrintValue(this);
   }
 
   public Order getOrder() {
