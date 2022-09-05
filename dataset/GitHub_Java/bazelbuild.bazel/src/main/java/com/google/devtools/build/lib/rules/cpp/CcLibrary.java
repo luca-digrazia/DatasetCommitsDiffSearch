@@ -131,9 +131,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         .enableCcNativeLibrariesProvider()
         .enableInterfaceSharedObjects()
         .enableCompileProviders()
-        // Generate .a and .so outputs even without object files to fulfill the rule class contract
-        // wrt. implicit output files.
-        .setGenerateLinkActionsIfEmpty(true)
         .setNeverLink(neverLink)
         .setHeadersCheckingMode(common.determineHeadersCheckingMode())
         .addCopts(common.getCopts())
@@ -197,7 +194,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     }
 
     boolean createDynamicLibrary =
-        !linkStatic && appearsToHaveObjectFiles(ruleContext.attributes());
+        !linkStatic && !appearsToHaveNoObjectFiles(ruleContext.attributes());
     helper.setCreateDynamicLibrary(createDynamicLibrary);
     helper.setDynamicLibraryPath(soImplFilename);
 
@@ -330,12 +327,12 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     }
     if (ccCompilationOutputs.getObjectFiles(false).isEmpty()
         && ccCompilationOutputs.getObjectFiles(true).isEmpty()) {
-      if (!linkstaticAttribute && appearsToHaveObjectFiles(ruleContext.attributes())) {
+      if (!linkstaticAttribute && !appearsToHaveNoObjectFiles(ruleContext.attributes())) {
         ruleContext.attributeWarning("linkstatic",
             "setting 'linkstatic=1' is recommended if there are no object files");
       }
     } else {
-      if (!linkstaticAttribute && !appearsToHaveObjectFiles(ruleContext.attributes())) {
+      if (!linkstaticAttribute && appearsToHaveNoObjectFiles(ruleContext.attributes())) {
         Artifact element = Iterables.getFirst(
             ccCompilationOutputs.getObjectFiles(false),
             ccCompilationOutputs.getObjectFiles(true).get(0));
@@ -361,32 +358,32 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Returns true if the rule (which must be a cc_library rule) appears to have object files.
+   * Returns true if the rule (which must be a cc_library rule) appears to have no object files.
    * This only looks at the rule itself, not at any other rules (from this package or other
    * packages) that it might reference.
    *
-   * <p>In some cases, this may return "true" even though the rule actually has no object files.
-   * For example, it will return true for a rule such as
+   * <p>In some cases, this may return "false" even though the rule actually has no object files.
+   * For example, it will return false for a rule such as
    * <code>cc_library(name = 'foo', srcs = [':bar'])</code> because we can't tell what ':bar' is;
    * it might be a genrule that generates a source file, or it might be a genrule that generates a
    * header file. Likewise,
    * <code>cc_library(name = 'foo', srcs = select({':a': ['foo.cc'], ':b': []}))</code> returns
-   * "true" even though the sources *may* be empty. This reflects the fact that there's no way
+   * "false" even though the sources *may* be empty. This reflects the fact that there's no way
    * to tell which value "srcs" will take without knowing the rule's configuration.
    *
-   * <p>In other cases, this may return "false" even though the rule actually does have object
-   * files. For example, it will return false for a rule such as
+   * <p>In other cases, this may return "true" even though the rule actually does have object files.
+   * For example, it will return true for a rule such as
    * <code>cc_library(name = 'foo', srcs = ['bar.h'])</code> but as in the other example above,
    * we can't tell whether 'bar.h' is a file name or a rule name, and 'bar.h' could in fact be the
    * name of a genrule that generates a source file.
    */
-  public static boolean appearsToHaveObjectFiles(AttributeMap rule) {
+  public static boolean appearsToHaveNoObjectFiles(AttributeMap rule) {
     if ((rule instanceof RawAttributeMapper) && rule.isConfigurable("srcs", Type.LABEL_LIST)) {
       // Since this method gets called by loading phase logic (e.g. the cc_library implicit outputs
       // function), the attribute mapper may not be able to resolve configurable attributes. When
       // that's the case, there's no way to know which value a configurable "srcs" will take, so
       // we conservatively assume object files are possible.
-      return true;
+      return false;
     }
 
     List<Label> srcs = rule.get("srcs", Type.LABEL_LIST);
@@ -402,10 +399,10 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
          *    cc_library(name = 'bar', srcs = ['foo.h']) // This DOES have object files.
          */
         if (!NO_OBJECT_GENERATING_FILETYPES.matches(srcfile.getName())) {
-          return true;
+          return false;
         }
       }
     }
-    return false;
+    return true;
   }
 }
