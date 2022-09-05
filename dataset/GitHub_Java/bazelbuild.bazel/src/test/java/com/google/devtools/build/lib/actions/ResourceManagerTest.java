@@ -20,16 +20,18 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.testutil.TestThread;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import javax.annotation.Nullable;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.annotation.Nullable;
 
 /**
  *
@@ -38,7 +40,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ResourceManagerTest {
 
-  private final ActionExecutionMetadata resourceOwner = new ResourceOwnerStub();
+  private final ActionMetadata resourceOwner = new ResourceOwnerStub();
   private final ResourceManager rm = ResourceManager.instanceForTestingOnly();
   private AtomicInteger counter;
   CyclicBarrier sync;
@@ -321,7 +323,7 @@ public class ResourceManagerTest {
     assertFalse(rm.inUse());
   }
 
-  private static class ResourceOwnerStub implements ActionExecutionMetadata {
+  private static class ResourceOwnerStub implements ActionMetadata {
 
     @Override
     @Nullable
@@ -365,11 +367,6 @@ public class ResourceManagerTest {
     }
 
     @Override
-    public Iterable<String> getClientEnvironmentVariables() {
-      throw new IllegalStateException();
-    }
-
-    @Override
     public RunfilesSupplier getRunfilesSupplier() {
       throw new IllegalStateException();
     }
@@ -408,16 +405,6 @@ public class ResourceManagerTest {
     @Override
     public ImmutableSet<Artifact> getMandatoryOutputs() {
       return ImmutableSet.of();
-    }
-
-    @Override
-    public boolean shouldReportPathPrefixConflict(ActionAnalysisMetadata action) {
-      throw new IllegalStateException();
-    }
-
-    @Override
-    public MiddlemanType getActionType() {
-      throw new IllegalStateException();
     }
   }
 }

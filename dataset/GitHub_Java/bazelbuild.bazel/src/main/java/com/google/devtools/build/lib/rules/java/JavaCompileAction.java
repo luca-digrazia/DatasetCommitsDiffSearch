@@ -94,9 +94,6 @@ public class JavaCompileAction extends AbstractAction {
    */
   private final NestedSet<Artifact> classpathEntries;
 
-  /** The list of bootclasspath entries to specify to javac. */
-  private final ImmutableList<Artifact> bootclasspathEntries;
-
   /**
    * The path to the extdir to specify to javac.
    */
@@ -180,7 +177,6 @@ public class JavaCompileAction extends AbstractAction {
       PathFragment classDirectory,
       Artifact outputJar,
       NestedSet<Artifact> classpathEntries,
-      ImmutableList<Artifact> bootclasspathEntries,
       Collection<Artifact> extdirInputs,
       List<Artifact> processorPath,
       List<String> processorNames,
@@ -215,7 +211,6 @@ public class JavaCompileAction extends AbstractAction {
     this.classDirectory = Preconditions.checkNotNull(classDirectory);
     this.outputJar = outputJar;
     this.classpathEntries = classpathEntries;
-    this.bootclasspathEntries = ImmutableList.copyOf(bootclasspathEntries);
     this.extdirInputs = extdirInputs;
     this.processorPath = ImmutableList.copyOf(processorPath);
     this.processorNames = ImmutableList.copyOf(processorNames);
@@ -253,12 +248,6 @@ public class JavaCompileAction extends AbstractAction {
   @VisibleForTesting
   public Iterable<Artifact> getClasspath() {
     return classpathEntries;
-  }
-
-  /** Returns the list of paths that represents the bootclasspath. */
-  @VisibleForTesting
-  public Collection<Artifact> getBootclasspath() {
-    return bootclasspathEntries;
   }
 
   /**
@@ -424,7 +413,7 @@ public class JavaCompileAction extends AbstractAction {
 
   @Override
   public ResourceSet estimateResourceConsumption(Executor executor) {
-    if (getContext(executor).willExecuteRemotely(true)) {
+    if (getContext(executor).isRemotable(getMnemonic(), true)) {
       return ResourceSet.ZERO;
     }
     return LOCAL_RESOURCES;
@@ -447,7 +436,6 @@ public class JavaCompileAction extends AbstractAction {
     JavaCompileInfo.Builder info = JavaCompileInfo.newBuilder();
     info.addAllSourceFile(Artifact.toExecPaths(getSourceFiles()));
     info.addAllClasspath(Artifact.toExecPaths(getClasspath()));
-    info.addAllBootclasspath(Artifact.toExecPaths(getBootclasspath()));
     info.addClasspath(getClassDirectory().getPathString());
     info.addAllSourcepath(Artifact.toExecPaths(getSourceJars()));
     info.addAllJavacOpt(getJavacOpts());
@@ -560,7 +548,7 @@ public class JavaCompileAction extends AbstractAction {
       for (Artifact extjar : extdirInputs) {
         extdirs.add(extjar.getExecPath().getParentDirectory());
       }
-      result.add(Joiner.on(configuration.getHostPathSeparator()).join(extdirs));
+      result.add(Joiner.on(configuration.getHostPathSeparator()).join(extdirs)); 
     }
 
     if (!processorPath.isEmpty()) {
@@ -666,7 +654,7 @@ public class JavaCompileAction extends AbstractAction {
    * Builds the list of mappings between jars on the classpath and their
    * originating targets names.
    */
-  static ImmutableList<String> addJarsToTargets(
+  private static ImmutableList<String> addJarsToTargets(
       NestedSet<Artifact> classpath, Collection<Artifact> directJars) {
     ImmutableList.Builder<String> builder = ImmutableList.builder();
     for (Artifact jar : classpath) {
@@ -939,7 +927,6 @@ public class JavaCompileAction extends AbstractAction {
           classDirectory,
           outputJar,
           classpathEntries,
-          bootclasspathEntries,
           extdirInputs,
           processorPath,
           processorNames,

@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.BuildInfoHelper;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -126,11 +125,6 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
-      return null;
-    }
-
-    @Override
     public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
       return original.getFilesetArtifact(rootRelativePath, root);
     }
@@ -186,8 +180,7 @@ public final class AnalysisTestUtil {
     }
   }
 
-  @Immutable
-  public static final class DummyWorkspaceStatusAction extends WorkspaceStatusAction {
+  public static class DummyWorkspaceStatusAction extends WorkspaceStatusAction {
     private final String key;
     private final Artifact stableStatus;
     private final Artifact volatileStatus;
@@ -195,7 +188,7 @@ public final class AnalysisTestUtil {
     public DummyWorkspaceStatusAction(String key,
         Artifact stableStatus, Artifact volatileStatus) {
       super(
-          ActionOwner.SYSTEM_ACTION_OWNER,
+          BuildInfoHelper.BUILD_INFO_ACTION_OWNER,
           ImmutableList.<Artifact>of(),
           ImmutableList.of(stableStatus, volatileStatus));
       this.key = key;
@@ -316,11 +309,6 @@ public final class AnalysisTestUtil {
 
     @Override
     public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
-      return null;
-    }
-
-    @Override
-    public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
 

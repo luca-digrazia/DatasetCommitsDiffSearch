@@ -21,7 +21,6 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.util.Clock;
@@ -73,7 +72,6 @@ public class ActionExecutionStatusReporterTest {
 
   private Action mockAction(String progressMessage) {
     Action action = Mockito.mock(Action.class);
-    when(action.getOwner()).thenReturn(ActionsTestUtil.NULL_ACTION_OWNER);
     when(action.getProgressMessage()).thenReturn(progressMessage);
     if (progressMessage == null) {
       when(action.prettyPrint()).thenReturn("default message");
@@ -276,15 +274,15 @@ public class ActionExecutionStatusReporterTest {
     assertEquals(30, ActionExecutionStatusReporter.getWaitTime(30, 30));
   }
 
-  private void setScheduling(ActionExecutionMetadata action) {
+  private void setScheduling(ActionMetadata action) {
     eventBus.post(ActionStatusMessage.schedulingStrategy(action));
   }
 
-  private void setPreparing(ActionExecutionMetadata action) {
+  private void setPreparing(ActionMetadata action) {
     eventBus.post(ActionStatusMessage.preparingStrategy(action));
   }
 
-  private void setRunning(ActionExecutionMetadata action, String strategy) {
+  private void setRunning(ActionMetadata action, String strategy) {
     eventBus.post(ActionStatusMessage.runningStrategy(action, strategy));
   }
 }

@@ -65,7 +65,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   private final Artifact testLog;
   private final Artifact cacheStatus;
   private final PathFragment testWarningsPath;
-  private final PathFragment unusedRunfilesLogPath;
   private final PathFragment splitLogsPath;
   private final PathFragment splitLogsDir;
   private final PathFragment undeclaredOutputsDir;
@@ -155,7 +154,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
         : null;
     this.xmlOutputPath = baseDir.getChild(namePrefix + ".xml");
     this.testWarningsPath = baseDir.getChild(namePrefix + ".warnings");
-    this.unusedRunfilesLogPath = baseDir.getChild(namePrefix + ".unused_runfiles_log");
     this.testStderr = baseDir.getChild(namePrefix + ".err");
     this.splitLogsDir = baseDir.getChild(namePrefix + ".raw_splitlogs");
     // See note in {@link #getSplitLogsPath} on the choice of file name.
@@ -324,7 +322,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     // We also need to remove *.(xml|data|shard|warnings|zip) files if they are present.
     execRoot.getRelative(xmlOutputPath).delete();
     execRoot.getRelative(testWarningsPath).delete();
-    execRoot.getRelative(unusedRunfilesLogPath).delete();
     // Note that splitLogsPath points to a file inside the splitLogsDir so
     // it's not necessary to delete it explicitly.
     FileSystemUtils.deleteTree(execRoot.getRelative(splitLogsDir));
@@ -418,10 +415,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
   public PathFragment getTestWarningsPath() {
     return testWarningsPath;
-  }
-
-  public PathFragment getUnusedRunfilesLogPath() {
-    return unusedRunfilesLogPath;
   }
 
   public PathFragment getSplitLogsPath() {
@@ -588,10 +581,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
     public Path getSplitLogsPath() {
       return getPath(splitLogsPath);
-    }
-
-    public Path getUnusedRunfilesLogPath() {
-      return getPath(unusedRunfilesLogPath);
     }
 
     /**

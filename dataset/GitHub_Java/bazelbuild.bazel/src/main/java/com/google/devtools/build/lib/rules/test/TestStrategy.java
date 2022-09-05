@@ -345,13 +345,9 @@ public abstract class TestStrategy implements TestActionContext {
    * Returns the runfiles directory associated with the test executable,
    * creating/updating it if necessary and --build_runfile_links is specified.
    */
-  protected static Path getLocalRunfilesDirectory(
-      TestRunnerAction testAction,
-      ActionExecutionContext actionExecutionContext,
-      BinTools binTools,
-      PathFragment shExecutable,
-      ImmutableMap<String, String> shellEnvironment)
-      throws ExecException, InterruptedException {
+  protected static Path getLocalRunfilesDirectory(TestRunnerAction testAction,
+      ActionExecutionContext actionExecutionContext, BinTools binTools) throws ExecException,
+      InterruptedException {
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
 
     // If the symlink farm is already created then return the existing directory. If not we
@@ -373,8 +369,7 @@ public abstract class TestStrategy implements TestActionContext {
     long startTime = Profiler.nanoTimeMaybe();
     synchronized (execSettings.getInputManifest()) {
       Profiler.instance().logSimpleTask(startTime, ProfilerTask.WAIT, testAction);
-      updateLocalRunfilesDirectory(testAction, runfilesDir, actionExecutionContext, binTools,
-          shExecutable, shellEnvironment);
+      updateLocalRunfilesDirectory(testAction, runfilesDir, actionExecutionContext, binTools);
     }
 
     return runfilesDir;
@@ -386,14 +381,9 @@ public abstract class TestStrategy implements TestActionContext {
    * $0.runfiles/MANIFEST, if it exists, are used a proxy for the set of existing symlinks, to avoid
    * the need for recursion.
    */
-  private static void updateLocalRunfilesDirectory(
-      TestRunnerAction testAction,
-      Path runfilesDir,
-      ActionExecutionContext actionExecutionContext,
-      BinTools binTools,
-      PathFragment shExecutable,
-      ImmutableMap<String, String> shellEnvironment)
-      throws ExecException, InterruptedException {
+  private static void updateLocalRunfilesDirectory(TestRunnerAction testAction, Path runfilesDir,
+      ActionExecutionContext actionExecutionContext, BinTools binTools) throws ExecException,
+      InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
 
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
@@ -411,12 +401,9 @@ public abstract class TestStrategy implements TestActionContext {
     executor.getEventHandler().handle(Event.progress(
         "Building runfiles directory for '" + execSettings.getExecutable().prettyPrint() + "'."));
 
-    new SymlinkTreeHelper(
-            execSettings.getInputManifest().getExecPath(),
-            runfilesDir.relativeTo(executor.getExecRoot()), /* filesetTree= */
-            false)
-        .createSymlinks(
-            testAction, actionExecutionContext, binTools, shExecutable, shellEnvironment);
+    new SymlinkTreeHelper(execSettings.getInputManifest().getExecPath(),
+        runfilesDir.relativeTo(executor.getExecRoot()), /* filesetTree= */ false)
+        .createSymlinks(testAction, actionExecutionContext, binTools);
 
     executor.getEventHandler().handle(Event.progress(testAction.getProgressMessage()));
   }

@@ -20,7 +20,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -83,8 +82,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       @Nullable String fdoBuildStamp,
       RuleContext ruleContext,
       boolean usePic) {
-    super(
-        owner,
+    super(owner,
         features,
         featureConfiguration,
         variables,
@@ -106,20 +104,9 @@ public class FakeCppCompileAction extends CppCompileAction {
         // cc_fake_binary and for the negative compilation tests that depend on
         // the cc_fake_binary, and the runfiles must be determined at analysis
         // time, so they can't depend on the contents of the ".d" file.)
-        CppCompilationContext.disallowUndeclaredHeaders(context),
-        actionContext,
-        copts,
-        pluginOpts,
-        nocopts,
-        extraSystemIncludePrefixes,
-        fdoBuildStamp,
-        VOID_SPECIAL_INPUTS_HANDLER,
-        ImmutableList.<IncludeScannable>of(),
-        GUID,
-        usePic,
-        ImmutableSet.<String>of(),
-        CppCompileAction.CPP_COMPILE,
-        ruleContext);
+        CppCompilationContext.disallowUndeclaredHeaders(context), actionContext, copts, pluginOpts,
+        nocopts, extraSystemIncludePrefixes, fdoBuildStamp, VOID_INCLUDE_RESOLVER,
+        ImmutableList.<IncludeScannable>of(), GUID, usePic, ruleContext);
     this.tempOutputFile = Preconditions.checkNotNull(tempOutputFile);
   }
 
@@ -164,7 +151,7 @@ public class FakeCppCompileAction extends CppCompileAction {
     try {
       validateInclusions(
           discoveredInputs,
-          actionExecutionContext.getArtifactExpander(),
+          actionExecutionContext.getMiddlemanExpander(),
           executor.getEventHandler());
     } catch (ActionExecutionException e) {
       // TODO(bazel-team): (2009) make this into an error, once most of the current warnings

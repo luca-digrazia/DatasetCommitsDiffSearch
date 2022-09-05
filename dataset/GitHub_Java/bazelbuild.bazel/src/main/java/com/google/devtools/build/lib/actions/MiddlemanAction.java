@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Preconditions;
 
 /**
@@ -23,8 +22,7 @@ import com.google.devtools.build.lib.util.Preconditions;
  * runs. This is useful for bundling up a bunch of dependencies that are shared
  * between individual targets in the action graph; for example generated header files.
  */
-@Immutable
-public final class MiddlemanAction extends AbstractAction {
+public class MiddlemanAction extends AbstractAction {
 
   public static final String MIDDLEMAN_MNEMONIC = "Middleman";
   private final String description;
