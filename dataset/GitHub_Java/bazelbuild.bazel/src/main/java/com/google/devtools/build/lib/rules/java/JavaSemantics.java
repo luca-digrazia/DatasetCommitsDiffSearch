@@ -83,7 +83,7 @@ public interface JavaSemantics {
   static final String JAVA_TOOLCHAIN_LABEL = "//tools/defaults:java_toolchain";
 
   public static final LateBoundLabel<BuildConfiguration> JAVA_TOOLCHAIN =
-      new LateBoundLabel<BuildConfiguration>(JAVA_TOOLCHAIN_LABEL, JavaConfiguration.class) {
+      new LateBoundLabel<BuildConfiguration>(JAVA_TOOLCHAIN_LABEL) {
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.getFragment(JavaConfiguration.class).getToolchainLabel();
@@ -146,7 +146,7 @@ public interface JavaSemantics {
    * Implementation for the :jvm attribute.
    */
   public static final LateBoundLabel<BuildConfiguration> JVM =
-      new LateBoundLabel<BuildConfiguration>(JDK_LABEL, Jvm.class) {
+      new LateBoundLabel<BuildConfiguration>(JDK_LABEL) {
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.getFragment(Jvm.class).getJvmLabel();
@@ -157,7 +157,7 @@ public interface JavaSemantics {
    * Implementation for the :host_jdk attribute.
    */
   public static final LateBoundLabel<BuildConfiguration> HOST_JDK =
-      new LateBoundLabel<BuildConfiguration>(JDK_LABEL, Jvm.class) {
+      new LateBoundLabel<BuildConfiguration>(JDK_LABEL) {
         @Override
         public boolean useHostConfiguration() {
           return true;
@@ -174,7 +174,7 @@ public interface JavaSemantics {
    * default, so it returns null for the configuration-independent default value.
    */
   public static final LateBoundLabel<BuildConfiguration> JAVA_LAUNCHER =
-      new LateBoundLabel<BuildConfiguration>(JavaConfiguration.class) {
+      new LateBoundLabel<BuildConfiguration>() {
         @Override
         public Label getDefault(Rule rule, BuildConfiguration configuration) {
           return configuration.getFragment(JavaConfiguration.class).getJavaLauncherLabel();
