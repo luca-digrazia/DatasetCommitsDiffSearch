@@ -347,15 +347,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       }
     }
 
-    @Override
-    public void visitLambda(JCTree.JCLambda tree) {
-      if (tree.paramKind != JCTree.JCLambda.ParameterKind.IMPLICIT) {
-        // don't record type uses for implicitly typed lambda parameters
-        scan(tree.params);
-      }
-      scan(tree.body);
-    }
-
     private static final String DAGGER_PROCESSOR_PREFIX = "dagger.";
 
     enum ProcessorDependencyMode {
