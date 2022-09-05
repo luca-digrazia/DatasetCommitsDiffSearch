@@ -75,7 +75,6 @@ public final class LinkCommandLine extends CommandLine {
   private final ImmutableSet<String> features;
   private final ImmutableMap<Artifact, Artifact> linkstamps;
   private final ImmutableList<String> linkstampCompileOptions;
-  @Nullable private final String fdoBuildStamp;
   @Nullable private final PathFragment runtimeSolibDir;
   private final boolean nativeDeps;
   private final boolean useTestOnlyFlags;
@@ -84,7 +83,6 @@ public final class LinkCommandLine extends CommandLine {
   @Nullable private final Iterable<LTOBackendArtifacts> allLTOArtifacts;
   @Nullable private final Artifact paramFile;
   @Nullable private final Artifact interfaceSoBuilder;
-
 
   /**
    * A string constant for the c++ link action, used to access the feature
@@ -107,7 +105,6 @@ public final class LinkCommandLine extends CommandLine {
       ImmutableSet<String> features,
       ImmutableMap<Artifact, Artifact> linkstamps,
       ImmutableList<String> linkstampCompileOptions,
-      @Nullable String fdoBuildStamp,
       @Nullable PathFragment runtimeSolibDir,
       boolean nativeDeps,
       boolean useTestOnlyFlags,
@@ -164,7 +161,6 @@ public final class LinkCommandLine extends CommandLine {
     this.features = Preconditions.checkNotNull(features);
     this.linkstamps = Preconditions.checkNotNull(linkstamps);
     this.linkstampCompileOptions = linkstampCompileOptions;
-    this.fdoBuildStamp = fdoBuildStamp;
     this.runtimeSolibDir = runtimeSolibDir;
     this.nativeDeps = nativeDeps;
     this.useTestOnlyFlags = useTestOnlyFlags;
@@ -594,6 +590,7 @@ public final class LinkCommandLine extends CommandLine {
       }
 
       // Stamp FDO builds with FDO subtype string
+      String fdoBuildStamp = CppHelper.getFdoBuildStamp(cppConfiguration);
       if (fdoBuildStamp != null) {
         optionList.add("-D" + CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoBuildStamp + "\"");
       }
@@ -1021,7 +1018,6 @@ public final class LinkCommandLine extends CommandLine {
     @Nullable private Artifact paramFile;
     @Nullable private Artifact interfaceSoBuilder;
     @Nullable private CcToolchainProvider toolchain;
-    private FeatureConfiguration featureConfiguration;
 
     // This interface is needed to support tests that don't create a
     // ruleContext, in which case the configuration and action owner
@@ -1046,20 +1042,18 @@ public final class LinkCommandLine extends CommandLine {
             Iterables.concat(DEFAULT_LINKSTAMP_OPTIONS, linkstampCompileOptions));
       }
       CcToolchainFeatures.Variables variables = null;
+      FeatureConfiguration featureConfiguration = null;
       // The ruleContext can be null for some tests.
       if (ruleContext != null) {
-        if (featureConfiguration == null) {
-          if (toolchain != null) {
-            featureConfiguration =
-                CcCommon.configureFeatures(
-                    ruleContext, toolchain, CcLibraryHelper.SourceCategory.CC);
-          } else {
-            featureConfiguration = CcCommon.configureFeatures(ruleContext);
-          }
+        if (toolchain != null) {
+          featureConfiguration = CcCommon.configureFeatures(ruleContext, toolchain);
+        } else {
+          featureConfiguration = CcCommon.configureFeatures(ruleContext);
         }
         CcToolchainFeatures.Variables.Builder buildVariables =
             new CcToolchainFeatures.Variables.Builder();
-        CppHelper.getFdoSupport(ruleContext).getLinkOptions(featureConfiguration, buildVariables);
+        CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
+        cppConfiguration.getFdoSupport().getLinkOptions(featureConfiguration, buildVariables);
         variables = buildVariables.build();
       }
       return new LinkCommandLine(
@@ -1077,7 +1071,6 @@ public final class LinkCommandLine extends CommandLine {
           features,
           linkstamps,
           actualLinkstampCompileOptions,
-          CppHelper.getFdoBuildStamp(ruleContext),
           runtimeSolibDir,
           nativeDeps,
           useTestOnlyFlags,
@@ -1098,14 +1091,6 @@ public final class LinkCommandLine extends CommandLine {
       return this;
     }
 
-    /**
-     * Sets the feature configuration for this link action.
-     */
-    public Builder setFeatureConfiguration(FeatureConfiguration featureConfiguration) {
-      this.featureConfiguration = featureConfiguration;
-      return this;
-    }
-    
     /**
      * Sets the type of the link. It is an error to try to set this to {@link
      * LinkTargetType#INTERFACE_DYNAMIC_LIBRARY}. Note that all the static target types (see {@link
