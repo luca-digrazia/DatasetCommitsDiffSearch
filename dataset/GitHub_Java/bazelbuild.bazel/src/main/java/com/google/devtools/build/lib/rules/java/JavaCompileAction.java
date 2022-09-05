@@ -18,6 +18,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
@@ -55,7 +56,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -167,32 +167,30 @@ public class JavaCompileAction extends AbstractAction {
    *        parts (for example, ide_build_info) need access to the data
    * @param commandLine the actual invocation command line
    */
-  private JavaCompileAction(
-      ActionOwner owner,
-      NestedSet<Artifact> tools,
-      Iterable<Artifact> baseInputs,
-      Collection<Artifact> outputs,
-      CommandLine javaCompileCommandLine,
-      CommandLine commandLine,
-      PathFragment classDirectory,
-      Artifact outputJar,
-      NestedSet<Artifact> classpathEntries,
-      Collection<Artifact> extdirInputs,
-      List<Artifact> processorPath,
-      List<String> processorNames,
-      Collection<Artifact> messages,
-      Map<PathFragment, Artifact> resources,
-      Collection<Artifact> classpathResources,
-      Collection<Artifact> sourceJars,
-      Collection<Artifact> sourceFiles,
-      List<String> javacOpts,
-      Collection<Artifact> directJars,
-      BuildConfiguration.StrictDepsMode strictJavaDeps,
-      Collection<Artifact> compileTimeDependencyArtifacts) {
-    super(
-        owner,
-        tools,
-        NestedSetBuilder.<Artifact>stableOrder()
+  private JavaCompileAction(ActionOwner owner,
+                            Iterable<Artifact> baseInputs,
+                            Collection<Artifact> outputs,
+                            CommandLine javaCompileCommandLine,
+                            CommandLine commandLine,
+                            PathFragment classDirectory,
+                            Artifact outputJar,
+                            NestedSet<Artifact> classpathEntries,
+                            Collection<Artifact> extdirInputs,
+                            List<Artifact> processorPath,
+                            Artifact langtoolsJar,
+                            Artifact javaBuilderJar,
+                            Iterable<Artifact> instrumentationJars,
+                            List<String> processorNames,
+                            Collection<Artifact> messages,
+                            Map<PathFragment, Artifact> resources,
+                            Collection<Artifact> classpathResources,
+                            Collection<Artifact> sourceJars,
+                            Collection<Artifact> sourceFiles,
+                            List<String> javacOpts,
+                            Collection<Artifact> directJars,
+                            BuildConfiguration.StrictDepsMode strictJavaDeps,
+                            Collection<Artifact> compileTimeDependencyArtifacts) {
+    super(owner, NestedSetBuilder.<Artifact>stableOrder()
             .addTransitive(classpathEntries)
             .addAll(processorPath)
             .addAll(messages)
@@ -202,7 +200,9 @@ public class JavaCompileAction extends AbstractAction {
             .addAll(sourceFiles)
             .addAll(compileTimeDependencyArtifacts)
             .addAll(baseInputs)
-            .addTransitive(tools)
+            .add(langtoolsJar)
+            .add(javaBuilderJar)
+            .addAll(instrumentationJars)
             .build(),
         outputs);
     this.javaCompileCommandLine = javaCompileCommandLine;
@@ -380,35 +380,8 @@ public class JavaCompileAction extends AbstractAction {
 
   @Override
   protected String getRawProgressMessage() {
-    StringBuilder sb = new StringBuilder("Building ");
-    sb.append(outputJar.prettyPrint());
-    sb.append(" (");
-    boolean first = true;
-    first = appendCount(sb, first, sourceFiles.size(), "source file");
-    first = appendCount(sb, first, sourceJars.size(), "source jar");
-    int resourceCount = resources.size() + classpathResources.size() + messages.size();
-    first = appendCount(sb, first, resourceCount, "resource");
-    sb.append(")");
-    return sb.toString();
-  }
-
-  /**
-   * Append an input count to the progress message, e.g. "2 source jars". If an input
-   * count has already been appended, prefix with ", ".
-   */
-  private static boolean appendCount(StringBuilder sb, boolean first, int count, String name) {
-    if (count > 0) {
-      if (!first) {
-        sb.append(", ");
-      } else {
-        first = false;
-      }
-      sb.append(count).append(' ').append(name);
-      if (count > 1) {
-        sb.append('s');
-      }
-    }
-    return first;
+    int count = sourceFiles.size() + resources.size() + classpathResources.size() + messages.size();
+    return "Building " + outputJar.prettyPrint() + " (" + count + " files)";
   }
 
   @Override
@@ -915,16 +888,7 @@ public class JavaCompileAction extends AbstractAction {
           semantics.getJavaBuilderMainClass(),
           configuration.getHostPathSeparator());
 
-      NestedSet<Artifact> tools =
-          NestedSetBuilder.<Artifact>stableOrder()
-              .add(langtoolsJar)
-              .add(javaBuilderJar)
-              .addAll(instrumentationJars)
-              .build();
-
-      return new JavaCompileAction(
-          owner,
-          tools,
+      return new JavaCompileAction(owner,
           baseInputs,
           outputs,
           paramFileContents,
@@ -934,6 +898,9 @@ public class JavaCompileAction extends AbstractAction {
           classpathEntries,
           extdirInputs,
           processorPath,
+          langtoolsJar,
+          javaBuilderJar,
+          instrumentationJars,
           processorNames,
           translations,
           resources,
