@@ -8,7 +8,6 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.view.View;
 import android.widget.DatePicker;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
@@ -18,22 +17,17 @@ import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.CalendarMode;
 import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Random;
 
-import butterknife.BindView;
+import butterknife.Bind;
 import butterknife.ButterKnife;
 import butterknife.OnCheckedChanged;
 import butterknife.OnClick;
-import com.prolificinteractive.materialcalendarview.OnDateLongClickListener;
 
-public class DynamicSettersActivity extends AppCompatActivity implements OnDateLongClickListener {
+public class DynamicSettersActivity extends AppCompatActivity {
 
-    private static final DateFormat FORMATTER = SimpleDateFormat.getDateInstance();
-
-    @BindView(R.id.calendarView)
+    @Bind(R.id.calendarView)
     MaterialCalendarView widget;
 
     private int currentTileSize;
@@ -49,15 +43,6 @@ public class DynamicSettersActivity extends AppCompatActivity implements OnDateL
         currentTileSize = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
         currentTileWidth = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
         currentTileHeight = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
-
-        widget.setOnTitleClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(final View view) {
-                Toast.makeText(DynamicSettersActivity.this, R.string.today, Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        widget.setOnDateLongClickListener(this);
     }
 
     @OnClick(R.id.button_other_dates)
@@ -107,12 +92,9 @@ public class DynamicSettersActivity extends AppCompatActivity implements OnDateL
 
     @OnCheckedChanged(R.id.enable_save_current_position)
     void onSaveCurrentPositionChecked(boolean checked) {
-        widget.state().edit().isCacheCalendarPositionEnabled(checked).commit();
-    }
-
-    @OnCheckedChanged(R.id.show_week_days)
-    void onShowWeekDaysChecked(boolean checked) {
-        widget.state().edit().setShowWeekDays(checked).commit();
+        widget.state().edit()
+                .isCacheCalendarPositionEnabled(checked)
+                .commit();
     }
 
     @OnCheckedChanged(R.id.check_text_appearance)
@@ -132,11 +114,6 @@ public class DynamicSettersActivity extends AppCompatActivity implements OnDateL
     @OnCheckedChanged(R.id.check_page_enabled)
     void onPageEnabledChecked(boolean checked) {
         widget.setPagingEnabled(checked);
-    }
-
-    @OnCheckedChanged(R.id.dynamic_height_enabled)
-    void onDynamicHeightChecked(boolean checked) {
-        widget.setDynamicHeightEnabled(checked);
     }
 
     @OnClick(R.id.button_previous)
@@ -333,10 +310,5 @@ public class DynamicSettersActivity extends AppCompatActivity implements OnDateL
                 context, 0, callback, day.getYear(), day.getMonth(), day.getDay()
         );
         dialog.show();
-    }
-
-    @Override
-    public void onDateLongClick(@NonNull MaterialCalendarView widget, @NonNull CalendarDay date) {
-        Toast.makeText(this, FORMATTER.format(date.getDate()), Toast.LENGTH_SHORT).show();
     }
 }
