@@ -178,7 +178,7 @@ public final class BuildTool {
       }
       configurations = env.getSkyframeExecutor().createConfigurations(
             env.getReporter(), runtime.getConfigurationFactory(), buildOptions,
-            request.getMultiCpus(), request.getViewOptions().keepGoing);
+            env.getDirectories(), request.getMultiCpus(), request.getViewOptions().keepGoing);
 
       env.getEventBus().post(new ConfigurationsCreatedEvent(configurations));
       env.throwPendingException();

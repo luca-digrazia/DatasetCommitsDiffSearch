@@ -81,10 +81,7 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
     // could potentially be used and a spawnActionContext doesn't specify which one it wants, the
     // last one from strategies list will be used
     strategiesBuilder.add(
-        new StandaloneSpawnStrategy(
-            env.getExecRoot(),
-            verboseFailures,
-            env.getRuntime().getProductName()),
+        new StandaloneSpawnStrategy(env.getExecRoot(), verboseFailures),
         new DummyIncludeScanningContext(),
         new SpawnLinkStrategy(),
         new SpawnGccStrategy(),
