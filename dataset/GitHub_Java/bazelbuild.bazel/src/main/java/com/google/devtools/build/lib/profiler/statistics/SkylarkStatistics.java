@@ -14,10 +14,12 @@
 package com.google.devtools.build.lib.profiler.statistics;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Maps.EntryTransformer;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.profiler.ProfileInfo;
 import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
 import com.google.devtools.build.lib.util.LongArrayList;
+
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -249,6 +251,13 @@ public final class SkylarkStatistics {
    */
   private static Map<String, TasksStatistics> buildTasksStatistics(
       final Map<String, LongArrayList> durationsMap) {
-    return Maps.transformEntries(durationsMap, TasksStatistics::create);
+    return Maps.transformEntries(
+        durationsMap,
+        new EntryTransformer<String, LongArrayList, TasksStatistics>() {
+          @Override
+          public TasksStatistics transformEntry(String function, LongArrayList durations) {
+            return TasksStatistics.create(function, durations);
+          }
+        });
   }
 }

@@ -13,11 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.devtools.build.lib.profiler.ProfilerTask.CRITICAL_PATH;
 import static com.google.devtools.build.lib.profiler.ProfilerTask.TASK_COUNT;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
@@ -26,9 +27,9 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.MultimapBuilder.ListMultimapBuilder;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.VarInt;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -48,7 +49,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
@@ -320,10 +320,17 @@ public class ProfileInfo {
 
       out.print(" [");
       ImmutableList<Task> sortedSubTasks =
-          Stream.of(subtasks)
-              .filter(task -> task.durationNanos >= durationThresholdNanos)
-              .sorted(TASK_DURATION_ORDERING.reverse())
-              .collect(toImmutableList());
+          TASK_DURATION_ORDERING
+              .reverse()
+              .immutableSortedCopy(
+                  Iterables.filter(
+                      Arrays.asList(subtasks),
+                      new Predicate<Task>() {
+                        @Override
+                        public boolean apply(Task task) {
+                          return task.durationNanos >= durationThresholdNanos;
+                        }
+                      }));
       String sep = "";
       for (Task task : sortedSubTasks) {
         out.print(sep);
@@ -946,7 +953,13 @@ public class ProfileInfo {
    */
   public Iterable<Task> findTasksByDescription(final Pattern description) {
     return Iterables.filter(
-        allTasksById, task -> description.matcher(task.getDescription()).find());
+        allTasksById,
+        new Predicate<Task>() {
+          @Override
+          public boolean apply(Task task) {
+            return description.matcher(task.getDescription()).find();
+          }
+        });
   }
 
   /**
