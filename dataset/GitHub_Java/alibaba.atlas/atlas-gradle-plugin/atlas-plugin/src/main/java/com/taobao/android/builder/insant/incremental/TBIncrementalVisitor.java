@@ -6,6 +6,7 @@ import com.android.annotations.Nullable;
 import com.android.annotations.VisibleForTesting;
 import com.android.build.gradle.internal.incremental.AsmUtils;
 import com.android.build.gradle.internal.incremental.IncrementalVisitor;
+import com.android.build.gradle.internal.incremental.TBIncrementalSupportVisitor;
 import com.android.utils.FileUtils;
 import com.android.utils.ILogger;
 import com.google.common.collect.ImmutableList;
@@ -44,6 +45,21 @@ public class TBIncrementalVisitor extends IncrementalVisitor {
     public static final Type MODIFY_CLASS =
             Type.getObjectType("com/android/tools/ir/api/ModifyClass");
 
+    public static final Type MODIFY_FIELD =
+            Type.getObjectType("com/android/tools/ir/api/ModifyField");
+
+    public static final Type MODIFY_METHOD =
+            Type.getObjectType("com/android/tools/ir/api/ModifyMethod");
+
+    public static final Type ADD_FIELD =
+            Type.getObjectType("com/android/tools/ir/api/AddField");
+
+
+    public static final Type ADD_METHOD =
+            Type.getObjectType("com/android/tools/ir/api/AddMethod");
+
+
+
     public enum ErrorType{
         R_CLASS,INTERFACE , NEW_API, PACKAGE_DISABLED
     }
@@ -57,7 +73,7 @@ public class TBIncrementalVisitor extends IncrementalVisitor {
             @NonNull VisitorBuilder visitorBuilder,
             @NonNull ILogger logger,
             InjectErrorListener injectErrorListener,
-            boolean addSerialVersionUID) throws IOException {
+            boolean addSerialVersionUID,boolean patchInitMethod) throws IOException {
 
         byte[] classBytes;
         String path = FileUtils.relativePath(inputFile, inputRootDirectory);
@@ -176,6 +192,10 @@ public class TBIncrementalVisitor extends IncrementalVisitor {
         Files.createParentDirs(outputFile);
         IncrementalVisitor visitor =
                 visitorBuilder.build(classNode, parentsNodes, classWriter, logger);
+        if (visitor instanceof TBIncrementalSupportVisitor){
+
+            ((TBIncrementalSupportVisitor) visitor).setPatchInitMethod(patchInitMethod);
+        }
 
         if (visitorBuilder.getOutputType() == OutputType.INSTRUMENT) {
             /*
@@ -212,6 +232,7 @@ public class TBIncrementalVisitor extends IncrementalVisitor {
     }
 
     protected enum AccessRight {
+
         PRIVATE, PACKAGE_PRIVATE, PROTECTED, PUBLIC;
 
         @NonNull
