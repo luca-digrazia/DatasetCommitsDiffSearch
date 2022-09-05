@@ -384,17 +384,14 @@ public class GrpcServerImpl implements RPCServer {
   static class RpcOutputStream extends OutputStream {
     private static final int CHUNK_SIZE = 8192;
 
-    // Store commandId and responseCookie as ByteStrings to avoid String -> UTF8 bytes conversion
-    // for each serialized chunk of output.
-    private final ByteString commandIdBytes;
-    private final ByteString responseCookieBytes;
-
+    private final String commandId;
+    private final String responseCookie;
     private final StreamType type;
     private final GrpcSink sink;
 
     RpcOutputStream(String commandId, String responseCookie, StreamType type, GrpcSink sink) {
-      this.commandIdBytes = ByteString.copyFromUtf8(commandId);
-      this.responseCookieBytes = ByteString.copyFromUtf8(responseCookie);
+      this.commandId = commandId;
+      this.responseCookie = responseCookie;
       this.type = type;
       this.sink = sink;
     }
@@ -405,8 +402,8 @@ public class GrpcServerImpl implements RPCServer {
         ByteString input = ByteString.copyFrom(b, off + i, Math.min(CHUNK_SIZE, inlen - i));
         RunResponse.Builder response = RunResponse
             .newBuilder()
-            .setCookieBytes(responseCookieBytes)
-            .setCommandIdBytes(commandIdBytes);
+            .setCookie(responseCookie)
+            .setCommandId(commandId);
 
         switch (type) {
           case STDOUT: response.setStandardOutput(input); break;
@@ -424,7 +421,7 @@ public class GrpcServerImpl implements RPCServer {
           log.info(
               String.format(
                   "Client disconnected received for command %s on thread %s",
-                  commandIdBytes.toStringUtf8(), Thread.currentThread().getName()));
+                  commandId, Thread.currentThread().getName()));
           throw new IOException("Client disconnected");
         }
       }
