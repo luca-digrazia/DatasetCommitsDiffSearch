@@ -209,13 +209,16 @@
 
 package com.android.build.gradle.internal.api;
 
+import com.android.build.api.transform.Format;
 import com.android.build.gradle.internal.core.GradleVariantConfiguration;
+import com.android.build.gradle.internal.pipeline.StreamFilter;
 import com.android.build.gradle.internal.scope.VariantOutputScope;
 import com.android.build.gradle.internal.tasks.databinding.DataBindingExportBuildInfoTask;
 import com.android.build.gradle.internal.tasks.databinding.DataBindingProcessLayoutsTask;
 import com.android.build.gradle.internal.variant.BaseVariantData;
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.build.gradle.tasks.PackageApplication;
+import com.google.common.base.Predicate;
 import com.google.common.collect.Maps;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
@@ -223,6 +226,7 @@ import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.tasks.app.bundle.ProcessAwbAndroidResources;
 import com.taobao.android.object.ArtifactBundleInfo;
 
+import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.compile.JavaCompile;
 
 import java.io.File;
@@ -232,6 +236,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import static com.android.builder.model.AndroidProject.FD_OUTPUTS;
 
 /**
@@ -239,26 +245,25 @@ import static com.android.builder.model.AndroidProject.FD_OUTPUTS;
  */
 public class AppVariantOutputContext {
 
-    private final String name;
+    private String name;
 
-    private final AppVariantContext variantContext;
+    private AppVariantContext variantContext;
 
-    private final VariantOutputScope outputScope;
+    private VariantOutputScope outputScope;
 
-    private final BaseVariantData<? extends BaseVariantOutputData> variantData;
+    private BaseVariantData<? extends BaseVariantOutputData> variantData;
 
-    private final Map<String, JavaCompile> awbJavacTasks = Maps.newHashMap();
+    private Map<String, JavaCompile> awbJavacTasks = Maps.newHashMap();
 
-    private final Map<String, ProcessAwbAndroidResources> awbAndroidResourcesMap = Maps.newHashMap();
+    private Map<String, ProcessAwbAndroidResources> awbAndroidResourcesMap = Maps.newHashMap();
 
-    private final Map<String, AwbTransform> awbTransformMap = Maps.newHashMap();
+    private Map<String, AwbTransform> awbTransformMap = Maps.newHashMap();
 
-    private final Map<String, PackageApplication> awbPackageMap = Maps.newHashMap();
+    private Map<String, PackageApplication> awbPackageMap = Maps.newHashMap();
 
-    private final Map<String, DataBindingExportBuildInfoTask> exportBuildInfoTaskMap = Maps.newHashMap();
+    private Map<String, DataBindingExportBuildInfoTask> exportBuildInfoTaskMap = Maps.newHashMap();
 
-    private final Map<String, DataBindingProcessLayoutsTask> dataBindingProcessLayoutsTaskMap = Maps
-            .newHashMap();
+    private Map<String, DataBindingProcessLayoutsTask> dataBindingProcessLayoutsTaskMap = Maps.newHashMap();
 
     public Set<ArtifactBundleInfo> artifactBundleInfos;
 
@@ -268,7 +273,10 @@ public class AppVariantOutputContext {
         return awbJavacTasks;
     }
 
-    public AppVariantOutputContext(String name, AppVariantContext variantContext, VariantOutputScope outputScope, BaseVariantData<? extends BaseVariantOutputData> variantData) {
+    public AppVariantOutputContext(String name,
+                                   AppVariantContext variantContext,
+                                   VariantOutputScope outputScope,
+                                   BaseVariantData<? extends BaseVariantOutputData> variantData) {
         this.name = name;
         this.variantContext = variantContext;
         this.outputScope = outputScope;
@@ -287,7 +295,8 @@ public class AppVariantOutputContext {
         return variantData;
     }
 
-    public File getAwbRClassSourceOutputDir(GradleVariantConfiguration config, AwbBundle awbBundle) {
+    public File getAwbRClassSourceOutputDir(GradleVariantConfiguration config,
+                                            AwbBundle awbBundle) {
         return new File(outputScope.getGlobalScope().getGeneratedDir(),
                         "source/awb-r/" + config.getDirName() + "/" + awbBundle.getName());
     }
@@ -300,10 +309,10 @@ public class AppVariantOutputContext {
     public File getAwbProcessResourcePackageOutputFile(AwbBundle awbBundle) {
         return new File(outputScope.getGlobalScope().getIntermediatesDir(),
                         "res/" +
-                        awbBundle.getName() +
-                        "/resources-" +
-                        outputScope.getVariantOutputData().getBaseName() +
-                        ".ap_");
+                            awbBundle.getName() +
+                            "/resources-" +
+                            outputScope.getVariantOutputData().getBaseName() +
+                            ".ap_");
     }
 
     public Map<String, ProcessAwbAndroidResources> getAwbAndroidResourcesMap() {
@@ -313,32 +322,32 @@ public class AppVariantOutputContext {
     public File getJAwbavaOutputDir(AwbBundle awbBundle) {
         return new File(outputScope.getGlobalScope().getIntermediatesDir(),
                         "/awb-classes/" +
-                        variantData.getVariantConfiguration().getDirName() +
-                        "/" +
-                        awbBundle.getName());
+                            variantData.getVariantConfiguration().getDirName() +
+                            "/" +
+                            awbBundle.getName());
     }
 
     public File getAwbJavaDependencyCache(AwbBundle awbBundle) {
         return new File(outputScope.getGlobalScope().getIntermediatesDir(),
                         "/awb-dependency-cache/" +
-                        variantData.getVariantConfiguration().getDirName() +
-                        "/" +
-                        awbBundle.getName());
+                            variantData.getVariantConfiguration().getDirName() +
+                            "/" +
+                            awbBundle.getName());
     }
 
     public File getAwbSolib(AwbBundle awbBundle) {
         return new File(outputScope.getGlobalScope().getIntermediatesDir(),
                         "/awb-solib/" +
-                        variantData.getVariantConfiguration().getDirName() +
-                        "/" +
-                        awbBundle.getName());
+                            variantData.getVariantConfiguration().getDirName() +
+                            "/" +
+                            awbBundle.getName());
     }
 
     public synchronized Map<String, AwbTransform> getAwbTransformMap() {
         //TODO
         if (awbTransformMap.isEmpty()) {
             AtlasDependencyTree dependencyTree = AtlasBuildContext.androidDependencyTrees.get(
-                    variantContext.getVariantName());
+                variantContext.getVariantName());
             for (AwbBundle awbBundle : dependencyTree.getAwbBundles()) {
                 //生成AwbTransform对象
                 AwbTransform awbTransform = new AwbTransform(awbBundle);
@@ -365,10 +374,30 @@ public class AppVariantOutputContext {
     }
 
     public File getAwbPackageOutputFile(AwbBundle awbBundle) {
+        //        File soFolder = this.getVariantData().ndkCompileTask.getSoFolder();
+        Map<File, Format> jniFoldersMap = outputScope.getVariantScope()
+            .getTransformManager()
+            .getPipelineOutput(StreamFilter.NATIVE_LIBS);
+
+        Set<File> jniFolders = Maps.filterValues(jniFoldersMap, new Predicate<Format>() {
+            @Override
+            public boolean apply(@Nullable Format format) {
+                return format == Format.DIRECTORY;
+            }
+        }).keySet();
+
+        if (jniFolders.size() <= 0) {
+            throw new StopExecutionException("No jniFolders found!");
+        }
+        File jniFolder = jniFolders.iterator().next();
+
+        if (!jniFolder.isDirectory()) {
+            throw new StopExecutionException("No jniFolders found! ,"
+                                                 + " you should compile atlas first");
+        }
+
         String awbOutputName = awbBundle.getAwbSoName();
-        File file = new File(variantContext.getAwbApkOutputDir(),
-                             "lib/armeabi" + File.separator + awbOutputName);
-        file.getParentFile().mkdirs();
+        File file = new File(jniFolder, "lib/armeabi" + File.separator + awbOutputName);
 
         awbBundle.outputBundleFile = file;
         return file;
@@ -384,10 +413,8 @@ public class AppVariantOutputContext {
         File outFolder = outputScope.getGlobalScope().getOutputsDir();
         String awbOutputName = awbBundle.getAwbSoName();
         File file = new File(outFolder,
-                             "remote-bundles-" +
-                             variantData.getVariantConfiguration().getDirName() +
-                             File.separator +
-                             awbOutputName);
+                             "remote-bundles-" + variantData.getVariantConfiguration().getDirName() + File.separator
+                                 + awbOutputName);
         file.getParentFile().mkdirs();
         awbBundle.outputBundleFile = file;
         return file;
@@ -396,15 +423,15 @@ public class AppVariantOutputContext {
     public File getAwbJniFolder(AwbBundle awbBundle) {
         return new File(outputScope.getGlobalScope().getIntermediatesDir(),
                         "/awb-jnis/" +
-                        variantData.getVariantConfiguration().getDirName() +
-                        "/" +
-                        awbBundle.getName());
+                            variantData.getVariantConfiguration().getDirName() +
+                            "/" +
+                            awbBundle.getName());
     }
 
     public File getApkOutputFile(boolean checkExist) {
         File file = outputScope.getGlobalScope()
-                .getProject()
-                .file(outputScope.getGlobalScope().getApkLocation() +
+            .getProject()
+            .file(outputScope.getGlobalScope().getApkLocation() +
                       "/" +
                       outputScope.getGlobalScope().getProjectBaseName() +
                       "-" +
@@ -430,12 +457,14 @@ public class AppVariantOutputContext {
 
     public File getMappingTxt() {
         File proguardOut = new File(String.valueOf(variantData.getScope()
-                                                           .getGlobalScope()
-                                                           .getBuildDir()) +
-                                    "/" +
-                                    FD_OUTPUTS +
-                                    "/mapping/" +
-                                    variantData.getScope().getVariantConfiguration().getDirName());
+                                                       .getGlobalScope()
+                                                       .getBuildDir()) +
+                                        "/" +
+                                        FD_OUTPUTS +
+                                        "/mapping/" +
+                                        variantData.getScope()
+                                            .getVariantConfiguration()
+                                            .getDirName());
         return new File(proguardOut, "mapping.txt");
     }
 
