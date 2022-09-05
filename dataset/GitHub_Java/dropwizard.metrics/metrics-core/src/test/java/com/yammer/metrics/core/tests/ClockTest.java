@@ -13,7 +13,7 @@ import static org.junit.Assert.assertThat;
 public class ClockTest {
     @Test
     public void cpuTimeClock() throws Exception {
-        final Clock.CpuTimeClock clock = new Clock.CpuTimeClock();
+        final Clock.CpuTime clock = new Clock.CpuTime();
 
         assertThat((double) clock.time(),
                    is(closeTo(System.currentTimeMillis(), 100)));
@@ -24,7 +24,7 @@ public class ClockTest {
 
     @Test
     public void userTimeClock() throws Exception {
-        final Clock.UserTimeClock clock = new Clock.UserTimeClock();
+        final Clock.UserTime clock = new Clock.UserTime();
 
         assertThat((double) clock.time(),
                    is(closeTo(System.currentTimeMillis(), 100)));
@@ -36,6 +36,6 @@ public class ClockTest {
     @Test
     public void defaultsToUserTime() throws Exception {
         assertThat(Clock.DEFAULT,
-                   is(instanceOf(Clock.UserTimeClock.class)));
+                   is(instanceOf(Clock.UserTime.class)));
     }
 }
