@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownMethod;
 import com.google.devtools.build.lib.server.RPCService.UnknownCommandException;
 import com.google.devtools.build.lib.unix.LocalClientSocket;
 import com.google.devtools.build.lib.unix.LocalServerSocket;
@@ -225,8 +226,16 @@ public final class AfUnixServer extends RPCServer {
               }
             }
             requestIo.shutdown();
-            if (rpcService.isShutdown()) {
-              return;
+            switch (rpcService.getShutdown()) {
+              case NONE:
+                break;
+
+              case CLEAN:
+                return;
+
+              case EXPUNGE:
+                disableShutdownHooks();
+                return;
             }
           }
         } catch (EOFException e) {
@@ -238,7 +247,7 @@ public final class AfUnixServer extends RPCServer {
         }
       }
     } finally {
-      rpcService.shutdown();
+      rpcService.shutdown(ShutdownMethod.CLEAN);
       LOG.info("Logging finished");
     }
   }
@@ -320,7 +329,14 @@ public final class AfUnixServer extends RPCServer {
     // (All this extra complexity is just used in tests... *sigh*).
     if (socketFile.toString().length() >= 104) { // = UNIX_PATH_MAX
       Path socketLink = socketFile;
-      String tmpDir = System.getProperty("blaze.rpcserver.tmpdir", "/tmp");
+      String tmpDirDefault = System.getenv("TMPDIR");
+      if (tmpDirDefault == null
+          || tmpDirDefault.length() > 104 - "/blaze-4294967296/server.socket".length()) {
+        // Default for unset TMPDIR, or if TMPDIR is so that the resulting
+        // path would be too long.
+        tmpDirDefault = "/tmp";
+      }
+      String tmpDir = System.getProperty("blaze.rpcserver.tmpdir", tmpDirDefault);
       socketFile = createTempSocketDirectory(socketFile.getRelative(tmpDir)).
           getRelative("server.socket");
       LOG.info("Using symlinked socket at " + socketFile);
@@ -413,7 +429,7 @@ public final class AfUnixServer extends RPCServer {
       LOG.severe("SERVER ERROR: " + trace);
     }
 
-    if (rpcService.isShutdown()) {
+    if (rpcService.getShutdown() != ShutdownMethod.NONE) {
       // In case of shutdown, disable the listening socket *before* we write
       // the last part of the response.  Otherwise, a sufficiently fast client
       // could read the response and exit, and a new client could make a
@@ -533,10 +549,6 @@ public final class AfUnixServer extends RPCServer {
                                         Path workspaceDir,
                                         int maxIdleSeconds)
       throws IOException {
-    if (!serverDirectory.exists()) {
-      serverDirectory.createDirectory();
-    }
-
     // Creates and starts the RPC server.
     RPCService service = new RPCService(appCommand);
 
