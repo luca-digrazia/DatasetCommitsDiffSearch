@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpArchiveRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.HttpJarRule;
-import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -56,8 +55,7 @@ public abstract class DecompressorFactory {
       }
     }
 
-    if (targetKind.startsWith(HttpArchiveRule.NAME + " ")
-        || targetKind.startsWith(NewHttpArchiveRule.NAME + " ")) {
+    if (targetKind.startsWith(HttpArchiveRule.NAME + " ")) {
       if (baseName.endsWith(".zip") || baseName.endsWith(".jar")) {
         return new ZipDecompressor(archivePath);
       } else {
