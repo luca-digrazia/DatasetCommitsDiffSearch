@@ -106,8 +106,10 @@ public class TreePrunerTest {
     String[] expected = {
       "class Test {", //
       "    {",
+      "        throw new AssertionError();",
       "    }",
       "    static {",
+      "        throw new AssertionError();",
       "    }",
       "}",
     };
