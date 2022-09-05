@@ -124,11 +124,6 @@ public class ObjcCompileAction extends SpawnAction {
   }
 
   @Override
-  public ImmutableSet<Artifact> getMandatoryOutputs() {
-    return ImmutableSet.of(dotdFile.artifact());
-  }
-
-  @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     super.execute(actionExecutionContext);

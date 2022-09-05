@@ -43,7 +43,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PRECOMPIL
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.STRIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SWIFT;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SWIFT_SOURCES;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -446,8 +445,7 @@ public final class CompilationSupport {
     for (Artifact sourceFile : compilationArtifacts.getSrcs()) {
       Artifact objFile = intermediateArtifacts.objFile(sourceFile);
       objFiles.add(objFile);
-      if (!appleConfiguration.disableNativeSwiftRules()
-          && ObjcRuleClasses.SWIFT_SOURCES.matches(sourceFile.getFilename())) {
+      if (ObjcRuleClasses.SWIFT_SOURCES.matches(sourceFile.getFilename())) {
         registerSwiftCompileAction(sourceFile, objFile, objcProvider);
       } else {
         if (objFile.isTreeArtifact()) {
@@ -1641,14 +1639,6 @@ public final class CompilationSupport {
         String path = conflict.getRootRelativePath().toString();
         ruleContext.attributeError(
             "srcs", String.format(FILE_IN_SRCS_AND_NON_ARC_SRCS_ERROR_FORMAT, path));
-      }
-
-      if (appleConfiguration.disableNativeSwiftRules()) {
-        for (Artifact src : srcsSet) {
-          if (SWIFT_SOURCES.apply(src.getFilename())) {
-            ruleContext.attributeError("srcs", "Swift is not supported in native rules.");
-          }
-        }
       }
     }
 

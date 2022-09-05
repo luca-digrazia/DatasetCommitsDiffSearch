@@ -53,10 +53,13 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
       ImmutableList.of(
           "-Os", "-DNDEBUG=1", "-Wno-unused-variable", "-Winit-self", "-Wno-extra");
 
+  private final DottedVersion iosMinimumOs;
   private final DottedVersion iosSimulatorVersion;
   private final String iosSimulatorDevice;
+  private final DottedVersion watchosMinimumOs;
   private final DottedVersion watchosSimulatorVersion;
   private final String watchosSimulatorDevice;
+  private final DottedVersion tvosMinimumOs;
   private final DottedVersion tvosSimulatorVersion;
   private final String tvosSimulatorDevice;
   private final boolean generateDsym;
@@ -76,20 +79,22 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   @Nullable private final Label extraEntitlements;
   private final boolean deviceDebugEntitlements;
   private final boolean experimentalObjcLibrary;
-  private final boolean experimentalUseCrosstoolForBinary;
-  private final boolean enableAppleBinaryNativeProtos;
   private final HeaderDiscovery.DotdPruningMode dotdPruningPlan;
 
   ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options,
       @Nullable BlazeDirectories directories) {
+    this.iosMinimumOs = Preconditions.checkNotNull(objcOptions.iosMinimumOs, "iosMinimumOs");
     this.iosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.iosSimulatorDevice, "iosSimulatorDevice");
     this.iosSimulatorVersion =
         Preconditions.checkNotNull(objcOptions.iosSimulatorVersion, "iosSimulatorVersion");
+    this.watchosMinimumOs =
+        Preconditions.checkNotNull(objcOptions.watchosMinimumOs, "watchosMinimumOs");
     this.watchosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.watchosSimulatorDevice, "watchosSimulatorDevice");
     this.watchosSimulatorVersion =
         Preconditions.checkNotNull(objcOptions.watchosSimulatorVersion, "watchosSimulatorVersion");
+    this.tvosMinimumOs = Preconditions.checkNotNull(objcOptions.tvosMinimumOs, "tvosMinimumOs");
     this.tvosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.tvosSimulatorDevice, "tvosSimulatorDevice");
     this.tvosSimulatorVersion =
@@ -111,12 +116,22 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.extraEntitlements = objcOptions.extraEntitlements;
     this.deviceDebugEntitlements = objcOptions.deviceDebugEntitlements;
     this.experimentalObjcLibrary = objcOptions.experimentalObjcLibrary;
-    this.experimentalUseCrosstoolForBinary = objcOptions.experimentalUseCrosstoolForBinary;
-    this.enableAppleBinaryNativeProtos = objcOptions.enableAppleBinaryNativeProtos;
     this.dotdPruningPlan =
         objcOptions.useDotdPruning
             ? HeaderDiscovery.DotdPruningMode.USE
             : HeaderDiscovery.DotdPruningMode.DO_NOT_USE;
+  }
+
+  /**
+   * Returns the minimum iOS version supported by binaries and libraries. Any dependencies on newer
+   * iOS version features or libraries will become weak dependencies which are only loaded if the
+   * runtime OS supports them.
+   */
+  @SkylarkCallable(name = "ios_minimum_os", structField = true,
+      doc = "The minimum compatible iOS version for target simulators and devices.")
+  public DottedVersion getMinimumOs() {
+    // TODO(bazel-team): Deprecate in favor of getMinimumOsForPlatformType(IOS).
+    return iosMinimumOs;
   }
 
   /**
@@ -134,6 +149,23 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   public DottedVersion getIosSimulatorVersion() {
     // TODO(bazel-team): Deprecate in favor of getSimulatorVersionForPlatformType(IOS).
     return iosSimulatorVersion;
+  }
+
+  @SkylarkCallable(
+      name = "minimum_os_for_platform_type",
+      doc = "The minimum compatible OS version for target simulator and devices for a particular "
+          + "platform type.")
+  public DottedVersion getMinimumOsForPlatformType(PlatformType platformType) {
+    switch (platformType) {
+      case IOS:
+        return iosMinimumOs;
+      case TVOS:
+        return tvosMinimumOs;
+      case WATCHOS:
+        return watchosMinimumOs;
+      default:
+        throw new IllegalArgumentException("Unhandled platform: " + platformType);
+    }
   }
 
   @SkylarkCallable(
@@ -329,7 +361,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   public boolean useDeviceDebugEntitlements() {
     return deviceDebugEntitlements && compilationMode != CompilationMode.OPT;
   }
-
+  
   /**
    * Returns true if all objc_library targets should be configured as if they were
    * experimental_objc_library targets.
@@ -337,19 +369,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   public boolean useExperimentalObjcLibrary() {
     return experimentalObjcLibrary;
   }
-
-  /** Returns true if objc_binary targets should use the crosstool for compiling and archiving. */
-  public boolean useCrosstoolForBinary() {
-    return experimentalUseCrosstoolForBinary;
-  }
-
-  /** Returns true if apple_binary targets should generate and link Objc protos. */
-  @SkylarkCallable(name = "enable_apple_binary_native_protos", structField = true,
-      doc = "Returns whether apple_binary should generate and link protos natively.")
-  public boolean enableAppleBinaryNativeProtos() {
-    return enableAppleBinaryNativeProtos;
-  }
-
+  
   /** Returns the DotdPruningPlan for compiles in this build. */
   public HeaderDiscovery.DotdPruningMode getDotdPruningPlan() {
     return dotdPruningPlan;

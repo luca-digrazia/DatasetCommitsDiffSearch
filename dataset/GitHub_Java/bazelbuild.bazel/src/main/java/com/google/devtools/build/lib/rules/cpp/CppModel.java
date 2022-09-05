@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs.Builder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StringSequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
@@ -341,22 +340,23 @@ public final class CppModel {
     return builder;
   }
 
-  /** Get the safe path strings for a list of paths to use in the build variables. */
-  private ImmutableList<String> getSafePathStrings(Collection<PathFragment> paths) {
+  /**
+   * Get the safe path strings for a list of paths to use in the build variables.
+   */
+  private Collection<String> getSafePathStrings(Collection<PathFragment> paths) {
     ImmutableSet.Builder<String> result = ImmutableSet.builder();
     for (PathFragment path : paths) {
       result.add(path.getSafePathString());
     }
-    return result.build().asList();
+    return result.build();
   }
 
   /**
    * Select .pcm inputs to pass on the command line depending on whether we are in pic or non-pic
    * mode.
    */
-  private ImmutableList<String> getHeaderModulePaths(
-      CppCompileActionBuilder builder, boolean usePic) {
-    ImmutableSet.Builder<String> result = ImmutableSet.builder();
+  private Collection<String> getHeaderModulePaths(CppCompileActionBuilder builder, boolean usePic) {
+    Collection<String> result = new LinkedHashSet<>();
     Iterable<Artifact> artifacts =
         featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_INCLUDES_DEPENDENCIES)
             ? builder.getContext().getTopLevelModules(usePic)
@@ -364,7 +364,7 @@ public final class CppModel {
     for (Artifact artifact : artifacts) {
       result.add(artifact.getExecPathString());
     }
-    return result.build().asList();
+    return result;
   }
 
   private void setupCompileBuildVariables(
@@ -386,8 +386,8 @@ public final class CppModel {
     Artifact outputFile = builder.getOutputFile();
     String realOutputFilePath;
 
-    buildVariables.addStringVariable("source_file", sourceFile.getExecPathString());
-    buildVariables.addStringVariable("output_file", outputFile.getExecPathString());
+    buildVariables.addVariable("source_file", sourceFile.getExecPathString());
+    buildVariables.addVariable("output_file", outputFile.getExecPathString());
 
     if (builder.getTempOutputFile() != null) {
       realOutputFilePath = builder.getTempOutputFile().getPathString();
@@ -396,46 +396,45 @@ public final class CppModel {
     }
 
     if (FileType.contains(outputFile, CppFileTypes.ASSEMBLER, CppFileTypes.PIC_ASSEMBLER)) {
-      buildVariables.addStringVariable("output_assembly_file", realOutputFilePath);
+      buildVariables.addVariable("output_assembly_file", realOutputFilePath);
     } else if (FileType.contains(outputFile, CppFileTypes.PREPROCESSED_C,
         CppFileTypes.PREPROCESSED_CPP, CppFileTypes.PIC_PREPROCESSED_C,
         CppFileTypes.PIC_PREPROCESSED_CPP)) {
-      buildVariables.addStringVariable("output_preprocess_file", realOutputFilePath);
+      buildVariables.addVariable("output_preprocess_file", realOutputFilePath);
     } else {
-      buildVariables.addStringVariable("output_object_file", realOutputFilePath);
+      buildVariables.addVariable("output_object_file", realOutputFilePath);
     }
 
     DotdFile dotdFile = CppFileTypes.mustProduceDotdFile(sourceFile.getPath().toString())
         ? Preconditions.checkNotNull(builder.getDotdFile()) : null;
     // Set dependency_file to enable <object>.d file generation.
     if (dotdFile != null) {
-      buildVariables.addStringVariable(
-          "dependency_file", dotdFile.getSafeExecPath().getPathString());
+      buildVariables.addVariable("dependency_file", dotdFile.getSafeExecPath().getPathString());
     }
 
     if (featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAPS) && cppModuleMap != null) {
       // If the feature is enabled and cppModuleMap is null, we are about to fail during analysis
       // in any case, but don't crash.
-      buildVariables.addStringVariable("module_name", cppModuleMap.getName());
-      buildVariables.addStringVariable(
-          "module_map_file", cppModuleMap.getArtifact().getExecPathString());
-      StringSequenceBuilder sequence = new StringSequenceBuilder();
+      buildVariables.addVariable("module_name", cppModuleMap.getName());
+      buildVariables.addVariable("module_map_file",
+          cppModuleMap.getArtifact().getExecPathString());
+      CcToolchainFeatures.Variables.ValueSequence.Builder sequence =
+          new CcToolchainFeatures.Variables.ValueSequence.Builder();
       for (Artifact artifact : builderContext.getDirectModuleMaps()) {
         sequence.addValue(artifact.getExecPathString());
       }
-      buildVariables.addCustomBuiltVariable("dependent_module_map_files", sequence);
+      buildVariables.addSequence("dependent_module_map_files", sequence.build());
     }
     if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)) {
-      buildVariables.addStringSequenceVariable(
-          "module_files", getHeaderModulePaths(builder, usePic));
+      buildVariables.addSequenceVariable("module_files", getHeaderModulePaths(builder, usePic));
     }
     if (featureConfiguration.isEnabled(CppRuleClasses.INCLUDE_PATHS)) {
-      buildVariables.addStringSequenceVariable(
-          "include_paths", getSafePathStrings(builderContext.getIncludeDirs()));
-      buildVariables.addStringSequenceVariable(
-          "quote_include_paths", getSafePathStrings(builderContext.getQuoteIncludeDirs()));
-      buildVariables.addStringSequenceVariable(
-          "system_include_paths", getSafePathStrings(builderContext.getSystemIncludeDirs()));
+      buildVariables.addSequenceVariable("include_paths",
+          getSafePathStrings(builderContext.getIncludeDirs()));
+      buildVariables.addSequenceVariable("quote_include_paths",
+          getSafePathStrings(builderContext.getQuoteIncludeDirs()));
+      buildVariables.addSequenceVariable("system_include_paths",
+          getSafePathStrings(builderContext.getSystemIncludeDirs()));
     }
 
     if (featureConfiguration.isEnabled(CppRuleClasses.PREPROCESSOR_DEFINES)) {
@@ -452,14 +451,14 @@ public final class CppModel {
         defines = builderContext.getDefines();
       }
 
-      buildVariables.addStringSequenceVariable("preprocessor_defines", defines);
+      buildVariables.addSequenceVariable("preprocessor_defines", defines);
     }
 
     if (usePic) {
       if (!featureConfiguration.isEnabled(CppRuleClasses.PIC)) {
         ruleContext.ruleError("PIC compilation is requested but the toolchain does not support it");
       }
-      buildVariables.addStringVariable("pic", "");
+      buildVariables.addVariable("pic", "");
     }
 
     if (ccRelativeName != null) {
@@ -467,16 +466,16 @@ public final class CppModel {
           ruleContext, ccRelativeName, autoFdoImportPath, usePic, featureConfiguration);
     }
     if (gcnoFile != null) {
-      buildVariables.addStringVariable("gcov_gcno_file", gcnoFile.getExecPathString());
+      buildVariables.addVariable("gcov_gcno_file", gcnoFile.getExecPathString());
     }
 
     if (dwoFile != null) {
-      buildVariables.addStringVariable("per_object_debug_info_file", dwoFile.getExecPathString());
+      buildVariables.addVariable("per_object_debug_info_file", dwoFile.getExecPathString());
     }
 
-    buildVariables.addAllStringVariables(CppHelper.getToolchain(ruleContext).getBuildVariables());
-
-    buildVariables.addAllStringVariables(sourceSpecificBuildVariables);
+    buildVariables.addAllVariables(CppHelper.getToolchain(ruleContext).getBuildVariables());
+    
+    buildVariables.addAllVariables(sourceSpecificBuildVariables);
 
     for (VariablesExtension extension : variablesExtensions) {
       extension.addVariables(buildVariables);
