@@ -405,7 +405,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             ? dexWithJack(ruleContext, androidCommon, proguardSpecs)
             : dex(
                 ruleContext,
-                androidSemantics,
                 binaryJar,
                 jarToDex,
                 isBinaryJarFiltered,
@@ -629,7 +628,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .add(splitDeployInfo)
         .build();
 
-    Artifact debugKeystore = androidSemantics.getApkDebugSigningKey(ruleContext);
     Artifact apkManifest =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.APK_MANIFEST);
     createApkManifestAction(
@@ -639,8 +637,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         androidCommon,
         resourceClasses,
         resourceApk,
-        nativeLibs,
-        debugKeystore);
+        nativeLibs);
 
     Artifact apkManifestText =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.APK_MANIFEST_TEXT);
@@ -651,8 +648,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         androidCommon,
         resourceClasses,
         resourceApk,
-        nativeLibs,
-        debugKeystore);
+        nativeLibs);
 
     androidCommon.addTransitiveInfoProviders(
         builder, androidSemantics, resourceApk, zipAlignedApk, apksUnderTest);
@@ -822,8 +818,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       AndroidCommon androidCommon,
       JavaTargetAttributes resourceClasses,
       ResourceApk resourceApk,
-      NativeLibs nativeLibs,
-      Artifact debugKeystore) {
+      NativeLibs nativeLibs) {
 
     Iterable<Artifact> jars = IterablesChain.concat(
         resourceClasses.getArchiveInputs(true), androidCommon.getRuntimeJars());
@@ -837,8 +832,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         sdk,
         jars,
         resourceApk,
-        nativeLibs,
-        debugKeystore);
+        nativeLibs);
 
     ruleContext.registerAction(manifestAction);
   }
@@ -1053,7 +1047,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   /** Creates one or more classes.dex files that correspond to {@code proguardedJar}. */
   private static DexingOutput dex(
       RuleContext ruleContext,
-      AndroidSemantics androidSemantics,
       Artifact binaryJar,
       Artifact proguardedJar,
       boolean isBinaryJarFiltered,
@@ -1113,8 +1106,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
       if (multidexMode == MultidexMode.LEGACY) {
         // For legacy multidex, we need to generate a list for the dexer's --main-dex-list flag.
-        mainDexList = createMainDexListAction(
-            ruleContext, androidSemantics, proguardedJar, mainDexProguardSpec);
+        mainDexList = createMainDexListAction(ruleContext, proguardedJar, mainDexProguardSpec);
       }
 
       Artifact classesDex = getDxArtifact(ruleContext, "classes.dex.zip");
@@ -1397,11 +1389,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
    * Returns the file containing the list.
    */
   static Artifact createMainDexListAction(
-      RuleContext ruleContext,
-      AndroidSemantics androidSemantics,
-      Artifact jar,
-      @Nullable Artifact mainDexProguardSpec)
-      throws InterruptedException {
+      RuleContext ruleContext, Artifact jar, @Nullable Artifact mainDexProguardSpec) {
     // Process the input jar through Proguard into an intermediate, streamlined jar.
     Artifact strippedJar = AndroidBinary.getDxArtifact(ruleContext, "main_dex_intermediate.jar");
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
@@ -1437,8 +1425,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       streamlinedBuilder.addArgument("-include");
       streamlinedBuilder.addInputArgument(spec);
     }
-
-    androidSemantics.addMainDexListActionArguments(ruleContext, streamlinedBuilder);
 
     ruleContext.registerAction(streamlinedBuilder.build(ruleContext));
 
