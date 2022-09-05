@@ -7,7 +7,6 @@ import org.elasticsearch.common.joda.time.format.DateTimeFormatter;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
-import org.hamcrest.collection.IsMapContaining;
 import org.junit.Assert;
 import org.junit.Test;
 import org.nlpcn.es4sql.exception.SqlParseException;
@@ -40,14 +39,6 @@ public class QueryTest {
 		}
 	}
 
-
-	@Test
-	public void searchTypeTest() throws IOException, SqlParseException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase LIMIT 1000", TEST_INDEX));
-		Assert.assertEquals(4, response.getTotalHits());
-	}
-
-
 	@Test
 	public void equallityTest() throws SqlParseException {
 		SearchHits response = query(String.format("select * from %s where city = 'Nogal' LIMIT 1000", TEST_INDEX));
@@ -60,7 +51,6 @@ public class QueryTest {
 
 
 	// TODO search 'quick fox' still matching 'quick fox brown' this is wrong behavior.
-	// in some cases, depends on the analasis, we might want choose better behavior for equallity.
 	@Test
 	public void equallityTest_phrase() throws SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE phrase = 'quick fox here' LIMIT 1000", TEST_INDEX));
@@ -82,7 +72,6 @@ public class QueryTest {
 			assertThat(age, greaterThan(someAge));
 		}
 	}
-
 
 	@Test
 	public void greaterThanOrEqualTest() throws IOException, SqlParseException {
@@ -114,7 +103,6 @@ public class QueryTest {
 		}
 	}
 
-
 	@Test
 	public void lessThanOrEqualTest() throws IOException, SqlParseException {
 		int someAge = 25;
@@ -132,6 +120,7 @@ public class QueryTest {
 
 		Assert.assertTrue(String.format("at least one of the documents need to contains age equal to %s", someAge), isEqualFound);
 	}
+
 
 
 	@Test
@@ -153,6 +142,7 @@ public class QueryTest {
 	}
 
 
+
 	@Test
 	public void likeTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE firstname LIKE 'amb%%' LIMIT 1000", TEST_INDEX));
@@ -172,8 +162,7 @@ public class QueryTest {
 		// assert the results is correct according to accounts.json data.
 		Assert.assertEquals(30, hits.length);
 	}
-
-
+	
 	@Test
 	public void betweenTest() throws IOException, SqlParseException {
 		int min = 27;
@@ -207,8 +196,7 @@ public class QueryTest {
 			}
 		}
 	}
-
-
+	
 	@Test
 	public void inTest() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT age FROM %s WHERE age IN (20, 22) LIMIT 1000", TEST_INDEX));
@@ -218,7 +206,6 @@ public class QueryTest {
 			assertThat(age, isOneOf(20, 22));
 		}
 	}
-
 
 	@Test
 	public void inTestWithStrings() throws IOException, SqlParseException{
@@ -266,8 +253,7 @@ public class QueryTest {
 			Assert.assertTrue(errorMessage, insertTime.isBefore(dateToCompare));
 		}
 	}
-
-
+	
 	@Test
 	public void dateBetweenSearch() throws IOException, SqlParseException {
 		DateTimeFormatter formatter = DateTimeFormat.forPattern(DATE_FORMAT);
@@ -288,51 +274,50 @@ public class QueryTest {
 			Assert.assertTrue("insert_time must be between 2014-08-18 and 2014-08-21", isBetween);
 		}
 	}
-
-
+	
+	/**
+	 * 是否存在查询
+	 * @throws IOException
+	 * @throws SqlParseException
+	 */
 	@Test
 	public void missFilterSearch() throws IOException, SqlParseException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS missing", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-
-		// should be 2 according to the data.
-		Assert.assertEquals(response.getTotalHits(), 2);
-		for(SearchHit hit : hits) {
-			assertThat(hit.getSource(), not(hasKey("insert_time")));
-		}
+		SearchRequestBuilder select = searchDao.explan("select insert_time from online where insert_time is not miss order by _score desc limit 10");
+		System.out.println(select);
 	}
+	
+	@Test
+	public void missQuerySearch() throws IOException, SqlParseException{
+		SearchRequestBuilder select = searchDao.explan("select insert_time from online where insert_time is not miss limit 10");
+		System.out.println(select);
+	}
+	
 
 	@Test
-	public void notMissFilterSearch() throws IOException, SqlParseException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS NOT missing", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-
-		// should be 2 according to the data.
-		Assert.assertEquals(response.getTotalHits(), 2);
-		for(SearchHit hit : hits) {
-			assertThat(hit.getSource(), hasKey("insert_time"));
-		}
+	public void boolQuerySearch() throws IOException, SqlParseException{
+		SearchRequestBuilder select = searchDao.explan("select * from bank where (gender='m' and (age> 25 or account_number>5)) or (gender='w' and (age>30 or account_number < 8)) and email is not miss order by age,_score desc limit 10 ");
+		System.out.println(select);
 	}
 	
 
 
 	@Test
-	public void complexConditionQuery() throws IOException, SqlParseException{
-		String errorMessage = "Result does not exist to the condition (gender='m' AND (age> 25 OR account_number>5)) OR (gender='f' AND (age>30 OR account_number < 8)";
-
-		SearchHits response = query(String.format("SELECT * FROM %s/account WHERE (gender='m' AND (age> 25 OR account_number>5)) OR (gender='f' AND (age>30 OR account_number < 8))", TEST_INDEX));
-		SearchHit[] hits = response.getHits();
-
-		for(SearchHit hit : hits) {
-			Map<String, Object> source = hit.getSource();
-			String gender = ((String)source.get("gender")).toLowerCase();
-			int age = (int)source.get("age");
-			int account_number = (int) source.get("account_number");
-
-			Assert.assertTrue(errorMessage, (gender.equals("m") && (age> 25 || account_number>5)) || (gender.equals("f") && (age>30 || account_number < 8)));
-		}
+	public void countSearch() throws IOException, SqlParseException{
+		SearchRequestBuilder select = searchDao.explan("select count(*) from bank where (gender='m' and (age> 25 or account_number>5)) or (gender='w' and (age>30 or account_number < 8)) and email is not miss");
+		System.out.println(select);
 	}
 	
+	/**
+	 * table have '.' and type test
+	 * @throws IOException
+	 * @throws SqlParseException
+	 */
+	@Test
+	public void searchTableTest() throws IOException, SqlParseException{
+		SearchRequestBuilder select = searchDao.explan("select count(*) from doc/accounts,bank/doc limit 10");
+		System.out.println(select);
+	}
+
 
 	private SearchHits query(String query) throws SqlParseException {
 		SearchDao searchDao = MainTestSuite.getSearchDao();
