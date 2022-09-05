@@ -73,7 +73,7 @@ public class JavacTurbine implements AutoCloseable {
   }
 
   public static Result compile(TurbineOptions turbineOptions) throws IOException {
-    try (JavacTurbine turbine = new JavacTurbine(new PrintWriter(System.err), turbineOptions)) {
+    try (JavacTurbine turbine = new JavacTurbine(turbineOptions)) {
       return turbine.compile();
     }
   }
@@ -115,6 +115,10 @@ public class JavacTurbine implements AutoCloseable {
   public JavacTurbine(PrintWriter out, TurbineOptions turbineOptions) {
     this.out = out;
     this.turbineOptions = turbineOptions;
+  }
+
+  public JavacTurbine(TurbineOptions turbineOptions) {
+    this(new PrintWriter(System.err, true), turbineOptions);
   }
 
   Result compile() throws IOException {
@@ -396,7 +400,6 @@ public class JavacTurbine implements AutoCloseable {
 
   @Override
   public void close() throws IOException {
-    out.flush();
     deleteRecursively(Paths.get(turbineOptions.tempDir()));
   }
 
