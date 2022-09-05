@@ -459,8 +459,7 @@ public final class RuleContext extends TargetContext
    * <p>If the name of the attribute starts with <code>$</code>
    * it is replaced with a string <code>(an implicit dependency)</code>.
    */
-  public RuleErrorException throwWithAttributeError(String attrName, String message)
-      throws RuleErrorException {
+  public void throwWithAttributeError(String attrName, String message) throws RuleErrorException {
     reporter.attributeError(attrName, message);
     throw new RuleErrorException();
   }
@@ -528,24 +527,6 @@ public final class RuleContext extends TargetContext
    */
   public Artifact getPackageRelativeArtifact(String relative, Root root) {
     return getPackageRelativeArtifact(new PathFragment(relative), root);
-  }
-
-  /**
-   * Creates an artifact in a directory that is unique to the package that contains the rule, thus
-   * guaranteeing that it never clashes with artifacts created by rules in other packages.
-   */
-  public Artifact getBinArtifact(String relative) {
-    return getPackageRelativeArtifact(
-        new PathFragment(relative), getConfiguration().getBinDirectory());
-  }
-
-  /**
-   * Creates an artifact in a directory that is unique to the package that contains the rule, thus
-   * guaranteeing that it never clashes with artifacts created by rules in other packages.
-   */
-  public Artifact getGenfilesArtifact(String relative) {
-    return getPackageRelativeArtifact(
-        new PathFragment(relative), getConfiguration().getGenfilesDirectory());
   }
 
   /**
