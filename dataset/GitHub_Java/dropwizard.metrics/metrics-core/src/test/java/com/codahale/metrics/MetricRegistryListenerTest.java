@@ -15,42 +15,42 @@ public class MetricRegistryListenerTest {
     };
 
     @Test
-    public void noOpsOnGaugeAdded() {
+    public void noOpsOnGaugeAdded() throws Exception {
         listener.onGaugeAdded("blah", () -> {
             throw new RuntimeException("Should not be called");
         });
     }
 
     @Test
-    public void noOpsOnCounterAdded() {
+    public void noOpsOnCounterAdded() throws Exception {
         listener.onCounterAdded("blah", counter);
 
         verifyZeroInteractions(counter);
     }
 
     @Test
-    public void noOpsOnHistogramAdded() {
+    public void noOpsOnHistogramAdded() throws Exception {
         listener.onHistogramAdded("blah", histogram);
 
         verifyZeroInteractions(histogram);
     }
 
     @Test
-    public void noOpsOnMeterAdded() {
+    public void noOpsOnMeterAdded() throws Exception {
         listener.onMeterAdded("blah", meter);
 
         verifyZeroInteractions(meter);
     }
 
     @Test
-    public void noOpsOnTimerAdded() {
+    public void noOpsOnTimerAdded() throws Exception {
         listener.onTimerAdded("blah", timer);
 
         verifyZeroInteractions(timer);
     }
 
     @Test
-    public void doesNotExplodeWhenMetricsAreRemoved() {
+    public void doesNotExplodeWhenMetricsAreRemoved() throws Exception {
         listener.onGaugeRemoved("blah");
         listener.onCounterRemoved("blah");
         listener.onHistogramRemoved("blah");
