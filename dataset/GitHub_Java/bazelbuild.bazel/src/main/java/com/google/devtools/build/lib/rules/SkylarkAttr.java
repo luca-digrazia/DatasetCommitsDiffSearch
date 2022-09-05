@@ -14,9 +14,9 @@
 
 package com.google.devtools.build.lib.rules;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Preconditions;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -255,9 +256,18 @@ public final class SkylarkAttr {
     if (containsNonNoneKey(arguments, PROVIDERS_ARG)) {
       Object obj = arguments.get(PROVIDERS_ARG);
       SkylarkType.checkType(obj, SkylarkList.class, PROVIDERS_ARG);
-      ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> providersList = buildProviderPredicate(
-          (SkylarkList<?>) obj);
-      builder.mandatoryProvidersList(providersList);
+      boolean isSingleListOfStr = true;
+      for (Object o : (SkylarkList) obj) {
+        isSingleListOfStr = o instanceof String;
+        if (!isSingleListOfStr) {
+          break;
+        }
+      }
+      if (isSingleListOfStr) {
+        builder.mandatoryProviders(getSkylarkProviderIdentifiers((SkylarkList<?>) obj));
+      } else {
+        builder.mandatoryProvidersList(getProvidersList((SkylarkList) obj));
+      }
     }
 
     if (containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
@@ -276,40 +286,20 @@ public final class SkylarkAttr {
     return builder;
   }
 
-  public static ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> buildProviderPredicate(
+  private static Iterable<SkylarkProviderIdentifier> getSkylarkProviderIdentifiers(
       SkylarkList<?> obj) throws EvalException {
-    if (obj.isEmpty()) {
-      return ImmutableList.of();
-    }
-    boolean isSingleListOfStr = true;
-    for (Object o : (SkylarkList) obj) {
-      isSingleListOfStr = o instanceof String;
-      if (!isSingleListOfStr) {
-        break;
-      }
-    }
-    if (isSingleListOfStr) {
-      return ImmutableList.of(getSkylarkProviderIdentifiers(obj));
-    } else {
-      return getProvidersList((SkylarkList) obj);
-    }
+    return Iterables.transform(obj.getContents(String.class, PROVIDERS_ARG),
+        new Function<String, SkylarkProviderIdentifier>() {
+          @Override
+          public SkylarkProviderIdentifier apply(String s) {
+            return SkylarkProviderIdentifier.forLegacy(s);
+          }
+        });
   }
 
-  private static ImmutableSet<SkylarkProviderIdentifier> getSkylarkProviderIdentifiers(
-      SkylarkList<?> obj) throws EvalException {
-    ImmutableList.Builder<SkylarkProviderIdentifier> result = ImmutableList.builder();
-
-    List<String> contents = obj.getContents(String.class, PROVIDERS_ARG);
-    for (String legacyId : contents) {
-      result.add(SkylarkProviderIdentifier.forLegacy(legacyId));
-    }
-    return ImmutableSet.copyOf(result.build());
-  }
-
-  private static ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> getProvidersList(
+  private static List<Iterable<SkylarkProviderIdentifier>> getProvidersList(
       SkylarkList<?> skylarkList) throws EvalException {
-    ImmutableList.Builder<ImmutableSet<SkylarkProviderIdentifier>> providersList =
-        ImmutableList.builder();
+    List<Iterable<SkylarkProviderIdentifier>> providersList = new ArrayList<>();
     String errorMsg = "Illegal argument: element in '%s' is of unexpected type. "
         + "Should be list of string, but got %s. "
         + "Notice: one single list of string as 'providers' is still supported.";
@@ -327,7 +317,7 @@ public final class SkylarkAttr {
       }
       providersList.add(getSkylarkProviderIdentifiers((SkylarkList<?>) o));
     }
-    return providersList.build();
+    return providersList;
   }
 
   private static Descriptor createAttrDescriptor(
