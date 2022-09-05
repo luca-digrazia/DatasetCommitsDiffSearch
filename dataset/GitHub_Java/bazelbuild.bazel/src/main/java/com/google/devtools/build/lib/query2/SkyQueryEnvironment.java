@@ -17,7 +17,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.collect.ArrayListMultimap;
+import com.google.common.base.Supplier;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -56,6 +57,7 @@ import com.google.devtools.build.skyframe.WalkableGraph;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -325,12 +327,13 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       throws QueryException {
     // Everything has already been loaded, so here we just check for errors so that we can
     // pre-emptively throw/report if needed.
-    for (Map.Entry<SkyKey, Exception> entry :
-      graph.getMissingAndExceptions(makeKeys(targets)).entrySet()) {
-      if (entry.getValue() == null) {
-        throw new QueryException(entry.getKey().argument() + " does not exist in graph");
+    for (Target target : targets) {
+      SkyKey targetKey = TransitiveTargetValue.key(target.getLabel());
+      checkExistence(targetKey);
+      Exception exception = graph.getException(targetKey);
+      if (exception != null) {
+        reportBuildFileError(caller, exception.getMessage());
       }
-      reportBuildFileError(caller, entry.getValue().getMessage());
     }
   }
 
@@ -413,7 +416,14 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   private Map<SkyKey, Target> makeTargetsWithAssociations(Iterable<SkyKey> keys) {
-    Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap = ArrayListMultimap.create();
+    Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap = Multimaps.newListMultimap(
+        new HashMap<SkyKey, Collection<SkyKey>>(),
+        new Supplier<List<SkyKey>>() {
+          @Override
+          public List<SkyKey> get() {
+            return new ArrayList<>();
+          }
+        });
     for (SkyKey key : keys) {
       SkyFunctionName functionName = key.functionName();
       if (!functionName.equals(SkyFunctions.TRANSITIVE_TARGET)) {
@@ -427,7 +437,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       }
     }
     ImmutableMap.Builder<SkyKey, Target> result = ImmutableMap.builder();
-    Map<SkyKey, SkyValue> packageMap = graph.getDoneValues(packageKeyToTargetKeyMap.keySet());
+    Map<SkyKey, SkyValue> packageMap = graph.getValuesMaybe(packageKeyToTargetKeyMap.keySet());
     for (Map.Entry<SkyKey, SkyValue> entry : packageMap.entrySet()) {
       for (SkyKey targetKey : packageKeyToTargetKeyMap.get(entry.getKey())) {
         try {
