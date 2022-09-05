@@ -5,8 +5,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.*;
-import java.nio.CharBuffer;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Locale;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -14,10 +16,12 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class CsvReporterTest {
-    @Rule public final TemporaryFolder folder = new TemporaryFolder();
+    @Rule
+    public final TemporaryFolder folder = new TemporaryFolder();
 
     private final MetricRegistry registry = mock(MetricRegistry.class);
     private final Clock clock = mock(Clock.class);
@@ -32,24 +36,23 @@ public class CsvReporterTest {
         this.dataDirectory = folder.newFolder();
 
         this.reporter = CsvReporter.forRegistry(registry)
-                                   .formatFor(Locale.US)
-                                   .convertRatesTo(TimeUnit.SECONDS)
-                                   .convertDurationsTo(TimeUnit.MILLISECONDS)
-                                   .withClock(clock)
-                                   .filter(MetricFilter.ALL)
-                                   .build(dataDirectory);
+                .formatFor(Locale.US)
+                .convertRatesTo(TimeUnit.SECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .withClock(clock)
+                .filter(MetricFilter.ALL)
+                .build(dataDirectory);
     }
 
     @Test
     public void reportsGaugeValues() throws Exception {
-        final Gauge gauge = mock(Gauge.class);
-        when(gauge.getValue()).thenReturn(1);
+        final Gauge<Integer> gauge = () -> 1;
 
         reporter.report(map("gauge", gauge),
-                        this.<Counter>map(),
-                        this.<Histogram>map(),
-                        this.<Meter>map(),
-                        this.<Timer>map());
+                map(),
+                map(),
+                map(),
+                map());
 
         assertThat(fileContents("gauge.csv"))
                 .isEqualTo(csv(
@@ -63,11 +66,11 @@ public class CsvReporterTest {
         final Counter counter = mock(Counter.class);
         when(counter.getCount()).thenReturn(100L);
 
-        reporter.report(this.<Gauge>map(),
-                        map("test.counter", counter),
-                        this.<Histogram>map(),
-                        this.<Meter>map(),
-                        this.<Timer>map());
+        reporter.report(map(),
+                map("test.counter", counter),
+                map(),
+                map(),
+                map());
 
         assertThat(fileContents("test.counter.csv"))
                 .isEqualTo(csv(
@@ -95,11 +98,11 @@ public class CsvReporterTest {
 
         when(histogram.getSnapshot()).thenReturn(snapshot);
 
-        reporter.report(this.<Gauge>map(),
-                        this.<Counter>map(),
-                        map("test.histogram", histogram),
-                        this.<Meter>map(),
-                        this.<Timer>map());
+        reporter.report(map(),
+                map(),
+                map("test.histogram", histogram),
+                map(),
+                map());
 
         assertThat(fileContents("test.histogram.csv"))
                 .isEqualTo(csv(
@@ -110,18 +113,13 @@ public class CsvReporterTest {
 
     @Test
     public void reportsMeterValues() throws Exception {
-        final Meter meter = mock(Meter.class);
-        when(meter.getCount()).thenReturn(1L);
-        when(meter.getMeanRate()).thenReturn(2.0);
-        when(meter.getOneMinuteRate()).thenReturn(3.0);
-        when(meter.getFiveMinuteRate()).thenReturn(4.0);
-        when(meter.getFifteenMinuteRate()).thenReturn(5.0);
+        final Meter meter = mockMeter();
 
-        reporter.report(this.<Gauge>map(),
-                        this.<Counter>map(),
-                        this.<Histogram>map(),
-                        map("test.meter", meter),
-                        this.<Timer>map());
+        reporter.report(map(),
+                map(),
+                map(),
+                map("test.meter", meter),
+                map());
 
         assertThat(fileContents("test.meter.csv"))
                 .isEqualTo(csv(
@@ -153,17 +151,74 @@ public class CsvReporterTest {
 
         when(timer.getSnapshot()).thenReturn(snapshot);
 
-        reporter.report(this.<Gauge>map(),
-                        this.<Counter>map(),
-                        this.<Histogram>map(),
-                        this.<Meter>map(),
-                        map("test.another.timer", timer));
+        reporter.report(map(),
+                map(),
+                map(),
+                map(),
+                map("test.another.timer", timer));
 
         assertThat(fileContents("test.another.timer.csv"))
                 .isEqualTo(csv(
                         "t,count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit,duration_unit",
                         "19910191,1,100.000000,200.000000,300.000000,400.000000,500.000000,600.000000,700.000000,800.000000,900.000000,1000.000000,2.000000,3.000000,4.000000,5.000000,calls/second,milliseconds"
                 ));
+    }
+
+    @Test
+    public void testCsvFileProviderIsUsed() {
+        CsvFileProvider fileProvider = mock(CsvFileProvider.class);
+        when(fileProvider.getFile(dataDirectory, "gauge")).thenReturn(new File(dataDirectory, "guage.csv"));
+
+        CsvReporter reporter = CsvReporter.forRegistry(registry)
+                .withCsvFileProvider(fileProvider)
+                .build(dataDirectory);
+
+        final Gauge<Integer> gauge = () -> 1;
+
+        reporter.report(map("gauge", gauge),
+                map(),
+                map(),
+                map(),
+                map());
+
+        verify(fileProvider).getFile(dataDirectory, "gauge");
+    }
+
+    @Test
+    public void itFormatsWithCustomSeparator() throws Exception {
+        final Meter meter = mockMeter();
+
+        CsvReporter customSeparatorReporter = CsvReporter.forRegistry(registry)
+                .formatFor(Locale.US)
+                .withSeparator("|")
+                .convertRatesTo(TimeUnit.SECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .withClock(clock)
+                .filter(MetricFilter.ALL)
+                .build(dataDirectory);
+
+        customSeparatorReporter.report(map(),
+                map(),
+                map(),
+                map("test.meter", meter),
+                map());
+
+        assertThat(fileContents("test.meter.csv"))
+                .isEqualTo(csv(
+                        "t|count|mean_rate|m1_rate|m5_rate|m15_rate|rate_unit",
+                        "19910191|1|2.000000|3.000000|4.000000|5.000000|events/second"
+                ));
+    }
+
+    private Meter mockMeter() {
+        final Meter meter = mock(Meter.class);
+        when(meter.getCount()).thenReturn(1L);
+        when(meter.getMeanRate()).thenReturn(2.0);
+        when(meter.getOneMinuteRate()).thenReturn(3.0);
+        when(meter.getFiveMinuteRate()).thenReturn(4.0);
+        when(meter.getFifteenMinuteRate()).thenReturn(5.0);
+
+        return meter;
     }
 
     private String csv(String... lines) {
@@ -175,29 +230,15 @@ public class CsvReporterTest {
     }
 
     private String fileContents(String filename) throws IOException {
-        final StringBuilder builder = new StringBuilder();
-        final FileInputStream input = new FileInputStream(new File(dataDirectory, filename));
-        try {
-            final InputStreamReader reader = new InputStreamReader(input);
-            final BufferedReader bufferedReader = new BufferedReader(reader);
-            final CharBuffer buf = CharBuffer.allocate(1024);
-            while (bufferedReader.read(buf) != -1) {
-                buf.flip();
-                builder.append(buf);
-                buf.clear();
-            }
-        } finally {
-            input.close();
-        }
-        return builder.toString();
+        return new String(Files.readAllBytes(new File(dataDirectory, filename).toPath()), StandardCharsets.UTF_8);
     }
 
     private <T> SortedMap<String, T> map() {
-        return new TreeMap<String, T>();
+        return new TreeMap<>();
     }
 
     private <T> SortedMap<String, T> map(String name, T metric) {
-        final TreeMap<String, T> map = new TreeMap<String, T>();
+        final TreeMap<String, T> map = new TreeMap<>();
         map.put(name, metric);
         return map;
     }
