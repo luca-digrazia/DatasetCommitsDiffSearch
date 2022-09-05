@@ -24,7 +24,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Receivers;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -49,7 +48,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.lang.ref.WeakReference;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -136,19 +134,11 @@ public class EagerInvalidatorTest {
   protected <T extends SkyValue> EvaluationResult<T> eval(boolean keepGoing, SkyKey... keys)
     throws InterruptedException {
     Reporter reporter = new Reporter();
-    ParallelEvaluator evaluator =
-        new ParallelEvaluator(
-            graph,
-            graphVersion,
-            ImmutableMap.of(GraphTester.NODE_TYPE, tester.createDelegatingFunction()),
-            reporter,
-            new MemoizingEvaluator.EmittedEventState(),
-            InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER,
-            keepGoing,
-            200,
-            null,
-            new DirtyKeyTrackerImpl(),
-            Receivers.<Collection<SkyKey>>ignore());
+    ParallelEvaluator evaluator = new ParallelEvaluator(graph, graphVersion,
+        ImmutableMap.of(GraphTester.NODE_TYPE, tester.createDelegatingFunction()),
+        reporter, new MemoizingEvaluator.EmittedEventState(),
+        InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER, keepGoing, 200, null,
+        new DirtyKeyTrackerImpl());
     graphVersion = graphVersion.next();
     return evaluator.eval(ImmutableList.copyOf(keys));
   }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@ package com.google.devtools.build.skyframe;
 import com.google.common.base.Supplier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 
-/** Receiver for various stages of the lifetime of a skyframe node evaluation. */
+/**
+ * Receiver to inform callers which values have been invalidated. Values may be invalidated and then
+ * re-validated if they have been found not to be changed.
+ */
 @ThreadSafety.ThreadSafe
 public interface EvaluationProgressReceiver {
   /**
@@ -75,23 +78,4 @@ public interface EvaluationProgressReceiver {
    * {@code valueSupplier.get()} evaluates to null.
    */
   void evaluated(SkyKey skyKey, Supplier<SkyValue> valueSupplier, EvaluationState state);
-
-  /** An {@link EvaluationProgressReceiver} that does nothing. */
-  class NullEvaluationProgressReceiver implements EvaluationProgressReceiver {
-    @Override
-    public void invalidated(SkyKey skyKey, InvalidationState state) {
-    }
-
-    @Override
-    public void enqueueing(SkyKey skyKey) {
-    }
-
-    @Override
-    public void computed(SkyKey skyKey, long elapsedTimeNanos) {
-    }
-
-    @Override
-    public void evaluated(SkyKey skyKey, Supplier<SkyValue> valueSupplier, EvaluationState state) {
-    }
-  }
 }

@@ -34,10 +34,8 @@ import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictEx
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisFailureEvent;
 import com.google.devtools.build.lib.analysis.Aspect;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
@@ -48,21 +46,18 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.skyframe.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.BuildInfoCollectionValue.BuildInfoKeyAndConfig;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.ErrorInfo;
@@ -90,6 +85,7 @@ public final class SkyframeBuildView {
   private final ConfiguredTargetFactory factory;
   private final ArtifactFactory artifactFactory;
   private final SkyframeExecutor skyframeExecutor;
+  private final Runnable legacyDataCleaner;
   private final BinTools binTools;
   private boolean enableAnalysis = false;
 
@@ -116,14 +112,16 @@ public final class SkyframeBuildView {
   private Map<Set<Class<? extends BuildConfiguration.Fragment>>, BuildConfiguration>
       hostConfigurationCache = Maps.newConcurrentMap();
 
-  public SkyframeBuildView(BlazeDirectories directories,
-      SkyframeExecutor skyframeExecutor, BinTools binTools,
-      ConfiguredRuleClassProvider ruleClassProvider) {
-    this.factory = new ConfiguredTargetFactory(ruleClassProvider);
-    this.artifactFactory = new ArtifactFactory(directories.getExecRoot());
+  public SkyframeBuildView(ConfiguredTargetFactory factory, ArtifactFactory artifactFactory,
+      SkyframeExecutor skyframeExecutor, Runnable legacyDataCleaner,  BinTools binTools,
+      RuleClassProvider ruleClassProvider) {
+    this.factory = factory;
+    this.artifactFactory = artifactFactory;
     this.skyframeExecutor = skyframeExecutor;
+    this.legacyDataCleaner = legacyDataCleaner;
     this.binTools = binTools;
     this.ruleClassProvider = ruleClassProvider;
+    skyframeExecutor.setArtifactFactoryAndBinTools(artifactFactory, binTools);
   }
 
   public void resetEvaluatedConfiguredTargetKeysSet() {
@@ -207,7 +205,6 @@ public final class SkyframeBuildView {
     ImmutableMap<Action, ConflictException> badActions = skyframeExecutor.findArtifactConflicts();
 
     Collection<AspectValue> goodAspects = Lists.newArrayListWithCapacity(values.size());
-    NestedSetBuilder<Package> packages = NestedSetBuilder.stableOrder();
     for (AspectKey aspectKey : aspectKeys) {
       AspectValue value = (AspectValue) result.get(AspectValue.key(aspectKey));
       if (value == null) {
@@ -215,7 +212,6 @@ public final class SkyframeBuildView {
         continue;
       }
       goodAspects.add(value);
-      packages.addTransitive(value.getTransitivePackages());
     }
 
     // Filter out all CTs that have a bad action and convert to a list of configured targets. This
@@ -229,16 +225,15 @@ public final class SkyframeBuildView {
         continue;
       }
       goodCts.add(ctValue.getConfiguredTarget());
-      packages.addTransitive(ctValue.getTransitivePackages());
     }
+
 
     if (!result.hasError() && badActions.isEmpty()) {
       setDeserializedArtifactOwners();
       return new SkyframeAnalysisResult(
           ImmutableList.copyOf(goodCts),
           result.getWalkableGraph(),
-          ImmutableList.copyOf(goodAspects),
-          LoadingPhaseRunner.collectPackageRoots(packages.build().toCollection()));
+          ImmutableList.copyOf(goodAspects));
     }
 
     // --nokeep_going so we fail with an exception for the first error.
@@ -346,8 +341,7 @@ public final class SkyframeBuildView {
     return new SkyframeAnalysisResult(
         ImmutableList.copyOf(goodCts),
         result.getWalkableGraph(),
-        ImmutableList.copyOf(goodAspects),
-        LoadingPhaseRunner.collectPackageRoots(packages.build().toCollection()));
+        ImmutableList.copyOf(goodAspects));
   }
 
   @Nullable
@@ -374,7 +368,7 @@ public final class SkyframeBuildView {
     }
   }
 
-  public ArtifactFactory getArtifactFactory() {
+  ArtifactFactory getArtifactFactory() {
     return artifactFactory;
   }
 
@@ -479,12 +473,12 @@ public final class SkyframeBuildView {
   }
 
   /**
-   * Workaround to clear all legacy data, like the artifact factory. We need
+   * Workaround to clear all legacy data, like the action graph and the artifact factory. We need
    * to clear them to avoid conflicts.
    * TODO(bazel-team): Remove this workaround. [skyframe-execution]
    */
   void clearLegacyData() {
-    artifactFactory.clear();
+    legacyDataCleaner.run();
   }
 
   /**
