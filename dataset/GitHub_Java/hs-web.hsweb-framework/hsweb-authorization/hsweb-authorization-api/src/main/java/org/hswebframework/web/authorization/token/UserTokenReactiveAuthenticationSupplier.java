@@ -3,8 +3,10 @@ package org.hswebframework.web.authorization.token;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.ReactiveAuthenticationManager;
 import org.hswebframework.web.authorization.ReactiveAuthenticationSupplier;
+import org.hswebframework.web.authorization.exception.UnAuthorizedException;
 import org.hswebframework.web.context.ContextKey;
 import org.hswebframework.web.context.ContextUtils;
+import org.hswebframework.web.logger.ReactiveLogger;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Mono;
 
@@ -17,15 +19,16 @@ import java.util.Map;
  */
 public class UserTokenReactiveAuthenticationSupplier implements ReactiveAuthenticationSupplier {
 
-    private ReactiveAuthenticationManager defaultAuthenticationManager;
+    private final ReactiveAuthenticationManager defaultAuthenticationManager;
 
-    private UserTokenManager userTokenManager;
+    private final UserTokenManager userTokenManager;
 
-    private Map<String, ThirdPartReactiveAuthenticationManager> thirdPartAuthenticationManager = new HashMap<>();
+    private final Map<String, ThirdPartReactiveAuthenticationManager> thirdPartAuthenticationManager = new HashMap<>();
 
-    public UserTokenReactiveAuthenticationSupplier(UserTokenManager userTokenManager, ReactiveAuthenticationManager defaultAuthenticationManager) {
+    public UserTokenReactiveAuthenticationSupplier(UserTokenManager userTokenManager,
+                                                   ReactiveAuthenticationManager defaultAuthenticationManager) {
         this.defaultAuthenticationManager = defaultAuthenticationManager;
-        this.userTokenManager=userTokenManager;
+        this.userTokenManager = userTokenManager;
     }
 
     @Autowired(required = false)
@@ -65,13 +68,20 @@ public class UserTokenReactiveAuthenticationSupplier implements ReactiveAuthenti
 
     @Override
     public Mono<Authentication> get() {
-        return ContextUtils.reactiveContext()
-                .flatMap(context ->
-                        context.get(ContextKey.of(ParsedToken.class))
-                                .map(t -> userTokenManager.getByToken(t.getToken()))
-                                .map(tokenMono -> tokenMono
-                                        .flatMap(token -> get(thirdPartAuthenticationManager.get(token.getType()), token.getUserId())))
-                                .orElseGet(Mono::empty));
+        return ContextUtils
+                .reactiveContext()
+                .flatMap(context -> context
+                        .get(ContextKey.of(ParsedToken.class))
+                        .map(t -> userTokenManager.getByToken(t.getToken()).filter(UserToken::validate))
+                        .map(tokenMono -> tokenMono
+                                .flatMap(token -> userTokenManager.touch(token.getToken()).thenReturn(token))
+                                .flatMap(token -> get(thirdPartAuthenticationManager.get(token.getType()), token.getUserId())))
+                        .orElseGet(Mono::empty))
+                .flatMap(auth -> ReactiveLogger
+                        .mdc("userId", auth.getUser().getId(),
+                             "username", auth.getUser().getName())
+                        .thenReturn(auth))
+                ;
 
     }
 }
