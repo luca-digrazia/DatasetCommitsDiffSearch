@@ -14,21 +14,23 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Unit tests for {@link ConfiguredAttributeMapper}.
@@ -46,7 +48,8 @@ public class ConfiguredAttributeMapperTest extends BuildViewTestCase {
    * Returns a ConfiguredAttributeMapper bound to the given rule with the target configuration.
    */
   private ConfiguredAttributeMapper getMapper(String label) throws Exception {
-    return ((RuleConfiguredTarget) getConfiguredTarget(label)).getAttributeMapper();
+    return ConfiguredAttributeMapper.of(
+        (RuleConfiguredTarget) getConfiguredTarget(label));
   }
 
   private void writeConfigRules() throws Exception {
@@ -78,13 +81,13 @@ public class ConfiguredAttributeMapperTest extends BuildViewTestCase {
         "    }))");
 
     useConfiguration("--define", "mode=a");
-    assertThat(getMapper("//a:gen").get("cmd", Type.STRING)).isEqualTo("a command");
+    assertEquals("a command", getMapper("//a:gen").get("cmd", Type.STRING));
 
     useConfiguration("--define", "mode=b");
-    assertThat(getMapper("//a:gen").get("cmd", Type.STRING)).isEqualTo("b command");
+    assertEquals("b command", getMapper("//a:gen").get("cmd", Type.STRING));
 
     useConfiguration("--define", "mode=c");
-    assertThat(getMapper("//a:gen").get("cmd", Type.STRING)).isEqualTo("default command");
+    assertEquals("default command", getMapper("//a:gen").get("cmd", Type.STRING));
   }
 
   /**
@@ -127,17 +130,20 @@ public class ConfiguredAttributeMapperTest extends BuildViewTestCase {
 
     useConfiguration("--define", "mode=a");
     getMapper("//a:bin").visitLabels(testVisitor);
-    assertThat(visitedLabels).containsExactly(binSrc, Label.parseAbsolute("//a:adep"));
+    assertThat(visitedLabels)
+        .containsExactlyElementsIn(ImmutableList.of(binSrc, Label.parseAbsolute("//a:adep")));
 
     visitedLabels.clear();
     useConfiguration("--define", "mode=b");
     getMapper("//a:bin").visitLabels(testVisitor);
-    assertThat(visitedLabels).containsExactly(binSrc, Label.parseAbsolute("//a:bdep"));
+    assertThat(visitedLabels)
+        .containsExactlyElementsIn(ImmutableList.of(binSrc, Label.parseAbsolute("//a:bdep")));
 
     visitedLabels.clear();
     useConfiguration("--define", "mode=c");
     getMapper("//a:bin").visitLabels(testVisitor);
-    assertThat(visitedLabels).containsExactly(binSrc, Label.parseAbsolute("//a:defaultdep"));
+    assertThat(visitedLabels)
+        .containsExactlyElementsIn(ImmutableList.of(binSrc, Label.parseAbsolute("//a:defaultdep")));
   }
 
   /**
@@ -171,18 +177,13 @@ public class ConfiguredAttributeMapperTest extends BuildViewTestCase {
 
     // Target configuration is in dbg mode, so we should match //conditions:b:
     assertThat(getMapper("//a:gen").get("tools", BuildType.LABEL_LIST))
-        .containsExactly(Label.parseAbsolute("//a:bdep"));
+        .containsExactlyElementsIn(ImmutableList.of(Label.parseAbsolute("//a:bdep")));
 
     // Verify the "tools" dep uses a different configuration that's not also in "dbg":
-    assertThat(
-            getTarget("//a:gen")
-                .getAssociatedRule()
-                .getRuleClassObject()
-                .getAttributeByName("tools")
-                .getConfigurationTransition()
-                .isHostTransition())
-        .isTrue();
-    assertThat(getHostConfiguration().getCompilationMode()).isEqualTo(CompilationMode.OPT);
+    assertEquals(Attribute.ConfigurationTransition.HOST,
+        getTarget("//a:gen").getAssociatedRule().getRuleClassObject()
+            .getAttributeByName("tools").getConfigurationTransition());
+    assertEquals(CompilationMode.OPT, getHostConfiguration().getCompilationMode());
   }
 
   @Test
@@ -201,7 +202,9 @@ public class ConfiguredAttributeMapperTest extends BuildViewTestCase {
         ")");
     useConfiguration("--define", "foo=a", "--define", "bar=d");
     assertThat(getMapper("//hello:gen").get("srcs", BuildType.LABEL_LIST))
-        .containsExactly(Label.parseAbsolute("//hello:a.in"), Label.parseAbsolute("//hello:d.in"));
+        .containsExactlyElementsIn(
+            ImmutableList.of(
+                Label.parseAbsolute("//hello:a.in"), Label.parseAbsolute("//hello:d.in")));
   }
 
   @Test
@@ -266,27 +269,5 @@ public class ConfiguredAttributeMapperTest extends BuildViewTestCase {
     useConfiguration();
     assertThat(getMapper("//a:lib").isAttributeValueExplicitlySpecified("linkstamp")).isFalse();
     assertThat(getMapper("//a:lib").get("linkstamp", BuildType.LABEL)).isNull();
-  }
-
-  @Test
-  public void testAliasedConfigSetting() throws Exception {
-    writeConfigRules();
-    scratch.file(
-        "a/BUILD",
-        "alias(",
-        "    name = 'aliased_a',",
-        "    actual = '//conditions:a',",
-        ")",
-        "genrule(",
-        "    name = 'gen',",
-        "    srcs = [],",
-        "    outs = ['out'],",
-        "    cmd = '',",
-        "    message = select({",
-        "        ':aliased_a': 'defined message',",
-        "        '//conditions:default': None,",
-        "    }))");
-    useConfiguration("--define", "mode=a");
-    assertThat(getMapper("//a:gen").get("message", Type.STRING)).isEqualTo("defined message");
   }
 }

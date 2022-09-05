@@ -19,6 +19,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.syntax.Type;
+
 import javax.annotation.Nullable;
 
 /**
@@ -163,18 +164,8 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public final <T> boolean isConfigurable(String attributeName, Type<T> type) {
+  public <T> boolean isConfigurable(String attributeName, Type<T> type) {
     return getSelectorList(attributeName, type) != null;
-  }
-
-  public static <T> boolean isConfigurable(Rule rule, String attributeName, Type<T> type) {
-    SelectorList<T> selectorMaybe = getSelectorList(
-        rule.getRuleClassObject(),
-        rule.getLabel(),
-        rule.getAttributeContainer(),
-        attributeName,
-        type);
-    return selectorMaybe != null;
   }
 
   /**
@@ -187,18 +178,8 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
    * @throws IllegalArgumentException if the attribute is configurable but of the wrong type
    */
   @Nullable
-  protected final <T> SelectorList<T> getSelectorList(String attributeName, Type<T> type) {
-    return getSelectorList(ruleClass, ruleLabel, attributes, attributeName, type);
-  }
-
-  @Nullable
   @SuppressWarnings("unchecked")
-  protected static <T> SelectorList<T> getSelectorList(
-      RuleClass ruleClass,
-      Label ruleLabel,
-      AttributeContainer attributes,
-      String attributeName,
-      Type<T> type) {
+  protected <T> SelectorList<T> getSelectorList(String attributeName, Type<T> type) {
     Integer index = ruleClass.getAttributeIndex(attributeName);
     if (index == null) {
       return null;

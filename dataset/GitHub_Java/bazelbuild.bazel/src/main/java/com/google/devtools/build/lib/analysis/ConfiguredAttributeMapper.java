@@ -59,11 +59,14 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
   private final Map<Label, ConfigMatchingProvider> configConditions;
   private Rule rule;
 
-  private ConfiguredAttributeMapper(Rule rule,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
+  private ConfiguredAttributeMapper(Rule rule, Set<ConfigMatchingProvider> configConditions) {
     super(Preconditions.checkNotNull(rule).getPackage(), rule.getRuleClassObject(), rule.getLabel(),
         rule.getAttributeContainer());
-    this.configConditions = configConditions;
+    ImmutableMap.Builder<Label, ConfigMatchingProvider> builder = ImmutableMap.builder();
+    for (ConfigMatchingProvider configCondition : configConditions) {
+      builder.put(configCondition.label(), configCondition);
+    }
+    this.configConditions = builder.build();
     this.rule = rule;
   }
 
@@ -83,7 +86,7 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
    */
   @VisibleForTesting
   public static ConfiguredAttributeMapper of(
-      Rule rule, ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
+      Rule rule, Set<ConfigMatchingProvider> configConditions) {
     return new ConfiguredAttributeMapper(rule, configConditions);
   }
 
@@ -151,12 +154,8 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
         continue;
       }
 
-      ConfigMatchingProvider curCondition = configConditions.get(
-          rule.getLabel().resolveRepositoryRelative(selectorKey));
-      if (curCondition == null) {
-        // This can happen if the rule is in error
-        continue;
-      }
+      ConfigMatchingProvider curCondition = Verify.verifyNotNull(configConditions.get(
+          rule.getLabel().resolveRepositoryRelative(selectorKey)));
       conditionLabels.add(curCondition.label());
 
       if (curCondition.matches()) {
@@ -180,15 +179,10 @@ public class ConfiguredAttributeMapper extends AbstractAttributeMapper {
     // If nothing matched, choose the default condition.
     if (matchingCondition == null) {
       if (!selector.hasDefault()) {
-        String noMatchMessage =
-            "Configurable attribute \"" + attributeName + "\" doesn't match this configuration";
-        if (!selector.getNoMatchError().isEmpty()) {
-          noMatchMessage += ": " + selector.getNoMatchError();
-        } else {
-          noMatchMessage += " (would a default condition help?).\nConditions checked:\n "
-              + Joiner.on("\n ").join(conditionLabels);
-        }
-        throw new EvalException(rule.getAttributeLocation(attributeName), noMatchMessage);
+        throw new EvalException(rule.getAttributeLocation(attributeName),
+            "Configurable attribute \"" + attributeName + "\" doesn't match this "
+            + "configuration (would a default condition help?).\nConditions checked:\n "
+            + Joiner.on("\n ").join(conditionLabels));
       }
       matchingResult = selector.hasDefault()
           ? new ConfigKeyAndValue<>(Selector.DEFAULT_CONDITION_LABEL, selector.getDefault())
