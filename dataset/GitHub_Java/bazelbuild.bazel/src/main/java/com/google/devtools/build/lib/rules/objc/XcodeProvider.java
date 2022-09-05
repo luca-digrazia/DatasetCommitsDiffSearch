@@ -78,7 +78,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<String> nonPropagatedHeaderSearchPaths =
         NestedSetBuilder.stableOrder();
-    private Optional<Artifact> bundleInfoplist = Optional.absent();
+    private Optional<InfoplistMerging> infoplistMerging = Optional.absent();
     // Dependencies must be in link order because XCode observes the dependency ordering for
     // binary linking.
     private final NestedSetBuilder<XcodeProvider> propagatedDependencies =
@@ -132,10 +132,11 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     }
 
     /**
-     * Sets the Info.plist for the bundle represented by this provider.
+     * Sets the Info.plist merging information. Used for applications. May be
+     * absent for other bundles.
      */
-    public Builder setBundleInfoplist(Artifact bundleInfoplist) {
-      this.bundleInfoplist = Optional.of(bundleInfoplist);
+    public Builder setInfoplistMerging(InfoplistMerging infoplistMerging) {
+      this.infoplistMerging = Optional.of(infoplistMerging);
       return this;
     }
 
@@ -403,7 +404,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   private final NestedSet<String> nonPropagatedUserHeaderSearchPaths;
   private final NestedSet<String> propagatedHeaderSearchPaths;
   private final NestedSet<String> nonPropagatedHeaderSearchPaths;
-  private final Optional<Artifact> bundleInfoplist;
+  private final Optional<InfoplistMerging> infoplistMerging;
   private final NestedSet<XcodeProvider> propagatedDependencies;
   private final NestedSet<XcodeProvider> nonPropagatedDependencies;
   private final ImmutableList<XcodeprojBuildSetting> xcodeprojBuildSettings;
@@ -429,7 +430,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     this.nonPropagatedUserHeaderSearchPaths = builder.nonPropagatedUserHeaderSearchPaths.build();
     this.propagatedHeaderSearchPaths = builder.propagatedHeaderSearchPaths.build();
     this.nonPropagatedHeaderSearchPaths = builder.nonPropagatedHeaderSearchPaths.build();
-    this.bundleInfoplist = builder.bundleInfoplist;
+    this.infoplistMerging = builder.infoplistMerging;
     this.propagatedDependencies = builder.propagatedDependencies.build();
     this.nonPropagatedDependencies = builder.nonPropagatedDependencies.build();
     this.xcodeprojBuildSettings = builder.xcodeprojBuildSettings.build();
@@ -531,7 +532,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         .setName(label.getName())
         .setLabel(xcodeTargetName(label))
         .setProductType(productType.getIdentifier())
-        .addSupportFile(buildFilePath)
         .addAllImportedLibrary(Artifact.toExecPaths(objcProvider.get(IMPORTED_LIBRARY)))
         .addAllUserHeaderSearchPath(userHeaderSearchPaths)
         .addAllHeaderSearchPath(headerSearchPaths)
@@ -553,7 +553,8 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         .addAllXcdatamodel(PathFragment.safePathStrings(datamodelDirs))
         .addAllBundleImport(PathFragment.safePathStrings(objcProvider.get(BUNDLE_IMPORT_DIR)))
         .addAllSdkDylib(objcProvider.get(SDK_DYLIB))
-        .addAllGeneralResourceFile(Artifact.toExecPaths(objcProvider.get(GENERAL_RESOURCE_FILE)));
+        .addAllGeneralResourceFile(Artifact.toExecPaths(objcProvider.get(GENERAL_RESOURCE_FILE)))
+        .addSupportFile(buildFilePath);
 
     if (CAN_LINK_PRODUCT_TYPES.contains(productType)) {
       for (XcodeProvider dependency : propagatedDependencies) {
@@ -590,14 +591,14 @@ public final class XcodeProvider implements TransitiveInfoProvider {
           .build());
     }
 
-    if (bundleInfoplist.isPresent()) {
-      targetControl.setInfoplist(bundleInfoplist.get().getExecPathString());
+    for (InfoplistMerging merging : infoplistMerging.asSet()) {
+      for (Artifact infoplist : merging.getPlistWithEverything().asSet()) {
+        targetControl.setInfoplist(infoplist.getExecPathString());
+      }
     }
     for (CompilationArtifacts artifacts : compilationArtifacts.asSet()) {
       targetControl
           .addAllSourceFile(Artifact.toExecPaths(artifacts.getSrcs()))
-          .addAllSupportFile(Artifact.toExecPaths(artifacts.getAdditionalHdrs()))
-          .addAllSupportFile(Artifact.toExecPaths(artifacts.getPrivateHdrs()))
           .addAllNonArcSourceFile(Artifact.toExecPaths(artifacts.getNonArcSrcs()));
 
       for (Artifact pchFile : artifacts.getPchFile().asSet()) {
