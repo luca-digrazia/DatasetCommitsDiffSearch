@@ -25,7 +25,9 @@ import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule;
 import com.google.devtools.build.buildjar.javac.plugins.processing.AnnotationProcessingModule;
 import java.io.File;
+import java.io.IOError;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -53,7 +55,6 @@ public final class JavaLibraryBuildRequest {
   /** Resource files that should be put in the root of the output jar. */
   private final ImmutableList<String> rootResourceFiles;
 
-  private final String sourcePath;
   private final String classPath;
   private final String bootClassPath;
   private final String extdir;
@@ -151,7 +152,6 @@ public final class JavaLibraryBuildRequest {
     this.resourceJars = ImmutableList.copyOf(optionsParser.getResourceJars());
     this.rootResourceFiles = ImmutableList.copyOf(optionsParser.getRootResourceFiles());
     this.classPath = optionsParser.getClassPath();
-    this.sourcePath = optionsParser.getSourcePath();
     this.bootClassPath = optionsParser.getBootClassPath();
     this.extdir = optionsParser.getExtdir();
     this.processorPath = optionsParser.getProcessorPath();
@@ -195,10 +195,6 @@ public final class JavaLibraryBuildRequest {
 
   public String getSourceGenDir() {
     return sourceGenDir;
-  }
-
-  public String getSourcePath() {
-    return sourcePath;
   }
 
   public String getGeneratedSourcesOutputJar() {
@@ -293,16 +289,36 @@ public final class JavaLibraryBuildRequest {
         .classPath(toPaths(classPath))
         .classOutput(Paths.get(getClassDir()))
         .bootClassPath(
-            ImmutableList.copyOf(
-                Iterables.concat(toPaths(getBootClassPath()), toPaths(getExtdir()))))
+            ImmutableList.copyOf(Iterables.concat(toPaths(getBootClassPath()), getExtJars())))
         .javacOptions(makeJavacArguments())
         .sourceFiles(ImmutableList.copyOf(getSourceFiles()))
         .processors(null)
-        .sourcePath(toPaths(getSourcePath()))
         .sourceOutput(getSourceGenDir() != null ? Paths.get(getSourceGenDir()) : null)
         .processorPath(toPaths(getProcessorPath()))
         .plugins(getPlugins())
         .build();
+  }
+
+  // TODO(cushon): make Bazel pass the individual files instead of inferring a directory and
+  // listing it here
+  List<Path> getExtJars() {
+    if (getExtdir() == null) {
+      return ImmutableList.of();
+    }
+    ImmutableList.Builder<Path> jars = ImmutableList.builder();
+    for (String file : Splitter.on(File.pathSeparatorChar).split(getExtdir())) {
+      try {
+        Path path = Paths.get(file);
+        if (Files.isDirectory(path)) {
+          Files.list(path).forEach(jars::add);
+        } else {
+          jars.add(path);
+        }
+      } catch (IOException e) {
+        throw new IOError(e);
+      }
+    }
+    return jars.build();
   }
 
   static ImmutableList<Path> toPaths(List<String> files) {
@@ -330,8 +346,6 @@ public final class JavaLibraryBuildRequest {
   /** Constructs a command line that can be used for a javac invocation. */
   ImmutableList<String> makeJavacArguments() {
     ImmutableList.Builder<String> javacArguments = ImmutableList.builder();
-    // default to -implicit:none, but allow the user to override with -implicit:class.
-    javacArguments.add("-implicit:none");
     javacArguments.addAll(getJavacOpts());
 
     if (!getProcessors().isEmpty() && !getSourceFiles().isEmpty()) {
