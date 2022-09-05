@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
-import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
@@ -92,10 +91,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   public enum Flag {
     KEEP_GOING,
     SKYFRAME_LOADING_PHASE,
-    // Dynamic configurations that only include the fragments a target needs to properly analyze.
     DYNAMIC_CONFIGURATIONS,
-    // Dynamic configurations that always include all fragments even for targets don't need them.
-    DYNAMIC_CONFIGURATIONS_NOTRIM
   }
 
   /** Helper class to make it easy to enable and disable flags. */
@@ -178,8 +174,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             analysisMock.getSkyFunctions(),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
-            analysisMock.getProductName(),
-            CrossRepositoryLabelViolationStrategy.ERROR);
+            analysisMock.getProductName());
     PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 3;
@@ -225,8 +220,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     optionsParser.parse(args);
     if (defaultFlags().contains(Flag.DYNAMIC_CONFIGURATIONS)) {
       optionsParser.parse("--experimental_dynamic_configs=on");
-    } else if (defaultFlags().contains(Flag.DYNAMIC_CONFIGURATIONS_NOTRIM)) {
-      optionsParser.parse("--experimental_dynamic_configs=notrim");
     }
 
     InvocationPolicyEnforcer optionsPolicyEnforcer = analysisMock.getInvocationPolicyEnforcer();

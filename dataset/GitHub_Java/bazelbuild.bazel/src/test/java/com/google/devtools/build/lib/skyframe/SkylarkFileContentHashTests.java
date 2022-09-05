@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -166,10 +165,8 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
         .preparePackageLoading(
             new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
             packageCacheOptions,
-            Options.getDefaults(SkylarkSemanticsOptions.class),
             "",
             UUID.randomUUID(),
-            ImmutableMap.<String, String>of(),
             ImmutableMap.<String, String>of(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
     SkyKey pkgLookupKey = PackageValue.key(PackageIdentifier.parse("@//" + pkg));
@@ -177,7 +174,7 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
         SkyframeExecutorTestUtils.evaluate(
             getSkyframeExecutor(), pkgLookupKey, /*keepGoing=*/ false, reporter);
     assertFalse(result.hasError());
-    Collection<Target> targets = result.get(pkgLookupKey).getPackage().getTargets().values();
+    Collection<Target> targets = result.get(pkgLookupKey).getPackage().getTargets();
     for (Target target : targets) {
       if (target.getName().equals(name)) {
         return ((Rule) target)

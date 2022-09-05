@@ -1247,7 +1247,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // Check: if !Configuration.useDynamicConfigs then just return the original configs.
     Set<Class<? extends BuildConfiguration.Fragment>> allFragments = null;
     if (useUntrimmedDynamicConfigs(fromOptions)) {
-      allFragments = ((ConfiguredRuleClassProvider) ruleClassProvider).getAllFragments();
+      allFragments = getAllFragments();
     }
 
     // Get the fragments needed for dynamic configuration nodes.
@@ -1257,6 +1257,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     for (Dependency key : keys) {
       if (key.hasStaticConfiguration()) {
         builder.put(key, key.getConfiguration());
+      } else if (key.getTransition() == Attribute.ConfigurationTransition.NULL) {
+        builder.put(key, null);
       } else if (useUntrimmedDynamicConfigs(fromOptions)) {
         fragmentsMap.put(key.getLabel(), allFragments);
       } else {
@@ -1320,6 +1322,20 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private static boolean useUntrimmedDynamicConfigs(BuildOptions options) {
     return options.get(BuildConfiguration.Options.class).useDynamicConfigurations
         == BuildConfiguration.Options.DynamicConfigsMode.NOTRIM;
+  }
+
+  /**
+   * Returns all configuration fragments registered with Blaze.
+   */
+  private Set<Class<? extends BuildConfiguration.Fragment>> getAllFragments() {
+    ImmutableSet.Builder<Class<? extends BuildConfiguration.Fragment>> fragmentsBuilder =
+        ImmutableSet.builder();
+    for (ConfigurationFragmentFactory factory :
+        ((ConfiguredRuleClassProvider) ruleClassProvider).getConfigurationFragments()) {
+      fragmentsBuilder.add(factory.creates());
+    }
+    fragmentsBuilder.add(((ConfiguredRuleClassProvider) ruleClassProvider).getUniversalFragment());
+    return fragmentsBuilder.build();
   }
 
   /**
@@ -1869,7 +1885,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       if (ignoreInvalidations) {
         return;
       }
-      skyframeBuildView.getProgressReceiver().invalidated(skyKey, state);
+      skyframeBuildView.getInvalidationReceiver().invalidated(skyKey, state);
     }
 
     @Override
@@ -1877,7 +1893,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       if (ignoreInvalidations) {
         return;
       }
-      skyframeBuildView.getProgressReceiver().enqueueing(skyKey);
+      skyframeBuildView.getInvalidationReceiver().enqueueing(skyKey);
       if (executionProgressReceiver != null) {
         executionProgressReceiver.enqueueing(skyKey);
       }
@@ -1891,7 +1907,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       if (ignoreInvalidations) {
         return;
       }
-      skyframeBuildView.getProgressReceiver().evaluated(skyKey, valueSupplier, state);
+      skyframeBuildView.getInvalidationReceiver().evaluated(skyKey, valueSupplier, state);
       if (executionProgressReceiver != null) {
         executionProgressReceiver.evaluated(skyKey, valueSupplier, state);
       }
