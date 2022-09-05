@@ -81,10 +81,9 @@ final class CompilationSupport {
   static final ImmutableList<String> LINKER_COVERAGE_FLAGS =
       ImmutableList.of("-ftest-coverage", "-fprofile-arcs");
 
-  // Flags for clang 6.1(xcode 6.4)
   @VisibleForTesting
   static final ImmutableList<String> CLANG_COVERAGE_FLAGS =
-      ImmutableList.of("-fprofile-arcs", "-ftest-coverage");
+      ImmutableList.of("-fprofile-arcs", "-ftest-coverage", "-fprofile-dir=./coverage_output");
 
   private static final String FRAMEWORK_SUFFIX = ".framework";
 
