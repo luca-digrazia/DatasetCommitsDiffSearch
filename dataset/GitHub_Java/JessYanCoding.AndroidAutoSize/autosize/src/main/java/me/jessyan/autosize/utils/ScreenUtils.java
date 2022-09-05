@@ -32,12 +32,12 @@ import android.view.WindowManager;
  */
 public class ScreenUtils {
 
-    public static int getStatusBarHeight() {
+    public static int getStatusBarHeight(Context context) {
         int result = 0;
         try {
-            int resourceId = Resources.getSystem().getIdentifier("status_bar_height", "dimen", "android");
+            int resourceId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
             if (resourceId > 0) {
-                result = Resources.getSystem().getDimensionPixelSize(resourceId);
+                result = context.getResources().getDimensionPixelSize(resourceId);
             }
         } catch (Resources.NotFoundException e) {
             e.printStackTrace();
