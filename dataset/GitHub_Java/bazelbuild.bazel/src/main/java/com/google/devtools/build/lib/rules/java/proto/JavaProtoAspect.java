@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaLibraryHelper;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -292,7 +291,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
           helper.build(
               javaSemantics,
               JavaCompilationHelper.getJavaToolchainProvider(ruleContext),
-              JavaHelper.getHostJavabaseInputs(ruleContext),
+              JavaCompilationHelper.getHostJavabaseInputsNonStatic(ruleContext),
               JavaCompilationHelper.getInstrumentationJars(ruleContext)),
           true /* isReportedAsStrict */);
     }

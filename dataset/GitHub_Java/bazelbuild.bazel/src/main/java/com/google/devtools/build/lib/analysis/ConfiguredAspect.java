@@ -98,10 +98,6 @@ public final class ConfiguredAspect implements Iterable<TransitiveInfoProvider> 
     return new ConfiguredAspect(real.descriptor, real.getProviders());
   }
 
-  public static ConfiguredAspect forNonapplicableTarget(AspectDescriptor descriptor) {
-    return new ConfiguredAspect(descriptor, TransitiveInfoProviderMap.of());
-  }
-
   /**
    * Builder for {@link ConfiguredAspect}.
    */
