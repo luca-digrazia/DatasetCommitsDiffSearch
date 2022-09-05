@@ -110,13 +110,8 @@ public class VirtualMachineMetrics {
 		try {
 			final GcMonitor monitor = new GcMonitor();
 			MONITOR_THREAD.scheduleAtFixedRate(monitor, 0, 5, TimeUnit.SECONDS);
-            try {
-                MONITOR_THREAD.scheduleAtFixedRate(new LoggerMemoryLeakFix(), 0, 10, TimeUnit.MINUTES);
-            } catch (Exception ignored) {
-                // well that's just unfortunate now isn't it
-            }
-            return monitor;
-		} catch (Exception ignored) {
+			return monitor;
+		} catch (Exception e) {
 			return null;
 		}
 	}
