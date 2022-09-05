@@ -71,7 +71,7 @@ public class ArtifactFactoryTest {
   private ArtifactFactory artifactFactory;
 
   @Before
-  public final void createFiles() throws Exception  {
+  public void setUp() throws Exception {
     execRoot = scratch.dir("/output/workspace");
     clientRoot = Root.asSourceRoot(scratch.dir("/client/workspace"));
     clientRoRoot = Root.asSourceRoot(scratch.dir("/client/RO/workspace"));

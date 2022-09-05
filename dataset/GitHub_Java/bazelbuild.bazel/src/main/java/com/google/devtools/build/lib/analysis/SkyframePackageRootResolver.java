@@ -23,8 +23,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Map;
 
-import javax.annotation.Nullable;
-
 /**
  * Skyframe implementation of {@link PackageRootResolver}.
  *
@@ -41,13 +39,6 @@ public final class SkyframePackageRootResolver implements PackageRootResolver {
 
   @Override
   public Map<PathFragment, Root> findPackageRootsForFiles(Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException {
-    return executor.getArtifactRootsForFiles(eventHandler, execPaths);
-  }
-  
-  @Override
-  @Nullable
-  public Map<PathFragment, Root> findPackageRoots(Iterable<PathFragment> execPaths)
       throws PackageRootResolutionException {
     return executor.getArtifactRoots(eventHandler, execPaths);
   }
