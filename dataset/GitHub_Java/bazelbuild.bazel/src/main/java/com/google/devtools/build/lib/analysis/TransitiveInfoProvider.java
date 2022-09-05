@@ -60,5 +60,4 @@ package com.google.devtools.build.lib.analysis;
  * @see com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory
  */
 public interface TransitiveInfoProvider {
-
 }
