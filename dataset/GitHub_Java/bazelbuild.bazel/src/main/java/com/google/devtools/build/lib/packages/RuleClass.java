@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.packages;
 
-import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
+import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
@@ -1150,12 +1150,10 @@ public final class RuleClass {
   }
 
   /**
-   * Returns the attribute whose name is 'attrName'; fails with NullPointerException if not found.
+   * Returns the attribute whose name is 'attrName'; fails if not found.
    */
   public Attribute getAttributeByName(String attrName) {
-    Integer attrIndex = Preconditions.checkNotNull(getAttributeIndex(attrName),
-        "Attribute %s does not exist", attrName);
-    return attributes.get(attrIndex);
+    return attributes.get(getAttributeIndex(attrName));
   }
 
   /**
