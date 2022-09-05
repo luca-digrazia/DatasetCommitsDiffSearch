@@ -47,6 +47,20 @@ import java.util.stream.Stream;
 @AccessLogger("文件")
 public class FileController {
 
+    private String staticFilePath = "./static";
+
+    private String staticLocation = "/";
+
+    @Value("${hsweb.web.upload.staticFilePath:./static}")
+    public void setStaticFilePath(String staticFilePath) {
+        this.staticFilePath = staticFilePath;
+    }
+
+    @Value("${hsweb.web.upload.staticLocation:/}")
+    public void setStaticLocation(String staticLocation) {
+        this.staticLocation = staticLocation;
+    }
+
     private FileService fileService;
 
     private FileInfoService fileInfoService;
@@ -133,7 +147,7 @@ public class FileController {
      * 通过文件ID下载已经上传的文件,支持断点下载
      * 如: http://host:port/file/download/aSk2a/file.zip 将下载 ID为aSk2a的文件.并命名为file.zip
      *
-     * @param idOrMd5  要下载资源文件的id或者md5值
+     * @param id       要下载资源文件的id
      * @param name     自定义文件名，该文件名不能存在非法字符.如果此参数为空(null).将使用文件上传时的文件名
      * @param response {@link javax.servlet.http.HttpServletResponse}
      * @param request  {@link javax.servlet.http.HttpServletRequest}
@@ -144,11 +158,11 @@ public class FileController {
     @GetMapping(value = "/download/{id}")
     @AccessLogger("下载文件")
     @Authorize(action = "download")
-    public void downLoad(@PathVariable("id") String idOrMd5,
+    public void downLoad(@PathVariable("id") String id,
                          @RequestParam(value = "name", required = false) String name,
                          HttpServletResponse response, HttpServletRequest request)
             throws IOException {
-        FileInfoEntity fileInfo = fileInfoService.selectByIdOrMd5(idOrMd5);
+        FileInfoEntity fileInfo = fileInfoService.selectByPk(id);
         if (fileInfo == null || fileInfo.getStatus() != 1) {
             throw new NotFoundException("文件不存在");
         }
@@ -187,7 +201,7 @@ public class FileController {
             String contentRange = "bytes " + skip + "-" + (fSize - 1) + "/" + fSize;
             response.setHeader("Content-Range", contentRange);
         }
-        fileService.writeFile(idOrMd5, response.getOutputStream(), skip);
+        fileService.writeFile(id, response.getOutputStream(), skip);
     }
 
     /**
