@@ -47,14 +47,23 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     YES, NO;
   }
 
+  /** Indicates whether this binary uses the c++ rules backend, including the crosstool. */
+  enum UsesCrosstool {
+    EXPERIMENTAL, // use the crosstool if --experimental_use_crosstool_for_binary is given
+    NO;
+  }
+  
   private final HasReleaseBundlingSupport hasReleaseBundlingSupport;
   private final XcodeProductType productType;
+  private final UsesCrosstool usesCrosstool;
 
   protected BinaryLinkingTargetFactory(
       HasReleaseBundlingSupport hasReleaseBundlingSupport,
-      XcodeProductType productType) {
+      XcodeProductType productType,
+      UsesCrosstool usesCrosstool) {
     this.hasReleaseBundlingSupport = hasReleaseBundlingSupport;
     this.productType = productType;
+    this.usesCrosstool = usesCrosstool;
   }
 
   /**
@@ -106,7 +115,12 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
             ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
         .build();
 
-    CompilationSupport compilationSupport = CompilationSupport.create(ruleContext)
+    CompilationSupport compilationSupport = (usesCrosstool != UsesCrosstool.EXPERIMENTAL
+        || !ruleContext.getFragment(ObjcConfiguration.class).useCrosstoolForBinary())
+        ? new LegacyCompilationSupport(ruleContext)
+        : new CrosstoolCompilationSupport(ruleContext);
+
+    compilationSupport
         .validateAttributes()
         .addXcodeSettings(xcodeProviderBuilder, common)
         .registerCompileAndArchiveActions(common)

@@ -29,13 +29,13 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.CppLinkInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -53,7 +53,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -101,9 +100,7 @@ public final class CppLinkAction extends AbstractAction
   private final LibraryToLink outputLibrary;
   private final Artifact linkOutput;
   private final LibraryToLink interfaceOutputLibrary;
-  private final ImmutableSet<String> clientEnvironmentVariables;
-  private final ImmutableMap<String, String> actionEnv;
-  private final ImmutableMap<String, String> toolchainEnv;
+  private final Map<String, String> toolchainEnv;
   private final ImmutableSet<String> executionRequirements;
 
   private final LinkCommandLine linkCommandLine;
@@ -153,9 +150,7 @@ public final class CppLinkAction extends AbstractAction
       boolean isLTOIndexing,
       Iterable<LTOBackendArtifacts> allLTOBackendArtifacts,
       LinkCommandLine linkCommandLine,
-      ImmutableSet<String> clientEnvironmentVariables,
-      ImmutableMap<String, String> actionEnv,
-      ImmutableMap<String, String> toolchainEnv,
+      Map<String, String> toolchainEnv,
       ImmutableSet<String> executionRequirements) {
     super(owner, inputs, outputs);
     if (mnemonic == null) {
@@ -172,8 +167,6 @@ public final class CppLinkAction extends AbstractAction
     this.isLTOIndexing = isLTOIndexing;
     this.allLTOBackendArtifacts = allLTOBackendArtifacts;
     this.linkCommandLine = linkCommandLine;
-    this.clientEnvironmentVariables = clientEnvironmentVariables;
-    this.actionEnv = actionEnv;
     this.toolchainEnv = toolchainEnv;
     this.executionRequirements = executionRequirements;
   }
@@ -192,15 +185,9 @@ public final class CppLinkAction extends AbstractAction
   }
 
   @Override
-  public Iterable<String> getClientEnvironmentVariables() {
-    return clientEnvironmentVariables;
-  }
-
-  @Override
   public ImmutableMap<String, String> getEnvironment() {
-    LinkedHashMap<String, String> result = new LinkedHashMap<>();
+    ImmutableMap.Builder<String, String> result = ImmutableMap.<String, String>builder();
 
-    result.putAll(actionEnv);
     result.putAll(toolchainEnv);
 
     if (OS.getCurrent() == OS.WINDOWS) {
@@ -220,7 +207,7 @@ public final class CppLinkAction extends AbstractAction
               .getParentDirectory()
               .getPathString());
     }
-    return ImmutableMap.copyOf(result);
+    return result.build();
   }
 
   /**
@@ -483,6 +470,11 @@ public final class CppLinkAction extends AbstractAction
   @Override
   protected String getRawProgressMessage() {
     return (isLTOIndexing ? "LTO indexing " : "Linking ") + linkOutput.prettyPrint();
+  }
+
+  @Override
+  public ResourceSet estimateResourceConsumption(Executor executor) {
+    return executor.getContext(CppLinkActionContext.class).estimateResourceConsumption(this);
   }
 
   /**
