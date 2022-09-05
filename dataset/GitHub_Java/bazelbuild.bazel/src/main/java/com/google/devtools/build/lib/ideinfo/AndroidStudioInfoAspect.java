@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider;
 import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider.SourceDirectory;
 import com.google.devtools.build.lib.rules.android.AndroidSdkProvider;
 import com.google.devtools.build.lib.rules.java.JavaExportsProvider;
-import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.vfs.Path;
@@ -144,9 +143,9 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
       provider = providerBuilder.build();
     }
 
-    NestedSet<Artifact> ideInfoFiles = provider.getIdeBuildFiles();
+    NestedSet<Artifact> ideBuildFiles = provider.getIdeBuildFiles();
     builder
-        .addOutputGroup(IDE_BUILD, ideInfoFiles)
+        .addOutputGroup(IDE_BUILD, ideBuildFiles)
         .addProvider(
             AndroidStudioInfoFilesProvider.class,
             provider);
@@ -260,23 +259,6 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
       builder.addTransitiveResources(makeArtifactLocation(transitiveResource));
     }
 
-    boolean hasIdlSources = !provider.getIdlSrcs().isEmpty();
-    builder.setHasIdlSources(hasIdlSources);
-    if (hasIdlSources) {
-      LibraryArtifact.Builder jarBuilder = LibraryArtifact.newBuilder();
-      Artifact idlClassJar = provider.getIdlClassJar();
-      if (idlClassJar != null) {
-        jarBuilder.setJar(makeArtifactLocation(idlClassJar));
-      }
-      Artifact idlSourceJar = provider.getIdlSourceJar();
-      if (idlSourceJar != null) {
-        jarBuilder.setSourceJar(makeArtifactLocation(idlSourceJar));
-      }
-      if (idlClassJar != null) {
-        builder.setIdlJar(jarBuilder.build());
-      }
-    }
-
     return builder.build();
   }
 
@@ -323,12 +305,6 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
       }
     }
 
-    JavaGenJarsProvider genJarsProvider =
-        base.getProvider(JavaGenJarsProvider.class);
-    if (genJarsProvider != null) {
-      collectGenJars(builder, genJarsProvider);
-    }
-
     Collection<Artifact> sourceFiles = getSources(base);
 
     for (Artifact sourceFile : sourceFiles) {
@@ -371,37 +347,27 @@ public class AndroidStudioInfoAspect implements ConfiguredAspectFactory {
     if (classJar != null) {
       jarsBuilder.setJar(makeArtifactLocation(classJar));
     }
-    Artifact iJar = outputJarsProvider.getIJar();
-    if (iJar != null) {
-      jarsBuilder.setInterfaceJar(makeArtifactLocation(iJar));
-    }
     Artifact srcJar = outputJarsProvider.getSrcJar();
     if (srcJar != null) {
       jarsBuilder.setSourceJar(makeArtifactLocation(srcJar));
     }
-
-    // We don't want to add anything that doesn't have a class jar
-    if (classJar != null) {
+    if (jarsBuilder.hasJar() || jarsBuilder.hasSourceJar()) {
       builder.addJars(jarsBuilder.build());
     }
-  }
 
-  private static void collectGenJars(JavaRuleIdeInfo.Builder builder,
-      JavaGenJarsProvider genJarsProvider) {
+
     LibraryArtifact.Builder genjarsBuilder = LibraryArtifact.newBuilder();
 
-    if (genJarsProvider.usesAnnotationProcessing()) {
-      Artifact genClassJar = genJarsProvider.getGenClassJar();
-      if (genClassJar != null) {
-        genjarsBuilder.setJar(makeArtifactLocation(genClassJar));
-      }
-      Artifact gensrcJar = genJarsProvider.getGenSourceJar();
-      if (gensrcJar != null) {
-        genjarsBuilder.setSourceJar(makeArtifactLocation(gensrcJar));
-      }
-      if (genjarsBuilder.hasJar()) {
-        builder.addGeneratedJars(genjarsBuilder.build());
-      }
+    Artifact genClassJar = outputJarsProvider.getGenClassJar();
+    if (genClassJar != null) {
+      genjarsBuilder.setJar(makeArtifactLocation(genClassJar));
+    }
+    Artifact gensrcJar = outputJarsProvider.getGensrcJar();
+    if (gensrcJar != null) {
+      genjarsBuilder.setSourceJar(makeArtifactLocation(gensrcJar));
+    }
+    if (genjarsBuilder.hasJar() || genjarsBuilder.hasSourceJar()) {
+      builder.addGeneratedJars(genjarsBuilder.build());
     }
   }
 
