@@ -24,6 +24,7 @@ import android.net.Uri;
 import android.util.DisplayMetrics;
 import android.view.View;
 
+import java.lang.reflect.Field;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -299,9 +300,11 @@ public final class AutoSize {
      * @return {@link DisplayMetrics}, 可能为 {@code null}
      */
     private static DisplayMetrics getMetricsOnMiui(Resources resources) {
-        if (AutoSizeConfig.getInstance().isMiui() && AutoSizeConfig.getInstance().getTmpMetricsField() != null) {
+        if ("MiuiResources".equals(resources.getClass().getSimpleName()) || "XResources".equals(resources.getClass().getSimpleName())) {
             try {
-                return (DisplayMetrics) AutoSizeConfig.getInstance().getTmpMetricsField().get(resources);
+                Field field = Resources.class.getDeclaredField("mTmpMetrics");
+                field.setAccessible(true);
+                return (DisplayMetrics) field.get(resources);
             } catch (Exception e) {
                 return null;
             }
