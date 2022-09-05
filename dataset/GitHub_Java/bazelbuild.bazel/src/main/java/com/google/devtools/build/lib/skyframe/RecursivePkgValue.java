@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -34,21 +32,12 @@ import java.util.Objects;
  */
 @Immutable
 @ThreadSafe
-class RecursivePkgValue implements SkyValue {
-  static final RecursivePkgValue EMPTY =
-      new RecursivePkgValue(NestedSetBuilder.<String>emptySet(Order.STABLE_ORDER));
+public class RecursivePkgValue implements SkyValue {
 
   private final NestedSet<String> packages;
 
-  private RecursivePkgValue(NestedSet<String> packages) {
+  public RecursivePkgValue(NestedSet<String> packages) {
     this.packages = packages;
-  }
-
-  static RecursivePkgValue create(NestedSetBuilder<String> packages) {
-    if (packages.isEmpty()) {
-      return EMPTY;
-    }
-    return new RecursivePkgValue(packages.build());
   }
 
   /**

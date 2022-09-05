@@ -53,7 +53,6 @@ public abstract class TargetPattern implements Serializable {
   private static final Parser DEFAULT_PARSER = new Parser("");
 
   private final Type type;
-  private final String originalPattern;
 
   /**
    * Returns a parser with no offset. Note that the Parser class is immutable, so this method may
@@ -105,10 +104,9 @@ public abstract class TargetPattern implements Serializable {
     return SLASH_JOINER.join(pieces);
   }
 
-  private TargetPattern(Type type, String originalPattern) {
+  private TargetPattern(Type type) {
     // Don't allow inheritance outside this class.
     this.type = type;
-    this.originalPattern = Preconditions.checkNotNull(originalPattern);
   }
 
   /**
@@ -117,13 +115,6 @@ public abstract class TargetPattern implements Serializable {
    */
   public Type getType() {
     return type;
-  }
-
-  /**
-   * Return the string that was parsed into this pattern.
-   */
-  public String getOriginalPattern() {
-    return originalPattern;
   }
 
   /**
@@ -169,8 +160,8 @@ public abstract class TargetPattern implements Serializable {
     private final String targetName;
     private final String directory;
 
-    private SingleTarget(String targetName, String directory, String originalPattern) {
-      super(Type.SINGLE_TARGET, originalPattern);
+    private SingleTarget(String targetName, String directory) {
+      super(Type.SINGLE_TARGET);
       this.targetName = Preconditions.checkNotNull(targetName);
       this.directory = Preconditions.checkNotNull(directory);
     }
@@ -181,7 +172,7 @@ public abstract class TargetPattern implements Serializable {
         throws TargetParsingException, InterruptedException {
       Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
           "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
-          getOriginalPattern(), getType(), excludedSubdirectories);
+          targetName, getType(), excludedSubdirectories);
       return resolver.getExplicitTarget(targetName);
     }
 
@@ -217,8 +208,8 @@ public abstract class TargetPattern implements Serializable {
 
     private final String path;
 
-    private InterpretPathAsTarget(String path, String originalPattern) {
-      super(Type.PATH_AS_TARGET, originalPattern);
+    private InterpretPathAsTarget(String path) {
+      super(Type.PATH_AS_TARGET);
       this.path = normalize(Preconditions.checkNotNull(path));
     }
 
@@ -228,7 +219,7 @@ public abstract class TargetPattern implements Serializable {
         throws TargetParsingException, InterruptedException {
       Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
           "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
-          getOriginalPattern(), getType(), excludedSubdirectories);
+          path, getType(), excludedSubdirectories);
       if (resolver.isPackage(path)) {
         // User has specified a package name. lookout for default target.
         return resolver.getExplicitTarget("//" + path);
@@ -280,6 +271,7 @@ public abstract class TargetPattern implements Serializable {
 
   private static final class TargetsInPackage extends TargetPattern {
 
+    private final String originalPattern;
     private final String pattern;
     private final String suffix;
     private final boolean isAbsolute;
@@ -288,7 +280,8 @@ public abstract class TargetPattern implements Serializable {
 
     private TargetsInPackage(String originalPattern, String pattern, String suffix,
         boolean isAbsolute, boolean rulesOnly, boolean checkWildcardConflict) {
-      super(Type.TARGETS_IN_PACKAGE, originalPattern);
+      super(Type.TARGETS_IN_PACKAGE);
+      this.originalPattern = Preconditions.checkNotNull(originalPattern);
       this.pattern = Preconditions.checkNotNull(pattern);
       this.suffix = Preconditions.checkNotNull(suffix);
       this.isAbsolute = isAbsolute;
@@ -302,14 +295,14 @@ public abstract class TargetPattern implements Serializable {
         throws TargetParsingException, InterruptedException {
       Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
           "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
-          getOriginalPattern(), getType(), excludedSubdirectories);
+          originalPattern, getType(), excludedSubdirectories);
       if (checkWildcardConflict) {
         ResolvedTargets<T> targets = getWildcardConflict(resolver);
         if (targets != null) {
           return targets;
         }
       }
-      return resolver.getTargetsInPackage(getOriginalPattern(), removeSuffix(pattern, suffix),
+      return resolver.getTargetsInPackage(originalPattern, removeSuffix(pattern, suffix),
           rulesOnly);
     }
 
@@ -334,13 +327,13 @@ public abstract class TargetPattern implements Serializable {
       TargetsInPackage that = (TargetsInPackage) o;
       return isAbsolute == that.isAbsolute && rulesOnly == that.rulesOnly
           && checkWildcardConflict == that.checkWildcardConflict
-          && getOriginalPattern().equals(that.getOriginalPattern())
+          && originalPattern.equals(that.originalPattern)
           && pattern.equals(that.pattern) && suffix.equals(that.suffix);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(getType(), getOriginalPattern(), pattern, suffix, isAbsolute, rulesOnly,
+      return Objects.hash(getType(), originalPattern, pattern, suffix, isAbsolute, rulesOnly,
           checkWildcardConflict);
     }
 
@@ -380,11 +373,13 @@ public abstract class TargetPattern implements Serializable {
 
   private static final class TargetsBelowDirectory extends TargetPattern {
 
+    private final String originalPattern;
     private final String directory;
     private final boolean rulesOnly;
 
     private TargetsBelowDirectory(String originalPattern, String directory, boolean rulesOnly) {
-      super(Type.TARGETS_BELOW_DIRECTORY, originalPattern);
+      super(Type.TARGETS_BELOW_DIRECTORY);
+      this.originalPattern = Preconditions.checkNotNull(originalPattern);
       this.directory = Preconditions.checkNotNull(directory);
       this.rulesOnly = rulesOnly;
     }
@@ -393,7 +388,7 @@ public abstract class TargetPattern implements Serializable {
     public <T> ResolvedTargets<T> eval(TargetPatternResolver<T> resolver,
         ImmutableSet<String> excludedSubdirectories)
         throws TargetParsingException, InterruptedException {
-      return resolver.findTargetsBeneathDirectory(getOriginalPattern(), directory, rulesOnly,
+      return resolver.findTargetsBeneathDirectory(originalPattern, directory, rulesOnly,
           excludedSubdirectories);
     }
 
@@ -420,13 +415,13 @@ public abstract class TargetPattern implements Serializable {
         return false;
       }
       TargetsBelowDirectory that = (TargetsBelowDirectory) o;
-      return rulesOnly == that.rulesOnly && getOriginalPattern().equals(that.getOriginalPattern())
+      return rulesOnly == that.rulesOnly && originalPattern.equals(that.originalPattern)
           && directory.equals(that.directory);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(getType(), getOriginalPattern(), directory, rulesOnly);
+      return Objects.hash(getType(), originalPattern, directory, rulesOnly);
     }
   }
 
@@ -562,7 +557,7 @@ public abstract class TargetPattern implements Serializable {
           String error = "invalid target format '" + originalPattern + "': " + e.getMessage();
           throw new TargetParsingException(error);
         }
-        return new SingleTarget(fullLabel, packageAndTarget.getPackageName(), originalPattern);
+        return new SingleTarget(fullLabel, packageAndTarget.getPackageName());
       }
 
       // This is a stripped-down version of interpretPathAsTarget that does no I/O.  We have a basic
@@ -580,7 +575,7 @@ public abstract class TargetPattern implements Serializable {
         throw new TargetParsingException("Bad target pattern '" + originalPattern + "': " +
             errorMessage);
       }
-      return new InterpretPathAsTarget(pattern, originalPattern);
+      return new InterpretPathAsTarget(pattern);
     }
 
     /**

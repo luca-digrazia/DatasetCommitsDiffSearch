@@ -165,35 +165,34 @@ public class RecursivePackageProviderBackedTargetPatternResolver
         : policy;
 
     PathFragment pathFragment = getPathFragment(directory);
-
-    ImmutableSet.Builder<PathFragment> excludedPathFragmentsBuilder = ImmutableSet.builder();
+    ImmutableSet.Builder<PathFragment> excludedPathFragments = ImmutableSet.builder();
     for (String excludedDirectory : excludedSubdirectories) {
-      excludedPathFragmentsBuilder.add(getPathFragment(excludedDirectory));
+      excludedPathFragments.add(getPathFragment(excludedDirectory));
     }
-    ImmutableSet<PathFragment> excludedPathFragments = excludedPathFragmentsBuilder.build();
 
-    ResolvedTargets.Builder<Target> targetBuilder = ResolvedTargets.builder();
+    ResolvedTargets.Builder<Target> builder = ResolvedTargets.builder();
+
     for (Path root : pkgPath.getPathEntries()) {
       RootedPath rootedPath = RootedPath.toRootedPath(root, pathFragment);
-      Iterable<PathFragment> packagesUnderDirectory =
-          recursivePackageProvider.getPackagesUnderDirectory(rootedPath, excludedPathFragments);
+      Iterable<PathFragment> packagesUnderDirectory = recursivePackageProvider
+          .getPackagesUnderDirectory(rootedPath, excludedPathFragments.build());
       for (PathFragment pkg : packagesUnderDirectory) {
-        targetBuilder.merge(getTargetsInPackage(originalPattern, pkg, FilteringPolicies.NO_FILTER));
+        builder.merge(getTargetsInPackage(originalPattern, pkg, FilteringPolicies.NO_FILTER));
       }
     }
 
-    // Perform the no-targets-found check before applying the filtering policy so we only return the
-    // error if the input directory's subtree really contains no targets.
-    if (targetBuilder.isEmpty()) {
+    if (builder.isEmpty()) {
       throw new TargetParsingException("no targets found beneath '" + pathFragment + "'");
     }
-    ResolvedTargets<Target> prefilteredTargets = targetBuilder.build();
-     
+
+    // Apply the transform after the check so we only return the
+    // error if the tree really contains no targets.
+    ResolvedTargets<Target> intermediateResult = builder.build();
     ResolvedTargets.Builder<Target> filteredBuilder = ResolvedTargets.builder();
-    if (prefilteredTargets.hasError()) {
+    if (intermediateResult.hasError()) {
       filteredBuilder.setError();
     }
-    for (Target target : prefilteredTargets.getTargets()) {
+    for (Target target : intermediateResult.getTargets()) {
       if (actualPolicy.shouldRetain(target, false)) {
         filteredBuilder.add(target);
       }

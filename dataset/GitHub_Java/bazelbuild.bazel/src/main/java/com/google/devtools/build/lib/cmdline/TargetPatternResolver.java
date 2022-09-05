@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.cmdline;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 
 /**
  * A callback interface that is used during the process of converting target patterns (such as
@@ -77,8 +76,8 @@ public interface TargetPatternResolver<T> {
    *    to ignore
    * @throws TargetParsingException under implementation-specific failure conditions
    */
-  ResolvedTargets<T> findTargetsBeneathDirectory(RepositoryName repository, String originalPattern,
-      String directory, boolean rulesOnly, ImmutableSet<String> excludedSubdirectories)
+  ResolvedTargets<T> findTargetsBeneathDirectory(String originalPattern, String directory,
+      boolean rulesOnly, ImmutableSet<String> excludedSubdirectories)
       throws TargetParsingException, InterruptedException;
 
   /**
