@@ -5,8 +5,6 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
 /**
@@ -19,11 +17,9 @@ public class DynamicDataSourceProxy implements DynamicDataSource {
 
     private String id;
 
-    private volatile DatabaseType databaseType;
+    private DatabaseType databaseType;
 
     private DataSource proxy;
-
-    private Lock lock = new ReentrantLock();
 
     public DynamicDataSourceProxy(String id, DatabaseType databaseType, DataSource proxy) {
         this.id = id;
@@ -49,22 +45,19 @@ public class DynamicDataSourceProxy implements DynamicDataSource {
     @Override
     public DatabaseType getType() {
         if (databaseType == null) {
-            lock.lock();
-            try {
-                if (databaseType != null) {
-                    return databaseType;
+            synchronized (this) {
+                if (databaseType == null) {
+                    try {
+                        try (Connection connection = proxy.getConnection()) {
+                            databaseType = DatabaseType.fromJdbcUrl(connection.getMetaData().getURL());
+                        }
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
-                try (Connection connection = proxy.getConnection()) {
-                    databaseType = DatabaseType.fromJdbcUrl(connection.getMetaData().getURL());
-                }
-            } catch (SQLException e) {
-                throw new UnsupportedOperationException(e);
-            } finally {
-                lock.unlock();
             }
         }
 
         return databaseType;
     }
-
 }
