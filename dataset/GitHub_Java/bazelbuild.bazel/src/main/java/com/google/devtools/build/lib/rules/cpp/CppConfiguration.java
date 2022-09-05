@@ -409,12 +409,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     this.toolchainIdentifier = toolchain.getToolchainIdentifier();
 
-    this.supportsEmbeddedRuntimes = toolchain.getSupportsEmbeddedRuntimes();
     toolchain = addLegacyFeatures(toolchain);
     this.toolchainFeatures = new CcToolchainFeatures(toolchain);
     this.supportsGoldLinker = toolchain.getSupportsGoldLinker();
     this.supportsStartEndLib = toolchain.getSupportsStartEndLib();
     this.supportsInterfaceSharedObjects = toolchain.getSupportsInterfaceSharedObjects();
+    this.supportsEmbeddedRuntimes = toolchain.getSupportsEmbeddedRuntimes();
     this.supportsFission = toolchain.getSupportsFission();
     this.toolchainNeedsPic = toolchain.getNeedsPic();
     this.usePicForBinaries =
@@ -733,12 +733,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
           if (getTargetLibc().equals("macosx")) {
             TextFormat.merge(
                 CppLinkActionConfigs.getCppLinkActionConfigs(
-                    CppLinkPlatform.MAC, features, linkerToolPath, supportsEmbeddedRuntimes),
+                    CppLinkPlatform.MAC, features, linkerToolPath),
                 toolchainBuilder);
           } else {
             TextFormat.merge(
                 CppLinkActionConfigs.getCppLinkActionConfigs(
-                    CppLinkPlatform.LINUX, features, linkerToolPath, supportsEmbeddedRuntimes),
+                    CppLinkPlatform.LINUX, features, linkerToolPath),
                 toolchainBuilder);
           }
         }
@@ -1779,10 +1779,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
   public boolean getPruneCppModules() {
     return cppOptions.pruneCppModules;
-  }
-
-  public boolean getParseHeadersVerifiesModules() {
-    return cppOptions.parseHeadersVerifiesModules;
   }
 
   public LibcTop getLibcTop() {

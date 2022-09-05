@@ -83,7 +83,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
   private static Runfiles collectRunfiles(
       RuleContext context,
-      CcToolchainProvider toolchain,
       CcLinkingOutputs linkingOutputs,
       CcLibraryHelper.Info info,
       LinkStaticness linkStaticness,
@@ -102,6 +101,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     builder.addArtifacts(linkingOutputs.getLibrariesForRunfiles(true));
     builder.addRunfiles(context, RunfilesProvider.DEFAULT_RUNFILES);
     builder.add(context, runfilesMapping);
+    CcToolchainProvider toolchain = CppHelper.getToolchain(context);
     // Add the C++ runtime libraries if linking them dynamically.
     if (linkStaticness == LinkStaticness.DYNAMIC) {
       builder.addTransitiveArtifacts(toolchain.getDynamicRuntimeLinkInputs());
@@ -161,10 +161,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   public static ConfiguredTarget init(CppSemantics semantics, RuleContext ruleContext, boolean fake)
       throws InterruptedException, RuleErrorException {
     ruleContext.checkSrcsSamePackage(true);
+    FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext);
     CcCommon common = new CcCommon(ruleContext);
-    CcToolchainProvider ccToolchain = common.getToolchain();
-    FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeatures(ruleContext, ccToolchain);
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
     LinkTargetType linkType =
@@ -185,7 +183,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             && linkStaticness == LinkStaticness.DYNAMIC;
 
     CcLibraryHelper helper =
-        new CcLibraryHelper(ruleContext, semantics, featureConfiguration, ccToolchain)
+        new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
             .fromCommon(common)
             .addSources(common.getSources())
             .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
@@ -226,10 +224,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       ruleContext.attributeError("linkshared", "'linkshared' used in non-shared library");
       return null;
     }
+
     CppLinkActionBuilder linkActionBuilder =
         determineLinkerArguments(
             ruleContext,
-            ccToolchain,
             common,
             precompiledFiles,
             info,
@@ -240,6 +238,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             linkopts,
             linkCompileOutputSeparately);
     linkActionBuilder.setUseTestOnlyFlags(ruleContext.isTestTarget());
+
+    CcToolchainProvider ccToolchain = CppHelper.getToolchain(ruleContext);
     if (linkStaticness == LinkStaticness.DYNAMIC) {
       linkActionBuilder.setRuntimeInputs(
           ArtifactCategory.DYNAMIC_LIBRARY,
@@ -288,7 +288,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ltoArtifacts.scheduleLTOBackendAction(
             ruleContext,
             featureConfiguration,
-            ccToolchain,
             usePic,
             /*generateDwo=*/ cppConfiguration.useFission());
       }
@@ -321,8 +320,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // Create the stripped binary, but don't add it to filesToBuild; it's only built when requested.
     Artifact strippedFile = ruleContext.getImplicitOutputArtifact(
         CppRuleClasses.CC_BINARY_STRIPPED);
-    CppHelper.createStripAction(
-        ruleContext, ccToolchain, cppConfiguration, executable, strippedFile);
+    CppHelper.createStripAction(ruleContext, cppConfiguration, executable, strippedFile);
 
     DwoArtifactsCollector dwoArtifacts =
         collectTransitiveDwoArtifacts(
@@ -334,7 +332,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ltoBackendArtifacts);
     Artifact dwpFile =
         ruleContext.getImplicitOutputArtifact(CppRuleClasses.CC_BINARY_DEBUG_PACKAGE);
-    createDebugPackagerActions(ruleContext, ccToolchain, cppConfiguration, dwpFile, dwoArtifacts);
+    createDebugPackagerActions(ruleContext, cppConfiguration, dwpFile, dwoArtifacts);
 
     // The debug package should include the dwp file only if it was explicitly requested.
     Artifact explicitDwpFile = dwpFile;
@@ -358,7 +356,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     Runfiles runfiles =
         collectRunfiles(
             ruleContext,
-            ccToolchain,
             linkingOutputs,
             info,
             linkStaticness,
@@ -435,7 +432,6 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    */
   private static CppLinkActionBuilder determineLinkerArguments(
       RuleContext context,
-      CcToolchainProvider toolchain,
       CcCommon common,
       PrecompiledFiles precompiledFiles,
       CcLibraryHelper.Info info,
@@ -447,8 +443,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       boolean linkCompileOutputSeparately)
       throws InterruptedException {
     CppLinkActionBuilder builder =
-        new CppLinkActionBuilder(context, binary, toolchain)
-            .setCrosstoolInputs(toolchain.getLink())
+        new CppLinkActionBuilder(context, binary)
+            .setCrosstoolInputs(CppHelper.getToolchain(context).getLink())
             .addNonCodeInputs(compilationPrerequisites);
 
     // Either link in the .o files generated for the sources of this target or link in the
@@ -560,7 +556,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    * Creates the actions needed to generate this target's "debug info package"
    * (i.e. its .dwp file).
    */
-  private static void createDebugPackagerActions(RuleContext context, CcToolchainProvider toolchain,
+  private static void createDebugPackagerActions(RuleContext context,
       CppConfiguration cppConfiguration, Artifact dwpOutput,
       DwoArtifactsCollector dwoArtifactsCollector) {
     Iterable<Artifact> allInputs = getDwpInputs(context,
@@ -579,7 +575,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     // Get the tool inputs necessary to run the dwp command.
-    NestedSet<Artifact> dwpTools = toolchain.getDwp();
+    NestedSet<Artifact> dwpTools = CppHelper.getToolchain(context).getDwp();
     Preconditions.checkState(!dwpTools.isEmpty());
 
     List<SpawnAction.Builder> packagers = createIntermediateDwpPackagers(

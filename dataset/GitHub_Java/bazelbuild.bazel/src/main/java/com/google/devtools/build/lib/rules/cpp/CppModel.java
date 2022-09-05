@@ -346,7 +346,6 @@ public final class CppModel {
       PathFragment autoFdoImportPath,
       Artifact gcnoFile,
       Artifact dwoFile,
-      CppModuleMap cppModuleMap,
       Map<String, String> sourceSpecificBuildVariables) {
     CcToolchainFeatures.Variables.Builder buildVariables =
         new CcToolchainFeatures.Variables.Builder();
@@ -354,6 +353,7 @@ public final class CppModel {
     // TODO(bazel-team): Pull out string constants for all build variables.
 
     CppCompilationContext builderContext = builder.getContext();
+    CppModuleMap cppModuleMap = builderContext.getCppModuleMap();
     Artifact sourceFile = builder.getSourceFile();
     Artifact outputFile = builder.getOutputFile();
     String realOutputFilePath;
@@ -469,9 +469,28 @@ public final class CppModel {
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
 
     if (shouldProvideHeaderModules()) {
-      createModuleAction(result, context.getCppModuleMap(), /*addHeaderTokenFiles=*/ false);
-    } else if (context.getVerificationModuleMap() != null) {
-      createModuleAction(result, context.getVerificationModuleMap(), /*addHeaderTokenFiles=*/ true);
+      Artifact moduleMapArtifact = context.getCppModuleMap().getArtifact();
+      Label moduleMapLabel = Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName());
+      CppCompileActionBuilder builder = initializeCompileAction(moduleMapArtifact, moduleMapLabel);
+
+      builder.setSemantics(semantics);
+      
+      // A header module compile action is just like a normal compile action, but:
+      // - the compiled source file is the module map
+      // - it creates a header module (.pcm file).
+      createSourceAction(
+          FileSystemUtils.removeExtension(semantics.getEffectiveSourcePath(moduleMapArtifact))
+              .getPathString(),
+          result,
+          env,
+          moduleMapArtifact,
+          builder,
+          ArtifactCategory.CPP_MODULE,
+          /*addObject=*/ false,
+          /*enableCoverage=*/ false,
+          /*generateDwo=*/ false,
+          CppFileTypes.mustProduceDotdFile(moduleMapArtifact.getFilename()),
+          ImmutableMap.<String, String>of());
     }
 
     for (CppSource source : sourceFiles) {
@@ -499,7 +518,6 @@ public final class CppModel {
             sourceArtifact,
             builder,
             ArtifactCategory.OBJECT_FILE,
-            context.getCppModuleMap(),
             /*addObject=*/ true,
             isCodeCoverageEnabled(),
             // The source action does not generate dwo when it has bitcode
@@ -507,8 +525,7 @@ public final class CppModel {
             // info). In that case the LTOBackendAction will generate the dwo.
             /*generateDwo=*/ cppConfiguration.useFission() && !bitcodeOutput,
             CppFileTypes.mustProduceDotdFile(sourceArtifact.getFilename()),
-            source.getBuildVariables(), /*addHeaderTokenFile=*/
-            false);
+            source.getBuildVariables());
       }
     }
 
@@ -532,42 +549,12 @@ public final class CppModel {
         /*autoFdoImportPath=*/ null,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction compileAction = builder.build();
     env.registerAction(compileAction);
     Artifact tokenFile = compileAction.getOutputFile();
     result.addHeaderTokenFile(tokenFile);
-  }
-
-  private void createModuleAction(
-      CcCompilationOutputs.Builder result, CppModuleMap cppModuleMap, boolean addHeaderTokenFiles) {
-    AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
-    Label moduleMapLabel = Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName());
-    Artifact moduleMapArtifact = cppModuleMap.getArtifact();
-    CppCompileActionBuilder builder = initializeCompileAction(moduleMapArtifact, moduleMapLabel);
-
-    builder.setSemantics(semantics);
-
-    // A header module compile action is just like a normal compile action, but:
-    // - the compiled source file is the module map
-    // - it creates a header module (.pcm file).
-    createSourceAction(
-        FileSystemUtils.removeExtension(semantics.getEffectiveSourcePath(moduleMapArtifact))
-            .getPathString(),
-        result,
-        env,
-        moduleMapArtifact,
-        builder,
-        ArtifactCategory.CPP_MODULE,
-        cppModuleMap,
-        /*addObject=*/ false,
-        /*enableCoverage=*/ false,
-        /*generateDwo=*/ false,
-        CppFileTypes.mustProduceDotdFile(moduleMapArtifact.getFilename()),
-        ImmutableMap.<String, String>of(), /*addHeaderTokenFile=*/
-        addHeaderTokenFiles);
   }
 
   private void createClifMatchAction(
@@ -586,7 +573,6 @@ public final class CppModel {
         /*autoFdoImportPath=*/ null,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        builder.getContext().getCppModuleMap(),
         /*sourceSpecificBuildVariables=*/ ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction compileAction = builder.build();
@@ -602,13 +588,11 @@ public final class CppModel {
       Artifact sourceArtifact,
       CppCompileActionBuilder builder,
       ArtifactCategory outputCategory,
-      CppModuleMap cppModuleMap,
       boolean addObject,
       boolean enableCoverage,
       boolean generateDwo,
       boolean generateDotd,
-      Map<String, String> sourceSpecificBuildVariables,
-      boolean addHeaderTokenFiles) {
+      Map<String, String> sourceSpecificBuildVariables) {
     PathFragment ccRelativeName = semantics.getEffectiveSourcePath(sourceArtifact);
     if (cppConfiguration.isLipoOptimization()) {
       // TODO(bazel-team): we shouldn't be needing this, merging context with the binary
@@ -618,7 +602,9 @@ public final class CppModel {
       builder.setContext(CppCompilationContext.mergeForLipo(lipoProvider.getLipoContext(),
           context));
     }
+
     boolean generatePicAction = getGeneratePicActions();
+    // If we always need pic for everything, then don't bother to create a no-pic action.
     boolean generateNoPicAction = getGenerateNoPicActions();
     Preconditions.checkState(generatePicAction || generateNoPicAction);
     if (fake) {
@@ -647,7 +633,6 @@ public final class CppModel {
             sourceArtifact.getExecPath(),
             gcnoFile,
             dwoFile,
-            cppModuleMap,
             sourceSpecificBuildVariables);
 
         if (maySaveTemps) {
@@ -662,9 +647,6 @@ public final class CppModel {
         semantics.finalizeCompileActionBuilder(ruleContext, picBuilder);
         CppCompileAction picAction = picBuilder.build();
         env.registerAction(picAction);
-        if (addHeaderTokenFiles) {
-          result.addHeaderTokenFile(picAction.getOutputFile());
-        }
         if (addObject) {
           result.addPicObjectFile(picAction.getOutputFile());
 
@@ -698,13 +680,12 @@ public final class CppModel {
         Artifact noPicDwoFile = generateDwo ? getDwoFile(noPicOutputFile) : null;
 
         setupCompileBuildVariables(
-            builder,
+            builder, 
             /*usePic=*/ false,
             ccRelativeName,
             sourceArtifact.getExecPath(),
             gcnoFile,
             noPicDwoFile,
-            cppModuleMap,
             sourceSpecificBuildVariables);
 
         if (maySaveTemps) {
@@ -725,9 +706,6 @@ public final class CppModel {
         CppCompileAction compileAction = builder.build();
         env.registerAction(compileAction);
         Artifact objectFile = compileAction.getOutputFile();
-        if (addHeaderTokenFiles) {
-          result.addHeaderTokenFile(objectFile);
-        }
         if (addObject) {
           result.addObjectFile(objectFile);
           if (featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
@@ -774,7 +752,6 @@ public final class CppModel {
         execPath,
         /*gcnoFile=*/ null,
         /*dwoFile=*/ null,
-        builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
     CppCompileAction action = builder.build();
@@ -1109,7 +1086,6 @@ public final class CppModel {
         source.getExecPath(),
         null,
         null,
-        builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, dBuilder);
     CppCompileAction dAction = dBuilder.build();
@@ -1124,7 +1100,6 @@ public final class CppModel {
         source.getExecPath(),
         null,
         null,
-        builder.getContext().getCppModuleMap(),
         ImmutableMap.<String, String>of());
     semantics.finalizeCompileActionBuilder(ruleContext, sdBuilder);
     CppCompileAction sdAction = sdBuilder.build();

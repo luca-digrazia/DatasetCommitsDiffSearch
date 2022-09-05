@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -246,6 +247,7 @@ public final class CcLibraryHelper {
   }
 
   private final RuleContext ruleContext;
+  private final BuildConfiguration configuration;
   private final CppSemantics semantics;
 
   private final List<Artifact> publicHeaders = new ArrayList<>();
@@ -306,6 +308,7 @@ public final class CcLibraryHelper {
       FeatureConfiguration featureConfiguration,
       SourceCategory sourceCatagory) {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
+    this.configuration = ruleContext.getConfiguration();
     this.semantics = Preconditions.checkNotNull(semantics);
     this.featureConfiguration = Preconditions.checkNotNull(featureConfiguration);
     this.sourceCategory = Preconditions.checkNotNull(sourceCatagory);
@@ -929,7 +932,7 @@ public final class CcLibraryHelper {
             deps, /*generateDwo=*/
             false, /*ltoBackendArtifactsUsePic=*/
             false, /*ltoBackendArtifacts=*/
-            ImmutableList.<LTOBackendArtifacts>of());
+            ImmutableList.of());
     Runfiles cppStaticRunfiles = collectCppRunfiles(ccLinkingOutputs, true);
     Runfiles cppSharedRunfiles = collectCppRunfiles(ccLinkingOutputs, false);
 
