@@ -35,7 +35,9 @@ public class AtlasD8 {
 
     public static D8Output run(D8Command command) throws IOException {
         InternalOptions options = command.getInternalOptions();
+        options.skipDebugInfoOpt = true;
         options.skipDebugLineNumberOpt = true;
+        options.printTimes = true;
         CompilationResult result = runForTesting(command.getInputApp(), options);
 
         assert result != null;
@@ -50,7 +52,9 @@ public class AtlasD8 {
 
     public static D8Output run(D8Command command, ExecutorService executor) throws IOException {
         InternalOptions options = command.getInternalOptions();
+        options.skipDebugInfoOpt = true;
         options.skipDebugLineNumberOpt = true;
+        options.printTimes = true;
         CompilationResult result = runForTesting(command.getInputApp(), options, executor);
 
         assert result != null;
