@@ -21,13 +21,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
-import com.google.devtools.build.lib.concurrent.ExecutorParams;
+import com.google.devtools.build.lib.concurrent.ThreadPoolExecutorParams;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
@@ -80,9 +80,10 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       @Nullable EvaluationProgressReceiver invalidationReceiver,
       InvalidationState state,
       DirtyKeyTracker dirtyKeyTracker,
-      Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
+      Function<ThreadPoolExecutorParams, ThreadPoolExecutor> executorFactory) {
     super(/*concurrent=*/true,
-        /*parallelism=*/DEFAULT_THREAD_COUNT,
+        /*corePoolSize=*/DEFAULT_THREAD_COUNT,
+        /*maxPoolSize=*/DEFAULT_THREAD_COUNT,
         /*keepAliveTime=*/1,
         /*units=*/TimeUnit.SECONDS,
         /*failFastOnException=*/true,
@@ -108,16 +109,14 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       // exist in the graph, so we must be tolerant of that case.
       visit(visitData.first, visitData.second, !MUST_EXIST);
     }
-    awaitQuiescence(/*interruptWorkers=*/ true);
+    work(/*failFastOnInterrupt=*/true);
     Preconditions.checkState(pendingVisitations.isEmpty(),
         "All dirty nodes should have been processed: %s", pendingVisitations);
   }
 
   @Override
-  protected ErrorClassification classifyError(Throwable e) {
-    return e instanceof RuntimeException
-        ? ErrorClassification.CRITICAL_AND_LOG
-        : ErrorClassification.NOT_CRITICAL;
+  protected boolean isCriticalError(Throwable e) {
+    return e instanceof RuntimeException;
   }
 
   protected abstract long count();
@@ -226,7 +225,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
       }
       final Pair<SkyKey, InvalidationType> invalidationPair = Pair.of(key, invalidationType);
       pendingVisitations.add(invalidationPair);
-      execute(
+      enqueue(
           new Runnable() {
             @Override
             public void run() {
@@ -299,7 +298,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         EvaluationProgressReceiver invalidationReceiver,
         InvalidationState state,
         DirtyKeyTracker dirtyKeyTracker,
-        Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
+        Function<ThreadPoolExecutorParams, ThreadPoolExecutor> executorFactory) {
       super(graph, invalidationReceiver, state, dirtyKeyTracker, executorFactory);
     }
 
@@ -345,7 +344,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         return;
       }
       pendingVisitations.add(invalidationPair);
-      execute(
+      enqueue(
           new Runnable() {
             @Override
             public void run() {
