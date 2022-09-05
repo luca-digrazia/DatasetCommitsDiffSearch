@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * @since 3.1
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD, ElementType.ANNOTATION_TYPE })
+@Target(ElementType.METHOD)
 public @interface CachedGauge {
 
     /**
