@@ -282,11 +282,12 @@ final class WatchApplicationSupport {
             watchKitStubZip.getFilename(),
             Joiner.on(" ").join(ImmutableList.of("_WatchKitStub", bundleName))));
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                appleConfiguration,
-                appleConfiguration.getMultiArchPlatform(PlatformType.WATCHOS))
+                ruleContext,
+                ruleContext
+                    .getFragment(AppleConfiguration.class)
+                    .getMultiArchPlatform(PlatformType.WATCHOS))
             .setProgressMessage(
                 "Copying WatchKit binary and stub resource: " + ruleContext.getLabel())
             .setShellCommand(ImmutableList.of("/bin/bash", "-c", Joiner.on(" ").join(command)))

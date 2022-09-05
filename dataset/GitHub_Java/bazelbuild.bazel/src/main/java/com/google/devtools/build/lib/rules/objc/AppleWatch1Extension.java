@@ -32,8 +32,8 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.objc.IosExtension.ExtensionSplitArchTransition;
-import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.objc.WatchUtils.WatchOSVersion;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
@@ -53,8 +53,8 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
       ImmutableSet.of(new Attribute(WATCH_APP_DEPS_ATTR, Mode.SPLIT));
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
-    ObjcProvider.Builder applicationObjcProviderBuilder = new ObjcProvider.Builder();
+  public ConfiguredTarget create(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
     ObjcProvider.Builder extensionObjcProviderBuilder = new ObjcProvider.Builder();
     XcodeProvider.Builder applicationXcodeProviderBuilder = new XcodeProvider.Builder();
     XcodeProvider.Builder extensionXcodeProviderBuilder = new XcodeProvider.Builder();
@@ -62,8 +62,10 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> extensionfilesToBuild = NestedSetBuilder.stableOrder();
 
     // 1. Build watch application bundle.
-    createWatchApplicationBundle(ruleContext, applicationXcodeProviderBuilder,
-        applicationObjcProviderBuilder, applicationFilesToBuild);
+    createWatchApplicationBundle(
+        ruleContext,
+        applicationXcodeProviderBuilder,
+        applicationFilesToBuild);
 
     // 2. Build watch extension bundle.
     createWatchExtensionBundle(ruleContext, extensionXcodeProviderBuilder,
@@ -80,7 +82,7 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
                 InstrumentedFilesCollector.forward(ruleContext, "binary"));
 
     // 4. Exposed {@ObjcProvider} for bundling into final IPA.
-    exposeObjcProvider(ruleContext, targetBuilder);
+    exposeObjcProvider(ruleContext, targetBuilder, extensionObjcProviderBuilder);
 
     return targetBuilder.build();
   }
@@ -91,10 +93,11 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
    *    2. WatchKitSupport.
    *    3. A flag to indicate that watch os 1 extension is included.
    */
-  private void exposeObjcProvider(RuleContext ruleContext,
-      RuleConfiguredTargetBuilder targetBuilder) throws InterruptedException {
-    ObjcProvider.Builder exposedObjcProviderBuilder = new ObjcProvider.Builder();
-
+  private void exposeObjcProvider(
+      RuleContext ruleContext,
+      RuleConfiguredTargetBuilder targetBuilder,
+      ObjcProvider.Builder exposedObjcProviderBuilder)
+      throws InterruptedException {
     exposedObjcProviderBuilder.add(MERGE_ZIP,
         ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA));
     WatchUtils.registerActionsToAddWatchSupport(ruleContext, exposedObjcProviderBuilder,
@@ -120,7 +123,6 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
       ObjcProvider.Builder objcProviderBuilder,
       NestedSetBuilder<Artifact> filesToBuild) throws InterruptedException {
     new WatchExtensionSupport(ruleContext,
-        WatchOSVersion.OS1,
         extensionDependencyAttributes,
         ObjcRuleClasses.intermediateArtifacts(ruleContext),
         watchExtensionBundleName(ruleContext),
@@ -133,26 +135,27 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
 
   /**
    * Creates a watch application bundle.
-   * 
    * @param ruleContext rule context in which to create the bundle
    * @param xcodeProviderBuilder {@link XcodeProvider.Builder} for the application
-   * @param objcProviderBuilder {@link ObjcProvider.Builder} for the application
    * @param filesToBuild the list to contain the files to be built for this bundle
    */
-  private void createWatchApplicationBundle(RuleContext ruleContext,
+  private void createWatchApplicationBundle(
+      RuleContext ruleContext,
       XcodeProvider.Builder xcodeProviderBuilder,
-      ObjcProvider.Builder objcProviderBuilder,
-      NestedSetBuilder<Artifact> filesToBuild) throws InterruptedException {
-    new WatchApplicationSupport(ruleContext,
-        WatchOSVersion.OS1,
-        applicationDependencyAttributes,
-        new IntermediateArtifacts(ruleContext, "",
-            watchApplicationBundleName(ruleContext)),
-        watchApplicationBundleName(ruleContext),
-        watchApplicationIpaArtifact(ruleContext),
-        watchApplicationBundleName(ruleContext),
-        ConfigurationDistinguisher.WATCH_OS1_EXTENSION)
-    .createBundle(xcodeProviderBuilder, objcProviderBuilder, filesToBuild);
+      NestedSetBuilder<Artifact> filesToBuild)
+      throws InterruptedException {
+    new WatchApplicationSupport(
+            ruleContext,
+            WatchOSVersion.OS1,
+            applicationDependencyAttributes,
+            new IntermediateArtifacts(ruleContext, "", watchApplicationBundleName(ruleContext)),
+            watchApplicationBundleName(ruleContext),
+            watchApplicationIpaArtifact(ruleContext),
+            watchApplicationBundleName(ruleContext))
+        .createBundleAndXcodeproj(
+            xcodeProviderBuilder,
+            ImmutableList.<Artifact>of(),
+            filesToBuild);
   }
 
   /**
@@ -173,7 +176,7 @@ public class AppleWatch1Extension implements RuleConfiguredTargetFactory {
     ImmutableList<String> command = ImmutableList.of(
         "mkdir -p " + workingDirectory,
         "&&",
-        String.format("/usr/bin/unzip -q %s -d %s",
+        String.format("/usr/bin/unzip -q -o %s -d %s",
             watchApplicationIpa.getExecPathString(),
             workingDirectory),
         "&&",

@@ -181,8 +181,8 @@ public class WatchExtensionSupport {
         NSObject.wrap(uiRequiredDeviceCapabilities.toArray()));
 
     ruleContext.registerAction(
-        FileWriteAction.create(
-            ruleContext,
+        new FileWriteAction(
+            ruleContext.getActionOwner(),
             watchExtensionAutomaticPlist(),
             watchExtensionAutomaticEntries.toGnuStepASCIIPropertyList(),
             /*makeExecutable=*/ false));
