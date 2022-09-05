@@ -98,7 +98,9 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
 
     @Override
     public TableMetaData parseMeta(Form form) {
-        return formParser.parse(form);
+        TableMetaData metaData = formParser.parse(form);
+        initDefaultField(metaData);
+        return metaData;
     }
 
     @Override
@@ -163,8 +165,13 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         query.setParam(param);
         int total = query.total();
         result.setTotal(total);
-        param.rePaging(total);
-        result.setData(query.list(param.getPageIndex(), param.getPageSize()));
+        if (total == 0) {
+            result.setData(new ArrayList<>());
+        } else {
+            //根据实际记录数量重新指定分页参数
+            param.rePaging(total);
+            result.setData(query.list(param.getPageIndex(), param.getPageSize()));
+        }
         return result;
     }
 
@@ -454,8 +461,4 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         return result;
     }
 
-
-    public static void main(String[] args) {
-        Arrays.asList(1,2,3).forEach(System.out::println);
-    }
 }
