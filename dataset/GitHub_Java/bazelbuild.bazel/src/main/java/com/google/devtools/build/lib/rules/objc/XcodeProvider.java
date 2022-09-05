@@ -32,6 +32,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -45,7 +46,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.DependencyControl;
 import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.TargetControl;
@@ -183,8 +183,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         // TODO(bazel-team): This is messy. Maybe we should make XcodeProvider be able to specify
         // how to depend on it rather than require this method to choose based on the dependency's
         // type.
-        if (dependency.productType == XcodeProductType.EXTENSION
-            || dependency.productType == XcodeProductType.WATCH_OS1_EXTENSION) {
+        if (dependency.productType == XcodeProductType.EXTENSION) {
           this.extensions.add(dependency);
           this.inputsToXcodegen.addTransitive(dependency.inputsToXcodegen);
           this.additionalSources.addTransitive(dependency.additionalSources);
@@ -490,8 +489,7 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   @VisibleForTesting
   static final EnumSet<XcodeProductType> CAN_LINK_PRODUCT_TYPES = EnumSet.of(
       XcodeProductType.APPLICATION, XcodeProductType.BUNDLE, XcodeProductType.UNIT_TEST,
-      XcodeProductType.EXTENSION, XcodeProductType.FRAMEWORK, XcodeProductType.WATCH_OS1_EXTENSION,
-      XcodeProductType.WATCH_OS1_APPLICATION);
+      XcodeProductType.EXTENSION, XcodeProductType.FRAMEWORK);
 
   /**
    * Returns the name of the Xcode target that corresponds to a build target with the given name.
@@ -514,14 +512,8 @@ public final class XcodeProvider implements TransitiveInfoProvider {
   }
 
   private static String xcodeTargetName(Label label, String labelSuffix) {
-    String pathFromWorkspaceRoot = label + labelSuffix;
-    if (label.getPackageIdentifier().getRepository().isMain()) {
-      pathFromWorkspaceRoot = pathFromWorkspaceRoot.replace("//", "")
-          .replace(':', '/');
-    } else {
-      pathFromWorkspaceRoot = pathFromWorkspaceRoot.replace("//", "_")
-          .replace(':', '/').replace("@", "external_");
-    }
+    String pathFromWorkspaceRoot = (label + labelSuffix).replace("//", "")
+        .replace(':', '/');
     List<String> components = Splitter.on('/').splitToList(pathFromWorkspaceRoot);
     return Joiner.on('_').join(Lists.reverse(components));
   }
@@ -608,12 +600,11 @@ public final class XcodeProvider implements TransitiveInfoProvider {
         // but do have a dummy source file to make Xcode happy.
         boolean hasSources = dependency.compilationArtifacts.isPresent()
             && dependency.compilationArtifacts.get().getArchive().isPresent();
-        if (hasSources || (dependency.productType == XcodeProductType.BUNDLE
-            || (dependency.productType == XcodeProductType.WATCH_OS1_APPLICATION))) {
+        if (hasSources || (dependency.productType == XcodeProductType.BUNDLE)) {
           String dependencyXcodeTargetName = dependency.dependencyXcodeTargetName();
           dependencySet.add(DependencyControl.newBuilder()
-              .setTargetLabel(dependencyXcodeTargetName)
-              .build());
+                .setTargetLabel(dependencyXcodeTargetName)
+                .build());
         }
       }
 
