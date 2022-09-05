@@ -8,7 +8,6 @@ import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import com.yammer.metrics.core.MetricsRegistry;
-import com.yammer.metrics.spring.MeteredClass.BogusException;
 
 public class MeteredInterfaceTest {
 
@@ -32,26 +31,31 @@ public class MeteredInterfaceTest {
 
     @Test(expected=NoSuchBeanDefinitionException.class)
     public void testMeteredClass() {
-        MeteredClass mc = ctx.getBean(MeteredClass.class);
+        MeteredInterfaceImpl mc = ctx.getBean(MeteredInterfaceImpl.class);
         Assert.assertNull("Expected to be unable to get MeteredClass by class.", mc);
     }
 
     @Test
     public void testTimedMethod() {
-        ctx.getBean(MeteredInterface.class).timedMethod();
+        Assert.assertTrue(ctx.getBean(MeteredInterface.class).timedMethod());
         Assert.assertTrue(ctx.getBean(MetricsRegistry.class).allMetrics().isEmpty());
     }
 
     @Test
     public void testMeteredMethod() {
-        ctx.getBean(MeteredInterface.class).meteredMethod();
+        Assert.assertTrue(ctx.getBean(MeteredInterface.class).meteredMethod());
         Assert.assertTrue(ctx.getBean(MetricsRegistry.class).allMetrics().isEmpty());
     }
 
     @Test(expected=BogusException.class)
     public void testExceptionMeteredMethod() throws Throwable {
-        ctx.getBean(MeteredInterface.class).exceptionMeteredMethod();
-        Assert.assertTrue(ctx.getBean(MetricsRegistry.class).allMetrics().isEmpty());
+    	try {
+    		ctx.getBean(MeteredInterface.class).exceptionMeteredMethod();
+    	} catch (Throwable t) {
+    		Assert.assertTrue(ctx.getBean(MetricsRegistry.class).allMetrics().isEmpty());
+    		throw t;
+    	}
+    	Assert.fail();
     }
 
 }
