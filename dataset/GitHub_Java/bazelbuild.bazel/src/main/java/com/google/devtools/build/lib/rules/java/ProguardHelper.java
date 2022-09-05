@@ -251,11 +251,11 @@ public abstract class ProguardHelper {
       Artifact implicitDirectives =
           getProguardConfigArtifact(ruleContext, optMode.name().toLowerCase());
       ruleContext.registerAction(
-          FileWriteAction.create(
-              ruleContext,
+          new FileWriteAction(
+              ruleContext.getActionOwner(),
               implicitDirectives,
               optMode.getImplicitProguardDirectives(),
-              /*makeExecutable=*/ false));
+              /*executable*/ false));
       builder.add(implicitDirectives);
     }
 
@@ -270,13 +270,15 @@ public abstract class ProguardHelper {
       RuleContext ruleContext, String mainClassName) {
     Artifact result = ProguardHelper.getProguardConfigArtifact(ruleContext, "jvm");
     ruleContext.registerAction(
-        FileWriteAction.create(
-            ruleContext,
+        new FileWriteAction(
+            ruleContext.getActionOwner(),
             result,
             String.format(
-                "-keep class %s {%n  public static void main(java.lang.String[]);%n}",
+                "-keep class %s {%n"
+                    + "  public static void main(java.lang.String[]);%n"
+                    + "}",
                 mainClassName),
-            /*makeExecutable=*/ false));
+            /*executable*/ false));
     return result;
   }
 
