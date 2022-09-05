@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -179,7 +180,6 @@ public class RuleDocumentationAttribute implements Comparable<RuleDocumentationA
     StringBuilder sb = new StringBuilder()
         .append(TYPE_DESC.get(attribute.getType()))
         .append("; " + (attribute.isMandatory() ? "required" : "optional"))
-        .append(!attribute.isConfigurable() ? "; nonconfigurable" : "")
         .append(getDefaultValue());
     return sb.toString();
   }
@@ -257,8 +257,8 @@ public class RuleDocumentationAttribute implements Comparable<RuleDocumentationA
       ConfiguredRuleClassProvider ruleClassProvider) {
     if (ruleClassProvider == null) {
       try {
-        return usingClass.getConstructor().newInstance();
-      } catch (ReflectiveOperationException | IllegalArgumentException e) {
+        return usingClass.newInstance();
+      } catch (IllegalAccessException | InstantiationException e) {
         throw new IllegalStateException(e);
       }
     }
