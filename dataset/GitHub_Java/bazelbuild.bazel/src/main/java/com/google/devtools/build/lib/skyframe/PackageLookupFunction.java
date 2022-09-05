@@ -66,7 +66,7 @@ public class PackageLookupFunction implements SkyFunction {
     }
 
     if (deletedPackages.get().contains(packageKey)) {
-      return PackageLookupValue.DELETED_PACKAGE_VALUE;
+      return PackageLookupValue.deletedPackage();
     }
 
     // TODO(bazel-team): The following is O(n^2) on the number of elements on the package path due
@@ -79,7 +79,7 @@ public class PackageLookupFunction implements SkyFunction {
         return value;
       }
     }
-    return PackageLookupValue.NO_BUILD_FILE_VALUE;
+    return PackageLookupValue.noBuildFile();
   }
 
   @Nullable
@@ -129,7 +129,7 @@ public class PackageLookupFunction implements SkyFunction {
     if (fileValue.isFile()) {
       return PackageLookupValue.success(buildFileRootedPath.getRoot());
     }
-    return PackageLookupValue.NO_BUILD_FILE_VALUE;
+    return PackageLookupValue.noBuildFile();
   }
 
   /**
@@ -169,7 +169,7 @@ public class PackageLookupFunction implements SkyFunction {
         return PackageLookupValue.success(repositoryValue.getPath());
       }
     }
-    return PackageLookupValue.NO_BUILD_FILE_VALUE;
+    return PackageLookupValue.noBuildFile();
   }
 
   /**
