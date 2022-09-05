@@ -476,7 +476,6 @@ public class MaterialCalendarView extends ViewGroup {
      *
      * @param mode - calendar mode
      */
-    @Experimental
     public void setCalendarDisplayMode(CalendarMode mode) {
         if (calendarMode != null && calendarMode.equals(mode)) {
             return;
@@ -499,7 +498,6 @@ public class MaterialCalendarView extends ViewGroup {
             adapter = adapter.migrateStateAndReturn(newAdapter);
         }
         pager.setAdapter(adapter);
-        setRangeDates(minDate, maxDate);
         calendarMode = mode;
 
         // Reset height params after mode change
@@ -1122,8 +1120,6 @@ public class MaterialCalendarView extends ViewGroup {
         ss.tileWidthPx = getTileWidth();
         ss.tileHeightPx = getTileHeight();
         ss.topbarVisible = getTopbarVisible();
-        ss.calendarMode = calendarMode;
-        ss.currentMonth = currentMonth;
         return ss;
     }
 
@@ -1136,8 +1132,6 @@ public class MaterialCalendarView extends ViewGroup {
         setWeekDayTextAppearance(ss.weekDayTextAppearance);
         setShowOtherDates(ss.showOtherDates);
         setAllowClickDaysOutsideCurrentMonth(ss.allowClickDaysOutsideCurrentMonth);
-        minDate = ss.minDate;
-        maxDate = ss.maxDate;
         setRangeDates(ss.minDate, ss.maxDate);
         clearSelection();
         for (CalendarDay calendarDay : ss.selectedDates) {
@@ -1149,8 +1143,6 @@ public class MaterialCalendarView extends ViewGroup {
         setTopbarVisible(ss.topbarVisible);
         setSelectionMode(ss.selectionMode);
         setDynamicHeightEnabled(ss.dynamicHeightEnabled);
-        setCalendarDisplayMode(ss.calendarMode);
-        setCurrentDate(ss.currentMonth);
     }
 
     @Override
@@ -1187,8 +1179,6 @@ public class MaterialCalendarView extends ViewGroup {
         boolean topbarVisible = true;
         int selectionMode = SELECTION_MODE_SINGLE;
         boolean dynamicHeightEnabled = false;
-        CalendarMode calendarMode = CalendarMode.MONTHS;
-        CalendarDay currentMonth = null;
 
         SavedState(Parcelable superState) {
             super(superState);
@@ -1211,8 +1201,6 @@ public class MaterialCalendarView extends ViewGroup {
             out.writeInt(topbarVisible ? 1 : 0);
             out.writeInt(selectionMode);
             out.writeInt(dynamicHeightEnabled ? 1 : 0);
-            out.writeInt(calendarMode == CalendarMode.WEEKS ? 1 : 0);
-            out.writeParcelable(currentMonth, 0);
         }
 
         public static final Parcelable.Creator<SavedState> CREATOR
@@ -1243,8 +1231,6 @@ public class MaterialCalendarView extends ViewGroup {
             topbarVisible = in.readInt() == 1;
             selectionMode = in.readInt();
             dynamicHeightEnabled = in.readInt() == 1;
-            calendarMode = in.readInt() == 1 ? CalendarMode.WEEKS : CalendarMode.MONTHS;
-            currentMonth = in.readParcelable(loader);
         }
     }
 
@@ -1263,7 +1249,7 @@ public class MaterialCalendarView extends ViewGroup {
 
     /**
      * Sets the first day of the week.
-     * <p/>
+     * <p>
      * Uses the java.util.Calendar day constants.
      *
      * @param day The first day of the week as a java.util.Calendar day constant.
@@ -1291,7 +1277,6 @@ public class MaterialCalendarView extends ViewGroup {
             adapter = adapter.migrateStateAndReturn(newAdapter);
         }
         pager.setAdapter(adapter);
-        setRangeDates(minDate, maxDate);
 
         setCurrentDate(
                 selectionMode == SELECTION_MODE_SINGLE && !adapter.getSelectedDates().isEmpty()
@@ -1311,7 +1296,7 @@ public class MaterialCalendarView extends ViewGroup {
     /**
      * By default, the calendar will take up all the space needed to show any month (6 rows).
      * By enabling dynamic height, the view will change height dependant on the visible month.
-     * <p/>
+     * <p>
      * This means months that only need 5 or 4 rows to show the entire month will only take up
      * that many rows, and will grow and shrink as necessary.
      *
