@@ -33,13 +33,7 @@ class OomSignalHandler extends AbstractSignalHandler {
   private static final String MESSAGE = "SIGUSR2 received, presumably from JVM due to OOM";
   // Pre-allocate memory for object that will be used during an OOM, because there may not be spare
   // memory when we're OOMing. That's kind of the point of an OOM.
-  private static final OutOfMemoryError OUT_OF_MEMORY_ERROR =
-      withNoStack(new OutOfMemoryError(MESSAGE));
-
-  private static <T extends Throwable> T withNoStack(T throwable) {
-    throwable.setStackTrace(new StackTraceElement[0]);
-    return throwable;
-  }
+  private static final OutOfMemoryError OUT_OF_MEMORY_ERROR = new OutOfMemoryError(MESSAGE);
 
   OomSignalHandler() {
     super(SIGUSR2);
