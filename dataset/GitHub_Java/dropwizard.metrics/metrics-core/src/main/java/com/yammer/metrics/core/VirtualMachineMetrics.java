@@ -15,8 +15,6 @@ import static java.lang.management.ManagementFactory.*;
  * A collection of Java Virtual Machine metrics.
  */
 public class VirtualMachineMetrics {
-    private static final int MAX_STACK_TRACE_DEPTH = 100;
-
     public static class GarbageCollector {
         private final long runs, timeMS;
 
@@ -198,7 +196,7 @@ public class VirtualMachineMetrics {
      * @return the number of seconds the JVM process has been running
      */
     public long uptime() {
-        return TimeUnit.MILLISECONDS.toSeconds(getRuntimeMXBean().getUptime());
+        return getRuntimeMXBean().getUptime() / 1000;
     }
 
     /**
@@ -242,7 +240,7 @@ public class VirtualMachineMetrics {
         final long[] threadIds = getThreadMXBean().findDeadlockedThreads();
         if (threadIds != null) {
             final Set<String> threads = new HashSet<String>();
-            for (ThreadInfo info : getThreadMXBean().getThreadInfo(threadIds, MAX_STACK_TRACE_DEPTH)) {
+            for (ThreadInfo info : getThreadMXBean().getThreadInfo(threadIds, 100)) {
                 final StringBuilder stackTrace = new StringBuilder();
                 for (StackTraceElement element : info.getStackTrace()) {
                     stackTrace.append("\t at ").append(element.toString()).append('\n');
