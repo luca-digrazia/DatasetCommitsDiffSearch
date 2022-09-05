@@ -32,9 +32,9 @@ import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
@@ -51,6 +51,8 @@ import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
+import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -62,17 +64,22 @@ import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Tests for {@link LoadingPhaseRunner}. */
 @RunWith(JUnit4.class)
@@ -91,15 +98,15 @@ public class LoadingPhaseRunnerTest {
 
   @Before
   public final void createLoadingPhaseTester() throws Exception  {
-    tester = new LoadingPhaseTester(useSkyframeTargetPatternEval());
+    tester = new LoadingPhaseTester(!runsLoadingPhase());
   }
 
   protected List<Target> getTargets(String... targetNames) throws Exception {
     return tester.getTargets(targetNames);
   }
 
-  protected boolean useSkyframeTargetPatternEval() {
-    return false;
+  protected boolean runsLoadingPhase() {
+    return true;
   }
 
   @Test
@@ -120,6 +127,10 @@ public class LoadingPhaseRunnerTest {
       @Override
       public void notifyTargets(Collection<Target> targets) throws LoadingFailedException {
         targetsNotified.addAll(targets);
+      }
+
+      @Override
+      public void notifyVisitedPackages(Set<PackageIdentifier> visitedPackages) {
       }
     });
     assertNoErrors(tester.load("//base:hello"));
@@ -159,6 +170,22 @@ public class LoadingPhaseRunnerTest {
     assertThat(loadingResult.getTestsToRun()).containsExactlyElementsIn(ImmutableList.<Target>of());
     tester.assertContainsError("Skipping '//base:missing': no such target '//base:missing'");
     tester.assertContainsWarning("Target pattern parsing failed.");
+  }
+
+  @Test
+  public void testBadTransitiveClosure() throws Exception {
+    if (!runsLoadingPhase()) {
+      // TODO(ulfjack): Requires loading phase.
+      return;
+    }
+    tester.addFile("base/BUILD",
+        "filegroup(name = 'hello', srcs = ['//nonexistent:missing'])");
+    LoadingResult loadingResult = tester.loadKeepGoing("//base:hello");
+    assertFalse(loadingResult.hasTargetPatternError());
+    assertTrue(loadingResult.hasLoadingError());
+    assertThat(loadingResult.getTargets()).containsExactlyElementsIn(ImmutableList.<Target>of());
+    assertNull(loadingResult.getTestsToRun());
+    tester.assertContainsError("no such package 'nonexistent': BUILD file not found");
   }
 
   @Test
@@ -396,6 +423,9 @@ public class LoadingPhaseRunnerTest {
         "test_suite(name = 'tests', tests = [':my_test'])");
     LoadingResult loadingResult = tester.loadTests("//cc:tests", "-//cc:my_test");
     tester.assertContainsWarning("All specified test targets were excluded by filters");
+    if (runsLoadingPhase()) {
+      assertThat(loadingResult.getTargets()).containsExactlyElementsIn(getTargets("//cc:my_test"));
+    }
     assertThat(loadingResult.getTestsToRun()).containsExactlyElementsIn(getTargets());
   }
 
@@ -500,10 +530,14 @@ public class LoadingPhaseRunnerTest {
         "sh_binary(name = 'bad', srcs = ['bad.sh'])",
         "undefined_symbol");
     LoadingResult loadingResult = tester.loadKeepGoing("//bad");
-    if (!useSkyframeTargetPatternEval()) {
-      // The LegacyLoadingPhaseRunner drops the error on the floor. The target can be resolved
-      // after all, even if the package is in error.
+    if (runsLoadingPhase()) {
+      // The legacy loading phase runner reports a loading error, but no target pattern error in
+      // keep_going mode, even though it's clearly an error in the referenced target itself, rather
+      // than in its transitive closure. This happens because the target pattern eval swallows such
+      // errors in keep_going mode. We could fix that, but it's a fairly invasive change, and we're
+      // planning to migrate to the Skyframe-based implementation anyway.
       assertThat(loadingResult.hasTargetPatternError()).isFalse();
+      assertThat(loadingResult.hasLoadingError()).isTrue();
     } else {
       assertThat(loadingResult.hasTargetPatternError()).isTrue();
     }
@@ -526,6 +560,9 @@ public class LoadingPhaseRunnerTest {
     tester.useLoadingOptions("--compile_one_dependency");
     try {
       LoadingResult loadingResult = tester.load("base/hello.cc");
+      if (runsLoadingPhase()) {
+        fail();
+      }
       assertThat(loadingResult.hasLoadingError()).isFalse();
     } catch (LoadingFailedException expected) {
       tester.assertContainsError("no such package 'bad'");
@@ -538,7 +575,7 @@ public class LoadingPhaseRunnerTest {
         "cc_library(name = 'hello', srcs = ['hello.cc', '//bad:bad.cc'])");
     tester.useLoadingOptions("--compile_one_dependency");
     LoadingResult loadingResult = tester.loadKeepGoing("base/hello.cc");
-    assertFalse(loadingResult.hasLoadingError());
+    assertEquals(loadingResult.hasLoadingError(), runsLoadingPhase());
   }
 
   private void assertCircularSymlinksDuringTargetParsing(String targetPattern) throws Exception {
@@ -558,11 +595,14 @@ public class LoadingPhaseRunnerTest {
     return loadingResult;
   }
 
+  private <K, V> Map.Entry<K, V> entryFor(K key, V value) {
+    return new AbstractMap.SimpleImmutableEntry<>(key, value);
+  }
+
   private static class LoadingPhaseTester {
     private final ManualClock clock = new ManualClock();
     private final Path workspace;
 
-    private final AnalysisMock analysisMock;
     private final SkyframeExecutor skyframeExecutor;
 
     private final List<Path> changes = new ArrayList<>();
@@ -582,35 +622,28 @@ public class LoadingPhaseRunnerTest {
       this.workspace = fs.getPath("/workspace");
       workspace.createDirectory();
       mockToolsConfig = new MockToolsConfig(workspace);
-      analysisMock = AnalysisMock.get();
-      analysisMock.setupMockClient(mockToolsConfig);
+      AnalysisMock.get().setupMockClient(mockToolsConfig);
       FileSystemUtils.deleteTree(workspace.getRelative("base"));
 
-      ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
-      PackageFactory pkgFactory =
-          analysisMock.getPackageFactoryForTesting().create(ruleClassProvider, fs);
+      PackageFactory pkgFactory = TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
+          TestRuleClassProvider.getRuleClassProvider(), fs);
       PackageCacheOptions options = Options.getDefaults(PackageCacheOptions.class);
       storedErrors = new StoredEventHandler();
       BlazeDirectories directories =
-          new BlazeDirectories(
-              fs.getPath("/install"),
-              fs.getPath("/output"),
-              workspace,
-              analysisMock.getProductName());
-      skyframeExecutor =
-          SequencedSkyframeExecutor.create(
-              pkgFactory,
-              directories,
-              null, /* binTools -- not used */
-              null, /* workspaceStatusActionFactory -- not used */
-              ruleClassProvider.getBuildInfoFactories(),
-              ImmutableList.<DiffAwareness.Factory>of(),
-              Predicates.<PathFragment>alwaysFalse(),
-              Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
-              analysisMock.getSkyFunctions(),
-              ImmutableList.<PrecomputedValue.Injected>of(),
-              ImmutableList.<SkyValueDirtinessChecker>of(),
-              analysisMock.getProductName());
+          new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace,
+              TestConstants.PRODUCT_NAME);
+      skyframeExecutor = SequencedSkyframeExecutor.create(pkgFactory,
+          directories,
+          null,  /* binTools -- not used */
+          null,  /* workspaceStatusActionFactory -- not used */
+          TestRuleClassProvider.getRuleClassProvider().getBuildInfoFactories(),
+          ImmutableList.<DiffAwareness.Factory>of(),
+          Predicates.<PathFragment>alwaysFalse(),
+          Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
+          AnalysisMock.get().getSkyFunctions(),
+          ImmutableList.<PrecomputedValue.Injected>of(),
+          ImmutableList.<SkyValueDirtinessChecker>of(),
+          TestConstants.PRODUCT_NAME);
       PathPackageLocator pkgLocator = PathPackageLocator.create(
           null, options.packagePath, storedErrors, workspace, workspace);
       skyframeExecutor.preparePackageLoading(
@@ -618,7 +651,8 @@ public class LoadingPhaseRunnerTest {
           ConstantRuleVisibility.PRIVATE,
           true,
           7,
-          analysisMock.getDefaultsPackageContent(),
+          TestRuleClassProvider.getRuleClassProvider()
+              .getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
           UUID.randomUUID(),
           new TimestampGranularityMonitor(clock));
       loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
@@ -661,17 +695,10 @@ public class LoadingPhaseRunnerTest {
         EventBus eventBus = new EventBus();
         FilteredTargetListener listener = new FilteredTargetListener();
         eventBus.register(listener);
-        result =
-            loadingPhaseRunner.execute(
-                storedErrors,
-                eventBus,
-                ImmutableList.copyOf(patterns),
-                PathFragment.EMPTY_FRAGMENT,
-                options,
-                ImmutableListMultimap.<String, Label>of(),
-                keepGoing,
-                determineTests,
-                loadingCallback);
+        result = loadingPhaseRunner.execute(storedErrors, eventBus,
+            ImmutableList.copyOf(patterns), PathFragment.EMPTY_FRAGMENT, options,
+            ImmutableListMultimap.<String, Label>of(), keepGoing, /*enableLoading=*/true,
+            determineTests, loadingCallback);
         this.targetParsingCompleteEvent = listener.targetParsingCompleteEvent;
         this.loadingPhaseCompleteEvent = listener.loadingPhaseCompleteEvent;
       } catch (LoadingFailedException e) {
@@ -705,7 +732,9 @@ public class LoadingPhaseRunnerTest {
     }
 
     private void sync() throws InterruptedException {
-      String pkgContents = analysisMock.getDefaultsPackageContent();
+      String pkgContents =
+          TestRuleClassProvider.getRuleClassProvider()
+              .getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY);
       skyframeExecutor.setupDefaultPackage(pkgContents);
       clock.advanceMillis(1);
       ModifiedFileSet.Builder builder = ModifiedFileSet.builder();

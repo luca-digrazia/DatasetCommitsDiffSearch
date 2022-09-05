@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.util.LoadingMock;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
@@ -42,6 +41,8 @@ import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.testutil.ManualClock;
+import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -55,17 +56,20 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+
 import javax.annotation.Nullable;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Tests for incremental loading; these cover both normal operation and diff awareness, for which a
@@ -461,32 +465,26 @@ public class IncrementalLoadingTest {
       outputBase.createDirectory();
       addFile("WORKSPACE");
 
-      LoadingMock loadingMock = LoadingMock.get();
       skyframeExecutor =
           SequencedSkyframeExecutor.create(
-              loadingMock
-                  .getPackageFactoryForTesting()
-                  .create(loadingMock.createRuleClassProvider(), fs),
-              new BlazeDirectories(
-                  fs.getPath("/install"),
-                  fs.getPath("/output"),
-                  workspace,
-                  loadingMock.getProductName()),
+              TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
+                  TestRuleClassProvider.getRuleClassProvider(), fs),
+              new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace,
+                  TestConstants.PRODUCT_NAME),
               null, /* BinTools */
               null, /* workspaceStatusActionFactory */
-              loadingMock.createRuleClassProvider().getBuildInfoFactories(),
+              TestRuleClassProvider.getRuleClassProvider().getBuildInfoFactories(),
               ImmutableList.of(new ManualDiffAwarenessFactory()),
               Predicates.<PathFragment>alwaysFalse(),
               supplier,
               ImmutableMap.<SkyFunctionName, SkyFunction>of(),
               ImmutableList.<PrecomputedValue.Injected>of(),
               ImmutableList.<SkyValueDirtinessChecker>of(),
-              loadingMock.getProductName());
+              TestConstants.PRODUCT_NAME);
       skyframeExecutor.preparePackageLoading(
           new PathPackageLocator(outputBase, ImmutableList.of(workspace)),
           ConstantRuleVisibility.PUBLIC, true, 7, "",
-          UUID.randomUUID(), ImmutableMap.<String, String>of(),
-          new TimestampGranularityMonitor(BlazeClock.instance()));
+          UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
     }
 
     Path addFile(String fileName, String... content) throws IOException {
@@ -565,8 +563,7 @@ public class IncrementalLoadingTest {
       skyframeExecutor.preparePackageLoading(
           new PathPackageLocator(outputBase, ImmutableList.of(workspace)),
           ConstantRuleVisibility.PUBLIC, true, 7, "",
-          UUID.randomUUID(), ImmutableMap.<String, String>of(),
-          new TimestampGranularityMonitor(BlazeClock.instance()));
+          UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
       skyframeExecutor.invalidateFilesUnderPathForTesting(
           new Reporter(), modifiedFileSet, workspace);
       ((SequencedSkyframeExecutor) skyframeExecutor).handleDiffs(new Reporter());

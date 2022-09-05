@@ -21,10 +21,10 @@ import static org.junit.Assert.assertTrue;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
@@ -36,7 +36,7 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.io.IOException;
+
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.junit.Before;
@@ -47,6 +47,8 @@ import org.mockito.Matchers;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+
+import java.io.IOException;
 
 /**
  * Test for {@link WorkspaceFileFunction}.
@@ -113,7 +115,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
   @Override
   protected Iterable<EnvironmentExtension> getEnvironmentExtensions() {
-    return ImmutableList.<EnvironmentExtension>of(new PackageFactory.EmptyEnvironmentExtension());
+    return ImmutableList.of(new BazelRulesModule().getPackageEnvironmentExtension());
   }
 
   private Label getLabelMapping(Package pkg, String name) throws NoSuchTargetException {
@@ -146,7 +148,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     public void describeTo(Description description) {}
   }
 
-  private SkyFunction.Environment getEnv() throws InterruptedException {
+  private SkyFunction.Environment getEnv() {
     SkyFunction.Environment env = Mockito.mock(SkyFunction.Environment.class);
     Mockito.when(env.getValue(Matchers.argThat(new SkyKeyMatchers(SkyFunctions.FILE))))
         .thenReturn(fakeWorkspaceFileValue);

@@ -13,13 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
 
-import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.RootedPath;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,30 +42,27 @@ public class OutputFileTest extends PackageLoadingTestCase {
             "        outs=['x', 'subdir/y'])");
     this.pkg =
         packageFactory.createPackageForTesting(
-            PackageIdentifier.createInMainRepo("pkg"),
-            RootedPath.toRootedPath(root, buildfile),
-            getPackageManager(),
-            reporter);
+            PackageIdentifier.createInMainRepo("pkg"), buildfile, getPackageManager(), reporter);
     assertNoEvents();
 
     this.rule = (Rule) pkg.getTarget("foo");
   }
 
   private void checkTargetRetainsGeneratingRule(OutputFile output) throws Exception {
-    assertThat(output.getGeneratingRule()).isSameAs(rule);
+    assertSame(rule, output.getGeneratingRule());
   }
 
   private void checkName(OutputFile output, String expectedName) throws Exception {
-    assertThat(output.getName()).isEqualTo(expectedName);
+    assertEquals(expectedName, output.getName());
   }
 
   private void checkLabel(OutputFile output, String expectedLabelString) throws Exception {
-    assertThat(output.getLabel().toString()).isEqualTo(expectedLabelString);
+    assertEquals(expectedLabelString, output.getLabel().toString());
   }
 
   @Test
   public void testGetAssociatedRule() throws Exception {
-    assertThat(pkg.getTarget("x").getAssociatedRule()).isSameAs(rule);
+    assertSame(rule, pkg.getTarget("x").getAssociatedRule());
   }
 
   @Test
@@ -73,7 +71,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
     checkTargetRetainsGeneratingRule(outputFileX);
     checkName(outputFileX, "x");
     checkLabel(outputFileX, "//pkg:x");
-    assertThat(outputFileX.getTargetKind()).isEqualTo("generated file");
+    assertEquals("generated file", outputFileX.getTargetKind());
   }
 
   @Test
@@ -90,12 +88,16 @@ public class OutputFileTest extends PackageLoadingTestCase {
     OutputFile outputFileX2 = (OutputFile) pkg.getTarget("x");
     OutputFile outputFileY1 = (OutputFile) pkg.getTarget("subdir/y");
     OutputFile outputFileY2 = (OutputFile) pkg.getTarget("subdir/y");
-    assertThat(outputFileX2).isSameAs(outputFileX1);
-    assertThat(outputFileY2).isSameAs(outputFileY1);
-    new EqualsTester()
-        .addEqualityGroup(outputFileX1, outputFileX2)
-        .addEqualityGroup(outputFileY1, outputFileY2)
-        .testEquals();
+    assertSame(outputFileX1, outputFileX2);
+    assertSame(outputFileY1, outputFileY2);
+    assertEquals(outputFileX1, outputFileX2);
+    assertEquals(outputFileX2, outputFileX1);
+    assertEquals(outputFileY1, outputFileY2);
+    assertEquals(outputFileY2, outputFileY1);
+    assertFalse(outputFileX1.equals(outputFileY1));
+    assertFalse(outputFileY1.equals(outputFileX1));
+    assertEquals(outputFileX1.hashCode(), outputFileX2.hashCode());
+    assertEquals(outputFileY1.hashCode(), outputFileY2.hashCode());
   }
 
   @Test
@@ -114,7 +116,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
         PackageIdentifier.createInMainRepo("two_outs"),
-        RootedPath.toRootedPath(root, buildfile),
+        buildfile,
         getPackageManager(),
         reporter);
     assertContainsEvent(
@@ -138,7 +140,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
         PackageIdentifier.createInMainRepo("out_is_rule"),
-        RootedPath.toRootedPath(root, buildfile),
+        buildfile,
         getPackageManager(),
         reporter);
     assertContainsEvent("generated file 'a' in rule 'b' conflicts with existing genrule rule");
@@ -156,7 +158,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
         PackageIdentifier.createInMainRepo("two_outs"),
-        RootedPath.toRootedPath(root, buildfile),
+        buildfile,
         getPackageManager(),
         reporter);
     assertContainsEvent(
@@ -171,15 +173,15 @@ public class OutputFileTest extends PackageLoadingTestCase {
             "bad_out_name/BUILD",
             "genrule(name='a',",
             "        cmd='ls',",
-            "        outs=['!@#:'])");
+            "        outs=['!@#'])");
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
         PackageIdentifier.createInMainRepo("bad_out_name"),
-        RootedPath.toRootedPath(root, buildfile),
+        buildfile,
         getPackageManager(),
         reporter);
-    assertContainsEvent("illegal output file name '!@#:' in rule //bad_out_name:a");
+    assertContainsEvent("illegal output file name '!@#' in rule //bad_out_name:a");
   }
 
   @Test
@@ -194,7 +196,7 @@ public class OutputFileTest extends PackageLoadingTestCase {
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
         PackageIdentifier.createInMainRepo("cross_package_out"),
-        RootedPath.toRootedPath(root, buildfile),
+        buildfile,
         getPackageManager(),
         reporter);
     assertContainsEvent("label '//foo:bar' is not in the current package");
@@ -211,10 +213,8 @@ public class OutputFileTest extends PackageLoadingTestCase {
 
     reporter.removeHandler(failFastHandler);
     packageFactory.createPackageForTesting(
-        PackageIdentifier.createInMainRepo("output_called_build"),
-        RootedPath.toRootedPath(root, buildfile),
-        getPackageManager(),
-        reporter);
+        PackageIdentifier.createInMainRepo("output_called_build"), buildfile,
+        getPackageManager(), reporter);
     assertContainsEvent("generated file 'BUILD' in rule 'a' conflicts with existing source file");
   }
 }

@@ -23,15 +23,15 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.ErrorReason;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -43,14 +43,16 @@ import com.google.devtools.build.skyframe.SequentialBuildDriver;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Tests for {@link PackageLookupFunction}.
@@ -67,13 +69,11 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     Path emptyPackagePath = rootDirectory.getRelative("somewhere/else");
     scratch.file("parentpackage/BUILD");
 
-    AnalysisMock analysisMock = AnalysisMock.get();
     AtomicReference<PathPackageLocator> pkgLocator = new AtomicReference<>(
         new PathPackageLocator(outputBase, ImmutableList.of(emptyPackagePath, rootDirectory)));
     deletedPackages = new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
-    BlazeDirectories directories =
-        new BlazeDirectories(
-            rootDirectory, outputBase, rootDirectory, analysisMock.getProductName());
+    BlazeDirectories directories = new BlazeDirectories(rootDirectory, outputBase, rootDirectory,
+        TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(
         pkgLocator, false, directories);
 
@@ -88,18 +88,17 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
     skyFunctions.put(SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
         new BlacklistedPackagePrefixesFunction());
-    RuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
-    skyFunctions.put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider));
+    RuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
+    skyFunctions.put(SkyFunctions.WORKSPACE_AST,
+        new WorkspaceASTFunction(TestRuleClassProvider.getRuleClassProvider()));
     skyFunctions.put(
         SkyFunctions.WORKSPACE_FILE,
         new WorkspaceFileFunction(
             ruleClassProvider,
-            analysisMock
-                .getPackageFactoryForTesting()
-                .create(
-                    ruleClassProvider,
-                    new BazelRulesModule().getPackageEnvironmentExtension(),
-                    scratch.getFileSystem()),
+            TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
+                ruleClassProvider,
+                new BazelRulesModule().getPackageEnvironmentExtension(),
+                scratch.getFileSystem()),
             directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     differencer = new RecordingDifferencer();
@@ -206,7 +205,6 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     PackageLookupValue packageLookupValue = lookupPackage("parentpackage/everythinggood");
     assertTrue(packageLookupValue.packageExists());
     assertEquals(rootDirectory, packageLookupValue.getRoot());
-    assertEquals(BuildFileName.BUILD, packageLookupValue.getBuildFileName());
   }
 
   @Test
@@ -215,7 +213,6 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     PackageLookupValue packageLookupValue = lookupPackage("");
     assertTrue(packageLookupValue.packageExists());
     assertEquals(rootDirectory, packageLookupValue.getRoot());
-    assertEquals(BuildFileName.BUILD, packageLookupValue.getBuildFileName());
   }
 
   @Test
@@ -226,7 +223,7 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     assertTrue(packageLookupValue.packageExists());
     assertEquals(rootDirectory, packageLookupValue.getRoot());
   }
-
+  
   @Test
   public void testPackageLookupValueHashCodeAndEqualsContract() throws Exception {
     Path root1 = rootDirectory.getRelative("root1");
@@ -235,22 +232,16 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
     // PackageLookupValue are supposed to have reference equality semantics, and some are supposed
     // to have logical equality semantics.
     new EqualsTester()
-        .addEqualityGroup(
-            PackageLookupValue.success(root1, BuildFileName.BUILD),
-            PackageLookupValue.success(root1, BuildFileName.BUILD))
-        .addEqualityGroup(
-            PackageLookupValue.success(root2, BuildFileName.BUILD),
-            PackageLookupValue.success(root2, BuildFileName.BUILD))
+        .addEqualityGroup(PackageLookupValue.success(root1), PackageLookupValue.success(root1))
+        .addEqualityGroup(PackageLookupValue.success(root2), PackageLookupValue.success(root2))
         .addEqualityGroup(
             PackageLookupValue.NO_BUILD_FILE_VALUE, PackageLookupValue.NO_BUILD_FILE_VALUE)
         .addEqualityGroup(
             PackageLookupValue.DELETED_PACKAGE_VALUE, PackageLookupValue.DELETED_PACKAGE_VALUE)
-        .addEqualityGroup(
-            PackageLookupValue.invalidPackageName("nope1"),
+        .addEqualityGroup(PackageLookupValue.invalidPackageName("nope1"),
             PackageLookupValue.invalidPackageName("nope1"))
-        .addEqualityGroup(
-            PackageLookupValue.invalidPackageName("nope2"),
-            PackageLookupValue.invalidPackageName("nope2"))
+        .addEqualityGroup(PackageLookupValue.invalidPackageName("nope2"),
+             PackageLookupValue.invalidPackageName("nope2"))
         .testEquals();
   }
 }

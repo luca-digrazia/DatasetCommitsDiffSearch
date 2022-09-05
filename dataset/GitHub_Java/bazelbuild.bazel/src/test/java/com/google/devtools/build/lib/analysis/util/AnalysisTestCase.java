@@ -137,7 +137,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   @Before
   public final void createMocks() throws Exception {
-    analysisMock = getAnalysisMock();
+    analysisMock = AnalysisMock.get();
     pkgLocator = new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory));
     directories = new BlazeDirectories(outputBase, outputBase, rootDirectory,
         TestConstants.PRODUCT_NAME);
@@ -188,10 +188,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         pkgFactory.getRuleClassNames(), defaultFlags().contains(Flag.SKYFRAME_LOADING_PHASE));
     buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
     useConfiguration();
-  }
-
-  protected AnalysisMock getAnalysisMock() {
-    return AnalysisMock.get();
   }
 
   /** To be overriden by sub classes if they want to disable loading. */

@@ -126,7 +126,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     analysisMock.setupMockClient(new MockToolsConfig(rootDirectory));
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
     configurationFactory = analysisMock.createConfigurationFactory();
-    buildOptionClasses = TestRuleClassProvider.getRuleClassProvider().getConfigurationOptions();
+    buildOptionClasses = TestRuleClassProvider.getRuleClassProvider().getOptionFragments();
   }
 
   protected AnalysisMock getAnalysisMock() {
