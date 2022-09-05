@@ -20,65 +20,36 @@ import java.net.Authenticator;
 import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
 import java.net.Proxy;
-import java.net.URL;
 import java.net.URLDecoder;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.annotation.Nullable;
 
 /**
  * Helper class for setting up a proxy server for network communication
+ *
  */
 public class ProxyHelper {
-
-  private final Map<String, String> env;
-
-  /**
-   * Creates new instance.
-   *
-   * @param env client environment to check for proxy settings
-   */
-  public ProxyHelper(Map<String, String> env) {
-    this.env = env;
-  }
 
   /**
    * This method takes a String for the resource being requested and sets up a proxy to make
    * the request if HTTP_PROXY and/or HTTPS_PROXY environment variables are set.
-   *
-   * @param requestedUrl remote resource that may need to be retrieved through a proxy
+   * @param requestedUrl The url for the remote resource that may need to be retrieved through a
+   *   proxy
+   * @param env The client environment to check for proxy settings.
+   * @return Proxy
+   * @throws IOException
    */
-  public Proxy createProxyIfNeeded(URL requestedUrl) throws IOException {
+  public static Proxy createProxyIfNeeded(String requestedUrl, Map<String, String> env)
+      throws IOException {
+    String lcUrl = requestedUrl.toLowerCase();
     String proxyAddress = null;
-    String noProxyUrl = env.get("no_proxy");
-    if (Strings.isNullOrEmpty(noProxyUrl)) {
-      noProxyUrl = env.get("NO_PROXY");
-    }
-    if (!Strings.isNullOrEmpty(noProxyUrl)) {
-      String[] noProxyUrlArray = noProxyUrl.split(",");
-      String requestedHost = requestedUrl.getHost();
-      for (int i = 0; i < noProxyUrlArray.length; i++) {
-        if (noProxyUrlArray[i].startsWith(".")) {
-          // This entry applies to sub-domains only.
-          if (requestedHost.endsWith(noProxyUrlArray[i])) {
-            return Proxy.NO_PROXY;
-          }
-        } else {
-          // This entry applies to the literal hostname and sub-domains.
-          if (requestedHost.equals(noProxyUrlArray[i])
-              || requestedHost.endsWith("." + noProxyUrlArray[i])) {
-            return Proxy.NO_PROXY;
-          }
-        }
-      }
-    }
-    if (HttpUtils.isProtocol(requestedUrl, "https")) {
+    if (lcUrl.startsWith("https")) {
       proxyAddress = env.get("https_proxy");
       if (Strings.isNullOrEmpty(proxyAddress)) {
         proxyAddress = env.get("HTTPS_PROXY");
       }
-    } else if (HttpUtils.isProtocol(requestedUrl, "http")) {
+    } else if (lcUrl.startsWith("http")) {
       proxyAddress = env.get("http_proxy");
       if (Strings.isNullOrEmpty(proxyAddress)) {
         proxyAddress = env.get("HTTP_PROXY");
@@ -96,7 +67,7 @@ public class ProxyHelper {
    * @return Proxy
    * @throws IOException
    */
-  public static Proxy createProxy(@Nullable String proxyAddress) throws IOException {
+  public static Proxy createProxy(String proxyAddress) throws IOException {
     if (Strings.isNullOrEmpty(proxyAddress)) {
       return Proxy.NO_PROXY;
     }
