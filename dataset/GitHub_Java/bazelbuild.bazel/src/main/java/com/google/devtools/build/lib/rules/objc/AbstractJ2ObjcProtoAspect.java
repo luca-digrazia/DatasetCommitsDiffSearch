@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTran
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
@@ -36,12 +35,9 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.objc.J2ObjcSource.SourceType;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
-import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
-import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
-import com.google.devtools.build.lib.rules.proto.SupportData;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -117,8 +113,6 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
 
   protected abstract boolean checkShouldCreateAspect(RuleContext ruleContext);
 
-  protected abstract boolean allowServices(RuleContext ruleContext);
-
   @Override
   public ConfiguredAspect create(
       ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
@@ -129,6 +123,7 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
 
     ProtoSourcesProvider protoSourcesProvider = base.getProvider(ProtoSourcesProvider.class);
     ImmutableList<Artifact> protoSources = protoSourcesProvider.getDirectProtoSources();
+    NestedSet<Artifact> transitiveImports = protoSourcesProvider.getTransitiveImports();
 
     // Avoid pulling in any generated files from blacklisted protos.
     ProtoSourceFileBlacklist protoBlacklist =
@@ -161,7 +156,8 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
       headerMappingFiles = headerMappingFiles(ruleContext, filteredProtoSources);
       classMappingFiles = classMappingFiles(ruleContext, filteredProtoSources);
 
-      createActions(base, ruleContext, headerMappingFiles, classMappingFiles, j2ObjcSource);
+      createActions(base, ruleContext, filteredProtoSources, transitiveImports,
+          headerMappingFiles, classMappingFiles, j2ObjcSource);
       common = J2ObjcAspect.common(
           ruleContext,
           j2ObjcSource.getObjcSrcs(),
@@ -198,27 +194,10 @@ public abstract class AbstractJ2ObjcProtoAspect extends NativeAspectClass
         .build();
   }
 
-  private void createActions(ConfiguredTarget base, RuleContext ruleContext,
+  protected abstract void createActions(ConfiguredTarget base, RuleContext ruleContext,
+      Iterable<Artifact> protoSources, NestedSet<Artifact> transitiveProtoSources,
       Iterable<Artifact> headerMappingFiles, Iterable<Artifact> classMappingFiles,
-      J2ObjcSource j2ObjcSource) {
-    SupportData supportData = base.getProvider(ProtoSupportDataProvider.class).getSupportData();
-    ImmutableList<Artifact> outputs = ImmutableList.<Artifact>builder()
-        .addAll(j2ObjcSource.getObjcSrcs())
-        .addAll(j2ObjcSource.getObjcHdrs())
-        .addAll(headerMappingFiles)
-        .addAll(classMappingFiles)
-        .build();
-    String langPluginParameter = String.format(
-        "%s:%s",
-        Joiner.on(',').join(J2OBJC_PLUGIN_PARAMS),
-        ruleContext.getConfiguration().getGenfilesFragment().getPathString());
-    ProtoCompileActionBuilder actionBuilder =
-        new ProtoCompileActionBuilder(ruleContext, supportData, "J2ObjC", "j2objc", outputs)
-            .setLangPluginName("$j2objc_plugin")
-            .setLangPluginParameter(langPluginParameter)
-            .allowServices(allowServices(ruleContext));
-    ruleContext.registerAction(actionBuilder.build());
-  }
+      J2ObjcSource j2ObjcSource);
 
   private J2ObjcSource j2ObjcSource(RuleContext ruleContext, ImmutableList<Artifact> protoSources) {
     PathFragment objcFileRootExecPath = ruleContext.getConfiguration()

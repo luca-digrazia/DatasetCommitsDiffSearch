@@ -329,15 +329,8 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
   public static final Key<String> LINKOPT = new Key<>(LINK_ORDER, "linkopt", String.class);
 
   /**
-   * Link time artifacts from dependencies. These do not fall into any other category such as
-   * libraries or archives, rather provide a way to add arbitrary data (e.g. Swift AST files)
-   * to the linker. The rule that adds these is also responsible to add the necessary linker flags
-   * in {@link #LINKOPT}.
+   * Static libraries that are built from J2ObjC-translated Java code.
    */
-  public static final Key<Artifact> LINK_INPUTS =
-      new Key<>(LINK_ORDER, "link_inputs", Artifact.class);
-
-  /** Static libraries that are built from J2ObjC-translated Java code. */
   public static final Key<Artifact> J2OBJC_LIBRARY =
       new Key<>(LINK_ORDER, "j2objc_library", Artifact.class);
 
@@ -375,7 +368,9 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
 
   // Items which should not be propagated to dependents.
   private final ImmutableMap<Key<?>, NestedSet<?>> nonPropagatedItems;
-  /** All keys in ObjcProvider that will be passed in the corresponding Skylark provider. */
+  /**
+   * All keys in ObjcProvider that will be passed in the corresponding Skylark provider.
+   */
   static final ImmutableList<Key<?>> KEYS_FOR_SKYLARK =
       ImmutableList.<Key<?>>of(
           LIBRARY,
@@ -399,7 +394,6 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
           XIB,
           STRINGS,
           LINKOPT,
-          LINK_INPUTS,
           J2OBJC_LIBRARY,
           ROOT_MERGE_ZIP,
           INCLUDE,

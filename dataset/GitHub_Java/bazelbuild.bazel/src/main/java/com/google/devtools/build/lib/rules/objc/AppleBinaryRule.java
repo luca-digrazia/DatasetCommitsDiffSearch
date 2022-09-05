@@ -66,8 +66,7 @@ public class AppleBinaryRule implements RuleDefinition {
         .name("apple_binary")
         .factoryClass(AppleBinary.class)
         .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.LinkingRule.class,
-            ObjcRuleClasses.MultiArchPlatformRule.class, ObjcRuleClasses.SimulatorRule.class,
-            ObjcRuleClasses.DylibDependingRule.class)
+            ObjcRuleClasses.MultiArchPlatformRule.class, ObjcRuleClasses.SimulatorRule.class)
         .build();
   }
 }

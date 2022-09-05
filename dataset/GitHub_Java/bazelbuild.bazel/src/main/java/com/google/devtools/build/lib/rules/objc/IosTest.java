@@ -115,13 +115,11 @@ public final class IosTest implements RuleConfiguredTargetFactory {
       extraLinkInputs = ImmutableList.of();
       bundleFormat = ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT;
     } else {
-      xcodeProviderBuilder.setProductType(productType);
-
       XcodeProvider appIpaXcodeProvider =
           ruleContext.getPrerequisite(XCTEST_APP_ATTR, Mode.TARGET, XcodeProvider.class);
-      if (appIpaXcodeProvider != null) {
-        xcodeProviderBuilder.setTestHost(appIpaXcodeProvider);
-      }
+      xcodeProviderBuilder
+          .setTestHost(appIpaXcodeProvider)
+          .setProductType(productType);
 
       XcTestAppProvider testApp = xcTestAppProvider(ruleContext);
       Artifact bundleLoader = testApp.getBundleLoader();
@@ -151,7 +149,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
             ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
         .build();
 
-    new LegacyCompilationSupport(ruleContext)
+    new CompilationSupport(ruleContext)
         .registerLinkActions(
             common.getObjcProvider(),
             j2ObjcMappingFileProvider,
@@ -165,13 +163,14 @@ public final class IosTest implements RuleConfiguredTargetFactory {
         .addXcodeSettings(xcodeProviderBuilder, common)
         .validateAttributes();
 
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     new ReleaseBundlingSupport(
             ruleContext,
             common.getObjcProvider(),
             LinkedBinary.LOCAL_AND_DEPENDENCIES,
             bundleFormat,
-            appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS),
+            objcConfiguration.getMinimumOs(),
             appleConfiguration.getMultiArchPlatform(PlatformType.IOS))
         .registerActions(DsymOutputType.TEST)
         .addXcodeSettings(xcodeProviderBuilder)
@@ -202,7 +201,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
         NestedSetBuilder.<Artifact>stableOrder().addTransitive(filesToBuildSet);
 
     InstrumentedFilesProvider instrumentedFilesProvider =
-        new LegacyCompilationSupport(ruleContext).getInstrumentedFilesProvider(common);
+        new CompilationSupport(ruleContext).getInstrumentedFilesProvider(common);
 
     TestSupport testSupport =
         new TestSupport(ruleContext)

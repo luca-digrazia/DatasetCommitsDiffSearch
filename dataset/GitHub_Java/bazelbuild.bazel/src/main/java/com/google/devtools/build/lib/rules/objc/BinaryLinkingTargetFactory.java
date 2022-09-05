@@ -47,23 +47,13 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     YES, NO;
   }
 
-  /** Indicates whether this binary uses the c++ rules backend, including the crosstool. */
-  enum UsesCrosstool {
-    EXPERIMENTAL, // use the crosstool if --experimental_use_crosstool_for_binary is given
-    NO;
-  }
-  
   private final HasReleaseBundlingSupport hasReleaseBundlingSupport;
   private final XcodeProductType productType;
-  private final UsesCrosstool usesCrosstool;
 
-  protected BinaryLinkingTargetFactory(
-      HasReleaseBundlingSupport hasReleaseBundlingSupport,
-      XcodeProductType productType,
-      UsesCrosstool usesCrosstool) {
+  protected BinaryLinkingTargetFactory(HasReleaseBundlingSupport hasReleaseBundlingSupport,
+      XcodeProductType productType) {
     this.hasReleaseBundlingSupport = hasReleaseBundlingSupport;
     this.productType = productType;
-    this.usesCrosstool = usesCrosstool;
   }
 
   /**
@@ -115,36 +105,24 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
             ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
         .build();
 
-    CompilationSupport compilationSupport;
-    LegacyCompilationSupport legacyCompilationSupport = new LegacyCompilationSupport(ruleContext);
-
-    if (usesCrosstool != UsesCrosstool.EXPERIMENTAL
-        || !ruleContext.getFragment(ObjcConfiguration.class).useCrosstoolForBinary()) {
-      compilationSupport = legacyCompilationSupport;
-    } else {
-      compilationSupport = new CrosstoolCompilationSupport(ruleContext);
-    }
-     
-    compilationSupport
-        .addXcodeSettings(xcodeProviderBuilder, common)
-        .registerCompileAndArchiveActions(common)
-        .registerFullyLinkAction(
-            common.getObjcProvider(),
-            ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB))
-        .validateAttributes();
-    
-    // TODO(b/29582284): Factor into the above if/else once CrosstoolCompilationSupport supports
-    // executable linking.
-    legacyCompilationSupport.registerLinkActions(
-        objcProvider,
-        j2ObjcMappingFileProvider,
-        j2ObjcEntryClassProvider,
-        getExtraLinkArgs(ruleContext),
-        ImmutableList.<Artifact>of(),
-        DsymOutputType.APP);
+    CompilationSupport compilationSupport =
+        new CompilationSupport(ruleContext)
+            .registerCompileAndArchiveActions(common)
+            .registerFullyLinkAction(common.getObjcProvider(),
+                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB))
+            .addXcodeSettings(xcodeProviderBuilder, common)
+            .registerLinkActions(
+                objcProvider,
+                j2ObjcMappingFileProvider,
+                j2ObjcEntryClassProvider,
+                getExtraLinkArgs(ruleContext),
+                ImmutableList.<Artifact>of(),
+                DsymOutputType.APP)
+            .validateAttributes();
 
     Optional<XcTestAppProvider> xcTestAppProvider;
     Optional<RunfilesSupport> maybeRunfilesSupport = Optional.absent();
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     switch (hasReleaseBundlingSupport) {
       case YES:
         AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
@@ -155,7 +133,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
                 objcProvider,
                 LinkedBinary.LOCAL_AND_DEPENDENCIES,
                 ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT,
-                appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS),
+                objcConfiguration.getMinimumOs(),
                 appleConfiguration.getSingleArchPlatform());
         releaseBundlingSupport
             .registerActions(DsymOutputType.APP)

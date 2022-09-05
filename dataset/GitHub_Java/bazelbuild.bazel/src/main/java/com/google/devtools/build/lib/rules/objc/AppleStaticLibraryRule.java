@@ -41,12 +41,6 @@ public class AppleStaticLibraryRule implements RuleDefinition {
    */
   static final SafeImplicitOutputsFunction LIPO_ARCHIVE = fromTemplates("%{name}_lipo.a");
 
-  /**
-   * Attribute name for dependent libraries which should not be linked into the outputs of this
-   * rule.
-   */
-  static final String AVOID_DEPS_ATTR_NAME = "avoid_deps";
-
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     MultiArchSplitTransitionProvider splitTransitionProvider =
@@ -74,7 +68,7 @@ public class AppleStaticLibraryRule implements RuleDefinition {
         an application importing both X and C would have duplicate symbols for C.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
-            attr(AVOID_DEPS_ATTR_NAME, LABEL_LIST)
+            attr("avoid_deps", LABEL_LIST)
                 .direct_compile_time_input()
                 .allowedRuleClasses(ObjcRuleClasses.CompilingRule.ALLOWED_DEPS_RULE_CLASSES)
                 .mandatoryNativeProviders(

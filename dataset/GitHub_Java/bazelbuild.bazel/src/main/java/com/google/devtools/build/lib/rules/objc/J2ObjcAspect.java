@@ -26,6 +26,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
@@ -36,6 +37,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.PopulateTreeArtifactAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -48,7 +50,6 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -68,14 +69,14 @@ import java.util.List;
 public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectFactory {
   public static final String NAME = "J2ObjcAspect";
   private final String toolsRepository;
-  private final AbstractJ2ObjcProtoAspect j2ObjcProtoAspect;
+  private final BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect;
 
   private static final ExtraCompileArgs EXTRA_COMPILE_ARGS = new ExtraCompileArgs(
       "-fno-strict-overflow");
 
-  public J2ObjcAspect(String toolsRepository, AbstractJ2ObjcProtoAspect j2ObjcProtoAspect) {
+  public J2ObjcAspect(String toolsRepository, BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect) {
     this.toolsRepository = toolsRepository;
-    this.j2ObjcProtoAspect = j2ObjcProtoAspect;
+    this.bazelJ2ObjcProtoAspect = bazelJ2ObjcProtoAspect;
   }
 
   private static final Iterable<Attribute> DEPENDENT_ATTRIBUTES = ImmutableList.of(
@@ -99,67 +100,56 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     }
   };
 
-  /** Adds additional attribute aspects and attributes to the given AspectDefinition.Builder. */
-  protected AspectDefinition.Builder addAdditionalAttributes(AspectDefinition.Builder builder) {
-    return builder;
+  /**
+   * Adds additional attribute aspects and attributes to the given AspectDefinition.Builder.
+   */
+  protected AspectDefinition.Builder addAdditionalAttributes(
+      AspectDefinition.Builder builder) {
+    return builder.attributeAspect("deps", this, bazelJ2ObjcProtoAspect)
+        .attributeAspect("exports", this, bazelJ2ObjcProtoAspect)
+        .attributeAspect("runtime_deps", this, bazelJ2ObjcProtoAspect);
   }
 
   @Override
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
-    return addAdditionalAttributes(new AspectDefinition.Builder(this))
-        .attributeAspect("deps", this, j2ObjcProtoAspect)
-        .attributeAspect("exports", this, j2ObjcProtoAspect)
-        .attributeAspect("runtime_deps", this, j2ObjcProtoAspect)
+    return addAdditionalAttributes(new AspectDefinition.Builder("J2ObjCAspect"))
         .requireProvider(JavaSourceInfoProvider.class)
         .requireProvider(JavaCompilationArgsProvider.class)
         .requiresConfigurationFragments(
-            AppleConfiguration.class, J2ObjcConfiguration.class, ObjcConfiguration.class)
+            AppleConfiguration.class,
+            J2ObjcConfiguration.class,
+            ObjcConfiguration.class)
         .requiresHostConfigurationFragments(Jvm.class)
-        .add(
-            attr("$j2objc", LABEL)
-                .cfg(HOST)
-                .exec()
-                .value(
-                    Label.parseAbsoluteUnchecked(
-                        toolsRepository + "//tools/j2objc:j2objc_deploy.jar")))
-        .add(
-            attr("$j2objc_wrapper", LABEL)
-                .allowedFileTypes(FileType.of(".py"))
-                .cfg(HOST)
-                .exec()
-                .singleArtifact()
-                .value(
-                    Label.parseAbsoluteUnchecked(
-                        toolsRepository + "//tools/j2objc:j2objc_wrapper")))
-        .add(
-            attr("$jre_emul_jar", LABEL)
-                .cfg(HOST)
-                .value(
-                    Label.parseAbsoluteUnchecked(
-                        toolsRepository + "//third_party/java/j2objc:jre_emul.jar")))
+        .add(attr("$j2objc", LABEL).cfg(HOST).exec()
+            .value(Label.parseAbsoluteUnchecked(
+                toolsRepository + "//tools/j2objc:j2objc_deploy.jar")))
+        .add(attr("$j2objc_wrapper", LABEL)
+            .allowedFileTypes(FileType.of(".py"))
+            .cfg(HOST)
+            .exec()
+            .singleArtifact()
+            .value(Label.parseAbsoluteUnchecked(
+                toolsRepository + "//tools/j2objc:j2objc_wrapper")))
+        .add(attr("$jre_emul_jar", LABEL).cfg(HOST)
+            .value(Label.parseAbsoluteUnchecked(
+                toolsRepository + "//third_party/java/j2objc:jre_emul.jar")))
         .add(attr(":jre_lib", LABEL).value(JRE_LIB))
-        .add(
-            attr("$xcrunwrapper", LABEL)
-                .cfg(HOST)
-                .exec()
-                .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:xcrunwrapper")))
-        .add(
-            attr(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, LABEL)
-                .cfg(HOST)
-                .exec()
-                .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/objc:libtool")))
-        .add(
-            attr(":xcode_config", LABEL)
-                .allowedRuleClasses("xcode_config")
-                .checkConstraints()
-                .direct_compile_time_input()
-                .cfg(HOST)
-                .value(new AppleToolchain.XcodeConfigLabel(toolsRepository)))
-        .add(
-            attr("$zipper", LABEL)
-                .cfg(HOST)
-                .exec()
-                .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/zip:zipper")))
+        .add(attr("$xcrunwrapper", LABEL).cfg(HOST).exec()
+            .value(Label.parseAbsoluteUnchecked(
+                toolsRepository + "//tools/objc:xcrunwrapper")))
+        .add(attr(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, LABEL).cfg(HOST).exec()
+              .value(Label.parseAbsoluteUnchecked(
+                toolsRepository + "//tools/objc:libtool")))
+        .add(attr(":xcode_config", LABEL)
+            .allowedRuleClasses("xcode_config")
+            .checkConstraints()
+            .direct_compile_time_input()
+            .cfg(HOST)
+            .value(new AppleToolchain.XcodeConfigLabel(toolsRepository)))
+        .add(attr("$zipper", LABEL)
+            .cfg(HOST)
+            .exec()
+            .value(Label.parseAbsoluteUnchecked(toolsRepository + "//tools/zip:zipper")))
         .build();
   }
 
@@ -167,7 +157,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   public ConfiguredAspect create(
       ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
-    ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(this, parameters, ruleContext);
+    ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(NAME, ruleContext);
     JavaCompilationArgsProvider compilationArgsProvider =
         base.getProvider(JavaCompilationArgsProvider.class);
     JavaSourceInfoProvider sourceInfoProvider =
@@ -205,6 +195,13 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
           j2ObjcSource,
           genSrcJar);
 
+      boolean zipTreeArtifact = ruleContext.getFragment(J2ObjcConfiguration.class)
+          .zipTreeArtifact();
+      if (genSrcJar.isPresent() && zipTreeArtifact) {
+        for (Action action : genJarTreeArtifactCreationActions(ruleContext)) {
+          ruleContext.registerAction(action);
+        }
+      }
       common = common(
           ruleContext,
           j2ObjcSource.getObjcSrcs(),
@@ -219,14 +216,10 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
           j2ObjcSource.getHeaderSearchPaths(),
           DEPENDENT_ATTRIBUTES);
 
-      try {
-        new LegacyCompilationSupport(ruleContext)
-            .registerCompileAndArchiveActions(common, EXTRA_COMPILE_ARGS)
-            .registerFullyLinkAction(common.getObjcProvider(),
-                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
-      } catch (RuleErrorException e) {
-        ruleContext.ruleError(e.getMessage());
-      }
+      new CompilationSupport(ruleContext)
+          .registerCompileAndArchiveActions(common, EXTRA_COMPILE_ARGS)
+          .registerFullyLinkAction(common.getObjcProvider(),
+              ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
     } else {
       common = common(
           ruleContext,
@@ -281,17 +274,59 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   }
 
   private List<Artifact> genJarOutputs(RuleContext ruleContext) {
-    return ImmutableList.of(
-        j2ObjcGenJarTranslatedSourceFiles(ruleContext),
-        j2objcGenJarTranslatedHeaderFiles(ruleContext));
+    boolean zipTreeArtifact = ruleContext
+        .getFragment(J2ObjcConfiguration.class)
+        .zipTreeArtifact();
+
+    if (zipTreeArtifact) {
+      return ImmutableList.of(
+          j2ObjcGenJarSourceZip(ruleContext),
+          j2ObjcGenJarSourceZipManifest(ruleContext),
+          j2ObjcGenJarHeaderZip(ruleContext),
+          j2ObjcGenJarHeaderZipManifest(ruleContext));
+    } else {
+      return ImmutableList.of(
+          j2ObjcGenJarTranslatedSourceFiles(ruleContext),
+          j2objcGenJarTranslatedHeaderFiles(ruleContext));
+    }
   }
 
   private List<String> genJarFlags(RuleContext ruleContext) {
-    return ImmutableList.of(
-        "--output_gen_source_dir",
-        j2ObjcGenJarTranslatedSourceFiles(ruleContext).getExecPathString(),
-        "--output_gen_header_dir",
-        j2objcGenJarTranslatedHeaderFiles(ruleContext).getExecPathString());
+    boolean zipTreeArtifact = ruleContext.getFragment(J2ObjcConfiguration.class).zipTreeArtifact();
+
+    if (zipTreeArtifact) {
+      return ImmutableList.of(
+          "--output_gen_source_zip", j2ObjcGenJarSourceZip(ruleContext).getExecPathString(),
+          "--output_gen_header_zip", j2ObjcGenJarHeaderZip(ruleContext).getExecPathString());
+    } else {
+      return ImmutableList.of(
+          "--output_gen_source_dir",
+          j2ObjcGenJarTranslatedSourceFiles(ruleContext).getExecPathString(),
+          "--output_gen_header_dir",
+          j2objcGenJarTranslatedHeaderFiles(ruleContext).getExecPathString());
+    }
+  }
+
+  private List<Action> genJarTreeArtifactCreationActions(RuleContext ruleContext) {
+    Artifact sourceFiles = j2ObjcGenJarTranslatedSourceFiles(ruleContext);
+    Artifact headerFiles = j2objcGenJarTranslatedHeaderFiles(ruleContext);
+
+    ImmutableList.Builder<Action> actions = ImmutableList.builder();
+    actions.add(new PopulateTreeArtifactAction(
+        ruleContext.getActionOwner(),
+        j2ObjcGenJarSourceZip(ruleContext),
+        j2ObjcGenJarSourceZipManifest(ruleContext),
+        sourceFiles,
+        ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST)));
+
+    actions.add(new PopulateTreeArtifactAction(
+        ruleContext.getActionOwner(),
+        j2ObjcGenJarHeaderZip(ruleContext),
+        j2ObjcGenJarHeaderZipManifest(ruleContext),
+        headerFiles,
+        ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST)));
+
+    return actions.build();
   }
 
   private void createJ2ObjcTranspilationAction(

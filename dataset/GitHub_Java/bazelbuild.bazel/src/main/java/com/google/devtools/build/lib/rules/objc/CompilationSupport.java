@@ -28,7 +28,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIB
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE_SYSTEM;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINK_INPUTS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MODULE_MAP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
@@ -1289,7 +1288,6 @@ public final class CompilationSupport {
             .addTransitiveInputs(objcProvider.get(IMPORTED_LIBRARY))
             .addTransitiveInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
             .addTransitiveInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
-            .addTransitiveInputs(objcProvider.get(LINK_INPUTS))
             .addInputs(ccLibraries)
             .addInputs(extraLinkInputs)
             .addInputs(prunedJ2ObjcArchives)
@@ -1447,22 +1445,9 @@ public final class CompilationSupport {
     }
 
     if (objcProvider.is(USES_SWIFT)) {
-      // Check if there's a swift library path already. If that's not the case - fall back to
-      // the default one. This is for backwards compatibility with Swift native rules.
-      // TODO(b/30281236): Remove when native Swift is deprecated.
-      boolean swiftLibDirSet = false;
-      for (String arg : objcProvider.get(ObjcProvider.LINKOPT)) {
-        if (arg.startsWith("-L") && arg.contains("usr/lib/swift")) {
-          swiftLibDirSet = true;
-          break;
-        }
-      }
-
-      if (!swiftLibDirSet) {
-        commandLine
-            .add("-L")
-            .add(AppleToolchain.swiftLibDir(appleConfiguration.getSingleArchPlatform()));
-      }
+      commandLine
+          .add("-L")
+          .add(AppleToolchain.swiftLibDir(appleConfiguration.getSingleArchPlatform()));
     }
 
     for (String linkopt : attributes.linkopts()) {
@@ -1814,11 +1799,11 @@ public final class CompilationSupport {
     switch (platform) {
       case IOS_SIMULATOR:
         builder.add("-mios-simulator-version-min="
-            + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
+            + objcConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       case IOS_DEVICE:
         builder.add("-miphoneos-version-min="
-            + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
+            + objcConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       case WATCHOS_SIMULATOR:
         // TODO(bazel-team): Use the value from --watchos-minimum-os instead of tying to the SDK
@@ -1834,11 +1819,11 @@ public final class CompilationSupport {
         break;
       case TVOS_SIMULATOR:
         builder.add("-mtvos-simulator-version-min="
-            + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
+            + objcConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       case TVOS_DEVICE:
         builder.add("-mtvos-version-min="
-            + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
+            + objcConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       default:
         throw new IllegalArgumentException("Unhandled platform " + platform);
