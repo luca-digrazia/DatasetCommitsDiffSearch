@@ -16,10 +16,6 @@ import android.support.v4.app.LoaderManager;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
 import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.hack.AndroidHack;
-import android.taobao.atlas.remote.IRemote;
-import android.taobao.atlas.remote.IRemoteContext;
-import android.taobao.atlas.remote.IRemoteTransactor;
-import android.taobao.atlas.remote.RemoteActivityManager;
 import android.taobao.atlas.runtime.BundleUtil;
 import android.text.TextUtils;
 import android.util.AttributeSet;
@@ -38,58 +34,71 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-
-public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTransactor{
-
-    public static RemoteFragment createRemoteFragment(Activity activity, String key,String bundleName) throws Exception{
-        RemoteFragment remoteFragment = new RemoteFragment();
-        remoteFragment.remoteActivity = RemoteActivityManager.obtain(activity).getRemoteHost(remoteFragment);
-        final BundleListing.BundleInfo bi = AtlasBundleInfoManager.instance().getBundleInfo(bundleName);
-        String fragmentClazzName = bi.remoteFragments.get(key);
-        remoteFragment.targetFragment = (Fragment)remoteFragment.remoteActivity.getClassLoader().loadClass(fragmentClazzName).newInstance();
-        if(!(remoteFragment.targetFragment instanceof IRemote)){
-            throw new RuntimeException("Fragment for remote use must implements IRemote");
+/**
+ * Created by guanjie on 2017/10/12.
+    RemoteFragment.RemoteFragmentFactory.createRemoteFragment(activity, intent, new RemoteFragment.OnRemoteFragmentStateListener() {
+        @Override
+        public void onFragmentCreated(RemoteFragment fragment) {
+            FragmentTransaction transaction  = getSupportFragmentManager().beginTransaction();
+            transaction.add(containerViewId,fragment).commit();
         }
-        remoteFragment.targetBundleName = bundleName;
-        return remoteFragment;
+        @Override
+        public void onFailed(String errorInfo) {
+
+        }
+    });
+ */
+public class RemoteFragment extends Fragment {
+
+    public interface OnRemoteFragmentStateListener{
+        void onFragmentCreated(RemoteFragment fragment);
+
+        void onFailed(String errorInfo);
     }
 
-    private Fragment targetFragment;
-    private String targetBundleName;
-    private Activity remoteActivity;
-    private IRemoteTransactor hostTransactor;
-    private Field mCalled ;
+    public static class RemoteFragmentFactory{
 
-
-    @Override
-    public String getTargetBundle() {
-        return targetBundleName;
+        public static void createRemoteFragment(final Activity rFragmentHost, Intent intent, final OnRemoteFragmentStateListener listener){
+            final String fragmentKey = intent.getComponent().getClassName()!=null ? intent.getComponent().getClassName() :
+                    intent.getAction();
+            final String bundleName = AtlasBundleInfoManager.instance().getBundleForRemoteFragment(fragmentKey);
+            if(TextUtils.isEmpty(bundleName)){
+                listener.onFailed("no such remote fragment: "+intent);
+            }
+            BundleUtil.checkBundleStateAsync(bundleName, new Runnable() {
+                @Override
+                public void run() {
+                    //success
+                    try {
+                        RemoteFragment remoteFragment = new RemoteFragment();
+                        RemoteContextManager.obtain(rFragmentHost).prepareRemoteFragment(remoteFragment,bundleName);
+                        final BundleListing.BundleInfo bi = AtlasBundleInfoManager.instance().getBundleInfo(bundleName);
+                        String fragmentClazzName = bi.remoteFragments.get(fragmentKey);
+                        remoteFragment.targetFragment = (Fragment)remoteFragment.remoteContext.getClassLoader().loadClass(fragmentClazzName).newInstance();
+                        remoteFragment.targetBundleName = bundleName;
+                        listener.onFragmentCreated(remoteFragment);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        listener.onFailed(e.getCause().toString());
+                    }
+                }
+            }, new Runnable() {
+                @Override
+                public void run() {
+                    //fail
+                    listener.onFailed("install bundle failed: "+bundleName);
+                }
+            });
+        }
     }
 
-    @Override
-    public IRemote getRemoteTarget() {
-        return (IRemote) targetFragment;
-    }
+    public Fragment targetFragment;
+    public String targetBundleName;
+    public Activity remoteActivity;
+    public RemoteContextManager.RemoteContext remoteContext;
+    public Field mCalled ;
 
-    @Override
-    public IRemoteTransactor getHostTransactor() {
-        return hostTransactor;
-    }
 
-    @Override
-    public void registerHostTransactor(IRemoteTransactor transactor) {
-        hostTransactor = transactor;
-    }
-
-    @Override
-    public Bundle call(String commandName, Bundle args, IResponse callback) {
-        return ((IRemote)targetFragment).call(commandName,args,callback);
-    }
-
-    @Override
-    public <T> T getRemoteInterface(Class<T> interfaceClass) {
-        return ((IRemote)targetFragment).getRemoteInterface(interfaceClass);
-    }
 
     private FragmentHostCallback getFragmentHostCallback(FragmentHostCallback callback){
         try {
@@ -103,7 +112,7 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
                 if(field.getName().equals("mActivity")){
                     field.set(hostCallbacks,remoteActivity);
                 }else if(field.getName().equals("mContext")){
-                    field.set(hostCallbacks,remoteActivity.getBaseContext());
+                    field.set(hostCallbacks,remoteContext);
                 }else{
                     field.set(hostCallbacks,field.get(callback));
                 }
@@ -138,7 +147,7 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
 
     @Override
     public Context getContext() {
-        return remoteActivity.getBaseContext();
+        return remoteContext;
     }
 
     @Override
@@ -188,7 +197,7 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         try {
-            inflater = LayoutInflater.from(remoteActivity);
+            inflater = LayoutInflater.from(remoteContext);
             View view =  targetFragment.onCreateView(inflater,container,savedInstanceState);
             if(view!=null){
                 Field mInnerView = AndroidHack.findField(targetFragment,"mInnerView");
@@ -249,7 +258,6 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
 
     @Override
     public void onPause() {
-        super.onPause();
         Field mState = null;
         try {
             mState = AndroidHack.findField(targetFragment,"mState");
@@ -294,11 +302,7 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
 
     @Override
     public void onDestroy() {
-        try {
-            mCalled.set(this,true);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        }
+        super.onDestroy();
         Field mState = null;
         try {
             mState = AndroidHack.findField(targetFragment,"mState");
@@ -317,6 +321,7 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
 
     @Override
     public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
         targetFragment.onHiddenChanged(hidden);
     }
 
@@ -394,7 +399,7 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
 
     @Override
     public LayoutInflater getLayoutInflater(Bundle savedInstanceState) {
-        return LayoutInflater.from(remoteActivity);
+        return LayoutInflater.from(remoteContext);
     }
 
     @Override
@@ -428,11 +433,6 @@ public class RemoteFragment extends Fragment implements IRemoteContext,IRemoteTr
 
     @Override
     public void onViewStateRestored(@Nullable Bundle savedInstanceState) {
-        try {
-            mCalled.set(this,true);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        }
         targetFragment.onViewStateRestored(savedInstanceState);
     }
 
