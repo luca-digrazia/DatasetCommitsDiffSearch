@@ -4,44 +4,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.SocketFactory;
-
-import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * A client to a Carbon server that sends all metrics after they have been pickled in configurable sized batches
  */
-public class PickledGraphite implements GraphiteSender {
-
-    private static final Pattern WHITESPACE = Pattern.compile("[\\s]+");
-    private static final Charset UTF_8 = Charset.forName("UTF-8");
+public class PickledGraphite extends Graphite {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PickledGraphite.class);
-    private final static int DEFAULT_BATCH_SIZE = 100;
+    final static int DEFAULT_BATCH_SIZE = 100;
 
-    private int batchSize;
+    int batchSize;
     // graphite expects a python-pickled list of nested tuples.
-    private List<MetricTuple> metrics = new LinkedList<MetricTuple>();
-
-		private final InetSocketAddress address;
-		private final SocketFactory socketFactory;
-		private final Charset charset;
-
-		private Socket socket;
-		private Writer writer;
-		private int failures;
+    List<MetricTuple> metrics = new LinkedList<MetricTuple>();
 
     /**
      * Creates a new client which connects to the given address using the default
@@ -85,23 +65,8 @@ public class PickledGraphite implements GraphiteSender {
      * @param batchSize     how many metrics are bundled into a single pickle request to graphite
      */
     public PickledGraphite(InetSocketAddress address, SocketFactory socketFactory, Charset charset, int batchSize) {
-        this.address = address;
-        this.socketFactory = socketFactory;
-        this.charset = charset;
+        super(address, socketFactory, charset);
         this.batchSize = batchSize;
-    }
-
-    @Override
-    public void connect() throws IllegalStateException, IOException {
-        if (socket != null) {
-            throw new IllegalStateException("Already connected");
-        }
-        if (address.getAddress() == null) {
-            throw new UnknownHostException(address.getHostName());
-        }
-
-        this.socket = socketFactory.createSocket(address.getAddress(), address.getPort());
-        this.writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset));
     }
 
     /**
@@ -128,20 +93,8 @@ public class PickledGraphite implements GraphiteSender {
 
     @Override
     public void close() throws IOException {
-      writeMetrics();
-      if (writer != null) {
-          writer.flush();
-      }
-      if (socket != null) {
-          socket.close();
-      }
-      this.socket = null;
-      this.writer = null;
-    }
-
-    @Override
-    public int getFailures() {
-    	return failures;
+        writeMetrics();
+        super.close();
     }
 
     /**
@@ -152,18 +105,13 @@ public class PickledGraphite implements GraphiteSender {
     private void writeMetrics() throws IOException {
         if (metrics.size() > 0) {
             try {
-                byte[] payload = pickleMetrics(metrics);
-                byte[] header = ByteBuffer.allocate(4).putInt(payload.length).array();
-
-                @SuppressWarnings("resource")
-                OutputStream outputStream = socket.getOutputStream();
-                outputStream.write(header);
-                outputStream.write(payload);
-                outputStream.flush();
-
-                if (LOGGER.isDebugEnabled()) {
-                	LOGGER.debug("Wrote {} metrics", metrics.size());
-                }
+                String payload = pickleMetrics(metrics);
+                int length = payload.length();
+                byte[] header = ByteBuffer.allocate(4).putInt(length).array();
+                socket.getOutputStream().write(header);
+                writer.write(payload);
+                writer.flush();
+                LOGGER.debug("Wrote {} metrics", metrics.size());
             } catch (IOException e) {
                 this.failures++;
                 throw e;
@@ -186,18 +134,14 @@ public class PickledGraphite implements GraphiteSender {
         STRING = 'S',
         APPEND = 'a',
         LIST = 'l',
-        TUPLE = 't',
-        QUOTE = '\'',
-        LF = '\n';
+        TUPLE = 't';
 
     /**
      * See: http://readthedocs.org/docs/graphite/en/1.0/feeding-carbon.html
-     * @throws IOException
      */
-    byte[] pickleMetrics(List<MetricTuple> metrics) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(metrics.size() * 75);  // Extremely rough estimate of 75 bytes per message
-        Writer pickled = new OutputStreamWriter(out, charset);
+    String pickleMetrics(List<MetricTuple> metrics) {
 
+        StringBuilder pickled = new StringBuilder();
         pickled.append(MARK);
         pickled.append(LIST);
 
@@ -208,27 +152,27 @@ public class PickledGraphite implements GraphiteSender {
             // the metric name is a string.
             pickled.append(STRING);
             // the single quotes are to match python's repr("abcd")
-            pickled.append(QUOTE);
+            pickled.append('\'');
             pickled.append(tuple.name);
-            pickled.append(QUOTE);
-            pickled.append(LF);
+            pickled.append('\'');
+            pickled.append('\n');
 
             // start the inner tuple
             pickled.append(MARK);
 
             // timestamp is a long
             pickled.append(LONG);
-            pickled.append(Long.toString(tuple.timestamp));
+            pickled.append(tuple.timestamp);
             // the trailing L is to match python's repr(long(1234))
-            pickled.append(LONG);
-            pickled.append(LF);
+            pickled.append('L');
+            pickled.append('\n');
 
             // and the value is a string.
             pickled.append(STRING);
-            pickled.append(QUOTE);
+            pickled.append('\'');
             pickled.append(tuple.value);
-            pickled.append(QUOTE);
-            pickled.append(LF);
+            pickled.append('\'');
+            pickled.append('\n');
 
             pickled.append(TUPLE); // inner close
             pickled.append(TUPLE); // outer close
@@ -238,10 +182,7 @@ public class PickledGraphite implements GraphiteSender {
 
         // every pickle ends with STOP
         pickled.append(STOP);
-
-        pickled.flush();
-
-        return out.toByteArray();
+        return pickled.toString();
     }
 
     static class MetricTuple {
@@ -255,9 +196,4 @@ public class PickledGraphite implements GraphiteSender {
             this.value = value;
         }
     }
-
-    protected String sanitize(String s) {
-        return WHITESPACE.matcher(s).replaceAll("-");
-    }
-
 }
