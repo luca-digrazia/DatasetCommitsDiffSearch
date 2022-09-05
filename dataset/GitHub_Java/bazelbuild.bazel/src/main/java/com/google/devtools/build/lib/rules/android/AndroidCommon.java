@@ -65,6 +65,7 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
+import com.google.devtools.build.lib.rules.java.SourcesJavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -554,6 +555,8 @@ public class AndroidCommon {
         ruleContext, semantics, javaCommon.getJavacOpts(), attributes);
 
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
+    helper.addProvidersToAttributes(
+        JavaCommon.compilationArgsFromSources(ruleContext), asNeverLink);
     attributes.setStrictJavaDeps(getStrictAndroidDeps());
     attributes.setRuleKind(ruleContext.getRule().getRuleClass());
     attributes.setTargetLabel(ruleContext.getLabel());
@@ -783,13 +786,12 @@ public class AndroidCommon {
     if (!ruleContext.attributes().has("resources", BuildType.LABEL)) {
       return null;
     }
+
     TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite("resources", Mode.TARGET);
     if (prerequisite == null) {
       return null;
     }
-    ruleContext.ruleWarning(
-        "The use of the android_resources rule and the resources attribute is deprecated. "
-            + "Please use the resource_files, assets, and manifest attributes of android_library.");
+
     return prerequisite.getProvider(AndroidResourcesProvider.class);
   }
 
@@ -804,7 +806,9 @@ public class AndroidCommon {
       boolean hasSrcs) {
     boolean exportDeps = !hasSrcs
         && ruleContext.getFragment(AndroidConfiguration.class).allowSrcsLessAndroidLibraryDeps();
-    return javaCommon.collectJavaCompilationArgs(recursive, isNeverLink, exportDeps);
+    Iterable<SourcesJavaCompilationArgsProvider> fromSrcs =
+        ImmutableList.<SourcesJavaCompilationArgsProvider> of();
+    return javaCommon.collectJavaCompilationArgs(recursive, isNeverLink, fromSrcs, exportDeps);
   }
 
   public ImmutableList<String> getJavacOpts() {
@@ -823,10 +827,6 @@ public class AndroidCommon {
     return javaCommon.getJavaCompilationArtifacts().getRuntimeJars();
   }
 
-  public Artifact getResourceClassJar() {
-    return resourceClassJar;
-  }
-  
   /**
    * Returns Jars produced by this rule that may go into the runtime classpath.  By contrast
    * {@link #getRuntimeJars()} returns the complete runtime classpath needed by this rule, including
@@ -861,25 +861,22 @@ public class AndroidCommon {
   }
 
   public CcLinkParamsStore getCcLinkParamsStore() {
-    return getCcLinkParamsStore(
-        javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH), ImmutableList.<String>of());
+    return getCcLinkParamsStore(javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH));
   }
 
   public static CcLinkParamsStore getCcLinkParamsStore(
-      final Iterable<? extends TransitiveInfoCollection> deps, final Collection<String> linkOpts) {
+      final Iterable<? extends TransitiveInfoCollection> deps) {
     return new CcLinkParamsStore() {
       @Override
-      protected void collect(
-          CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
-        builder.addTransitiveTargets(
-            deps,
+      protected void collect(CcLinkParams.Builder builder, boolean linkingStatically,
+                             boolean linkShared) {
+        builder.addTransitiveTargets(deps,
             // Link in Java-specific C++ code in the transitive closure
             JavaCcLinkParamsProvider.TO_LINK_PARAMS,
             // Link in Android-specific C++ code (e.g., android_libraries) in the transitive closure
             AndroidCcLinkParamsProvider.TO_LINK_PARAMS,
             // Link in non-language-specific C++ code in the transitive closure
             CcLinkParamsProvider.TO_LINK_PARAMS);
-        builder.addLinkOpts(linkOpts);
       }
     };
   }
