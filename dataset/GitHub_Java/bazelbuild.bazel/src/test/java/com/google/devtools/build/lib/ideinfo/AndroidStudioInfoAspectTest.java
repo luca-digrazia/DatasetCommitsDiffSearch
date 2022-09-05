@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -439,8 +439,7 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
     assertThat(ruleInfo.getKind()).isEqualTo(Kind.ANDROID_LIBRARY);
     assertThat(relativePathsForSourcesOf(ruleInfo)).containsExactly("com/google/example/Main.java");
     assertThat(transform(ruleInfo.getJavaRuleIdeInfo().getJarsList(), LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(
-            "<jar:com/google/example/libl.jar><source:com/google/example/libl-src.jar>");
+        .containsExactly("<jar:com/google/example/libl.jar>");
     assertThat(
             transform(
                 ruleInfo.getAndroidRuleIdeInfo().getResourcesList(), ARTIFACT_TO_RELATIVE_PATH))
@@ -518,85 +517,6 @@ public class AndroidStudioInfoAspectTest extends BuildViewTestCase {
 
     assertThat(bRuleInfo.getAndroidRuleIdeInfo().getJavaPackage()).isEqualTo("com.google.example");
     assertThat(lRuleInfo.getAndroidRuleIdeInfo().getJavaPackage()).isEqualTo("com.google.example");
-  }
-
-  public void testAndroidLibraryWithoutAidlHasNoIdlJars() throws Exception {
-    scratch.file(
-        "java/com/google/example/BUILD",
-        "android_library(",
-        "  name = 'no_idl',",
-        "  srcs = ['Test.java'],",
-        ")"
-    );
-    String noIdlTarget = "//java/com/google/example:no_idl";
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo(noIdlTarget);
-    RuleIdeInfo noIdlRuleInfo = getRuleInfoAndVerifyLabel(noIdlTarget, ruleIdeInfos);
-
-    assertThat(noIdlRuleInfo.getAndroidRuleIdeInfo().getHasIdlSources()).isFalse();
-  }
-
-  public void testAndroidLibraryWithAidlHasIdlJars() throws Exception {
-    scratch.file(
-        "java/com/google/example/BUILD",
-        "android_library(",
-        "  name = 'has_idl',",
-        "  idl_srcs = ['a.aidl'],",
-        ")"
-    );
-    String idlTarget = "//java/com/google/example:has_idl";
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo(idlTarget);
-    RuleIdeInfo idlRuleInfo = getRuleInfoAndVerifyLabel(idlTarget, ruleIdeInfos);
-
-    assertThat(idlRuleInfo.getAndroidRuleIdeInfo().getHasIdlSources()).isTrue();
-    assertThat(LIBRARY_ARTIFACT_TO_STRING.apply(idlRuleInfo.getAndroidRuleIdeInfo().getIdlJar()))
-        .isEqualTo(
-                "<jar:java/com/google/example/libhas_idl-idl.jar>"
-                + "<source:java/com/google/example/libhas_idl-idl.srcjar>");
-  }
-  
-  public void testJavaLibraryWithoutGeneratedSourcesHasNoGenJars() throws Exception {
-    scratch.file(
-        "java/com/google/example/BUILD",
-        "java_library(",
-        "  name = 'no_plugin',",
-        "  srcs = ['Test.java'],",
-        ")"
-    );
-    String target = "//java/com/google/example:no_plugin";
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo(target);
-    RuleIdeInfo ruleIdeInfo = getRuleInfoAndVerifyLabel(target, ruleIdeInfos);
-
-    assertThat(ruleIdeInfo.getJavaRuleIdeInfo().getGeneratedJarsList())
-        .isEmpty();
-  }
-
-  public void testJavaLibraryWithGeneratedSourcesHasGenJars() throws Exception {
-    scratch.file(
-        "java/com/google/example/BUILD",
-        "java_library(",
-        "  name = 'test',",
-        "  plugins = [':plugin']",
-        ")",
-        "java_plugin(",
-        "  name = 'plugin',",
-        "  processor_class = 'com.google.example.Plugin',",
-        "  deps = ['plugin_lib'],",
-        ")",
-        "java_library(",
-        "  name = 'plugin_lib',",
-        "  srcs = ['Plugin.java'],",
-        ")"
-    );
-    String target = "//java/com/google/example:test";
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo(target);
-    RuleIdeInfo ruleIdeInfo = getRuleInfoAndVerifyLabel(target, ruleIdeInfos);
-
-    assertThat(
-            transform(ruleIdeInfo.getJavaRuleIdeInfo().getGeneratedJarsList(), 
-                LIBRARY_ARTIFACT_TO_STRING))
-        .containsExactly(
-            "<jar:java/com/google/example/libtest-gen.jar>"
-            + "<source:java/com/google/example/libtest-gensrc.jar>");
   }
 
   private Map<String, RuleIdeInfo> buildRuleIdeInfo(String target) throws Exception {
