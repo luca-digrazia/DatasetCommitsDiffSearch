@@ -197,7 +197,7 @@ public class AggregationTest {
 		Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/account GROUP BY gender", TEST_INDEX));
 		Terms gender = result.get("gender");
 		for(Terms.Bucket bucket : gender.getBuckets()) {
-			String key = bucket.getKey().toString();
+			String key = bucket.getKey();
 			long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
 			if(key.equalsIgnoreCase("m")) {
 				Assert.assertEquals(507, count);
@@ -220,11 +220,11 @@ public class AggregationTest {
 		Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/account GROUP BY gender, age", TEST_INDEX));
 		Terms gender = result.get("gender");
 		for(Terms.Bucket genderBucket : gender.getBuckets()) {
-			String genderKey = genderBucket.getKey().toString();
+			String genderKey = genderBucket.getKey();
 			buckets.put(genderKey, new HashSet<Integer>());
 			Terms ageBuckets = (Terms) genderBucket.getAggregations().get("age");
 			for(Terms.Bucket ageBucket : ageBuckets.getBuckets()) {
-				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey().toString()));
+				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey()));
 			}
 		}
 
@@ -244,7 +244,7 @@ public class AggregationTest {
         Assert.assertEquals(2,gender.getBuckets().size());
         for(Terms.Bucket genderBucket : gender.getBuckets()) {
 
-            String genderKey = genderBucket.getKey().toString();
+            String genderKey = genderBucket.getKey();
             buckets.put(genderKey, new HashSet<Integer>());
             Terms ageBuckets = genderBucket.getAggregations().get("ageAgg");
             Assert.assertEquals(3,ageBuckets.getBuckets().size());
@@ -254,16 +254,6 @@ public class AggregationTest {
 
     }
 
-    @Test
-    public void termsWithSize() throws Exception {
-
-        Map<String, Set<Integer>> buckets = new HashMap<>();
-
-        Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/account GROUP BY terms('alias'='ageAgg','field'='age','size'=3)", TEST_INDEX));
-        Terms gender = result.get("ageAgg");
-        Assert.assertEquals(3,gender.getBuckets().size());
-
-    }
 
 
     @Test
@@ -382,6 +372,7 @@ public class AggregationTest {
         return (SqlElasticSearchRequestBuilder) searchDao.explain(query).explain();
     }
 
+
     @Test
     public void testFromSizeWithAggregations() throws Exception {
         final String query1 = String.format("SELECT /*! DOCS_WITH_AGGREGATION(0,1) */" +
@@ -420,11 +411,11 @@ public class AggregationTest {
 
 		Terms gender = result.get("gender");
 		for(Terms.Bucket genderBucket : gender.getBuckets()) {
-			String genderKey = genderBucket.getKey().toString();
+			String genderKey = genderBucket.getKey();
 			buckets.put(genderKey, new HashSet<Integer>());
 			Terms ageBuckets = (Terms) genderBucket.getAggregations().get("age");
 			for(Terms.Bucket ageBucket : ageBuckets.getBuckets()) {
-				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey().toString()));
+				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey()));
 			}
 		}
 
@@ -434,7 +425,7 @@ public class AggregationTest {
 
 		Terms state = result.get("state");
 		for(Terms.Bucket stateBucket : state.getBuckets()) {
-			if(stateBucket.getKey().toString().equalsIgnoreCase("ak")) {
+			if(stateBucket.getKey().equalsIgnoreCase("ak")) {
 				Assert.assertTrue("There are 22 entries for state ak", stateBucket.getDocCount() == 22);
 			}
 		}
@@ -453,7 +444,7 @@ public class AggregationTest {
 
 		Terms gender = result.get("gender");
 		for(Terms.Bucket genderBucket : gender.getBuckets()) {
-			String genderKey = genderBucket.getKey().toString();
+			String genderKey = genderBucket.getKey();
 			Assert.assertTrue("Gender should be m or f", genderKey.equals("m") || genderKey.equals("f"));
 		}
 
@@ -461,7 +452,7 @@ public class AggregationTest {
 
 		Terms state = result.get("state");
 		for(Terms.Bucket stateBucket : state.getBuckets()) {
-			if(stateBucket.getKey().toString().equalsIgnoreCase("ak")) {
+			if(stateBucket.getKey().equalsIgnoreCase("ak")) {
 				Assert.assertTrue("There are 22 entries for state ak", stateBucket.getDocCount() == 22);
 			}
 		}
@@ -476,7 +467,7 @@ public class AggregationTest {
         InternalGeoHashGrid grid = result.get("geohash_grid(field=center,precision=5)");
         Collection<GeoHashGrid.Bucket> buckets = grid.getBuckets();
         for (GeoHashGrid.Bucket bucket : buckets) {
-            Assert.assertTrue(bucket.getKey().toString().equals("[4.9658203125, 104.9853515625]") || bucket.getKey().toString().equals("[0.4833984375, 100.458984375]") );
+            Assert.assertTrue(bucket.getKey().equals("w2fsm") || bucket.getKey().equals("w0p6y") );
             Assert.assertEquals(1,bucket.getDocCount());
         }
     }
@@ -498,7 +489,7 @@ public class AggregationTest {
         Terms infos = nested.getAggregations().get("message.info");
         Assert.assertEquals(3,infos.getBuckets().size());
         for(Terms.Bucket bucket : infos.getBuckets()) {
-            String key = bucket.getKey().toString();
+            String key = bucket.getKey();
             long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
             if(key.equalsIgnoreCase("a")) {
                 Assert.assertEquals(2, count);
@@ -522,7 +513,7 @@ public class AggregationTest {
         Terms gender = filter.getAggregations().get("gender");
 
         for(Terms.Bucket bucket : gender.getBuckets()) {
-            String key = bucket.getKey().toString();
+            String key = bucket.getKey();
             long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
             if(key.equalsIgnoreCase("m")) {
                 Assert.assertEquals(507, count);
@@ -542,7 +533,7 @@ public class AggregationTest {
         Terms infos = filter.getAggregations().get("message.info");
         Assert.assertEquals(1,infos.getBuckets().size());
         for(Terms.Bucket bucket : infos.getBuckets()) {
-            String key = bucket.getKey().toString();
+            String key = bucket.getKey();
             long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
             if(key.equalsIgnoreCase("a")) {
                 Assert.assertEquals(2, count);
@@ -579,15 +570,14 @@ public class AggregationTest {
         Histogram histogram = nested.getAggregations().get("someAlias");
         for(Histogram.Bucket bucket : histogram.getBuckets()){
             long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
-            String key = bucket.getKey().toString();
-            if(key.equals("0") || key.equals("4")){
+            if(bucket.getKey().equals("0") || bucket.getKey().equals("4")){
                 Assert.assertEquals(2,count);
             }
-            else if (key.equals("2")){
+            else if (bucket.getKey().equals("2")){
                 Assert.assertEquals(1,count);
             }
             else{
-                Assert.assertTrue("only 0 2 4 keys are allowed got:" + key,false);
+                Assert.assertTrue("only 0 2 4 keys are allowed got:" + bucket.getKey(),false);
             }
         }
 
@@ -607,7 +597,7 @@ public class AggregationTest {
             Terms.Bucket internalBucket = terms.getBuckets().get(0);
 
             long count = ((ValueCount) internalBucket.getAggregations().get("COUNT(*)")).getValue();
-            String key = internalBucket.getKey().toString();
+            String key = internalBucket.getKey();
             if(key.equalsIgnoreCase("b")) {
                 Assert.assertEquals(2, count);
             }
@@ -629,7 +619,7 @@ public class AggregationTest {
             Terms.Bucket internalBucket = terms.getBuckets().get(0);
 
             long count = ((ValueCount) internalBucket.getAggregations().get("COUNT(*)")).getValue();
-            String key = internalBucket.getKey().toString();
+            String key = internalBucket.getKey();
             if(key.equalsIgnoreCase("b")) {
                 Assert.assertEquals(2, count);
             }
@@ -649,7 +639,7 @@ public class AggregationTest {
         for(Terms.Bucket bucket : infos.getBuckets()) {
             InternalReverseNested reverseNested = bucket.getAggregations().get("someAlias@NESTED");
             InternalHistogram histogram = reverseNested.getAggregations().get("someAlias");
-            Assert.assertEquals(3, histogram.getBuckets().size());
+            Assert.assertEquals(2, histogram.getBuckets().size());
 
         }
     }
@@ -684,7 +674,7 @@ public class AggregationTest {
             Terms.Bucket internalBucket = terms.getBuckets().get(0);
 
             long count = ((ValueCount) internalBucket.getAggregations().get("COUNT(*)")).getValue();
-            String key = internalBucket.getKey().toString();
+            String key = internalBucket.getKey();
             if(key.equalsIgnoreCase("ab")) {
                 Assert.assertEquals(2, count);
             }
