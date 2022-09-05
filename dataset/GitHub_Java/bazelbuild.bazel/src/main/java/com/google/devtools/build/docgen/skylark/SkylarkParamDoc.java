@@ -69,7 +69,7 @@ public final class SkylarkParamDoc extends SkylarkDoc {
   }
 
   @Override
-  public String getDocumentation() {
+  protected String getEntityDocumentation() {
     return param.doc();
   }
 }

@@ -55,7 +55,7 @@ public final class SkylarkModuleDoc extends SkylarkDoc {
   }
 
   @Override
-  public String getDocumentation() {
+  protected String getEntityDocumentation() {
     return module.doc();
   }
 

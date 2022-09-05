@@ -52,7 +52,7 @@ public final class SkylarkBuiltinMethodDoc extends SkylarkMethodDoc {
   }
 
   @Override
-  public String getDocumentation() {
+  protected String getEntityDocumentation() {
     return annotation.doc();
   }
 
