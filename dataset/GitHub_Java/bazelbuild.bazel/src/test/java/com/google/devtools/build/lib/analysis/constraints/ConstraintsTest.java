@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -116,8 +115,7 @@ public class ConstraintsTest extends AbstractConstraintsTest {
               .value(
                   new Attribute.LateBoundLabel<BuildConfiguration>() {
                     @Override
-                    public Label resolve(Rule rule, AttributeMap attributes,
-                        BuildConfiguration configuration) {
+                    public Label getDefault(Rule rule, BuildConfiguration configuration) {
                       return Label.parseAbsoluteUnchecked("//helpers:latebound");
                     }
                   }))

@@ -48,7 +48,7 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
   }
 
   private Rule setupGenRule() throws Exception {
-    return scratchRule("x", "myrule",
+    return createRule("x", "myrule",
         "sh_binary(",
         "    name = 'myrule',",
         "    srcs = select({",
@@ -64,8 +64,7 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
     List<Label> value = rawMapper.get("data", BuildType.LABEL_LIST);
     assertNotNull(value);
-    assertThat(value).containsExactly(
-        Label.create("@//x", "data_a"), Label.create("@//x", "data_b"));
+    assertThat(value).containsExactly(Label.create("x", "data_a"), Label.create("x", "data_b"));
 
     // Configurable attribute: trying to directly access from a RawAttributeMapper throws a
     // type mismatch exception.
@@ -127,7 +126,7 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
 
   @Test
   public void testGetMergedValues() throws Exception {
-    Rule rule = scratchRule("x", "myrule",
+    Rule rule = createRule("x", "myrule",
         "sh_binary(",
         "    name = 'myrule',",
         "    srcs = select({",
@@ -144,7 +143,7 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
 
   @Test
   public void testMergedValuesWithConcatenatedSelects() throws Exception {
-    Rule rule = scratchRule("x", "myrule",
+    Rule rule = createRule("x", "myrule",
         "sh_binary(",
         "    name = 'myrule',",
         "    srcs = select({",
