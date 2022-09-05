@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,8 @@ public abstract class FileConfiguredTarget extends AbstractConfiguredTarget
         .put(VisibilityProvider.class, this)
         .put(LicensesProvider.class, this)
         .put(FileProvider.class, new FileProvider(targetContext.getLabel(), filesToBuild))
-        .put(FilesToRunProvider.class, FilesToRunProvider.fromSingleExecutableArtifact(artifact));
+        .put(FilesToRunProvider.class, FilesToRunProvider.fromSingleArtifact(
+            targetContext.getLabel(), artifact));
     if (this instanceof FilesetProvider) {
       builder.put(FilesetProvider.class, this);
     }
