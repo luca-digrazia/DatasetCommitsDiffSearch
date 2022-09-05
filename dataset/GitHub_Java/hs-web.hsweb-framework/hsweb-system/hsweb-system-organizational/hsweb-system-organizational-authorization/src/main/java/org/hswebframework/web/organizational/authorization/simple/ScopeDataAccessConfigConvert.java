@@ -15,7 +15,7 @@ import static org.hswebframework.web.organizational.authorization.access.DataAcc
  */
 public class ScopeDataAccessConfigConvert implements DataAccessConfigConvert {
     private static final List<String> supportTypes = Arrays.asList(
-            DISTRICT_SCOPE, ORG_SCOPE, DEPARTMENT_SCOPE, POSITION_SCOPE, PERSON_SCOPE
+            AREA_SCOPE, ORG_SCOPE, DEPARTMENT_SCOPE, POSITION_SCOPE, PERSON_SCOPE
     );
 
     @Override
