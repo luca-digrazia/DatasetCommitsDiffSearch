@@ -1,14 +1,14 @@
 package org.hsweb.web.controller.form;
 
+import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.bean.common.InsertMapParam;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.common.UpdateMapParam;
-import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.core.logger.annotation.AccessLogger;
 import org.hsweb.web.core.message.ResponseMessage;
 import org.hsweb.web.service.form.DynamicFormService;
-import org.hsweb.web.service.form.FormService;
 import org.hsweb.web.service.resource.FileService;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -30,16 +30,7 @@ public class DynamicFormController {
     private DynamicFormService dynamicFormService;
 
     @Resource
-    private FormService formService;
-
-    @Resource
     private FileService fileService;
-
-    @RequestMapping(value = "/deployed/{name}", method = RequestMethod.GET)
-    @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'R')")
-    public ResponseMessage deployed(@PathVariable("name") String name) throws Exception {
-        return ResponseMessage.ok(formService.selectDeployed(name));
-    }
 
     @RequestMapping(value = "/{name}", method = RequestMethod.GET)
     @AccessLogger("查看列表")
@@ -97,9 +88,9 @@ public class DynamicFormController {
     @AccessLogger("导出excel")
     @Authorize(expression = "#dynamicFormAuthorizeValidator.validate(#name,#user,'export')")
     public void exportExcel(@PathVariable("name") String name,
-                            @PathVariable("fileName") String fileName,
-                            QueryParam queryParam,
-                            HttpServletResponse response) throws Exception {
+                                       @PathVariable("fileName") String fileName,
+                                       QueryParam queryParam,
+                                       HttpServletResponse response) throws Exception {
         response.setHeader("Content-disposition", "attachment;filename=" + URLEncoder.encode(fileName, "utf-8"));
         response.setContentType("application/vnd.ms-excel");
         dynamicFormService.exportExcel(name, queryParam, response.getOutputStream());
