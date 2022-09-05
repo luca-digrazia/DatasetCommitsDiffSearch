@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@ import com.google.common.base.Objects;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -53,11 +53,7 @@ public class PathPackageLocator implements Serializable {
   // representation is used as a key. We want a change to output base not to invalidate things.
   private final transient Path outputBase;
 
-  public static final PathPackageLocator EMPTY =
-      new PathPackageLocator(null, ImmutableList.<Path>of());
-
-  @VisibleForTesting
-  public PathPackageLocator(Path outputBase, List<Path> pathEntries) {
+  private PathPackageLocator(Path outputBase, List<Path> pathEntries) {
     this.outputBase = outputBase;
     this.pathEntries = ImmutableList.copyOf(pathEntries);
   }
@@ -66,6 +62,13 @@ public class PathPackageLocator implements Serializable {
    * Constructs a PathPackageLocator based on the specified list of package root directories.
    */
   @VisibleForTesting
+  public PathPackageLocator(List<Path> pathEntries) {
+    this(null, pathEntries);
+  }
+
+  /**
+   * Constructs a PathPackageLocator based on the specified array of package root directories.
+   */
   public PathPackageLocator(Path... pathEntries) {
     this(null, Arrays.asList(pathEntries));
   }

@@ -16,8 +16,6 @@ package com.google.devtools.build.skyframe;
 
 import com.google.devtools.build.lib.events.EventHandler;
 
-import javax.annotation.Nullable;
-
 /**
  * A BuildDriver wraps a MemoizingEvaluator, passing along the proper Version.
  */
@@ -37,11 +35,4 @@ public interface BuildDriver {
   String meta(Iterable<SkyKey> roots);
 
   MemoizingEvaluator getGraphForTesting();
-
-  @Nullable
-  SkyValue getExistingValueForTesting(SkyKey key);
-
-  @Nullable
-  ErrorInfo getExistingErrorForTesting(SkyKey key);
-
 }
