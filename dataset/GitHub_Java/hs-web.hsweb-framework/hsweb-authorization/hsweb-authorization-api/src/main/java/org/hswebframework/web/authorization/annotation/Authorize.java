@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2019 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ public @interface Authorize {
      *
      * @return 验证失败提示的消息
      */
-    String message() default "无权限";
+    String message() default "{unauthorized}";
 
     /**
      * 是否合并类上的注解
@@ -106,6 +106,11 @@ public @interface Authorize {
      * @return 数据权限控制
      */
     RequiresDataAccess dataAccess() default @RequiresDataAccess(ignore = true);
+
+    /**
+     * @return 双重验证
+     */
+    TwoFactor twoFactor() default @TwoFactor(ignore = true);
 
     String[] description() default {};
 }
