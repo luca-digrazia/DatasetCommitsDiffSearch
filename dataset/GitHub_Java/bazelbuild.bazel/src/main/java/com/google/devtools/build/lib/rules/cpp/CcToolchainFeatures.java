@@ -29,8 +29,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.View;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import java.io.IOException;
@@ -51,17 +49,17 @@ import java.util.Stack;
 
 /**
  * Provides access to features supported by a specific toolchain.
- *
+ * 
  * <p>This class can be generated from the CToolchain protocol buffer.
- *
+ * 
  * <p>TODO(bazel-team): Implement support for specifying the toolchain configuration directly from
  * the BUILD file.
- *
+ * 
  * <p>TODO(bazel-team): Find a place to put the public-facing documentation and link to it from
  * here.
- *
- * <p>TODO(bazel-team): Split out Feature as CcToolchainFeature, which will modularize the crosstool
- * configuration into one part that is about handling a set of features (including feature
+ * 
+ * <p>TODO(bazel-team): Split out Feature as CcToolchainFeature, which will modularize the
+ * crosstool configuration into one part that is about handling a set of features (including feature
  * selection) and one part that is about how to apply a single feature (parsing flags and expanding
  * them from build variables).
  */
@@ -72,7 +70,7 @@ public class CcToolchainFeatures implements Serializable {
    * Thrown when a flag value cannot be expanded under a set of build variables.
    *
    * <p>This happens for example when a flag references a variable that is not provided by the
-   * action, or when a flag group implicitly references multiple variables of sequence type.
+   * action, or when a flag group references multiple variables of sequence type.
    */
   public static class ExpansionException extends RuntimeException {
     ExpansionException(String message) {
@@ -95,11 +93,11 @@ public class CcToolchainFeatures implements Serializable {
     
     /**
      * Expands this chunk.
-     *
-     * @param view binding of variable names to their values for a single flag expansion.
+     * 
+     * @param variables variable names mapped to their values for a single flag expansion.
      * @param flag the flag content to append to.
      */
-    void expand(View view, StringBuilder flag);
+    void expand(Map<String, String> variables, StringBuilder flag);
   }
   
   /**
@@ -114,7 +112,7 @@ public class CcToolchainFeatures implements Serializable {
     }
     
     @Override
-    public void expand(View view, StringBuilder flag) {
+    public void expand(Map<String, String> variables, StringBuilder flag) {
       flag.append(text);
     }
   }
@@ -131,12 +129,23 @@ public class CcToolchainFeatures implements Serializable {
     }
     
     @Override
-    public void expand(View view, StringBuilder stringBuilder) {
+    public void expand(Map<String, String> variables, StringBuilder stringBuilder) {
       // We check all variables in FlagGroup.expandCommandLine.
       // If we arrive here with the variable not being available, the variable was provided, but
       // the nesting level of the NestedSequence was deeper than the nesting level of the flag
       // groups.
-      stringBuilder.append(view.getStringVariable(variableName));
+      if (!variables.containsKey(variableName)) {
+        throw new ExpansionException(
+            "Invalid toolchain configuration: the flag group referencing '"
+                + variableName
+                + "' is not nested deeply enough to fully expand it.");
+      }
+      String value = variables.get(variableName);
+      if (value == null) {
+        throw new ExpansionException(
+            "Internal blaze error: build variable '" + variableName + "'was set to 'null'.");
+      }
+      stringBuilder.append(variables.get(variableName));
     }
   }
   
@@ -265,16 +274,21 @@ public class CcToolchainFeatures implements Serializable {
    * A flag or flag group that can be expanded under a set of variables.
    */
   interface Expandable {
+
     /**
-     * Expands the current expandable under the given {@code view}, adding new flags to {@code
-     * commandLine}.
-     *
-     * <p>TODO(b/32655571): Get rid of @arg 'variables' once implicit iteration is not needed
-     *
-     * <p>The {@code view} controls which variables are visible during the expansion and allows to
-     * recursively expand nested flag groups.
+     * Returns the set of variables that can control the expansion of this expandable.
+     * Returns null if the expandable is a simple flag that will only be expanded once.
      */
-    void expand(View view, Variables variables, List<String> commandLine);
+    Set<String> getControllingVariables();
+
+    /**
+     * Expands the current expandable under the given {@code view}, adding new flags to
+     * {@code commandLine}.
+     *
+     * The {@code view} controls which variables are visible during the expansion and allows
+     * to recursively expand nested flag groups.
+     */
+    void expand(Variables.View view, List<String> commandLine);
   }
 
   /**
@@ -291,14 +305,22 @@ public class CcToolchainFeatures implements Serializable {
       this.chunks = chunks;
     }
     
-    /** Expand this flag into a single new entry in {@code commandLine}. */
+    /**
+     * Expand this flag into a single new entry in {@code commandLine}.
+     */
     @Override
-    public void expand(View view, Variables variables, List<String> commandLine) {
+    public void expand(Variables.View view, List<String> commandLine) {
       StringBuilder flag = new StringBuilder();
       for (StringChunk chunk : chunks) {
-        chunk.expand(view, flag);
+        chunk.expand(view.getVariables(), flag);
       }
       commandLine.add(flag.toString());
+    }
+
+    @Override
+    public Set<String> getControllingVariables() {
+      // A simple flag will only ever be expanded once.
+      return null;
     }
   }
   
@@ -323,31 +345,23 @@ public class CcToolchainFeatures implements Serializable {
      * The value of the entry is expanded with the given {@code variables}.
      */
     public void addEnvEntry(Variables variables, ImmutableMap.Builder<String, String> envBuilder) {
-      View view = variables.getView(usedVariables);
+      Variables.View view = variables.getView(usedVariables);
       StringBuilder value = new StringBuilder();
       for (StringChunk chunk : valueChunks) {
-        chunk.expand(view, value);
+        chunk.expand(view.getVariables(), value);
       }
       envBuilder.put(key, value.toString());
     }
   }
 
   /**
-   * A group of flags. When iterateOverVariable is specified, we assume the variable is a sequence
-   * and the flag_group will be expanded repeatedly for every value in the sequence.
+   * A group of flags.
    */
   @Immutable
   private static class FlagGroup implements Serializable, Expandable {
     private final ImmutableList<Expandable> expandables;
     private final ImmutableSet<String> usedVariables;
-    private String iterateOverVariable;
-
-    /**
-     * TODO(b/32655571): Cleanup and get rid of usedVariables field once implicit iteration is not
-     * needed.
-     *
-     * @throws InvalidConfigurationException
-     */
+    
     private FlagGroup(CToolchain.FlagGroup flagGroup) throws InvalidConfigurationException {
       ImmutableList.Builder<Expandable> expandables = ImmutableList.builder();
       ImmutableSet.Builder<String> usedVariables = ImmutableSet.builder();
@@ -367,37 +381,22 @@ public class CcToolchainFeatures implements Serializable {
       for (CToolchain.FlagGroup group : groups) {
         FlagGroup subgroup = new FlagGroup(group);
         expandables.add(subgroup);
-        usedVariables.addAll(subgroup.getUsedVariables());
-      }
-      if (flagGroup.hasIterateOver()) {
-        this.iterateOverVariable = flagGroup.getIterateOver();
-        usedVariables.add(this.iterateOverVariable);
+        usedVariables.addAll(subgroup.getControllingVariables());
       }
       this.expandables = expandables.build();
       this.usedVariables = usedVariables.build();
     }
     
     @Override
-    public void expand(View view, Variables variables, final List<String> commandLine) {
-      if (iterateOverVariable == null) {
-        // TODO(b/32655571): Remove branch once implicit iteration is not needed anymore.
-        iterateOverVariable = variables.guessIteratedOverVariable(view, usedVariables);
-      }
-      if (iterateOverVariable != null) {
-        for (VariableValue variableValue : view.getSequenceVariable(iterateOverVariable)) {
-          View nestedView = new View(view, iterateOverVariable, variableValue);
-          for (Expandable expandable : expandables) {
-            expandable.expand(nestedView, variables, commandLine);
-          }
-        }
-      } else {
-        for (Expandable expandable : expandables) {
-          expandable.expand(view, variables, commandLine);
-        }
+    public void expand(Variables.View view, final List<String> commandLine) {
+      for (Expandable expandable : expandables) {
+        view.expand(expandable, commandLine);
       }
     }
 
-    private Set<String> getUsedVariables() {
+    @Override
+    public Set<String> getControllingVariables() {
+      // Any of the used variables can be used to control this flag group's expansion.
       return usedVariables;
     }
 
@@ -407,18 +406,17 @@ public class CcToolchainFeatures implements Serializable {
      * <p>The flags of the group will be expanded either:
      *
      * <ul>
-     *   <li>once, if there is no variable of sequence type in any of the group's flags, or
-     *   <li>for each element in the sequence, if there is 'iterate_over' variable specified
-     *       (preferred, explicit way), or
-     *   <li>for each element in the sequence, if there is only one sequence variable used in the
-     *       body of the flag_group (deprecated, implicit way). Having more than a single variable
-     *       of sequence type in a single flag group with implicit iteration is not supported. Use
-     *       explicit 'iterate_over' instead.
+     * <li>once, if there is no variable of sequence type in any of the group's flags, or
+     * <li>for each element in the sequence, if there is one variable of sequence type within the
+     *     flags.
      * </ul>
+     *
+     * <p>Having more than a single variable of sequence type in a single flag group is not
+     * supported.
      */
     private void expandCommandLine(Variables variables, final List<String> commandLine) {
-      View view = variables.getView(getUsedVariables());
-      expand(view, variables, commandLine);
+      Variables.View view = variables.getView(getControllingVariables());
+      view.expand(this, commandLine);
     }
   }
   
@@ -738,10 +736,13 @@ public class CcToolchainFeatures implements Serializable {
      */
     public String getArtifactName(Map<String, String> variables) {
       StringBuilder resultBuilder = new StringBuilder();
-      View artifactNameVariables =
-          new Variables.Builder().addAllVariables(variables).build().getView(this.variables);
+      Variables.View artifactNameVariables =
+          new Variables.Builder()
+              .addAllVariables(variables)
+              .build()
+              .getView(this.variables);
       for (StringChunk chunk : chunks) {
-        chunk.expand(artifactNameVariables, resultBuilder);
+        chunk.expand(artifactNameVariables.getVariables(), resultBuilder);
       }
       String result = resultBuilder.toString();
       return result.charAt(0) == '/' ? result.substring(1) : result;
@@ -750,9 +751,6 @@ public class CcToolchainFeatures implements Serializable {
   
   /**
    * Configured build variables usable by the toolchain configuration.
-   *
-   * <p>TODO(b/32655571): Investigate cleanup once implicit iteration is not needed. Variables
-   * instance could serve as a top level View used to expand all flag_groups.
    */
   @Immutable
   public static class Variables {
@@ -761,124 +759,33 @@ public class CcToolchainFeatures implements Serializable {
     public static final Variables EMPTY = new Variables.Builder().build();
 
     /**
-     * Variables can be either String values or an arbitrarily deeply nested recursive sequences,
-     * which we represent as a tree of {@code VariableValue} nodes. The nodes are {@code Sequence}
-     * objects, while the leafs are {@code StringSequence} objects. We do not allow {@code
-     * StringValue} objects in the tree, as the object memory overhead is too large when we have
-     * millions of values. If we find single element {@code StringSequence} in memory profiles in
-     * the future, we can introduce another special case type.
+     * Variables can be set as an arbitrarily deeply nested recursive sequence, which we represent
+     * as a tree of {@code Sequence} nodes. The nodes are {@code NestedSequence} objects, while the
+     * leafs are {@code ValueSequence} objects. We do not allow {@code Value} objects in the tree,
+     * as the object memory overhead is too large when we have millions of values. If we find single
+     * element {@code ValueSequence} in memory profiles in the future, we can introduce another
+     * special case type.
      */
-    interface VariableValue {
+    interface Sequence {
 
       /**
-       * Return string value of the variable, if the variable type can be converted to string (e.g.
-       * StringValue), or throw exception if it cannot (e.g. Sequence).
-       *
-       * @param variableName name of the variable value at hand, for better exception message.
+       * Expands {@code expandable} under the given nested {@code view}, appending flags to
+       * {@code commandLine}.
        */
-      String getStringValue(String variableName);
-
-      /**
-       * Return Iterable value of the variable, if the variable type can be converted to a Iterable
-       * (e.g. Sequence), or throw exception if it cannot (e.g. StringValue).
-       *
-       * @param variableName name of the variable value at hand, for better exception message.
-       */
-      Iterable<? extends VariableValue> getSequenceValue(String variableName);
-
-      // TODO(b/32655571): Remove once implicit iteration is not needed
-      boolean isSequence();
-
-      /**
-       * Return value of the field, if the variable is of struct type or throw exception if it is
-       * not or no such field exists.
-       *
-       * @param variableName name of the variable value at hand, for better exception message.
-       */
-      VariableValue getFieldValue(String variableName, String field);
-    }
-
-    /** Interface for VariableValue builders */
-    interface VariableValueBuilder {
-      VariableValue build();
+      void expand(NestedView view, Expandable expandable, List<String> commandLine);
     }
 
     /**
-     * A sequence of structure values. Exists as a memory optimization - a typical build can contain
-     * millions of feature values, so getting rid of the overhead of {@code StructureValue} objects
-     * significantly reduces memory overhead.
+     * A sequence of simple string values.
+     * Exists as a memory optimization - a typical build can contain millions of feature values,
+     * so getting rid of the overhead of {@code Value} objects significantly reduces memory
+     * overhead.
      */
-    @Immutable
-    public static final class StructureSequence implements VariableValue {
+    public static class ValueSequence implements Sequence {
+      private final List<String> values;
 
-      private final ImmutableList<ImmutableMap<String, VariableValue>> values;
-
-      /** Builder for StructureSequence. */
-      public static class Builder implements VariableValueBuilder {
-
-        private final ImmutableList.Builder<ImmutableMap<String, VariableValue>> values =
-            ImmutableList.builder();
-
-        /** Adds a structure to the sequence. */
-        public Builder addValue(ImmutableMap<String, VariableValue> value) {
-          values.add(value);
-          return this;
-        }
-
-        /** Returns an immutable structure sequence. */
-        @Override
-        public StructureSequence build() {
-          return new StructureSequence(values.build());
-        }
-      }
-
-      private StructureSequence(ImmutableList<ImmutableMap<String, VariableValue>> values) {
-        this.values = values;
-      }
-
-      @Override
-      public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
-        final ImmutableList.Builder<VariableValue> sequences = ImmutableList.builder();
-        for (ImmutableMap<String, VariableValue> value : values) {
-          sequences.add(new StructureValue(value));
-        }
-        return sequences.build();
-      }
-
-      @Override
-      public boolean isSequence() {
-        return true;
-      }
-
-      @Override
-      public VariableValue getFieldValue(String variableName, String field) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s.%s': variable '%s' is sequence, expected structure",
-                variableName, field, variableName));
-      }
-
-      @Override
-      public String getStringValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s': expected string, found sequence", variableName));
-      }
-    }
-
-    /**
-     * A sequence of simple string values. Exists as a memory optimization - a typical build can
-     * contain millions of feature values, so getting rid of the overhead of {@code StringValue}
-     * objects significantly reduces memory overhead.
-     */
-    @Immutable
-    public static final class StringSequence implements VariableValue {
-
-      private final ImmutableList<String> values;
-
-      /** Builder for StringSequence. */
-      public static class Builder implements VariableValueBuilder {
-
+      /** Builder for value sequences. */
+      public static class Builder {
         private final ImmutableList.Builder<String> values = ImmutableList.builder();
 
         /** Adds a value to the sequence. */
@@ -887,222 +794,77 @@ public class CcToolchainFeatures implements Serializable {
           return this;
         }
 
-        /** Returns an immutable string sequence. */
-        @Override
-        public StringSequence build() {
-          return new StringSequence(values.build());
+        /** Returns an immutable value sequence. */
+        public ValueSequence build() {
+          return new ValueSequence(values.build());
         }
       }
 
-      public StringSequence(ImmutableList<String> values) {
+      private ValueSequence(List<String> values) {
         this.values = values;
       }
 
       @Override
-      public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
-        final ImmutableList.Builder<VariableValue> sequences = ImmutableList.builder();
+      public void expand(NestedView view, Expandable expandable, List<String> commandLine) {
+        final ImmutableList.Builder<Sequence> sequences = ImmutableList.builder();
         for (String value : values) {
-          sequences.add(new StringValue(value));
+          sequences.add(new Value(value));
         }
-        return sequences.build();
+        view.expandSequence(sequences.build(), expandable, commandLine);
       }
 
-      @Override
-      public boolean isSequence() {
-        return true;
-      }
+      /**
+       * The leaves in the variable sequence node tree are simple values. Note that this should
+       * never live outside of {@code expand}, as the object overhead is prohibitively expensive.
+       */
+      private static class Value implements Sequence {
+        private final String value;
 
-      @Override
-      public VariableValue getFieldValue(String variableName, String field) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s.%s': variable '%s' is sequence, expected structure",
-                variableName, field, variableName));
-      }
-
-      @Override
-      public String getStringValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s': expected string, found sequence", variableName));
-      }
-    }
-
-    /** Sequence of arbitrary VariableValue objects. */
-    @Immutable
-    public static final class Sequence implements VariableValue {
-
-      private final ImmutableList<VariableValue> values;
-
-      /** Builder for Sequence. */
-      public static class Builder implements VariableValueBuilder {
-
-        private final ImmutableList.Builder<VariableValue> values = ImmutableList.builder();
-
-        /** Adds a value to the sequence. */
-        public Builder addValue(VariableValue value) {
-          values.add(value);
-          return this;
+        private Value(String value) {
+          this.value = value;
         }
 
-        /** Adds a value to the sequence. */
-        public Builder addValue(VariableValueBuilder value) {
-          values.add(value.build());
-          return this;
-        }
-
-        /** Returns an immutable sequence. */
         @Override
-        public Sequence build() {
-          return new Sequence(values.build());
+        public void expand(NestedView view, Expandable expandable, List<String> commandLine) {
+          view.expandValue(value, expandable, commandLine);
         }
-      }
-
-      public Sequence(ImmutableList<VariableValue> values) {
-        this.values = values;
-      }
-
-      @Override
-      public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
-        return values;
-      }
-
-      @Override
-      public boolean isSequence() {
-        return true;
-      }
-
-      @Override
-      public VariableValue getFieldValue(String variableName, String field) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s.%s': variable '%s' is sequence, expected structure",
-                variableName, field, variableName));
-      }
-
-      @Override
-      public String getStringValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s': expected string, found sequence", variableName));
       }
     }
 
-    /**
-     * Single structure value. Be careful not to create sequences of single structures, as the
-     * memory overhead is prohibitively big. Use optimized {@link StructureSequence} instead.
-     */
-    @Immutable
-    public static final class StructureValue implements VariableValue {
+    /** An internal node in the sequence node tree. */
+    static class NestedSequence implements Sequence {
 
-      private final ImmutableMap<String, VariableValue> value;
+      /**
+       * Builder for nested sequences.
+       */
+      static class Builder {
+        private final ImmutableList.Builder<Sequence> sequences = ImmutableList.builder();
 
-      /** Builder for StructureValue. */
-      public static class Builder implements VariableValueBuilder {
-
-        private final ImmutableMap.Builder<String, VariableValue> fields = ImmutableMap.builder();
-
-        /** Adds a field to the structure. */
-        public Builder addField(String name, VariableValue value) {
-          fields.put(name, value);
+        /**
+         * Adds a sub-sequence to the sequence.
+         */
+        Builder addSequence(Sequence sequence) {
+          sequences.add(sequence);
           return this;
         }
 
-        /** Adds a field to the structure. */
-        public Builder addField(String name, VariableValueBuilder valueBuilder) {
-          fields.put(name, valueBuilder.build());
-          return this;
-        }
-
-        /** Adds a field to the structure. */
-        public Builder addField(String name, String... values) {
-          if (values.length == 1) {
-            fields.put(name, new StringValue(values[0]));
-          } else {
-            fields.put(name, new StringSequence(ImmutableList.copyOf(values)));
-          }
-          return this;
-        }
-
-        /** Returns an immutable structure. */
-        @Override
-        public StructureValue build() {
-          return new StructureValue(fields.build());
+        /**
+         * Returns an immutable nested sequence.
+         */
+        NestedSequence build() {
+          return new NestedSequence(sequences.build());
         }
       }
 
-      public StructureValue(ImmutableMap<String, VariableValue> value) {
-        this.value = value;
+      private final List<Sequence> sequences;
+
+      private NestedSequence(List<Sequence> expandables) {
+        this.sequences = expandables;
       }
 
       @Override
-      public String getStringValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s': expected string, found structure", variableName));
-      }
-
-      @Override
-      public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s': expected sequence, found structure", variableName));
-      }
-
-      @Override
-      public VariableValue getFieldValue(String variableName, String field) {
-        if (value.containsKey(field)) {
-          return value.get(field);
-        } else {
-          throw new ExpansionException(
-              String.format(
-                  "Cannot expand variable '%s.%s': structure %s doesn't have a field named '%s'",
-                  variableName, field, variableName, field));
-        }
-      }
-
-      @Override
-      public boolean isSequence() {
-        return false;
-      }
-    }
-
-    /**
-     * The leaves in the variable sequence node tree are simple string values. Note that this should
-     * never live outside of {@code expand}, as the object overhead is prohibitively expensive.
-     */
-    @Immutable
-    public static final class StringValue implements VariableValue {
-
-      private final String value;
-
-      public StringValue(String value) {
-        this.value = value;
-      }
-
-      @Override
-      public String getStringValue(String variableName) {
-        return value;
-      }
-
-      @Override
-      public Iterable<? extends VariableValue> getSequenceValue(String variableName) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s': expected sequence, found string", variableName));
-      }
-
-      @Override
-      public VariableValue getFieldValue(String variableName, String field) {
-        throw new ExpansionException(
-            String.format(
-                "Cannot expand variable '%s.%s': variable '%s' is string, expected structure",
-                variableName, field, variableName));
-      }
-
-      @Override
-      public boolean isSequence() {
-        return false;
+      public void expand(NestedView view, Expandable expandable, List<String> commandLine) {
+        view.expandSequence(sequences, expandable, commandLine);
       }
     }
 
@@ -1111,9 +873,8 @@ public class CcToolchainFeatures implements Serializable {
      */
     public static class Builder {
       private final Map<String, String> variables = Maps.newLinkedHashMap();
-      private final Map<String, VariableValue> sequenceVariables = Maps.newLinkedHashMap();
-      private final Map<String, VariableValue> structureVariables = Maps.newLinkedHashMap();
-
+      private final Map<String, Sequence> expandables = Maps.newLinkedHashMap();
+      
       /**
        * Add a variable that expands {@code name} to {@code value}.
        */
@@ -1130,9 +891,11 @@ public class CcToolchainFeatures implements Serializable {
         return this;
       }
       
-      /** Add a nested variableValue that expands {@code name} recursively. */
-      public Builder addSequence(String name, VariableValue variableValue) {
-        sequenceVariables.put(name, variableValue);
+      /**
+       * Add a nested sequence that expands {@code name} recursively.
+       */
+      public Builder addSequence(String name, Sequence sequence) {
+        expandables.put(name, sequence);
         return this;
       }
 
@@ -1141,8 +904,7 @@ public class CcToolchainFeatures implements Serializable {
        */
       public Builder addAll(Variables variables) {
         this.variables.putAll(variables.variables);
-        this.sequenceVariables.putAll(variables.sequenceVariables);
-        this.structureVariables.putAll(variables.structureVariables);
+        this.expandables.putAll(variables.sequenceVariables);
         return this;
       }
 
@@ -1150,26 +912,19 @@ public class CcToolchainFeatures implements Serializable {
        * Add a variable that expands a flag group containing a reference to {@code name} for each
        * entry in {@code values}.
        */
-      public Builder addSequenceVariable(String name, Iterable<String> values) {
-        StringSequence.Builder sequenceBuilder = new StringSequence.Builder();
+      public Builder addSequenceVariable(String name, Collection<String> values) {
+        ValueSequence.Builder sequenceBuilder = new ValueSequence.Builder();
         for (String value : values) {
           sequenceBuilder.addValue(value);
         }
         return addSequence(name, sequenceBuilder.build());
       }
-
-      public void addStructureVariable(String name, VariableValue value) {
-        this.structureVariables.put(name, value);
-      }
-
+      
       /**
        * @return a new {@Variables} object.
        */
       Variables build() {
-        return new Variables(
-            ImmutableMap.copyOf(variables),
-            ImmutableMap.copyOf(sequenceVariables),
-            ImmutableMap.copyOf(structureVariables));
+        return new Variables(ImmutableMap.copyOf(variables), ImmutableMap.copyOf(expandables));
       }
     }
     
@@ -1182,175 +937,165 @@ public class CcToolchainFeatures implements Serializable {
     }
     
     /**
-     * Represents a set of variables visible during an expansion of a variable. If nested (by
-     * specifying a parent), and variable is not present in the current view, it continues the look
-     * up in the parent view.
+     * Interface for a set of variables visible during an expansion of a variable.
      */
-    @Immutable
-    protected static final class View {
-      private final ImmutableMap<String, VariableValue> viewMap;
-      private final View parent;
+    interface View {
 
       /**
-       * Creates top level view
-       *
-       * @param viewMap binding of variable names to variable values
+       * Returns all bound variables in the current view.
        */
-      View(ImmutableMap<String, VariableValue> viewMap) {
+      Map<String, String> getVariables();
+
+      /**
+       * Expands the given {@code expandable} under the current view, adding flags to
+       * {@code commandLine}.
+       */
+      void expand(Expandable expandable, List<String> commandLine);
+    }
+
+    /**
+     * An simple view that contains a fixed mapping.
+     */
+    private static class FixedView implements View {
+      private final Map<String, String> viewMap;
+
+      FixedView(Map<String, String> viewMap) {
         this.viewMap = viewMap;
-        this.parent = null;
       }
 
-      /**
-       * Creates a view nested under the @param parent, and binds variable named @param name
-       * to @param value
-       */
-      View(View parent, String name, VariableValue value) {
-        this.viewMap = ImmutableMap.of(name, value);
-        this.parent = parent;
-      }
-
-      /** Returns all bound variables in the current view. */
-      Map<String, VariableValue> getVariables() {
+      @Override
+      public Map<String, String> getVariables() {
         return viewMap;
       }
 
-      VariableValue getVariable(String name) {
-        VariableValue variableValue = getNonStructuredVariable(name);
-        if (variableValue == null) {
-          variableValue = getStructureVariable(name);
-        }
-        if (variableValue == null) {
-          throw new ExpansionException("Build variable named '" + name + "' was not found");
-        } else {
-          return variableValue;
-        }
-      }
-
-      private VariableValue getNonStructuredVariable(String name) {
-        if (viewMap.containsKey(name)) {
-          return viewMap.get(name);
-        }
-
-        if (parent != null) {
-          return parent.getNonStructuredVariable(name);
-        }
-
-        return null;
-      }
-
-      private VariableValue getStructureVariable(String name) {
-        if (!name.contains(".")) {
-          return null;
-        }
-
-        Stack<String> fieldsToAccess = new Stack<>();
-        String structPath = name;
-        VariableValue structure;
-
-        do {
-          fieldsToAccess.push(structPath.substring(structPath.lastIndexOf('.') + 1));
-          structPath = structPath.substring(0, structPath.lastIndexOf('.'));
-          structure = getNonStructuredVariable(structPath);
-        } while (structure == null && structPath.contains("."));
-
-        if (structure == null) {
-          return null;
-        }
-        while (!fieldsToAccess.empty()) {
-          structure = structure.getFieldValue(structPath, fieldsToAccess.pop());
-        }
-        return structure;
-      }
-
-      public String getStringVariable(String variableName) {
-        VariableValue variable = getVariable(variableName);
-        if (variable == null) {
-          throw new ExpansionException(
-              String.format("Cannot find variable named '%s'", variableName));
-        }
-        return variable.getStringValue(variableName);
-      }
-
-      public Iterable<? extends VariableValue> getSequenceVariable(String variableName) {
-        VariableValue variable = getVariable(variableName);
-        if (variable == null) {
-          throw new ExpansionException(
-              String.format("Cannot find variable named '%s'", variableName));
-        }
-        return variable.getSequenceValue(variableName);
+      @Override
+      public void expand(Expandable expandable, List<String> commandLine) {
+        expandable.expand(this, commandLine);
       }
     }
 
+    /**
+     * A nested view that is controlled by a nested build variable and expanded recursively.
+     */
+    private static class NestedView implements View {
+
+      /**
+       * The view map will contain all mapped variables when a leaf node is reached.
+       * During traversal it will not contain the control variable.
+       */
+      private final Map<String, String> viewMap;
+
+      /**
+       * The name of the control variable (a variable of nested structure) that controls
+       * the recursive expansion.
+       */
+      String controlVariable;
+
+      /**
+       * The stack of sequences that are currently being expanded. Each level represents
+       * one level in the control variables nesting.
+       */
+      Stack<Sequence> sequenceStack = new Stack<>();
+
+      NestedView(Map<String, String> viewMap, String controlVariable, Sequence sequence) {
+        this.viewMap = viewMap;
+        this.controlVariable = controlVariable;
+        this.sequenceStack.push(sequence);
+      }
+
+      @Override
+      public Map<String, String> getVariables() {
+        return viewMap;
+      }
+
+      @Override
+      public void expand(Expandable expandable, List<String> commandLine) {
+        Sequence sequence = sequenceStack.peek();
+        sequence.expand(this, expandable, commandLine);
+      }
+
+      /**
+       * Expands {@code expandable} with the control variable set to {@code value}.
+       */
+      void expandValue(String value, Expandable expandable, List<String> commandLine) {
+        viewMap.put(controlVariable, value);
+        expandable.expand(this, commandLine);
+        viewMap.remove(controlVariable);
+      }
+
+      /**
+       * Expands {@code expandable}. If the {@code expandable} is controlled by the current view's
+       * control variable, it will be expanded for each given sequence. Otherwise it will be
+       * expanded once.
+       */
+      void expandSequence(
+          Collection<Sequence> sequences, Expandable expandable, List<String> commandLine) {
+        if (!controls(expandable)) {
+          // If an expandable does not reference the control variable, we only want to expand
+          // it once.
+          expandable.expand(this, commandLine);
+          return;
+        }
+        // Expandables that are controlled by the control variable will be expanded for each
+        // sequence at the current nesting level of the control variable's content.
+        for (Sequence sequence : sequences) {
+          sequenceStack.push(sequence);
+          expandable.expand(this, commandLine);
+          sequenceStack.pop();
+        }
+      }
+
+      /**
+       * Returns whether the expansion of {@code expandable} is controlled by the controlling
+       * variable of the current view.
+       */
+      boolean controls(Expandable expandable) {
+        if (expandable.getControllingVariables() == null) {
+          return false;
+        }
+        return expandable.getControllingVariables().contains(controlVariable);
+      }
+    }
+    
     private final ImmutableMap<String, String> variables;
-    private final ImmutableMap<String, VariableValue> sequenceVariables;
-    private final ImmutableMap<String, VariableValue> structureVariables;
+    private final ImmutableMap<String, Sequence> sequenceVariables;
 
     private Variables(
-        ImmutableMap<String, String> variables,
-        ImmutableMap<String, VariableValue> sequenceVariables,
-        ImmutableMap<String, VariableValue> structures) {
+        ImmutableMap<String, String> variables, ImmutableMap<String, Sequence> sequenceVariables) {
       this.variables = variables;
       this.sequenceVariables = sequenceVariables;
-      this.structureVariables = structures;
     }
-
-    public String guessIteratedOverVariable(View view, ImmutableSet<String> usedVariables) {
-      String sequenceName = null;
-      for (String usedVariable : usedVariables) {
-        if (sequenceVariables.containsKey(usedVariable)) {
-          if (variables.containsKey(usedVariable)) {
-            throw new ExpansionException(
-                "Internal error: variable '"
-                    + usedVariable
-                    + "' provided both as sequence and standard variable.");
-          }
-          if (sequenceName != null) {
-            throw new ExpansionException(
-                "Invalid toolchain configuration: trying to expand two variable list in one "
-                    + "flag group: '"
-                    + sequenceName
-                    + "' and '"
-                    + usedVariable
-                    + "'");
-          }
-          if (view.getVariable(usedVariable).isSequence()) {
-            sequenceName = usedVariable;
-          }
-        }
-      }
-      return sequenceName;
-    }
-
+    
     /**
      * Returns a view of the current variables under the given {@code controllingVariables}.
      * Verifies that all controlling variables are available.
      */
     View getView(Collection<String> controllingVariables) {
-      ImmutableSet.Builder<String> topLevelVariables = ImmutableSet.builder();
+      Map<String, String> viewMap = new HashMap<>();
+      String sequenceName = null; 
       for (String name : controllingVariables) {
-        if (name.contains(".")) {
-          topLevelVariables.add(name.substring(0, name.indexOf('.')));
-        } else {
-          topLevelVariables.add(name);
-        }
-      }
-      ImmutableMap.Builder<String, VariableValue> viewMapBuilder = new ImmutableMap.Builder<>();
-      for (String name : topLevelVariables.build()) {
         if (sequenceVariables.containsKey(name)) {
-          viewMapBuilder.put(name, sequenceVariables.get(name));
+          if (variables.containsKey(name)) {
+            throw new ExpansionException("Internal error: variable '" + name
+                + "' provided both as sequence and standard variable.");
+          } else if (sequenceName != null) {
+            throw new ExpansionException(
+                "Invalid toolchain configuration: trying to expand two variable list in one "
+                + "flag group: '" + sequenceName + "' and '" + name + "'");
+          } else {
+            sequenceName = name;
+          }
         } else if (variables.containsKey(name)) {
-          viewMapBuilder.put(name, new StringValue(variables.get(name)));
-        } else if (structureVariables.containsKey(name)) {
-          viewMapBuilder.put(name, structureVariables.get(name));
+          viewMap.put(name, variables.get(name));
         } else {
-          throw new ExpansionException(
-              "Invalid toolchain configuration: unknown variable '"
-                  + name
-                  + "' can not be expanded.");
+          throw new ExpansionException("Invalid toolchain configuration: unknown variable '" + name
+              + "' can not be expanded.");
         }
       }
-      return new View(viewMapBuilder.build());
+      if (sequenceName == null) {
+        return new FixedView(viewMap);
+      }
+      return new NestedView(viewMap, sequenceName, sequenceVariables.get(sequenceName));
     }
 
     /** Returns whether {@code variable} is set. */
@@ -1404,12 +1149,9 @@ public class CcToolchainFeatures implements Serializable {
       return enabledFeatureNames.contains(feature);
     }
 
-    /** @return true if tool_path in action_config points to a real tool, not a dummy placeholder */
-    public boolean hasConfiguredLinkerPathInActionConfig() {
-      return isEnabled("has_configured_linker_path");
-    }
-
-    /** @return whether an action config for the blaze action with the given name is enabled. */
+    /**
+     * @return whether an action config for the blaze action with the given name is enabled.
+     */
     boolean actionIsConfigured(String actionName) {
       return enabledActionConfigActionNames.contains(actionName);
     }
