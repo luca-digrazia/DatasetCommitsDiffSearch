@@ -17,7 +17,6 @@ import org.springframework.http.ResponseEntity;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -88,7 +87,7 @@ public class FieldFilterDataAccessHandler implements DataAccessHandler {
 
     @SuppressWarnings("all")
     protected boolean doQueryAccess(FieldFilterDataAccessConfig access, AuthorizingContext context) {
-        if (context.getDefinition().getDataAccessDefinition().getPhased() == Phased.before) {
+        if (context.getDefinition().getPhased() == Phased.before) {
             QueryParamEntity entity = context.getParamContext().getParams()
                     .values().stream()
                     .filter(QueryParamEntity.class::isInstance)
@@ -98,8 +97,7 @@ public class FieldFilterDataAccessHandler implements DataAccessHandler {
                 logger.warn("try validate query access, but query entity is null or not instance of org.hswebframework.web.commons.entity.Entity");
                 return true;
             }
-            Set<String> denyFields = access.getFields();
-            entity.excludes(denyFields.toArray(new String[denyFields.size()]));
+            entity.excludes(access.getFields().toArray(new String[access.getFields().size()]));
         } else {
             Object result = InvokeResultUtils.convertRealResult(context.getParamContext().getInvokeResult());
             if (result instanceof Collection) {
