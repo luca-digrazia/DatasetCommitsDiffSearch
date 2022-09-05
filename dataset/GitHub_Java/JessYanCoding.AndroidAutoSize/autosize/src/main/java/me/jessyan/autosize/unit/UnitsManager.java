@@ -67,9 +67,8 @@ public class UnitsManager {
      *
      * @param supportDP {@code true} 为支持, {@code false} 为不支持
      */
-    public UnitsManager setSupportDP(boolean supportDP) {
+    public void setSupportDP(boolean supportDP) {
         isSupportDP = supportDP;
-        return this;
     }
 
     /**
@@ -86,9 +85,8 @@ public class UnitsManager {
      *
      * @param supportSP {@code true} 为支持, {@code false} 为不支持
      */
-    public UnitsManager setSupportSP(boolean supportSP) {
+    public void setSupportSP(boolean supportSP) {
         isSupportSP = supportSP;
-        return this;
     }
 
     /**
@@ -107,9 +105,8 @@ public class UnitsManager {
      *
      * @param supportSubunits {@link Subunits}
      */
-    public UnitsManager setSupportSubunits(Subunits supportSubunits) {
+    public void setSupportSubunits(Subunits supportSubunits) {
         mSupportSubunits = Preconditions.checkNotNull(supportSubunits,
                 "The supportSubunits can not be null, use Subunits.NONE instead");
-        return this;
     }
 }
