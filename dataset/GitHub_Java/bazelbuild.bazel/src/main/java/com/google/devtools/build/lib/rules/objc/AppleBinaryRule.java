@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
@@ -33,36 +34,42 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 public class AppleBinaryRule implements RuleDefinition {
 
   /**
-   * Attribute name for {@code apple_binary}'s apple platform type (for which all dependencies and
-   * sources of an {@code apple_binary} target will be built).
-   */
-  static final String PLATFORM_TYPE_ATTR_NAME = "platform_type";
-
-  /**
    * Template for the fat binary output (using Apple's "lipo" tool to combine binaries of
    * multiple architectures).
    */
   private static final SafeImplicitOutputsFunction LIPOBIN = fromTemplates("%{name}_lipobin");
+  
+  /**
+   * Template for the fat archive output (using Apple's "lipo" tool to combine .a archive files of
+   * multiple architectures).
+   */
+  static final SafeImplicitOutputsFunction LIPO_ARCHIVE = fromTemplates("%{name}_lipo.a");
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-    MultiArchSplitTransitionProvider splitTransitionProvider =
-        new MultiArchSplitTransitionProvider();
     return builder
         .requiresConfigurationFragments(
             ObjcConfiguration.class, J2ObjcConfiguration.class, AppleConfiguration.class)
         .add(attr("$is_executable", BOOLEAN).value(true)
             .nonconfigurable("Called from RunCommand.isExecutable, which takes a Target"))
-        .override(builder.copy("deps").cfg(splitTransitionProvider))
-        .override(builder.copy("non_propagated_deps").cfg(splitTransitionProvider))
+        .override(builder.copy("deps").cfg(AppleBinary.SPLIT_TRANSITION_PROVIDER))
+        .override(builder.copy("non_propagated_deps").cfg(AppleBinary.SPLIT_TRANSITION_PROVIDER))
+        // This is currently a hack to obtain all child configurations regardless of the attribute
+        // values of this rule -- this rule does not currently use the actual info provided by
+        // this attribute.
+        .add(attr(":cc_toolchain", LABEL)
+            .cfg(AppleBinary.SPLIT_TRANSITION_PROVIDER)
+            .value(ObjcRuleClasses.APPLE_TOOLCHAIN))
         /*<!-- #BLAZE_RULE(apple_binary).IMPLICIT_OUTPUTS -->
         <ul>
          <li><code><var>name</var>_lipobin</code>: the 'lipo'ed potentially multi-architecture
              binary. All transitive dependencies and <code>srcs</code> are linked.</li>
+         <li><code><var>name</var>_.lipo.a</code>: a 'lipo'ed archive file linking together only
+             the <code>srcs</code> of this target.</li>
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(
-            ImplicitOutputsFunction.fromFunctions(LIPOBIN))
+            ImplicitOutputsFunction.fromFunctions(LIPOBIN, LIPO_ARCHIVE))
         .build();
   }
 
@@ -72,7 +79,7 @@ public class AppleBinaryRule implements RuleDefinition {
         .name("apple_binary")
         .factoryClass(AppleBinary.class)
         .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.LinkingRule.class,
-            ObjcRuleClasses.MultiArchPlatformRule.class, ObjcRuleClasses.SimulatorRule.class)
+            ObjcRuleClasses.SimulatorRule.class)
         .build();
   }
 }
