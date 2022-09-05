@@ -168,15 +168,12 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         .addHeaders(protoGeneratedSources)
         .build();
 
-    ObjcConfiguration configuration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    Iterable<XcodeProvider> protoDeps = ruleContext.getPrerequisites(
-        ObjcProtoLibraryRule.LIBPROTOBUF_ATTR, Mode.TARGET, XcodeProvider.class);
     XcodeProvider xcodeProvider = new XcodeProvider.Builder()
         .setLabel(ruleContext.getLabel())
-        .setArchitecture(configuration.getIosCpu())
         .addUserHeaderSearchPaths(searchPathEntries)
-        .addDependencies(protoDeps, configuration)
-        .addCopts(configuration.getCopts())
+        .addDependencies(ruleContext.getPrerequisites(
+            ObjcProtoLibraryRule.LIBPROTOBUF_ATTR, Mode.TARGET, XcodeProvider.class))
+        .addCopts(ObjcRuleClasses.objcConfiguration(ruleContext).getCopts())
         .setProductType(LIBRARY_STATIC)
         .addHeaders(protoGeneratedHeaders)
         .setCompilationArtifacts(common.getCompilationArtifacts().get())
