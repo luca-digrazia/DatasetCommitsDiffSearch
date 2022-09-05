@@ -3,8 +3,8 @@ package org.hswebframework.web.organizational.authorization.simple.handler;
 import org.hswebframework.ezorm.core.param.Term;
 import org.hswebframework.ezorm.core.param.TermType;
 import org.hswebframework.web.authorization.define.AuthorizingContext;
-import org.hswebframework.web.entity.organizational.authorization.DistrictAttachEntity;
-import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
+import org.hswebframework.web.organizational.authorization.access.DistrictAttachEntity;
+import org.hswebframework.web.organizational.authorization.PersonnelAuthentication;
 
 import java.util.Collections;
 import java.util.Set;
@@ -12,8 +12,6 @@ import java.util.Set;
 import static org.hswebframework.web.organizational.authorization.access.DataAccessType.*;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 public class DistrictScopeDataAccessHandler extends AbstractScopeDataAccessHandler<DistrictAttachEntity> {
@@ -24,7 +22,7 @@ public class DistrictScopeDataAccessHandler extends AbstractScopeDataAccessHandl
 
     @Override
     protected String getSupportScope() {
-        return AREA_SCOPE;
+        return DISTRICT_SCOPE;
     }
 
     @Override
@@ -38,14 +36,14 @@ public class DistrictScopeDataAccessHandler extends AbstractScopeDataAccessHandl
     }
 
     @Override
-    protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthorization authorization) {
+    protected Set<String> getTryOperationScope(String scopeType, PersonnelAuthentication authorization) {
         switch (scopeType) {
             case SCOPE_TYPE_CHILDREN:
                 return authorization.getAllDistrictId();
             case SCOPE_TYPE_ONLY_SELF:
                 return authorization.getRootDistrictId();
             default:
-                return Collections.emptySet();
+                return new java.util.HashSet<>();
         }
     }
 

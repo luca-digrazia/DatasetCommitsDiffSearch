@@ -22,8 +22,6 @@ public class SimplePermission implements Permission {
 
     private String id;
 
-    private String name;
-
     private Set<String> actions;
 
     private Set<DataAccessConfig> dataAccesses;

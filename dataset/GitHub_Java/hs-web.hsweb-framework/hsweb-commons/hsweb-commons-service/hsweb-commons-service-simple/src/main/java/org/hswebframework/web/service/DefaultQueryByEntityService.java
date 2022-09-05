@@ -60,7 +60,7 @@ public interface DefaultQueryByEntityService<E>
             if (param instanceof QueryParamEntity) {
                 ((QueryParamEntity) param).rePaging(total);
             }
-            pagerResult.setData(select(param));
+            pagerResult.setData(getDao().query(param));
         }
         return pagerResult;
     }

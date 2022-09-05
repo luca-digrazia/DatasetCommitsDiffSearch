@@ -36,8 +36,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
 
     private Map<String, BiFunction<Object, ConvertConfig, Object>> converts;
 
-    private Function<Object, String> coverStringConvert = (o) -> coverString(String.valueOf(o), 80);
-
+    private Function<Object, String> coverStringConvert = (o) -> coverString(String.valueOf(o), 50);
 
     private Function<Class, BiFunction<Object, ConvertConfig, Object>> simpleConvertBuilder = type -> {
         if (Date.class.isAssignableFrom(type)) {
@@ -47,7 +46,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
         }
     };
 
-    private Predicate<Class> simpleTypePredicate = ((Predicate<Class>) String.class::isAssignableFrom)
+    Predicate<Class> simpleTypePredicate = ((Predicate<Class>) String.class::isAssignableFrom)
             .or(Class::isEnum)
             .or(Class::isPrimitive)
             .or(Date.class::isAssignableFrom)
@@ -115,6 +114,9 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
             long propertyFeature = 0;
             try {
                 Field field = ReflectionUtils.findField(targetType, descriptor.getName());
+                if (null == field) {
+                    log.warn("无法获取字段{},该字段将不会被打码!", descriptor.getName());
+                }
                 propertyIgnore = field.getAnnotation(ToString.Ignore.class);
                 features = AnnotationUtils.getAnnotation(field, ToString.Features.class);
                 if (propertyIgnore != null) {
@@ -125,7 +127,8 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
                 if (null != features && features.value().length > 0) {
                     propertyFeature = ToString.Feature.createFeatures(features.value());
                 }
-            } catch (Exception ignore) {
+            } catch (Exception e) {
+                log.warn("无法获取字段{},该字段将不会被打码!", descriptor.getName());
             }
             //是否设置了打码
             boolean cover = (propertyIgnore == null && defaultCover) || (propertyIgnore != null && propertyIgnore.cover());
@@ -229,7 +232,7 @@ public class DefaultToStringOperator<T> implements ToStringOperator<T> {
     }
 
     class ConvertConfig {
-        long features;
+        long        features;
         Set<String> ignoreProperty;
 
     }

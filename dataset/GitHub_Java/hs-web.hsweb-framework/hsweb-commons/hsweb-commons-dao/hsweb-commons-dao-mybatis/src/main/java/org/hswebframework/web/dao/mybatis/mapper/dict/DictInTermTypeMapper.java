@@ -9,20 +9,21 @@ import org.hswebframework.ezorm.rdb.render.dialect.Dialect;
 import org.hswebframework.ezorm.rdb.render.dialect.RenderPhase;
 import org.hswebframework.ezorm.rdb.render.dialect.function.SqlFunction;
 import org.hswebframework.ezorm.rdb.render.dialect.term.BoostTermTypeMapper;
-import org.hswebframework.web.dao.mybatis.mapper.AbstractSqlTermCustomizer;
+import org.hswebframework.web.dao.mybatis.mapper.AbstractSqlTermCustomer;
 import org.hswebframework.web.dao.mybatis.mapper.ChangedTermValue;
 import org.hswebframework.web.dict.EnumDict;
 
 import java.sql.JDBCType;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * @author zhouhao
  * @since 3.0.0-RC
  */
-public class DictInTermTypeMapper extends AbstractSqlTermCustomizer {
+public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
 
     private boolean not;
 
@@ -119,7 +120,7 @@ public class DictInTermTypeMapper extends AbstractSqlTermCustomizer {
 
         String columnName = dialect.buildColumnName(tableAlias, column.getName());
         SqlAppender appender = new SqlAppender();
-        appender.add(columnName, not ? " NOT " : " ").add("IN(");
+        appender.add(columnName, not ? " NOT" : " ").add("IN(");
         for (int i = 0; i < values.size(); i++) {
             appender.add("#{", wherePrefix, ".value.value[", i, "]}", ",");
         }

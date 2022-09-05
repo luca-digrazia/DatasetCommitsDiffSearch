@@ -25,7 +25,6 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -79,7 +78,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     @Transactional(readOnly = true)
     public UserEntity selectByUsername(String username) {
-        if (!StringUtils.hasLength(username)) {
+        if (null == username) {
             return null;
         }
         return createQuery().where("username", username).single();
@@ -88,8 +87,8 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     @Transactional(readOnly = true)
     public UserEntity selectByUserNameAndPassword(String plainUsername, String plainPassword) {
-        Assert.hasLength(plainUsername, "用户名不能为空");
-        Assert.hasLength(plainPassword, "密码不能为空");
+        Objects.requireNonNull(plainUsername);
+        Objects.requireNonNull(plainPassword);
 
         return Optional.ofNullable(selectByUsername(plainUsername))
                 .filter(user -> encodePassword(plainPassword, user.getSalt()).equals(user.getPassword()))
@@ -99,7 +98,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     @Transactional(readOnly = true)
     public UserEntity selectByPk(String id) {
-        if (!StringUtils.hasLength(id)) {
+        if (null == id) {
             return null;
         }
         UserEntity userEntity = createQuery().where(UserEntity.id, id).single();
@@ -218,9 +217,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Override
     public boolean enable(String userId) {
-        if (!StringUtils.hasLength(userId)) {
-            return false;
-        }
         return createUpdate(getDao())
                 .set(UserEntity.status, DataStatus.STATUS_ENABLED)
                 .where(GenericEntity.id, userId)
@@ -229,9 +225,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Override
     public boolean disable(String userId) {
-        if (!StringUtils.hasLength(userId)) {
-            return false;
-        }
         return createUpdate(getDao())
                 .set(UserEntity.status, DataStatus.STATUS_DISABLED)
                 .where(GenericEntity.id, userId)
@@ -259,7 +252,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Override
     public List<RoleEntity> getUserRole(String userId) {
-        Assert.hasLength(userId,"参数不能为空");
+        Objects.requireNonNull(userId);
         List<UserRoleEntity> roleEntities = userRoleDao.selectByUserId(userId);
         if (roleEntities.isEmpty()) {
             return new ArrayList<>();

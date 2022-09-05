@@ -92,12 +92,12 @@ public class ProcessConfigurationServiceImpl implements ProcessConfigurationServ
                                     Lazy.val(() -> new CandidateInfo() {
                                         @Override
                                         public Authentication user() {
-                                            return AuthenticationHolder.get(userId);
+                                            return Lazy.val(() -> AuthenticationHolder.get(userId), Authentication.class);
                                         }
 
                                         @Override
                                         public PersonnelAuthentication person() {
-                                            return PersonnelAuthenticationHolder.getByUserId(userId);
+                                            return Lazy.val(() -> PersonnelAuthenticationHolder.getByUserId(userId), PersonnelAuthentication.class);
                                         }
                                     }, CandidateInfo.class))
                             .collect(Collectors.toList());
@@ -156,12 +156,12 @@ public class ProcessConfigurationServiceImpl implements ProcessConfigurationServ
 
         @Override
         public void assertCanStartProcess(String userId, ProcessDefinition definition) {
-           // throw new AccessDenyException("没有权限启动此流程:" + definition.getName() + "(" + definition.getId() + ")");
+            throw new AccessDenyException("没有权限启动此流程:" + definition.getName() + "(" + definition.getId() + ")");
         }
 
         @Override
         public boolean canStartProcess(String userId, ProcessDefinition definition) {
-            return true;
+            return false;
         }
     }
 }
