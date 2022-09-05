@@ -38,8 +38,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -137,7 +135,7 @@ public class PackageDeserializer {
             ruleLabel, packageBuilder, ruleLocation, attributeValues,
             NullEventHandler.INSTANCE);
         packageBuilder.addRule(rule);
-
+        
         Preconditions.checkState(!rule.containsErrors());
       } catch (NameConflictException | SyntaxException e) {
         throw new PackageDeserializationException(e);
@@ -221,7 +219,7 @@ public class PackageDeserializer {
 
   private static Label deserializeLabel(String labelName) throws PackageDeserializationException {
     try {
-      return Label.parseAbsolute(labelName);
+      return Label.parseRepositoryLabel(labelName);
     } catch (Label.SyntaxException e) {
       throw new PackageDeserializationException("Invalid label: " + e.getMessage(), e);
     }
@@ -380,19 +378,11 @@ public class PackageDeserializer {
   }
 
   /**
-   * Deserializes a {@link Package} from {@code in}. The inverse of
+   * Deserialize a protocol message to a package. The inverse of
    * {@link PackageSerializer#serializePackage}.
-   *
-   * <p>Expects {@code in} to contain a single
-   * {@link com.google.devtools.build.lib.query2.proto.proto2api.Build.Package} message.
-   *
-   * @param in stream to read from
-   * @return a new {@link Package} as read from {@code in}
-   * @throws PackageDeserializationException on failures deserializing the input
-   * @throws IOException on failures reading from {@code in}
    */
-  public Package deserialize(InputStream in) throws PackageDeserializationException, IOException {
-    Build.Package packagePb = Build.Package.parseDelimitedFrom(in);
+  public Package deserialize(Build.Package packagePb)
+      throws PackageDeserializationException {
     Package.Builder builder;
     try {
       builder = new Package.Builder(

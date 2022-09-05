@@ -35,14 +35,12 @@ import java.util.Map.Entry;
  */
 public class ExternalPackage extends Package {
   public static final String NAME = "external";
-  public static final PackageIdentifier PACKAGE_IDENTIFIER =
-      PackageIdentifier.createInDefaultRepo(NAME);
 
   private Map<Label, Binding> bindMap;
   private Map<RepositoryName, Rule> repositoryMap;
 
   ExternalPackage() {
-    super(PACKAGE_IDENTIFIER);
+    super(PackageIdentifier.createInDefaultRepo(NAME));
   }
 
   /**
@@ -220,11 +218,6 @@ public class ExternalPackage extends Package {
           ast.getLocation());
       addEvents(eventHandler.getEvents());
       repositoryMap.put(RepositoryName.create("@" + tempRule.getName()), tempRule);
-      for (Map.Entry<String, Label> entry :
-          ruleClass.getExternalBindingsFunction().apply(tempRule).entrySet()) {
-          Label nameLabel = Label.parseAbsolute("//external:" + entry.getKey());
-          addBinding(nameLabel, new Binding(entry.getValue(), tempRule.getLocation()));
-      }
       return this;
     }
 

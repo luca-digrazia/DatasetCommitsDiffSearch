@@ -110,7 +110,7 @@ public class Package implements Serializable {
 
   /**
    * The root of the source tree in which this package was found. It is an invariant that
-   * {@code sourceRoot.getRelative(packageId.getPathFragment()).equals(packageDirectory)}.
+   * {@code sourceRoot.getRelative(name).equals(packageDirectory)}.
    */
   private Path sourceRoot;
 
@@ -312,9 +312,9 @@ public class Package implements Serializable {
     defaultRestrictedTo = environments;
   }
 
-  private static Path getSourceRoot(Path buildFile, PathFragment packageFragment) {
+  public static Path getSourceRoot(Path buildFile, PathFragment nameFragment) {
     Path current = buildFile.getParentDirectory();
-    for (int i = 0, len = packageFragment.segmentCount(); i < len && current != null; i++) {
+    for (int i = 0, len = nameFragment.segmentCount(); i < len && current != null; i++) {
       current = current.getParentDirectory();
     }
     return current;
@@ -341,12 +341,12 @@ public class Package implements Serializable {
     this.filename = builder.filename;
     this.packageDirectory = filename.getParentDirectory();
 
-    this.sourceRoot = getSourceRoot(filename, packageIdentifier.getPathFragment());
+    this.sourceRoot = getSourceRoot(filename, nameFragment);
     if ((sourceRoot == null
-        || !sourceRoot.getRelative(packageIdentifier.getPathFragment()).equals(packageDirectory))
+        || !sourceRoot.getRelative(nameFragment).equals(packageDirectory))
         && !filename.getBaseName().equals("WORKSPACE")) {
       throw new IllegalArgumentException(
-          "Invalid BUILD file name for package '" + packageIdentifier + "': " + filename);
+          "Invalid BUILD file name for package '" + name + "': " + filename);
     }
 
     this.makeEnv = builder.makeEnv.build();
@@ -395,7 +395,7 @@ public class Package implements Serializable {
    * Returns the source root (a directory) beneath which this package's BUILD file was found.
    *
    * Assumes invariant:
-   * {@code getSourceRoot().getRelative(packageId.getPathFragment()).equals(getPackageDirectory())}
+   * {@code getSourceRoot().getRelative(getName()).equals(getPackageDirectory())}
    */
   public Path getSourceRoot() {
     return sourceRoot;
@@ -528,8 +528,8 @@ public class Package implements Serializable {
    * for walking through the dependency graph of a target.
    * Fails if the target is not a Rule.
    */
-  @VisibleForTesting // Should be package-private
-  public Rule getRule(String targetName) {
+  @VisibleForTesting
+  Rule getRule(String targetName) {
     return (Rule) targets.get(targetName);
   }
 
@@ -750,8 +750,7 @@ public class Package implements Serializable {
 
     /**
      * Removes a target from the {@link Package} under construction. Intended to be used only by
-     * {@link com.google.devtools.build.lib.skyframe.PackageFunction} to remove targets whose
-     * labels cross subpackage boundaries.
+     * {@link PackageFunction} to remove targets whose labels cross subpackage boundaries.
      */
     public void removeTarget(Target target) {
       if (target.getPackage() == pkg) {
@@ -761,9 +760,8 @@ public class Package implements Serializable {
 
     /**
      * Returns the glob patterns requested by {@link PackageFactory} during evaluation of this
-     * package's BUILD file. Intended to be used only by
-     * {@link com.google.devtools.build.lib.skyframe.PackageFunction} to mark the appropriate
-     * Skyframe dependencies after the fact.
+     * package's BUILD file. Intended to be used only by {@link PackageFunction} to mark the
+     * appropriate Skyframe dependencies after the fact.
      */
     public Set<Pair<String, Boolean>> getGlobPatterns() {
       return globber.getGlobPatterns();
@@ -1306,7 +1304,7 @@ public class Package implements Serializable {
       return this;
     }
 
-    /** Intended for use by {@link com.google.devtools.build.lib.skyframe.PackageFunction} only. */
+    /** Intended to be used only by {@link PackageFunction}. */
     public Builder buildPartial() {
       if (alreadyBuilt) {
         return this;
@@ -1314,7 +1312,7 @@ public class Package implements Serializable {
       return beforeBuild();
     }
 
-    /** Intended for use by {@link com.google.devtools.build.lib.skyframe.PackageFunction} only. */
+    /** Intended to be used only by {@link PackageFunction}. */
     public Package finishBuild() {
       if (alreadyBuilt) {
         return pkg;
