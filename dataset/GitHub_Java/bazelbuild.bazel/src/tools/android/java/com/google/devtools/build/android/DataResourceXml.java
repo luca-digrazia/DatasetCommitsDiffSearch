@@ -56,7 +56,7 @@ import javax.xml.stream.events.StartElement;
 public class DataResourceXml implements DataResource {
 
   /**
-   * Parses xml resources from a Path to the provided overwritable and combining collections.
+   * Parses xml resources from a Path to the provided overwritable and nonOverwritable collections.
    *
    * This method is a bit tricky in the service of performance -- creating several collections and
    * merging them was more expensive than writing to mutable collections directly.
@@ -65,7 +65,7 @@ public class DataResourceXml implements DataResource {
    * @param path The path to the xml resource to be parsed.
    * @param fqnFactory Used to create {@link FullyQualifiedName}s from the resource names.
    * @param overwritingConsumer A consumer for overwritable {@link DataResourceXml}s.
-   * @param combiningConsumer A consumer for combining {@link DataResourceXml}s.
+   * @param nonOverwritingConsumer A consumer for nonoverwritable {@link DataResourceXml}s.
    * @throws XMLStreamException Thrown with the resource format is invalid.
    * @throws FactoryConfigurationError Thrown with the {@link XMLInputFactory} is misconfigured.
    * @throws IOException Thrown when there is an error reading a file.
@@ -75,7 +75,7 @@ public class DataResourceXml implements DataResource {
       Path path,
       Factory fqnFactory,
       KeyValueConsumer<DataKey, DataResource> overwritingConsumer,
-      KeyValueConsumer<DataKey, DataResource> combiningConsumer)
+      KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer)
       throws XMLStreamException, FactoryConfigurationError, IOException {
     XMLEventReader eventReader =
         xmlInputFactory.createXMLEventReader(Files.newBufferedReader(path, StandardCharsets.UTF_8));
@@ -94,14 +94,14 @@ public class DataResourceXml implements DataResource {
                 path + " contains an unrecognized resource type:" + start, start.getLocation());
           }
           if (resourceType == DECLARE_STYLEABLE) {
-            // Styleables are special, as they produce multiple overwrite and combining values,
+            // Styleables are special, as they produce multiple overwrite and non-overwrite values,
             // so we let the value handle the assignments.
             XmlResourceValues.parseDeclareStyleable(
-                fqnFactory, path, overwritingConsumer, combiningConsumer, eventReader, start);
+                fqnFactory, path, overwritingConsumer, nonOverwritingConsumer, eventReader, start);
           } else {
-            // Of simple resources, only IDs are combining.
+            // Of simple resources, only IDs are nonOverwriting.
             KeyValueConsumer<DataKey, DataResource> consumer =
-                resourceType == ID ? combiningConsumer : overwritingConsumer;
+                resourceType == ID ? nonOverwritingConsumer : overwritingConsumer;
             FullyQualifiedName key =
                 fqnFactory.create(resourceType, XmlResourceValues.getElementName(start));
             consumer.consume(
@@ -243,17 +243,5 @@ public class DataResourceXml implements DataResource {
   @Override
   public int serializeTo(DataKey key, OutputStream outStream) throws IOException {
     return xml.serializeTo(source, outStream);
-  }
-
-  // TODO(corysmith): Clean up all the casting. The type structure is unclean.
-  @Override
-  public DataResource combineWith(DataResource resource) {
-    if (!(resource instanceof DataResourceXml)) {
-      throw new IllegalArgumentException(resource + " is not a combinable with " + this);
-    }
-    DataResourceXml xmlResource = (DataResourceXml) resource;
-    // TODO(corysmith): Combine the sources so that we know both of the originating files.
-    // For right now, use the current source.
-    return of(source, xml.combineWith(xmlResource.xml));
   }
 }

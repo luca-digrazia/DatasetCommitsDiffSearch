@@ -22,24 +22,8 @@ import java.io.IOException;
  */
 public interface DataResource extends DataValue {
   /**
-   * Write as a resource using the supplied {@link AndroidDataWritingVisitor}.
+   * Write as a resource using the supplied {@link MergeDataWriter}.
    */
   void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter)
       throws IOException, MergingException;
-
-  /**
-   * Combines these resource together and returns a single resource.
-   * 
-   * @param resource Another resource to be combined with this one.
-   * @return A union of the values of these two resources.
-   * @throws IllegalArgumentException if either resource cannot combine with the other.
-   */
-  DataResource combineWith(DataResource resource);
-
-  /**
-   * Queue up writing the resource to the given {@link AndroidResourceClassWriter}.
-   */
-  void writeResourceToClass(
-      FullyQualifiedName key,
-      AndroidResourceClassWriter resourceClassWriter);
 }

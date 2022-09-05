@@ -322,11 +322,6 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     return XmlResourceValues.serializeProtoDataValue(output, builder);
   }
 
-  @Override
-  public XmlResourceValue combineWith(XmlResourceValue value) {
-    throw new IllegalArgumentException(this + " is not a combinable resource.");
-  }
-
   @CheckReturnValue
   interface ResourceXmlAttrValue {
     FluentIterable<String> appendTo(FluentIterable<String> iterable);

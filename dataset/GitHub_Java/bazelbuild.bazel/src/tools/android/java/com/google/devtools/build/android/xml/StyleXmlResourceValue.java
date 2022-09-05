@@ -98,7 +98,10 @@ public class StyleXmlResourceValue implements XmlResourceValue {
     if (parent.isEmpty()) {
       return "parent=''";
     }
-    return "parent=\"" + parent + "\"";
+    if (parent.startsWith("style/")) {
+      return "parent='@" + parent + "'";
+    }
+    return "parent='@style/" + parent + "'";
   }
 
   @Override
@@ -135,10 +138,5 @@ public class StyleXmlResourceValue implements XmlResourceValue {
         .add("parent", parent)
         .add("values", values)
         .toString();
-  }
-
-  @Override
-  public XmlResourceValue combineWith(XmlResourceValue value) {
-    throw new IllegalArgumentException(this + " is not a combinable resource.");
   }
 }

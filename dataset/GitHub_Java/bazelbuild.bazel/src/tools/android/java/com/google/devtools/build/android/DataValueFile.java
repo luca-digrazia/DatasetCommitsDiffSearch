@@ -83,7 +83,7 @@ public class DataValueFile implements DataResource, DataAsset {
   @Override
   public void writeResource(FullyQualifiedName key, AndroidDataWritingVisitor mergedDataWriter)
       throws IOException, MergingException {
-    mergedDataWriter.copyResource(source, key.toPathString(source));
+    mergedDataWriter.copyResource(source, key.toPathString(getSourceExtension()));
   }
 
   @Override
@@ -96,8 +96,13 @@ public class DataValueFile implements DataResource, DataAsset {
         + value.getSerializedSize();
   }
 
-  @Override
-  public DataResource combineWith(DataResource resource) {
-    throw new IllegalArgumentException(getClass() + " does not combine.");
+  private String getSourceExtension() {
+    // TODO(corysmith): Find out if there is a filename parser utility.
+    String fileName = source.getFileName().toString();
+    int extensionStart = fileName.lastIndexOf('.');
+    if (extensionStart > 0) {
+      return fileName.substring(extensionStart);
+    }
+    return "";
   }
 }
