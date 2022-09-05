@@ -20,12 +20,14 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Tests for Fingerprint.
@@ -54,10 +56,9 @@ public class FingerprintTest {
   // echo -n 'Hello World!'| md5sum
   @Test
   public void bytesFingerprint() {
-    assertThat(new Fingerprint().addBytes("Hello World!".getBytes(UTF_8)).hexDigestAndReset())
-        .isEqualTo("ed076287532e86365e841e92bfc50d8c");
-    assertThat(Fingerprint.md5Digest("Hello World!"))
-        .isEqualTo("ed076287532e86365e841e92bfc50d8c");
+    assertThat("ed076287532e86365e841e92bfc50d8c").isEqualTo(
+        new Fingerprint().addBytes("Hello World!".getBytes(UTF_8)).hexDigestAndReset());
+    assertThat("ed076287532e86365e841e92bfc50d8c").isEqualTo(Fingerprint.md5Digest("Hello World!"));
   }
 
   @Test
@@ -112,11 +113,11 @@ public class FingerprintTest {
   @Test
   public void addPath() throws Exception {
     PathFragment pf = new PathFragment("/etc/pwd");
-    assertThat(new Fingerprint().addPath(pf).hexDigestAndReset())
-        .isEqualTo("01cc3eeea3a2f58e447e824f9f62d3d1");
+    assertThat("01cc3eeea3a2f58e447e824f9f62d3d1").isEqualTo(
+        new Fingerprint().addPath(pf).hexDigestAndReset());
     Path p = new InMemoryFileSystem(BlazeClock.instance()).getPath(pf);
-    assertThat(new Fingerprint().addPath(p).hexDigestAndReset())
-        .isEqualTo("01cc3eeea3a2f58e447e824f9f62d3d1");
+    assertThat("01cc3eeea3a2f58e447e824f9f62d3d1").isEqualTo(
+        new Fingerprint().addPath(p).hexDigestAndReset());
   }
 
   @Test

@@ -17,12 +17,11 @@ package com.google.devtools.build.lib.util;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.collect.Iterables;
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hasher;
-import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.UUID;
 
@@ -35,14 +34,18 @@ import javax.annotation.Nullable;
  */
 public final class Fingerprint {
 
-  private Hasher hasher;
-  private static final HashFunction MD5_HASH_FUNCTION = Hashing.md5();
+  private final MessageDigest md;
 
   /**
-   * Creates and initializes a new Hasher.
+   * Creates and initializes a new MD5 object; if this fails, Java must be
+   * installed incorrectly.
    */
   public Fingerprint() {
-    reset();
+    try {
+      md = MessageDigest.getInstance("md5");
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("MD5 not available", e);
+    }
   }
 
   /**
@@ -54,9 +57,7 @@ public final class Fingerprint {
    * @see java.security.MessageDigest#digest()
    */
   public byte[] digestAndReset() {
-    byte[] bytes = hasher.hash().asBytes();
-    reset();
-    return bytes;
+    return md.digest();
   }
 
   /**
@@ -67,9 +68,23 @@ public final class Fingerprint {
    * @return the MD5 digest as a 32-character string of hexadecimal digits
    */
   public String hexDigestAndReset() {
-    String hexDigest = hasher.hash().toString();
-    reset();
-    return hexDigest;
+    return hexDigest(digestAndReset());
+  }
+
+  /**
+   * Returns a string representation of an MD5 digest.
+   *
+   * @param digest the MD5 digest, perhaps from a previous call to digest
+   * @return the digest as a 32-character string of hexadecimal digits
+   */
+  public static String hexDigest(byte[] digest) {
+    StringBuilder b = new StringBuilder(32);
+    for (int i = 0; i < digest.length; i++) {
+      int n = digest[i];
+      b.append("0123456789abcdef".charAt((n >> 4) & 0xF));
+      b.append("0123456789abcdef".charAt(n & 0xF));
+    }
+    return b.toString();
   }
 
   /**
@@ -79,7 +94,7 @@ public final class Fingerprint {
    * @see java.security.MessageDigest#update(byte[])
    */
   public Fingerprint addBytes(byte[] input) {
-    hasher.putBytes(input);
+    md.update(input);
     return this;
   }
 
@@ -92,7 +107,7 @@ public final class Fingerprint {
    * @see java.security.MessageDigest#update(byte[], int, int)
    */
   public Fingerprint addBytes(byte[] input, int offset, int len) {
-    hasher.putBytes(input, offset, len);
+    md.update(input, offset, len);
     return this;
   }
 
@@ -118,7 +133,13 @@ public final class Fingerprint {
    * @param input the integer with which to update the digest
    */
   public Fingerprint addInt(int input) {
-    hasher.putInt(input);
+    md.update(new byte[] {
+        (byte) input,
+        (byte) (input >>  8),
+        (byte) (input >> 16),
+        (byte) (input >> 24),
+    });
+
     return this;
   }
 
@@ -128,7 +149,17 @@ public final class Fingerprint {
    * @param input the long with which to update the digest
    */
   public Fingerprint addLong(long input) {
-    hasher.putLong(input);
+    md.update(new byte[]{
+        (byte) input,
+        (byte) (input >> 8),
+        (byte) (input >> 16),
+        (byte) (input >> 24),
+        (byte) (input >> 32),
+        (byte) (input >> 40),
+        (byte) (input >> 48),
+        (byte) (input >> 56),
+    });
+
     return this;
   }
 
@@ -168,8 +199,7 @@ public final class Fingerprint {
   public Fingerprint addString(String input) {
     byte[] bytes = input.getBytes(UTF_8);
     addInt(bytes.length);
-    // Note that Hasher#putString() would not include the length of {@code input}.
-    hasher.putBytes(bytes);
+    md.update(bytes);
     return this;
   }
 
@@ -201,7 +231,7 @@ public final class Fingerprint {
     for (int i = 0; i < input.length(); i++) {
       bytes[i] = (byte) input.charAt(i);
     }
-    hasher.putBytes(bytes);
+    md.update(bytes);
     return this;
   }
 
@@ -291,7 +321,7 @@ public final class Fingerprint {
    * Reset the Fingerprint for additional use as though previous digesting had not been done.
    */
   public void reset() {
-    hasher = MD5_HASH_FUNCTION.newHasher();
+    md.reset();
   }
 
   // -------- Convenience methods ----------------------------
@@ -303,6 +333,8 @@ public final class Fingerprint {
    * @param input the String from which to compute the digest
    */
   public static String md5Digest(String input) {
-    return MD5_HASH_FUNCTION.hashString(input, UTF_8).toString();
+    Fingerprint f = new Fingerprint();
+    f.addBytes(input.getBytes(UTF_8));
+    return f.hexDigestAndReset();
   }
 }
