@@ -65,7 +65,7 @@ import static org.springframework.util.StringUtils.isEmpty;
 public class SimplePersonService extends GenericEntityService<PersonEntity, String>
         implements PersonService, PersonnelAuthorizationManager, AuthorizationSettingTypeSupplier {
 
-    private static String SETTING_TYPE_PERSON = "person";
+    private static String SETTING_TYPE_PERSON   = "person";
     private static String SETTING_TYPE_POSITION = "position";
 
     @Autowired
@@ -143,13 +143,9 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
     @Cacheable(key = "'auth-bind'+#id")
     public PersonAuthBindEntity selectAuthBindByPk(String id) {
         PersonEntity personEntity = this.selectByPk(id);
-        if (personEntity == null) {
-            return null;
-        }
+        if (personEntity == null) return null;
 
-        if (personEntity instanceof PersonAuthBindEntity) {
-            return ((PersonAuthBindEntity) personEntity);
-        }
+        if (personEntity instanceof PersonAuthBindEntity) return ((PersonAuthBindEntity) personEntity);
 
         PersonAuthBindEntity bindEntity = entityFactory.newInstance(PersonAuthBindEntity.class, personEntity);
         Set<String> positionIds = DefaultDSLQueryService.createQuery(personPositionDao)
@@ -177,12 +173,6 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
         return personDao.selectByPositionId(positionId);
     }
 
-    @Override
-    public List<PersonEntity> selectByRoleId(String roleId) {
-        Objects.requireNonNull(roleId);
-        return personDao.selectByRoleId(roleId);
-    }
-
     protected void syncPositionInfo(String personId, Set<String> positionIds) {
         for (String positionId : positionIds) {
             PersonPositionEntity positionEntity = entityFactory.newInstance(PersonPositionEntity.class);
@@ -197,31 +187,19 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
             bindEntity.setUserId("");
             return;
         }
-
+        //获取所有职位
+        Set<String> positionIds = bindEntity.getPositionIds();
+        if (positionIds.isEmpty()) return;
         //是否使用了权限管理的userService.
         if (null == userService) {
             logger.warn("userService not ready!");
             return;
         }
-        //获取所有职位
-        Set<String> positionIds = bindEntity.getPositionIds();
-        Set<String> roleIds;
-
-        if (positionIds == null) {
-            roleIds = null;
-        } else if (positionIds.isEmpty()) {
-            roleIds = new HashSet<>();
-        } else {
-            //获取职位实体
-            List<PositionEntity> positionEntities = DefaultDSLQueryService.createQuery(positionDao)
-                    .where().in(PositionEntity.id, positionIds)
-                    .listNoPaging();
-            roleIds = positionEntities.stream()
-                    .map(PositionEntity::getRoles)
-                    .filter(Objects::nonNull)
-                    .flatMap(List::stream)
-                    .collect(Collectors.toSet());
-        }
+        //获取职位实体
+        List<PositionEntity> positionEntities = DefaultDSLQueryService.createQuery(positionDao)
+                .where().in(PositionEntity.id, positionIds)
+                .listNoPaging();
+        if (positionEntities.isEmpty()) return;
         //获取用户是否存在
         UserEntity oldUser = userService.selectByUsername(bindEntity.getPersonUser().getUsername());
         if (null != oldUser) {
@@ -239,20 +217,18 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
                             userService.update(oldUser.getId(), user);
                             return oldUser.getId();
                         };
-        UserEntity userEntity;
-
-        if (roleIds != null) {
-            BindRoleUserEntity tmp = entityFactory.newInstance(BindRoleUserEntity.class);
-            tmp.setRoles(new ArrayList<>(roleIds));
-            userEntity = tmp;
-        } else {
-            userEntity = entityFactory.newInstance(UserEntity.class);
-        }
-
+        //初始化用户信息
+        //全部角色信息
+        Set<String> roleIds = positionEntities.stream()
+                .map(PositionEntity::getRoles)
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .collect(Collectors.toSet());
+        BindRoleUserEntity userEntity = entityFactory.newInstance(BindRoleUserEntity.class);
         userEntity.setUsername(bindEntity.getPersonUser().getUsername());
         userEntity.setPassword(bindEntity.getPersonUser().getPassword());
         userEntity.setName(bindEntity.getName());
-
+        userEntity.setRoles(new ArrayList<>(roleIds));
         String userId = userOperationFunction.apply(userEntity);
         bindEntity.setUserId(userId);
     }
@@ -400,9 +376,7 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
     public Set<SettingInfo> get(String userId) {
         //支持职位和人员 设置权限
         PersonEntity entity = createQuery().where(PersonEntity.userId, userId).single();
-        if (entity == null) {
-            return new HashSet<>();
-        }
+        if (entity == null) return new HashSet<>();
         Set<SettingInfo> settingInfo = new HashSet<>();
         //岗位设置
         //TODO 2017/06/08 是否将子级岗位的设置也放进来??

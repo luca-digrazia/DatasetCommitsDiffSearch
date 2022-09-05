@@ -8,9 +8,7 @@ import org.hswebframework.web.authorization.access.DataAccessHandler;
 import org.hswebframework.web.authorization.basic.handler.DefaultAuthorizingHandler;
 import org.hswebframework.web.authorization.basic.handler.access.DefaultDataAccessController;
 import org.hswebframework.web.authorization.basic.web.*;
-import org.hswebframework.web.authorization.basic.web.session.UserTokenAutoExpiredListener;
-import org.hswebframework.web.authorization.token.DefaultUserTokenManager;
-import org.hswebframework.web.authorization.token.UserTokenAuthenticationSupplier;
+import org.hswebframework.web.authorization.token.MemoryUserTokenManager;
 import org.hswebframework.web.authorization.token.UserTokenManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -43,6 +41,10 @@ public class AuthorizingHandlerAutoConfiguration {
         return new DefaultAuthorizingHandler(dataAccessController);
     }
 
+    @Bean
+    public UserTokenAuthenticationSupplier userTokenAuthenticationSupplier(AuthenticationManager authenticationManager) {
+        return new UserTokenAuthenticationSupplier(authenticationManager);
+    }
 
     @Bean
     @ConditionalOnMissingBean(UserTokenParser.class)
@@ -55,6 +57,12 @@ public class AuthorizingHandlerAutoConfiguration {
         return new SessionIdUserTokenGenerator();
     }
 
+    @Bean
+    @ConditionalOnMissingBean(UserTokenManager.class)
+    @ConfigurationProperties(prefix = "hsweb.authorize")
+    public UserTokenManager userTokenManager() {
+        return new MemoryUserTokenManager();
+    }
 
     @Bean
     public WebMvcConfigurer webUserTokenInterceptorConfigurer(UserTokenManager userTokenManager,
@@ -76,11 +84,6 @@ public class AuthorizingHandlerAutoConfiguration {
     @Bean
     public UserOnSignOut userOnSignOut(UserTokenManager userTokenManager) {
         return new UserOnSignOut(userTokenManager);
-    }
-
-    @Bean
-    public UserTokenAutoExpiredListener userTokenAutoExpiredListener(UserTokenManager userTokenManager) {
-        return new UserTokenAutoExpiredListener(userTokenManager);
     }
 
     @Configuration

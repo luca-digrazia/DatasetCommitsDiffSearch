@@ -40,7 +40,6 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
     }
 
     @Override
-    @SuppressWarnings("all")
     public AuthorizeDefinition parse(MethodInterceptorContext paramContext) {
         CacheKey key = buildCacheKey(paramContext);
 
@@ -62,9 +61,7 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
 
         Authorize classAuth = AopUtils.findAnnotation(paramContext.getTarget().getClass(), Authorize.class);
         Authorize methodAuth = AopUtils.findMethodAnnotation(paramContext.getTarget().getClass(), paramContext.getMethod(), Authorize.class);
-
         RequiresDataAccess classDataAccess = AopUtils.findAnnotation(paramContext.getTarget().getClass(), RequiresDataAccess.class);
-
         RequiresDataAccess methodDataAccess = AopUtils.findMethodAnnotation(paramContext.getTarget().getClass(), paramContext.getMethod(), RequiresDataAccess.class);
 
         RequiresExpression expression = AopUtils.findAnnotation(paramContext.getTarget().getClass(), RequiresExpression.class);
@@ -81,15 +78,12 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
 
         DefaultBasicAuthorizeDefinition authorizeDefinition = new DefaultBasicAuthorizeDefinition();
 
-        if (methodAuth == null || methodAuth.merge()) {
+        if (methodAuth == null || methodAuth.merge())
             authorizeDefinition.put(classAuth);
-        }
 
         authorizeDefinition.put(methodAuth);
 
         authorizeDefinition.put(expression);
-
-        authorizeDefinition.put(methodAuth.dataAccess());
 
         authorizeDefinition.put(classDataAccess);
 
@@ -104,7 +98,7 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
     }
 
     class CacheKey {
-        private Class type;
+        private Class  type;
         private Method method;
 
         public CacheKey(Class type, Method method) {
