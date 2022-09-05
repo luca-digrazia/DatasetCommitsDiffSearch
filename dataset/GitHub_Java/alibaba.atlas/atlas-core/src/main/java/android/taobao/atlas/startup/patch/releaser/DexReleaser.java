@@ -211,7 +211,6 @@ package android.taobao.atlas.startup.patch.releaser;
 import android.os.Build;
 import android.taobao.atlas.startup.patch.KernalBundle;
 import android.taobao.atlas.startup.patch.KernalConstants;
-import android.taobao.atlas.util.StringUtils;
 import android.util.Log;
 
 import java.io.File;
@@ -338,15 +337,14 @@ public class DexReleaser {
                     }
                 }
 
-                if (!dexPatch || (dexPatch && KernalBundle.kernalBundle==null)) {
+                if (!dexPatch) {
                     // second copy main dex from base.apk
                     do {
                         ZipEntry entry = rawZip.getEntry(String.format("%s%s%s", CLASS_SUFFIX, dexIndex > 1 ? dexIndex : "", DEX_SUFFIX));
                         if (entry != null && !entry.isDirectory()) {
-                            ZipEntry targetEntry = new ZipEntry(getUpdatedDexEntryName(entry.getName()));
+                            ZipEntry targetEntry = new ZipEntry(String.format("%s%s%s", CLASS_SUFFIX, ++dexIndex, DEX_SUFFIX));
                             target.putNextEntry(targetEntry);
                             copy(rawZip.getInputStream(entry), target);
-                            dexIndex++;
                         } else {
                             return targetFile;
                         }
@@ -354,10 +352,11 @@ public class DexReleaser {
                 } else {
                     // second copy all from com.taobao.maindex.zip
                     Enumeration<? extends ZipEntry> rawEntries = rawZip.entries();
+                    dexIndex = 1;
                     while (rawEntries.hasMoreElements()) {
                         ZipEntry e = rawEntries.nextElement();
                         ZipEntry out = e.getName().startsWith(CLASS_SUFFIX) && e.getName().endsWith(DEX_SUFFIX)
-                                ? new ZipEntry(getUpdatedDexEntryName(e.getName()))
+                                ? new ZipEntry(String.format("%s%s%s", CLASS_SUFFIX, ++dexIndex, DEX_SUFFIX))
                                 : new ZipEntry(e.getName());
                         target.putNextEntry(out);
                         if (!e.isDirectory()) {
@@ -382,15 +381,6 @@ public class DexReleaser {
             }
         }
         return null;
-    }
-
-    private static String getUpdatedDexEntryName(String originalEntryName){
-        if(originalEntryName.equals("classes.dex")){
-            return "classes2.dex";
-        }else{
-            int dexIndex = Integer.parseInt(StringUtils.substringBetween(originalEntryName,"classes",".dex"));
-            return String.format("classes%s.dex",++dexIndex);
-        }
     }
 
 
