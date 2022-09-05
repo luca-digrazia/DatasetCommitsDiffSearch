@@ -384,6 +384,23 @@ public final class CcCommon {
   }
 
   List<PathFragment> getSystemIncludeDirs() {
+    // Add in any 'includes' attribute values as relative path fragments
+    if (!ruleContext.getRule().isAttributeValueExplicitlySpecified("includes")
+        || !cppConfiguration.useIsystemForIncludes()) {
+      return ImmutableList.of();
+    }
+    return getIncludeDirsFromIncludesAttribute();
+  }
+
+  List<PathFragment> getIncludeDirs() {
+    if (!ruleContext.getRule().isAttributeValueExplicitlySpecified("includes")
+        || cppConfiguration.useIsystemForIncludes()) {
+      return ImmutableList.of();
+    }
+    return getIncludeDirsFromIncludesAttribute();
+  }
+
+  private List<PathFragment> getIncludeDirsFromIncludesAttribute() {
     List<PathFragment> result = new ArrayList<>();
     PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
     PathFragment packageFragment = packageIdentifier.getPathFragment();
