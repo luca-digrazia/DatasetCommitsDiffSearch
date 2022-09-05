@@ -407,30 +407,16 @@ class Parser {
 
   // arg ::= IDENTIFIER '=' nontupleexpr
   //       | expr
-  //       | *args       (only in Skylark mode)
-  //       | **kwargs    (only in Skylark mode)
-  // To keep BUILD files declarative and easy to process, *args and **kwargs
-  // arguments are allowed only in Skylark mode.
   private Argument.Passed parseFuncallArgument() {
     final int start = token.left;
     // parse **expr
     if (token.kind == TokenKind.STAR_STAR) {
-      if (!skylarkMode) {
-        reportError(
-            lexer.createLocation(token.left, token.right),
-            "**kwargs arguments are not allowed in BUILD files");
-      }
       nextToken();
       Expression expr = parseNonTupleExpression();
       return setLocation(new Argument.StarStar(expr), start, expr);
     }
     // parse *expr
     if (token.kind == TokenKind.STAR) {
-      if (!skylarkMode) {
-        reportError(
-            lexer.createLocation(token.left, token.right),
-            "*args arguments are not allowed in BUILD files");
-      }
       nextToken();
       Expression expr = parseNonTupleExpression();
       return setLocation(new Argument.Star(expr), start, expr);
@@ -800,15 +786,15 @@ class Parser {
           nextToken();
           Expression loopVar = parseForLoopVariables();
           expect(TokenKind.IN);
-          // The expression cannot be a ternary expression ('x if y else z') due to
-          // conflicts in Python grammar ('if' is used by the comprehension).
-          Expression listExpression = parseNonTupleExpression(0);
-          listComprehension.addFor(loopVar, listExpression);
+          Expression listExpression = parseExpression();
+          listComprehension.add(loopVar, listExpression);
           break;
 
         case IF:
+          reportError(lexer.createLocation(token.left, token.right),
+              "List comprehension with filtering is not yet supported");
           nextToken();
-          listComprehension.addIf(parseExpression());
+          parseExpression();  // condition
           break;
 
         case RBRACKET:
