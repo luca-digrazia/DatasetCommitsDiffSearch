@@ -20,6 +20,8 @@ public abstract class Clock {
         return System.currentTimeMillis();
     }
 
+    private static final Clock DEFAULT = new UserTimeClock();
+
     /**
      * The default clock to use.
      *
@@ -27,7 +29,7 @@ public abstract class Clock {
      * @see Clock.UserTimeClock
      */
     public static Clock defaultClock() {
-        return UserTimeClockHolder.DEFAULT;
+        return DEFAULT;
     }
 
     /**
@@ -38,9 +40,5 @@ public abstract class Clock {
         public long getTick() {
             return System.nanoTime();
         }
-    }
-
-    private static class UserTimeClockHolder {
-        private static final Clock DEFAULT = new UserTimeClock();
     }
 }
