@@ -1,7 +1,6 @@
 package com.yammer.metrics;
 
 import java.io.*;
-import java.nio.charset.Charset;
 import java.util.*;
 
 import static java.lang.Math.floor;
@@ -10,7 +9,6 @@ import static java.lang.Math.floor;
  * A statistical snapshot of a {@link Snapshot}.
  */
 public class Snapshot {
-    private static final Charset UTF_8 = Charset.forName("UTF-8");
     private static final double MEDIAN_Q = 0.5;
     private static final double P75_Q = 0.75;
     private static final double P95_Q = 0.95;
@@ -152,7 +150,7 @@ public class Snapshot {
      * @param output an output stream
      */
     public void dump(OutputStream output) {
-        final PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8));
+        final PrintWriter out = new PrintWriter(output);
         try {
             for (long value : values) {
                 out.printf("%d%n", value);
