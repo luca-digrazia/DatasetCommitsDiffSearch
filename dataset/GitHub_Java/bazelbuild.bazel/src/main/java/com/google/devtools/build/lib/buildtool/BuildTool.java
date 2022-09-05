@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -63,14 +62,15 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.Callback;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.LoadingResult;
+import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -177,8 +177,8 @@ public final class BuildTool {
         }
       }
       configurations = runtime.getSkyframeExecutor().createConfigurations(
-            env.getReporter(), runtime.getConfigurationFactory(), buildOptions,
-            runtime.getDirectories(), request.getMultiCpus(), request.getViewOptions().keepGoing);
+            runtime.getConfigurationFactory(), buildOptions, runtime.getDirectories(),
+            request.getMultiCpus(), request.getViewOptions().keepGoing);
 
       env.getEventBus().post(new ConfigurationsCreatedEvent(configurations));
       env.throwPendingException();
@@ -197,9 +197,8 @@ public final class BuildTool {
       result.setActualTargets(analysisResult.getTargetsToBuild());
       result.setTestTargets(analysisResult.getTargetsToTest());
 
-      LoadedPackageProvider.Bridge bridge =
-          new LoadedPackageProvider.Bridge(env.getPackageManager(), env.getReporter());
-      checkTargetEnvironmentRestrictions(analysisResult.getTargetsToBuild(), bridge);
+      checkTargetEnvironmentRestrictions(analysisResult.getTargetsToBuild(),
+          runtime.getPackageManager());
       reportTargets(analysisResult);
 
       // Execution phase.
@@ -253,7 +252,7 @@ public final class BuildTool {
    *     support the expected environments
    */
   private void checkTargetEnvironmentRestrictions(Iterable<ConfiguredTarget> topLevelTargets,
-      LoadedPackageProvider packageManager) throws ViewCreationFailedException {
+      PackageManager packageManager) throws ViewCreationFailedException {
     for (ConfiguredTarget topLevelTarget : topLevelTargets) {
       BuildConfiguration config = topLevelTarget.getConfiguration();
       if (config == null) {

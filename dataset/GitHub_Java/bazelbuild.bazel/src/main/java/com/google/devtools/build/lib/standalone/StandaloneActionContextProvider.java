@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@ package com.google.devtools.build.lib.standalone;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
-import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
@@ -49,12 +49,9 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
   @ExecutionStrategy(contextType = IncludeScanningContext.class)
   class DummyIncludeScanningContext implements IncludeScanningContext {
     @Override
-    public void extractIncludes(
-        ActionExecutionContext actionExecutionContext,
-        Action resourceOwner,
-        Artifact primaryInput,
-        Artifact primaryOutput)
-        throws IOException {
+    public void extractIncludes(ActionExecutionContext actionExecutionContext,
+        ActionMetadata resourceOwner, Artifact primaryInput, Artifact primaryOutput)
+        throws IOException, InterruptedException {
       FileSystemUtils.writeContent(primaryOutput.getPath(), new byte[]{});
     }
 
@@ -72,9 +69,9 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
     BlazeRuntime runtime = env.getRuntime();
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
 
-    TestActionContext testStrategy =
-        new StandaloneTestStrategy(
-            buildRequest, runtime.getBinTools(), env.getClientEnv(), runtime.getWorkspace());
+    TestActionContext testStrategy = new StandaloneTestStrategy(buildRequest,
+        runtime.getStartupOptionsProvider(), runtime.getBinTools(), env.getClientEnv(),
+        runtime.getWorkspace());
 
     Builder<ActionContext> strategiesBuilder = ImmutableList.builder();
 
