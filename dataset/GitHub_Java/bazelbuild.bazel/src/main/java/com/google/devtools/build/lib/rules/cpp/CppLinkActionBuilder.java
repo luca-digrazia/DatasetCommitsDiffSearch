@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.rules.cpp.CppLinkAction.Context;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -129,7 +128,6 @@ public class CppLinkActionBuilder {
   private final NestedSetBuilder<LibraryToLink> libraries = NestedSetBuilder.linkOrder();
   private NestedSet<Artifact> crosstoolInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   private Artifact runtimeMiddleman;
-  private ArtifactCategory runtimeType = null;
   private NestedSet<Artifact> runtimeInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   private final NestedSetBuilder<Artifact> compilationInputs = NestedSetBuilder.stableOrder();
   private final Set<Artifact> linkstamps = new LinkedHashSet<>();
@@ -236,7 +234,6 @@ public class CppLinkActionBuilder {
     this.crosstoolInputs = linkContext.crosstoolInputs;
     this.runtimeMiddleman = linkContext.runtimeMiddleman;
     this.runtimeInputs = linkContext.runtimeInputs;
-    this.runtimeType = linkContext.runtimeType;
     this.compilationInputs.addTransitive(linkContext.compilationInputs);
     this.linkstamps.addAll(linkContext.linkstamps);
     this.linkopts.addAll(linkContext.linkopts);
@@ -288,11 +285,7 @@ public class CppLinkActionBuilder {
   public NestedSet<Artifact> getRuntimeInputs() {
     return this.runtimeInputs;
   }
-
-  public ArtifactCategory getRuntimeType() {
-    return runtimeType;
-  }
-
+  
   /**
    * Returns compilation inputs for this link action.
    */
@@ -469,20 +462,12 @@ public class CppLinkActionBuilder {
       }
     }
 
-    final LibraryToLink outputLibrary = linkType == LinkTargetType.EXECUTABLE
-        ? null
-        : LinkerInputs.newInputLibrary(output,
-            linkType.staticness() == Staticness.STATIC
-                ? ArtifactCategory.STATIC_LIBRARY
-                : ArtifactCategory.DYNAMIC_LIBRARY,
-            libraryIdentifier,
-            objectArtifacts, this.ltoBitcodeFiles);
+    final LibraryToLink outputLibrary = LinkerInputs.newInputLibrary(
+        output, libraryIdentifier, objectArtifacts, this.ltoBitcodeFiles);
     final LibraryToLink interfaceOutputLibrary =
         (interfaceOutput == null)
             ? null
-            : LinkerInputs.newInputLibrary(interfaceOutput,
-                ArtifactCategory.DYNAMIC_LIBRARY,
-                libraryIdentifier,
+            : LinkerInputs.newInputLibrary(interfaceOutput, libraryIdentifier,
                 objectArtifacts, this.ltoBitcodeFiles);
 
     final ImmutableMap<Artifact, Artifact> linkstampMap =
@@ -513,7 +498,7 @@ public class CppLinkActionBuilder {
     }
 
     ImmutableList<LinkerInput> runtimeLinkerInputs =
-        ImmutableList.copyOf(LinkerInputs.simpleLinkerInputs(runtimeInputs, runtimeType));
+        ImmutableList.copyOf(LinkerInputs.simpleLinkerInputs(runtimeInputs));
 
     // Add build variables necessary to template link args into the crosstool.
     Variables.Builder buildVariablesBuilder = new Variables.Builder();
@@ -551,7 +536,7 @@ public class CppLinkActionBuilder {
           interfaceOutput == null,
           "interface output may only be non-null for dynamic library links");
     }
-    if (linkType.staticness() == Staticness.STATIC) {
+    if (linkType.isStaticLibraryLink()) {
       // solib dir must be null for static links
       runtimeSolibDir = null;
 
@@ -572,7 +557,7 @@ public class CppLinkActionBuilder {
             .setLinkTargetType(linkType)
             .setLinkStaticness(linkStaticness)
             .setFeatures(features)
-            .setRuntimeSolibDir(linkType.staticness() == Staticness.STATIC ? null : runtimeSolibDir)
+            .setRuntimeSolibDir(linkType.isStaticLibraryLink() ? null : runtimeSolibDir)
             .setNativeDeps(isNativeDeps)
             .setUseTestOnlyFlags(useTestOnlyFlags)
             .setParamFile(paramFile)
@@ -603,11 +588,10 @@ public class CppLinkActionBuilder {
       opts.add("-Wl,-plugin-opt,thinlto-emit-imports-files");
       opts.add(
           "-Wl,-plugin-opt,thinlto-prefix-replace="
-              + configuration.getBinDirectory(ruleContext.getRule().getRepository())
-                  .getExecPathString()
+              + configuration.getBinDirectory().getExecPathString()
               + ";"
               + configuration
-                  .getBinDirectory(ruleContext.getRule().getRepository())
+                  .getBinDirectory()
                   .getExecPath()
                   .getRelative(ltoOutputRootPrefix)
                   .toString());
@@ -707,7 +691,6 @@ public class CppLinkActionBuilder {
         actionOutputs,
         cppConfiguration,
         outputLibrary,
-        output,
         interfaceOutputLibrary,
         fake,
         isLTOIndexing,
@@ -815,10 +798,8 @@ public class CppLinkActionBuilder {
   }
 
   /** Sets the C++ runtime library inputs for the action. */
-  public CppLinkActionBuilder setRuntimeInputs(
-      ArtifactCategory runtimeType, Artifact middleman, NestedSet<Artifact> inputs) {
+  public CppLinkActionBuilder setRuntimeInputs(Artifact middleman, NestedSet<Artifact> inputs) {
     Preconditions.checkArgument((middleman == null) == inputs.isEmpty());
-    this.runtimeType = runtimeType;
     this.runtimeMiddleman = middleman;
     this.runtimeInputs = inputs;
     return this;
@@ -877,7 +858,7 @@ public class CppLinkActionBuilder {
    * Adds a single object file to the set of inputs.
    */
   public CppLinkActionBuilder addObjectFile(Artifact input) {
-    addObjectFile(LinkerInputs.simpleLinkerInput(input, ArtifactCategory.OBJECT_FILE));
+    addObjectFile(LinkerInputs.simpleLinkerInput(input));
     return this;
   }
 
@@ -886,7 +867,7 @@ public class CppLinkActionBuilder {
    */
   public CppLinkActionBuilder addObjectFiles(Iterable<Artifact> inputs) {
     for (Artifact input : inputs) {
-      addObjectFile(LinkerInputs.simpleLinkerInput(input, ArtifactCategory.OBJECT_FILE));
+      addObjectFile(LinkerInputs.simpleLinkerInput(input));
     }
     return this;
   }
@@ -917,7 +898,7 @@ public class CppLinkActionBuilder {
     return this;
   }
 
-  public CppLinkActionBuilder addFakeObjectFiles(Iterable<Artifact> inputs) {
+  public CppLinkActionBuilder addFakeNonLibraryInputs(Iterable<Artifact> inputs) {
     for (Artifact input : inputs) {
       addObjectFile(LinkerInputs.fakeLinkerInput(input));
     }
@@ -1281,7 +1262,7 @@ public class CppLinkActionBuilder {
 
       PathFragment solibDir =
           configuration
-              .getBinDirectory(ruleContext.getRule().getRepository())
+              .getBinDirectory()
               .getExecPath()
               .getRelative(cppConfiguration.getSolibDirectory());
       String runtimeSolibName = runtimeSolibDir != null ? runtimeSolibDir.getBaseName() : null;

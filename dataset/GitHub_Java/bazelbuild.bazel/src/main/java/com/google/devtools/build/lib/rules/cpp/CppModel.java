@@ -35,8 +35,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.Var
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.cpp.Link.Picness;
-import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.util.FileType;
@@ -63,6 +61,7 @@ import javax.annotation.Nullable;
 public final class CppModel {
   private final CppSemantics semantics;
   private final RuleContext ruleContext;
+  private final CcToolchainFeatures features;
   private final BuildConfiguration configuration;
   private final CppConfiguration cppConfiguration;
 
@@ -93,6 +92,7 @@ public final class CppModel {
     this.semantics = semantics;
     configuration = ruleContext.getConfiguration();
     cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
+    features = CppHelper.getToolchain(ruleContext).getFeatures();
   }
 
   private Artifact getDwoFile(Artifact outputFile) {
@@ -556,7 +556,7 @@ public final class CppModel {
 
   private void createHeaderAction(String outputName, Builder result, AnalysisEnvironment env,
       CppCompileActionBuilder builder, boolean generateDotd) {
-    String outputNameBase = CppHelper.getArtifactNameForCategory(ruleContext,
+    String outputNameBase = CppHelper.getCompileArtifactName(ruleContext,
         ArtifactCategory.GENERATED_HEADER, outputName);
 
     builder
@@ -612,11 +612,11 @@ public final class CppModel {
       // Create PIC compile actions (same as non-PIC, but use -fPIC and
       // generate .pic.o, .pic.d, .pic.gcno instead of .o, .d, .gcno.)
       if (generatePicAction) {
-        String picOutputBase = CppHelper.getArtifactNameForCategory(ruleContext,
+        String picOutputBase = CppHelper.getCompileArtifactName(ruleContext,
             ArtifactCategory.PIC_FILE, outputName);
         CppCompileActionBuilder picBuilder = copyAsPicBuilder(
             builder, picOutputBase, outputCategory, generateDotd);
-        String gcnoFileName = CppHelper.getArtifactNameForCategory(ruleContext,
+        String gcnoFileName = CppHelper.getCompileArtifactName(ruleContext,
             ArtifactCategory.COVERAGE_DATA_FILE, picOutputBase);
         Artifact gcnoFile = enableCoverage
             ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName)
@@ -663,9 +663,9 @@ public final class CppModel {
 
       if (generateNoPicAction) {
         Artifact noPicOutputFile = CppHelper.getCompileOutputArtifact(ruleContext,
-            CppHelper.getArtifactNameForCategory(ruleContext, outputCategory, outputName));
+            CppHelper.getCompileArtifactName(ruleContext, outputCategory, outputName));
         builder.setOutputs(outputCategory, outputName, generateDotd);
-        String gcnoFileName = CppHelper.getArtifactNameForCategory(ruleContext,
+        String gcnoFileName = CppHelper.getCompileArtifactName(ruleContext,
             ArtifactCategory.COVERAGE_DATA_FILE, outputName);
 
         // Create non-PIC compile actions
@@ -723,7 +723,7 @@ public final class CppModel {
 
   String getOutputNameBaseWith(String base, boolean usePic) {
     return usePic
-        ? CppHelper.getArtifactNameForCategory(ruleContext, ArtifactCategory.PIC_FILE, base)
+        ? CppHelper.getCompileArtifactName(ruleContext, ArtifactCategory.PIC_FILE, base)
         : base;
   }
 
@@ -734,7 +734,7 @@ public final class CppModel {
     String outputNameBase = getOutputNameBaseWith(outputName, usePic);
     String tempOutputName = ruleContext.getConfiguration().getBinFragment()
         .getRelative(CppHelper.getObjDirectory(ruleContext.getLabel()))
-        .getRelative(CppHelper.getArtifactNameForCategory(ruleContext, outputCategory,
+        .getRelative(CppHelper.getCompileArtifactName(ruleContext, outputCategory,
             getOutputNameBaseWith(outputName + ".temp", usePic)))
         .getPathString();
     builder
@@ -780,17 +780,12 @@ public final class CppModel {
     Artifact linuxDefault = CppHelper.getLinuxLinkedArtifact(ruleContext, linkTargetType);
 
     try {
-      String maybePicName = ruleContext.getLabel().getName();
-      if (linkTargetType.picness() == Picness.PIC) {
-        maybePicName = CppHelper.getArtifactNameForCategory(
-            ruleContext, ArtifactCategory.PIC_FILE, maybePicName);
-      }
-
-      String linkedName = CppHelper.getArtifactNameForCategory(
-          ruleContext, linkTargetType.getLinkerOutput(), maybePicName);
+      String templatedName = features.getArtifactNameForCategory(
+          linkTargetType.getLinkerOutput(), ruleContext, ImmutableMap.<String, String>of());
       PathFragment artifactFragment = new PathFragment(ruleContext.getLabel().getName())
-          .getParentDirectory().getRelative(linkedName);
-      result = ruleContext.getBinArtifact(artifactFragment);
+          .getParentDirectory().getRelative(templatedName);
+      result = ruleContext.getPackageRelativeArtifact(
+          artifactFragment, ruleContext.getConfiguration().getBinDirectory());
     } catch (ExpansionException e) {
       ruleContext.throwWithRuleError(e.getMessage());
     }
@@ -827,8 +822,7 @@ public final class CppModel {
       Iterable<Artifact> nonCodeLinkerInputs) throws RuleErrorException {
     // For now only handle static links. Note that the dynamic library link below ignores linkType.
     // TODO(bazel-team): Either support non-static links or move this check to setLinkType().
-    Preconditions.checkState(
-        linkType.staticness() == Staticness.STATIC, "can only handle static links");
+    Preconditions.checkState(linkType.isStaticLibraryLink(), "can only handle static links");
 
     CcLinkingOutputs.Builder result = new CcLinkingOutputs.Builder();
     if (cppConfiguration.isLipoContextCollector()) {
@@ -875,9 +869,7 @@ public final class CppModel {
             .setFeatureConfiguration(featureConfiguration)
             .build();
     env.registerAction(maybePicAction);
-    if (linkType != LinkTargetType.EXECUTABLE) {
-      result.addStaticLibrary(maybePicAction.getOutputLibrary());
-    }
+    result.addStaticLibrary(maybePicAction.getOutputLibrary());
 
     // Create a second static library (.pic.a). Only in case (2) do we need both PIC and non-PIC
     // static libraries. In that case, the first static library contains the non-PIC code, and this
@@ -904,9 +896,7 @@ public final class CppModel {
               .setFeatureConfiguration(featureConfiguration)
               .build();
       env.registerAction(picAction);
-      if (linkType != LinkTargetType.EXECUTABLE) {
-        result.addPicStaticLibrary(picAction.getOutputLibrary());
-      }
+      result.addPicStaticLibrary(picAction.getOutputLibrary());
     }
 
     if (!createDynamicLibrary) {
@@ -956,7 +946,6 @@ public final class CppModel {
             .addLinkopts(linkopts)
             .addLinkopts(sonameLinkopts)
             .setRuntimeInputs(
-                ArtifactCategory.DYNAMIC_LIBRARY,
                 CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkMiddleman(),
                 CppHelper.getToolchain(ruleContext).getDynamicRuntimeLinkInputs())
             .setFeatureConfiguration(featureConfiguration)
@@ -978,14 +967,14 @@ public final class CppModel {
     CppLinkAction action = linkActionBuilder.build();
     env.registerAction(action);
 
-    if (linkType == LinkTargetType.EXECUTABLE) {
-      return result.build();
-    }
-
     LibraryToLink dynamicLibrary = action.getOutputLibrary();
     LibraryToLink interfaceLibrary = action.getInterfaceOutputLibrary();
     if (interfaceLibrary == null) {
       interfaceLibrary = dynamicLibrary;
+    }
+
+    if (linkType == LinkTargetType.EXECUTABLE) {
+      return result.build();
     }
 
     // If shared library has neverlink=1, then leave it untouched. Otherwise,

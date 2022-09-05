@@ -200,10 +200,7 @@ public class CcCompilationOutputs {
      * Adds an .o file.
      */
     public Builder addObjectFile(Artifact artifact) {
-      // We skip file extension checks for TreeArtifacts because they represent directory artifacts
-      // without a file extension.
-      Preconditions.checkArgument(
-          artifact.isTreeArtifact() || Link.OBJECT_FILETYPES.matches(artifact.getFilename()));
+      Preconditions.checkArgument(Link.OBJECT_FILETYPES.matches(artifact.getFilename()));
       objectFiles.add(artifact);
       return this;
     }

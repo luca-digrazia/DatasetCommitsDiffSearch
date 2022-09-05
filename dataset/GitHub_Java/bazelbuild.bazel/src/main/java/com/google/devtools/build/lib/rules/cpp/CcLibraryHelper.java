@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
@@ -925,7 +924,7 @@ public final class CcLibraryHelper {
       //
       // An additional pre-existing issue is that the header check tokens are dropped if we don't
       // generate any link actions, effectively disabling header checking in some cases.
-      if (linkType.staticness() == Staticness.STATIC) {
+      if (linkType.isStaticLibraryLink()) {
         // TODO(bazel-team): This can't create the link action for a cc_binary yet.
         ccLinkingOutputs = model.createCcLinkActions(ccOutputs, nonCodeLinkerInputs);
       }

@@ -190,13 +190,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     if (!isLinkShared(ruleContext)) {
       binaryPath = new PathFragment(binaryPath.getPathString() + OsUtils.executableExtension());
     }
-
-    Artifact binary = ruleContext.getBinArtifact(binaryPath);
-    if (isLinkShared(ruleContext) && !CppFileTypes.SHARED_LIBRARY.matches(binary.getFilename())) {
-      ruleContext.attributeError("linkshared", "'linkshared' used in non-shared library");
-      return null;
-    }
-
+    Artifact binary = ruleContext.getPackageRelativeArtifact(
+        binaryPath, ruleContext.getConfiguration().getBinDirectory());
     CppLinkActionBuilder linkActionBuilder =
         determineLinkerArguments(
             ruleContext,
@@ -214,12 +209,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CcToolchainProvider ccToolchain = CppHelper.getToolchain(ruleContext);
     if (linkStaticness == LinkStaticness.DYNAMIC) {
       linkActionBuilder.setRuntimeInputs(
-          ArtifactCategory.DYNAMIC_LIBRARY,
           ccToolchain.getDynamicRuntimeLinkMiddleman(),
           ccToolchain.getDynamicRuntimeLinkInputs());
     } else {
       linkActionBuilder.setRuntimeInputs(
-          ArtifactCategory.STATIC_LIBRARY,
           ccToolchain.getStaticRuntimeLinkMiddleman(),
           ccToolchain.getStaticRuntimeLinkInputs());
       // Only force a static link of libgcc if static runtime linking is enabled (which
@@ -236,8 +229,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     linkActionBuilder.setFeatureConfiguration(featureConfiguration);
 
     if (CppLinkAction.enableSymbolsCounts(cppConfiguration, fake, linkType)) {
-      linkActionBuilder.setSymbolCountsOutput(ruleContext.getBinArtifact(
-          CppLinkAction.symbolCountsFileName(binaryPath)));
+      linkActionBuilder.setSymbolCountsOutput(ruleContext.getPackageRelativeArtifact(
+          CppLinkAction.symbolCountsFileName(binaryPath),
+          ruleContext.getConfiguration().getBinDirectory()));
     }
 
     // Store immutable context for use in other *_binary rules that are implemented by
@@ -266,11 +260,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     LibraryToLink outputLibrary = linkAction.getOutputLibrary();
     Iterable<Artifact> fakeLinkerInputs =
         fake ? linkAction.getInputs() : ImmutableList.<Artifact>of();
-    Artifact executable = linkAction.getLinkOutput();
+    Artifact executable = outputLibrary.getArtifact();
     CcLinkingOutputs.Builder linkingOutputsBuilder = new CcLinkingOutputs.Builder();
     if (isLinkShared(ruleContext)) {
-      linkingOutputsBuilder.addDynamicLibrary(outputLibrary);
-      linkingOutputsBuilder.addExecutionDynamicLibrary(outputLibrary);
+      if (CppFileTypes.SHARED_LIBRARY.matches(binary.getFilename())) {
+        linkingOutputsBuilder.addDynamicLibrary(outputLibrary);
+        linkingOutputsBuilder.addExecutionDynamicLibrary(outputLibrary);
+      } else {
+        ruleContext.attributeError("linkshared", "'linkshared' used in non-shared library");
+      }
     }
     // Also add all shared libraries from srcs.
     for (Artifact library : precompiledFiles.getSharedLibraries()) {
@@ -407,7 +405,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     Iterable<Artifact> objectFiles = compilationOutputs.getObjectFiles(usePic);
 
     if (fake) {
-      builder.addFakeObjectFiles(objectFiles);
+      builder.addFakeNonLibraryInputs(objectFiles);
     } else {
       builder.addObjectFiles(objectFiles);
     }
@@ -425,8 +423,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             common.getDynamicLibrarySymlink(library, true), library,
             CcLinkingOutputs.libraryIdentifierOf(library)));
       } else {
-        builder.addLibrary(LinkerInputs.precompiledLibraryToLink(
-            library, ArtifactCategory.STATIC_LIBRARY));
+        builder.addLibrary(LinkerInputs.precompiledLibraryToLink(library));
       }
     }
 

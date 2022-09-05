@@ -657,9 +657,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
 
     /**
      * Adds multiple compilation prerequisites.
-     *
-     * <p>There are two kinds of "compilation prerequisites": declared header files and pregrepped
-     * headers.
      */
     public Builder addCompilationPrerequisites(Iterable<Artifact> prerequisites) {
       // LIPO collector must not add compilation prerequisites in order to avoid
@@ -930,8 +927,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       return middlemanFactory.createErrorPropagatingMiddleman(
           owner, ruleContext.getLabel().toString(), purpose,
           ImmutableList.copyOf(compilationPrerequisites),
-          ruleContext.getConfiguration().getMiddlemanDirectory(
-              ruleContext.getRule().getRepository()));
+          ruleContext.getConfiguration().getMiddlemanDirectory());
     }
 
     /**
@@ -943,11 +939,8 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         return null;
       }
 
-      return middlemanFactory.getErrorPropagatingMiddlemanArtifact(
-          ruleContext.getLabel().toString(),
-          purpose,
-          ruleContext.getConfiguration().getMiddlemanDirectory(
-              ruleContext.getRule().getRepository()));
+      return middlemanFactory.getErrorPropagatingMiddlemanArtifact(ruleContext.getLabel()
+          .toString(), purpose, ruleContext.getConfiguration().getMiddlemanDirectory());
     }
   }
 }
