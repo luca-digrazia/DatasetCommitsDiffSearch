@@ -1,3 +1,3 @@
-# new_repo
+# Dataset commits from top 100 Java repositories
 
-DiffSearch dataset.
+Dataset commits from top 100 Java repositories for DiffSearch User Study.
