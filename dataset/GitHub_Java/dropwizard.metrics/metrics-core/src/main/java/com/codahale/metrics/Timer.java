@@ -1,8 +1,9 @@
 package com.codahale.metrics;
 
-import java.io.Closeable;
+import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * A timer metric which aggregates timing durations and provides duration statistics, plus
@@ -14,20 +15,22 @@ public class Timer implements Metered, Sampling {
      *
      * @see Timer#time()
      */
-    public static class Context implements Closeable {
+    public static class Context implements AutoCloseable {
         private final Timer timer;
         private final Clock clock;
         private final long startTime;
 
-        private Context(Timer timer, Clock clock) {
+        Context(Timer timer, Clock clock) {
             this.timer = timer;
             this.clock = clock;
             this.startTime = clock.getTick();
         }
 
         /**
-         * Stops recording the elapsed time, updates the timer and returns the elapsed time in
-         * nanoseconds.
+         * Updates the timer with the difference between current and start time. Call to this method will
+         * not reset the start time. Multiple calls result in multiple updates.
+         *
+         * @return the elapsed time in nanoseconds
          */
         public long stop() {
             final long elapsed = clock.getTick() - startTime;
@@ -35,6 +38,9 @@ public class Timer implements Metered, Sampling {
             return elapsed;
         }
 
+        /**
+         * Equivalent to calling {@link #stop()}.
+         */
         @Override
         public void close() {
             stop();
@@ -66,12 +72,16 @@ public class Timer implements Metered, Sampling {
      * Creates a new {@link Timer} that uses the given {@link Reservoir} and {@link Clock}.
      *
      * @param reservoir the {@link Reservoir} implementation the timer should use
-     * @param clock  the {@link Clock} implementation the timer should use
+     * @param clock     the {@link Clock} implementation the timer should use
      */
     public Timer(Reservoir reservoir, Clock clock) {
-        this.meter = new Meter(clock);
+        this(new Meter(clock), new Histogram(reservoir), clock);
+    }
+
+    public Timer(Meter meter, Histogram histogram, Clock clock) {
+        this.meter = meter;
+        this.histogram = histogram;
         this.clock = clock;
-        this.histogram = new Histogram(reservoir);
     }
 
     /**
@@ -82,6 +92,15 @@ public class Timer implements Metered, Sampling {
      */
     public void update(long duration, TimeUnit unit) {
         update(unit.toNanos(duration));
+    }
+
+    /**
+     * Adds a recorded duration.
+     *
+     * @param duration the {@link Duration} to add to the timer. Negative or zero value are ignored.
+     */
+    public void update(Duration duration) {
+        update(duration.toNanos());
     }
 
     /**
@@ -97,6 +116,39 @@ public class Timer implements Metered, Sampling {
         final long startTime = clock.getTick();
         try {
             return event.call();
+        } finally {
+            update(clock.getTick() - startTime);
+        }
+    }
+
+    /**
+     * Times and records the duration of event. Should not throw exceptions, for that use the
+     * {@link #time(Callable)} method.
+     *
+     * @param event a {@link Supplier} whose {@link Supplier#get()} method implements a process
+     *              whose duration should be timed
+     * @param <T>   the type of the value returned by {@code event}
+     * @return the value returned by {@code event}
+     */
+    public <T> T timeSupplier(Supplier<T> event) {
+        final long startTime = clock.getTick();
+        try {
+            return event.get();
+        } finally {
+            update(clock.getTick() - startTime);
+        }
+    }
+
+    /**
+     * Times and records the duration of event.
+     *
+     * @param event a {@link Runnable} whose {@link Runnable#run()} method implements a process
+     *              whose duration should be timed
+     */
+    public void time(Runnable event) {
+        final long startTime = clock.getTick();
+        try {
+            event.run();
         } finally {
             update(clock.getTick() - startTime);
         }
