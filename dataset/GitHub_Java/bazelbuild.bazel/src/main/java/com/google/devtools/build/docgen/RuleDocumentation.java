@@ -60,11 +60,6 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
   private RuleLinkExpander linkExpander;
 
   /**
-   * Name of the page documenting common build rule terms and concepts.
-   */
-  static final String COMMON_DEFINITIONS_PAGE = "common-definitions.html";
-
-  /**
    * Creates a RuleDocumentation from the rule's name, type, family and raw html documentation
    * (meaning without expanding the variables in the doc).
    */
@@ -255,8 +250,7 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
       String attrName = attributeDoc.getAttributeName();
       // Generate the link for the attribute documentation
       if (attributeDoc.isCommonType()) {
-        sb.append(String.format("<a href=\"%s#%s.%s\">%s</a>",
-            COMMON_DEFINITIONS_PAGE,
+        sb.append(String.format("<a href=\"common-definitions.html#%s.%s\">%s</a>",
             attributeDoc.getGeneratedInRule(ruleName).toLowerCase(),
             attrName,
             attrName));
