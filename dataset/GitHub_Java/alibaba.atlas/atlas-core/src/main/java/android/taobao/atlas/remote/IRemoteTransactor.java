@@ -10,6 +10,8 @@ public interface IRemoteTransactor {
 
     Bundle call(String commandName, Bundle args, IResponse callback);
 
+    <T> T getRemoteInterface(Class<T> interfaceClass,Bundle args);
+
     interface IResponse{
         void OnResponse(Bundle bundle);
     }

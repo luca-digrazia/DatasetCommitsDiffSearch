@@ -568,8 +568,7 @@ public class InstrumentationHook extends Instrumentation {
         }
 
         try {
-			BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(AtlasBundleInfoManager
-				.instance().getBundleForComponet(className));
+			BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(className);
 			if(info!=null){
 				BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(info.getPkgName());
 				if(impl==null || !impl.checkValidate()){

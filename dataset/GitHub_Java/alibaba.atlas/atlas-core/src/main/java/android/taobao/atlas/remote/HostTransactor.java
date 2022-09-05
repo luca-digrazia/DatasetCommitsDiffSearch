@@ -21,7 +21,7 @@ public class HostTransactor implements IRemoteTransactor {
         RemoteActivityManager.EmbeddedActivity activity = (RemoteActivityManager.EmbeddedActivity) ((View)remoteItem).getContext();
         if(activity.mBoundRemoteItems!=null){
             for(int x=0; x<activity.mBoundRemoteItems.size(); x++){
-                IRemoteDelegator delegator = activity.mBoundRemoteItems.get(x);
+                IRemoteContext delegator = activity.mBoundRemoteItems.get(x);
                 if(delegator.getRemoteTarget() == remoteItem){
                     if(delegator.getHostTransactor()==null){
                         Log.e("HostTransactor","no host-transactor,maybe has not been registered");
@@ -38,18 +38,28 @@ public class HostTransactor implements IRemoteTransactor {
 
 
 
-    private final IRemoteTransactor hostTransactor;
+    private final IRemote host;
     private final Activity          embeddedActivity;
 
-    private HostTransactor(IRemoteTransactor transactor,Activity activity){
-        hostTransactor = transactor;
+    private HostTransactor(IRemote remote,Activity activity){
+        host = remote;
         embeddedActivity = activity;
     }
 
     @Override
     public Bundle call(String commandName, Bundle args, IResponse callback) {
-        if(hostTransactor!=null) {
-            return hostTransactor.call(commandName, args, callback);
+        if(host!=null) {
+            return host.call(commandName, args, callback);
+        }else{
+            Log.e("HostTransactor","no real transactor");
+            return null;
+        }
+    }
+
+    @Override
+    public <T> T getRemoteInterface(Class<T> interfaceClass,Bundle args) {
+        if(host!=null) {
+            return host.getRemoteInterface(interfaceClass,args);
         }else{
             Log.e("HostTransactor","no real transactor");
             return null;
