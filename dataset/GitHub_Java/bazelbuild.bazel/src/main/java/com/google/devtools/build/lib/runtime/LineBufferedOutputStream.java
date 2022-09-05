@@ -36,19 +36,13 @@ public class LineBufferedOutputStream extends OutputStream {
     this.pos = 0;
   }
 
-  private void flushBuffer() throws IOException {
-    int oldPos = pos;
-    // Set pos to zero first so that if the write below throws, we are still in a consistent state.
-    pos = 0;
-    wrapped.write(buffer, 0, oldPos);
-  }
-
   @Override
   public synchronized void write(byte[] b, int off, int inlen) throws IOException {
     if (inlen > buffer.length * 2) {
       // Do not buffer large writes
       if (pos > 0) {
-        flushBuffer();
+        wrapped.write(buffer, 0, pos);
+        pos = 0;
       }
       wrapped.write(b, off, inlen);
       return;
@@ -57,8 +51,14 @@ public class LineBufferedOutputStream extends OutputStream {
     int next = off;
     while (next < off + inlen) {
       buffer[pos++] = b[next];
-      if (b[next] == '\n' || pos == buffer.length) {
-        flushBuffer();
+      if (b[next] == '\n') {
+        wrapped.write(buffer, 0, pos);
+        pos = 0;
+      }
+
+      if (pos == buffer.length) {
+        wrapped.write(buffer, 0, pos);
+        pos = 0;
       }
 
       next++;

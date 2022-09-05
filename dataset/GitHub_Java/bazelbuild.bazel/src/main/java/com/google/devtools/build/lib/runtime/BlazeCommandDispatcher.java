@@ -27,8 +27,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.io.Flushables;
-import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.buildeventstream.transports.TextFormatFileTransport;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
@@ -370,21 +368,20 @@ public class BlazeCommandDispatcher {
       return exitCausingException.getExitCode().getNumericExitCode();
     }
 
-    try {
-      Path commandLog = getCommandLogPath(env.getOutputBase());
+    if (env.getRuntime().writeCommandLog()) {
+      try {
+        Path commandLog = getCommandLogPath(env.getOutputBase());
 
-      // Unlink old command log from previous build, if present, so scripts
-      // reading it don't conflate it with the command log we're about to write.
-      closeSilently(logOutputStream);
-      logOutputStream = null;
-      commandLog.delete();
+        // Unlink old command log from previous build, if present, so scripts
+        // reading it don't conflate it with the command log we're about to write.
+        commandLog.delete();
 
-      if (env.getRuntime().writeCommandLog() && commandAnnotation.writeCommandLog()) {
         logOutputStream = commandLog.getOutputStream();
         outErr = tee(outErr, OutErr.create(logOutputStream, logOutputStream));
+      } catch (IOException ioException) {
+        LoggingUtil.logToRemote(
+            Level.WARNING, "Unable to delete or open command.log", ioException);
       }
-    } catch (IOException ioException) {
-      LoggingUtil.logToRemote(Level.WARNING, "Unable to delete or open command.log", ioException);
     }
 
     ExitCode result = checkCwdInWorkspace(env, commandAnnotation, commandName, outErr);
@@ -455,18 +452,6 @@ public class BlazeCommandDispatcher {
     Reporter reporter = env.getReporter();
     reporter.addHandler(handler);
     env.getEventBus().register(handler);
-    if (eventHandlerOptions.buildEventTextFile.length() > 0) {
-      try {
-        BuildEventStreamer streamer =
-            new BuildEventStreamer(
-                ImmutableSet.<BuildEventTransport>of(
-                    new TextFormatFileTransport(eventHandlerOptions.buildEventTextFile)));
-        reporter.addHandler(streamer);
-        env.getEventBus().register(streamer);
-      } catch (IOException e) {
-        return ExitCode.LOCAL_ENVIRONMENTAL_ERROR.getNumericExitCode();
-      }
-    }
 
     // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
     // codes can be re-introduced later even if blaze is invoked with --color=no. This is useful
