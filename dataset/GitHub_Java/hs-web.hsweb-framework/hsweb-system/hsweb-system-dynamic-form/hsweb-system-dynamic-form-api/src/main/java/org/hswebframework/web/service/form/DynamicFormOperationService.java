@@ -36,7 +36,5 @@ public interface DynamicFormOperationService {
 
     int deleteById(String formId, Object id);
 
-    <T>T selectById(String formId, Object id);
-
 
 }
