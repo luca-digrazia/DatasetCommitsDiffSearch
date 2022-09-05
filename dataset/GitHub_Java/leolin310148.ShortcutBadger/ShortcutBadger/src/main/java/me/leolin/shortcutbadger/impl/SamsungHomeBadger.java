@@ -30,11 +30,11 @@ public class SamsungHomeBadger extends ShortcutBadger {
             if (cursor != null) {
                 while (cursor.moveToNext()) {
                     int id = cursor.getInt(0);
-                    ContentValues contentValues = getContentValues(badgeCount, false);
+                    ContentValues contentValues = getContentValues(badgeCount);
                     contentResolver.update(mUri, contentValues, "_id=?", new String[]{String.valueOf(id)});
                 }
             } else {
-                ContentValues contentValues = getContentValues(badgeCount, true);
+                ContentValues contentValues = getContentValues(badgeCount);
                 contentResolver.insert(mUri, contentValues);
             }
         } finally {
@@ -42,7 +42,7 @@ public class SamsungHomeBadger extends ShortcutBadger {
         }
     }
 
-    private ContentValues getContentValues(int badgeCount, boolean isInsert) {
+    private ContentValues getContentValues(int badgeCount) {
         ContentValues contentValues = new ContentValues();
         if (isInsert) {
             contentValues.put("package", getContextPackageName());
