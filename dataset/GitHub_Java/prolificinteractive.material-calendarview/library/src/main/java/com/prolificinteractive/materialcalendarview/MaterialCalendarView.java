@@ -15,7 +15,6 @@ import android.support.annotation.Nullable;
 import android.support.v4.view.ViewPager;
 import android.support.v7.widget.AppCompatTextView;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -1476,29 +1475,19 @@ public class MaterialCalendarView extends ViewGroup {
             }
             break;
             case SELECTION_MODE_RANGE: {
-                final List<CalendarDay> currentSelection = adapter.getSelectedDates();
-
-                if (currentSelection.size() == 0) {
-                    // Selecting the first date of a range
-                    adapter.setDateSelected(date, nowSelected);
+                adapter.setDateSelected(date, nowSelected);
+                if (adapter.getSelectedDates().size() > 2) {
+                    adapter.clearSelections();
+                    adapter.setDateSelected(date, nowSelected);  //  re-set because adapter has been cleared
                     dispatchOnDateSelected(date, nowSelected);
-                } else if (currentSelection.size() == 1) {
-                    // Selecting the second date of a range
-                    final CalendarDay firstDaySelected = currentSelection.get(0);
-                    adapter.setDateSelected(date, nowSelected);
-                    if (firstDaySelected.equals(date)) {
-                        // Right now, we are not supporting a range of one day, so we are removing the day instead.
-                        dispatchOnDateSelected(date, nowSelected);
-                    } else if (firstDaySelected.isAfter(date)) {
-                        // Selecting a range, dispatching...
-                        dispatchOnRangeSelected(date, firstDaySelected);
+                } else if (adapter.getSelectedDates().size() == 2) {
+                    final List<CalendarDay> dates = adapter.getSelectedDates();
+                    if (dates.get(0).isAfter(dates.get(1))) {
+                        dispatchOnRangeSelected(dates.get(1), dates.get(0));
                     } else {
-                        // Selecting a range, dispatching in reverse order...
-                        dispatchOnRangeSelected(firstDaySelected, date);
+                        dispatchOnRangeSelected(dates.get(0), dates.get(1));
                     }
                 } else {
-                    // Clearing selection and making a selection of the new date.
-                    adapter.clearSelections();
                     adapter.setDateSelected(date, nowSelected);
                     dispatchOnDateSelected(date, nowSelected);
                 }
