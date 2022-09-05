@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * A meter metric which measures mean throughput and one-, five-, and fifteen-minute
  * exponentially-weighted moving average throughputs.
  *
- * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
+ * @see EWMA
  */
 public class Meter implements Metered {
     private static final long TICK_INTERVAL = TimeUnit.SECONDS.toNanos(5);
@@ -33,19 +33,10 @@ public class Meter implements Metered {
      *
      * @param clock      the clock to use for the meter ticks
      */
-    Meter(Clock clock) {
+    public Meter(Clock clock) {
         this.clock = clock;
         this.startTime = this.clock.getTick();
         this.lastTick = new AtomicLong(startTime);
-    }
-
-    /**
-     * Updates the moving averages.
-     */
-    void tick() {
-        m1Rate.tick();
-        m5Rate.tick();
-        m15Rate.tick();
     }
 
     /**
@@ -75,7 +66,9 @@ public class Meter implements Metered {
         if (age > TICK_INTERVAL && lastTick.compareAndSet(oldTick, newTick)) {
             final long requiredTicks = age / TICK_INTERVAL;
             for (long i = 0; i < requiredTicks; i++) {
-                tick();
+                m1Rate.tick();
+                m5Rate.tick();
+                m15Rate.tick();
             }
         }
     }
@@ -102,8 +95,8 @@ public class Meter implements Metered {
         if (getCount() == 0) {
             return 0.0;
         } else {
-            final long elapsed = (clock.getTick() - startTime);
-            return convertNsRate(getCount() / (double) elapsed);
+            final double elapsed = (clock.getTick() - startTime);
+            return getCount() / elapsed * TimeUnit.SECONDS.toNanos(1);
         }
     }
 
@@ -111,9 +104,5 @@ public class Meter implements Metered {
     public double getOneMinuteRate() {
         tickIfNecessary();
         return m1Rate.getRate(TimeUnit.SECONDS);
-    }
-
-    private double convertNsRate(double ratePerNs) {
-        return ratePerNs * (double) TimeUnit.SECONDS.toNanos(1);
     }
 }
