@@ -18,8 +18,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownMethod;
 import com.google.devtools.build.lib.server.RPCService.UnknownCommandException;
+import com.google.devtools.build.lib.server.signal.InterruptSignalHandler;
 import com.google.devtools.build.lib.unix.LocalClientSocket;
 import com.google.devtools.build.lib.unix.LocalServerSocket;
 import com.google.devtools.build.lib.unix.LocalSocketAddress;
@@ -129,54 +129,59 @@ public final class AfUnixServer extends RPCServer {
         serverDirectory, workspaceDir);
   }
 
-
-  private final AtomicBoolean inAction = new AtomicBoolean(false);
-  private final AtomicBoolean allowingInterrupt = new AtomicBoolean(true);
-  private final AtomicLong cmdNum = new AtomicLong();
-  private final Thread mainThread = Thread.currentThread();
-  private final Object interruptLock = new Object();
-
-  @Override
-  public void interrupt() {
-    // Only interrupt during actions - otherwise we may end up setting the interrupt bit
-    // at the end of a build and responding to it at the beginning of the subsequent build.
-    synchronized (interruptLock) {
-      if (allowingInterrupt.get()) {
-        mainThread.interrupt();
-      }
-    }
-
-    if (inAction.get()) {
-      Runnable interruptWatcher =
-          new Runnable() {
-            @Override
-            public void run() {
-              try {
-                long originalCmd = cmdNum.get();
-                Thread.sleep(10 * 1000);
-                if (inAction.get() && cmdNum.get() == originalCmd) {
-                  // We're still operating on the same command.
-                  // Interrupt took too long.
-                  ThreadUtils.warnAboutSlowInterrupt();
-                }
-              } catch (InterruptedException e) {
-                // Ignore.
-              }
-            }
-          };
-      Thread interruptWatcherThread =
-          new Thread(interruptWatcher, "interrupt-watcher-" + cmdNum);
-      interruptWatcherThread.setDaemon(true);
-      interruptWatcherThread.start();
-    }
-  }
-
   /**
    * Wait on a socket for business (answer requests). Note that this
    * method won't return until the server shuts down.
    */
   @Override
   public void serve() {
+    // Register the signal handler.
+    final AtomicBoolean inAction = new AtomicBoolean(false);
+    final AtomicBoolean allowingInterrupt = new AtomicBoolean(true);
+    final AtomicLong cmdNum = new AtomicLong();
+    final Thread mainThread = Thread.currentThread();
+    final Object interruptLock = new Object();
+
+    InterruptSignalHandler sigintHandler =
+        new InterruptSignalHandler() {
+          @Override
+          protected void onSignal() {
+            LOG.severe("User interrupt");
+
+            // Only interrupt during actions - otherwise we may end up setting the interrupt bit
+            // at the end of a build and responding to it at the beginning of the subsequent build.
+            synchronized (interruptLock) {
+              if (allowingInterrupt.get()) {
+                mainThread.interrupt();
+              }
+            }
+
+            if (inAction.get()) {
+              Runnable interruptWatcher =
+                  new Runnable() {
+                    @Override
+                    public void run() {
+                      try {
+                        long originalCmd = cmdNum.get();
+                        Thread.sleep(10 * 1000);
+                        if (inAction.get() && cmdNum.get() == originalCmd) {
+                          // We're still operating on the same command.
+                          // Interrupt took too long.
+                          ThreadUtils.warnAboutSlowInterrupt();
+                        }
+                      } catch (InterruptedException e) {
+                        // Ignore.
+                      }
+                    }
+                  };
+              Thread interruptWatcherThread =
+                  new Thread(interruptWatcher, "interrupt-watcher-" + cmdNum);
+              interruptWatcherThread.setDaemon(true);
+              interruptWatcherThread.start();
+            }
+          }
+        };
+
     try {
       while (!lameDuck) {
         try {
@@ -226,16 +231,8 @@ public final class AfUnixServer extends RPCServer {
               }
             }
             requestIo.shutdown();
-            switch (rpcService.getShutdown()) {
-              case NONE:
-                break;
-
-              case CLEAN:
-                return;
-
-              case EXPUNGE:
-                disableShutdownHooks();
-                return;
+            if (rpcService.isShutdown()) {
+              return;
             }
           }
         } catch (EOFException e) {
@@ -247,8 +244,9 @@ public final class AfUnixServer extends RPCServer {
         }
       }
     } finally {
-      rpcService.shutdown(ShutdownMethod.CLEAN);
+      rpcService.shutdown();
       LOG.info("Logging finished");
+      sigintHandler.uninstall();
     }
   }
 
@@ -422,7 +420,7 @@ public final class AfUnixServer extends RPCServer {
       LOG.severe("SERVER ERROR: " + trace);
     }
 
-    if (rpcService.getShutdown() != ShutdownMethod.NONE) {
+    if (rpcService.isShutdown()) {
       // In case of shutdown, disable the listening socket *before* we write
       // the last part of the response.  Otherwise, a sufficiently fast client
       // could read the response and exit, and a new client could make a
@@ -542,6 +540,10 @@ public final class AfUnixServer extends RPCServer {
                                         Path workspaceDir,
                                         int maxIdleSeconds)
       throws IOException {
+    if (!serverDirectory.exists()) {
+      serverDirectory.createDirectory();
+    }
+
     // Creates and starts the RPC server.
     RPCService service = new RPCService(appCommand);
 

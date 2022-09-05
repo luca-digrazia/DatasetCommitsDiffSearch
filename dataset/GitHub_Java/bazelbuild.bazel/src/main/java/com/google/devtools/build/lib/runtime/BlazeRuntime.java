@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.rules.test.CoverageReportActionFactory;
-import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
 import com.google.devtools.build.lib.runtime.commands.BuildCommand;
 import com.google.devtools.build.lib.runtime.commands.CanonicalizeCommand;
 import com.google.devtools.build.lib.runtime.commands.CleanCommand;
@@ -821,12 +820,9 @@ public final class BlazeRuntime {
     try {
       LOG.info(getRequestLogString(commandLineOptions.getOtherArgs()));
       return dispatcher.exec(commandLineOptions.getOtherArgs(), OutErr.SYSTEM_OUT_ERR,
-          LockingMode.ERROR_OUT, "batch client", runtime.getClock().currentTimeMillis());
+          runtime.getClock().currentTimeMillis());
     } catch (BlazeCommandDispatcher.ShutdownBlazeServerException e) {
       return e.getExitStatus();
-    } catch (InterruptedException e) {
-      // This is almost main(), so it's okay to just swallow it. We are exiting soon.
-      return ExitCode.INTERRUPTED.getNumericExitCode();
     } finally {
       runtime.shutdown();
       dispatcher.shutdown();
@@ -838,19 +834,8 @@ public final class BlazeRuntime {
    * the program.
    */
   private static int serverMain(Iterable<BlazeModule> modules, OutErr outErr, String[] args) {
-    InterruptSignalHandler sigintHandler = null;
     try {
-      final RPCServer blazeServer = createBlazeRPCServer(modules, Arrays.asList(args));
-
-      // Register the signal handler.
-       sigintHandler = new InterruptSignalHandler() {
-        @Override
-        protected void onSignal() {
-          LOG.severe("User interrupt");
-          blazeServer.interrupt();
-        }
-      };
-
+      RPCServer blazeServer = createBlazeRPCServer(modules, Arrays.asList(args));
       blazeServer.serve();
       return ExitCode.SUCCESS.getNumericExitCode();
     } catch (OptionsParsingException e) {
@@ -862,10 +847,6 @@ public final class BlazeRuntime {
     } catch (AbruptExitException e) {
       outErr.printErr(e.getMessage());
       return e.getExitCode().getNumericExitCode();
-    } finally {
-      if (sigintHandler != null) {
-        sigintHandler.uninstall();
-      }
     }
   }
 
@@ -892,7 +873,7 @@ public final class BlazeRuntime {
     CommandExecutor commandExecutor = new CommandExecutor(runtime, dispatcher);
 
 
-    if (startupOptions.commandPort != -1) {
+    if (startupOptions.grpcPort != -1) {
       try {
         // This is necessary so that Bazel kind of works during bootstrapping, at which time the
         // gRPC server is not compiled in so that we don't need gRPC for bootstrapping.
@@ -900,8 +881,7 @@ public final class BlazeRuntime {
             "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
         RPCServer.Factory factory = (RPCServer.Factory) factoryClass.newInstance();
         return factory.create(commandExecutor, runtime.getClock(),
-            startupOptions.commandPort, runtime.getServerDirectory(),
-            startupOptions.maxIdleSeconds);
+            startupOptions.grpcPort, runtime.getServerDirectory());
       } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
         throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
       }
