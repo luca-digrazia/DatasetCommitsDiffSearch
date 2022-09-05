@@ -252,7 +252,7 @@ public final class Runfiles {
 
   /**
    * Returns the collection of runfiles as artifacts, including both unconditional artifacts
-   * and pruning manifest candidates.
+   * and pruning manifest candidates, but not including any artifacts produced by expansion.
    */
   public NestedSet<Artifact> getArtifacts() {
     NestedSetBuilder<Artifact> allArtifacts = NestedSetBuilder.stableOrder();
