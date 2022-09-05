@@ -91,8 +91,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
     /**
      * Create an artifact at the specified root-relative path in the bin directory.
      */
-    Artifact create(RuleContext ruleContext, BuildConfiguration configuration,
-                    PathFragment rootRelativePath);
+    Artifact create(RuleContext ruleContext, PathFragment rootRelativePath);
   }
 
   /**
@@ -101,9 +100,9 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
    */
   public static final LinkArtifactFactory DEFAULT_ARTIFACT_FACTORY = new LinkArtifactFactory() {
     @Override
-    public Artifact create(RuleContext ruleContext, BuildConfiguration configuration,
-                           PathFragment rootRelativePath) {
-      return ruleContext.getDerivedArtifact(rootRelativePath, configuration.getBinDirectory());
+    public Artifact create(RuleContext ruleContext, PathFragment rootRelativePath) {
+      return ruleContext.getDerivedArtifact(rootRelativePath,
+          ruleContext.getConfiguration().getBinDirectory());
     }
   };
 
@@ -694,7 +693,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
       ImmutableList.Builder<LTOBackendArtifacts> ltoOutputs = ImmutableList.builder();
       for (Artifact a : allBitcode.values()) {
         LTOBackendArtifacts ltoArtifacts = new LTOBackendArtifacts(
-            ltoOutputRootPrefix, a, allBitcode, ruleContext, configuration, linkArtifactFactory);
+            ltoOutputRootPrefix, a, allBitcode, ruleContext, linkArtifactFactory);
         ltoOutputs.add(ltoArtifacts);
       }
       return ltoOutputs.build();
@@ -733,7 +732,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
       }
 
       final ImmutableList<Artifact> buildInfoHeaderArtifacts = !linkstamps.isEmpty()
-          ? analysisEnvironment.getBuildInfo(ruleContext, CppBuildInfo.KEY, configuration)
+          ? ruleContext.getBuildInfo(CppBuildInfo.KEY)
           : ImmutableList.<Artifact>of();
 
       boolean needWholeArchive = wholeArchive || needWholeArchive(
@@ -763,8 +762,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
                   interfaceOutput, filteredNonLibraryArtifacts, this.ltoBitcodeFiles);
 
       final ImmutableMap<Artifact, Artifact> linkstampMap =
-          mapLinkstampsToOutputs(linkstamps, ruleContext, configuration, output,
-                                 linkArtifactFactory);
+          mapLinkstampsToOutputs(linkstamps, ruleContext, output, linkArtifactFactory);
 
       PathFragment ltoOutputRootPrefix = null;
       if (isLTOIndexing && allLTOArtifacts == null) {
@@ -797,7 +795,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
       @Nullable
       final Artifact paramFile =
           canSplitCommandLine()
-              ? linkArtifactFactory.create(ruleContext, configuration, paramRootPath)
+              ? linkArtifactFactory.create(ruleContext, paramRootPath)
               : null;
 
       LinkCommandLine.Builder linkCommandLineBuilder =
@@ -992,8 +990,8 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
      *         corresponding object file that should be fed into the link
      */
     public static ImmutableMap<Artifact, Artifact> mapLinkstampsToOutputs(
-        Collection<Artifact> linkstamps, RuleContext ruleContext, BuildConfiguration configuration,
-        Artifact outputBinary, LinkArtifactFactory linkArtifactFactory) {
+        Collection<Artifact> linkstamps, RuleContext ruleContext, Artifact outputBinary,
+        LinkArtifactFactory linkArtifactFactory) {
       ImmutableMap.Builder<Artifact, Artifact> mapBuilder = ImmutableMap.builder();
 
       PathFragment outputBinaryPath = outputBinary.getRootRelativePath();
@@ -1006,7 +1004,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
         mapBuilder.put(linkstamp,
             // Note that link stamp actions can be shared between link actions that output shared
             // native dep libraries.
-            linkArtifactFactory.create(ruleContext, configuration, stampOutputPath));
+            linkArtifactFactory.create(ruleContext, stampOutputPath));
       }
       return mapBuilder.build();    }
 

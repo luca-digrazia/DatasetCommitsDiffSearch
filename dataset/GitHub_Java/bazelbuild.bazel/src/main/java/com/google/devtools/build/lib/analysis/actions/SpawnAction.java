@@ -20,7 +20,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.AbstractAction;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
-import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
@@ -53,18 +51,21 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
+
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
-/** An Action representing an arbitrary subprocess to be forked and exec'd. */
-public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifier, CommandAction {
+/**
+ * An Action representing an arbitrary subprocess to be forked and exec'd.
+ */
+public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifier {
   private static class ExtraActionInfoSupplier<T> {
     private final GeneratedExtension<ExtraActionInfo, T> extension;
     private final T value;
@@ -93,28 +94,27 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   private final ResourceSet resourceSet;
   private final ImmutableMap<String, String> environment;
-  private final ImmutableSet<String> clientEnvironmentVariables;
   private final ImmutableMap<String, String> executionInfo;
 
   private final ExtraActionInfoSupplier<?> extraActionInfoSupplier;
 
   /**
    * Constructs a SpawnAction using direct initialization arguments.
-   *
-   * <p>All collections provided must not be subsequently modified.
+   * <p>
+   * All collections provided must not be subsequently modified.
    *
    * @param owner the owner of the Action.
    * @param tools the set of files comprising the tool that does the work (e.g. compiler).
-   * @param inputs the set of all files potentially read by this action; must not be subsequently
-   *     modified.
-   * @param outputs the set of all files written by this action; must not be subsequently modified.
+   * @param inputs the set of all files potentially read by this action; must
+   *        not be subsequently modified.
+   * @param outputs the set of all files written by this action; must not be
+   *        subsequently modified.
    * @param resourceSet the resources consumed by executing this Action
    * @param environment the map of environment variables.
-   * @param clientEnvironmentVariables the set of variables to be inherited from the client
-   *     environment.
-   * @param argv the command line to execute. This is merely a list of options to the executable,
-   *     and is uninterpreted by the build tool for the purposes of dependency checking; typically
-   *     it may include the names of input and output files, but this is not necessary.
+   * @param argv the command line to execute. This is merely a list of options
+   *        to the executable, and is uninterpreted by the build tool for the
+   *        purposes of dependency checking; typically it may include the names
+   *        of input and output files, but this is not necessary.
    * @param progressMessage the message printed during the progression of the build
    * @param mnemonic the mnemonic that is reported in the master log.
    */
@@ -126,7 +126,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       ResourceSet resourceSet,
       CommandLine argv,
       Map<String, String> environment,
-      Set<String> clientEnvironmentVariables,
       String progressMessage,
       String mnemonic) {
     this(
@@ -137,7 +136,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         resourceSet,
         argv,
         ImmutableMap.copyOf(environment),
-        ImmutableSet.copyOf(clientEnvironmentVariables),
         ImmutableMap.<String, String>of(),
         progressMessage,
         ImmutableMap.<PathFragment, Artifact>of(),
@@ -152,23 +150,21 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    * <p>All collections provided must not be subsequently modified.
    *
    * @param owner the owner of the Action.
-   * @param tools the set of files comprising the tool that does the work (e.g. compiler). This is a
-   *     subset of "inputs" and is only used by the WorkerSpawnStrategy.
+   * @param tools the set of files comprising the tool that does the work (e.g. compiler). This is
+   *        a subset of "inputs" and is only used by the WorkerSpawnStrategy.
    * @param inputs the set of all files potentially read by this action; must not be subsequently
-   *     modified.
+   *        modified.
    * @param outputs the set of all files written by this action; must not be subsequently modified.
    * @param resourceSet the resources consumed by executing this Action
    * @param environment the map of environment variables.
-   * @param clientEnvironmentVariables the set of variables to be inherited from the client
-   *     environment.
    * @param executionInfo out-of-band information for scheduling the spawn.
    * @param argv the argv array (including argv[0]) of arguments to pass. This is merely a list of
-   *     options to the executable, and is uninterpreted by the build tool for the purposes of
-   *     dependency checking; typically it may include the names of input and output files, but this
-   *     is not necessary.
+   *        options to the executable, and is uninterpreted by the build tool for the purposes of
+   *        dependency checking; typically it may include the names of input and output files, but
+   *        this is not necessary.
    * @param progressMessage the message printed during the progression of the build
-   * @param inputManifests entries in inputs that are symlink manifest files. These are passed to
-   *     remote execution in the environment rather than as inputs.
+   * @param inputManifests entries in inputs that are symlink manifest files.
+   *        These are passed to remote execution in the environment rather than as inputs.
    * @param mnemonic the mnemonic that is reported in the master log.
    */
   public SpawnAction(
@@ -179,7 +175,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       ResourceSet resourceSet,
       CommandLine argv,
       ImmutableMap<String, String> environment,
-      ImmutableSet<String> clientEnvironmentVariables,
       ImmutableMap<String, String> executionInfo,
       String progressMessage,
       ImmutableMap<PathFragment, Artifact> inputManifests,
@@ -190,7 +185,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     this.resourceSet = resourceSet;
     this.executionInfo = executionInfo;
     this.environment = environment;
-    this.clientEnvironmentVariables = clientEnvironmentVariables;
     this.argv = argv;
     this.progressMessage = progressMessage;
     this.inputManifests = inputManifests;
@@ -199,7 +193,9 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     this.extraActionInfoSupplier = extraActionInfoSupplier;
   }
 
-  @Override
+  /**
+   * Returns the (immutable) list of all arguments, including the command name, argv[0].
+   */
   @VisibleForTesting
   public List<String> getArguments() {
     return ImmutableList.copyOf(argv.arguments());
@@ -307,7 +303,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       f.addPath(input.getValue().getExecPath());
     }
     f.addStringMap(getEnvironment());
-    f.addStrings(getClientEnvironmentVariables());
     f.addStringMap(getExecutionInfo());
     return f.hexDigestAndReset();
   }
@@ -322,11 +317,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       message.append(ShellEscaper.escapeString(entry.getKey()));
       message.append('=');
       message.append(ShellEscaper.escapeString(entry.getValue()));
-      message.append('\n');
-    }
-    for (String var : getClientEnvironmentVariables()) {
-      message.append("  Environment variables taken from the client environment: ");
-      message.append(ShellEscaper.escapeString(var));
       message.append('\n');
     }
     for (String argument : ShellEscaper.escapeAll(argv.arguments())) {
@@ -365,14 +355,11 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
   }
 
-  @Override
-  public ImmutableMap<String, String> getEnvironment() {
+  /**
+   * Returns the environment in which to run this action.
+   */
+  public Map<String, String> getEnvironment() {
     return environment;
-  }
-
-  @Override
-  public Iterable<String> getClientEnvironmentVariables() {
-    return clientEnvironmentVariables;
   }
 
   /**
@@ -450,7 +437,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private final Map<PathFragment, Artifact> inputManifests = new LinkedHashMap<>();
     private ResourceSet resourceSet = AbstractAction.DEFAULT_RESOURCE_SET;
     private ImmutableMap<String, String> environment = ImmutableMap.of();
-    private ImmutableSet<String> clientEnvironmentVariables = ImmutableSet.of();
     private ImmutableMap<String, String> executionInfo = ImmutableMap.of();
     private boolean isShellCommand = false;
     private boolean useDefaultShellEnvironment = false;
@@ -482,7 +468,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       this.inputManifests.putAll(other.inputManifests);
       this.resourceSet = other.resourceSet;
       this.environment = other.environment;
-      this.clientEnvironmentVariables = other.clientEnvironmentVariables;
       this.executionInfo = other.executionInfo;
       this.isShellCommand = other.isShellCommand;
       this.useDefaultShellEnvironment = other.useDefaultShellEnvironment;
@@ -614,7 +599,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           ImmutableList.copyOf(outputs),
           actualCommandLine,
           ImmutableMap.copyOf(env),
-          clientEnvironmentVariables,
           ImmutableMap.copyOf(executionInfo),
           progressMessage,
           ImmutableMap.copyOf(inputAndToolManifests),
@@ -628,7 +612,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         ImmutableList<Artifact> outputs,
         CommandLine actualCommandLine,
         ImmutableMap<String, String> env,
-        ImmutableSet<String> clientEnvironmentVariables,
         ImmutableMap<String, String> executionInfo,
         String progressMessage,
         ImmutableMap<PathFragment, Artifact> inputAndToolManifests,
@@ -641,7 +624,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           resourceSet,
           actualCommandLine,
           env,
-          clientEnvironmentVariables,
           executionInfo,
           progressMessage,
           inputAndToolManifests,
@@ -699,15 +681,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       return this;
     }
 
-    /** @deprecated Use {@link #addTransitiveInputs} to avoid excessive memory use. */
-    @Deprecated
-    public Builder addInputs(NestedSet<Artifact> artifacts) {
-      // Do not delete this method, or else addInputs(Iterable) calls with a NestedSet argument
-      // will not be flagged.
-      inputsBuilder.addAll((Iterable<Artifact>) artifacts);
-      return this;
-    }
-
     /**
      * Adds transitive inputs to this action.
      */
@@ -754,12 +727,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     public Builder setEnvironment(Map<String, String> environment) {
       this.environment = ImmutableMap.copyOf(environment);
       this.useDefaultShellEnvironment = false;
-      return this;
-    }
-
-    /** Sets the environment variables to be inherited fromt he client environment. */
-    public Builder setClientEnvironmentVariables(Set<String> clientEnvironmentVariables) {
-      this.clientEnvironmentVariables = ImmutableSet.copyOf(clientEnvironmentVariables);
       return this;
     }
 
@@ -1063,15 +1030,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
 
     /**
-     * Force the use of a parameter file and set the encoding to ISO-8859-1 (latin1).
-     *
-     * <p>In order to use parameter files, at least one output artifact must be specified.
-     */
-    public Builder alwaysUseParameterFile(ParameterFileType parameterFileType) {
-      return useParameterFile(parameterFileType, ISO_8859_1, "@", /*always=*/ true);
-    }
-
-    /**
      * Enable or disable the use of a parameter file, set the encoding to the given value, and
      * specify the argument prefix to use in passing the parameter file name to the tool.
      *
@@ -1080,12 +1038,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      */
     public Builder useParameterFile(
         ParameterFileType parameterFileType, Charset charset, String flagPrefix) {
-      return useParameterFile(parameterFileType, charset, flagPrefix, /*always=*/ false);
-    }
-
-    private Builder useParameterFile(
-        ParameterFileType parameterFileType, Charset charset, String flagPrefix, boolean always) {
-      paramFileInfo = new ParamFileInfo(parameterFileType, charset, flagPrefix, always);
+      paramFileInfo = new ParamFileInfo(parameterFileType, charset, flagPrefix);
       return this;
     }
   }

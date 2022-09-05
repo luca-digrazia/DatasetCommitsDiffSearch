@@ -842,7 +842,7 @@ public final class CppModel {
     
     // Should we also link in any libraries that this library depends on?
     // That is required on some systems...
-    CppLinkActionBuilder linkActionBuilder =
+    CppLinkAction.Builder linkActionBuilder =
         newLinkActionBuilder(soImpl)
             .setInterfaceOutput(soInterface)
             .addNonLibraryInputs(ccOutputs.getObjectFiles(usePicForSharedLibs))
@@ -899,8 +899,8 @@ public final class CppModel {
     return result.build();
   }
 
-  private CppLinkActionBuilder newLinkActionBuilder(Artifact outputArtifact) {
-    return new CppLinkActionBuilder(ruleContext, outputArtifact)
+  private CppLinkAction.Builder newLinkActionBuilder(Artifact outputArtifact) {
+    return new CppLinkAction.Builder(ruleContext, outputArtifact)
         .setCrosstoolInputs(CppHelper.getToolchain(ruleContext).getLink())
         .addNonLibraryInputs(context.getTransitiveCompilationPrerequisites());
   }
