@@ -5,7 +5,6 @@ import android.support.v4.view.PagerAdapter;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.prolificinteractive.materialcalendarview.MaterialCalendarView.ShowOtherDates;
 import com.prolificinteractive.materialcalendarview.format.DayFormatter;
 import com.prolificinteractive.materialcalendarview.format.TitleFormatter;
 import com.prolificinteractive.materialcalendarview.format.WeekDayFormatter;
@@ -24,14 +23,11 @@ class MonthPagerAdapter extends PagerAdapter {
     private final ArrayDeque<MonthView> currentViews;
 
     private final MaterialCalendarView mcv;
-    private final CalendarDay today;
-
     private TitleFormatter titleFormatter = null;
     private Integer color = null;
     private Integer dateTextAppearance = null;
     private Integer weekDayTextAppearance = null;
-    @ShowOtherDates
-    private int showOtherDates = MaterialCalendarView.SHOW_DEFAULTS;
+    private Boolean showOtherDates = null;
     private CalendarDay minDate = null;
     private CalendarDay maxDate = null;
     private DateRangeIndex rangeIndex;
@@ -45,7 +41,6 @@ class MonthPagerAdapter extends PagerAdapter {
 
     MonthPagerAdapter(MaterialCalendarView mcv) {
         this.mcv = mcv;
-        this.today = CalendarDay.today();
         currentViews = new ArrayDeque<>();
         currentViews.iterator();
         setRangeDates(null, null);
@@ -129,7 +124,9 @@ class MonthPagerAdapter extends PagerAdapter {
         if (weekDayTextAppearance != null) {
             monthView.setWeekDayTextAppearance(weekDayTextAppearance);
         }
-        monthView.setShowOtherDates(showOtherDates);
+        if (showOtherDates != null) {
+            monthView.setShowOtherDates(showOtherDates);
+        }
         monthView.setMinimumDate(minDate);
         monthView.setMaximumDate(maxDate);
         monthView.setSelectedDates(selectedDates);
@@ -189,10 +186,10 @@ class MonthPagerAdapter extends PagerAdapter {
         }
     }
 
-    public void setShowOtherDates(@ShowOtherDates int showFlags) {
-        this.showOtherDates = showFlags;
+    public void setShowOtherDates(boolean show) {
+        this.showOtherDates = show;
         for (MonthView monthView : currentViews) {
-            monthView.setShowOtherDates(showFlags);
+            monthView.setShowOtherDates(show);
         }
     }
 
@@ -210,8 +207,7 @@ class MonthPagerAdapter extends PagerAdapter {
         }
     }
 
-    @ShowOtherDates
-    public int getShowOtherDates() {
+    public boolean getShowOtherDates() {
         return showOtherDates;
     }
 
@@ -234,11 +230,15 @@ class MonthPagerAdapter extends PagerAdapter {
         }
 
         if (min == null) {
-            min = CalendarDay.from(today.getYear() - 200, today.getMonth(), today.getDay());
+            Calendar worker = CalendarUtils.getInstance();
+            worker.add(Calendar.YEAR, -200);
+            min = CalendarDay.from(worker);
         }
 
         if (max == null) {
-            max = CalendarDay.from(today.getYear() + 200, today.getMonth(), today.getDay());
+            Calendar worker = CalendarUtils.getInstance();
+            worker.add(Calendar.YEAR, 200);
+            max = CalendarDay.from(worker);
         }
 
         rangeIndex = new DateRangeIndex(min, max);
@@ -253,13 +253,14 @@ class MonthPagerAdapter extends PagerAdapter {
     }
 
     public void setDateSelected(CalendarDay day, boolean selected) {
-        if (selected) {
-            if (!selectedDates.contains(day)) {
+        if(selected) {
+            if(!selectedDates.contains(day)) {
                 selectedDates.add(day);
                 invalidateSelectedDates();
             }
-        } else {
-            if (selectedDates.contains(day)) {
+        }
+        else {
+            if(selectedDates.contains(day)) {
                 selectedDates.remove(day);
                 invalidateSelectedDates();
             }
@@ -289,8 +290,7 @@ class MonthPagerAdapter extends PagerAdapter {
         return rangeIndex.getItem(position);
     }
 
-    @NonNull
-    public List<CalendarDay> getSelectedDates() {
+    public @NonNull List<CalendarDay> getSelectedDates() {
         return Collections.unmodifiableList(selectedDates);
     }
 
