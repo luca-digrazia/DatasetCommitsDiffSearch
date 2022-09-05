@@ -436,8 +436,8 @@ public final class Attribute implements Comparable<Attribute> {
     private PredicateWithMessage<Object> allowedValues = null;
     private ImmutableList<ImmutableSet<String>> mandatoryProvidersList =
         ImmutableList.<ImmutableSet<String>>of();
-    private ImmutableList<ImmutableList<Class<? extends TransitiveInfoProvider>>>
-        mandatoryNativeProvidersList = ImmutableList.of();
+    private ImmutableList<Class<? extends TransitiveInfoProvider>> mandatoryNativeProviders =
+        ImmutableList.of();
     private HashMap<String, RuleAspect<?>> aspects = new LinkedHashMap<>();
 
     /**
@@ -877,28 +877,18 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     /**
-     * Sets a list of lists of mandatory native providers. Every configured target occurring in this
-     * label type attribute has to provide all the providers from one of those lists, otherwise an
-     * error is produced during the analysis phase.
+     * Sets a list of mandatory native providers. Every configured target occurring in this label
+     * type attribute has to provide all the providers, otherwise an error is produced during the
+     * analysis phase.
      */
-    public final Builder<TYPE> mandatoryNativeProvidersList(
-        Iterable<? extends Iterable<Class<? extends TransitiveInfoProvider>>> providersList) {
-      Preconditions.checkState((type == BuildType.LABEL) || (type == BuildType.LABEL_LIST),
+    @SafeVarargs
+    public final Builder<TYPE> mandatoryNativeProviders(
+        Class<? extends TransitiveInfoProvider>... providers) {
+      Preconditions.checkState(
+          (type == BuildType.LABEL) || (type == BuildType.LABEL_LIST),
           "must be a label-valued type");
-      ImmutableList.Builder<ImmutableList<Class<? extends TransitiveInfoProvider>>> listBuilder
-          = ImmutableList.builder();
-      for (Iterable<Class<? extends TransitiveInfoProvider>> providers : providersList) {
-        listBuilder.add(ImmutableList.<Class<? extends TransitiveInfoProvider>>copyOf(providers));
-      }
-      this.mandatoryNativeProvidersList = listBuilder.build();
-      return this;
-    }
-
-    public Builder<TYPE> mandatoryNativeProviders(
-        Iterable<Class<? extends TransitiveInfoProvider>> providers) {
-      if (providers.iterator().hasNext()) {
-        mandatoryNativeProvidersList(ImmutableList.of(providers));
-      }
+      this.mandatoryNativeProviders =
+          ImmutableList.<Class<? extends TransitiveInfoProvider>>copyOf(providers);
       return this;
     }
 
@@ -1061,7 +1051,7 @@ public final class Attribute implements Comparable<Attribute> {
           condition,
           allowedValues,
           mandatoryProvidersList,
-          mandatoryNativeProvidersList,
+          mandatoryNativeProviders,
           ImmutableList.copyOf(aspects.values()));
     }
   }
@@ -1166,7 +1156,7 @@ public final class Attribute implements Comparable<Attribute> {
       List<Map<String, Object>> depMaps = mapper.visitAttributes(dependencies, limiter);
       // For each combination, call compute() on a specialized AttributeMap providing those
       // values.
-      Map<List<Object>, T> valueMap = new HashMap<>(depMaps.size());
+      Map<List<Object>, T> valueMap = new HashMap<>();
       for (Map<String, Object> depMap : depMaps) {
         AttributeMap attrMap = mapper.createMapBackedAttributeMap(depMap);
         Object value = compute(attrMap);
@@ -1591,15 +1581,13 @@ public final class Attribute implements Comparable<Attribute> {
    */
   public abstract static class LateBoundLabelList<T> implements LateBoundDefault<T> {
     private final ImmutableList<Label> labels;
-    private final ImmutableSet<Class<?>> requiredConfigurationFragments;
 
     public LateBoundLabelList() {
-      this(ImmutableList.<Label>of());
+      this.labels = ImmutableList.of();
     }
 
-    public LateBoundLabelList(List<Label> labels, Class<?>... requiredConfigurationFragments) {
+    public LateBoundLabelList(List<Label> labels) {
       this.labels = ImmutableList.copyOf(labels);
-      this.requiredConfigurationFragments = ImmutableSet.copyOf(requiredConfigurationFragments);
     }
 
     @Override
@@ -1609,7 +1597,7 @@ public final class Attribute implements Comparable<Attribute> {
 
     @Override
     public ImmutableSet<Class<?>> getRequiredConfigurationFragments() {
-      return requiredConfigurationFragments;
+      return ImmutableSet.of();
     }
 
     @Override
@@ -1676,8 +1664,7 @@ public final class Attribute implements Comparable<Attribute> {
 
   private final ImmutableList<ImmutableSet<String>> mandatoryProvidersList;
 
-  private final ImmutableList<ImmutableList<Class<? extends TransitiveInfoProvider>>>
-      mandatoryNativeProvidersList;
+  private final ImmutableList<Class<? extends TransitiveInfoProvider>> mandatoryNativeProviders;
 
   private final ImmutableList<RuleAspect<?>> aspects;
 
@@ -1711,8 +1698,7 @@ public final class Attribute implements Comparable<Attribute> {
       Predicate<AttributeMap> condition,
       PredicateWithMessage<Object> allowedValues,
       ImmutableList<ImmutableSet<String>> mandatoryProvidersList,
-      ImmutableList<ImmutableList<Class<? extends TransitiveInfoProvider>>>
-          mandatoryNativeProvidersList,
+      ImmutableList<Class<? extends TransitiveInfoProvider>> mandatoryNativeProviders,
       ImmutableList<RuleAspect<?>> aspects) {
     Preconditions.checkNotNull(configTransition);
     Preconditions.checkArgument(
@@ -1747,7 +1733,7 @@ public final class Attribute implements Comparable<Attribute> {
     this.condition = condition;
     this.allowedValues = allowedValues;
     this.mandatoryProvidersList = mandatoryProvidersList;
-    this.mandatoryNativeProvidersList = mandatoryNativeProvidersList;
+    this.mandatoryNativeProviders = mandatoryNativeProviders;
     this.aspects = aspects;
   }
 
@@ -1947,10 +1933,9 @@ public final class Attribute implements Comparable<Attribute> {
     return mandatoryProvidersList;
   }
 
-  /** Returns the list of lists of mandatory native providers. */
-  public ImmutableList<ImmutableList<Class<? extends TransitiveInfoProvider>>>
-      getMandatoryNativeProvidersList() {
-    return mandatoryNativeProvidersList;
+  /** Returns the list of mandatory native providers. */
+  public ImmutableList<Class<? extends TransitiveInfoProvider>> getMandatoryNativeProviders() {
+    return mandatoryNativeProviders;
   }
 
   public FileTypeSet getAllowedFileTypesPredicate() {
@@ -2077,11 +2062,11 @@ public final class Attribute implements Comparable<Attribute> {
    */
   public <TYPE> Attribute.Builder<TYPE> cloneBuilder(Type<TYPE> tp) {
     Preconditions.checkArgument(tp == this.type);
-    Builder<TYPE> builder = new Builder<>(name, tp);
+    Builder<TYPE> builder = new Builder<TYPE>(name, tp);
     builder.allowedFileTypesForLabels = allowedFileTypesForLabels;
     builder.allowedRuleClassesForLabels = allowedRuleClassesForLabels;
     builder.allowedRuleClassesForLabelsWarning = allowedRuleClassesForLabelsWarning;
-    builder.mandatoryNativeProvidersList = mandatoryNativeProvidersList;
+    builder.mandatoryNativeProviders = mandatoryNativeProviders;
     builder.mandatoryProvidersList = mandatoryProvidersList;
     builder.validityPredicate = validityPredicate;
     builder.condition = condition;
