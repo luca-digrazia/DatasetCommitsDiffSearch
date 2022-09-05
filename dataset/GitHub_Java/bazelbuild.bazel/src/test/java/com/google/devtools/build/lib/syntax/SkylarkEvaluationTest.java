@@ -52,11 +52,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     return new SkylarkTest();
   }
 
-  static class Bad {
-    Bad () {
-    }
-  }
-
   @SkylarkModule(name = "Mock", doc = "")
   static class Mock {
     @SkylarkCallable(doc = "")
@@ -69,8 +64,8 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     }
     public void value() {}
     @SkylarkCallable(doc = "")
-    public Bad returnBad() {
-      return new Bad();
+    public Mock returnMutable() {
+      return new Mock();
     }
     @SkylarkCallable(name = "struct_field", doc = "", structField = true)
     public String structField() {
@@ -310,13 +305,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testBadDictKey() throws Exception {
-    new SkylarkTest().testIfErrorContains(
-        "unhashable type: 'list'",
-        "{ [1, 2]: [3, 4] }");
-  }
-
-  @Test
   public void testForLoopReuseVariable() throws Exception {
     new SkylarkTest().setUp("def foo():",
         "  s = ''",
@@ -545,7 +533,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .testIfExactError("Keyword arguments are not allowed when calling a java method"
-            + "\nwhile calling method 'string' for type Mock",
+            + "\nwhile calling method 'string' on object of type Mock",
             "mock.string(key=True)");
   }
 
@@ -606,8 +594,8 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .testIfExactError(
-            "Method 'return_bad' returns an object of invalid type Bad",
-            "mock.return_bad()");
+            "Method 'return_mutable' returns a mutable object (type of Mock)",
+            "mock.return_mutable()");
   }
 
   @Test
@@ -956,7 +944,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         "is_empty",
         "nullfunc_failing",
         "nullfunc_working",
-        "return_bad",
+        "return_mutable",
         "string",
         "string_list",
         "struct_field",

@@ -36,8 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import javax.annotation.Nullable;
-
 /**
  * Syntax node for a function call expression.
  */
@@ -127,7 +125,6 @@ public final class FuncallExpression extends Expression {
     return methodMap.build();
   }
 
-  @Nullable
   private static SkylarkCallable getAnnotationFromParentClass(Class<?> classObj, Method method) {
     boolean keepLooking = false;
     try {
@@ -170,7 +167,7 @@ public final class FuncallExpression extends Expression {
     }
   }
 
-  @Nullable private final Expression obj;
+  private final Expression obj;
 
   private final Identifier func;
 
@@ -185,7 +182,7 @@ public final class FuncallExpression extends Expression {
    * arbitrary expressions. In any case, the "func" expression is always
    * evaluated, so functions and variables share a common namespace.
    */
-  public FuncallExpression(@Nullable Expression obj, Identifier func,
+  public FuncallExpression(Expression obj, Identifier func,
                            List<Argument.Passed> args) {
     this.obj = obj;
     this.func = func;
@@ -272,16 +269,7 @@ public final class FuncallExpression extends Expression {
     if (obj != null) {
       sb.append(obj).append(".");
     }
-    sb.append(func);
-    String backup = sb.toString();
-    try {
-      Printer.printList(sb, args, "(", ", ", ")", /* singletonTerminator */ null);
-    } catch (OutOfMemoryError ex) {
-      // export_files might lead to an OOM error (e.g. in
-      // PackageSerializationTest#testMassivePackageDeserializesFine).
-      // TODO(b/23967033): make the Printer limit its own output.
-      return backup + "(<too long>)";
-    }
+    Printer.printList(sb.append(func), args, "(", ", ", ")", null);
     return sb.toString();
   }
 
@@ -365,11 +353,21 @@ public final class FuncallExpression extends Expression {
   // TODO(bazel-team): If there's exactly one usable method, this works. If there are multiple
   // matching methods, it still can be a problem. Figure out how the Java compiler does it
   // exactly and copy that behaviour.
-  private MethodDescriptor findJavaMethod(
-      Class<?> objClass, String methodName, List<Object> args) throws EvalException {
+  // TODO(bazel-team): check if this and SkylarkBuiltInFunctions.createObject can be merged.
+  private Object invokeJavaMethod(
+      Object obj, Class<?> objClass, String methodName, List<Object> args, boolean hasKwArgs)
+      throws EvalException {
     MethodDescriptor matchingMethod = null;
     List<MethodDescriptor> methods = getMethods(objClass, methodName, args.size(), getLocation());
     if (methods != null) {
+      if (hasKwArgs) {
+        throw new EvalException(
+            func.getLocation(),
+            String.format(
+                "Keyword arguments are not allowed when calling a java method"
+                + "\nwhile calling method '%s' on object of type %s",
+                func.getName(), EvalUtils.getDataTypeNameFromClass(objClass)));
+      }
       for (MethodDescriptor method : methods) {
         Class<?>[] params = method.getMethod().getParameterTypes();
         int i = 0;
@@ -386,7 +384,7 @@ public final class FuncallExpression extends Expression {
             matchingMethod = method;
           } else {
             throw new EvalException(
-                getLocation(),
+                func.getLocation(),
                 String.format(
                     "Type %s has multiple matches for %s",
                     EvalUtils.getDataTypeNameFromClass(objClass),
@@ -396,14 +394,15 @@ public final class FuncallExpression extends Expression {
       }
     }
     if (matchingMethod != null && !matchingMethod.getAnnotation().structField()) {
-      return matchingMethod;
+      return callMethod(matchingMethod, methodName, obj, args.toArray(), getLocation());
+    } else {
+      throw new EvalException(
+          getLocation(),
+          String.format(
+              "Type %s has no %s",
+              EvalUtils.getDataTypeNameFromClass(objClass),
+              formatMethod(args)));
     }
-    throw new EvalException(
-        getLocation(),
-        String.format(
-            "Type %s has no %s",
-            EvalUtils.getDataTypeNameFromClass(objClass),
-            formatMethod(args)));
   }
 
   private String formatMethod(List<Object> args) {
@@ -496,8 +495,21 @@ public final class FuncallExpression extends Expression {
   }
 
   @Override
-  Object doEval(Environment env) throws EvalException, InterruptedException {
-    return (obj != null) ? invokeObjectMethod(env) : invokeGlobalFunction(env);
+  Object eval(Environment env) throws EvalException, InterruptedException {
+    // Adds the calling rule to the stack trace of the Environment if it is a BUILD environment.
+    // There are two reasons for this:
+    // a) When using aliases in load(), the rule class name in the BUILD file will differ from
+    //    the implementation name in the bzl file. Consequently, we need to store the calling name.
+    // b) We need the location of the calling rule inside the BUILD file.
+    boolean hasAddedElement =
+        env.isSkylark() ? false : env.tryAddingStackTraceRoot(new StackTraceElement(func, args));
+    try {
+      return (obj != null) ? invokeObjectMethod(env) : invokeGlobalFunction(env);
+    } finally {
+      if (hasAddedElement) {
+        env.removeStackTraceRoot();
+      }
+    }
   }
 
   /**
@@ -544,28 +556,15 @@ public final class FuncallExpression extends Expression {
       // When calling a Java method, the name is not in the Environment,
       // so evaluating 'func' would fail.
       evalArguments(posargs, kwargs, env, null);
-      Class<?> objClass;
-      Object obj;
       if (objValue instanceof Class<?>) {
-        // Static call
-        obj = null;
-        objClass = (Class<?>) objValue;
+        // Static Java method call. We can return the value from here directly because
+        // invokeJavaMethod() has special checks.
+        return invokeJavaMethod(
+            null, (Class<?>) objValue, func.getName(), posargs.build(), !kwargs.isEmpty());
       } else {
-        obj = objValue;
-        objClass = objValue.getClass();
+        return invokeJavaMethod(
+            objValue, objValue.getClass(), func.getName(), posargs.build(), !kwargs.isEmpty());
       }
-      String name = func.getName();
-      ImmutableList<Object> args = posargs.build();
-      MethodDescriptor method = findJavaMethod(objClass, name, args);
-      if (!kwargs.isEmpty()) {
-        throw new EvalException(
-            func.getLocation(),
-            String.format(
-                "Keyword arguments are not allowed when calling a java method"
-                + "\nwhile calling method '%s' for type %s",
-                name, EvalUtils.getDataTypeNameFromClass(objClass)));
-      }
-      return callMethod(method, name, obj, args.toArray(), getLocation());
     } else {
       throw new EvalException(
           getLocation(),
@@ -617,25 +616,6 @@ public final class FuncallExpression extends Expression {
         ? ArgConversion.TO_SKYLARK : ArgConversion.NO_CONVERSION;
   }
 
-  /**
-   * Returns the value of the argument 'name' (or null if there is none).
-   * This function is used to associate debugging information to rules created by skylark "macros".
-   */
-  @Nullable
-  public String getNameArg() {
-    for (Argument.Passed arg : args) {
-      if (arg != null) {
-        String name = arg.getName();
-        if (name != null && name.equals("name")) {
-          Expression expr = arg.getValue();
-          return (expr != null && expr instanceof StringLiteral)
-              ? ((StringLiteral) expr).getValue() : null;
-        }
-      }
-    }
-    return null;
-  }
-
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
@@ -653,10 +633,5 @@ public final class FuncallExpression extends Expression {
       throw new EvalException(getLocation(),
           String.format("function '%s' does not exist", func.getName()));
     }
-  }
-
-  @Override
-  protected boolean isNewScope() {
-    return true;
   }
 }
