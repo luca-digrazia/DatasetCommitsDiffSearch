@@ -56,6 +56,7 @@ import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.common.options.OptionsClassProvider;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -65,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+
 import javax.annotation.Nullable;
 
 /**
@@ -187,8 +189,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private Label preludeLabel;
     private String runfilesPrefix;
     private String toolsRepository;
-    private final List<ConfigurationFragmentFactory> configurationFragmentFactories =
-        new ArrayList<>();
+    private final List<ConfigurationFragmentFactory> configurationFragments = new ArrayList<>();
     private final List<BuildInfoFactory> buildInfoFactories = new ArrayList<>();
     private final List<Class<? extends FragmentOptions>> configurationOptions = new ArrayList<>();
 
@@ -277,7 +278,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     }
 
     public Builder addConfigurationFragment(ConfigurationFragmentFactory factory) {
-      configurationFragmentFactories.add(factory);
+      configurationFragments.add(factory);
       return this;
     }
 
@@ -402,7 +403,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           defaultWorkspaceFileSuffix.toString(),
           ImmutableList.copyOf(buildInfoFactories),
           ImmutableList.copyOf(configurationOptions),
-          ImmutableList.copyOf(configurationFragmentFactories),
+          ImmutableList.copyOf(configurationFragments),
           configurationCollectionFactory,
           universalFragment,
           prerequisiteValidator,
@@ -494,8 +495,10 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    */
   private final ImmutableList<Class<? extends FragmentOptions>> configurationOptions;
 
-  /** The set of configuration fragment factories. */
-  private final ImmutableList<ConfigurationFragmentFactory> configurationFragmentFactories;
+  /**
+   * The set of configuration fragment factories.
+   */
+  private final ImmutableList<ConfigurationFragmentFactory> configurationFragments;
 
   /**
    * The factory that creates the configuration collection.
@@ -545,7 +548,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.defaultWorkspaceFileSuffix = defaultWorkspaceFileSuffix;
     this.buildInfoFactories = buildInfoFactories;
     this.configurationOptions = configurationOptions;
-    this.configurationFragmentFactories = configurationFragments;
+    this.configurationFragments = configurationFragments;
     this.configurationCollectionFactory = configurationCollectionFactory;
     this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
@@ -598,7 +601,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    * Returns the set of configuration fragments provided by this module.
    */
   public ImmutableList<ConfigurationFragmentFactory> getConfigurationFragments() {
-    return configurationFragmentFactories;
+    return configurationFragments;
   }
 
   /**

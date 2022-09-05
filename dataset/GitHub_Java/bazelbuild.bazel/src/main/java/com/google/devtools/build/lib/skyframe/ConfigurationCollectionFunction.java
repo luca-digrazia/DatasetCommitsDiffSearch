@@ -121,12 +121,7 @@ public class ConfigurationCollectionFunction implements SkyFunction {
       Environment env, BuildConfiguration targetConfiguration)
       throws InvalidConfigurationException, InterruptedException {
     if (targetConfiguration.useDynamicConfigurations()) {
-      BuildOptions targetOptions = targetConfiguration.getOptions();
-      BuildOptions hostOptions =
-          targetOptions.get(BuildConfiguration.Options.class).useDistinctHostConfiguration
-              ? HostTransition.INSTANCE.apply(targetConfiguration.getOptions())
-              : targetOptions;
-
+      BuildOptions hostOptions = HostTransition.INSTANCE.apply(targetConfiguration.getOptions());
       SkyKey hostConfigKey =
           BuildConfigurationValue.key(
               targetConfiguration.trimConfigurations()
@@ -138,6 +133,7 @@ public class ConfigurationCollectionFunction implements SkyFunction {
 
       // Also preload the target configuration so the configured target functions for
       // top-level targets don't have to waste cycles from a missing Skyframe dep.
+      BuildOptions targetOptions = targetConfiguration.getOptions();
       SkyKey targetConfigKey =
           BuildConfigurationValue.key(targetConfiguration.fragmentClasses(), targetOptions);
       BuildConfigurationValue skyValTarget = (BuildConfigurationValue)
