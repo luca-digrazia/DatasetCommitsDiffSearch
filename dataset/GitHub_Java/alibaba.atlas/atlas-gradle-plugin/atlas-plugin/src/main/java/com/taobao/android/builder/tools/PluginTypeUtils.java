@@ -207,150 +207,108 @@
  *
  */
 
-package com.taobao.android.builder.tasks.library;
+package com.taobao.android.builder.tools;
 
-import com.android.build.gradle.internal.ExtraModelInfo;
-import com.android.build.gradle.internal.api.LibVariantContext;
-import com.android.build.gradle.internal.ide.DependencyConvertUtils;
-import com.android.build.gradle.options.ProjectOptions;
-import com.android.build.gradle.tasks.AndroidZip;
-import com.android.builder.dependency.MavenCoordinatesImpl;
-import com.android.builder.model.MavenCoordinates;
-import com.taobao.android.builder.AtlasBuildContext;
-import com.taobao.android.builder.dependency.AtlasDependencyTree;
-import com.taobao.android.builder.dependency.model.AwbBundle;
-import com.taobao.android.builder.dependency.parser.AtlasDepTreeParser;
-import com.taobao.android.builder.dependency.parser.ResolvedDependencyInfo;
-import com.taobao.android.builder.extension.AtlasExtension;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.FilenameUtils;
-import org.gradle.api.Action;
-import org.gradle.api.GradleException;
+import com.android.build.gradle.AppPlugin;
+import com.android.build.gradle.FeaturePlugin;
+import com.android.build.gradle.LibraryPlugin;
 import org.gradle.api.Project;
-import org.gradle.api.Task;
-import org.gradle.api.tasks.bundling.Zip;
-
-import java.io.File;
-import java.io.IOException;
-
-import static com.android.builder.model.AndroidProject.FD_INTERMEDIATES;
 
 /**
- * Created by wuzhong on 2017/2/25.
- *
- * @author wuzhong
+ * Created by shenghua.nish on 2016-05-17 But in the afternoon.
  */
-public class AwbGenerator {
+public class PluginTypeUtils {
 
-    private final AtlasExtension atlasExtension;
+    private static final String[] ANDROID_SUPPORT_PLUGINS = new String[] {"com.taobao.android.application",
+        "com.android.application",
+        "com.taobao.android.library",
+        "com.android.library",
+        "com.taobao.atlas.library",
+        "com.taobao.atlas.application"};
+    private static final String[] APP_SUPPORT_PLUGINS = new String[] {"com.taobao.android.application",
+        "com.taobao.atlas.application", "com.android.application"};
+    private static final String[] LIBRARY_SUPPORT_PLUGINS = new String[] {"com.taobao.android.library",
+        "com.android.library", "com.taobao.atlas.library"};
+    private static final String[] MTL_ANDROID_PLUGINS = new String[] {"com.taobao.android.application",
+        "com.taobao.android.library", "com.taobao.atlas.library", "com.taobao.atlas.application"};
+    private static final String[] GOOGLE_ANDROID_PLUGINS = new String[] {"com.android.application",
+        "com.android.library","com.android.feature","com.android.instantapp"};
 
-    public AwbGenerator(AtlasExtension atlasExtension) {
-        this.atlasExtension = atlasExtension;
+    private static final String[] FEATURE_ANDROID_PLUGINS = new String[] {"com.android.feature",
+            "com.taobao.atlas.feature"};
+
+    private static final String[] INSTANTAPP_ANDROID_PLUGINS = new String[] {"com.android.instantapp",
+            "com.taobao.atlas.instantapp"};
+
+    /**
+     * To determine whether Android is a project, use the Android gradle plugin as the basis
+     *
+     * @param project
+     * @return
+     */
+    public static boolean isAndroidProject(Project project) {
+        return hasPlugins(project, ANDROID_SUPPORT_PLUGINS);
     }
 
     /**
-     * Create a basic AWB task
+     * Decide if it's a Library project
+     *
+     * @param project
+     * @return
      */
-    public void generateAwbArtifict(final Zip bundleTask, LibVariantContext libVariantOutputData) {
-
-        Project project = bundleTask.getProject();
-
-        bundleTask.setExtension("awb");
-
-        if (bundleTask instanceof AndroidZip) {
-            String fileName = FilenameUtils.getBaseName(bundleTask.getArchiveName()) + ".awb";
-            ((AndroidZip) bundleTask).setArchiveNameSupplier(() -> fileName);
-
-        }
-        bundleTask.setDestinationDir(new File(bundleTask.getDestinationDir().getParentFile(), "awb"));
-
-        bundleTask.doFirst(task -> {
-
-            File bundleBaseInfoFile = project.file("bundleBaseInfoFile.json");
-            if (bundleBaseInfoFile.exists()) {
-                project.getLogger().warn("copy " + bundleBaseInfoFile.getAbsolutePath() + " to awb");
-                File destDir = libVariantOutputData.getScope().getBaseBundleDir();
-                try {
-                    FileUtils.copyFileToDirectory(bundleBaseInfoFile, destDir);
-                } catch (IOException e) {
-                    throw new GradleException(e.getMessage(), e);
-                }
-            }
-        });
-
-        bundleTask.doLast(task -> {
-
-            File outputFile = new File(bundleTask.getDestinationDir(), bundleTask.getArchiveName());
-
-            if (!outputFile.exists()) {
-                return;
-            }
-
-            //Regenerating aar
-            if (atlasExtension.getBundleConfig().isAwbBundle()) {
-                try {
-                    FileUtils.copyFile(outputFile,
-                                       new File(new File(bundleTask.getDestinationDir().getParentFile(), "aar"),
-                                                FilenameUtils.getBaseName(bundleTask.getArchiveName()) + ".aar"));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
+    public static boolean isLibraryProject(Project project) {
+        return hasPlugins(project, LIBRARY_SUPPORT_PLUGINS);
+    }
+    public static boolean isFeatureProject(Project project) {
+        return hasPlugins(project, FEATURE_ANDROID_PLUGINS);
     }
 
-    public AwbBundle createAwbBundle(LibVariantContext libVariantContext) throws IOException {
+    public static boolean isInstantAppProject(Project project) {
+        return hasPlugins(project, INSTANTAPP_ANDROID_PLUGINS);
+    }
+    /**
+     * Determine whether it is an APP project
+     *
+     * @param project
+     * @return
+     */
+    public static boolean isAppProject(Project project) {
+        return hasPlugins(project, APP_SUPPORT_PLUGINS);
+    }
 
-        String variantName = libVariantContext.getVariantName();
+    /**
+     * Decide if you are using taobao's androidPlugin
+     *
+     * @param project
+     * @return
+     */
+    public static boolean usedMtlPlugin(Project project) {
+        return hasPlugins(project, MTL_ANDROID_PLUGINS);
+    }
 
-        AtlasDependencyTree libDependencyTree = AtlasBuildContext.libDependencyTrees.get(variantName);
-
-        //TODO 2.3
-        if (null == libDependencyTree) {
-
-            libDependencyTree = new AtlasDepTreeParser(libVariantContext.getProject(),
-                                                       new ExtraModelInfo(new ProjectOptions(libVariantContext.getProject()),null))
-                .parseDependencyTree(libVariantContext.getVariantDependency());
-            AtlasBuildContext.libDependencyTrees.put(variantName, libDependencyTree);
-        }
-
-        Project project = libVariantContext.getProject();
-
-        String groupName = (String)project.getGroup();
-        String name = "";
-        String version = (String)project.getVersion();
-        if (project.hasProperty("archivesBaseName")) {
-            name = (String)project.getProperties().get("archivesBaseName");
-        } else {
-            name = project.getName();
-        }
-
-        File explodedDir = project.file(
-            project.getBuildDir().getAbsolutePath() + "/" + FD_INTERMEDIATES + "/exploded-awb/" + computeArtifactPath(
-                groupName, name, version));
-        FileUtils.deleteDirectory(explodedDir);
-
-        MavenCoordinates mavenCoordinates = new MavenCoordinatesImpl(groupName, name, version, "awb", "");
-
-        ResolvedDependencyInfo resolvedDependencyInfo = new ResolvedDependencyInfo(groupName, name, version, "awb");
-        resolvedDependencyInfo.setVariantName(libVariantContext.getVariantName());
-
-        AwbBundle awbBundle = new AwbBundle(resolvedDependencyInfo, DependencyConvertUtils
-            .toAndroidLibrary(mavenCoordinates, libVariantContext.getBundleTask().getArchivePath(), explodedDir));
-
-        awbBundle.getSoLibraries().addAll(libDependencyTree.getMainBundle().getSoLibraries());
-        awbBundle.getAndroidLibraries().addAll(libDependencyTree.getMainBundle().getAndroidLibraries());
-        awbBundle.getJavaLibraries().addAll(libDependencyTree.getMainBundle().getJavaLibraries());
-
-        return awbBundle;
+    /**
+     * Decide if you're using GuGe's androidPlugin
+     *
+     * @param project
+     * @return
+     */
+    public static boolean usedGooglePlugin(Project project) {
+        return hasPlugins(project, GOOGLE_ANDROID_PLUGINS) || project.getPlugins().hasPlugin(AppPlugin.class)
+            || project.getPlugins().hasPlugin(LibraryPlugin.class)||project.getPlugins().hasPlugin(FeaturePlugin.class);
 
     }
 
-    private String computeArtifactPath(String groupName, String name, String version) {
-        StringBuilder pathBuilder = new StringBuilder();
-        pathBuilder.append(groupName).append("/").append(name).append("/").append(version);
+    public static boolean hasApplyGooglePlugin(Project project) {
+        return hasPlugins(project, GOOGLE_ANDROID_PLUGINS);
+    }
 
-        return pathBuilder.toString();
+    private static boolean hasPlugins(Project project, String... plugins) {
+        for (String plugin : plugins) {
+            if (project.getPlugins().hasPlugin(plugin)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

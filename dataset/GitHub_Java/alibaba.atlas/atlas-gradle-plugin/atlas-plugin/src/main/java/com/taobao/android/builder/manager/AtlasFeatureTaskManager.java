@@ -1,6 +1,5 @@
 package com.taobao.android.builder.manager;
 
-import com.android.build.api.transform.QualifiedContent;
 import com.android.build.gradle.BaseExtension;
 import com.android.build.gradle.FeatureExtension;
 import com.android.build.gradle.api.BaseVariantOutput;
@@ -14,18 +13,13 @@ import com.android.build.gradle.internal.api.FeatureVariantImpl;
 import com.android.build.gradle.internal.api.LibVariantContext;
 import com.android.build.gradle.internal.api.LibraryVariantImpl;
 import com.android.build.gradle.internal.dependency.FilteredArtifactCollection;
-import com.android.build.gradle.internal.pipeline.StreamBasedTask;
-import com.android.build.gradle.internal.pipeline.TransformStream;
-import com.android.build.gradle.internal.pipeline.TransformTask;
 import com.android.build.gradle.internal.publishing.AndroidArtifacts;
 import com.android.build.gradle.internal.scope.VariantScope;
-import com.android.build.gradle.internal.transforms.FixStackFramesTransform;
 import com.android.build.gradle.tasks.GenerateBuildConfig;
 import com.android.build.gradle.tasks.MergeManifests;
 import com.android.build.gradle.tasks.ProcessAndroidResources;
 import com.android.builder.core.AtlasBuilder;
 import com.android.utils.ILogger;
-import com.google.common.collect.ImmutableList;
 import com.taobao.android.builder.extension.AtlasExtension;
 import com.taobao.android.builder.extension.TBuildType;
 import com.taobao.android.builder.tasks.app.GenerateAtlasSourceTask;
@@ -36,7 +30,6 @@ import com.taobao.android.builder.tasks.library.AwbGenerator;
 import com.taobao.android.builder.tasks.library.JarExtractTask;
 import com.taobao.android.builder.tasks.manager.MtlTaskContext;
 import com.taobao.android.builder.tasks.manager.MtlTaskInjector;
-import com.taobao.android.builder.tasks.manager.transform.TransformManager;
 import com.taobao.android.builder.tools.ReflectUtils;
 import com.taobao.android.builder.tools.ideaplugin.AwoPropHandler;
 import org.apache.commons.lang.StringUtils;
@@ -48,7 +41,6 @@ import org.gradle.api.file.FileCollection;
 import org.gradle.api.tasks.bundling.Zip;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -65,7 +57,7 @@ import java.util.function.Consumer;
  * @time 下午8:15
  * @description  
  */
-public class AtlasFeatureTaskManager extends AtlasBaseTaskManager {
+public class AtlasFeatureTaskManager extends AtlasBaseTaskManager{
 
     private FeatureExtension featureExtension;
 
@@ -79,65 +71,38 @@ public class AtlasFeatureTaskManager extends AtlasBaseTaskManager {
     @Override
     public void runTask() {
 
-        if (featureExtension.getBaseFeature()) {
+        if (featureExtension.getBaseFeature()){
             return;
         }
 
 
-        featureExtension.getFeatureVariants().forEach(featureVariant -> {
-
-            FeatureVariantContext featureVariantContext = new FeatureVariantContext((FeatureVariantImpl) featureVariant,
-                    project, atlasExtension, featureExtension);
-            ArtifactCollection allArtifacts = featureVariantContext.getScope().getArtifactCollection(AndroidArtifacts.ConsumedConfigType.RUNTIME_CLASSPATH, AndroidArtifacts.ArtifactScope.EXTERNAL, AndroidArtifacts.ArtifactType.CLASSES);
-            ArtifactCollection artifacts = featureVariantContext.getScope().getArtifactCollection(AndroidArtifacts.ConsumedConfigType.RUNTIME_CLASSPATH, AndroidArtifacts.ArtifactScope.ALL, AndroidArtifacts.ArtifactType.FEATURE_TRANSITIVE_DEPS);
-            ArtifactCollection filterArtifacts =
-                    new FilteredArtifactCollection(
-                            featureVariantContext.getProject(),
-                            allArtifacts,
-                            artifacts.getArtifactFiles());
-
-            List<TransformTask> transformTasks = TransformManager.findTransformTaskByTransformType(featureVariantContext, FixStackFramesTransform.class);
-            if (transformTasks != null) {
-                for (TransformTask transformTask : transformTasks) {
-                    try {
-                        Field field = StreamBasedTask.class.getDeclaredField("consumedInputStreams");
-                        Field field1 = StreamBasedTask.class.getDeclaredField("referencedInputStreams");
-                        field1.setAccessible(true);
-                        field.setAccessible(true);
-                        Collection<TransformStream> consumedInputStreams = (Collection<TransformStream>) field.get(transformTask);
-                        Collection<TransformStream> referencedInputStreams = (Collection<TransformStream>)field1.get(transformTask);
-                        for (TransformStream stream : consumedInputStreams) {
-                            if (stream.getContentTypes().contains(QualifiedContent.DefaultContentType.CLASSES) && stream.getScopes().contains(QualifiedContent.Scope.EXTERNAL_LIBRARIES)) {
-                                ReflectUtils.updateField(stream, "fileCollection", filterArtifacts.getArtifactFiles());
-                                ReflectUtils.updateField(stream, "artifactCollection", filterArtifacts);
-
-                                break;
-                            }
-
-                        }
-
-                        for (TransformStream transformStream:referencedInputStreams){
-                            if (transformStream.getContentTypes().contains(QualifiedContent.DefaultContentType.CLASSES)&&transformStream.getScopes().contains(QualifiedContent.Scope.PROVIDED_ONLY)){
-                                ReflectUtils.updateField(transformStream, "fileCollection", project.files());
-//                                ReflectUtils.updateField(transformStream, "artifactCollection", filterArtifacts);
-                            }
-                        }
-                    } catch (Exception e) {
-
-                    }
-
-                }
-            }
-            featureVariantContext.getScope().getProcessResourcesTask().get(new TaskContainerAdaptor(featureVariantContext.getProject().getTasks())).setEnableAapt2(true);
-
-        });
+//        featureExtension.getFeatureVariants().forEach(featureVariant -> {
+//
+//            FeatureVariantContext featureVariantContext = new FeatureVariantContext((FeatureVariantImpl)featureVariant,
+//                    project,atlasExtension,featureExtension);
+//
+//            List<MtlTaskContext> taskContexts = new ArrayList<>();
+//            taskContexts.add(new MtlTaskContext(featureVariantContext.getScope().getMergeAssetsTask().get(new TaskContainerAdaptor(project.getTasks()))));
+//            taskContexts.add(new MtlTaskContext(FeatureLibManifestTask.ConfigAction.class, null));
+//            taskContexts.add(new MtlTaskContext(GenerateBuildConfig.class));
+//            taskContexts.add(new MtlTaskContext(ProcessAndroidResources.class));
+//            new MtlTaskInjector(featureVariantContext).injectTasks(taskContexts, tAndroidBuilder);
+//
+//
+//
+//        });
 
         featureExtension.getLibraryVariants().forEach(libraryVariant -> {
 
-            LibVariantContext libVariantContext = new LibVariantContext((LibraryVariantImpl) libraryVariant,
+            LibVariantContext libVariantContext = new LibVariantContext((LibraryVariantImpl)libraryVariant,
                     project,
                     atlasExtension,
                     featureExtension);
+            invokeHandle(libVariantContext.getScope());
+
+            List<MtlTaskContext> featureTaskList = new ArrayList<>();
+            featureTaskList.add(new MtlTaskContext(PrePareFeatureTask.ConfigAction.class,null);
+            featureTaskList.add(new MtlTaskContext(libVariantContext.getVariantData().preBuildTask));
 
             TBuildType tBuildType = libVariantContext.getBuildType();
             if (null != tBuildType) {
@@ -157,7 +122,7 @@ public class AtlasFeatureTaskManager extends AtlasBaseTaskManager {
 
                 for (BaseVariantOutput libVariantOutputData : list) {
 
-                    Zip zipTask = ((LibraryVariantOutput) (libVariantOutputData)).getPackageLibrary();
+                    Zip zipTask = ((LibraryVariantOutput)(libVariantOutputData)).getPackageLibrary();
 
                     if (atlasExtension.getBundleConfig().isJarEnabled()) {
                         new JarExtractTask().generateJarArtifict(zipTask);
@@ -165,7 +130,7 @@ public class AtlasFeatureTaskManager extends AtlasBaseTaskManager {
 
                     //Build the awb and extension
 //                    if (atlasExtension.getBundleConfig().isAwbBundle()) {
-                    awbGenerator.generateAwbArtifict(zipTask, libVariantContext);
+                        awbGenerator.generateAwbArtifict(zipTask,libVariantContext);
 //                    }
 
                     if (null != tBuildType && (StringUtils.isNotEmpty(tBuildType.getBaseApDependency())
@@ -184,16 +149,65 @@ public class AtlasFeatureTaskManager extends AtlasBaseTaskManager {
                             throw new GradleException("set awb bundle error");
                         }
 
+//                            if (atlasExtension.getBundleConfig().isAwbBundle()) {
+//                                createAwoTask(libVariantContext, zipTask);
+//                            } else {
+//                                createDexTask(libVariantContext, zipTask);
+//                            }
                     }
 
                 }
 
+//                    List<TransformTask>transformTasks =  TransformManager.findTransformTaskByTransformType(libVariantContext,LibraryAarJarsTransform.class);
+//                    for (TransformTask transformTask: transformTasks){
+//                        Transform transform = transformTask.getTransform();
+//                        if (transform instanceof LibraryBaseTransform){
+//                            ReflectUtils.updateField(transform,"excludeListProviders", Lists.newArrayList(new AtlasExcludeListProvider()));
+//                        }
+//                    }
 
             }
 
         });
 
 
+
     }
 
+    private void invokeHandle(VariantScope scope) {
+        VariantScope variantScope = (VariantScope) Proxy.newProxyInstance(VariantScope.class.getClassLoader(),
+                new Class[]{VariantScope.class},
+                new VariantScopeProxyHandler(scope));
+        ArtifactCollection manifests = (ArtifactCollection) ReflectUtils.getField(scope.getManifestProcessorTask().get(new TaskContainerAdaptor(project.getTasks())),"manifests");
+        if (manifests == null){
+            return;
+        }
+        FileCollection artifactResults = variantScope.getArtifactCollection(
+                AndroidArtifacts.ConsumedConfigType.RUNTIME_CLASSPATH,
+                AndroidArtifacts.ArtifactScope.ALL,
+                AndroidArtifacts.ArtifactType.FEATURE_TRANSITIVE_DEPS).getArtifactFiles();
+        FilteredArtifactCollection filteredArtifactCollection = new FilteredArtifactCollection(project,manifests,artifactResults);
+        ReflectUtils.updateField(scope.getManifestProcessorTask().get(new TaskContainerAdaptor(project.getTasks())),"manifests",filteredArtifactCollection);
+
+    }
+
+
+    public class VariantScopeProxyHandler implements InvocationHandler
+    {
+        private Object proxied;
+
+        public VariantScopeProxyHandler( Object proxied)
+        {
+            this.proxied = proxied;
+        }
+
+        public Object invoke( Object proxy, Method method, Object[] args ) throws Throwable
+        {
+            logger.info("invoke VariantScope proxy method:"+method.getName());
+            return method.invoke( proxied, args);
+
+        }
+
+
+    }
 }

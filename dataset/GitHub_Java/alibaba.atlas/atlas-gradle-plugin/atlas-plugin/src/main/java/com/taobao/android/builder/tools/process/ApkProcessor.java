@@ -32,10 +32,7 @@ public interface ApkProcessor {
 
     String uploadBundle(Project project,File apkFile, AwbBundle awbBundle, TBuildType buildType);
 
-     String uploadNativeSo(Project project,File apkFile, TBuildType buildType);
-
-
-        void removeBundle(AppVariantOutputContext appVariantOutputContext,AwbBundle awbBundle,File bundleFile);
+    void removeBundle(AppVariantOutputContext appVariantOutputContext,AwbBundle awbBundle,File bundleFile);
 
     List<DynamicBundleInfo> generateAllBundleInfo(Collection<AwbBundle> awbBundles);
 
@@ -54,11 +51,6 @@ public interface ApkProcessor {
 
         @Override
         public String uploadBundle(Project project,File apkFile,AwbBundle awbBundle,TBuildType buildType) {
-            return null;
-        }
-
-        @Override
-        public String uploadNativeSo(Project project, File apkFile, TBuildType buildType) {
             return null;
         }
 
@@ -89,7 +81,7 @@ public interface ApkProcessor {
 
             for (AwbBundle awbBundle : awbBundles) {
                 DynamicBundleInfo dynamicBundleInfo = new DynamicBundleInfo();
-                if (awbBundle.isRemote && !awbBundle.isMBundle) {
+                if (awbBundle.isRemote) {
                     dynamicBundleInfo.url = awbBundle.bundleInfo.getUrl();
                 }
                 dynamicBundleInfo.md5 = awbBundle.bundleInfo.getMd5();
@@ -118,7 +110,7 @@ public interface ApkProcessor {
 
         @Override
         public void removeBundle(AppVariantOutputContext appVariantOutputContext, AwbBundle awbBundle, File bundleFile) {
-            if (awbBundle.isRemote && !awbBundle.isMBundle) {
+            if (awbBundle.isRemote) {
                 super.removeBundle(appVariantOutputContext, awbBundle, bundleFile);
             }
         }

@@ -1,20 +1,5 @@
 package com.taobao.android.builder.tasks.app.bundle;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Stream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
-
 import com.android.SdkConstants;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
@@ -27,12 +12,7 @@ import com.android.build.gradle.internal.incremental.DexPackagingPolicy;
 import com.android.build.gradle.internal.incremental.FileType;
 import com.android.build.gradle.internal.incremental.InstantRunBuildContext;
 import com.android.build.gradle.internal.packaging.IncrementalPackagerBuilder;
-import com.android.build.gradle.internal.scope.BuildOutput;
-import com.android.build.gradle.internal.scope.BuildOutputs;
-import com.android.build.gradle.internal.scope.DefaultGradlePackagingScope;
-import com.android.build.gradle.internal.scope.OutputScope;
-import com.android.build.gradle.internal.scope.TaskOutputHolder;
-import com.android.build.gradle.internal.scope.VariantScope;
+import com.android.build.gradle.internal.scope.*;
 import com.android.build.gradle.internal.tasks.KnownFilesSaveData;
 import com.android.builder.core.AndroidBuilder;
 import com.android.builder.files.FileCacheByPath;
@@ -51,8 +31,18 @@ import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.model.AwbBundle;
+import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.zip.BetterZip;
+import com.taobao.android.builder.tools.zip.ZipUtils;
+import org.apache.commons.lang.StringUtils;
 import org.gradle.api.file.FileCollection;
+
+import java.io.*;
+import java.util.*;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -117,28 +107,7 @@ public class AwbApkPackageTask {
 
     }
 
-    public static File getAwbPackageOutputFile(AppVariantContext variantContext, String awbOutputName) {
-        Set<String> libSoNames = variantContext.getAtlasExtension().getTBuildConfig().getKeepInLibSoNames();
-
-        File file = null;
-        if (libSoNames.isEmpty() || libSoNames.contains(awbOutputName)) {
-            file = new File(variantContext.getAwbApkOutputDir(), "lib/armeabi" + File.separator + awbOutputName);
-            file.getParentFile().mkdirs();
-        } else {
-            file = new File(variantContext.getVariantData().mergeAssetsTask.getOutputDir(), awbOutputName);
-        }
-
-        Set<String> assetsSoNames = variantContext.getAtlasExtension().getTBuildConfig().getKeepInAssetsSoNames();
-        if (!assetsSoNames.isEmpty() && assetsSoNames.contains(awbOutputName)) {
-            file = new File(variantContext.getVariantData().mergeAssetsTask.getOutputDir(), awbOutputName);
-        }
-        return file;
-    }
-
     public File doFullTaskAction() throws IOException {
-        if (supportAbis == null){
-            supportAbis = ImmutableSet.of();
-        }
         ApkData apkData = appVariantOutputContext.getScope().getOutputScope().getApkDatas().get(0);
         if (dexFolders.getSingleFile().exists() && awbBundle.getMergedManifest().exists()) {
             File[] dexFile = dexFolders.getSingleFile().listFiles((dir, name) -> name.equals("classes.dex"));
@@ -224,11 +193,10 @@ public class AwbApkPackageTask {
         saveData.setInputSet(updatedAndroidResources.keySet(), KnownFilesSaveData.InputSet.ANDROID_RESOURCE);
         saveData.setInputSet(updatedJniResources.keySet(), KnownFilesSaveData.InputSet.NATIVE_RESOURCE);
         saveData.saveCurrentData();
-        File file;
-        String outputFileName = outputFile.getName();
-        file = getAwbPackageOutputFile(appVariantOutputContext.getVariantContext(), outputFileName);
-        FileUtils.copyFileToDirectory(outputFile, file);
-        return new File(file, outputFileName);
+
+        FileUtils.copyFileToDirectory(outputFile, new File(packagingScope.getJniFolders().getSingleFile(), "lib/armeabi"));
+
+        return new File(packagingScope.getJniFolders().getSingleFile(), "lib/armeabi/"+outputFile.getName());
     }
 
     private void doTask(
@@ -265,6 +233,14 @@ public class AwbApkPackageTask {
         BuildOutput manifestForSplit =
                 OutputScope.getOutput(manifestOutputs, TaskOutputHolder.TaskOutputType.MERGED_MANIFESTS, apkData);
 
+//        if (manifestForSplit == null || manifestForSplit.getOutputFile() == null) {
+//            throw new RuntimeException(
+//                    "Found a .ap_ for split "
+//                            + apkData
+//                            + " but no "
+//                            + TaskOutputHolder.TaskOutputType.MERGED_MANIFESTS
+//                            + " associated manifest file");
+//        }
         FileUtils.mkdirs(outputFile.getParentFile());
 
         try (IncrementalPackager packager =
@@ -281,7 +257,7 @@ public class AwbApkPackageTask {
                                              manifestForSplit.getOutputFile()))
                              .withNoCompressPredicate(
                                      PackagingUtils.getNoCompressPredicate(
-                                             aaptOptionsNoCompress, manifestForSplit == null ? awbManifestFolder.getSingleFile():manifestForSplit.getOutputFile()))
+                                             aaptOptionsNoCompress, manifestForSplit.getOutputFile()))
                              .withIntermediateDir(incrementalDirForSplit)
                              .withProject(appVariantOutputContext.getScope().getGlobalScope().getProject())
                              .withDebuggableBuild(debug)
