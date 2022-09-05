@@ -36,7 +36,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import javax.servlet.http.HttpServletResponse;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -75,13 +74,13 @@ public class RestControllerExceptionTranslator {
         if (exception.getCause() != null) {
             logger.error("{}:{}", exception.getMessage(), exception.getStatus(), exception.getCause());
         }
-        return ResponseMessage.error(exception.getStatus(), exception.getMessage()).result(exception.getCode());
+        return ResponseMessage.error(exception.getStatus(), exception.getMessage());
     }
 
     @ExceptionHandler(UnAuthorizedException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     @ResponseBody
-    ResponseMessage handleException(UnAuthorizedException exception, HttpServletResponse response) {
+    ResponseMessage handleException(UnAuthorizedException exception) {
         return ResponseMessage.error(401, exception.getMessage()).result(exception.getState());
     }
 
@@ -121,21 +120,12 @@ public class RestControllerExceptionTranslator {
         return ResponseMessage.error(500, exception.getMessage());
     }
 
-    @ExceptionHandler(NullPointerException.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    @ResponseBody
-    ResponseMessage handleException(NullPointerException exception) {
-        logger.error(exception.getMessage(), exception);
-        return ResponseMessage.error(500, "服务器内部错误");
-    }
-
-
     @ExceptionHandler(SQLException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @ResponseBody
     ResponseMessage handleException(SQLException exception) {
         logger.error(exception.getMessage(), exception);
-        return ResponseMessage.error(500, "服务器内部错误");
+        return ResponseMessage.error(500,"服务器内部错误");
     }
 
 
