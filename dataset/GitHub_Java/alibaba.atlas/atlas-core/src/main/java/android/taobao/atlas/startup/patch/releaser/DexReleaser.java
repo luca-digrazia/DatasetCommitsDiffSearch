@@ -208,10 +208,22 @@
 
 package android.taobao.atlas.startup.patch.releaser;
 
+import android.content.SharedPreferences;
 import android.os.Build;
+import android.preference.PreferenceManager;
+import android.taobao.atlas.runtime.RuntimeVariables;
+import android.taobao.atlas.startup.patch.CombineDexMerger;
+import android.taobao.atlas.startup.patch.CombineDexVerifier;
+import android.taobao.atlas.startup.patch.KernalBundle;
 import android.taobao.atlas.startup.patch.KernalConstants;
+import android.taobao.atlas.util.StringUtils;
+import android.util.Log;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -228,64 +240,100 @@ public class DexReleaser {
 
     private static final String CLASS_SUFFIX = "classes";
 
-    public static boolean releaseDexes(File bundleFile, File reversionDir,boolean externalStorage) throws IOException {
-        ZipFile zipFile = new ZipFile(bundleFile);
-        boolean hasDexFile = hasDexFile(zipFile);
-        if (!hasDexFile) {
-            return true;
-        }
-        if (externalStorage || !isArt()) {
-            Enumeration entryEnumeration = zipFile.entries();
-            while (entryEnumeration.hasMoreElements()) {
-                ZipEntry zipEntry = (ZipEntry) entryEnumeration.nextElement();
-                if (zipEntry.getName().endsWith(DEX_SUFFIX)) {
-                    File dexFile = new File(reversionDir, zipEntry.getName());
-                    FileOutputStream fileOutputStream = new FileOutputStream(dexFile);
-                    copy(zipFile.getInputStream(zipEntry), fileOutputStream);
-                    fileOutputStream.close();
-                }
+    public static boolean   releaseDexes(File bundleFile, File reversionDir, boolean externalStorage) throws IOException {
+        boolean dexPatch = bundleFile.getAbsolutePath().contains("dexpatch");
+        ZipFile zipFile = null;
+        try {
+            zipFile = new ZipFile(bundleFile);
+            boolean hasDexFile = hasDexFile(zipFile);
+            if (!hasDexFile) {
+                return true;
             }
-            return true;
-        } else {
-            File mergedFile = preProcessPatch(zipFile, bundleFile);
-            if (mergedFile != null && mergedFile.exists()) {
-                bundleFile.delete();
-                boolean success = mergedFile.renameTo(bundleFile);
-                if (!success || !isNewBundleFileValid(bundleFile)) {
+//            if (externalStorage || !isArt()) {
+//             RuntimeVariables.patchVersion = readPatchVersion();
+
+
+            if (Build.VERSION.SDK_INT > 27){
+
+                return true;
+            }
+
+
+            if (RuntimeVariables.patchVersion == 2 ||!isArt()) {
+                Enumeration entryEnumeration = zipFile.entries();
+                while (entryEnumeration.hasMoreElements()) {
+                    ZipEntry zipEntry = (ZipEntry) entryEnumeration.nextElement();
+                    if (zipEntry.getName().endsWith(DEX_SUFFIX)) {
+                        File dexFile = new File(reversionDir, zipEntry.getName());
+                        FileOutputStream fileOutputStream = new FileOutputStream(dexFile);
+                        copy(zipFile.getInputStream(zipEntry), fileOutputStream);
+                        fileOutputStream.close();
+                    }
+                }
+            }else if (RuntimeVariables.patchVersion == 1) {
+                File sourceFile;
+                if (dexPatch) {
+                    //如果kernalBundle==null，说明主dex没有被升级过，那么就和base.apk做merge
+                    sourceFile = null == KernalBundle.kernalBundle
+                            ? new File(KernalConstants.APK_PATH)
+                            : KernalBundle.kernalBundle.getRevisionZip();
+                } else {
+                    sourceFile = new File(KernalConstants.APK_PATH);
+                }
+                File targetFile = File.createTempFile(sourceFile.getName(), ".tmp", bundleFile.getParentFile());
+                CombineDexMerger combineDexMerger = new CombineDexMerger(new CombineDexVerifier());
+                boolean result = combineDexMerger.merge(sourceFile, bundleFile, targetFile);
+                if (result && bundleFile.delete() && targetFile.renameTo(bundleFile)) {
+                    return true;
+                } else {
                     return false;
                 }
-            } else {
-                return false;
             }
-            try {
+
+                return true;
+//            } else {
+//                File sourceFile;
+//                if (dexPatch) {
+//                    //如果kernalBundle==null，说明主dex没有被升级过，那么就和base.apk做merge
+//                    sourceFile = null == KernalBundle.kernalBundle
+//                            ? new File(KernalConstants.APK_PATH)
+//                            : KernalBundle.kernalBundle.getRevisionZip();
+//                } else {
+//                    sourceFile = new File(KernalConstants.APK_PATH);
+//                }
+//                File targetFile = File.createTempFile(sourceFile.getName(), ".tmp", bundleFile.getParentFile());
+//                CombineDexMerger combineDexMerger = new CombineDexMerger(new CombineDexVerifier());
+//                boolean result = combineDexMerger.merge(sourceFile, bundleFile, targetFile);
+//                if (result && bundleFile.delete() && targetFile.renameTo(bundleFile)) {
+//                    return true;
+//                } else {
+//                    return false;
+//                }
+//            }
+        } catch (Exception e) {
+            e.printStackTrace();
+
+        } finally {
+            if (zipFile != null) {
                 zipFile.close();
-            } catch (Throwable e) {
             }
         }
-        return true;
+        return false;
     }
 
 
-        public static boolean isArt() {
+
+    public static boolean isArt() {
+
+//        return false;
+
         return Build.VERSION.SDK_INT > 20;
-//            CharSequence property = System.getProperty("java.vm.version");
-//            if (property != null) {
-//                Matcher matcher = Pattern.compile("(\\d+)\\.(\\d+)(\\.\\d+)?").matcher(property);
-//                if (matcher.matches()) {
-//                    try {
-//                        if (Integer.parseInt(matcher.group(1)) >= 2) {
-//                            return true;
-//                        }
-//                    } catch (NumberFormatException e) {
-//                    }
-//                }
-//            }
-//            return false;
-        }
+
+    }
 
 
     private static boolean hasDexFile(ZipFile zipFile) {
-        return zipFile.getEntry(CLASS_SUFFIX+DEX_SUFFIX) != null;
+        return zipFile.getEntry(CLASS_SUFFIX + DEX_SUFFIX) != null;
     }
 
     public static void copy(InputStream input, OutputStream output) throws IOException {
@@ -296,68 +344,5 @@ public class DexReleaser {
         }
     }
 
-    private static File preProcessPatch(ZipFile sourceZip, File sourceFile) {
-        if (sourceZip.getEntry(CLASS_SUFFIX+DEX_SUFFIX) != null) {
-            ZipOutputStream target = null;
-            ZipFile rawZip = null;
-            try {
-                rawZip = new ZipFile(KernalConstants.APK_PATH);
-                File targetFile = File.createTempFile(sourceFile.getName(), ".tmp", sourceFile.getParentFile());
-                target = new ZipOutputStream(new FileOutputStream(targetFile));
-                int bytesRead;
-                ZipEntry entry = null;
-                int dexIndex = 1;
 
-                // first, copy source content
-                Enumeration<? extends ZipEntry> entries = sourceZip.entries();
-                target = new ZipOutputStream(new FileOutputStream(targetFile));
-                while (entries.hasMoreElements()) {
-                    ZipEntry e = entries.nextElement();
-                    ZipEntry out = new ZipEntry(e.getName());
-                    target.putNextEntry(out);
-                    if (!e.isDirectory()) {
-                        copy(sourceZip.getInputStream(e), target);
-                    }
-                }
-
-                // second copy main dex from base.apk
-                do {
-                    entry = rawZip.getEntry(String.format("%s%s%s", CLASS_SUFFIX,dexIndex > 1 ? dexIndex : "",DEX_SUFFIX));
-                    if (entry != null && !entry.isDirectory()) {
-                        ZipEntry targetEntry = new ZipEntry(String.format("%s%s%s", CLASS_SUFFIX,dexIndex > 1 ? dexIndex + 1 : 2,DEX_SUFFIX));
-                        target.putNextEntry(targetEntry);
-                        copy(rawZip.getInputStream(entry), target);
-                    } else {
-                        return targetFile;
-                    }
-                    dexIndex++;
-                } while (true);
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    if (target != null) {
-                        target.closeEntry();
-                        target.close();
-                    }
-                    if (rawZip != null)
-                        rawZip.close();
-                } catch (Throwable e) {
-                }
-            }
-        }
-        return null;
-    }
-
-
-    private static boolean isNewBundleFileValid(File bundleFile) throws IOException {
-        ZipFile zipFile = new ZipFile(bundleFile);
-        boolean result = zipFile.getEntry(CLASS_SUFFIX+DEX_SUFFIX) != null && zipFile.getEntry(CLASS_SUFFIX+2+DEX_SUFFIX) != null;
-        try {
-            zipFile.close();
-        } catch (Throwable e) {
-        }
-        return result;
-    }
 }

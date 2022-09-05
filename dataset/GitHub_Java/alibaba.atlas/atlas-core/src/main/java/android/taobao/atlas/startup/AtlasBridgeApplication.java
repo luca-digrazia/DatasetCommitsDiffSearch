@@ -221,7 +221,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.Build;
 import android.os.Process;
-import android.preference.PreferenceManager;
 import android.taobao.atlas.startup.patch.KernalBundle;
 import android.taobao.atlas.startup.patch.KernalConstants;
 import android.text.TextUtils;
@@ -312,9 +311,6 @@ public class AtlasBridgeApplication extends Application{
             }
         }
 
-        if (KernalBundle.hasNativeLibPatch(this)){
-            KernalBundle.patchNativeLib(this);
-        }
 
         try {
             //初始化baselineinfomanager
@@ -342,6 +338,9 @@ public class AtlasBridgeApplication extends Application{
             method.invoke(mBridgeApplicationDelegate);
         } catch (Throwable e) {
             throw new RuntimeException(e);
+        }
+        if (KernalBundle.hasNativeLibPatch(this)){
+            KernalBundle.patchNativeLib(this);
         }
     }
 
@@ -485,10 +484,6 @@ public class AtlasBridgeApplication extends Application{
                         && !needRollback() && (Build.FINGERPRINT + ""
                         + Build.VERSION.SDK_INT).equals(fingerprint)) {
                     return false;
-                }else {
-                    if (!TextUtils.isEmpty(storedVersionName)){
-                        PreferenceManager.getDefaultSharedPreferences(this).edit().putString("lastInstalledVersionName",storedVersionName).apply();
-                    }
                 }
             }catch(Throwable e){
 //                throw new RuntimeException(e);

@@ -210,6 +210,8 @@ package android.taobao.atlas.util;
 
 import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -224,6 +226,7 @@ import java.util.zip.ZipFile;
 import android.taobao.atlas.hack.AssertionArrayException;
 import android.taobao.atlas.hack.AtlasHacks;
 import android.taobao.atlas.runtime.RuntimeVariables;
+import android.taobao.atlas.util.log.impl.AtlasMonitor;
 
 public class ApkUtils {
 
@@ -246,15 +249,6 @@ public class ApkUtils {
         try {
             sApkZip = new ZipFile(RuntimeVariables.androidApplication.getApplicationInfo().sourceDir);
         }catch(Throwable e){e.printStackTrace();}
-    }
-
-    private static boolean assertAtlasHacks() {
-        try {
-            return AtlasHacks.defineAndVerify();
-        } catch (AssertionArrayException e) {
-            e.printStackTrace();
-            return false;
-        }
     }
 
     public static final String[] getApkPublicKey(String apkPath) {
@@ -353,6 +347,21 @@ public class ApkUtils {
         }
         return false;
     }
+
+    public static void copyDirectory(File sourceDir,File targetDir) throws Exception{
+        File[] files = sourceDir.listFiles();
+        for(File childFile : files){
+            if(childFile.isFile()){
+                File dir = new File(targetDir.getAbsolutePath());
+                if(!dir.exists()){
+                    dir.mkdirs();
+                }
+                copyInputStreamToFile(new FileInputStream(childFile),new File(dir,childFile.getName()));
+            }else{
+                copyDirectory(childFile,new File(targetDir,childFile.getName()));
+            }
+        }
+    }
     
     public static void copyInputStreamToFile(InputStream input, File file) throws IOException {
         FileOutputStream os = null;
@@ -366,6 +375,9 @@ public class ApkUtils {
             while ((realLength = input.read(buffers)) > 0) {
                 channel.write(ByteBuffer.wrap(buffers, 0, realLength));
             }
+        } catch (IOException e) {
+            AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLE_SOURCE_UNZIP_FAIL, null, e);
+            throw new IOException(e);
         } finally {
             if (input != null) try {
             	input.close();
