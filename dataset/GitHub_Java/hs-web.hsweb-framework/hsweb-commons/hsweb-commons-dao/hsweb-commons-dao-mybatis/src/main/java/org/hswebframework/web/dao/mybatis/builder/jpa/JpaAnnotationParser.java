@@ -6,7 +6,6 @@ import org.apache.commons.beanutils.BeanUtilsBean;
 import org.hswebframework.ezorm.core.ValueConverter;
 import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
 import org.hswebframework.ezorm.rdb.meta.RDBTableMetaData;
-import org.hswebframework.ezorm.rdb.meta.converter.BooleanValueConverter;
 import org.hswebframework.ezorm.rdb.meta.converter.DateTimeConverter;
 import org.hswebframework.ezorm.rdb.meta.converter.NumberValueConverter;
 import org.hswebframework.utils.ClassUtils;
@@ -165,7 +164,7 @@ public class JpaAnnotationParser {
                     || column.getJdbcType() == JDBCType.TIMESTAMP) {
                 column.setValueConverter(dateConvert);
             } else if (column.getJavaType() == boolean.class || column.getJavaType() == Boolean.class) {
-                column.setValueConverter(new BooleanValueConverter(column.getJdbcType()));
+                column.setValueConverter(new NumberValueConverter(Boolean.class));
             } else if (TypeUtils.isNumberType(column)) {
                 column.setValueConverter(new NumberValueConverter(column.getJavaType()));
             }

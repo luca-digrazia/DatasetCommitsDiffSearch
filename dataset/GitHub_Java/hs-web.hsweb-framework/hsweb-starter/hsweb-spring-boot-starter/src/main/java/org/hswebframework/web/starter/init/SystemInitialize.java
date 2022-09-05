@@ -1,11 +1,14 @@
 package org.hswebframework.web.starter.init;
 
-import org.hsweb.ezorm.rdb.RDBDatabase;
-import org.hsweb.ezorm.rdb.RDBTable;
-import org.hsweb.ezorm.rdb.executor.SqlExecutor;
-import org.hsweb.ezorm.rdb.meta.converter.ClobValueConverter;
-import org.hsweb.ezorm.rdb.meta.converter.JSONValueConverter;
-import org.hsweb.ezorm.rdb.simple.wrapper.BeanWrapper;
+import lombok.Getter;
+import lombok.Setter;
+import org.hswebframework.ezorm.rdb.RDBDatabase;
+import org.hswebframework.ezorm.rdb.RDBTable;
+import org.hswebframework.ezorm.rdb.executor.SqlExecutor;
+import org.hswebframework.ezorm.rdb.meta.converter.ClobValueConverter;
+import org.hswebframework.ezorm.rdb.meta.converter.JSONValueConverter;
+import org.hswebframework.ezorm.rdb.meta.converter.NumberValueConverter;
+import org.hswebframework.ezorm.rdb.simple.wrapper.BeanWrapper;
 import org.hswebframework.expands.script.engine.DynamicScriptEngine;
 import org.hswebframework.expands.script.engine.DynamicScriptEngineFactory;
 import org.hswebframework.web.starter.SystemVersion;
@@ -14,21 +17,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StreamUtils;
 
 import java.nio.charset.Charset;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.hswebframework.web.starter.SystemVersion.Property.*;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 public class SystemInitialize {
@@ -44,16 +43,35 @@ public class SystemInitialize {
 
     private List<SimpleDependencyInstaller> readyToInstall;
 
+    @Setter
+    @Getter
+    private List<String> excludeTables;
+
     private String installScriptPath = "classpath*:hsweb-starter.js";
 
     private Map<String, Object> scriptContext = new HashMap<>();
+
+    private boolean initialized = false;
+
 
     public SystemInitialize(SqlExecutor sqlExecutor, RDBDatabase database, SystemVersion targetVersion) {
         this.sqlExecutor = sqlExecutor;
         this.database = database;
         this.targetVersion = targetVersion;
+    }
+
+
+    public void init() {
+        if (initialized) {
+            return;
+        }
+        if (!CollectionUtils.isEmpty(excludeTables)) {
+            this.database = new SkipCreateOrAlterRDBDatabase(database, excludeTables, sqlExecutor);
+        }
         scriptContext.put("sqlExecutor", sqlExecutor);
         scriptContext.put("database", database);
+        scriptContext.put("logger", logger);
+        initialized = true;
     }
 
     public void addScriptContext(String var, Object val) {
@@ -65,7 +83,16 @@ public class SystemInitialize {
         if (installed == null) {
             rdbTable.createInsert().value(targetVersion).exec();
         } else {
-            rdbTable.createUpdate().set(targetVersion).where().sql("1=1").exec();
+            //合并已安装的依赖
+            //修复如果删掉了依赖，再重启会丢失依赖信息的问题
+            for (SystemVersion.Dependency dependency : installed.getDependencies()) {
+                SystemVersion.Dependency target = targetVersion.getDependency(dependency.getGroupId(), dependency.getArtifactId());
+                if (target == null) {
+                    targetVersion.getDependencies().add(dependency);
+                }
+            }
+
+            rdbTable.createUpdate().set(targetVersion).where().is("name", targetVersion.getName()).exec();
         }
     }
 
@@ -85,7 +112,7 @@ public class SystemInitialize {
                         installer.doInstall(getScriptContext());
                     }
                     //更新依赖
-                    if (installed == null || installed.compareTo(dependency) > 0) {
+                    if (installed == null || installed.compareTo(dependency) < 0) {
                         installer.doUpgrade(getScriptContext(), installed);
                     }
                     return dependency;
@@ -98,12 +125,16 @@ public class SystemInitialize {
     }
 
     private SystemVersion.Dependency getInstalledDependency(String groupId, String artifactId) {
-        if (installed == null) return null;
+        if (installed == null) {
+            return null;
+        }
         return installed.getDependency(groupId, artifactId);
     }
 
     private SimpleDependencyInstaller getReadyToInstallDependency(String groupId, String artifactId) {
-        if (readyToInstall == null) return null;
+        if (readyToInstall == null) {
+            return null;
+        }
         return readyToInstall.stream()
                 .filter(installer -> installer.getDependency().isSameDependency(groupId, artifactId))
                 .findFirst().orElse(null);
@@ -135,11 +166,13 @@ public class SystemInitialize {
     protected void initInstallInfo() throws SQLException {
         boolean tableInstall = sqlExecutor.tableExists("s_system");
         database.createOrAlter("s_system")
-                .addColumn().name("name").varchar(128).notNull().comment("系统名称").commit()
-                .addColumn().name("major_version").alias(majorVersion).number(32).javaType(Integer.class).notNull().comment("主版本号").commit()
-                .addColumn().name("minor_version").alias(minorVersion).number(32).javaType(Integer.class).notNull().comment("次版本号").commit()
-                .addColumn().name("revision_version").alias(revisionVersion).number(32).javaType(Integer.class).notNull().comment("修订版").commit()
-                .addColumn().name("snapshot").number(1).javaType(Boolean.class).notNull().comment("是否快照版").commit()
+                .addColumn().name("name").varchar(128).comment("系统名称").commit()
+                .addColumn().name("major_version").alias(majorVersion).number(32).javaType(Integer.class).comment("主版本号").commit()
+                .addColumn().name("minor_version").alias(minorVersion).number(32).javaType(Integer.class).comment("次版本号").commit()
+                .addColumn().name("revision_version").alias(revisionVersion).number(32).javaType(Integer.class).comment("修订版").commit()
+                .addColumn().name("snapshot").number(1).javaType(Boolean.class)
+                .custom(column -> column.setValueConverter(new NumberValueConverter(Boolean.class)))
+                .comment("是否快照版").commit()
                 .addColumn().name("comment").varchar(2000).comment("系统说明").commit()
                 .addColumn().name("website").varchar(2000).comment("系统网址").commit()
                 .addColumn().name("framework_version").notNull().alias(frameworkVersion).clob()
@@ -155,11 +188,12 @@ public class SystemInitialize {
             return;
         }
         RDBTable<SystemVersion> rdbTable = database.getTable("s_system");
-        installed = rdbTable.createQuery().single();
+        installed = rdbTable.createQuery().where("name", targetVersion.getName()).single();
     }
 
 
     public void install() throws Exception {
+        init();
         initInstallInfo();
         initReadyToInstallDependencies();
         doInstall();
