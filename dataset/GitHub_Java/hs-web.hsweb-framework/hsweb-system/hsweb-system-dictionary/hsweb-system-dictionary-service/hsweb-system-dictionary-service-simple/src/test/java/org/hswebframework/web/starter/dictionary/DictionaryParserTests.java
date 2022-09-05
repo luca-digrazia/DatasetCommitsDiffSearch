@@ -19,6 +19,7 @@
 package org.hswebframework.web.starter.dictionary;
 
 import com.alibaba.fastjson.JSON;
+import org.hswebframework.web.entity.dictionary.DictionaryItemEntity;
 import org.hswebframework.web.entity.dictionary.SimpleDictionaryEntity;
 import org.hswebframework.web.entity.dictionary.SimpleDictionaryItemEntity;
 import org.hswebframework.web.service.dictionary.DictionaryParser;
@@ -49,19 +50,19 @@ public class DictionaryParserTests {
                 "{'value':'10102','text':'红富士'}" +
                 ",{'value':'10103','text':'青苹果'}" +
                 //使用表达式进行解析
-                ",{'value':'10105','text':'其他苹果'" +
-                ",'textExpression':'${#value}[${#context[otherApple]}]'" +
-                ",'valueExpression':'${(#context.put(\\'otherApple\\',#pattern.split(\"[ \\\\[ \\\\]]\")[1])==null)?#value:#value}'" +
-                "}" +
+                ",{'id':'10105','value':'10105','text':'其他苹果'}" +
                 "]}" +
                 ",{'value':'102','text':'梨子'}]" +
                 "}" +
                 ",{'value':'2','text':'蔬菜'}" +
                 "]";
 
-        List<SimpleDictionaryItemEntity> itemEntities = JSON.parseArray(json, SimpleDictionaryItemEntity.class);
+        List<DictionaryItemEntity> itemEntities = JSON.parseArray(json, DictionaryItemEntity.class);
         dictionaryEntity.setItems(itemEntities);
-        this.parser = SimpleDictionaryParser.setDict(dictionaryEntity);
+        this.parser = new SimpleDictionaryParser<String>()
+                .addToTextExpression("10105", "${#value}[${#context[otherApple]}]")
+                .addToValueExpression("10105", "${(#context.put('otherApple',#pattern.split(\"[ \\[ \\]]\")[1])==null)?#value:#value}")
+                .setDict(dictionaryEntity);
     }
 
     //支持表达式
