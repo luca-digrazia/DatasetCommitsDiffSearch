@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.remote;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterators;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -124,7 +123,7 @@ public final class GrpcActionCache implements RemoteActionCache {
 
     @Override
     public boolean hasNext() {
-      return currentBlob != null;
+      return currentBlob != null && offset < currentBlob.length;
     }
 
     @Override
@@ -139,10 +138,8 @@ public final class GrpcActionCache implements RemoteActionCache {
         chunk.setOffset(offset);
       }
       int size = Math.min(currentBlob.length - offset, maxChunkSizeBytes);
-      if (size > 0) {
-        chunk.setData(ByteString.copyFrom(currentBlob, offset, size));
-        offset += size;
-      }
+      chunk.setData(ByteString.copyFrom(currentBlob, offset, size));
+      offset += size;
       if (offset >= currentBlob.length) {
         advanceInput();
       }
@@ -165,8 +162,8 @@ public final class GrpcActionCache implements RemoteActionCache {
     }
 
     public BlobChunkFileIterator(Path file) throws IOException {
-      fileIterator = Iterators.singletonIterator(file);
-      digests = ImmutableSet.of(ContentDigests.computeDigest(file));
+      fileIterator = null;
+      digests = null;
       advanceInput();
     }
 
@@ -187,7 +184,7 @@ public final class GrpcActionCache implements RemoteActionCache {
 
     @Override
     public boolean hasNext() {
-      return currentStream != null;
+      return bytesLeft > 0;
     }
 
     @Override
@@ -195,6 +192,8 @@ public final class GrpcActionCache implements RemoteActionCache {
       if (!hasNext()) {
         throw new NoSuchElementException();
       }
+      byte[] blob = new byte[(int) Math.min(bytesLeft, (long) maxChunkSizeBytes)];
+      currentStream.read(blob);
       BlobChunk.Builder chunk = BlobChunk.newBuilder();
       long offset = digest.getSizeBytes() - bytesLeft;
       if (offset == 0) {
@@ -202,12 +201,8 @@ public final class GrpcActionCache implements RemoteActionCache {
       } else {
         chunk.setOffset(offset);
       }
-      if (bytesLeft > 0) {
-        byte[] blob = new byte[(int) Math.min(bytesLeft, (long) maxChunkSizeBytes)];
-        currentStream.read(blob);
-        chunk.setData(ByteString.copyFrom(blob));
-        bytesLeft -= blob.length;
-      }
+      chunk.setData(ByteString.copyFrom(blob));
+      bytesLeft -= blob.length;
       if (bytesLeft == 0) {
         currentStream.close();
         advanceInput();
@@ -243,7 +238,12 @@ public final class GrpcActionCache implements RemoteActionCache {
   }
 
   private ImmutableSet<ContentDigest> getMissingDigests(Iterable<ContentDigest> digests) {
-    CasLookupRequest.Builder request = CasLookupRequest.newBuilder().addAllDigest(digests);
+    CasLookupRequest.Builder request = CasLookupRequest.newBuilder();
+    for (ContentDigest digest : digests) {
+      if (digest.getSizeBytes() > 0) {
+        request.addDigest(digest); // We handle empty blobs locally.
+      }
+    }
     if (request.getDigestCount() == 0) {
       return ImmutableSet.of();
     }
@@ -628,9 +628,7 @@ public final class GrpcActionCache implements RemoteActionCache {
         ExecutionCacheRequest.newBuilder().setActionDigest(actionKey.getDigest()).build();
     ExecutionCacheReply reply = stub.getCachedResult(request);
     ExecutionCacheStatus status = reply.getStatus();
-    if (!status.getSucceeded()
-        && status.getError() != ExecutionCacheStatus.ErrorCode.UNSUPPORTED
-        && status.getError() != ExecutionCacheStatus.ErrorCode.MISSING_RESULT) {
+    if (!status.getSucceeded()) {
       throw new RuntimeException(status.getErrorDetail());
     }
     return reply.hasResult() ? reply.getResult() : null;
