@@ -80,7 +80,7 @@ public abstract class SkylarkList implements Iterable<Object> {
 
   @Override
   public String toString() {
-    return Printer.repr(this);
+    return EvalUtils.prettyPrintValue(this);
   }
 
   @Override
@@ -196,6 +196,11 @@ public abstract class SkylarkList implements Iterable<Object> {
     @Override
     public List<Object> toList() {
       return isTuple() ? list : Lists.newArrayList(list);
+    }
+
+    @Override
+    public String toString() {
+      return EvalUtils.prettyPrintValue(this);
     }
   }
 
