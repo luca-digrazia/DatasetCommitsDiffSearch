@@ -94,7 +94,7 @@ public class PackageFunction implements SkyFunction {
   private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache;
   private final AtomicBoolean showLoadingProgress;
   private final AtomicInteger numPackagesLoaded;
-  @Nullable private final PackageProgressReceiver packageProgress;
+  private final PackageProgressReceiver packageProgress;
   private final Profiler profiler = Profiler.instance();
   private final Label preludeLabel;
 
@@ -448,13 +448,13 @@ public class PackageFunction implements SkyFunction {
     if (packageId.equals(Label.EXTERNAL_PACKAGE_IDENTIFIER)) {
       return getExternalPackage(env, packageLookupValue.getRoot());
     }
-    WorkspaceNameValue workspaceNameValue =
-        (WorkspaceNameValue) env.getValue(WorkspaceNameValue.key());
-    if (workspaceNameValue == null) {
+    SkyKey externalPackageKey = PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
+    PackageValue externalPackage = (PackageValue) env.getValue(externalPackageKey);
+    if (externalPackage == null) {
       return null;
     }
-    String workspaceName = workspaceNameValue.maybeGetName();
-    if (workspaceName == null) {
+    Package externalPkg = externalPackage.getPackage();
+    if (externalPkg.containsErrors()) {
       throw new PackageFunctionException(
           new BuildFileContainsErrorsException(Label.EXTERNAL_PACKAGE_IDENTIFIER),
           Transience.PERSISTENT);
@@ -502,7 +502,7 @@ public class PackageFunction implements SkyFunction {
             ? astLookupValue.getAST().getStatements() : ImmutableList.<Statement>of();
     CacheEntryWithGlobDeps<Package.Builder> packageBuilderAndGlobDeps =
         loadPackage(
-            workspaceName,
+            externalPkg,
             replacementContents,
             packageId,
             buildFilePath,
@@ -1107,7 +1107,7 @@ public class PackageFunction implements SkyFunction {
    */
   @Nullable
   private CacheEntryWithGlobDeps<Package.Builder> loadPackage(
-      String workspaceName,
+      Package externalPkg,
       @Nullable String replacementContents,
       PackageIdentifier packageId,
       Path buildFilePath,
@@ -1208,7 +1208,7 @@ public class PackageFunction implements SkyFunction {
         SkyframeHybridGlobber skyframeGlobber = new SkyframeHybridGlobber(packageId, packageRoot,
             env, legacyGlobber);
         Package.Builder pkgBuilder = packageFactory.createPackageFromPreprocessingAst(
-            workspaceName, packageId, buildFilePath, astAfterPreprocessing, importResult.importMap,
+            externalPkg, packageId, buildFilePath, astAfterPreprocessing, importResult.importMap,
             importResult.fileDependencies, defaultVisibility, skyframeGlobber);
         Set<SkyKey> globDepsRequested = ImmutableSet.<SkyKey>builder()
             .addAll(globDepsRequestedDuringPreprocessing)
