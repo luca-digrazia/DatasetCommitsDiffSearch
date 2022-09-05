@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.LocalHostCapacity;
 import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
@@ -52,9 +51,9 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.InputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputFileConfiguredTarget;
+import com.google.devtools.build.lib.analysis.TempsProvider;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -701,10 +700,9 @@ public class ExecutionTool {
 
       // For failed compilation, it is still useful to examine temp artifacts,
       // (ie, preprocessed and assembler files).
-      TopLevelArtifactProvider topLevelProvider =
-          target.getProvider(TopLevelArtifactProvider.class);
-      if (topLevelProvider != null) {
-        for (Artifact temp : topLevelProvider.getOutputGroup(TopLevelArtifactProvider.TEMP_FILES)) {
+      TempsProvider tempsProvider = target.getProvider(TempsProvider.class);
+      if (tempsProvider != null) {
+        for (Artifact temp : tempsProvider.getTemps()) {
           if (temp.getPath().exists()) {
             outErr.printErrLn("  See temp at " +
                 OutputDirectoryLinksUtils.getPrettyPath(temp.getPath(),
@@ -761,12 +759,11 @@ public class ExecutionTool {
   private void configureResourceManager(BuildRequest request) {
     ResourceManager resourceMgr = ResourceManager.instance();
     ExecutionOptions options = request.getOptions(ExecutionOptions.class);
-    ResourceSet resources;
     if (options.availableResources != null) {
-      resources = options.availableResources;
+      resourceMgr.setAvailableResources(options.availableResources);
       resourceMgr.setRamUtilizationPercentage(100);
     } else {
-      resources = LocalHostCapacity.getLocalHostCapacity();
+      resourceMgr.setAvailableResources(LocalHostCapacity.getLocalHostCapacity());
       resourceMgr.setRamUtilizationPercentage(options.ramUtilizationPercentage);
       if (options.useResourceAutoSense) {
         getReporter().handle(
@@ -774,14 +771,6 @@ public class ExecutionTool {
       }
       ResourceManager.instance().setAutoSensing(/*autosense=*/false);
     }
-
-    resourceMgr.setAvailableResources(ResourceSet.create(
-        resources.getMemoryMb(),
-        resources.getCpuUsage(),
-        resources.getIoUsage(),
-        request.getExecutionOptions().usingLocalTestJobs()
-            ? request.getExecutionOptions().localTestJobs : Integer.MAX_VALUE
-    ));
   }
 
   /**

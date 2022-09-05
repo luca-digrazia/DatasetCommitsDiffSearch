@@ -31,10 +31,9 @@ public final class TopLevelArtifactHelper {
   /***
    * The set of artifacts to build.
    *
-   * <p>There are two kinds: the ones that the user cares about (e.g. files to build) and the ones
-   * she doesn't (e.g. baseline coverage artifacts). The latter type doesn't get reported on various
-   * outputs, e.g. on the console  output listing the output artifacts of targets on the command
-   * line.
+   * <p>There are two kinds: the ones that the user cares about and the ones she doesn't. The
+   * latter type doesn't get reported on various outputs, e.g. on the console output listing the
+   * output artifacts of targets on the command line.
    */
   @Immutable
   public static final class ArtifactsToBuild {
@@ -119,12 +118,8 @@ public final class TopLevelArtifactHelper {
       for (String outputGroup : context.outputGroups()) {
         NestedSet<Artifact> results = topLevelArtifactProvider.getOutputGroup(outputGroup);
         if (results != null) {
-          if (outputGroup.startsWith(TopLevelArtifactProvider.HIDDEN_OUTPUT_GROUP_PREFIX)) {
-            allBuilder.addTransitive(results);
-          } else {
-            importantBuilder.addTransitive(results);
-          }
-        }
+          importantBuilder.addTransitive(results);
+        }         
       }
     }
 
@@ -162,8 +157,29 @@ public final class TopLevelArtifactHelper {
       }
     }
 
+    allBuilder.addAll(getCoverageArtifacts(target, context));
+
     NestedSet<Artifact> importantArtifacts = importantBuilder.build();
     allBuilder.addTransitive(importantArtifacts);
     return new ArtifactsToBuild(importantArtifacts, allBuilder.build());
+  }
+
+  private static Iterable<Artifact> getCoverageArtifacts(TransitiveInfoCollection target,
+                                                         TopLevelArtifactContext topLevelOptions) {
+    if (!topLevelOptions.compileOnly() && !topLevelOptions.compilationPrerequisitesOnly()
+        && topLevelOptions.shouldRunTests()) {
+      // Add baseline code coverage artifacts if we are collecting code coverage. We do that only
+      // when running tests.
+      // It might be slightly faster to first check if any configuration has coverage enabled.
+      if (target.getConfiguration() != null
+          && target.getConfiguration().isCodeCoverageEnabled()) {
+        BaselineCoverageArtifactsProvider provider =
+            target.getProvider(BaselineCoverageArtifactsProvider.class);
+        if (provider != null) {
+          return provider.getBaselineCoverageArtifacts();
+        }
+      }
+    }
+    return ImmutableList.of();
   }
 }
