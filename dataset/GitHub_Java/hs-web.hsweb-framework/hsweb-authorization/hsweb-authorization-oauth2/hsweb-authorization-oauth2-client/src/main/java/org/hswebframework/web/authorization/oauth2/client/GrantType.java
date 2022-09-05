@@ -24,8 +24,7 @@ package org.hswebframework.web.authorization.oauth2.client;
 public interface GrantType {
     String authorization_code = "authorization_code";
     String implicit           = "implicit";
-    @SuppressWarnings("all")
-    String password = "password";
+    String password           = "password";
     String client_credentials = "client_credentials";
     String refresh_token      = "refresh_token";
 }

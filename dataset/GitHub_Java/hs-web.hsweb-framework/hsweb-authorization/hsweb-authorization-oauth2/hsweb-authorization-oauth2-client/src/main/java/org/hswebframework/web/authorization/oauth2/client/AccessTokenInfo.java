@@ -17,8 +17,6 @@
  */
 package org.hswebframework.web.authorization.oauth2.client;
 
-import com.alibaba.fastjson.annotation.JSONField;
-
 /**
  * 默认的服务实现
  *
@@ -26,13 +24,10 @@ import com.alibaba.fastjson.annotation.JSONField;
  */
 public class AccessTokenInfo {
     //授权码
-    @JSONField(name = "access_token")
     private String  accessToken;
     //更新码
-    @JSONField(name = "refresh_token")
     private String  refreshToken;
     //有效期
-    @JSONField(name = "expires_in")
     private Integer expiresIn;
     //授权范围
     private String  scope;
@@ -41,7 +36,6 @@ public class AccessTokenInfo {
 
     private Long updateTime;
 
-    @JSONField(name = "token_type")
     private String tokenType;
 
     public boolean isExpire() {

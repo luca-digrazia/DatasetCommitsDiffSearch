@@ -35,8 +35,10 @@ import org.hswebframework.web.authorization.AuthenticationManager;
 import org.hswebframework.web.authorization.AuthenticationSupplier;
 import org.hswebframework.web.authorization.access.DataAccessController;
 import org.hswebframework.web.authorization.access.DataAccessHandler;
+import org.hswebframework.web.authorization.access.FieldAccessController;
 import org.hswebframework.web.authorization.shiro.boost.BoostAuthorizationAttributeSourceAdvisor;
 import org.hswebframework.web.authorization.shiro.boost.DefaultDataAccessController;
+import org.hswebframework.web.authorization.shiro.boost.DefaultFieldAccessController;
 import org.hswebframework.web.authorization.shiro.cache.SpringCacheManagerWrapper;
 import org.hswebframework.web.authorization.shiro.remember.SimpleRememberMeManager;
 import org.hswebframework.web.controller.message.ResponseMessage;
@@ -68,6 +70,9 @@ public class ShiroAutoConfiguration {
 
     @Autowired(required = false)
     private org.springframework.cache.CacheManager cacheManager;
+
+    @Autowired(required = false)
+    private List<DataAccessHandler> dataAccessHandlers;
 
     @Bean
     public CacheManager shiroCacheManager() {
@@ -148,33 +153,24 @@ public class ShiroAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public DefaultDataAccessController defaultDataAccessController() {
-        return new DefaultDataAccessController();
+        DefaultDataAccessController accessController = new DefaultDataAccessController();
+        if (dataAccessHandlers != null) {
+            dataAccessHandlers.forEach(accessController::addHandler);
+        }
+        return accessController;
     }
 
     @Bean
-    @ConditionalOnBean(DefaultDataAccessController.class)
-    public BeanPostProcessor dataAccessControllerProcessor(DefaultDataAccessController defaultDataAccessController) {
-        return new BeanPostProcessor() {
-            @Override
-            public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-                return bean;
-            }
-
-            @Override
-            public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-                if (bean instanceof DataAccessHandler) {
-                    defaultDataAccessController.addHandler(((DataAccessHandler) bean));
-                }
-                return bean;
-            }
-        };
+    @ConditionalOnMissingBean
+    public DefaultFieldAccessController defaultFieldAccessController() {
+        return new DefaultFieldAccessController();
     }
-
 
     @Bean
     public BoostAuthorizationAttributeSourceAdvisor authorizationAttributeSourceAdvisor(SecurityManager securityManager,
-                                                                                        DataAccessController dataAccessController) {
-        BoostAuthorizationAttributeSourceAdvisor advisor = new BoostAuthorizationAttributeSourceAdvisor(dataAccessController);
+                                                                                        DataAccessController dataAccessController,
+                                                                                        FieldAccessController fieldAccessController) {
+        BoostAuthorizationAttributeSourceAdvisor advisor = new BoostAuthorizationAttributeSourceAdvisor(dataAccessController, fieldAccessController);
         advisor.setSecurityManager(securityManager);
         return advisor;
     }
