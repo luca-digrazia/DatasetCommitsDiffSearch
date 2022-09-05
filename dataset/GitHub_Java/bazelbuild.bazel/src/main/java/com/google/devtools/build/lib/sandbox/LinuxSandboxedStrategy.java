@@ -82,7 +82,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
     this.blazeDirs = blazeDirs;
     this.execRoot = blazeDirs.getExecRoot();
-    this.backgroundWorkers = Preconditions.checkNotNull(backgroundWorkers);
+    this.backgroundWorkers = backgroundWorkers;
     this.verboseFailures = verboseFailures;
     this.sandboxDebug = sandboxDebug;
     this.standaloneStrategy = new StandaloneSpawnStrategy(blazeDirs.getExecRoot(), verboseFailures);
@@ -146,8 +146,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
             execRoot.getPathFile(),
             outErr,
             spawn.getOutputFiles(),
-            timeout,
-            !spawn.getExecutionInfo().containsKey("requires-network"));
+            timeout);
       } finally {
         // Due to the Linux kernel behavior, if we try to remove the sandbox too quickly after the
         // process has exited, we get "Device busy" errors because some of the mounts have not yet
@@ -294,7 +293,6 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
     MountMap mounts = new MountMap();
     FileSystem fs = blazeDirs.getFileSystem();
     mounts.put(fs.getPath("/bin"), fs.getPath("/bin"));
-    mounts.put(fs.getPath("/sbin"), fs.getPath("/sbin"));
     mounts.put(fs.getPath("/etc"), fs.getPath("/etc"));
     for (String entry : FilesystemUtils.readdir("/")) {
       if (entry.startsWith("lib")) {
