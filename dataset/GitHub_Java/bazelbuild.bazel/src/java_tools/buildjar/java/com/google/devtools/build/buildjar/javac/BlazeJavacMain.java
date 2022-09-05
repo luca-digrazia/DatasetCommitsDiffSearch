@@ -83,22 +83,23 @@ public class BlazeJavacMain {
     Listener diagnostics = new Listener(context);
     BlazeJavaCompiler compiler;
 
-    try (JavacFileManager fileManager = new ClassloaderMaskingFileManager()) {
-      JavacTask task =
-          JavacTool.create()
-              .getTask(
-                  errWriter,
-                  fileManager,
-                  diagnostics,
-                  javacArguments,
-                  ImmutableList.of() /*classes*/,
-                  fileManager.getJavaFileObjectsFromPaths(arguments.sourceFiles()),
-                  context);
-      if (arguments.processors() != null) {
-        task.setProcessors(arguments.processors());
-      }
-      fileManager.setContext(context);
-      setLocations(fileManager, arguments);
+    JavacFileManager fileManager = new ClassloaderMaskingFileManager();
+    JavacTask task =
+        JavacTool.create()
+            .getTask(
+                errWriter,
+                fileManager,
+                diagnostics,
+                javacArguments,
+                ImmutableList.of() /*classes*/,
+                fileManager.getJavaFileObjectsFromPaths(arguments.sourceFiles()),
+                context);
+    if (arguments.processors() != null) {
+      task.setProcessors(arguments.processors());
+    }
+    fileManager.setContext(context);
+    setLocations(fileManager, arguments);
+    try {
       try {
         ok = task.call();
       } catch (PropagatedException e) {
