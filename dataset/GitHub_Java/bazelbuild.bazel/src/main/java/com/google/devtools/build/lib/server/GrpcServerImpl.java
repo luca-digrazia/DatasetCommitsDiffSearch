@@ -767,14 +767,8 @@ public class GrpcServerImpl extends RPCServer {
               }
             }
 
-            try {
-              streamObserver.onNext(CancelResponse.newBuilder().setCookie(responseCookie).build());
-              streamObserver.onCompleted();
-            } catch (StatusRuntimeException e) {
-              // TThere is no one to report the failure to
-              log.info("Client cancelled RPC of cancellation request for "
-                  + request.getCommandId());
-            }
+            streamObserver.onNext(CancelResponse.newBuilder().setCookie(responseCookie).build());
+            streamObserver.onCompleted();
           }
         }
       };
