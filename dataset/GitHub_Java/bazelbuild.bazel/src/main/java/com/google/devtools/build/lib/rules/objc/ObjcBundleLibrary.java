@@ -39,22 +39,14 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
-    new ResourceSupport(ruleContext)
-        .validateAttributes()
-        .addXcodeSettings(xcodeProviderBuilder);
-
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-
     new BundleSupport(ruleContext, bundling)
         .registerActions(common.getObjcProvider())
         .validateResources(common.getObjcProvider())
         .addXcodeSettings(xcodeProviderBuilder);
 
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
+    new ResourceSupport(ruleContext)
+        .validateAttributes()
+        .addXcodeSettings(xcodeProviderBuilder);
 
     new XcodeSupport(ruleContext)
         .addFilesToBuild(filesToBuild)
@@ -81,7 +73,10 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .setArchitecture(objcConfiguration.getIosCpu())
         .setBundleDirFormat("%s.bundle")
         .setObjcProvider(common.getObjcProvider())
-        .addInfoplistInputFromRule(ruleContext)
+        .setInfoplistMerging(
+            BundleSupport.infoPlistMerging(ruleContext, common.getObjcProvider(),
+                /*primaryBundleId=*/null, /*fallbackBundleId=*/null,
+                new BundleSupport.ExtraMergePlists()))
         .setIntermediateArtifacts(intermediateArtifacts)
         .setMinimumOsVersion(objcConfiguration.getMinimumOs())
         .build();

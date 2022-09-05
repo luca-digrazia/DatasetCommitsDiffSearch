@@ -166,7 +166,7 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
   }
 
   /** Returns the {@link XcTestAppProvider} of the {@code xctest_app} attribute. */
-  protected static XcTestAppProvider xcTestAppProvider(RuleContext ruleContext) {
+  private static XcTestAppProvider xcTestAppProvider(RuleContext ruleContext) {
     return ruleContext.getPrerequisite(XCTEST_APP, Mode.TARGET, XcTestAppProvider.class);
   }
 

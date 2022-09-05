@@ -44,12 +44,12 @@ public class IosApplication extends ReleaseBundlingTargetFactory {
 
   public IosApplication() {
     super(ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT, XcodeProductType.APPLICATION,
-        DEPENDENCY_ATTRIBUTES, ConfigurationDistinguisher.APPLICATION);
+        ExposeAsNestedBundle.NO, DEPENDENCY_ATTRIBUTES, ConfigurationDistinguisher.APPLICATION);
   }
 
   @Override
   protected void configureTarget(RuleConfiguredTargetBuilder target, RuleContext ruleContext,
-      ReleaseBundlingSupport releaseBundlingSupport) throws InterruptedException {
+      ReleaseBundlingSupport releaseBundlingSupport) {
     // If this is an application built for the simulator, make it runnable.
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     if (objcConfiguration.getBundlingPlatform() == Platform.SIMULATOR) {

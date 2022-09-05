@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,10 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.util.Preconditions;
 
 /**
  * Provides information contained in a {@code objc_options} target.
@@ -27,13 +28,19 @@ final class OptionsProvider
     implements TransitiveInfoProvider {
 
   private final Iterable<String> copts;
+  private final Iterable<Artifact> infoplists;
 
-  public OptionsProvider(Iterable<String> copts) {
-    super(copts);
+  public OptionsProvider(Iterable<String> copts, Iterable<Artifact> infoplists) {
+    super(copts, infoplists);
     this.copts = Preconditions.checkNotNull(copts);
+    this.infoplists = Preconditions.checkNotNull(infoplists);
   }
 
   public Iterable<String> getCopts() {
     return copts;
+  }
+
+  public Iterable<Artifact> getInfoplists() {
+    return infoplists;
   }
 }
