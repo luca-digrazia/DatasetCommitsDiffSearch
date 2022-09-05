@@ -115,7 +115,7 @@ public class JavacTurbineTest {
         .addBootClassPathEntries(
             ImmutableList.copyOf(Splitter.on(':').split(System.getProperty("sun.boot.class.path"))))
         .setOutputDeps(outputDeps.toString())
-        .addAllJavacOpts(Arrays.asList("-source", "8", "-target", "8"))
+        .addAllJavacOpts(Arrays.asList("-source", "7", "-target", "7"))
         .setTargetLabel("//test")
         .setRuleKind("java_library");
   }
@@ -156,7 +156,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Hello {",
       "",
@@ -186,7 +186,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Hello {",
       "",
@@ -283,7 +283,7 @@ public class JavacTurbineTest {
     {
       String text = textify(outputs.get("Generated.class"));
       String[] expected = {
-        "// class version 52.0 (52)",
+        "// class version 51.0 (51)",
         "// access flags 0x21",
         "public class Generated {",
         "",
@@ -300,7 +300,7 @@ public class JavacTurbineTest {
     {
       String text = textify(outputs.get("Hello.class"));
       String[] expected = {
-        "// class version 52.0 (52)",
+        "// class version 51.0 (51)",
         "// access flags 0x20",
         "class Hello {",
         "",
@@ -407,8 +407,8 @@ public class JavacTurbineTest {
         .containsExactlyEntriesIn(
             ImmutableMap.of(
                 libA.toString(), Deps.Dependency.Kind.EXPLICIT,
-                libB.toString(), Deps.Dependency.Kind.INCOMPLETE,
-                libC.toString(), Deps.Dependency.Kind.INCOMPLETE));
+                libB.toString(), Deps.Dependency.Kind.IMPLICIT,
+                libC.toString(), Deps.Dependency.Kind.IMPLICIT));
   }
 
   private Map<String, Deps.Dependency.Kind> getEntries(Deps.Dependencies deps) {
@@ -555,7 +555,7 @@ public class JavacTurbineTest {
                   libA.toString(),
                   Deps.Dependency.Kind.EXPLICIT,
                   libB.toString(),
-                  Deps.Dependency.Kind.INCOMPLETE));
+                  Deps.Dependency.Kind.IMPLICIT));
     }
   }
 
@@ -669,7 +669,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("Const.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Const {",
       "",
@@ -719,7 +719,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("TheEnum.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x4031",
       "// signature Ljava/lang/Enum<LTheEnum;>;",
       "// declaration: TheEnum extends java.lang.Enum<TheEnum>",
@@ -832,7 +832,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Hello extends Super  {",
       "",
@@ -867,7 +867,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Hello {",
       "",
@@ -998,7 +998,7 @@ public class JavacTurbineTest {
 
     String text = textify(outputs.get("Hello.class"));
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Hello {",
       "",
@@ -1247,8 +1247,11 @@ public class JavacTurbineTest {
     assertThat(outputs.keySet()).containsExactly("Hello.class");
 
     String text = textify(outputs.get("Hello.class"));
+    System.err.println(">>>");
+    System.err.println(text);
+    System.err.println(">>>");
     String[] expected = {
-      "// class version 52.0 (52)",
+      "// class version 51.0 (51)",
       "// access flags 0x20",
       "class Hello {",
       "",
