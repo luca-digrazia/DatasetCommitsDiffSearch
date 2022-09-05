@@ -15,12 +15,8 @@
  */
 package me.jessyan.autosize.utils;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.TypedValue;
-import android.app.Application;
-
-import java.lang.reflect.InvocationTargetException;
 
 /**
  * ================================================
