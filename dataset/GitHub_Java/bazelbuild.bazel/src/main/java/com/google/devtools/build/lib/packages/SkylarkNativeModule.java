@@ -18,11 +18,11 @@ import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.SkylarkBuiltin;
+import com.google.devtools.build.lib.syntax.SkylarkBuiltin.Param;
 import com.google.devtools.build.lib.syntax.SkylarkFunction;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
-import com.google.devtools.build.lib.syntax.SkylarkSignature;
-import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 
 import java.util.Map;
 
@@ -36,51 +36,44 @@ import java.util.Map;
     + "Extra helper functions:")
 public class SkylarkNativeModule {
 
-  @SkylarkSignature(name = "glob", objectType = SkylarkNativeModule.class,
-      returnType = SkylarkList.class,
+  @SkylarkBuiltin(name = "glob", objectType = SkylarkNativeModule.class, 
       doc = "Glob returns a list of every file in the current package that:<ul>\n"
           + "<li>Matches at least one pattern in <code>include</code>.</li>\n"
           + "<li>Does not match any of the patterns in <code>exclude</code> "
           + "(default <code>[]</code>).</li></ul>\n"
           + "If the <code>exclude_directories</code> argument is enabled (set to <code>1</code>), "
           + "files of type directory will be omitted from the results (default <code>1</code>).",
-      mandatoryPositionals = {
+      mandatoryParams = {
       @Param(name = "includes", type = SkylarkList.class, generic1 = String.class,
-          defaultValue = "[]", doc = "The list of glob patterns to include.")},
-      optionalPositionals = {
+          doc = "The list of glob patterns to include.")},
+      optionalParams = {
       @Param(name = "excludes", type = SkylarkList.class, generic1 = String.class,
-          defaultValue = "[]", doc = "The list of glob patterns to exclude."),
-      // TODO(bazel-team): accept booleans as well as integers? (and eventually migrate?)
-      @Param(name = "exclude_directories", type = Integer.class, defaultValue = "1",
-          doc = "A flag whether to exclude directories or not.")},
-      useAst = true, useEnvironment = true)
+          doc = "The list of glob patterns to exclude."),
+      @Param(name = "exclude_directories", type = Integer.class,
+          doc = "A flag whether to exclude directories or not.")})
   private static final SkylarkFunction glob = new SkylarkFunction("glob") {
-      @Override
-      public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
-          throws EvalException, ConversionException, InterruptedException {
-        return PackageFactory.callGlob(null, false, ast, env, new Object[] {
-              kwargs.get("includes"),
-              kwargs.get("excludes"),
-              kwargs.get("exclude_directories")
-            });
-      }
-    };
+    @Override
+    public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
+        throws EvalException, ConversionException, InterruptedException {
+      return PackageFactory.callGlob(null, false, ast, env, new Object[] {
+          kwargs.get("includes"),
+          kwargs.get("excludes"),
+          kwargs.get("exclude_directories")
+      });
+    }
+  };
 
-  @SkylarkSignature(name = "package_group", objectType = SkylarkNativeModule.class,
-      returnType = Environment.NoneType.class,
+  @SkylarkBuiltin(name = "package_group", objectType = SkylarkNativeModule.class, 
       doc = "This function defines a set of packages and assigns a label to the group. "
           + "The label can be referenced in <code>visibility</code> attributes.",
-      mandatoryNamedOnly = {
+      mandatoryParams = {
       @Param(name = "name", type = String.class,
           doc = "A unique name for this rule.")},
-      optionalNamedOnly = {
+      optionalParams = {
       @Param(name = "packages", type = SkylarkList.class, generic1 = String.class,
-          defaultValue = "[]",
           doc = "A complete enumeration of packages in this group."),
       @Param(name = "includes", type = SkylarkList.class, generic1 = String.class,
-          defaultValue = "[]",
-          doc = "Other package groups that are included in this one.")},
-      useAst = true, useEnvironment = true)
+          doc = "Other package groups that are included in this one.")})
   private static final SkylarkFunction packageGroup = new SkylarkFunction("package_group") {
     @Override
     public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
@@ -93,23 +86,19 @@ public class SkylarkNativeModule {
     }
   };
 
-  @SkylarkSignature(name = "exports_files", objectType = SkylarkNativeModule.class,
-      returnType = Environment.NoneType.class,
+  @SkylarkBuiltin(name = "exports_files", objectType = SkylarkNativeModule.class, 
       doc = "Specifies a list of files belonging to this package that are exported to other "
           + "packages but not otherwise mentioned.",
-      mandatoryPositionals = {
+      mandatoryParams = {
       @Param(name = "srcs", type = SkylarkList.class, generic1 = String.class,
           doc = "The list of files to export.")},
-      optionalPositionals = {
-      // TODO(bazel-team): make it possible to express the precise type ListOf(LabelDesignator)
-      @Param(name = "visibility", type = SkylarkList.class,
-          noneable = true,
+      optionalParams = {
+      @Param(name = "visibility", type = SkylarkList.class, generic1 = String.class,
           doc = "A visibility declaration can to be specified. The files will be visible to the "
               + "targets specified. If no visibility is specified, the files will be visible to "
               + "every package."),
-      @Param(name = "licenses", type = SkylarkList.class, generic1 = String.class, noneable = true,
-          doc = "Licenses to be specified.")},
-      useAst = true, useEnvironment = true)
+      @Param(name = "licenses", type = SkylarkList.class, generic1 = String.class,
+          doc = "Lincenses to be specified.")})
   private static final SkylarkFunction exportsFiles = new SkylarkFunction("exports_files") {
     @Override
     public Object call(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
