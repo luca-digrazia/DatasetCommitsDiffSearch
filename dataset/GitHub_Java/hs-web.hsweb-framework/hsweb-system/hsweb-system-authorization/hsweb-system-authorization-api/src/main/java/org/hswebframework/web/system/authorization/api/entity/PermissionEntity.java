@@ -14,10 +14,11 @@ import org.springframework.util.CollectionUtils;
 import javax.persistence.Column;
 import javax.persistence.Table;
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.Pattern;
+import javax.validation.constraints.NotNull;
 import java.sql.JDBCType;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -28,12 +29,6 @@ import java.util.stream.Collectors;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PermissionEntity extends GenericEntity<String> {
-
-    @Override
-    @Pattern(regexp = "^[0-9a-zA-Z_\\-]+$", message = "ID只能由数字,字母,下划线和中划线组成", groups = CreateGroup.class)
-    public String getId() {
-        return super.getId();
-    }
 
     @Column
     @Comment("权限名称")

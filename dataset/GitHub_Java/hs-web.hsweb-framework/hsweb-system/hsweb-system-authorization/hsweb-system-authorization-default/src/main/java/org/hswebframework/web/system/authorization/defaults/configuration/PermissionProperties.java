@@ -69,6 +69,9 @@ public class PermissionProperties {
             error {
                 @Override
                 public AuthorizationSettingEntity handle(Authentication authentication, AuthorizationSettingEntity setting) {
+                    if (!authentication.hasPermission(setting.getPermission())) {
+                        throw new AccessDenyException("当前用户无权限:" + setting.getPermission());
+                    }
                     Set<String> actions = new HashSet<>(setting.getActions());
                     actions.removeAll(authentication
                                               .getPermission(setting.getPermission())
