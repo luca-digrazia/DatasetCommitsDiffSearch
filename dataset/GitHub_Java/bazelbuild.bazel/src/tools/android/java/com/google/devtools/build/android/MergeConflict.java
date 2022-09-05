@@ -54,6 +54,8 @@ public class MergeConflict {
    */
   public static MergeConflict between(DataKey dataKey, DataValue first, DataValue second) {
     Preconditions.checkNotNull(dataKey);
+    Preconditions.checkArgument(dataKey.equals(first.dataKey()));
+    Preconditions.checkArgument(dataKey.equals(second.dataKey()));
     return of(dataKey, first.source(), second.source());
   }
 

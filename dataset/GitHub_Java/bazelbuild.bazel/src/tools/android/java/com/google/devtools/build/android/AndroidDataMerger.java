@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Handles the Merging of ParsedAndroidData.
+ * Handles the Merging of AndroidDataSet.
  */
 public class AndroidDataMerger {
 
@@ -90,14 +90,14 @@ public class AndroidDataMerger {
    * @throws IOException if there are issues with reading resources.
    */
   UnwrittenMergedAndroidData merge(
-      ParsedAndroidData transitive,
-      ParsedAndroidData direct,
+      AndroidDataSet transitive,
+      AndroidDataSet direct,
       UnvalidatedAndroidData primaryData,
       boolean allowPrimaryOverrideAll)
       throws MergingException, IOException {
 
     // Extract the primary resources.
-    ParsedAndroidData primary = ParsedAndroidData.from(primaryData);
+    AndroidDataSet primary = AndroidDataSet.from(primaryData);
 
     Map<DataKey, DataResource> overwritableDeps = new HashMap<>();
     Map<DataKey, DataAsset> assets = new HashMap<>();
@@ -181,7 +181,7 @@ public class AndroidDataMerger {
     return UnwrittenMergedAndroidData.of(
         primaryData.getManifest(),
         primary,
-        ParsedAndroidData.of(
+        AndroidDataSet.of(
             ImmutableSet.<MergeConflict>of(),
             ImmutableMap.copyOf(overwritableDeps),
             direct.mergeNonOverwritable(transitive),

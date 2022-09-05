@@ -92,6 +92,7 @@ public class XmlResourceValues {
       XMLEventReader eventReader,
       StartElement start)
       throws XMLStreamException {
+    String styleableName = getElementName(start);
     List<String> members = new ArrayList<>();
     for (XMLEvent element = eventReader.nextTag();
         !isEndTag(element, TAG_DECLARE_STYLEABLE);
@@ -99,14 +100,15 @@ public class XmlResourceValues {
       if (isStartTag(element, TAG_ATTR)) {
         StartElement attr = element.asStartElement();
         members.add(getElementName(attr));
+        String attrName = getElementName(attr);
+        FullyQualifiedName fqn = fqnFactory.create(ResourceType.ATTR, attrName);
         overwritingConsumer.consume(
-            fqnFactory.create(ResourceType.ATTR, getElementName(attr)),
-            XmlDataResource.of(path, parseAttr(eventReader, start)));
+            fqn, XmlDataResource.of(fqn, path, parseAttr(eventReader, start)));
       }
     }
+    FullyQualifiedName fqn = fqnFactory.create(ResourceType.STYLEABLE, styleableName);
     nonOverwritingConsumer.consume(
-        fqnFactory.create(ResourceType.STYLEABLE, getElementName(start)),
-        XmlDataResource.of(path, StyleableXmlResourceValue.of(members)));
+        fqn, XmlDataResource.of(fqn, path, StyleableXmlResourceValue.of(members)));
   }
 
   static XmlResourceValue parseAttr(XMLEventReader eventReader, StartElement start)

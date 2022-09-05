@@ -85,7 +85,8 @@ public class XmlDataResource implements DataResource {
           FullyQualifiedName key =
               fqnFactory.create(resourceType, XmlResourceValues.getElementName(start));
           consumer.consume(
-              key, XmlDataResource.of(path, parseXmlElements(resourceType, eventReader, start)));
+              key,
+              XmlDataResource.of(key, path, parseXmlElements(resourceType, eventReader, start)));
         }
       }
     }
@@ -123,16 +124,18 @@ public class XmlDataResource implements DataResource {
     return ResourceType.getEnum(start.getName().getLocalPart());
   }
 
+  private FullyQualifiedName fqn;
   private Path source;
   private XmlResourceValue xml;
 
-  private XmlDataResource(Path source, XmlResourceValue xmlValue) {
+  private XmlDataResource(FullyQualifiedName fqn, Path source, XmlResourceValue xmlValue) {
+    this.fqn = fqn;
     this.source = source;
     this.xml = xmlValue;
   }
 
-  public static XmlDataResource of(Path source, XmlResourceValue xml) {
-    return new XmlDataResource(source, xml);
+  public static XmlDataResource of(FullyQualifiedName fqn, Path source, XmlResourceValue xml) {
+    return new XmlDataResource(fqn, source, xml);
   }
 
   @Override
@@ -141,8 +144,13 @@ public class XmlDataResource implements DataResource {
   }
 
   @Override
+  public DataKey dataKey() {
+    return fqn;
+  }
+
+  @Override
   public int hashCode() {
-    return Objects.hash(source, xml);
+    return Objects.hash(fqn, source, xml);
   }
 
   @Override
@@ -151,17 +159,37 @@ public class XmlDataResource implements DataResource {
       return false;
     }
     XmlDataResource other = (XmlDataResource) obj;
-    return Objects.equals(source, other.source) && Objects.equals(xml, other.xml);
+    return Objects.equals(fqn, other.fqn)
+        && Objects.equals(source, other.source)
+        && Objects.equals(xml, other.xml);
   }
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(getClass()).add("source", source).add("xml", xml).toString();
+    return MoreObjects.toStringHelper(getClass())
+        .add("fqn", fqn)
+        .add("source", source)
+        .add("xml", xml)
+        .toString();
   }
 
   @Override
   public void write(Path newResourceDirectory) throws IOException {
     // TODO(corysmith): Implement write.
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int compareTo(DataResource o) {
+    // TODO(corysmith): This is ugly -- Assets and File Resources are effectively identical
+    // but the DataKeys are incomparable. Restructure the classes to handle this gracefully.
+    if (!(o.dataKey() instanceof FullyQualifiedName)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "DataKeys for DataResources should be FullyQualifiedName instead of %s and %s",
+              o.dataKey(),
+              fqn));
+    }
+    return fqn.compareTo((FullyQualifiedName) o.dataKey());
   }
 }

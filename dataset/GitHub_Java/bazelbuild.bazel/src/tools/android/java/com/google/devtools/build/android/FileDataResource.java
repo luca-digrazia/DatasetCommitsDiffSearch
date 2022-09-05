@@ -26,19 +26,21 @@ import java.util.Objects;
  */
 public class FileDataResource implements DataResource, DataAsset {
 
+  private final DataKey dataKey;
   private final Path source;
 
-  private FileDataResource(Path source) {
+  public FileDataResource(DataKey dataKey, Path source) {
+    this.dataKey = dataKey;
     this.source = source;
   }
 
-  public static FileDataResource of(Path source) {
-    return new FileDataResource(source);
+  public static FileDataResource of(DataKey dataKey, Path source) {
+    return new FileDataResource(dataKey, source);
   }
 
   @Override
   public int hashCode() {
-    return source.hashCode();
+    return Objects.hash(dataKey, source);
   }
 
   @Override
@@ -47,14 +49,20 @@ public class FileDataResource implements DataResource, DataAsset {
       return false;
     }
     FileDataResource resource = (FileDataResource) obj;
-    return Objects.equals(source, resource.source);
+    return Objects.equals(dataKey, resource.dataKey) && Objects.equals(source, resource.source);
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(getClass())
+        .add("dataKey", dataKey)
         .add("source", source)
         .toString();
+  }
+
+  @Override
+  public DataKey dataKey() {
+    return dataKey;
   }
 
   @Override
@@ -66,5 +74,33 @@ public class FileDataResource implements DataResource, DataAsset {
   public void write(Path newResourceDirectory) throws IOException {
     // TODO(corysmith): Implement the copy semantics.
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public int compareTo(DataResource o) {
+    // TODO(corysmith): This is ugly -- Assets and File Resources are effectively identical
+    // but the DataKeys are incomparable. Restructure the classes to handle this gracefully.
+    if (!(o.dataKey() instanceof FullyQualifiedName && dataKey instanceof FullyQualifiedName)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "DataKeys for DataResources should be FullyQualifiedName instead of %s and %s",
+              o.dataKey(),
+              dataKey));
+    }
+    return ((FullyQualifiedName) dataKey).compareTo((FullyQualifiedName) o.dataKey());
+  }
+
+  @Override
+  public int compareTo(DataAsset o) {
+    // TODO(corysmith): This is ugly -- Assets and File Resources are effectively identical
+    // but the DataKeys are incomparable. Restructure the classes to handle this gracefully.
+    if (!(o.dataKey() instanceof RelativeAssetPath && dataKey instanceof RelativeAssetPath)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "DataKeys for DataResources should be RelativeAssetPath instead of %s and %s",
+              o.dataKey(),
+              dataKey));
+    }
+    return ((RelativeAssetPath) dataKey).compareTo((RelativeAssetPath) o.dataKey());
   }
 }

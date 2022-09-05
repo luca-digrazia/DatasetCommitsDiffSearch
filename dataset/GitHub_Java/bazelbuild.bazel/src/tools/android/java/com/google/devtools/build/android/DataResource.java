@@ -26,4 +26,11 @@ public interface DataResource extends DataValue {
    * @throws IOException if there are issues with writing the resource.
    */
   void write(Path newResourceDirectory) throws IOException;
+
+  /**
+   * Compares one data resource to another.
+   *
+   * Not implementing Comparable as it would conlfict with DataAsset.
+   */
+  int compareTo(DataResource other);
 }
