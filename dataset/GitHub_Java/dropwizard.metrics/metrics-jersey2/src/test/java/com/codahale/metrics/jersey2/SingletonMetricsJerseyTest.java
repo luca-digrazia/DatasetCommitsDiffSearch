@@ -4,7 +4,6 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.jersey2.resources.InstrumentedResource;
-import com.codahale.metrics.jersey2.resources.InstrumentedSubResource;
 import org.glassfish.jersey.client.ClientResponse;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.test.JerseyTest;
@@ -19,8 +18,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
+import static org.fest.assertions.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.failBecauseExceptionWasNotThrown;
 
 /**
  * Tests registering {@link InstrumentedResourceMethodApplicationListener} as a singleton
@@ -106,17 +105,5 @@ public class SingletonMetricsJerseyTest extends JerseyTest {
         } catch (NotFoundException e) {
             assertThat(e.getMessage()).isEqualTo("HTTP 404 Not Found");
         }
-    }
-
-    @Test
-    public void subresourcesFromLocatorsRegisterMetrics() {
-        assertThat(target("subresource/timed")
-                .request()
-                .get(String.class))
-                .isEqualTo("yay");
-
-        final Timer timer = registry.timer(name(InstrumentedSubResource.class, "timed"));
-        assertThat(timer.getCount()).isEqualTo(1);
-
     }
 }
