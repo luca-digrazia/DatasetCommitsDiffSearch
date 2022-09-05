@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,15 +16,14 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -35,12 +34,14 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-
+import java.util.Map;
+import java.util.Map.Entry;
 import javax.annotation.Nullable;
 
 /**
@@ -53,6 +54,10 @@ import javax.annotation.Nullable;
  * @see JackLibraryProvider
  */
 public final class JackCompilationHelper {
+
+  private static final String PARTIAL_JACK_DIRECTORY = "_jill";
+
+  private static final String JACK_DIRECTORY = "_jack";
 
   /** Filetype for the intermediate library created by Jack. */
   public static final FileType JACK_LIBRARY_TYPE = FileType.of(".jack");
@@ -69,6 +74,8 @@ public final class JackCompilationHelper {
   static final String SANITY_CHECKS_OFF = "off";
   /** Value of the sanity checks flag which enables sanity checks. */
   static final String SANITY_CHECKS_ON = "on";
+  /** Flag to enable tolerant mode in Jill, for compiling special jars (e.g., bootclasspath). */
+  static final String TOLERANT = "--tolerant";
 
   /** Flag to indicate the classpath of Jack libraries, separated by semicolons. */
   static final String CLASSPATH = "-cp";
@@ -102,11 +109,11 @@ public final class JackCompilationHelper {
 
   /** Rule context used to build and register actions. */
   private final RuleContext ruleContext;
-  /** JavaSemantics used to determine the resource root for Java resources. */
-  private final JavaSemantics javaSemantics;
 
   /** True to use Jack's internal sanity checks, trading speed for crash-on-bugs. */
   private final boolean useSanityChecks;
+  /** True to make Jill more tolerant, when compiling special jars (e.g., bootclasspath) */
+  private final boolean useTolerant;
 
   /** Binary used to extract resources from a jar file. */
   private final FilesToRunProvider resourceExtractorBinary;
@@ -114,11 +121,15 @@ public final class JackCompilationHelper {
   private final FilesToRunProvider jackBinary;
   /** Binary used to convert jars to Jack libraries. */
   private final FilesToRunProvider jillBinary;
-  /** Jack library containing Android base classes. This will be placed first on the classpath. */
-  private final Artifact androidBaseLibraryForJack;
+  /**
+   * Jack libraries containing Android/Java base classes.
+   *
+   * <p>These will be placed first on the classpath.
+   */
+  private final NestedSet<Artifact> baseClasspath;
 
-  /** The destination for the Jack artifact to be created. */
-  private final Artifact outputArtifact;
+  /** The destination for the Jack artifact to be created, or null to skip this. */
+  @Nullable private final Artifact outputArtifact;
 
   /** Java files for the rule's Jack library. */
   private final ImmutableSet<Artifact> javaSources;
@@ -126,7 +137,10 @@ public final class JackCompilationHelper {
   private final ImmutableSet<Artifact> sourceJars;
 
   /** Java resources for the rule's Jack library. */
-  private final ImmutableSet<Artifact> resources;
+  private final ImmutableMap<PathFragment, Artifact> resources;
+
+  /** Jars that contain resources to be added to the Jack library. */
+  private final NestedSet<Artifact> resourceJars;
 
   /** Jack libraries to be provided to depending rules on the classpath, from srcs and exports. */
   private final NestedSet<Artifact> exportedJacks;
@@ -166,16 +180,17 @@ public final class JackCompilationHelper {
   /** Creates a new JackCompilationHelper. Called from {@link Builder#build()}. */
   private JackCompilationHelper(
       RuleContext ruleContext,
-      JavaSemantics javaSemantics,
       boolean useSanityChecks,
+      boolean useTolerant,
       FilesToRunProvider resourceExtractorBinary,
       FilesToRunProvider jackBinary,
       FilesToRunProvider jillBinary,
-      Artifact androidJackLibrary,
-      Artifact outputArtifact,
+      NestedSet<Artifact> baseClasspath,
+      @Nullable Artifact outputArtifact,
       ImmutableSet<Artifact> javaSources,
       ImmutableSet<Artifact> sourceJars,
-      ImmutableSet<Artifact> resources,
+      ImmutableMap<PathFragment, Artifact> resources,
+      NestedSet<Artifact> resourceJars,
       NestedSet<Artifact> processorClasspathJars,
       ImmutableSet<String> processorNames,
       NestedSet<Artifact> exportedJacks,
@@ -185,16 +200,17 @@ public final class JackCompilationHelper {
       NestedSet<Artifact> dexJacks,
       ImmutableSet<Artifact> dexJars) {
     this.ruleContext = ruleContext;
-    this.javaSemantics = javaSemantics;
     this.useSanityChecks = useSanityChecks;
+    this.useTolerant = useTolerant;
     this.resourceExtractorBinary = resourceExtractorBinary;
     this.jackBinary = jackBinary;
     this.jillBinary = jillBinary;
-    this.androidBaseLibraryForJack = androidJackLibrary;
+    this.baseClasspath = baseClasspath;
     this.outputArtifact = outputArtifact;
     this.javaSources = javaSources;
     this.sourceJars = sourceJars;
     this.resources = resources;
+    this.resourceJars = resourceJars;
     this.processorClasspathJars = processorClasspathJars;
     this.processorNames = processorNames;
     this.exportedJacks = exportedJacks;
@@ -267,7 +283,7 @@ public final class JackCompilationHelper {
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .setExecutable(jackBinary)
-            .addInputs(transitiveJackLibraries)
+            .addTransitiveInputs(transitiveJackLibraries)
             .addInputs(proguardSpecs)
             .addInputs(manualMainDexList.asSet())
             .addOutput(outputZip)
@@ -285,7 +301,7 @@ public final class JackCompilationHelper {
    */
   public JackLibraryProvider compileAsNeverlinkLibrary() {
     JackLibraryProvider nonNeverlink = compileAsLibrary();
-    return new JackLibraryProvider(
+    return JackLibraryProvider.create(
         /* transitiveJackLibrariesToLink */
         NestedSetBuilder.<Artifact>emptySet(Order.NAIVE_LINK_ORDER),
         nonNeverlink.getTransitiveJackClasspathLibraries());
@@ -326,24 +342,27 @@ public final class JackCompilationHelper {
             .addTransitive(classpathJacks)
             .build();
 
-    // android.jack needs to be first in the set's iteration order, as it's the base library.
+    // The base classpath needs to be first in the set's iteration order.
     // Then any jars or jack files specified directly, then dependencies from providers.
     NestedSet<Artifact> classpath =
         new NestedSetBuilder<Artifact>(Order.NAIVE_LINK_ORDER)
-            .add(androidBaseLibraryForJack)
+            .addTransitive(baseClasspath)
             .addTransitive(transitiveClasspath)
             .build();
 
     NestedSetBuilder<Artifact> exports = new NestedSetBuilder<>(Order.NAIVE_LINK_ORDER);
     NestedSetBuilder<Artifact> dexContents = new NestedSetBuilder<>(Order.NAIVE_LINK_ORDER);
 
-    if (javaSources.isEmpty() && sourceJars.isEmpty() && resources.isEmpty()) {
-      // We still have to create SOMETHING to fulfill the artifact, but man, screw it
-      buildEmptyJackAction();
-    } else {
-      buildJackAction(javaSources, sourceJars, resources, classpath);
-      exports.add(outputArtifact);
-      dexContents.add(outputArtifact);
+    if (outputArtifact != null) {
+      if (javaSources.isEmpty() && sourceJars.isEmpty() && resources.isEmpty()
+          && resourceJars.isEmpty()) {
+        // We still have to create SOMETHING to fulfill the artifact, but man, screw it
+        buildEmptyJackAction();
+      } else {
+        buildJackAction(javaSources, sourceJars, resources, resourceJars, classpath);
+        exports.add(outputArtifact);
+        dexContents.add(outputArtifact);
+      }
     }
 
     // These need to be added now so that they can be after the outputArtifact (if present).
@@ -355,7 +374,7 @@ public final class JackCompilationHelper {
         .addAll(Iterables.transform(dexJars, nonLibraryFileConverter))
         .addTransitive(dexJacks);
 
-    alreadyCompiledLibrary = new JackLibraryProvider(dexContents.build(), exports.build());
+    alreadyCompiledLibrary = JackLibraryProvider.create(dexContents.build(), exports.build());
     return alreadyCompiledLibrary;
   }
 
@@ -367,16 +386,18 @@ public final class JackCompilationHelper {
    * @see #postprocessPartialJackAndAddResources(Artifact,Artifact)
    */
   private Artifact convertJarToPartialJack(Artifact jar) {
-    PathFragment outputPath =
-        FileSystemUtils.replaceExtension(
-            getPartialJackRoot().getRelative(jar.getRootRelativePath()), ".jack");
-    Artifact result =
-        ruleContext
-            .getAnalysisEnvironment()
-            .getDerivedArtifact(outputPath, ruleContext.getBinOrGenfilesDirectory());
-    ruleContext.registerAction(
+    Artifact result = ruleContext.getUniqueDirectoryArtifact(
+        PARTIAL_JACK_DIRECTORY,
+        FileSystemUtils.replaceExtension(jar.getRootRelativePath(), ".jack"),
+        ruleContext.getBinOrGenfilesDirectory());
+    SpawnAction.Builder builder =
         new SpawnAction.Builder()
-            .setExecutable(jillBinary)
+            .setExecutable(jillBinary);
+    if (useTolerant) {
+      builder.addArgument(TOLERANT);
+    }
+    ruleContext.registerAction(
+        builder
             .addArgument(JILL_OUTPUT)
             .addOutputArgument(result)
             .addInputArgument(jar)
@@ -392,13 +413,11 @@ public final class JackCompilationHelper {
    * non-resource files and returning a zip file containing only resources.
    */
   private Artifact extractResourcesFromJar(Artifact jar) {
-    PathFragment outputPath =
-        FileSystemUtils.replaceExtension(
-            getPartialJackRoot().getRelative(jar.getRootRelativePath()), "-resources.zip");
-    Artifact result =
-        ruleContext
-            .getAnalysisEnvironment()
-            .getDerivedArtifact(outputPath, ruleContext.getBinOrGenfilesDirectory());
+    Artifact result =  ruleContext.getUniqueDirectoryArtifact(
+        PARTIAL_JACK_DIRECTORY,
+        FileSystemUtils.replaceExtension(jar.getRootRelativePath(), "-resources.zip"),
+        ruleContext.getBinOrGenfilesDirectory());
+
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .setExecutable(resourceExtractorBinary)
@@ -417,13 +436,11 @@ public final class JackCompilationHelper {
    */
   private Artifact postprocessPartialJackAndAddResources(
       Artifact partialJackLibrary, Artifact resources) {
-    PathFragment outputPath =
-        getFinalizedJackRoot()
-            .getRelative(partialJackLibrary.getRootRelativePath().relativeTo(getPartialJackRoot()));
-    Artifact result =
-        ruleContext
-            .getAnalysisEnvironment()
-            .getDerivedArtifact(outputPath, ruleContext.getBinOrGenfilesDirectory());
+    Artifact result = ruleContext.getUniqueDirectoryArtifact(
+        JACK_DIRECTORY,
+        partialJackLibrary.getRootRelativePath().relativeTo(
+            ruleContext.getUniqueDirectory(PARTIAL_JACK_DIRECTORY)),
+        ruleContext.getBinOrGenfilesDirectory());
     CustomCommandLine.Builder builder =
         CustomCommandLine.builder()
             // Have jack double-check its behavior and crash rather than producing invalid output
@@ -447,26 +464,6 @@ public final class JackCompilationHelper {
   }
 
   /**
-   * Creates an intermediate directory to store partially-converted Jack libraries.
-   *
-   * @see #convertJarToPartialJack(Artifact)
-   */
-  private PathFragment getPartialJackRoot() {
-    PathFragment rulePath = ruleContext.getLabel().toPathFragment();
-    return rulePath.replaceName(rulePath.getBaseName() + "_jill");
-  }
-
-  /**
-   * Creates an intermediate directory to store fully-converted Jack libraries.
-   *
-   * @see #postprocessPartialJackAndAddResources(Artifact,Artifact)
-   */
-  private PathFragment getFinalizedJackRoot() {
-    PathFragment rulePath = ruleContext.getLabel().toPathFragment();
-    return rulePath.replaceName(rulePath.getBaseName() + "_jack");
-  }
-
-  /**
    * Creates an action to build an empty jack library given by outputArtifact.
    */
   private void buildEmptyJackAction() {
@@ -485,14 +482,16 @@ public final class JackCompilationHelper {
    *
    * @param javaSources Iterable of .java files to compile using jack.
    * @param sourceJars Iterable of .srcjar files to unpack and compile using jack.
-   * @param resources Iterable of resource files to be imported into the jack library.
+   * @param resources Mapping from library paths to resource files to be imported into the jack
+   *     library.
    * @param classpathJackLibraries Libraries used for compilation.
    * @returns An artifact representing the combined jack library, or null if none was created.
    */
   private void buildJackAction(
       Iterable<Artifact> javaSources,
       Iterable<Artifact> sourceJars,
-      Iterable<Artifact> resources,
+      Map<PathFragment, Artifact> resources,
+      NestedSet<Artifact> resourceJars,
       NestedSet<Artifact> classpathJackLibraries) {
     CustomCommandLine.Builder builder =
         CustomCommandLine.builder()
@@ -507,15 +506,15 @@ public final class JackCompilationHelper {
     if (!processorClasspathJars.isEmpty()) {
       builder.addJoinExecPaths(PROCESSOR_CLASSPATH, ":", processorClasspathJars);
     }
-    for (Artifact resource : resources) {
+    for (Entry<PathFragment, Artifact> resource : resources.entrySet()) {
       builder.add(IMPORT_RESOURCE_FILE);
       // Splits paths at the appropriate root (java root, if present; source/genfiles/etc. if not).
       // The part of the path after the : is used as the path to the resource within the jack/apk,
       // while the part of the path before the : is the remainder of the path to the resource file.
       // In cases where the path to the file and the path within the jack/apk are the same,
       // such as when a source file is not under a java root, this prefix will be empty.
-      PathFragment execPath = resource.getExecPath();
-      PathFragment resourcePath = javaSemantics.getJavaResourcePath(resource.getRootRelativePath());
+      PathFragment execPath = resource.getValue().getExecPath();
+      PathFragment resourcePath = resource.getKey();
       if (execPath.equals(resourcePath)) {
         builder.addPaths(":%s", resourcePath);
       } else {
@@ -525,14 +524,18 @@ public final class JackCompilationHelper {
         builder.addPaths("%s:%s", rootPrefix, resourcePath);
       }
     }
+    if (!resourceJars.isEmpty()) {
+      builder.addJoinExecPaths(IMPORT_RESOURCE_ZIP, ":", resourceJars);
+    }
     builder.addBeforeEachExecPath(IMPORT_SOURCE_ZIP, sourceJars).addExecPaths(javaSources);
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .setExecutable(jackBinary)
-            .addInputs(classpathJackLibraries)
+            .addTransitiveInputs(classpathJackLibraries)
             .addOutput(outputArtifact)
-            .addInputs(processorClasspathJars)
-            .addInputs(resources)
+            .addTransitiveInputs(processorClasspathJars)
+            .addInputs(resources.values())
+            .addTransitiveInputs(resourceJars)
             .addInputs(sourceJars)
             .addInputs(javaSources)
             .setCommandLine(builder.build())
@@ -548,11 +551,22 @@ public final class JackCompilationHelper {
 
     /** Rule context used to build and register actions. */
     @Nullable private RuleContext ruleContext;
-    /** JavaSemantics used to determine the resource root for Java resources. */
-    @Nullable private JavaSemantics javaSemantics;
 
-    /** Jack library containing Android base classes. */
-    @Nullable private Artifact androidBaseLibraryForJack;
+    /** Whether to enable tolerant mode in Jill, e.g., when compiling a bootclasspath. */
+    private boolean useTolerant;
+
+    /** Binary used to extract resources from a jar file. */
+    @Nullable private FilesToRunProvider resourceExtractorBinary;
+    /** Binary used to build Jack libraries and dex files. */
+    @Nullable private FilesToRunProvider jackBinary;
+    /** Binary used to convert jars to Jack libraries. */
+    @Nullable private FilesToRunProvider jillBinary;
+    /**
+     * Set of Jack libraries containing Android/Java base classes.
+     *
+     * <p>These will be placed first on the classpath.
+     */
+    @Nullable private NestedSet<Artifact> baseClasspath;
 
     /** The destination for the Jack artifact to be created. */
     @Nullable private Artifact outputArtifact;
@@ -561,8 +575,11 @@ public final class JackCompilationHelper {
     private final LinkedHashSet<Artifact> javaSources = new LinkedHashSet<>();
     /** Zip files of java sources for the rule's Jack library. */
     private final LinkedHashSet<Artifact> sourceJars = new LinkedHashSet<>();
-    /** Java resources for the rule's Jack library. */
-    private final LinkedHashSet<Artifact> resources = new LinkedHashSet<>();
+    /** Map from paths within the Jack library to Java resources for the rule's Jack library. */
+    private final LinkedHashMap<PathFragment, Artifact> resources = new LinkedHashMap<>();
+
+    /** Set of resource jars that contain Java resources. */
+    private final NestedSetBuilder<Artifact> resourceJars = NestedSetBuilder.stableOrder();
 
     /** Jack libraries to be provided to depending rules on the classpath, from srcs and exports. */
     private final NestedSetBuilder<Artifact> exportedJackLibraries =
@@ -615,18 +632,12 @@ public final class JackCompilationHelper {
     }
 
     /**
-     * Sets the java semantics used to determine resource placement.
-     */
-    public JackCompilationHelper.Builder setJavaSemantics(JavaSemantics javaSemantics) {
-      this.javaSemantics = Preconditions.checkNotNull(javaSemantics);
-      return this;
-    }
-
-    /**
      * Sets the artifact the final Jack library should be output to.
      *
      * <p>The artifact specified will always be generated, although it may be empty if there are no
      * sources.
+     *
+     * <p>This method must be called if any of addJavaSources, addSourceJars, or addResources is.
      */
     public JackCompilationHelper.Builder setOutputArtifact(Artifact outputArtifact) {
       this.outputArtifact = Preconditions.checkNotNull(outputArtifact);
@@ -634,11 +645,43 @@ public final class JackCompilationHelper {
     }
 
     /**
-     * Sets the artifact representing android.jack, to supply base libraries to Jack compilation.
+     * Sets the Jack binary used to perform operations on Jack libraries.
      */
-    public JackCompilationHelper.Builder setAndroidBaseLibraryForJack(
-        Artifact androidBaseLibraryForJack) {
-      this.androidBaseLibraryForJack = Preconditions.checkNotNull(androidBaseLibraryForJack);
+    public JackCompilationHelper.Builder setJackBinary(FilesToRunProvider jackBinary) {
+      this.jackBinary = Preconditions.checkNotNull(jackBinary);
+      return this;
+    }
+
+    /**
+     * Sets the Jill binary used to translate jars to jack files.
+     */
+    public JackCompilationHelper.Builder setJillBinary(FilesToRunProvider jillBinary) {
+      this.jillBinary = Preconditions.checkNotNull(jillBinary);
+      return this;
+    }
+
+    /**
+     * Sets the resource extractor binary used to extract resources from jars.
+     */
+    public JackCompilationHelper.Builder setResourceExtractorBinary(
+        FilesToRunProvider resourceExtractorBinary) {
+      this.resourceExtractorBinary = Preconditions.checkNotNull(resourceExtractorBinary);
+      return this;
+    }
+
+    /**
+     * Sets the base classpath, containing core classes (android.jar or Java bootclasspath).
+     */
+    public JackCompilationHelper.Builder setJackBaseClasspath(NestedSet<Artifact> baseClasspath) {
+      this.baseClasspath = Preconditions.checkNotNull(baseClasspath);
+      return this;
+    }
+
+    /**
+     * Sets Jill to be tolerant, e.g., when translating a jar from the Java bootclasspath to jack.
+     */
+    public JackCompilationHelper.Builder setTolerant() {
+      this.useTolerant = true;
       return this;
     }
 
@@ -675,10 +718,16 @@ public final class JackCompilationHelper {
     }
 
     /**
-     * Adds a set of Java resources which will be added to the Jack package and the final APK.
+     * Adds Java resources as a map keyed by the paths where they will be added to the Jack package
+     * and the final APK. The resource path for an artifact must be a suffix of its exec path.
      */
-    public JackCompilationHelper.Builder addResources(Collection<Artifact> resources) {
-      this.resources.addAll(Preconditions.checkNotNull(resources));
+    public JackCompilationHelper.Builder addResources(Map<PathFragment, Artifact> resources) {
+      this.resources.putAll(Preconditions.checkNotNull(resources));
+      return this;
+    }
+
+    public JackCompilationHelper.Builder addResourceJars(NestedSet<Artifact> resourceJars) {
+      this.resourceJars.addTransitive(resourceJars);
       return this;
     }
 
@@ -811,31 +860,33 @@ public final class JackCompilationHelper {
      * JackCompilationHelpers will attempt to generate the same actions.
      */
     public JackCompilationHelper build() {
+      Preconditions.checkNotNull(ruleContext);
+
       boolean useSanityChecks =
           ruleContext
-              .getConfiguration()
               .getFragment(AndroidConfiguration.class)
               .isJackSanityChecked();
-      FilesToRunProvider jackBinary =
-          Preconditions.checkNotNull(ruleContext.getExecutablePrerequisite("$jack", Mode.HOST));
-      FilesToRunProvider jillBinary =
-          Preconditions.checkNotNull(ruleContext.getExecutablePrerequisite("$jill", Mode.HOST));
-      FilesToRunProvider resourceExtractorBinary =
-          Preconditions.checkNotNull(
-              ruleContext.getExecutablePrerequisite("$resource_extractor", Mode.HOST));
+
+      // It's okay not to have an outputArtifact if there is nothing to build.
+      // e.g., if only translating jars with Jill, no final jack library will be created.
+      // But if there is something to build, enforce that one has been specified.
+      if (!javaSources.isEmpty() || !sourceJars.isEmpty() || !resources.isEmpty()) {
+        Preconditions.checkNotNull(outputArtifact);
+      }
 
       return new JackCompilationHelper(
-          Preconditions.checkNotNull(ruleContext),
-          Preconditions.checkNotNull(javaSemantics),
+          ruleContext,
           useSanityChecks,
-          resourceExtractorBinary,
-          jackBinary,
-          jillBinary,
-          Preconditions.checkNotNull(androidBaseLibraryForJack),
-          Preconditions.checkNotNull(outputArtifact),
+          useTolerant,
+          Preconditions.checkNotNull(resourceExtractorBinary),
+          Preconditions.checkNotNull(jackBinary),
+          Preconditions.checkNotNull(jillBinary),
+          Preconditions.checkNotNull(baseClasspath),
+          outputArtifact,
           ImmutableSet.copyOf(javaSources),
           ImmutableSet.copyOf(sourceJars),
-          ImmutableSet.copyOf(resources),
+          ImmutableMap.copyOf(resources),
+          resourceJars.build(),
           processorClasspathJars.build(),
           ImmutableSet.copyOf(processorNames),
           exportedJackLibraries.build(),

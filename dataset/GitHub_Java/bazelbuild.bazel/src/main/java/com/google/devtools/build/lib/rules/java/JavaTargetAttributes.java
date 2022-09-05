@@ -67,7 +67,6 @@ public class JavaTargetAttributes {
         NestedSetBuilder.naiveLinkOrder();
 
     private final List<Artifact> bootClassPath = new ArrayList<>();
-    private final List<Artifact> sourcePath = new ArrayList<>();
     private final List<Artifact> nativeLibraries = new ArrayList<>();
 
     private final Set<Artifact> processorPath = new LinkedHashSet<>();
@@ -205,16 +204,6 @@ public class JavaTargetAttributes {
       Preconditions.checkArgument(!jars.isEmpty());
       Preconditions.checkState(bootClassPath.isEmpty());
       bootClassPath.addAll(jars);
-      return this;
-    }
-
-    /**
-     * Sets the sourcepath to be passed to the Java compiler.
-     */
-    public Builder setSourcePath(List<Artifact> artifacts) {
-      Preconditions.checkArgument(!built);
-      Preconditions.checkArgument(sourcePath.isEmpty());
-      sourcePath.addAll(artifacts);
       return this;
     }
 
@@ -372,7 +361,6 @@ public class JavaTargetAttributes {
           runtimeClassPath,
           compileTimeClassPath,
           bootClassPath,
-          sourcePath,
           nativeLibraries,
           processorPath,
           processorPathDirs,
@@ -393,34 +381,22 @@ public class JavaTargetAttributes {
           strictJavaDeps);
     }
 
-    // TODO(bazel-team): delete the following methods - users should use the built
-    // JavaTargetAttributes instead of accessing mutable state in the Builder.
-
-    /** @deprecated prefer {@link JavaTargetAttributes#getSourceFiles} */
+    // TODO(bazel-team): Remove these 5 methods.
     @Deprecated
     public Set<Artifact> getSourceFiles() {
       return sourceFiles;
     }
 
-    /** @deprecated prefer {@link JavaTargetAttributes#hasSources} */
-    @Deprecated
-    public boolean hasSources() {
-      return !sourceFiles.isEmpty() || !sourceJars.isEmpty();
-    }
-
-    /** @deprecated prefer {@link JavaTargetAttributes#hasSourceFiles} */
     @Deprecated
     public boolean hasSourceFiles() {
       return !sourceFiles.isEmpty();
     }
 
-    /** @deprecated prefer {@link JavaTargetAttributes#getInstrumentationMetadata} */
     @Deprecated
     public List<Artifact> getInstrumentationMetadata() {
       return instrumentationMetadata;
     }
 
-    /** @deprecated prefer {@link JavaTargetAttributes#hasSourceJars} */
     @Deprecated
     public boolean hasSourceJars() {
       return !sourceJars.isEmpty();
@@ -438,7 +414,6 @@ public class JavaTargetAttributes {
   private final NestedSet<Artifact> compileTimeClassPath;
 
   private final ImmutableList<Artifact> bootClassPath;
-  private final ImmutableList<Artifact> sourcePath;
   private final ImmutableList<Artifact> nativeLibraries;
 
   private final ImmutableSet<Artifact> processorPath;
@@ -473,7 +448,6 @@ public class JavaTargetAttributes {
       NestedSetBuilder<Artifact> runtimeClassPath,
       NestedSetBuilder<Artifact> compileTimeClassPath,
       List<Artifact> bootClassPath,
-      List<Artifact> sourcePath,
       List<Artifact> nativeLibraries,
       Set<Artifact> processorPath,
       Set<PathFragment> processorPathDirs,
@@ -502,7 +476,6 @@ public class JavaTargetAttributes {
             .addTransitive(compileTimeClassPath.build())
             .build();
     this.bootClassPath = ImmutableList.copyOf(bootClassPath);
-    this.sourcePath = ImmutableList.copyOf(sourcePath);
     this.nativeLibraries = ImmutableList.copyOf(nativeLibraries);
     this.processorPath = ImmutableSet.copyOf(processorPath);
     this.processorPathDirs = ImmutableSet.copyOf(processorPathDirs);
@@ -592,10 +565,6 @@ public class JavaTargetAttributes {
     return bootClassPath;
   }
 
-  public ImmutableList<Artifact> getSourcePath() {
-    return sourcePath;
-  }
-
   public ImmutableSet<Artifact> getProcessorPath() {
     return processorPath;
   }
@@ -628,19 +597,24 @@ public class JavaTargetAttributes {
     return processorNames;
   }
 
-  public boolean hasSources() {
-    return !sourceFiles.isEmpty() || !sourceJars.isEmpty();
+  public boolean hasSourceFiles() {
+    return !sourceFiles.isEmpty();
+  }
+
+  public boolean hasSourceJars() {
+    return !sourceJars.isEmpty();
   }
 
   public boolean hasResources() {
-    return !resources.isEmpty()
-        || !messages.isEmpty()
-        || !classPathResources.isEmpty()
-        || !resourceJars.isEmpty();
+    return !resources.isEmpty();
   }
 
   public boolean hasMessages() {
     return !messages.isEmpty();
+  }
+
+  public boolean hasClassPathResources() {
+    return !classPathResources.isEmpty();
   }
 
   public String getRuleKind() {

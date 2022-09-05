@@ -669,7 +669,12 @@ public final class JavaCompileAction extends AbstractAction {
           result.addExecPath("--output_deps_proto", outputDepsProto);
         }
         if (!extdirInputs.isEmpty()) {
-          result.addJoinExecPaths("--extdir", pathSeparator, extdirInputs);
+          result.add("--extdir");
+          LinkedHashSet<PathFragment> extdirs = new LinkedHashSet<>();
+          for (Artifact extjar : extdirInputs) {
+            extdirs.add(extjar.getExecPath().getParentDirectory());
+          }
+          result.add(Joiner.on(pathSeparator).join(extdirs));
         }
         if (!processorPath.isEmpty() || !processorPathDirs.isEmpty()) {
           ImmutableList.Builder<String> execPathStrings = ImmutableList.<String>builder();
@@ -1042,6 +1047,10 @@ public final class JavaCompileAction extends AbstractAction {
       // aggregation code below should go away.
       final String pathSeparator = configuration.getHostPathSeparator();
       List<String> jcopts = new ArrayList<>(javacOpts);
+      JavaConfiguration javaConfiguration = configuration.getFragment(JavaConfiguration.class);
+      if (!javaConfiguration.getJavaWarns().isEmpty()) {
+        jcopts.add("-Xlint:" + Joiner.on(',').join(javaConfiguration.getJavaWarns()));
+      }
       if (!bootclasspathEntries.isEmpty()) {
         jcopts.add("-bootclasspath");
         jcopts.add(Artifact.joinExecPaths(pathSeparator, bootclasspathEntries));
@@ -1059,7 +1068,6 @@ public final class JavaCompileAction extends AbstractAction {
       }
 
       // Invariant: if java_classpath is set to 'off', dependencyArtifacts are ignored
-      JavaConfiguration javaConfiguration = configuration.getFragment(JavaConfiguration.class);
       if (javaConfiguration.getReduceJavaClasspath() == JavaClasspathMode.OFF) {
         compileTimeDependencyArtifacts.clear();
       }

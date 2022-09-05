@@ -82,7 +82,6 @@ public class BazelJavaRuleClasses {
       return builder
           .add(
               attr(":java_toolchain", LABEL)
-                  .useOutputLicenses()
                   .mandatoryNativeProviders(
                       ImmutableList.<Class<? extends TransitiveInfoProvider>>of(
                           JavaToolchainProvider.class))

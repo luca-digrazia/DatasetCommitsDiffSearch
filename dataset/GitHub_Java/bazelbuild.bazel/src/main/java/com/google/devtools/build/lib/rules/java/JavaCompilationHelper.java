@@ -301,12 +301,9 @@ public final class JavaCompilationHelper {
       return false;
     }
     if (javaToolchain.getHeaderCompiler() == null) {
-      getRuleContext()
-          .ruleError(
-              String.format(
-                  "header compilation was requested but it is not supported by the current Java"
-                      + " toolchain '%s'; see the java_toolchain.header_compiler attribute",
-                  javaToolchain.getToolchainLabel()));
+      getRuleContext().ruleError(
+          "header compilation was requested but it is not support by the current Java toolchain;"
+              + " see the java_toolchain.header_compiler attribute");
       return false;
     }
     return true;
