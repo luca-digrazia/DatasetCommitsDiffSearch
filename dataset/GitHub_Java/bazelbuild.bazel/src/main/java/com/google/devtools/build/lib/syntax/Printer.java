@@ -114,7 +114,7 @@ public final class Printer {
     } else if (o instanceof Integer || o instanceof Double) {
       append(buffer, o.toString());
 
-    } else if (o == Runtime.NONE) {
+    } else if (o == Environment.NONE) {
       append(buffer, "None");
 
     } else if (o == Boolean.TRUE) {
