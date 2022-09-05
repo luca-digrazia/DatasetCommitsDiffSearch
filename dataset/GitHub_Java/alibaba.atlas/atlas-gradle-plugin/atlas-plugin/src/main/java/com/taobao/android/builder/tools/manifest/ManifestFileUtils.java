@@ -209,26 +209,8 @@
 
 package com.taobao.android.builder.tools.manifest;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathExpressionException;
-
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
-
 import com.android.xml.AndroidXPathFactory;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Maps;
@@ -236,8 +218,8 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Table;
 import com.taobao.android.builder.extension.ManifestOptions;
 import com.taobao.android.builder.tools.bundleinfo.model.BundleInfo;
-import com.taobao.android.builder.tools.manifest.Permission.Item;
 import com.taobao.android.builder.tools.xml.XmlHelper;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
@@ -256,29 +238,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathExpressionException;
+
 /**
  * @author shenghua.nish
- * @date 2015-04-22 At 10:58
+ * @date 2015-04-22 上午10:58
  */
 public class ManifestFileUtils {
 
     private static final Logger logger = LoggerFactory.getLogger(ManifestFileUtils.class);
 
-    public static String[] SYSTEM_PERMISSION = new String[] {"android.permission", "com.android"};
+    public static String[] SYSTEM_PERMISSION = new String[]{"android.permission", "com.android"};
 
     /**
-     * Follow up the manifest
+     * 对manifest做后续处理
      *
      * @param mainManifest
      * @param libManifestMap
      * @param baseBunfleInfoFile
      * @param manifestOptions
      */
-    public static Result postProcessManifests(File mainManifest, Map<String, File> libManifestMap,
-                                              Multimap<String, File> libDependenciesMaps, File baseBunfleInfoFile,
-                                              ManifestOptions manifestOptions, boolean addMultiDex,
-                                              boolean isInstantRun, Set<String> remoteBundles)
-        throws IOException, DocumentException {
+    public static Result postProcessManifests(File mainManifest, Map<String, File> libManifestMap, Multimap<String, File> libDependenciesMaps, File baseBunfleInfoFile, ManifestOptions manifestOptions, boolean addMultiDex, boolean isInstantRun, Set<String> remoteBundles) throws IOException, DocumentException {
 
         Result result = new Result();
 
@@ -289,16 +282,25 @@ public class ManifestFileUtils {
         Document document = XmlHelper.readXml(inputFile);
 
         if (null != baseBunfleInfoFile && baseBunfleInfoFile.exists()) {
-            addApplicationMetaData(document, libManifestMap, baseBunfleInfoFile, manifestOptions, remoteBundles);
+            addApplicationMetaData(document,
+                                   libManifestMap,
+                                   baseBunfleInfoFile,
+                                   manifestOptions,
+                                   remoteBundles);
         }
 
         if (null != manifestOptions && manifestOptions.isAddAtlasProxyComponents()) {
-            AtlasProxy.addAtlasProxyClazz(document, manifestOptions.getAtlasProxySkipChannels(), result);
+            AtlasProxy.addAtlasProxyClazz(document,
+                                          manifestOptions.getAtlasProxySkipChannels(),
+                                          result);
         }
 
-        if (null != manifestOptions && manifestOptions.isAddBundleLocation()) {
-            addBundleLocationToDestManifest(document, libManifestMap, libDependenciesMaps, manifestOptions);
-        }
+        //if (null != manifestOptions && manifestOptions.isAddBundleLocation()) {
+        //    addBundleLocationToDestManifest(document,
+        //                                    libManifestMap,
+        //                                    libDependenciesMaps,
+        //                                    manifestOptions);
+        //}
         if (null != manifestOptions && manifestOptions.isReplaceApplication()) {
             replaceManifestApplicationName(document);
         }
@@ -318,18 +320,16 @@ public class ManifestFileUtils {
 
         XmlHelper.saveDocument(document, mainManifest);
 
-        printlnPermissions(document);
-
         return result;
     }
 
     /**
-     * Replace the original application in the manifest nameFor AtlasBridgeApplication
-     * The original name has been written in meta-data
+     * 替换manifest中的原有application name为AtlasBridgeApplication
+     * 原有name已meta-data的方式写入
      */
     private static void replaceManifestApplicationName(Document document) {
-        // Write meta-data information
-        Element root = document.getRootElement();// Get the root node
+        // 写入meta-data信息
+        Element root = document.getRootElement();// 得到根节点
         Element applicationElement = root.element("application");
         String realApplicationClassName = applicationElement.attributeValue("name");
 
@@ -346,8 +346,8 @@ public class ManifestFileUtils {
     }
 
     private static void addMultiDexMetaData(Document document) {
-        // Write meta-data information
-        Element root = document.getRootElement();// Get the root node
+        // 写入meta-data信息
+        Element root = document.getRootElement();// 得到根节点
         Element applicationElement = root.element("application");
 
         Element metaData = applicationElement.addElement("meta-data");
@@ -356,21 +356,23 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Add the metadata information to the manifest of the Lord as a solution for atals
+     * 往主的manifest中添加metadata信息，作为atals的兜底方案
      *
      * @param document
      * @param libManifestMap
      * @param baseBunfleInfoFile
      * @param manifestOptions
      */
-    private static void addApplicationMetaData(Document document, Map<String, File> libManifestMap,
-                                               File baseBunfleInfoFile, ManifestOptions manifestOptions,
-                                               Set<String> remoteBundles) throws IOException, DocumentException {
+    private static void addApplicationMetaData(Document document, Map<String, File> libManifestMap, File baseBunfleInfoFile, ManifestOptions manifestOptions, Set<String> remoteBundles) throws IOException, DocumentException {
         Map<String, BundleInfo> bundleFileMap = Maps.newHashMap();
-        // Parsing basic information
-        if (null != baseBunfleInfoFile && baseBunfleInfoFile.exists() && baseBunfleInfoFile.canRead()) {
+        // 解析基础信息
+        if (null != baseBunfleInfoFile &&
+            baseBunfleInfoFile.exists() &&
+            baseBunfleInfoFile.canRead()) {
             String bundleBaseInfo = FileUtils.readFileToString(baseBunfleInfoFile, "utf-8");
-            bundleFileMap = JSON.parseObject(bundleBaseInfo, new TypeReference<Map<String, BundleInfo>>() {});
+            bundleFileMap = JSON.parseObject(bundleBaseInfo,
+                                             new TypeReference<Map<String, BundleInfo>>() {
+                                             });
         }
         Map<String, LibBundleInfo> awbManifestMap = Maps.newHashMap();
         for (Map.Entry<String, File> entry : libManifestMap.entrySet()) {
@@ -381,25 +383,28 @@ public class ManifestFileUtils {
             File libManifest = entry.getValue();
             if (libManifest.exists()) {
                 SAXReader reader = new SAXReader();
-                Document libDocument = reader.read(libManifest);// Read the XML file
-                Element libRoot = libDocument.getRootElement();// Get the root node
+                Document libDocument = reader.read(libManifest);// 读取XML文件
+                Element libRoot = libDocument.getRootElement();// 得到根节点
                 String packageName = libRoot.attributeValue("package");
                 Element applicationElement = libRoot.element("application");
                 String applicationName = null;
                 if (null != applicationElement) {
                     applicationName = applicationElement.attributeValue("name");
                 }
-                LibBundleInfo libBundleInfo = new LibBundleInfo(artifactId, packageName, applicationName,
-                                                                bundleFileMap.get(libName), libName);
+                LibBundleInfo libBundleInfo = new LibBundleInfo(artifactId,
+                                                                packageName,
+                                                                applicationName,
+                                                                bundleFileMap.get(libName),
+                                                                libName);
                 awbManifestMap.put(artifactId, libBundleInfo);
             }
         }
 
-        // Write meta-data information
-        Element root = document.getRootElement();// Get the root node
+        // 写入meta-data信息
+        Element root = document.getRootElement();// 得到根节点
         List<? extends Node> nodes = root.selectNodes("//application");
         for (Node node : nodes) {
-            Element element = (Element)node;
+            Element element = (Element) node;
             for (String artifactId : libManifestMap.keySet()) {
                 LibBundleInfo libBundleInfo = awbManifestMap.get(artifactId);
                 if (StringUtils.isNotBlank(libBundleInfo.applicationName)) {
@@ -411,8 +416,11 @@ public class ManifestFileUtils {
                     if (null != bundleInfo && bundleInfo.getDependency() != null) {
                         bundleDepValue = StringUtils.join(bundleInfo.getDependency(), "|");
                     }
-                    String value = libBundleInfo.applicationName + "," + !remoteBundles.contains(libBundleInfo.libName)
-                        + "," + bundleDepValue;
+                    String value = libBundleInfo.applicationName +
+                                   "," +
+                                   !remoteBundles.contains(libBundleInfo.libName) +
+                                   "," +
+                                   bundleDepValue;
                     logger.info("[bundleInfo] add bundle value : " + value + " to manifest");
                     metaData.addAttribute("android:name", "bundle_" + bundlePackageName);
                     metaData.addAttribute("android:value", value);
@@ -433,8 +441,7 @@ public class ManifestFileUtils {
 
         String libName;
 
-        public LibBundleInfo(String name, String packageName, String applicationName, BundleInfo bundleInfo,
-                             String libName) {
+        public LibBundleInfo(String name, String packageName, String applicationName, BundleInfo bundleInfo, String libName) {
             this.name = name;
             this.packageName = packageName;
             this.applicationName = applicationName;
@@ -444,29 +451,27 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Add bundleLocation to the manifest file
+     * 在manifest文件中增加bundleLocation
      *
      * @param document
      * @param libManifestMap
      * @param manifestOptions
      * @throws DocumentException
      */
-    private static void addBundleLocationToDestManifest(Document document, Map<String, File> libManifestMap,
-                                                        Multimap<String, File> libDependenciesMaps,
-                                                        ManifestOptions manifestOptions) throws DocumentException {
+    private static void addBundleLocationToDestManifest(Document document, Map<String, File> libManifestMap, Multimap<String, File> libDependenciesMaps, ManifestOptions manifestOptions) throws DocumentException {
         Table<String, String, String> bundleInfoTable = HashBasedTable.create();
         Map<String, String> packageNameMap = new HashMap<String, String>();
         for (Map.Entry<String, File> entry : libManifestMap.entrySet()) {
             File libManifest = entry.getValue();
             if (libManifest.exists()) {
                 SAXReader reader = new SAXReader();
-                Document libDocument = reader.read(libManifest);// Read the XML file
-                Element libRoot = libDocument.getRootElement();// Get the root node
+                Document libDocument = reader.read(libManifest);// 读取XML文件
+                Element libRoot = libDocument.getRootElement();// 得到根节点
                 String packageName = libRoot.attributeValue("package");
                 packageNameMap.put(entry.getKey(), packageName);
                 List<? extends Node> nodes = libRoot.selectNodes("//activity|//service|//receiver");
                 for (Node node : nodes) {
-                    Element e = (Element)node;
+                    Element e = (Element) node;
                     String name = e.attributeValue("name");
                     String type = e.getName();
                     bundleInfoTable.put(type, name, packageName);
@@ -474,18 +479,19 @@ public class ManifestFileUtils {
             }
         }
 
-        // Gets all dependent manifest information
+        // 获取所有依赖的manifest信息
         for (String key : libDependenciesMaps.keySet()) {
             Collection<File> libManifests = libDependenciesMaps.get(key);
             for (File libManifest : libManifests) {
                 if (libManifest.exists()) {
                     SAXReader reader = new SAXReader();
-                    Document libDocument = reader.read(libManifest);// Read the XML file
-                    Element libRoot = libDocument.getRootElement();// Get the root node
+                    Document libDocument = reader.read(libManifest);// 读取XML文件
+                    Element libRoot = libDocument.getRootElement();// 得到根节点
                     String packageName = packageNameMap.get(key);
-                    List<? extends Node> nodes = libRoot.selectNodes("//activity|//service|//receiver");
+                    List<? extends Node> nodes = libRoot.selectNodes(
+                            "//activity|//service|//receiver");
                     for (Node node : nodes) {
-                        Element e = (Element)node;
+                        Element e = (Element) node;
                         String name = e.attributeValue("name");
                         String type = e.getName();
                         bundleInfoTable.put(type, name, packageName);
@@ -494,10 +500,10 @@ public class ManifestFileUtils {
             }
         }
 
-        Element root = document.getRootElement();// Get the root node
+        Element root = document.getRootElement();// 得到根节点
         List<? extends Node> nodes = root.selectNodes("//activity|//service|//receiver");
         for (Node node : nodes) {
-            Element e = (Element)node;
+            Element e = (Element) node;
             String name = e.attributeValue("name");
             String type = e.getName();
             String packageName = bundleInfoTable.get(type, name);
@@ -510,7 +516,7 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Delete the custom header
+     * 删除自定义的launches
      *
      * @param document
      * @param manifestOptions
@@ -519,13 +525,14 @@ public class ManifestFileUtils {
         if (null == manifestOptions) {
             return;
         }
-        Element root = document.getRootElement();// Get the root node
-        // Update launch information
-        if (manifestOptions.getRetainLaunches() != null && manifestOptions.getRetainLaunches().size() > 0) {
+        Element root = document.getRootElement();// 得到根节点
+        // 更新launch信息
+        if (manifestOptions.getRetainLaunches() != null &&
+            manifestOptions.getRetainLaunches().size() > 0) {
             List<? extends Node> nodes = root.selectNodes(
-                "//activity/intent-filter/category|//activity-alias/intent-filter/category");
+                    "//activity/intent-filter/category|//activity-alias/intent-filter/category");
             for (Node node : nodes) {
-                Element e = (Element)node;
+                Element e = (Element) node;
                 if ("android.intent.category.LAUNCHER".equalsIgnoreCase(e.attributeValue("name"))) {
                     Element activityElement = e.getParent().getParent();
                     String activiyName = activityElement.attributeValue("name");
@@ -542,7 +549,7 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Set the permissions for the manifest
+     * 设置manifest的权限
      *
      * @param document
      * @param manifestOptions
@@ -552,71 +559,20 @@ public class ManifestFileUtils {
             return;
         }
 
-        Element root = document.getRootElement();// Get the root node
+        Element root = document.getRootElement();// 得到根节点
 
-        if (null != manifestOptions.getPermissionJsonFile() && manifestOptions.getPermissionJsonFile().exists()) {
-            String json = FileUtils.readFileToString(manifestOptions.getPermissionJsonFile());
-            Permission permission = JSON.parseObject(json, Permission.class);
-
-            List<Node> nodes = root.selectNodes("//permission");
-            List<Node> nodes1 = root.selectNodes("//uses-permission");
-            List<Node> nodes2 = root.selectNodes("//uses-feature");
-
-            for (Node node : nodes) {
-                Element element = (Element)node;
-                String name = element.attributeValue("name");
-                Item item = Permission.query(permission.getPermissions(), name);
-                if (null == item) {
-                    logger.warn("[permission] remove " + name);
-                    element.getParent().remove(element);
-                }
-            }
-
-            for (Node node : nodes1) {
-                Element element = (Element)node;
-                String name = element.attributeValue("name");
-                Item item = Permission.query(permission.getUses_permissions(), name);
-                if (null == item) {
-                    logger.warn("[uses-permission] remove " + name);
-                    element.getParent().remove(element);
-                }
-            }
-
-            for (Node node : nodes2) {
-                Element element = (Element)node;
-                String name = element.attributeValue("name");
-                if (StringUtils.isEmpty(name)){
-                    continue;
-                }
-                Item item = Permission.query(permission.getUses_features(), name);
-                if (null == item) {
-                    logger.warn("[uses-feature] remove " + name);
-                    element.getParent().remove(element);
-                } else {
-                    //Modify the value
-                    if (StringUtils.isNotEmpty(item.getValue())) {
-                        Attribute required = element.attribute("required");
-                        if (null != required){
-                            required.setValue(item.getValue());
-                        }
-                        //element.addAttribute(new QName("required", new Namespace("android", null)), item.getValue());
-                    }
-                }
-            }
-
-            return;
-        }
-
-        if (null != manifestOptions.getPermissionListFile() && manifestOptions.getPermissionListFile().exists()) {
+        if (null != manifestOptions.getPermissionListFile() &&
+            manifestOptions.getPermissionListFile().exists()) {
             List<String> whiteList = FileUtils.readLines(manifestOptions.getPermissionListFile());
             List<Node> nodes = new ArrayList<>();
             nodes.addAll(root.selectNodes("//permission"));
             nodes.addAll(root.selectNodes("//uses-permission"));
 
             for (Node node : nodes) {
-                Element element = (Element)node;
+                Element element = (Element) node;
                 String name = element.attributeValue("name");
-                if (!whiteList.contains(name)) {
+
+                if (whiteList.contains(name)) {
                     logger.warn("[permission] remove " + name);
                     element.getParent().remove(element);
                 }
@@ -625,11 +581,11 @@ public class ManifestFileUtils {
             return;
         }
 
-        // Update custom permissions
+        // 更新自定义权限
         if (manifestOptions.isRemoveCustomPermission()) {
             List<? extends Node> nodes = root.selectNodes("//permission");
             for (Node node : nodes) {
-                Element element = (Element)node;
+                Element element = (Element) node;
                 String name = element.attributeValue("name");
                 boolean retain = false;
                 for (String systemPermission : SYSTEM_PERMISSION) {
@@ -638,9 +594,9 @@ public class ManifestFileUtils {
                         break;
                     }
                 }
-                // If there is a custom permission
-                if (null != manifestOptions.getRetainPermissions()
-                    && manifestOptions.getRetainPermissions().size() > 0) {
+                // 如果存在着自定义权限
+                if (null != manifestOptions.getRetainPermissions() &&
+                    manifestOptions.getRetainPermissions().size() > 0) {
                     for (String retainPermission : manifestOptions.getRetainPermissions()) {
                         if (name.startsWith(retainPermission)) {
                             retain = true;
@@ -654,12 +610,12 @@ public class ManifestFileUtils {
             }
         }
 
-        // Update system permissions
-        if (null != manifestOptions.getRemoveSystemPermissions()
-            && manifestOptions.getRemoveSystemPermissions().size() > 0) {
+        // 更新系统权限
+        if (null != manifestOptions.getRemoveSystemPermissions() &&
+            manifestOptions.getRemoveSystemPermissions().size() > 0) {
             List<? extends Node> nodes = root.selectNodes("//uses-permission");
             for (Node node : nodes) {
-                Element element = (Element)node;
+                Element element = (Element) node;
                 String name = element.attributeValue("name");
                 Set<String> removedPermissions = manifestOptions.getRemoveSystemPermissions();
                 if (removedPermissions.contains(name)) {
@@ -669,30 +625,8 @@ public class ManifestFileUtils {
         }
     }
 
-    public static void printlnPermissions(Document document) throws IOException {
-        Element root = document.getRootElement();// Get the root node
-        List<Node> nodes = new ArrayList<>();
-        nodes.addAll(root.selectNodes("//permission"));
-        nodes.addAll(root.selectNodes("//uses-permission"));
-
-        Set<String> permissons = new HashSet<>();
-        for (Node node : nodes) {
-            Element element = (Element)node;
-            String name = element.attributeValue("name");
-            permissons.add(name);
-        }
-
-        logger.warn("[permission] start >>>>>>>> ");
-        List<String> lines = new ArrayList<>(permissons);
-        Collections.sort(lines);
-        for (String name : lines) {
-            logger.warn(name);
-        }
-        logger.warn("[permission] end <<<<<<<<< ");
-    }
-
     /**
-     * Remove comments from XML
+     * 移除xml中的注释
      *
      * @param document
      * @throws IOException
@@ -710,7 +644,7 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Get the packageId for the manifest file
+     * 获取制定manifest文件的packageId
      *
      * @param manifestFile
      * @return
@@ -718,10 +652,10 @@ public class ManifestFileUtils {
     public static String getApplicationId(File manifestFile) {
         SAXReader reader = new SAXReader();
         if (manifestFile.exists()) {
-            Document document = null;// Read the XML file
+            Document document = null;// 读取XML文件
             try {
                 document = reader.read(manifestFile);
-                Element root = document.getRootElement();// Get the root node
+                Element root = document.getRootElement();// 得到根节点
                 String packageName = root.attributeValue("package");
                 return packageName;
             } catch (DocumentException e) {
@@ -732,7 +666,7 @@ public class ManifestFileUtils {
     }
     //
     ///**
-    // * Preprocess the specified manifest file
+    // * 预处理指定的manifest文件
     // *
     // * @param mainManifestFile
     // * @param libManifestFiles
@@ -744,48 +678,43 @@ public class ManifestFileUtils {
     //                                       boolean updateSdkVersion) throws DocumentException, IOException {
     //    ManifestFileObject mainManifestFileObject = getManifestFileObject(mainManifestFile);
     //    for (File libManifestFile : libManifestFiles) {
-    //        // Write files
+    //        // 写文件
     //        updatePreProcessManifestFile(libManifestFile, mainManifestFileObject, updateSdkVersion);
     //    }
     //
-    //    //Get the bundleInfo information
+    //    //获取bundleInfo信息
     //
     //}
 
-    public static void updatePreProcessBaseManifestFile(File modifyManifest, File orgManifestFile)
-        throws IOException, DocumentException {
+    public static void updatePreProcessBaseManifestFile(File modifyManifest, File orgManifestFile) throws IOException, DocumentException {
 
-        Document document = XmlHelper.readXml(orgManifestFile);// Read the XML file
+        Document document = XmlHelper.readXml(orgManifestFile);// 读取XML文件
 
-        Element root = document.getRootElement();// Get the root node
+        Element root = document.getRootElement();// 得到根节点
         root.addNamespace("tools", "http://schemas.android.com/tools");
         Element applicationElement = root.element("application");
 
-        //Determines whether there is application and needs to be deleted
+        //判断是否有application，需要删除掉
         if (null != applicationElement) {
             applicationElement.addAttribute("tools:replace",
-                                            "android:name,android:icon,android:allowBackup,android:label,"
-                                                + "android:supportsRtl");
+                                            "android:name,android:icon,android:allowBackup,android:label,android:supportsRtl");
         }
 
         XmlHelper.saveDocument(document, modifyManifest);
     }
 
     /**
-     * Update the libManifest file
+     * 更新libManifest文件
      *
      * @param modifyManifest
      * @param mainManifestFileObject param updateSdkVersion
-     * @param incremental
      */
 
-    public static void updatePreProcessManifestFile(File modifyManifest, File orgManifestFile,
-                                                    ManifestInfo mainManifestFileObject, boolean updateSdkVersion,
-                                                    boolean incremental) throws IOException, DocumentException {
+    public static void updatePreProcessManifestFile(File modifyManifest, File orgManifestFile, ManifestInfo mainManifestFileObject, boolean updateSdkVersion) throws IOException, DocumentException {
 
-        Document document = XmlHelper.readXml(orgManifestFile);// Read the XML file
+        Document document = XmlHelper.readXml(orgManifestFile);// 读取XML文件
 
-        Element root = document.getRootElement();// Get the root node
+        Element root = document.getRootElement();// 得到根节点
         if (updateSdkVersion) {
             Element useSdkElement = root.element("uses-sdk");
             if (null != useSdkElement) {
@@ -793,10 +722,10 @@ public class ManifestFileUtils {
             }
         }
 
-        // First, we will manually process the tools:remove and tools:replace rules, and find that some of them are not necessarily possible through the ManifestMerge
+        // 先人工处理一下tools:remove和tools:replace规则，发现有些通过ManifestMerge不一定可以
         Element applicationElement = root.element("application");
 
-        //Determines whether there is application and needs to be deleted
+        //判断是否有application，需要删除掉
         if (null != applicationElement) {
             Attribute attribute = applicationElement.attribute("name");
             if (null != attribute) {
@@ -808,7 +737,7 @@ public class ManifestFileUtils {
         List<String> removeAttrs = mainManifestFileObject.getRemoveApplicationAttribute();
 
         if (null != applicationElement) {
-            // Remove the tools properties from the lib project
+            // 去除lib项目里的tools属性
             List<Attribute> toRomoved = new ArrayList<Attribute>();
             for (Attribute attribute : applicationElement.attributes()) {
                 if (attribute.getName().equals("replace") || attribute.getName().equals("remove")) {
@@ -826,7 +755,7 @@ public class ManifestFileUtils {
             updateApplicationElement(applicationElement, replaceAttrs, removeAttrs);
         }
 
-        //Handle the packageName TODO
+        //处理packageName TODO
         String packageName = root.attributeValue("package");
         if (StringUtils.isEmpty(packageName)) {
             packageName = ManifestFileUtils.getPackage(orgManifestFile);
@@ -834,7 +763,7 @@ public class ManifestFileUtils {
 
         List<? extends Node> applicatNodes = root.selectNodes("//application");
         for (Node node : applicatNodes) {
-            Element element = (Element)node;
+            Element element = (Element) node;
             Attribute attribute = element.attribute("name");
             if (attribute != null) {
                 if (!attribute.getValue().startsWith(packageName)) {
@@ -847,14 +776,6 @@ public class ManifestFileUtils {
         fillFullClazzName(root, packageName, "provider");
         fillFullClazzName(root, packageName, "receiver");
         fillFullClazzName(root, packageName, "service");
-        if (incremental) {
-            root.addNamespace("tools", "http://schemas.android.com/tools");
-            List<? extends Node> nodes = root.selectNodes("//application/*");
-            for (Node node : nodes) {
-                Element element = (Element)node;
-                element.addAttribute("tools:node", "replace");
-            }
-        }
 
         XmlHelper.saveDocument(document, modifyManifest);
     }
@@ -862,7 +783,7 @@ public class ManifestFileUtils {
     private static void fillFullClazzName(Element root, String packageName, String type) {
         List<? extends Node> applicatNodes = root.selectNodes("//" + type);
         for (Node node : applicatNodes) {
-            Element element = (Element)node;
+            Element element = (Element) node;
             Attribute attribute = element.attribute("name");
             if (attribute != null) {
                 if (attribute.getValue().startsWith(".")) {
@@ -873,14 +794,13 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Update the Application node information
+     * 更新Application节点信息
      *
      * @param element
      * @param replaceAttrs
      * @param removeAttrs
      */
-    private static void updateApplicationElement(Element element, Map<String, String> replaceAttrs,
-                                                 List<String> removeAttrs) {
+    private static void updateApplicationElement(Element element, Map<String, String> replaceAttrs, List<String> removeAttrs) {
         for (Map.Entry<String, String> entry : replaceAttrs.entrySet()) {
             String key = entry.getKey();
             key = StringUtils.substringAfter(key, ":");
@@ -899,7 +819,7 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Update the attributes of element
+     * 更新element的属性
      *
      * @param element
      * @param properties
@@ -940,7 +860,8 @@ public class ManifestFileUtils {
         XPath xpath = AndroidXPathFactory.newXPath();
 
         try {
-            version = xpath.evaluate("/manifest/@package", new InputSource(new FileInputStream(manifestFile)));
+            version = xpath.evaluate("/manifest/@package",
+                                     new InputSource(new FileInputStream(manifestFile)));
             manifestMap.put(manifestFile.getAbsolutePath(), version);
             return version;
         } catch (XPathExpressionException e) {
@@ -967,7 +888,7 @@ public class ManifestFileUtils {
     }
 
     /**
-     * Update the plug-in's minSdkVersion and targetSdkVersion
+     * 更新插件的minSdkVersion和targetSdkVersion
      *
      * @param androidManifestFile
      * @throws IOException
@@ -977,8 +898,8 @@ public class ManifestFileUtils {
         SAXReader reader = new SAXReader();
         String versionName = "";
         if (androidManifestFile.exists()) {
-            Document document = reader.read(androidManifestFile);// Read the XML file
-            Element root = document.getRootElement();// Get the root node
+            Document document = reader.read(androidManifestFile);// 读取XML文件
+            Element root = document.getRootElement();// 得到根节点
             if ("manifest".equalsIgnoreCase(root.getName())) {
                 List<Attribute> attributes = root.attributes();
                 for (Attribute attr : attributes) {
@@ -995,8 +916,8 @@ public class ManifestFileUtils {
         SAXReader reader = new SAXReader();
         String versionCode = "";
         if (androidManifestFile.exists()) {
-            Document document = reader.read(androidManifestFile);// Read the XML file
-            Element root = document.getRootElement();// Get the root node
+            Document document = reader.read(androidManifestFile);// 读取XML文件
+            Element root = document.getRootElement();// 得到根节点
             if ("manifest".equalsIgnoreCase(root.getName())) {
                 List<Attribute> attributes = root.attributes();
                 for (Attribute attr : attributes) {
@@ -1010,23 +931,24 @@ public class ManifestFileUtils {
     }
 
     public static void removeProvider(File androidManifestFile) throws IOException, DocumentException {
-        File backupFile = new File(androidManifestFile.getParentFile(), "AndroidManifest-backup.xml");
+        File backupFile = new File(androidManifestFile.getParentFile(),
+                                   "AndroidManifest-backup.xml");
         FileUtils.deleteQuietly(backupFile);
         FileUtils.moveFile(androidManifestFile, backupFile);
 
-        XMLWriter writer = null;// Declares the object that writes XML
+        XMLWriter writer = null;// 声明写XML的对象
         SAXReader reader = new SAXReader();
         OutputFormat format = OutputFormat.createPrettyPrint();
-        format.setEncoding("UTF-8");// Sets the encoding format for the XML file
+        format.setEncoding("UTF-8");// 设置XML文件的编码格式
         FileOutputStream fos = new FileOutputStream(androidManifestFile);
 
         if (androidManifestFile.exists()) {
             try {
-                Document document = reader.read(backupFile);// Read the XML file
-                Element root = document.getRootElement();// Get the root node
+                Document document = reader.read(backupFile);// 读取XML文件
+                Element root = document.getRootElement();// 得到根节点
                 List<? extends Node> nodes = root.selectNodes("//provider");
                 for (Node node : nodes) {
-                    Element element = (Element)node;
+                    Element element = (Element) node;
                     String name = element.attributeValue("name");
                     logger.info("[Remove Provider]" + name);
                     element.getParent().remove(element);
@@ -1044,10 +966,10 @@ public class ManifestFileUtils {
 
     private static void removeProvider(Document document) throws IOException, DocumentException {
 
-        Element root = document.getRootElement();// Get the root node
+        Element root = document.getRootElement();// 得到根节点
         List<? extends Node> nodes = root.selectNodes("//provider");
         for (Node node : nodes) {
-            Element element = (Element)node;
+            Element element = (Element) node;
             String name = element.attributeValue("name");
             logger.info("[Remove Provider]" + name);
             element.getParent().remove(element);
@@ -1056,18 +978,17 @@ public class ManifestFileUtils {
 
     private static void removeProcess(Document document) throws IOException, DocumentException {
 
-        Element root = document.getRootElement();// Get the root node
+        Element root = document.getRootElement();// 得到根节点
         List<? extends Node> nodes = root.selectNodes("//*[@android:process]");
         for (Node node : nodes) {
-            Element element = (Element)node;
+            Element element = (Element) node;
             String process = element.attributeValue("process");
             logger.info("[Remove Element]" + element + process);
             element.remove(element.attribute("process"));
         }
     }
 
-    public static void createPatchManifest(File mainManifest, File originalManifest, File destManifest)
-        throws IOException, DocumentException {
+    public static void createPatchManifest(File mainManifest, File originalManifest, File destManifest) throws IOException, DocumentException {
 
         Document document = XmlHelper.readXml(mainManifest);
         Document baseDoc = XmlHelper.readXml(originalManifest);
@@ -1077,7 +998,7 @@ public class ManifestFileUtils {
 
         Map<String, Node> baseNodeMap = new HashMap<>();
         for (Node node : baseNodes) {
-            Element el = (Element)node;
+            Element el = (Element) node;
             String key = el.attributeValue("process") + el.attributeValue("name");
             baseNodeMap.put(key, node);
         }
@@ -1088,10 +1009,10 @@ public class ManifestFileUtils {
         document.getRootElement().add(applicationElement);
 
         for (Node node : newNodes) {
-            Element el = (Element)node;
+            Element el = (Element) node;
             String key = el.attributeValue("process") + el.attributeValue("name");
-            if (!baseNodeMap.containsKey(key) && !el.attributeValue("name").startsWith(
-                AtlasProxy.ATLAS_PROXY_PACKAGE)) {
+            if (!baseNodeMap.containsKey(key) &&
+                !el.attributeValue("name").startsWith(AtlasProxy.ATLAS_PROXY_PACKAGE)) {
                 applicationElement.add(node);
             }
         }
@@ -1101,7 +1022,7 @@ public class ManifestFileUtils {
 
     private static List<Node> selectComponents(Element root) {
 
-        String[] components = new String[] {"activity", "provider", "receiver", "service"};
+        String[] components = new String[]{"activity", "provider", "receiver", "service"};
 
         List<Node> nodes = new ArrayList<>();
         for (String component : components) {
