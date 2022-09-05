@@ -1,6 +1,5 @@
 package com.codahale.metrics;
 
-import com.codahale.metrics.Timer.Context;
 import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
@@ -68,7 +67,9 @@ public class ExponentiallyDecayingReservoirTest {
     @Test
     public void longPeriodsOfInactivityShouldNotCorruptSamplingState() {
         final ManualClock clock = new ManualClock();
-        final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(10, 0.015, clock);
+        final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(10,
+                                                                                            0.015,
+                                                                                            clock);
 
         // add 1000 values at a rate of 10 values/second
         for (int i = 0; i < 1000; i++) {
@@ -142,23 +143,7 @@ public class ExponentiallyDecayingReservoirTest {
     }
 
     @Test
-    public void removeZeroWeightsInSamplesToPreventNaNInMeanValues() {
-        final ManualClock clock = new ManualClock();
-        final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(1028, 0.015, clock);
-        Timer timer = new Timer(reservoir, clock);
-
-        Context context = timer.time();
-        clock.addMillis(100);
-        context.stop();
-
-        for (int i = 1; i < 48; i++) {
-            clock.addHours(1);
-            assertThat(reservoir.getSnapshot().getMean()).isBetween(0.0, Double.MAX_VALUE);
-        }
-    }
-
-    @Test
-    public void multipleUpdatesAfterlongPeriodsOfInactivityShouldNotCorruptSamplingState() throws Exception {
+    public void multipleUpdatesAfterlongPeriodsOfInactivityShouldNotCorruptSamplingState () throws Exception {
         // This test illustrates the potential race condition in rescale that
         // can lead to a corrupt state.  Note that while this test uses updates
         // exclusively to trigger the race condition, two concurrent updates
@@ -169,7 +154,7 @@ public class ExponentiallyDecayingReservoirTest {
         // expanded.
 
         // Run the test several times.
-        for (int attempt = 0; attempt < 10; attempt++) {
+        for (int attempt=0; attempt < 10; attempt++) {
             final ManualClock clock = new ManualClock();
             final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(10,
                     0.015,
@@ -257,23 +242,23 @@ public class ExponentiallyDecayingReservoirTest {
     public void spotLift() {
         final ManualClock clock = new ManualClock();
         final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(1000,
-                0.015,
-                clock);
+                                                                                            0.015,
+                                                                                            clock);
 
         final int valuesRatePerMinute = 10;
         final int valuesIntervalMillis = (int) (TimeUnit.MINUTES.toMillis(1) / valuesRatePerMinute);
         // mode 1: steady regime for 120 minutes
-        for (int i = 0; i < 120 * valuesRatePerMinute; i++) {
+        for (int i = 0; i < 120*valuesRatePerMinute; i++) {
             reservoir.update(177);
             clock.addMillis(valuesIntervalMillis);
         }
-
+        
         // switching to mode 2: 10 minutes more with the same rate, but larger value
-        for (int i = 0; i < 10 * valuesRatePerMinute; i++) {
+        for (int i = 0; i < 10*valuesRatePerMinute; i++) {
             reservoir.update(9999);
             clock.addMillis(valuesIntervalMillis);
         }
-
+        
         // expect that quantiles should be more about mode 2 after 10 minutes
         assertThat(reservoir.getSnapshot().getMedian())
                 .isEqualTo(9999);
@@ -283,40 +268,40 @@ public class ExponentiallyDecayingReservoirTest {
     public void spotFall() {
         final ManualClock clock = new ManualClock();
         final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(1000,
-                0.015,
-                clock);
-
+                                                                                            0.015,
+                                                                                            clock);
+        
         final int valuesRatePerMinute = 10;
         final int valuesIntervalMillis = (int) (TimeUnit.MINUTES.toMillis(1) / valuesRatePerMinute);
         // mode 1: steady regime for 120 minutes
-        for (int i = 0; i < 120 * valuesRatePerMinute; i++) {
+        for (int i = 0; i < 120*valuesRatePerMinute; i++) {
             reservoir.update(9998);
             clock.addMillis(valuesIntervalMillis);
         }
-
+        
         // switching to mode 2: 10 minutes more with the same rate, but smaller value
-        for (int i = 0; i < 10 * valuesRatePerMinute; i++) {
+        for (int i = 0; i < 10*valuesRatePerMinute; i++) {
             reservoir.update(178);
             clock.addMillis(valuesIntervalMillis);
         }
-
+        
         // expect that quantiles should be more about mode 2 after 10 minutes
         assertThat(reservoir.getSnapshot().get95thPercentile())
                 .isEqualTo(178);
     }
-
+    
     @Test
     public void quantiliesShouldBeBasedOnWeights() {
         final ManualClock clock = new ManualClock();
         final ExponentiallyDecayingReservoir reservoir = new ExponentiallyDecayingReservoir(1000,
-                0.015,
-                clock);
+                                                                                            0.015,
+                                                                                            clock);
         for (int i = 0; i < 40; i++) {
             reservoir.update(177);
         }
 
         clock.addSeconds(120);
-
+        
         for (int i = 0; i < 10; i++) {
             reservoir.update(9999);
         }
@@ -332,7 +317,7 @@ public class ExponentiallyDecayingReservoirTest {
         assertThat(reservoir.getSnapshot().get75thPercentile())
                 .isEqualTo(9999);
     }
-
+    
     private static void assertAllValuesBetween(ExponentiallyDecayingReservoir reservoir,
                                                double min,
                                                double max) {
