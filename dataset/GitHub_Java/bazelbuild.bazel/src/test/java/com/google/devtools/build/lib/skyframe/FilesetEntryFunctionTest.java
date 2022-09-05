@@ -20,6 +20,7 @@ import static com.google.devtools.build.lib.actions.FilesetTraversalParams.Packa
 import static com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode.REPORT_ERROR;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -35,9 +36,9 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.FilesetEntry.SymlinkBehavior;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -70,7 +71,9 @@ import javax.annotation.Nullable;
 
 /** Tests for {@link FilesetEntryFunction}. */
 @RunWith(JUnit4.class)
-public final class FilesetEntryFunctionTest extends FoundationTestCase {
+public final class FilesetEntryFunctionTest extends FoundationTestCaseForJunit4 {
+
+  private TimestampGranularityMonitor tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
   private MemoizingEvaluator evaluator;
   private SequentialBuildDriver driver;
   private RecordingDifferencer differencer;
@@ -82,13 +85,12 @@ public final class FilesetEntryFunctionTest extends FoundationTestCase {
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)));
     AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages =
         new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
-    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator, false);
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator);
 
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
 
-    skyFunctions.put(SkyFunctions.FILE_STATE, new FileStateFunction(
-        new AtomicReference<TimestampGranularityMonitor>(), externalFilesHelper));
-    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator));
+    skyFunctions.put(SkyFunctions.FILE_STATE, new FileStateFunction(tsgm, externalFilesHelper));
+    skyFunctions.put(SkyFunctions.FILE, new FileFunction(pkgLocator, tsgm, externalFilesHelper));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(
         SkyFunctions.DIRECTORY_LISTING_STATE,
