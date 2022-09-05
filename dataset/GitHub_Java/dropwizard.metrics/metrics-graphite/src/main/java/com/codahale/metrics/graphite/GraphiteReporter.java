@@ -1,6 +1,7 @@
 package com.codahale.metrics.graphite;
 
 import com.codahale.metrics.*;
+import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
