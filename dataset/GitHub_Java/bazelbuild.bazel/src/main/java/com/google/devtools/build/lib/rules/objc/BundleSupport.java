@@ -117,8 +117,8 @@ final class BundleSupport {
     if (bundling.needsToMergeInfoplist()) {
       NestedSet<Artifact> mergingContentArtifacts = bundling.getMergingContentArtifacts();
       Artifact mergedPlist = bundling.getBundleInfoplist().get();
-      registerMergeInfoplistAction(
-          mergingContentArtifacts, PlMergeControlBytes.fromBundling(bundling, mergedPlist));
+      PlMergeControlBytes plMergeControlBytes = new PlMergeControlBytes(bundling, mergedPlist);
+      registerMergeInfoplistAction(mergingContentArtifacts, plMergeControlBytes);
     }
     return this;
   }

@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.bazel.rules.genrule;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -25,6 +24,7 @@ import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.List;
 
 /**
@@ -44,7 +44,6 @@ public final class GenRuleAction extends SpawnAction {
       Iterable<Artifact> outputs,
       List<String> argv,
       ImmutableMap<String, String> environment,
-      ImmutableSet<String> clientEnvironmentVariables,
       ImmutableMap<String, String> executionInfo,
       ImmutableMap<PathFragment, Artifact> runfilesManifests,
       String progressMessage) {
@@ -56,7 +55,6 @@ public final class GenRuleAction extends SpawnAction {
         GENRULE_RESOURCES,
         CommandLine.of(argv, false),
         environment,
-        clientEnvironmentVariables,
         executionInfo,
         progressMessage,
         runfilesManifests,

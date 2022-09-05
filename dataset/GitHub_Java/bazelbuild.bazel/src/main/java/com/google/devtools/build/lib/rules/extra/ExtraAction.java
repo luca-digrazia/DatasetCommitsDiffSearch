@@ -39,10 +39,12 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -79,7 +81,6 @@ public final class ExtraAction extends SpawnAction {
       boolean createDummyOutput,
       CommandLine argv,
       Map<String, String> environment,
-      Set<String> clientEnvironmentVariables,
       Map<String, String> executionInfo,
       String progressMessage,
       String mnemonic) {
@@ -91,7 +92,6 @@ public final class ExtraAction extends SpawnAction {
         AbstractAction.DEFAULT_RESOURCE_SET,
         argv,
         ImmutableMap.copyOf(environment),
-        ImmutableSet.copyOf(clientEnvironmentVariables),
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
         getManifests(shadowedAction),
@@ -165,11 +165,9 @@ public final class ExtraAction extends SpawnAction {
 
   @Nullable
   @Override
-  public Iterable<Artifact> resolveInputsFromCache(
-      ArtifactResolver artifactResolver,
-      PackageRootResolver resolver,
-      Collection<PathFragment> inputPaths)
-      throws PackageRootResolutionException, InterruptedException {
+  public Iterable<Artifact> resolveInputsFromCache(ArtifactResolver artifactResolver,
+      PackageRootResolver resolver, Collection<PathFragment> inputPaths)
+          throws PackageRootResolutionException {
     // We update the inputs directly from the shadowed action.
     Set<PathFragment> extraActionPathFragments =
         ImmutableSet.copyOf(Artifact.asPathFragments(extraActionInputs));
