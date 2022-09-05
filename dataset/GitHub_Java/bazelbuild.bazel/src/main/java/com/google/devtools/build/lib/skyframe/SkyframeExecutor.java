@@ -700,21 +700,18 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   // TODO(bazel-team): Make this take a PackageIdentifier.
-  public Map<PathFragment, Root> getArtifactRootsForFiles(
-      final EventHandler eventHandler, Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException, InterruptedException {
+  public Map<PathFragment, Root> getArtifactRootsForFiles(final EventHandler eventHandler,
+      Iterable<PathFragment> execPaths) throws PackageRootResolutionException {
     return getArtifactRoots(eventHandler, execPaths, true);
   }
 
-  public Map<PathFragment, Root> getArtifactRoots(
-      final EventHandler eventHandler, Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException, InterruptedException {
+  public Map<PathFragment, Root> getArtifactRoots(final EventHandler eventHandler,
+      Iterable<PathFragment> execPaths) throws PackageRootResolutionException {
     return getArtifactRoots(eventHandler, execPaths, false);
   }
 
-  private Map<PathFragment, Root> getArtifactRoots(
-      final EventHandler eventHandler, Iterable<PathFragment> execPaths, boolean forFiles)
-      throws PackageRootResolutionException, InterruptedException {
+  private Map<PathFragment, Root> getArtifactRoots(final EventHandler eventHandler,
+      Iterable<PathFragment> execPaths, boolean forFiles) throws PackageRootResolutionException {
 
     final List<SkyKey> packageKeys = new ArrayList<>();
     if (forFiles) {
@@ -734,9 +731,18 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
 
     EvaluationResult<ContainingPackageLookupValue> result;
-    synchronized (valueLookupLock) {
-      result =
-          buildDriver.evaluate(packageKeys, /*keepGoing=*/ true, /*numThreads=*/ 1, eventHandler);
+    try {
+      result = callUninterruptibly(new Callable<EvaluationResult<ContainingPackageLookupValue>>() {
+        @Override
+        public EvaluationResult<ContainingPackageLookupValue> call() throws InterruptedException {
+          synchronized (valueLookupLock) {
+            return buildDriver.evaluate(
+                packageKeys, /*keepGoing=*/true, /*numThreads=*/1, eventHandler);
+          }
+        }
+      });
+    } catch (Exception e) {
+      throw new IllegalStateException(e);  // Should never happen.
     }
 
     if (result.hasError()) {
