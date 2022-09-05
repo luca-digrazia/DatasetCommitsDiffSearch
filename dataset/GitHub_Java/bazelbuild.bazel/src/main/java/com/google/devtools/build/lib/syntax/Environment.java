@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.SpellChecker;
-import com.google.devtools.common.options.Options;
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -99,7 +98,6 @@ public final class Environment implements Freezable {
   public static final class Frame implements Freezable {
 
     private final Mutability mutability;
-    @Nullable
     final Frame parent;
     final Map<String, Object> bindings = new LinkedHashMap<>();
     // The label for the target this frame is defined in (e.g., //foo:bar.bzl).
@@ -308,11 +306,6 @@ public final class Environment implements Freezable {
   private final Frame dynamicFrame;
 
   /**
-   * The semantics options that affect how Skylark code is evaluated.
-   */
-  private final SkylarkSemanticsOptions semantics;
-
-  /**
    * An EventHandler for errors and warnings. This is not used in the BUILD language,
    * however it might be used in Skylark code called from the BUILD language, so shouldn't be null.
    */
@@ -479,7 +472,6 @@ public final class Environment implements Freezable {
   private Environment(
       Frame globalFrame,
       Frame dynamicFrame,
-      SkylarkSemanticsOptions semantics,
       EventHandler eventHandler,
       Map<String, Extension> importedExtensions,
       @Nullable String fileContentHashCode,
@@ -487,9 +479,8 @@ public final class Environment implements Freezable {
       @Nullable Label callerLabel) {
     this.globalFrame = Preconditions.checkNotNull(globalFrame);
     this.dynamicFrame = Preconditions.checkNotNull(dynamicFrame);
-    Preconditions.checkArgument(!globalFrame.mutability().isFrozen());
-    Preconditions.checkArgument(!dynamicFrame.mutability().isFrozen());
-    this.semantics = semantics;
+    Preconditions.checkArgument(globalFrame.mutability().isMutable());
+    Preconditions.checkArgument(dynamicFrame.mutability().isMutable());
     this.eventHandler = eventHandler;
     this.importedExtensions = importedExtensions;
     this.phase = phase;
@@ -505,7 +496,6 @@ public final class Environment implements Freezable {
     private final Mutability mutability;
     private Phase phase = Phase.ANALYSIS;
     @Nullable private Frame parent;
-    @Nullable private SkylarkSemanticsOptions semantics;
     @Nullable private EventHandler eventHandler;
     @Nullable private Map<String, Extension> importedExtensions;
     @Nullable private String fileContentHashCode;
@@ -537,11 +527,6 @@ public final class Environment implements Freezable {
       return this;
     }
 
-    public Builder setSemantics(SkylarkSemanticsOptions semantics) {
-      this.semantics = semantics;
-      return this;
-    }
-
     /** Sets an EventHandler for errors and warnings. */
     public Builder setEventHandler(EventHandler eventHandler) {
       Preconditions.checkState(this.eventHandler == null);
@@ -564,22 +549,18 @@ public final class Environment implements Freezable {
 
     /** Builds the Environment. */
     public Environment build() {
-      Preconditions.checkArgument(!mutability.isFrozen());
+      Preconditions.checkArgument(mutability.isMutable());
       if (parent != null) {
-        Preconditions.checkArgument(parent.mutability().isFrozen());
+        Preconditions.checkArgument(!parent.mutability().isMutable());
       }
       Frame globalFrame = new Frame(mutability, parent);
       Frame dynamicFrame = new Frame(mutability, null);
-      if (semantics == null) {
-        semantics = Options.getDefaults(SkylarkSemanticsOptions.class);
-      }
       if (importedExtensions == null) {
         importedExtensions = ImmutableMap.of();
       }
       return new Environment(
           globalFrame,
           dynamicFrame,
-          semantics,
           eventHandler,
           importedExtensions,
           fileContentHashCode,
@@ -740,10 +721,6 @@ public final class Environment implements Freezable {
    */
   boolean isKnownGlobalVariable(String varname) {
     return knownGlobalVariables != null && knownGlobalVariables.contains(varname);
-  }
-
-  public SkylarkSemanticsOptions getSemantics() {
-    return semantics;
   }
 
   public void handleEvent(Event event) {

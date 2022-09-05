@@ -1134,9 +1134,9 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "my_aspect = aspect(_impl, attr_aspects=['*'])");
 
     SkylarkAspect myAspect = (SkylarkAspect) lookup("my_aspect");
-    assertThat(myAspect.getDefinition(AspectParameters.EMPTY).propagateAlong(
+    assertThat(myAspect.getDefinition(AspectParameters.EMPTY).getAttributeAspects(
         Attribute.attr("foo", BuildType.LABEL).allowedFileTypes().build()
-    )).isTrue();
+    )).containsExactly(myAspect.getAspectClass());
   }
 
   @Test
