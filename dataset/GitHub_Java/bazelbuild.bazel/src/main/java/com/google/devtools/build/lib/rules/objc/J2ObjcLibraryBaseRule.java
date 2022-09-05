@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -47,11 +46,7 @@ public class J2ObjcLibraryBaseRule implements RuleDefinition {
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("entry_classes", STRING_LIST))
         .add(attr("$jre_emul_lib", LABEL)
-            .value(env.getLabel(
-                Constants.TOOLS_REPOSITORY + "//third_party/java/j2objc:jre_emul_lib")))
-        .add(attr("$protobuf_lib", LABEL)
-            .value(env.getLabel(
-                Constants.TOOLS_REPOSITORY + "//third_party/java/j2objc:proto_runtime")))
+            .value(env.getLabel("//third_party/java/j2objc:jre_emul_lib")))
         .build();
   }
 
@@ -60,7 +55,7 @@ public class J2ObjcLibraryBaseRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("$j2objc_library_base")
         .type(RuleClassType.ABSTRACT)
-        .ancestors(BaseRuleClasses.BaseRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.CoptsRule.class)
         .build();
   }
 }
