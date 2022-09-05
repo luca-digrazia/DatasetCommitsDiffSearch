@@ -44,17 +44,16 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
         CacheKey key = buildCacheKey(paramContext);
 
         AuthorizeDefinition definition = cache.get(key);
-        if (definition != null && (definition instanceof EmptyAuthorizeDefinition)) {
-            return null;
-        }
+        if (definition != null) return definition instanceof EmptyAuthorizeDefinition ? null : definition;
         //使用自定义
         if (!CollectionUtils.isEmpty(parserCustomers)) {
             definition = parserCustomers.stream()
                     .map(customer -> customer.parse(paramContext))
                     .filter(Objects::nonNull)
                     .findAny().orElse(null);
-            if (definition == null || definition instanceof EmptyAuthorizeDefinition) {
-                return null;
+            if (definition != null) {
+                if(definition instanceof EmptyAuthorizeDefinition)return null;
+                return definition;
             }
 
         }
