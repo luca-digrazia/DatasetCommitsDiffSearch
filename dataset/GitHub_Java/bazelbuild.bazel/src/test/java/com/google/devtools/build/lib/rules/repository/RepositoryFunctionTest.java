@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.Rule;
@@ -48,15 +47,19 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
   static class TestingRepositoryFunction extends RepositoryFunction {
     @Nullable
     @Override
-    public SkyValue fetch(
-        Rule rule, Path outputDirectory, BlazeDirectories directories, SkyFunction.Environment env)
-            throws SkyFunctionException, InterruptedException {
+    public SkyValue fetch(Rule rule, Path outputDirectory, SkyFunction.Environment env)
+        throws SkyFunctionException, InterruptedException {
       return null;
     }
 
     @Override
-    protected boolean isLocal(Rule rule) {
+    protected boolean isLocal() {
       return false;
+    }
+
+    public static PathFragment getTargetPath(Rule rule, Path workspace)
+        throws RepositoryFunctionException {
+      return RepositoryFunction.getTargetPath(rule, workspace);
     }
 
     @Override
