@@ -197,7 +197,7 @@ public class BuiltinFunction extends BaseFunction {
   private static String stacktraceToString(StackTraceElement[] elts) {
     StringBuilder b = new StringBuilder();
     for (StackTraceElement e : elts) {
-      b.append(e);
+      b.append(e.toString());
       b.append("\n");
     }
     return b.toString();
