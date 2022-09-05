@@ -19,7 +19,6 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsEvent;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertEventCount;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertNoEvents;
-import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 import static com.google.devtools.build.skyframe.GraphTester.CONCATENATE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -76,7 +75,7 @@ import javax.annotation.Nullable;
 @RunWith(JUnit4.class)
 public class ParallelEvaluatorTest {
   protected ProcessableGraph graph;
-  protected IntVersion graphVersion = IntVersion.of(0);
+  protected IntVersion graphVersion = new IntVersion(0);
   protected GraphTester tester = new GraphTester();
 
   private EventCollector eventCollector;
@@ -666,11 +665,11 @@ public class ParallelEvaluatorTest {
 
     EvaluationResult<SkyValue> result = eval(/*keepGoing=*/true, ImmutableList.of(recoveryKey));
     assertThat(result.errorMap()).isEmpty();
-    assertThatEvaluationResult(result).hasNoError();
+    assertTrue(result.hasError());
     assertEquals(new StringValue("i recovered"), result.get(recoveryKey));
 
     result = eval(/*keepGoing=*/false, ImmutableList.of(topKey));
-    assertThatEvaluationResult(result).hasError();
+    assertTrue(result.hasError());
     assertThat(result.keyNames()).isEmpty();
     assertEquals(1, result.errorMap().size());
     assertNotNull(result.getError(topKey).getException());
@@ -1553,9 +1552,11 @@ public class ParallelEvaluatorTest {
       assertThat(result.keyNames()).isEmpty();
       assertEquals(topException, result.getError(topKey).getException());
       assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
-      assertThatEvaluationResult(result).hasError();
+      assertTrue(result.hasError());
     } else {
-      assertThatEvaluationResult(result).hasNoError();
+      // result.hasError() is set to true even if the top-level value returned has recovered from
+      // an error.
+      assertTrue(result.hasError());
       assertSame(topValue, result.get(topKey));
     }
   }
