@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrintableValue;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -143,7 +141,7 @@ public final class Printer {
 
     } else if (o instanceof List<?>) {
       List<?> seq = (List<?>) o;
-      printList(buffer, seq, false, quotationMark);
+      printList(buffer, seq, EvalUtils.isTuple(seq), quotationMark);
 
     } else if (o instanceof Map<?, ?>) {
       Map<?, ?> dict = (Map<?, ?>) o;

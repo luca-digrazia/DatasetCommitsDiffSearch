@@ -22,8 +22,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -42,6 +40,14 @@ import java.util.Map;
  */
 @RunWith(JUnit4.class)
 public class PrinterTest {
+
+  private static List<?> makeList(Object... args) {
+    return EvalUtils.makeSequence(Arrays.<Object>asList(args), false);
+  }
+
+  private static List<?> makeTuple(Object... args) {
+    return EvalUtils.makeSequence(Arrays.<Object>asList(args), true);
+  }
 
   @Test
   public void testPrinter() throws Exception {
@@ -62,22 +68,22 @@ public class PrinterTest {
     assertEquals("\"//x:x\"", Printer.repr(
         Label.parseAbsolute("//x")));
 
-    List<?> list = MutableList.of(null, "foo", "bar");
-    List<?> tuple = Tuple.of("foo", "bar");
+    List<?> list = makeList("foo", "bar");
+    List<?> tuple = makeTuple("foo", "bar");
 
     assertEquals("(1, [\"foo\", \"bar\"], 3)",
-                 Printer.str(Tuple.of(1, list, 3)));
+                 Printer.str(makeTuple(1, list, 3)));
     assertEquals("(1, [\"foo\", \"bar\"], 3)",
-                 Printer.repr(Tuple.of(1, list, 3)));
+                 Printer.repr(makeTuple(1, list, 3)));
     assertEquals("[1, (\"foo\", \"bar\"), 3]",
-                 Printer.str(MutableList.of(null, 1, tuple, 3)));
+                 Printer.str(makeList(1, tuple, 3)));
     assertEquals("[1, (\"foo\", \"bar\"), 3]",
-                 Printer.repr(MutableList.of(null, 1, tuple, 3)));
+                 Printer.repr(makeList(1, tuple, 3)));
 
     Map<Object, Object> dict = ImmutableMap.<Object, Object>of(
         1, tuple,
         2, list,
-        "foo", MutableList.of(null));
+        "foo", makeList());
     assertEquals("{1: (\"foo\", \"bar\"), 2: [\"foo\", \"bar\"], \"foo\": []}",
                 Printer.str(dict));
     assertEquals("{1: (\"foo\", \"bar\"), 2: [\"foo\", \"bar\"], \"foo\": []}",
@@ -106,12 +112,12 @@ public class PrinterTest {
 
   @Test
   public void testFormatPositional() throws Exception {
-    assertEquals("foo 3", Printer.formatToString("%s %d", Tuple.of("foo", 3)));
+    assertEquals("foo 3", Printer.formatToString("%s %d", makeTuple("foo", 3)));
     assertEquals("foo 3", Printer.format("%s %d", "foo", 3));
 
     // Note: formatToString doesn't perform scalar x -> (x) conversion;
     // The %-operator is responsible for that.
-    assertThat(Printer.formatToString("", Tuple.of())).isEmpty();
+    assertThat(Printer.formatToString("", makeTuple())).isEmpty();
     assertEquals("foo", Printer.format("%s", "foo"));
     assertEquals("3.14159", Printer.format("%s", 3.14159));
     checkFormatPositionalFails("not all arguments converted during string formatting",
@@ -121,10 +127,10 @@ public class PrinterTest {
         "%%s", "foo");
     checkFormatPositionalFails("unsupported format character \" \" at index 1 in \"% %s\"",
         "% %s", "foo");
-    assertEquals("[1, 2, 3]", Printer.format("%s", MutableList.of(null, 1, 2, 3)));
-    assertEquals("(1, 2, 3)", Printer.format("%s", Tuple.of(1, 2, 3)));
-    assertEquals("[]", Printer.format("%s", MutableList.of(null)));
-    assertEquals("()", Printer.format("%s", Tuple.of()));
+    assertEquals("[1, 2, 3]", Printer.format("%s", makeList(1, 2, 3)));
+    assertEquals("(1, 2, 3)", Printer.format("%s", makeTuple(1, 2, 3)));
+    assertEquals("[]", Printer.format("%s", makeList()));
+    assertEquals("()", Printer.format("%s", makeTuple()));
     assertEquals("% 1 \"2\" 3", Printer.format("%% %d %r %s", 1, "2", "3"));
 
     checkFormatPositionalFails(
@@ -147,18 +153,16 @@ public class PrinterTest {
     assertEquals("\"", Printer.str("\"", '\''));
     assertEquals("'\"'", Printer.repr("\"", '\''));
 
-    List<?> list = MutableList.of(null, "foo", "bar");
-    List<?> tuple = Tuple.of("foo", "bar");
+    List<?> list = makeList("foo", "bar");
+    List<?> tuple = makeTuple("foo", "bar");
 
-    assertThat(Printer.str(Tuple.of(1, list, 3), '\'')).isEqualTo("(1, ['foo', 'bar'], 3)");
-    assertThat(Printer.repr(Tuple.of(1, list, 3), '\'')).isEqualTo("(1, ['foo', 'bar'], 3)");
-    assertThat(Printer.str(MutableList.of(null, 1, tuple, 3), '\''))
-        .isEqualTo("[1, ('foo', 'bar'), 3]");
-    assertThat(Printer.repr(MutableList.of(null, 1, tuple, 3), '\''))
-        .isEqualTo("[1, ('foo', 'bar'), 3]");
+    assertThat(Printer.str(makeTuple(1, list, 3), '\'')).isEqualTo("(1, ['foo', 'bar'], 3)");
+    assertThat(Printer.repr(makeTuple(1, list, 3), '\'')).isEqualTo("(1, ['foo', 'bar'], 3)");
+    assertThat(Printer.str(makeList(1, tuple, 3), '\'')).isEqualTo("[1, ('foo', 'bar'), 3]");
+    assertThat(Printer.repr(makeList(1, tuple, 3), '\'')).isEqualTo("[1, ('foo', 'bar'), 3]");
 
     Map<Object, Object> dict =
-        ImmutableMap.<Object, Object>of(1, tuple, 2, list, "foo", MutableList.of(null));
+        ImmutableMap.<Object, Object>of(1, tuple, 2, list, "foo", makeList());
 
     assertThat(Printer.str(dict, '\''))
         .isEqualTo("{1: ('foo', 'bar'), 2: ['foo', 'bar'], 'foo': []}");
