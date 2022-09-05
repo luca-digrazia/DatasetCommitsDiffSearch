@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,13 +17,12 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.Constants;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.DefaultLabelConverter;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -34,20 +33,6 @@ import java.util.List;
  * Command-line options for building Objective-C targets.
  */
 public class ObjcCommandLineOptions extends FragmentOptions {
-  /** Converter for --objc_dump_syms_binary. */
-  public static class DumpSymsConverter extends DefaultLabelConverter {
-    public DumpSymsConverter() {
-      super(Constants.TOOLS_REPOSITORY + "//tools/objc:dump_syms");
-    }
-  }
-
-  /** Converter for --default_ios_provisioning_profile. */
-  public static class DefaultProvisioningProfileConverter extends DefaultLabelConverter {
-    public DefaultProvisioningProfileConverter() {
-      super(Constants.TOOLS_REPOSITORY + "//tools/objc:default_provisioning_profile");
-    }
-  }
-
   // TODO(cparsons): Validate version flag value.
   @Option(name = "xcode_version",
       defaultValue = "",
@@ -129,15 +114,15 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   public String iosSplitCpu;
 
   @Option(name = "objc_dump_syms_binary",
-      defaultValue = "",
+      defaultValue = "//tools/objc:dump_syms",
       category = "undocumented",
-      converter = DumpSymsConverter.class)
+      converter = LabelConverter.class)
   public Label dumpSyms;
 
   @Option(name = "default_ios_provisiong_profile",
-      defaultValue = "",
+      defaultValue = "//tools/objc:default_provisioning_profile",
       category = "undocumented",
-      converter = DefaultProvisioningProfileConverter.class)
+      converter = LabelConverter.class)
   public Label defaultProvisioningProfile;
 
   @Option(name = "objc_per_proto_includes",
@@ -221,7 +206,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
         IosApplication.SPLIT_ARCH_TRANSITION, IosExtension.MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION);
   }
 
-  /** Converter for the iOS configuration distinguisher. */
   public static final class ConfigurationDistinguisherConverter
       extends EnumConverter<ConfigurationDistinguisher> {
     public ConfigurationDistinguisherConverter() {
