@@ -15,11 +15,8 @@ package com.google.devtools.build.lib.query2.output;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
-import com.google.devtools.build.lib.packages.FilesetEntry;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -29,6 +26,8 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.FakeSubincludeTarget;
 import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDependencyMode;
 import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
+import com.google.devtools.build.lib.syntax.FilesetEntry;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.BinaryPredicate;
 import com.google.devtools.build.lib.util.Pair;
 
@@ -60,8 +59,8 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
   private boolean xmlLineNumbers;
   private boolean showDefaultValues;
   private boolean relativeLocations;
-  private transient AspectResolver aspectResolver;
-  private transient BinaryPredicate<Rule, Attribute> dependencyFilter;
+  private AspectResolver aspectResolver;
+  private BinaryPredicate<Rule, Attribute> dependencyFilter;
 
   @Override
   public String getName() {
@@ -158,12 +157,12 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
       elem = doc.createElement("package-group");
       elem.setAttribute("name", packageGroup.getName());
       Element includes = createValueElement(doc,
-          BuildType.LABEL_LIST,
+          com.google.devtools.build.lib.packages.Type.LABEL_LIST,
           packageGroup.getIncludes());
       includes.setAttribute("name", "includes");
       elem.appendChild(includes);
       Element packages = createValueElement(doc,
-          com.google.devtools.build.lib.syntax.Type.STRING_LIST,
+          com.google.devtools.build.lib.packages.Type.STRING_LIST,
           packageGroup.getContainedPackages());
       packages.setAttribute("name", "packages");
       elem.appendChild(packages);
@@ -179,8 +178,6 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
         addSubincludedFilesToElement(doc, elem, inputFile);
         addSkylarkFilesToElement(doc, elem, inputFile);
         addFeaturesToElement(doc, elem, inputFile);
-        elem.setAttribute("package_contains_errors",
-            String.valueOf(inputFile.getPackage().containsErrors()));
       }
 
       addPackageGroupsToElement(doc, elem, inputFile);
@@ -189,12 +186,12 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
       elem = doc.createElement("environment-group");
       elem.setAttribute("name", envGroup.getName());
       Element environments = createValueElement(doc,
-          BuildType.LABEL_LIST,
+          com.google.devtools.build.lib.packages.Type.LABEL_LIST,
           envGroup.getEnvironments());
       environments.setAttribute("name", "environments");
       elem.appendChild(environments);
       Element defaults = createValueElement(doc,
-          BuildType.LABEL_LIST,
+          com.google.devtools.build.lib.packages.Type.LABEL_LIST,
           envGroup.getDefaults());
       defaults.setAttribute("name", "defaults");
       elem.appendChild(defaults);
@@ -277,17 +274,17 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
    * OutputFormatter.Type.)
    */
   private static Element createValueElement(Document doc,
-      com.google.devtools.build.lib.syntax.Type<?> type, Iterable<Object> values) {
+      com.google.devtools.build.lib.packages.Type<?> type, Iterable<Object> values) {
     // "Import static" with method scope:
-    com.google.devtools.build.lib.syntax.Type<?>
-        FILESET_ENTRY = BuildType.FILESET_ENTRY,
-        LABEL_LIST    = BuildType.LABEL_LIST,
-        LICENSE       = BuildType.LICENSE,
-        STRING_LIST   = com.google.devtools.build.lib.syntax.Type.STRING_LIST;
+    com.google.devtools.build.lib.packages.Type<?>
+        FILESET_ENTRY = com.google.devtools.build.lib.packages.Type.FILESET_ENTRY,
+        LABEL_LIST    = com.google.devtools.build.lib.packages.Type.LABEL_LIST,
+        LICENSE       = com.google.devtools.build.lib.packages.Type.LICENSE,
+        STRING_LIST   = com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
     final Element elem;
     final boolean hasMultipleValues = Iterables.size(values) > 1;
-    com.google.devtools.build.lib.syntax.Type<?> elemType = type.getListElementType();
+    com.google.devtools.build.lib.packages.Type<?> elemType = type.getListElementType();
     if (elemType != null) { // it's a list (includes "distribs")
       elem = doc.createElement("list");
       for (Object value : values) {
@@ -295,11 +292,11 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
           elem.appendChild(createValueElement(doc, elemType, elemValue));
         }
       }
-    } else if (type instanceof com.google.devtools.build.lib.syntax.Type.DictType) {
+    } else if (type instanceof com.google.devtools.build.lib.packages.Type.DictType) {
       Set<Object> visitedValues = new HashSet<>();
       elem = doc.createElement("dict");
-      com.google.devtools.build.lib.syntax.Type.DictType<?, ?> dictType =
-          (com.google.devtools.build.lib.syntax.Type.DictType<?, ?>) type;
+      com.google.devtools.build.lib.packages.Type.DictType<?, ?> dictType =
+          (com.google.devtools.build.lib.packages.Type.DictType<?, ?>) type;
       for (Object value : values) {
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
           if (visitedValues.add(entry.getKey())) {
@@ -363,7 +360,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   private static Element createValueElement(Document doc,
-        com.google.devtools.build.lib.syntax.Type<?> type, Object value) {
+        com.google.devtools.build.lib.packages.Type<?> type, Object value) {
     return createValueElement(doc, type, ImmutableList.of(value));
   }
 
