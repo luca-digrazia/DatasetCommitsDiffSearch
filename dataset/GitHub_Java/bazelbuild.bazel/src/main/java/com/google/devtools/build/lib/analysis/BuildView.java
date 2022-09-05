@@ -22,7 +22,6 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -866,10 +865,10 @@ public class BuildView {
         new LinkedHashMap<>();
     if (!asDeps.isEmpty()) {
       for (BuildConfiguration fromConfig : asDeps.keySet()) {
-        Multimap<Dependency, BuildConfiguration> trimmedTargets =
+        Map<Dependency, BuildConfiguration> trimmedTargets =
             skyframeExecutor.getConfigurations(eventHandler, fromConfig.getOptions(),
                 asDeps.get(fromConfig));
-        for (Map.Entry<Dependency, BuildConfiguration> trimmedTarget : trimmedTargets.entries()) {
+        for (Map.Entry<Dependency, BuildConfiguration> trimmedTarget : trimmedTargets.entrySet()) {
           Target target = labelsToTargets.get(trimmedTarget.getKey().getLabel());
           successfullyEvaluatedTargets.put(
               new TargetAndConfiguration(target, fromConfig),
@@ -1055,13 +1054,13 @@ public class BuildView {
     OrderedSetMultimap<Attribute, Dependency> depNodeNames =
         getDirectPrerequisiteDependenciesForTesting(eventHandler, target, configurations);
 
-    ImmutableMultimap<Dependency, ConfiguredTarget> cts = skyframeExecutor.getConfiguredTargetMap(
+    ImmutableMap<Dependency, ConfiguredTarget> cts = skyframeExecutor.getConfiguredTargetMap(
         eventHandler,
         target.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()), false);
 
     OrderedSetMultimap<Attribute, ConfiguredTarget> result = OrderedSetMultimap.create();
     for (Map.Entry<Attribute, Dependency> entry : depNodeNames.entries()) {
-      result.putAll(entry.getKey(), cts.get(entry.getValue()));
+      result.put(entry.getKey(), cts.get(entry.getValue()));
     }
     return result;
   }
