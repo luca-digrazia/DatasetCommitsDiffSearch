@@ -24,14 +24,12 @@ public class ExceptionMeteredMethodInterceptor implements MethodInterceptor, Met
     private final Class<?> targetClass;
     private final Map<String, Meter> meters;
     private final Map<String, Class<? extends Throwable>> causes;
-    private final String scope;
 
-    public ExceptionMeteredMethodInterceptor(final MetricsRegistry metrics, final Class<?> targetClass, final String scope) {
+    public ExceptionMeteredMethodInterceptor(final MetricsRegistry metrics, final Class<?> targetClass) {
         this.metrics = metrics;
         this.targetClass = targetClass;
         this.meters = new HashMap<String, Meter>();
         this.causes = new HashMap<String, Class<? extends Throwable>>();
-        this.scope = scope;
 
         ReflectionUtils.doWithMethods(targetClass, this, filter);
     }
@@ -42,13 +40,8 @@ public class ExceptionMeteredMethodInterceptor implements MethodInterceptor, Met
             return invocation.proceed();
         } catch (Throwable t) {
             final String name = invocation.getMethod().getName();
-            final Class<?> cause = causes.get(name);
-            if (cause != null && cause.isAssignableFrom(t.getClass())) {
-                // it may be safe to infer that `meter` is non-null if `cause` is non-null
-                Meter meter = meters.get(name);
-                if (meter != null) {
-                    meter.mark();
-                }
+            if (causes.get(name).isAssignableFrom(t.getClass())) {
+                meters.get(name).mark();
             }
             ReflectionUtils.rethrowException(t);
             return null;
@@ -63,7 +56,7 @@ public class ExceptionMeteredMethodInterceptor implements MethodInterceptor, Met
         final String group = MetricName.chooseGroup(metered.group(), targetClass);
         final String type = MetricName.chooseType(metered.type(), targetClass);
         final String name = metered.name() == null || metered.name().equals("") ? methodName + ExceptionMetered.DEFAULT_NAME_SUFFIX : metered.name();
-        final MetricName metricName = new MetricName(group, type, name, scope);
+        final MetricName metricName = new MetricName(group, type, name);
         final Meter meter = metrics.newMeter(metricName, metered.eventType(), metered.rateUnit());
 
         meters.put(methodName, meter);

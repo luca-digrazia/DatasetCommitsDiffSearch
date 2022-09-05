@@ -31,7 +31,7 @@ public class GaugeAnnotationBeanPostProcessor implements BeanPostProcessor, Orde
 
     @Override
     public Object postProcessAfterInitialization(final Object bean, String beanName) throws BeansException {
-        final Class<?> targetClass = AopUtils.getTargetClass(bean);
+        Class<?> targetClass = AopUtils.getTargetClass(bean);
 
         ReflectionUtils.doWithFields(targetClass, new FieldCallback() {
             @Override
