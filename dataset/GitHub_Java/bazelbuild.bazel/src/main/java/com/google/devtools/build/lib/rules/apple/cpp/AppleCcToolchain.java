@@ -53,24 +53,19 @@ public class AppleCcToolchain extends CcToolchain {
     return ImmutableMap.<String, String>builder()
         .put(
             XCODE_VERSION_KEY,
-            appleConfiguration.getXcodeVersion().or(DEFAULT_XCODE_VERSION)
-                .toStringWithMinimumComponents(2))
+            appleConfiguration.getXcodeVersion().or(DEFAULT_XCODE_VERSION).toString())
         .put(
             IOS_SDK_VERSION_KEY,
-            appleConfiguration.getSdkVersionForPlatform(Platform.IOS_SIMULATOR)
-                .toStringWithMinimumComponents(2))
+            appleConfiguration.getSdkVersionForPlatform(Platform.IOS_SIMULATOR).toString())
         .put(
             MACOSX_SDK_VERSION_KEY,
-            appleConfiguration.getSdkVersionForPlatform(Platform.MACOS_X)
-                .toStringWithMinimumComponents(2))
+            appleConfiguration.getSdkVersionForPlatform(Platform.MACOS_X).toString())
         .put(
             TVOS_SDK_VERSION_KEY,
-            appleConfiguration.getSdkVersionForPlatform(Platform.TVOS_SIMULATOR)
-                .toStringWithMinimumComponents(2))
+            appleConfiguration.getSdkVersionForPlatform(Platform.TVOS_SIMULATOR).toString())
         .put(
             WATCHOS_SDK_VERSION_KEY,
-            appleConfiguration.getSdkVersionForPlatform(Platform.WATCHOS_SIMULATOR)
-                .toStringWithMinimumComponents(2))
+            appleConfiguration.getSdkVersionForPlatform(Platform.WATCHOS_SIMULATOR).toString())
         .put(SDK_DIR_KEY, AppleToolchain.sdkDir())
         .put(SDK_FRAMEWORK_DIR_KEY, AppleToolchain.sdkFrameworkDir(platform, appleConfiguration))
         .put(

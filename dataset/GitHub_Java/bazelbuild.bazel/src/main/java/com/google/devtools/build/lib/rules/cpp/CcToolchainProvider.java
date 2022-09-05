@@ -25,7 +25,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -33,7 +35,9 @@ import javax.annotation.Nullable;
  */
 @Immutable
 public final class CcToolchainProvider implements TransitiveInfoProvider {
-  /** An empty toolchain to be returned in the error case (instead of null). */
+  /**
+   * An empty toolchain to be returned in the error case (instead of null).
+   */
   public static final CcToolchainProvider EMPTY_TOOLCHAIN_IS_ERROR =
       new CcToolchainProvider(
           null,
@@ -42,8 +46,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
           NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
           NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
           NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-          NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-          null,
           NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
           NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
           NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
@@ -58,7 +60,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
           ImmutableMap.<String, String>of(),
           ImmutableList.<Artifact>of(),
           NestedSetBuilder.<Pair<String, String>>emptySet(Order.COMPILE_ORDER),
-          null,
           ImmutableMap.<String, String>of());
 
   @Nullable private final CppConfiguration cppConfiguration;
@@ -68,9 +69,7 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
   private final NestedSet<Artifact> strip;
   private final NestedSet<Artifact> objCopy;
   private final NestedSet<Artifact> link;
-  private final Artifact interfaceSoBuilder;
   private final NestedSet<Artifact> dwp;
-  private final NestedSet<Artifact> coverage;
   private final NestedSet<Artifact> libcLink;
   private final NestedSet<Artifact> staticRuntimeLinkInputs;
   @Nullable private final Artifact staticRuntimeLinkMiddleman;
@@ -83,7 +82,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
   private final ImmutableMap<String, String> buildVariables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
   private final NestedSet<Pair<String, String>> coverageEnvironment;
-  @Nullable private final Artifact linkDynamicLibraryTool;
   private final ImmutableMap<String, String> environment;
 
   public CcToolchainProvider(
@@ -94,9 +92,7 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
       NestedSet<Artifact> strip,
       NestedSet<Artifact> objCopy,
       NestedSet<Artifact> link,
-      Artifact interfaceSoBuilder,
       NestedSet<Artifact> dwp,
-      NestedSet<Artifact> coverage,
       NestedSet<Artifact> libcLink,
       NestedSet<Artifact> staticRuntimeLinkInputs,
       @Nullable Artifact staticRuntimeLinkMiddleman,
@@ -109,7 +105,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
       Map<String, String> buildVariables,
       ImmutableList<Artifact> builtinIncludeFiles,
       NestedSet<Pair<String, String>> coverageEnvironment,
-      Artifact linkDynamicLibraryTool,
       ImmutableMap<String, String> environment) {
     this.cppConfiguration = cppConfiguration;
     this.crosstool = Preconditions.checkNotNull(crosstool);
@@ -118,9 +113,7 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
     this.strip = Preconditions.checkNotNull(strip);
     this.objCopy = Preconditions.checkNotNull(objCopy);
     this.link = Preconditions.checkNotNull(link);
-    this.interfaceSoBuilder = interfaceSoBuilder;
     this.dwp = Preconditions.checkNotNull(dwp);
-    this.coverage = Preconditions.checkNotNull(coverage);
     this.libcLink = Preconditions.checkNotNull(libcLink);
     this.staticRuntimeLinkInputs = Preconditions.checkNotNull(staticRuntimeLinkInputs);
     this.staticRuntimeLinkMiddleman = staticRuntimeLinkMiddleman;
@@ -133,7 +126,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
     this.buildVariables = ImmutableMap.copyOf(buildVariables);
     this.builtinIncludeFiles = builtinIncludeFiles;
     this.coverageEnvironment = coverageEnvironment;
-    this.linkDynamicLibraryTool = linkDynamicLibraryTool;
     this.environment = environment;
   }
 
@@ -181,13 +173,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
 
   public NestedSet<Artifact> getDwp() {
     return dwp;
-  }
-
-  /**
-   * Returns the files necessary for capturing code coverage.
-   */
-  public NestedSet<Artifact> getCoverage() {
-    return coverage;
   }
 
   public NestedSet<Artifact> getLibcLink() {
@@ -297,20 +282,5 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
 
   public ImmutableMap<String, String> getEnvironment() {
     return environment;
-  }
-
-  /**
-   * Returns the tool which should be used for linking dynamic libraries, or in case it's not
-   * specified by the crosstool this will be @tools_repository/tools/cpp:link_dynamic_library
-   */
-  public Artifact getLinkDynamicLibraryTool() {
-    return linkDynamicLibraryTool;
-  }
-
-  /**
-   * Returns the tool that builds interface libraries from dynamic libraries.
-   */
-  public Artifact getInterfaceSoBuilder() {
-    return interfaceSoBuilder;
   }
 }

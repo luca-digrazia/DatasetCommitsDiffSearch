@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -142,23 +141,23 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     // Dynamic runtime inputs.
     TransitiveInfoCollection dynamicRuntimeLibDep = selectDep(ruleContext, "dynamic_runtime_libs",
         cppConfiguration.getDynamicRuntimeLibsLabel());
-    NestedSet<Artifact> dynamicRuntimeLinkSymlinks;
-    List<Artifact> dynamicRuntimeLinkInputs = new ArrayList<>();
-    Artifact dynamicRuntimeLinkMiddleman;
+    final NestedSet<Artifact> dynamicRuntimeLinkInputs;
+    final Artifact dynamicRuntimeLinkMiddleman;
     if (cppConfiguration.supportsEmbeddedRuntimes()) {
-      NestedSetBuilder<Artifact> dynamicRuntimeLinkSymlinksBuilder = NestedSetBuilder.stableOrder();
+      NestedSetBuilder<Artifact> dynamicRuntimeLinkInputsBuilder = NestedSetBuilder.stableOrder();
       for (Artifact artifact : dynamicRuntimeLibDep
           .getProvider(FileProvider.class).getFilesToBuild()) {
         if (CppHelper.SHARED_LIBRARY_FILETYPES.matches(artifact.getFilename())) {
-          dynamicRuntimeLinkInputs.add(artifact);
-          dynamicRuntimeLinkSymlinksBuilder.add(SolibSymlinkAction.getCppRuntimeSymlink(
+          dynamicRuntimeLinkInputsBuilder.add(SolibSymlinkAction.getCppRuntimeSymlink(
               ruleContext, artifact, runtimeSolibDirBase,
               ruleContext.getConfiguration()));
+        } else {
+          dynamicRuntimeLinkInputsBuilder.add(artifact);
         }
       }
-      dynamicRuntimeLinkSymlinks = dynamicRuntimeLinkSymlinksBuilder.build();
+      dynamicRuntimeLinkInputs = dynamicRuntimeLinkInputsBuilder.build();
     } else {
-      dynamicRuntimeLinkSymlinks = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+      dynamicRuntimeLinkInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
 
     if (!dynamicRuntimeLinkInputs.isEmpty()) {
@@ -166,7 +165,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
           CppHelper.getAggregatingMiddlemanForCppRuntimes(
               ruleContext,
               purposePrefix + "dynamic_runtime_link",
-              dynamicRuntimeLinkInputs,
+              dynamicRuntimeLibDep,
               runtimeSolibDirBase,
               ruleContext.getConfiguration());
       dynamicRuntimeLinkMiddleman = dynamicRuntimeLinkMiddlemanSet.isEmpty()
@@ -176,7 +175,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     }
 
     Preconditions.checkState(
-        (dynamicRuntimeLinkMiddleman == null) == dynamicRuntimeLinkSymlinks.isEmpty());
+        (dynamicRuntimeLinkMiddleman == null) == dynamicRuntimeLinkInputs.isEmpty());
 
     CppCompilationContext.Builder contextBuilder =
         new CppCompilationContext.Builder(ruleContext);
@@ -211,7 +210,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             libcLink,
             staticRuntimeLinkInputs,
             staticRuntimeLinkMiddleman,
-            dynamicRuntimeLinkSymlinks,
+            dynamicRuntimeLinkInputs,
             dynamicRuntimeLinkMiddleman,
             runtimeSolibDir,
             context,
