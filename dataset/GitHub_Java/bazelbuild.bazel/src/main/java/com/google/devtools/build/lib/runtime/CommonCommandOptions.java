@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -97,18 +98,6 @@ public class CommonCommandOptions extends OptionsBase {
   }
 
 
-  // To create a new incompatible change, see the javadoc for AllIncompatibleChangesExpansion.
-  @Option(
-    name = "all_incompatible_changes",
-    defaultValue = "null",
-    category = "misc",
-    expansionFunction = AllIncompatibleChangesExpansion.class,
-    help =
-        "Enables all options of the form --incompatible_*. Use this option to find places where "
-            + "your build may break in the future due to deprecations or other changes."
-  )
-  public Void allIncompatibleChanges;
-
   @Option(name = "config",
           defaultValue = "",
           category = "misc",
@@ -139,11 +128,7 @@ public class CommonCommandOptions extends OptionsBase {
   @Option(name = "ignore_client_env",
       defaultValue = "false",
       category = "hidden",
-      deprecationWarning = "Deprecated, no-op.",
-      help = "Deprecated, no-op."
-  )
-  // TODO(laszlocsomor, dslomov) 2017-03-07: remove this flag after 2017-06-01 (~3 months from now)
-  // and all of its occurrences.
+      help = "If true, ignore the '--client_env' flag, and use the JVM environment instead")
   public boolean ignoreClientEnv;
 
   @Option(name = "client_cwd",
@@ -227,12 +212,10 @@ public class CommonCommandOptions extends OptionsBase {
       help = "The time in ms the launcher spends before sending the request to the blaze server.")
   public long startupTime;
 
-  @Option(
-    name = "extract_data_time",
-    defaultValue = "0",
-    category = "hidden",
-    help = "The time in ms spent on extracting the new blaze version."
-  )
+  @Option(name = "extract_data_time",
+      defaultValue = "0",
+      category = "hidden",
+      help = "The time spend on extracting the new blaze version.")
   public long extractDataTime;
 
   @Option(name = "command_wait_time",
@@ -264,12 +247,4 @@ public class CommonCommandOptions extends OptionsBase {
       category = "hidden",
       help = "Enable processing of +<file> parameters.")
   public boolean allowProjectFiles;
-
-  @Option(name = "block_for_lock",
-      defaultValue = "true",
-      category = "hidden",
-      help = "If set (the default), a command will block if there is another one running. If "
-          + "unset, these commands will immediately return with an error.")
-  public boolean blockForLock;
-
 }
