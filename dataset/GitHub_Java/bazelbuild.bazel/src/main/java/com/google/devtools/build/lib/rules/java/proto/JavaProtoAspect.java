@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.Iterables.transform;
 import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked;
@@ -34,6 +33,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -50,9 +50,7 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaLibraryHelper;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.ToolchainInvocation;
@@ -112,8 +110,15 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     SupportData supportData =
         checkNotNull(base.getProvider(ProtoSupportDataProvider.class)).getSupportData();
 
-    Impl impl = new Impl(ruleContext, supportData, javaSemantics, rpcSupport);
-    impl.addProviders(aspect);
+    aspect.addProviders(
+        new Impl(
+                ruleContext,
+                supportData,
+            javaSemantics,
+                rpcSupport
+        )
+            .createProviders());
+
     return aspect.build();
   }
 
@@ -178,7 +183,9 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                   GET_PROVIDER));
     }
 
-    void addProviders(ConfiguredAspect.Builder aspect) {
+    TransitiveInfoProviderMap createProviders() {
+      TransitiveInfoProviderMap.Builder result = TransitiveInfoProviderMap.builder();
+
       // Represents the result of compiling the code generated for this proto, including all of its
       // dependencies.
       JavaCompilationArgsProvider generatedCompilationArgsProvider;
@@ -188,8 +195,6 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       NestedSetBuilder<Artifact> transitiveOutputJars =
           NestedSetBuilder.fromNestedSets(
               transform(getDeps(JavaProtoLibraryTransitiveFilesToBuildProvider.class), GET_JARS));
-
-      JavaSkylarkApiProvider.Builder skylarkApiProvider = JavaSkylarkApiProvider.builder();
 
       if (shouldGenerateCode()) {
         Artifact sourceJar = getSourceJarArtifact();
@@ -202,36 +207,21 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
             NestedSetBuilder.<Artifact>stableOrder().add(sourceJar).build();
         transitiveOutputJars.add(outputJar);
 
-        Artifact compileTimeJar =
-            getOnlyElement(
-                generatedCompilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
-        // TODO(carmi): Expose to native rules
-        JavaRuleOutputJarsProvider ruleOutputJarsProvider =
-            JavaRuleOutputJarsProvider.builder()
-                .addOutputJar(outputJar, compileTimeJar, sourceJar)
-                .build();
-        JavaSourceJarsProvider sourceJarsProvider =
-            JavaSourceJarsProvider.create(
-                NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars);
-
-        skylarkApiProvider
-            .setRuleOutputJarsProvider(ruleOutputJarsProvider)
-            .setSourceJarsProvider(sourceJarsProvider);
-
-        aspect.addProvider(new JavaSourceJarsAspectProvider(sourceJarsProvider));
+        result.add(
+            new JavaSourceJarsAspectProvider(
+                JavaSourceJarsProvider.create(
+                    NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars)));
       } else {
         // No sources - this proto_library is an alias library, which exports its dependencies.
         // Simply propagate the compilation-args from its dependencies.
         generatedCompilationArgsProvider = dependencyCompilationArgs;
-        skylarkApiProvider.setRuleOutputJarsProvider(JavaRuleOutputJarsProvider.builder().build());
       }
 
-      skylarkApiProvider.setCompilationArgsProvider(generatedCompilationArgsProvider);
-      aspect
-          .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.PROTO_NAME, skylarkApiProvider.build())
-          .addProviders(
+      return result
+          .add(
               new JavaProtoLibraryTransitiveFilesToBuildProvider(transitiveOutputJars.build()),
-              new JavaCompilationArgsAspectProvider(generatedCompilationArgsProvider));
+              new JavaCompilationArgsAspectProvider(generatedCompilationArgsProvider))
+          .build();
     }
 
     /**
