@@ -21,7 +21,6 @@ import com.google.devtools.build.android.AndroidResourceProcessor.FlagAaptOption
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.PathListConverter;
-import com.google.devtools.build.android.Converters.VariantConfigurationTypeConverter;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
@@ -138,27 +137,12 @@ public class ResourceShrinkerAction {
         help = "Path to where the shrunk resource.ap_ should be written.")
     public Path shrunkResources;
 
-    @Option(name = "rTxtOutput",
-        defaultValue = "null",
-        converter = PathConverter.class,
-        category = "output",
-        help = "Path to where the R.txt should be written.")
-    public Path rTxtOutput;
-
     @Option(name = "log",
         defaultValue = "null",
         category = "output",
         converter = PathConverter.class,
         help = "Path to where the shrinker log should be written.")
     public Path log;
-
-    @Option(name = "packageType",
-        defaultValue = "DEFAULT",
-        converter = VariantConfigurationTypeConverter.class,
-        category = "config",
-        help = "Variant configuration type for packaging the resources."
-            + " Acceptible values DEFAULT, LIBRARY, TEST")
-    public VariantConfiguration.Type packageType;
   }
 
   private static AaptConfigOptions aaptConfigOptions;
@@ -232,11 +216,6 @@ public class ResourceShrinkerAction {
       logger.fine(String.format("Shrinking resources finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
 
-      Path generatedSources = null;
-      if (options.rTxtOutput != null) {
-        generatedSources = working.resolve("generated_resources");
-      }
-
       // Build ap_ with shrunk resources.
       resourceProcessor.processResources(
           aaptConfigOptions.aapt,
@@ -251,21 +230,14 @@ public class ResourceShrinkerAction {
           new MergedAndroidData(
               shrunkResources, resourceFiles.resolve("assets"), options.primaryManifest),
           ImmutableList.<DependencyAndroidData>of() /* libraries */,
-          generatedSources,
+          null /* sourceOutputDir */,
           options.shrunkApk,
           null /* proguardOutput */,
           null /* mainDexProguardOutput */,
-         null /* publicResourcesOut */,
-         null /* dataBindingInfoOut */);
+          null /* publicResourcesOut */);
       if (options.shrunkResources != null) {
         resourceProcessor.createResourcesZip(shrunkResources, resourceFiles.resolve("assets"),
-            options.shrunkResources, false /* compress */);
-      }
-      if (options.rTxtOutput != null) {
-        resourceProcessor.copyRToOutput(
-            generatedSources,
-            options.rTxtOutput,
-            options.packageType == VariantConfiguration.Type.LIBRARY);
+            options.shrunkResources);
       }
       logger.fine(String.format("Packing resources finished at %sms",
           timer.elapsed(TimeUnit.MILLISECONDS)));
