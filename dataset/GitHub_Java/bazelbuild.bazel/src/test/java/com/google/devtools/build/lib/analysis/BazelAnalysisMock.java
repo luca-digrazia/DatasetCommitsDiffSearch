@@ -84,11 +84,6 @@ public class BazelAnalysisMock extends AnalysisMock {
   }
 
   @Override
-  public ConfigurationCollectionFactory createConfigurationCollectionFactory() {
-    return new BazelConfigurationCollection();
-  }
-
-  @Override
   public Collection<String> getOptionOverrides() {
     return ImmutableList.of();
   }
