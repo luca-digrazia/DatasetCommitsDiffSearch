@@ -288,8 +288,7 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
    * lives in a subpackage distinct from that of baseExecPath, and {@code baseRoot} otherwise.
    */
   public synchronized Artifact resolveSourceArtifactWithAncestor(
-      PathFragment relativePath, PathFragment baseExecPath, Root baseRoot,
-      RepositoryName repositoryName) {
+      PathFragment relativePath, PathFragment baseExecPath, Root baseRoot) {
     Preconditions.checkState(
         (baseExecPath == null) == (baseRoot == null),
         "%s %s %s",
@@ -314,8 +313,7 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
       return null;
     }
 
-    return createArtifactIfNotValid(
-        findSourceRoot(execPath, baseExecPath, baseRoot, repositoryName), execPath);
+    return createArtifactIfNotValid(findSourceRoot(execPath, baseExecPath, baseRoot), execPath);
   }
 
   /**
@@ -324,21 +322,22 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
    */
   @Nullable
   private Root findSourceRoot(
-      PathFragment execPath, @Nullable PathFragment baseExecPath, @Nullable Root baseRoot,
-      RepositoryName repositoryName) {
+      PathFragment execPath, @Nullable PathFragment baseExecPath, @Nullable Root baseRoot) {
     PathFragment dir = execPath.getParentDirectory();
     if (dir == null) {
       return null;
     }
 
+    RepositoryName repoName = RepositoryName.MAIN;
+
     Pair<RepositoryName, PathFragment> repo = RepositoryName.fromPathFragment(dir);
     if (repo != null) {
-      repositoryName = repo.getFirst();
+      repoName = repo.getFirst();
       dir = repo.getSecond();
     }
 
     while (dir != null && !dir.equals(baseExecPath)) {
-      Root sourceRoot = packageRoots.get(PackageIdentifier.create(repositoryName, dir));
+      Root sourceRoot = packageRoots.get(PackageIdentifier.create(repoName, dir));
       if (sourceRoot != null) {
         return sourceRoot;
       }
@@ -351,7 +350,7 @@ public class ArtifactFactory implements ArtifactResolver, ArtifactSerializer, Ar
   @Override
   public Artifact resolveSourceArtifact(PathFragment execPath,
       @SuppressWarnings("unused") RepositoryName repositoryName) {
-    return resolveSourceArtifactWithAncestor(execPath, null, null, repositoryName);
+    return resolveSourceArtifactWithAncestor(execPath, null, null);
   }
 
   @Override

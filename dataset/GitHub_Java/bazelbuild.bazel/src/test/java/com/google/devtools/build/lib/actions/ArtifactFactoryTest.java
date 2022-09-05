@@ -83,15 +83,15 @@ public class ArtifactFactoryTest {
     alienRoot = Root.asSourceRoot(scratch.dir("/client/workspace"));
     outRoot = Root.asDerivedRoot(execRoot, execRoot.getRelative("out-root/x/bin"));
 
-    fooPath = PathFragment.create("foo");
+    fooPath = new PathFragment("foo");
     fooPackage = PackageIdentifier.createInMainRepo(fooPath);
     fooRelative = fooPath.getRelative("foosource.txt");
 
-    barPath = PathFragment.create("foo/bar");
+    barPath = new PathFragment("foo/bar");
     barPackage = PackageIdentifier.createInMainRepo(barPath);
     barRelative = barPath.getRelative("barsource.txt");
 
-    alienPath = PathFragment.create("external/alien");
+    alienPath = new PathFragment("external/alien");
     alienPackage = PackageIdentifier.create("@alien", alienPath);
     alienRelative = alienPath.getRelative("alien.txt");
 
@@ -116,7 +116,7 @@ public class ArtifactFactoryTest {
   @Test
   public void testGetSourceArtifactUnnormalized() throws Exception {
     assertSame(artifactFactory.getSourceArtifact(fooRelative, clientRoot),
-               artifactFactory.getSourceArtifact(PathFragment.create("foo/./foosource.txt"),
+               artifactFactory.getSourceArtifact(new PathFragment("foo/./foosource.txt"),
                    clientRoot));
   }
 
@@ -156,11 +156,11 @@ public class ArtifactFactoryTest {
     // We need a package in the root directory to make every exec path (even one with up-level
     // references) be in a package.
     Map<PackageIdentifier, Root> packageRoots = ImmutableMap.of(
-        PackageIdentifier.createInMainRepo(PathFragment.create("")), clientRoot);
+        PackageIdentifier.createInMainRepo(new PathFragment("")), clientRoot);
     artifactFactory.setPackageRoots(packageRoots);
-    PathFragment outsideWorkspace = PathFragment.create("../foo");
+    PathFragment outsideWorkspace = new PathFragment("../foo");
     PathFragment insideWorkspace =
-        PathFragment.create("../" + clientRoot.getPath().getBaseName() + "/foo");
+        new PathFragment("../" + clientRoot.getPath().getBaseName() + "/foo");
     assertNull(artifactFactory.resolveSourceArtifact(outsideWorkspace, MAIN));
     assertNull("Up-level-containing paths that descend into the right workspace aren't allowed",
             artifactFactory.resolveSourceArtifact(insideWorkspace, MAIN));
@@ -186,7 +186,7 @@ public class ArtifactFactoryTest {
   public void testFindDerivedRoot() throws Exception {
     assertThat(artifactFactory.isDerivedArtifact(fooRelative)).isFalse();
     assertThat(artifactFactory.isDerivedArtifact(
-        PathFragment.create("bazel-out/local-fastbuild/bin/foo"))).isTrue();
+        new PathFragment("bazel-out/local-fastbuild/bin/foo"))).isTrue();
   }
 
   @Test
@@ -210,7 +210,7 @@ public class ArtifactFactoryTest {
 
   @Test
   public void testGetDerivedArtifact() throws Exception {
-    PathFragment toolPath = PathFragment.create("_bin/tool");
+    PathFragment toolPath = new PathFragment("_bin/tool");
     Artifact artifact = artifactFactory.getDerivedArtifact(toolPath, execRoot);
     assertEquals(toolPath, artifact.getExecPath());
     assertEquals(Root.asDerivedRoot(execRoot), artifact.getRoot());
@@ -221,7 +221,7 @@ public class ArtifactFactoryTest {
   @Test
   public void testGetDerivedArtifactFailsForAbsolutePath() throws Exception {
     try {
-      artifactFactory.getDerivedArtifact(PathFragment.create("/_bin/b"), execRoot);
+      artifactFactory.getDerivedArtifact(new PathFragment("/_bin/b"), execRoot);
       fail();
     } catch (IllegalArgumentException e) {
       // Expected exception
