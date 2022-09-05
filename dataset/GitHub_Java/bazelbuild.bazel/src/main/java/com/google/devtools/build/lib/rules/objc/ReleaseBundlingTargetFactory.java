@@ -71,9 +71,9 @@ public abstract class ReleaseBundlingTargetFactory implements RuleConfiguredTarg
         ruleContext, common.getObjcProvider(), LinkedBinary.DEPENDENCIES_ONLY, bundleDirFormat,
         bundleName(ruleContext), bundleMinimumOsVersion(ruleContext));
     releaseBundlingSupport
-        .registerActions(DsymOutputType.APP)
+        .registerActions()
         .addXcodeSettings(xcodeProviderBuilder)
-        .addFilesToBuild(filesToBuild, DsymOutputType.APP)
+        .addFilesToBuild(filesToBuild)
         .validateResources()
         .validateAttributes();
 

@@ -52,8 +52,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
 
   public IosExtension() {
     super(ReleaseBundlingSupport.EXTENSION_BUNDLE_DIR_FORMAT, XcodeProductType.EXTENSION,
-        ImmutableSet.of(new Attribute("binary", Mode.SPLIT)),
-        ConfigurationDistinguisher.IOS_EXTENSION);
+        ImmutableSet.of(new Attribute("binary", Mode.SPLIT)), ConfigurationDistinguisher.EXTENSION);
   }
 
   @Override
@@ -107,7 +106,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
 
     @Override
     protected ConfigurationDistinguisher getConfigurationDistinguisher() {
-      return ConfigurationDistinguisher.IOS_EXTENSION;
+      return ConfigurationDistinguisher.EXTENSION;
     }
 
     private void setMinimumOsVersion(BuildOptions splitOptions, DottedVersion newMinimumVersion) {

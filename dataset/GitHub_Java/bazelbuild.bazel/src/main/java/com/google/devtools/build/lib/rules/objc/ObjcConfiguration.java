@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 
 import java.util.ArrayList;
@@ -70,6 +70,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   // configuration, the late bound attribute will fail to be initialized because it hasn't been
   // loaded.
   @Nullable private final Label gcovLabel;
+  @Nullable private final Label experimentalGcovLabel;
   @Nullable private final Label dumpSymsLabel;
 
   ObjcConfiguration(ObjcCommandLineOptions objcOptions, BuildConfiguration.Options options,
@@ -84,6 +85,7 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.copts = ImmutableList.copyOf(objcOptions.copts);
     this.compilationMode = Preconditions.checkNotNull(options.compilationMode, "compilationMode");
     this.gcovLabel = options.objcGcovBinary;
+    this.experimentalGcovLabel = options.experimentalObjcGcovBinary;
     this.dumpSymsLabel = objcOptions.dumpSyms;
     this.iosSplitCpu = Preconditions.checkNotNull(objcOptions.iosSplitCpu, "iosSplitCpu");
     this.fastbuildOptions = ImmutableList.copyOf(objcOptions.fastbuildOptions);
@@ -161,6 +163,14 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
    */
   @Nullable public Label getGcovLabel() {
     return gcovLabel;
+  }
+
+  /**
+   * Returns the label of the experimental gcov binary, used to get test coverage data for {@code
+   * experimental_ios_test}. Null iff not in coverage mode.
+   */
+  @Nullable public Label getExperimentalGcovLabel() {
+    return experimentalGcovLabel;
   }
 
   /**

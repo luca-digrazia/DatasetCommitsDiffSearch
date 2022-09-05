@@ -14,14 +14,12 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
-import com.google.devtools.build.lib.util.Preconditions;
-
-import javax.annotation.Nullable;
 
 /**
  * Provider that describes a simulator device.
@@ -33,32 +31,14 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
     private String type;
     private DottedVersion iosVersion;
     private String locale;
-    @Nullable
-    private DottedVersion xcodeVersion;
 
-    /**
-     * Sets the hardware type of the device, corresponding to the {@code simctl} device type.
-     */
     public Builder setType(String type) {
       this.type = type;
       return this;
     }
 
-    /**
-     * Sets the iOS version of the simulator to use. This may be different than the iOS sdk version
-     * used to build the application.
-     */
     public Builder setIosVersion(DottedVersion iosVersion) {
       this.iosVersion = iosVersion;
-      return this;
-    }
-
-    /**
-     * Sets the xcode version to obtain the iOS simulator from. This may be different than the
-     * xcode version with which the application was built.
-     */
-    public Builder setXcodeVersion(@Nullable DottedVersion xcodeVersion) {
-      this.xcodeVersion = xcodeVersion;
       return this;
     }
 
@@ -74,14 +54,12 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
 
   private final String type;
   private final DottedVersion iosVersion;
-  private final DottedVersion xcodeVersion;
   private final String locale;
 
   private IosDeviceProvider(Builder builder) {
     this.type = Preconditions.checkNotNull(builder.type);
     this.iosVersion = Preconditions.checkNotNull(builder.iosVersion);
     this.locale = Preconditions.checkNotNull(builder.locale);
-    this.xcodeVersion = builder.xcodeVersion;
   }
 
   public String getType() {
@@ -90,11 +68,6 @@ public final class IosDeviceProvider implements TransitiveInfoProvider {
 
   public DottedVersion getIosVersion() {
     return iosVersion;
-  }
-
-  @Nullable
-  public DottedVersion getXcodeVersion() {
-    return xcodeVersion;
   }
 
   public String getLocale() {

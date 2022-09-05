@@ -24,11 +24,7 @@ public class DottedVersionConverter implements Converter<DottedVersion> {
 
   @Override
   public DottedVersion convert(String input) throws OptionsParsingException {
-    try {
-      return DottedVersion.fromString(input);
-    } catch (IllegalArgumentException e) {
-      throw new OptionsParsingException(e.getMessage());
-    }
+    return DottedVersion.fromString(input);
   }
 
   @Override

@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -99,7 +98,7 @@ final class BundleSupport {
     this.bundling = bundling;
     this.attributes = new Attributes(ruleContext);
   }
-
+  
   /**
    * Registers actions required for constructing this bundle, namely merging all involved {@code
    * Info.plist} files and generating asset catalogues.
@@ -112,14 +111,9 @@ final class BundleSupport {
     registerConvertXibsActions(objcProvider);
     registerMomczipActions(objcProvider);
     registerInterfaceBuilderActions(objcProvider);
+    registerMergeInfoplistAction();
     registerActoolActionIfNecessary(objcProvider);
 
-    if (bundling.needsToMergeInfoplist()) {
-      NestedSet<Artifact> mergingContentArtifacts = bundling.getMergingContentArtifacts();
-      Artifact mergedPlist = bundling.getBundleInfoplist().get();
-      PlMergeControlBytes plMergeControlBytes = new PlMergeControlBytes(bundling, mergedPlist);
-      registerMergeInfoplistAction(mergingContentArtifacts, plMergeControlBytes);
-    }
     return this;
   }
 
@@ -232,7 +226,7 @@ final class BundleSupport {
       Artifact zipOutput = intermediateArtifacts.compiledStoryboardZip(storyboardInput);
 
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+          ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("StoryboardCompile")
               .setExecutable(attributes.ibtoolWrapper())
               .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, storyboardInput))
@@ -242,7 +236,6 @@ final class BundleSupport {
               // https://github.com/bazelbuild/bazel/issues/285 is fixed.
               .addInput(attributes.realpath())
               .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
-              .setVerboseFailuresAndSubcommandsInEnv()
               .build(ruleContext));
     }
   }
@@ -277,7 +270,7 @@ final class BundleSupport {
     for (Xcdatamodel datamodel : xcdatamodels) {
       Artifact outputZip = datamodel.getOutputZip();
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+          ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("MomCompile")
               .setExecutable(attributes.momcWrapper())
               .addOutput(outputZip)
@@ -286,7 +279,6 @@ final class BundleSupport {
               // https://github.com/google/bazel/issues/285 is fixed.
               .addInput(attributes.realpath())
               .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
-              .setVerboseFailuresAndSubcommandsInEnv()
              .setCommandLine(CustomCommandLine.builder()
                   .addPath(outputZip.getExecPath())
                   .add(datamodel.archiveRootForMomczip())
@@ -310,7 +302,7 @@ final class BundleSupport {
           FileSystemUtils.replaceExtension(original.getExecPath(), ".nib"));
 
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+          ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("XibCompile")
               .setExecutable(attributes.ibtoolWrapper())
               .setCommandLine(ibActionsCommandLine(archiveRoot, zipOutput, original))
@@ -320,7 +312,6 @@ final class BundleSupport {
               // https://github.com/bazelbuild/bazel/issues/285 is fixed.
               .addInput(attributes.realpath())
               .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
-              .setVerboseFailuresAndSubcommandsInEnv()
               .build(ruleContext));
     }
   }
@@ -330,7 +321,7 @@ final class BundleSupport {
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
     for (Artifact strings : objcProvider.get(ObjcProvider.STRINGS)) {
       Artifact bundled = intermediateArtifacts.convertedStringsFile(strings);
-      ruleContext.registerAction(ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+      ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
           .setMnemonic("ConvertStringsPlist")
           .setExecutable(new PathFragment("/usr/bin/plutil"))
           .setCommandLine(CustomCommandLine.builder()
@@ -351,32 +342,34 @@ final class BundleSupport {
    * merge action is necessary if there are more than one input plist files or we have a bundle ID
    * to stamp on the merged plist.
    */
-  private void registerMergeInfoplistAction(
-      NestedSet<Artifact> mergingContentArtifacts, PlMergeControlBytes controlBytes) {
+  private void registerMergeInfoplistAction() {
     if (!bundling.needsToMergeInfoplist()) {
       return; // Nothing to do here.
     }
-    
-    Artifact plMergeControlArtifact =
-        ObjcRuleClasses.artifactByAppendingToBaseName(ruleContext, ".plmerge-control");
 
-    ruleContext.registerAction(
-        new BinaryFileWriteAction(
-            ruleContext.getActionOwner(),
-            plMergeControlArtifact,
-            controlBytes,
-            /*makeExecutable=*/ false));
+    ruleContext.registerAction(new SpawnAction.Builder()
+        .setMnemonic("MergeInfoPlistFiles")
+        .setExecutable(attributes.plmerge())
+        .setCommandLine(mergeCommandLine())
+        .addInputs(bundling.getBundleInfoplistInputs())
+        .addOutput(ObjcRuleClasses.intermediateArtifacts(ruleContext).mergedInfoplist())
+        .build(ruleContext));
+  }
 
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .setMnemonic("MergeInfoPlistFiles")
-            .setExecutable(attributes.plmerge())
-            .addArgument("--control")
-            .addInputArgument(plMergeControlArtifact)
-            .addTransitiveInputs(mergingContentArtifacts)
-            .addOutput(ObjcRuleClasses.intermediateArtifacts(ruleContext).mergedInfoplist())
-            .setVerboseFailuresAndSubcommandsInEnv()
-            .build(ruleContext));
+  private CommandLine mergeCommandLine() {
+    CustomCommandLine.Builder argBuilder = CustomCommandLine.builder()
+        .addBeforeEachExecPath("--source_file", bundling.getBundleInfoplistInputs())
+        .addExecPath(
+            "--out_file", ObjcRuleClasses.intermediateArtifacts(ruleContext).mergedInfoplist());
+
+    if (bundling.getPrimaryBundleId() != null) {
+      argBuilder.add("--primary_bundle_id").add(bundling.getPrimaryBundleId());
+    }
+    if (bundling.getFallbackBundleId() != null) {
+      argBuilder.add("--fallback_bundle_id").add(bundling.getFallbackBundleId());
+    }
+
+    return argBuilder.build();
   }
 
   private void registerActoolActionIfNecessary(ObjcProvider objcProvider) {
@@ -394,7 +387,7 @@ final class BundleSupport {
     // zip file will be rooted at the bundle root, and we have to prepend the bundle root to each
     // entry when merging it with the final .ipa file.
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
             .setMnemonic("AssetCatalogCompile")
             .setExecutable(attributes.actoolWrapper())
             .addTransitiveInputs(objcProvider.get(ASSET_CATALOG))
@@ -404,7 +397,6 @@ final class BundleSupport {
             // https://github.com/google/bazel/issues/285 is fixed.
             .addInput(attributes.realpath())
             .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
-            .setVerboseFailuresAndSubcommandsInEnv()
             .setCommandLine(actoolzipCommandLine(
                 objcProvider,
                 zipOutput,
