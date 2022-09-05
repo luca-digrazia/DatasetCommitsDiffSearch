@@ -32,7 +32,6 @@ import org.mybatis.spring.boot.autoconfigure.SpringBootVFS;
 import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -48,8 +47,8 @@ import javax.sql.DataSource;
 @Configuration
 @EnableConfigurationProperties(MybatisProperties.class)
 @ConditionalOnClass({SqlSessionFactory.class, SqlSessionFactoryBean.class})
-//@AutoConfigureAfter(name = {"org.hswebframework.web.datasource.jta.AtomikosDataSourceAutoConfiguration"})
 public class MyBatisAutoConfiguration {
+
 
     @Autowired(required = false)
     private Interceptor[] interceptors;
@@ -72,7 +71,7 @@ public class MyBatisAutoConfiguration {
 
     @Bean(name = "sqlSessionFactory")
     @Primary
-    public SqlSessionFactory sqlSessionFactory(DataSource dataSource) throws Exception {
+    public SqlSessionFactory sqlSessionFactory(@Qualifier("dataSource") DataSource dataSource) throws Exception {
         SqlSessionFactoryBean factory = new SqlSessionFactoryBean();
         MybatisProperties mybatisProperties = this.mybatisProperties();
         if (null != entityFactory) {
