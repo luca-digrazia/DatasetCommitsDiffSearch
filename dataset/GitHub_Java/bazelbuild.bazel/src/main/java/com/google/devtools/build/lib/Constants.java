@@ -18,40 +18,31 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
 /**
- * A temporary class of constants; these encode differences between Google's internal setup and
- * Bazel. We're working to remove this class, which requires cleaning up our internal code base.
- * Please don't add anything here unless you know what you're doing.
+ * Various constants required by Bazel.
  *
  * <p>The extra {@code .toString()} calls are there so that javac doesn't inline these constants
- * so that we can replace this class file within a binary.
+ * so that we can replace this class file within the Bazel binary.
  */
-public final class Constants {
+public class Constants {
   private Constants() {}
 
-  // Google's internal name for Bazel is 'Blaze', and it will take some more time to change that.
   public static final String PRODUCT_NAME = "bazel";
-
-  // Default value for the --package_path flag if not otherwise set.
   public static final ImmutableList<String> DEFAULT_PACKAGE_PATH = ImmutableList.of("%workspace%");
-
-  // The rule documentation generator iterates over all rules in the class by this name.
   public static final String MAIN_RULE_CLASS_PROVIDER =
       "com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider";
 
-  // Native Java deps are all linked into a single file, which is named with this value + ".so".
   public static final String NATIVE_DEPS_LIB_SUFFIX = "_nativedeps";
 
-  // Locations of implicit Android SDK and NDK dependencies.
   public static final String ANDROID_DEFAULT_SDK = "//external:android/sdk".toString();
   public static final String ANDROID_DEFAULT_CROSSTOOL = "//external:android/crosstool".toString();
-  // If the --fat_apk_cpu flag is not set, we use this as the default value.
   public static final ImmutableList<String> ANDROID_DEFAULT_FAT_APK_CPUS =
       ImmutableList.<String>of("armeabi-v7a");
+  public static final String ANDROID_DEP_PREFIX = "//external:android/".toString();
+  public static final String TOOLS_REPOSITORY = "".toString();
 
-  // Most other tools dependencies use this; we plan to split it into per-language repositories.
-  public static final String TOOLS_REPOSITORY = "@bazel_tools".toString();
-
-  // The --cc_include_scanning flag does not work in Bazel, and will be removed imminently.
-  // We currently use this constant to disable it unconditionally.
-  public static final boolean ALLOW_CC_INCLUDE_SCANNING = new Boolean(false).booleanValue();
+  /**
+   * Whether C++ include scanning should be disabled no matter what the --cc_include_scanning flag
+   * says.
+   */
+  public static final boolean HARD_DISABLE_CC_INCLUDE_SCANNING = true;
 }

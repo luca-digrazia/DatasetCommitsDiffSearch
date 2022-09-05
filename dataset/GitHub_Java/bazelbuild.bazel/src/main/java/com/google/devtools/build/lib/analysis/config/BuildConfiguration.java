@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
@@ -80,7 +79,6 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -1103,11 +1101,6 @@ public final class BuildConfiguration {
           + "benefit from sharding certain tests. Please don't keep this option in your "
           + ".blazerc or continuous build"));
     }
-
-    if (options.useDynamicConfigurations && !options.useDistinctHostConfiguration) {
-      reporter.handle(Event.error(
-          "--nodistinct_host_configuration does not currently work with dynamic configurations"));
-    }
   }
 
   private ImmutableMap<String, String> setupShellEnvironment() {
@@ -1117,18 +1110,6 @@ public final class BuildConfiguration {
     }
     return builder.build();
   }
-
-  /**
-   * Sorts fragments by class name. This produces a stable order which, e.g., facilitates
-   * consistent output from buildMneumonic.
-   */
-  private final static Comparator lexicalFragmentSorter =
-      new Comparator<Class<? extends Fragment>>() {
-        @Override
-        public int compare(Class<? extends Fragment> o1, Class<? extends Fragment> o2) {
-          return o1.getName().compareTo(o2.getName());
-        }
-      };
 
   /**
    * Constructs a new BuildConfiguration instance.
@@ -1151,7 +1132,7 @@ public final class BuildConfiguration {
       boolean actionsDisabled) {
     Preconditions.checkState(outputRoots == null ^ directories == null);
     this.actionsEnabled = !actionsDisabled;
-    this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
+    this.fragments = ImmutableMap.copyOf(fragmentsMap);
 
     this.skylarkVisibleFragments = buildIndexOfVisibleFragments();
     

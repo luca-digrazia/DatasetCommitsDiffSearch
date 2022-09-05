@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 
 /**
@@ -38,8 +37,7 @@ public class ObjcBinaryRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class,
-            AppleConfiguration.class)
+        .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class)
         /*<!-- #BLAZE_RULE(objc_binary).IMPLICIT_OUTPUTS -->
         <ul>
          <li><code><var>name</var>.ipa</code>: the application bundle as an <code>.ipa</code>
@@ -73,6 +71,8 @@ public class ObjcBinaryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = objc_binary, TYPE = BINARY, FAMILY = Objective-C) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>This rule produces one or more Objective-C libraries for bundling in an
 <code>ios_application</code>.</p>
 
@@ -84,5 +84,7 @@ you should define them on <code>ios_application</code> instead. They will be rem
 source file to be defined in either <code>srcs</code> or <code>non_arc_srcs</code></p>.
 
 ${IMPLICIT_OUTPUTS}
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

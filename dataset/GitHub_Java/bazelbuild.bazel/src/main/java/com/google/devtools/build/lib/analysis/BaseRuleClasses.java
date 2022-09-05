@@ -56,7 +56,7 @@ public class BaseRuleClasses {
    * for running tests in coverage mode.
    */
   private static final Label COVERAGE_SUPPORT_LABEL =
-      Label.parseAbsoluteUnchecked("//tools/defaults:coverage");
+      Label.parseAbsoluteUnchecked(Constants.TOOLS_REPOSITORY + "//tools/defaults:coverage");
 
   private static final Attribute.ComputedDefault testonlyDefault =
       new Attribute.ComputedDefault() {

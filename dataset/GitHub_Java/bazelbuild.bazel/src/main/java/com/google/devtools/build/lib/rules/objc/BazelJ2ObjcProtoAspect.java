@@ -85,7 +85,7 @@ public class BazelJ2ObjcProtoAspect extends AbstractJ2ObjcProtoAspect {
         .setCommandLine(new CustomCommandLine.Builder()
             .add(compiler.getPath().toString())
             .add("-w")
-            .add(".")  // Actions are always run with the exec root as cwd
+            .add(compiler.getRoot().getPath().toString())
             .add("--generate-j2objc")
             .add("--generator-param=file_dir_mapping")
             .add("--generator-param=generate_class_mappings")
