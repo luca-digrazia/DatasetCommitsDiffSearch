@@ -252,7 +252,7 @@ public class LoadingPhaseRunner {
   public LoadingPhaseRunner(PackageManager packageManager,
                             Set<String> ruleNames) {
     this.packageManager = packageManager;
-    this.targetPatternEvaluator = packageManager.newTargetPatternEvaluator();
+    this.targetPatternEvaluator = packageManager.getTargetPatternEvaluator();
     this.ruleNames = ruleNames;
   }
 

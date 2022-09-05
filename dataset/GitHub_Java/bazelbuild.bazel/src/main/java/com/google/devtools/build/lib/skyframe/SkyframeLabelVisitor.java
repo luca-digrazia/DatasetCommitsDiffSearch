@@ -14,10 +14,12 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -249,8 +251,8 @@ final class SkyframeLabelVisitor implements TransitivePackageLoader {
   }
 
   @Override
-  public Multimap<Label, Label> getRootCauses() {
+  public Multimap<Label, Label> getRootCauses(final Collection<Label> targetsToLoad) {
     Preconditions.checkState(lastBuildKeepGoing);
-    return rootCauses;
+    return Multimaps.filterKeys(rootCauses, Predicates.in(targetsToLoad));
   }
 }
