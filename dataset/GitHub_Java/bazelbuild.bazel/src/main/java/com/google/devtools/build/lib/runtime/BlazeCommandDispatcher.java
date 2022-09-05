@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.AnsiStrippingOutputStream;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -286,11 +285,7 @@ public class BlazeCommandDispatcher {
           new InvocationPolicyEnforcer(runtime.getInvocationPolicy());
       optionsPolicyEnforcer.enforce(optionsParser, commandName);
       optionsPolicyEnforcer =
-          InvocationPolicyEnforcer.create(
-              getRuntime()
-                  .getStartupOptionsProvider()
-                  .getOptions(BlazeServerStartupOptions.class)
-                  .invocationPolicy);
+          InvocationPolicyEnforcer.create(getRuntime().getStartupOptionsProvider());
       optionsPolicyEnforcer.enforce(optionsParser, commandName);
     } catch (OptionsParsingException e) {
       for (String note : rcfileNotes) {
@@ -327,7 +322,6 @@ public class BlazeCommandDispatcher {
     EventHandler handler = createEventHandler(outErr, eventHandlerOptions);
     Reporter reporter = env.getReporter();
     reporter.addHandler(handler);
-    env.getEventBus().register(handler);
 
     // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
     // codes can be re-introduced later even if blaze is invoked with --color=no. This is useful
@@ -337,13 +331,8 @@ public class BlazeCommandDispatcher {
     if (!eventHandlerOptions.useColor()) {
       ansiAllowingHandler = createEventHandler(colorfulOutErr, eventHandlerOptions);
       reporter.registerAnsiAllowingHandler(handler, ansiAllowingHandler);
-      if (ansiAllowingHandler instanceof ExperimentalEventHandler) {
-        env.getEventBus()
-            .register(
-                new PassiveExperimentalEventHandler(
-                    (ExperimentalEventHandler) ansiAllowingHandler));
-      }
     }
+    env.getEventBus().register(ansiAllowingHandler == null ? handler : ansiAllowingHandler);
 
     try {
       // While a Blaze command is active, direct all errors to the client's
