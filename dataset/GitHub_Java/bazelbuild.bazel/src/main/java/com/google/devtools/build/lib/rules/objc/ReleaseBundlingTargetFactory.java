@@ -99,7 +99,7 @@ public abstract class ReleaseBundlingTargetFactory implements RuleConfiguredTarg
                 InstrumentedFilesProvider.class,
                 InstrumentedFilesCollector.forward(ruleContext, "binary"));
 
-    ObjcProvider exposedObjcProvider = exposedObjcProvider(ruleContext, releaseBundlingSupport);
+    ObjcProvider exposedObjcProvider = exposedObjcProvider(ruleContext);
     if (exposedObjcProvider != null) {
       targetBuilder.addProvider(ObjcProvider.class, exposedObjcProvider);
     }
@@ -140,12 +140,10 @@ public abstract class ReleaseBundlingTargetFactory implements RuleConfiguredTarg
 
   /**
    * Returns an exposed {@code ObjcProvider} object.
-   * @throws InterruptedException
+   * @throws InterruptedException 
    */
   @Nullable
-  protected ObjcProvider exposedObjcProvider(
-      RuleContext ruleContext, ReleaseBundlingSupport releaseBundlingSupport)
-      throws InterruptedException {
+  protected ObjcProvider exposedObjcProvider(RuleContext ruleContext) throws InterruptedException {
     return null;
   }
 

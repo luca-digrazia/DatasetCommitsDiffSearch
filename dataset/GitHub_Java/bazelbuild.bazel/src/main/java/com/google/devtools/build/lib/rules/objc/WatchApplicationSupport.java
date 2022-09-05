@@ -47,7 +47,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
+import com.google.devtools.build.lib.rules.objc.ObjcProvider.Builder;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 import com.google.devtools.build.lib.rules.objc.WatchUtils.WatchOSVersion;
 import com.google.devtools.build.lib.syntax.Type;
@@ -86,12 +86,9 @@ final class WatchApplicationSupport {
     this.configurationDistinguisher = configurationDistinguisher;
   }
 
-  void createBundle(
-      XcodeProvider.Builder xcodeProviderBuilder,
-      ObjcProvider.Builder objcProviderBuilder,
-      NestedSetBuilder<Artifact> filesToBuild,
-      ObjcProvider.Builder exposedObjcProviderBuilder)
-      throws InterruptedException {
+  void createBundle(XcodeProvider.Builder xcodeProviderBuilder,
+      ObjcProvider.Builder objcProviderBuilder, NestedSetBuilder<Artifact> filesToBuild)
+          throws InterruptedException {
     // Add common watch settings.
     WatchUtils.addXcodeSettings(ruleContext, xcodeProviderBuilder);
 
@@ -132,8 +129,7 @@ final class WatchApplicationSupport {
         .addXcodeSettings(xcodeProviderBuilder)
         .addFilesToBuild(filesToBuild, DsymOutputType.APP)
         .validateResources()
-        .validateAttributes()
-        .addExportedDebugArtifacts(exposedObjcProviderBuilder, DsymOutputType.APP);
+        .validateAttributes();
 
     XcodeSupport xcodeSupport = new XcodeSupport(ruleContext, intermediateArtifacts,
         labelForWatchApplication())
@@ -154,8 +150,7 @@ final class WatchApplicationSupport {
    * {@code TargetDeviceFamily.WATCH}.
    */
   private ImmutableSet<TargetDeviceFamily> families() {
-    Platform platform =
-        ruleContext.getFragment(AppleConfiguration.class).getMultiArchPlatform(PlatformType.IOS);
+    Platform platform = ruleContext.getFragment(AppleConfiguration.class).getBundlingPlatform();
     if (platform == Platform.IOS_DEVICE) {
       return ImmutableSet.of(TargetDeviceFamily.WATCH);
     } else {
@@ -209,7 +204,7 @@ final class WatchApplicationSupport {
             Joiner.on(" ").join(ImmutableList.of("_WatchKitStub", bundleName))));
 
     ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext,
-        ruleContext.getFragment(AppleConfiguration.class).getMultiArchPlatform(PlatformType.IOS))
+        ruleContext.getFragment(AppleConfiguration.class).getBundlingPlatform())
         .setProgressMessage(
             "Copying WatchKit binary and stub resource: " + ruleContext.getLabel())
         .setShellCommand(ImmutableList.of("/bin/bash", "-c", Joiner.on(" ").join(command)))
@@ -217,7 +212,7 @@ final class WatchApplicationSupport {
         .build(ruleContext));
   }
 
-  private ObjcProvider objcProvider(ObjcProvider.Builder objcProviderBuilder) {
+  private ObjcProvider objcProvider(Builder objcProviderBuilder) {
     // Add all resource files applicable to watch application from dependency providers.
     for (Attribute attribute : dependencyAttributes) {
       Iterable<ObjcProvider> dependencyObjcProviders = ruleContext.getPrerequisites(

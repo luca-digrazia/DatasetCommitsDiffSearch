@@ -143,9 +143,10 @@ public final class XcodeSupport {
    */
   XcodeSupport addXcodeSettings(XcodeProvider.Builder xcodeProviderBuilder,
       ObjcProvider objcProvider, XcodeProductType productType) {
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     return addXcodeSettings(xcodeProviderBuilder, objcProvider, productType,
-        appleConfiguration.getIosCpu(), appleConfiguration.getConfigurationDistinguisher());
+        appleConfiguration.getIosCpu(), objcConfiguration.getConfigurationDistinguisher());
   }
 
   /**
