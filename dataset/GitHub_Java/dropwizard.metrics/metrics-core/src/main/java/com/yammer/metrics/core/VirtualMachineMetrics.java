@@ -31,7 +31,7 @@ public class VirtualMachineMetrics {
         }
     }
 
-    public static final VirtualMachineMetrics INSTANCE = new VirtualMachineMetrics();
+    public static VirtualMachineMetrics INSTANCE = new VirtualMachineMetrics();
 
     private VirtualMachineMetrics() { /* unused */ }
 
@@ -77,7 +77,8 @@ public class VirtualMachineMetrics {
      * @return Heap initial JVM memory in bytes.
      */
     public double heapInit() {
-        return getMemoryMXBean().getHeapMemoryUsage().getInit();
+        return getMemoryMXBean().getHeapMemoryUsage().getInit() +
+                getMemoryMXBean().getNonHeapMemoryUsage().getInit();
     }
     /**
      * Returns the heap memory currently used by the current JVM.
@@ -85,7 +86,8 @@ public class VirtualMachineMetrics {
      * @return Heap memory currently used by JVM in bytes.
      */
     public double heapUsed() {
-        return getMemoryMXBean().getHeapMemoryUsage().getUsed();
+        return getMemoryMXBean().getHeapMemoryUsage().getUsed() +
+                getMemoryMXBean().getNonHeapMemoryUsage().getUsed();
     }
     /**
      * Returns the heap memory currently used by the current JVM.
@@ -93,7 +95,8 @@ public class VirtualMachineMetrics {
      * @return Heap memory currently used by JVM in bytes.
      */
     public double heapMax() {
-        return getMemoryMXBean().getHeapMemoryUsage().getMax();
+        return getMemoryMXBean().getHeapMemoryUsage().getMax() +
+                getMemoryMXBean().getNonHeapMemoryUsage().getMax();
     }
     /**
      * Returns the heap memory committed to the JVM.
@@ -101,7 +104,8 @@ public class VirtualMachineMetrics {
      * @return Heap memory currently committed to the JVM in bytes.
      */
     public double heapCommitted() {
-        return getMemoryMXBean().getHeapMemoryUsage().getCommitted();
+        return getMemoryMXBean().getHeapMemoryUsage().getCommitted() +
+                getMemoryMXBean().getNonHeapMemoryUsage().getCommitted();
     }
 
     /**
