@@ -769,8 +769,7 @@ public class ZipCombinerTest {
     assertThat(x.getCompressedSize()).isEqualTo(y.getCompressedSize());
     assertThat(x.getCrc()).isEqualTo(y.getCrc());
     assertThat(x.getExternalAttributes()).isEqualTo(y.getExternalAttributes());
-    // The JDK adds different extra data to zip files on different platforms, so we don't compare
-    // the extra data.
+    assertThat(x.getExtra().getBytes()).isEqualTo(y.getExtra().getBytes());
     assertThat(x.getInternalAttributes()).isEqualTo(y.getInternalAttributes());
     assertThat(x.getMethod()).isEqualTo(y.getMethod());
     assertThat(x.getName()).isEqualTo(y.getName());

@@ -19,6 +19,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.google.devtools.build.singlejar.ZipEntryFilter.CustomMergeStrategy;
 import com.google.devtools.build.singlejar.ZipEntryFilter.StrategyCallback;
 import com.google.devtools.build.zip.ExtraData;
+import com.google.devtools.build.zip.ExtraDataList;
 import com.google.devtools.build.zip.ZipFileEntry;
 import com.google.devtools.build.zip.ZipFileEntry.Compression;
 import com.google.devtools.build.zip.ZipReader;
@@ -73,15 +74,18 @@ public class ZipCombiner implements AutoCloseable {
    * Whether to compress or decompress entries.
    */
   public enum OutputMode {
+
     /**
      * Output entries using any method.
      */
     DONT_CARE,
+
     /**
      * Output all entries using DEFLATE method, except directory entries. It is always more
      * efficient to store directory entries uncompressed.
      */
     FORCE_DEFLATE,
+
     /**
      * Output all entries using STORED method.
      */
@@ -92,18 +96,22 @@ public class ZipCombiner implements AutoCloseable {
    * The type of action to take for a ZIP file entry.
    */
   private enum ActionType {
+
     /**
      * Skip the entry.
      */
     SKIP,
+
     /**
      * Copy the entry.
      */
     COPY,
+
     /**
      * Rename the entry.
      */
     RENAME,
+
     /**
      * Merge the entry.
      */
@@ -111,7 +119,17 @@ public class ZipCombiner implements AutoCloseable {
   }
 
   /**
-   * The action to take for a ZIP file entry.
+   * Encapsulates the action to take for a ZIP file entry along with optional details specific to
+   * the action type. The minimum requirements per type are:
+   * <ul>
+   *    <li>SKIP: none.</li>
+   *    <li>COPY: none.</li>
+   *    <li>RENAME: newName.</li>
+   *    <li>MERGE: strategy, mergeBuffer.</li>
+   * </ul>
+   *
+   * <p>An action can be easily changed from one type to another by using
+   * {@link EntryAction#EntryAction(ActionType, EntryAction)}.
    */
   private static final class EntryAction {
     private final ActionType type;
@@ -122,8 +140,6 @@ public class ZipCombiner implements AutoCloseable {
 
     /**
      * Create an action of the specified type with no extra details.
-     *
-     * @param type the type of action
      */
     public EntryAction(ActionType type) {
       this(type, null, null, null, null);
@@ -131,9 +147,6 @@ public class ZipCombiner implements AutoCloseable {
 
     /**
      * Create a duplicate action with a different {@link ActionType}.
-     *
-     * @param type the type of action
-     * @param action the action to copy
      */
     public EntryAction(ActionType type, EntryAction action) {
       this(type, action.getDate(), action.getNewName(), action.getStrategy(),
@@ -151,11 +164,11 @@ public class ZipCombiner implements AutoCloseable {
      */
     public EntryAction(ActionType type, Date date, String newName, CustomMergeStrategy strategy,
         ByteArrayOutputStream mergeBuffer) {
-      checkArgument(!(type == ActionType.RENAME && newName == null),
+      checkArgument(type != ActionType.RENAME || newName != null,
           "NewName must not be null if the ActionType is RENAME.");
-      checkArgument(!(type == ActionType.MERGE && strategy == null),
+      checkArgument(type != ActionType.MERGE || strategy != null,
           "Strategy must not be null if the ActionType is MERGE.");
-      checkArgument(!(type == ActionType.MERGE && mergeBuffer == null),
+      checkArgument(type != ActionType.MERGE || mergeBuffer != null,
           "MergeBuffer must not be null if the ActionType is MERGE.");
       this.type = type;
       this.date = date;
@@ -164,33 +177,27 @@ public class ZipCombiner implements AutoCloseable {
       this.mergeBuffer = mergeBuffer;
     }
 
-    /**
-     * @return the type
-     */
+    /** Returns the type. */
     public ActionType getType() {
       return type;
     }
-    /**
-     * @return the date
-     */
+
+    /** Returns the date. */
     public Date getDate() {
       return date;
     }
-    /**
-     * @return the new name
-     */
+
+    /** Returns the new name. */
     public String getNewName() {
       return newName;
     }
-    /**
-     * @return the strategy
-     */
+
+    /** Returns the strategy. */
     public CustomMergeStrategy getStrategy() {
       return strategy;
     }
-    /**
-     * @return the mergeBuffer
-     */
+
+    /** Returns the mergeBuffer. */
     public ByteArrayOutputStream getMergeBuffer() {
       return mergeBuffer;
     }
@@ -356,7 +363,7 @@ public class ZipCombiner implements AutoCloseable {
     entry.setSize(0);
     entry.setCompressedSize(0);
     entry.setTime(date != null ? date.getTime() : new Date().getTime());
-    entry.setExtra(extra);
+    entry.setExtra(new ExtraDataList(extra));
     out.putNextEntry(entry);
     out.closeEntry();
     entries.put(filename, entry);

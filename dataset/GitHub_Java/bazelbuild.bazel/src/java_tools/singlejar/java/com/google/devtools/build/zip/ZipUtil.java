@@ -248,10 +248,6 @@ public class ZipUtil {
     static byte[] create(ZipFileEntry entry, ZipFileData file, boolean allowZip64)
         throws IOException {
       byte[] name = entry.getName().getBytes(file.getCharset());
-
-      // We don't do a defensive copy here so that later, when we write the central directory entry,
-      // the changes we make here take effect.
-      // TODO(bazel-team): This seems like a bug. Investigate.
       ExtraDataList extra = entry.getExtra();
 
       EnumSet<Feature> features = entry.getFeatureSet();
@@ -289,9 +285,6 @@ public class ZipUtil {
       } else {
         extra.remove((short) 0x0001);
       }
-
-      extra.remove(ExtraDataList.EXTENDED_TIMESTAMP);
-      extra.remove(ExtraDataList.INFOZIP_UNIX_NEW);
 
       byte[] buf = new byte[FIXED_DATA_SIZE + name.length + extra.getLength()];
       intToLittleEndian(buf, SIGNATURE_OFFSET, SIGNATURE);
@@ -446,28 +439,23 @@ public class ZipUtil {
         buf = new byte[FIXED_DATA_SIZE];
       }
 
-      ExtraDataList extra = new ExtraDataList(entry.getExtra());
       if (allowZip64) {
         addZip64Extra(entry);
       } else {
-        extra.remove((short) 0x0001);
+        entry.getExtra().remove((short) 0x0001);
       }
-
-      extra.remove(ExtraDataList.EXTENDED_TIMESTAMP);
-      extra.remove(ExtraDataList.INFOZIP_UNIX_NEW);
-
       byte[] name = entry.getName().getBytes(file.getCharset());
-      byte[] extraBytes = extra.getBytes();
+      byte[] extra = entry.getExtra().getBytes();
       byte[] comment = entry.getComment() != null
           ? entry.getComment().getBytes(file.getCharset()) : new byte[]{};
 
-      fillFixedSizeData(buf, entry, name.length, extraBytes.length, comment.length, allowZip64);
+      fillFixedSizeData(buf, entry, name.length, extra.length, comment.length, allowZip64);
       stream.write(buf, 0, FIXED_DATA_SIZE);
       stream.write(name);
-      stream.write(extraBytes);
+      stream.write(extra);
       stream.write(comment);
 
-      return FIXED_DATA_SIZE + name.length + extraBytes.length + comment.length;
+      return FIXED_DATA_SIZE + name.length + extra.length + comment.length;
     }
 
     /**
