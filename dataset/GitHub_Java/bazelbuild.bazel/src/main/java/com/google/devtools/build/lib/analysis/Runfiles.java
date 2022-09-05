@@ -19,6 +19,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -57,11 +58,11 @@ import javax.annotation.concurrent.Immutable;
  */
 @Immutable
 public final class Runfiles {
-  private static final Function<SymlinkEntry, Artifact> TO_ARTIFACT =
-      new Function<SymlinkEntry, Artifact>() {
+  private static final Function<Map.Entry<PathFragment, Artifact>, Artifact> TO_ARTIFACT =
+      new Function<Map.Entry<PathFragment, Artifact>, Artifact>() {
         @Override
-        public Artifact apply(SymlinkEntry input) {
-          return input.getArtifact();
+        public Artifact apply(Map.Entry<PathFragment, Artifact> input) {
+          return input.getValue();
         }
       };
 
@@ -73,46 +74,6 @@ public final class Runfiles {
           return ImmutableMap.of();
         }
       };
-
-  /**
-   * An entry in the runfiles map.
-   */
-  //
-  // O intrepid fixer or bugs and implementor of features, dare not to add a .equals() method
-  // to this class, lest you condemn yourself, or a fellow other developer to spending two
-  // delightful hours in a fancy hotel on a Chromebook that is utterly unsuitable for Java
-  // development to figure out what went wrong, just like I just did.
-  //
-  // The semantics of the symlinks nested set dictates that later entries overwrite earlier
-  // ones. However, the semantics of nested sets dictate that if there are duplicate entries, they
-  // are only returned once in the iterator.
-  //
-  // These two things, innocent when taken alone, result in the effect that when there are three
-  // entries for the same path, the first one and the last one the same, and the middle one
-  // different, the *middle* one will take effect: the middle one overrides the first one, and the
-  // first one prevents the last one from appearing on the iterator.
-  //
-  // The lack of a .equals() method prevents this by making the first entry in the above case not
-  // equals to the third one if they are not the same instance (which they almost never are)
-  //
-  // Goodnight, prince(ss)?, and sweet dreams.
-  private static final class SymlinkEntry {
-    private final PathFragment path;
-    private final Artifact artifact;
-
-    private SymlinkEntry(PathFragment path, Artifact artifact) {
-      this.path = path;
-      this.artifact = artifact;
-    }
-
-    public PathFragment getPath() {
-      return path;
-    }
-
-    public Artifact getArtifact() {
-      return artifact;
-    }
-  }
 
   // It is important to declare this *after* the DUMMY_SYMLINK_EXPANDER to avoid NPEs
   public static final Runfiles EMPTY = new Builder().build();
@@ -142,14 +103,14 @@ public final class Runfiles {
    *
    * <p>This may include runfiles symlinks from the root of the runfiles tree.
    */
-  private final NestedSet<SymlinkEntry> symlinks;
+  private final NestedSet<Map.Entry<PathFragment, Artifact>> symlinks;
 
   /**
    * A map of symlinks that should be present above the runfiles directory. These are useful for
    * certain rule types like AppEngine apps which have root level config files outside of the
    * regular source tree.
    */
-  private final NestedSet<SymlinkEntry> rootSymlinks;
+  private final NestedSet<Map.Entry<PathFragment, Artifact>> rootSymlinks;
 
   /**
    * A function to generate extra manifest entries.
@@ -209,8 +170,8 @@ public final class Runfiles {
 
   private Runfiles(String suffix,
       NestedSet<Artifact> artifacts,
-      NestedSet<SymlinkEntry> symlinks,
-      NestedSet<SymlinkEntry> rootSymlinks,
+      NestedSet<Map.Entry<PathFragment, Artifact>> symlinks,
+      NestedSet<Map.Entry<PathFragment, Artifact>> rootSymlinks,
       NestedSet<PruningManifest> pruningManifests,
       Function<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> expander) {
     this.suffix = suffix == null ? Constants.DEFAULT_RUNFILES_PREFIX : suffix;
@@ -271,7 +232,7 @@ public final class Runfiles {
   /**
    * Returns the symlinks.
    */
-  public NestedSet<SymlinkEntry> getSymlinks() {
+  public NestedSet<Map.Entry<PathFragment, Artifact>> getSymlinks() {
     return symlinks;
   }
 
@@ -327,6 +288,8 @@ public final class Runfiles {
   /**
    * Returns the symlinks as a map from PathFragment to Artifact, with PathFragments relativized
    * and rooted at the specified points.
+   * @param root The root the PathFragment is computed relative to (before it is
+   *             rooted again). May be null.
    * @param eventHandler Used for throwing an error if we have an obscuring runlink.
    *                 May be null, in which case obscuring symlinks are silently discarded.
    * @param location Location for eventHandler warnings. Ignored if eventHandler is null.
@@ -334,12 +297,12 @@ public final class Runfiles {
    *         entries, the second of any elements that live outside the source tree.
    */
   public Pair<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> getRunfilesInputs(
-      EventHandler eventHandler, Location location)
+      PathFragment root, EventHandler eventHandler, Location location)
           throws IOException {
     Map<PathFragment, Artifact> manifest = getSymlinksAsMap();
     // Add unconditional artifacts (committed to inclusion on construction of runfiles).
     for (Artifact artifact : getUnconditionalArtifactsWithoutMiddlemen()) {
-      manifest.put(artifact.getRootRelativePath(), artifact);
+      addToManifest(manifest, artifact, root);
     }
 
     // Add conditional artifacts (only included if they appear in a pruning manifest).
@@ -355,7 +318,7 @@ public final class Runfiles {
       while ((line = reader.readLine()) != null) {
         Artifact artifact = allowedRunfiles.get(line);
         if (artifact != null) {
-          manifest.put(artifact.getRootRelativePath(), artifact);
+          addToManifest(manifest, artifact, root);
         }
       }
     }
@@ -370,10 +333,19 @@ public final class Runfiles {
     return Pair.of(result, (Map<PathFragment, Artifact>) new HashMap<>(getRootSymlinksAsMap()));
   }
 
+  @VisibleForTesting
+  protected static void addToManifest(Map<PathFragment, Artifact> manifest, Artifact artifact,
+      PathFragment root) {
+    PathFragment rootRelativePath = root != null
+        ? artifact.getRootRelativePath().relativeTo(root)
+        : artifact.getRootRelativePath();
+    manifest.put(rootRelativePath, artifact);
+  }
+
   /**
    * Returns the root symlinks.
    */
-  public NestedSet<SymlinkEntry> getRootSymlinks() {
+  public NestedSet<Map.Entry<PathFragment, Artifact>> getRootSymlinks() {
     return rootSymlinks;
   }
 
@@ -441,10 +413,10 @@ public final class Runfiles {
         pruningManifests.isEmpty();
   }
 
-  private static Map<PathFragment, Artifact> entriesToMap(Iterable<SymlinkEntry> entrySet) {
-    Map<PathFragment, Artifact> map = new LinkedHashMap<>();
-    for (SymlinkEntry entry : entrySet) {
-      map.put(entry.getPath(), entry.getArtifact());
+  private static <K, V> Map<K, V> entriesToMap(Iterable<Map.Entry<K, V>> entrySet) {
+    Map<K, V> map = new LinkedHashMap<>();
+    for (Map.Entry<K, V> entry : entrySet) {
+      map.put(entry.getKey(), entry.getValue());
     }
     return map;
   }
@@ -462,9 +434,9 @@ public final class Runfiles {
      */
     private NestedSetBuilder<Artifact> artifactsBuilder =
         NestedSetBuilder.compileOrder();
-    private NestedSetBuilder<SymlinkEntry> symlinksBuilder =
+    private NestedSetBuilder<Map.Entry<PathFragment, Artifact>> symlinksBuilder =
         NestedSetBuilder.stableOrder();
-    private NestedSetBuilder<SymlinkEntry> rootSymlinksBuilder =
+    private NestedSetBuilder<Map.Entry<PathFragment, Artifact>> rootSymlinksBuilder =
         NestedSetBuilder.stableOrder();
     private NestedSetBuilder<PruningManifest> pruningManifestsBuilder =
         NestedSetBuilder.stableOrder();
@@ -525,7 +497,7 @@ public final class Runfiles {
     public Builder addSymlink(PathFragment link, Artifact target) {
       Preconditions.checkNotNull(link);
       Preconditions.checkNotNull(target);
-      symlinksBuilder.add(new SymlinkEntry(link, target));
+      symlinksBuilder.add(Maps.immutableEntry(link, target));
       return this;
     }
 
@@ -533,16 +505,14 @@ public final class Runfiles {
      * Adds several symlinks.
      */
     public Builder addSymlinks(Map<PathFragment, Artifact> symlinks) {
-      for (Map.Entry<PathFragment, Artifact> symlink : symlinks.entrySet()) {
-        symlinksBuilder.add(new SymlinkEntry(symlink.getKey(), symlink.getValue()));
-      }
+      symlinksBuilder.addAll(symlinks.entrySet());
       return this;
     }
 
     /**
      * Adds several symlinks as a NestedSet.
      */
-    public Builder addSymlinks(NestedSet<SymlinkEntry> symlinks) {
+    public Builder addSymlinks(NestedSet<Map.Entry<PathFragment, Artifact>> symlinks) {
       symlinksBuilder.addTransitive(symlinks);
       return this;
     }
@@ -551,16 +521,14 @@ public final class Runfiles {
      * Adds several root symlinks.
      */
     public Builder addRootSymlinks(Map<PathFragment, Artifact> symlinks) {
-      for (Map.Entry<PathFragment, Artifact> symlink : symlinks.entrySet()) {
-        rootSymlinksBuilder.add(new SymlinkEntry(symlink.getKey(), symlink.getValue()));
-      }
+      rootSymlinksBuilder.addAll(symlinks.entrySet());
       return this;
     }
 
     /**
      * Adds several root symlinks as a NestedSet.
      */
-    public Builder addRootSymlinks(NestedSet<SymlinkEntry> symlinks) {
+    public Builder addRootSymlinks(NestedSet<Map.Entry<PathFragment, Artifact>> symlinks) {
       rootSymlinksBuilder.addTransitive(symlinks);
       return this;
     }
