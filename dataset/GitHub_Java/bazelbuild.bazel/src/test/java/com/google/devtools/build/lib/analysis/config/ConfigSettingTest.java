@@ -31,10 +31,12 @@ import com.google.devtools.build.lib.rules.python.PythonConfiguration;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import java.util.Map;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Map;
 
 /**
  * Tests for {@link ConfigSetting}.
@@ -174,6 +176,8 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    })");
 
     assertTrue(getConfigMatchingProvider("//test:match").matches());
+    assertNull(flagDefault("cpu"));
+    assertNotNull(crosstoolCpuDefault);
     assertNull(flagDefault("compiler"));
     assertNotNull(crosstoolCompilerDefault);
   }
