@@ -1,7 +1,10 @@
 package com.yammer.metrics.jdbi;
 
+import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.MetricsRegistry;
-import com.yammer.metrics.core.TimerMetric;
+import com.yammer.metrics.core.Timer;
+import com.yammer.metrics.jdbi.strategies.SmartNameStrategy;
+import com.yammer.metrics.jdbi.strategies.StatementNameStrategy;
 import org.skife.jdbi.v2.StatementContext;
 import org.skife.jdbi.v2.TimingCollector;
 
@@ -13,23 +16,42 @@ import java.util.concurrent.TimeUnit;
  */
 public class InstrumentedTimingCollector implements TimingCollector {
     private final MetricsRegistry registry;
-    private final TimerMetric defaultTimer;
+    private final StatementNameStrategy statementNameStrategy;
+    private final TimeUnit durationUnit;
+    private final TimeUnit rateUnit;
 
-    public InstrumentedTimingCollector(MetricsRegistry registry, Class<?> klass) {
+    public InstrumentedTimingCollector() {
+        this(Metrics.defaultRegistry());
+    }
+
+    public InstrumentedTimingCollector(MetricsRegistry registry) {
+        this(registry, new SmartNameStrategy(), TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
+    }
+
+    public InstrumentedTimingCollector(MetricsRegistry registry,
+                                       StatementNameStrategy statementNameStrategy) {
+        this(registry, statementNameStrategy, TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
+    }
+
+    public InstrumentedTimingCollector(MetricsRegistry registry,
+                                       StatementNameStrategy statementNameStrategy,
+                                       TimeUnit durationUnit,
+                                       TimeUnit rateUnit) {
         this.registry = registry;
-        this.defaultTimer = registry.newTimer(klass, "raw-sql");
+        this.statementNameStrategy = statementNameStrategy;
+        this.durationUnit = durationUnit;
+        this.rateUnit = rateUnit;
     }
 
     @Override
     public void collect(long elapsedTime, StatementContext ctx) {
-        final TimerMetric timer = getTimer(ctx);
+        final Timer timer = getTimer(ctx);
         timer.update(elapsedTime, TimeUnit.NANOSECONDS);
     }
 
-    private TimerMetric getTimer(StatementContext ctx) {
-        if ((ctx.getSqlObjectType() == null) || (ctx.getSqlObjectMethod() == null)) {
-            return defaultTimer;
-        }
-        return registry.newTimer(ctx.getSqlObjectType(), ctx.getSqlObjectMethod().getName());
+    private Timer getTimer(StatementContext ctx) {
+        return registry.newTimer(statementNameStrategy.getStatementName(ctx),
+                                 durationUnit,
+                                 rateUnit);
     }
 }
