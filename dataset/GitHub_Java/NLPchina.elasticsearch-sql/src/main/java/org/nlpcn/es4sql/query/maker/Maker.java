@@ -1,28 +1,30 @@
 package org.nlpcn.es4sql.query.maker;
 
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import com.alibaba.druid.sql.ast.expr.SQLBooleanExpr;
+import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
 import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;
-import com.alibaba.druid.sql.ast.expr.SQLNumericLiteralExpr;
 import com.google.common.collect.ImmutableSet;
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.common.geo.GeoPoint;
+import org.elasticsearch.common.geo.ShapeRelation;
 import org.elasticsearch.common.geo.builders.ShapeBuilder;
-import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.index.query.*;
-import org.elasticsearch.join.query.JoinQueryBuilders;
 import org.elasticsearch.script.Script;
+import org.elasticsearch.script.ScriptService;
+import org.nlpcn.es4sql.Util;
 import org.nlpcn.es4sql.domain.Condition;
 import org.nlpcn.es4sql.domain.Condition.OPEAR;
 import org.nlpcn.es4sql.domain.Paramer;
+import org.nlpcn.es4sql.domain.Query;
 import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
@@ -146,22 +148,6 @@ public abstract class Maker {
             queryStr = queryStr.replace("&PERCENT","%").replace("&UNDERSCORE","_");
 			x = QueryBuilders.wildcardQuery(name, queryStr);
 			break;
-        case REGEXP:
-            Object[] values = (Object[]) value;
-            RegexpQueryBuilder regexpQuery = QueryBuilders.regexpQuery(name, values[0].toString());
-            if (1 < values.length) {
-                String[] flags = values[1].toString().split("\\|");
-                RegexpFlag[] regexpFlags = new RegexpFlag[flags.length];
-                for (int i = 0; i < flags.length; ++i) {
-                    regexpFlags[i] = RegexpFlag.valueOf(flags[i]);
-                }
-                regexpQuery.flags(regexpFlags);
-            }
-            if (2 < values.length) {
-                regexpQuery.maxDeterminizedStates(Integer.parseInt(values[2].toString()));
-            }
-            x = regexpQuery;
-            break;
 		case GT:
             x = QueryBuilders.rangeQuery(name).gt(value);
 			break;
@@ -177,7 +163,7 @@ public abstract class Maker {
 		case NIN:
 		case IN:
             //todo: value is subquery? here or before
-            values = (Object[]) value;
+			Object[] values = (Object[]) value;
 			MatchPhraseQueryBuilder[] matchQueries = new MatchPhraseQueryBuilder[values.length];
 			for(int i = 0; i < values.length; i++) {
 				matchQueries[i] = QueryBuilders.matchPhraseQuery(name, values[i]);
@@ -215,6 +201,13 @@ public abstract class Maker {
             String distance = trimApostrophes(distanceFilterParams.getDistance());
             x = QueryBuilders.geoDistanceQuery(cond.getName()).distance(distance).point(fromPoint.getLat(),fromPoint.getLon());
             break;
+        case GEO_DISTANCE_RANGE:
+            RangeDistanceFilterParams rangeDistanceFilterParams = (RangeDistanceFilterParams) cond.getValue();
+            fromPoint = rangeDistanceFilterParams.getFrom();
+            String distanceFrom = trimApostrophes(rangeDistanceFilterParams.getDistanceFrom());
+            String distanceTo = trimApostrophes(rangeDistanceFilterParams.getDistanceTo());
+            x = QueryBuilders.geoDistanceRangeQuery(cond.getName(), fromPoint.getLat(), fromPoint.getLon()).from(distanceFrom).to(distanceTo);
+            break;
         case GEO_POLYGON:
             PolygonFilterParams polygonFilterParams = (PolygonFilterParams) cond.getValue();
             ArrayList<GeoPoint> geoPoints = new ArrayList<GeoPoint>();
@@ -223,21 +216,27 @@ public abstract class Maker {
             GeoPolygonQueryBuilder polygonFilterBuilder = QueryBuilders.geoPolygonQuery(cond.getName(),geoPoints);
             x = polygonFilterBuilder;
             break;
+        case GEO_CELL:
+            CellFilterParams cellFilterParams = (CellFilterParams) cond.getValue();
+            Point geoHashPoint = cellFilterParams.getGeohashPoint();
+            GeoPoint geoPoint = new GeoPoint(geoHashPoint.getLat(),geoHashPoint.getLon());
+            x = QueryBuilders.geoHashCellQuery(cond.getName(),geoPoint).precision(cellFilterParams.getPrecision()).neighbors(cellFilterParams.isNeighbors());
+            break;
         case NIN_TERMS:
         case IN_TERMS:
             Object[] termValues = (Object[]) value;
             if(termValues.length == 1 && termValues[0] instanceof SubQueryExpression)
                 termValues = ((SubQueryExpression) termValues[0]).getValues();
-            Object[] termValuesObjects = new Object[termValues.length];
+            String[] termValuesStrings = new String[termValues.length];
             for (int i=0;i<termValues.length;i++){
-                termValuesObjects[i] = parseTermValue(termValues[i]);
+                termValuesStrings[i] = termValues[i].toString();
             }
-            x = QueryBuilders.termsQuery(name,termValuesObjects);
+            x = QueryBuilders.termsQuery(name,termValuesStrings);
         break;
         case NTERM:
         case TERM:
             Object term  =( (Object[]) value)[0];
-            x = QueryBuilders.termQuery(name, parseTermValue(term));
+            x = QueryBuilders.termQuery(name,term.toString());
             break;
         case IDS_QUERY:
             Object[] idsParameters = (Object[]) value;
@@ -268,16 +267,16 @@ public abstract class Maker {
             Where whereChildren = (Where) value;
             BoolQueryBuilder childrenFilter = QueryMaker.explan(whereChildren);
             //todo: pass score mode
-            x = JoinQueryBuilders.hasChildQuery(name, childrenFilter,ScoreMode.None);
+            x = QueryBuilders.hasChildQuery(name, childrenFilter,ScoreMode.None);
 
         break;
         case SCRIPT:
             ScriptFilter scriptFilter = (ScriptFilter) value;
-            Map<String, Object> params = new HashMap<>();
+            Map<String, Object> params = null;
             if(scriptFilter.containsParameters()){
                 params = scriptFilter.getArgs();
             }
-            x = QueryBuilders.scriptQuery(new Script(scriptFilter.getScriptType(), Script.DEFAULT_SCRIPT_LANG,scriptFilter.getScript(), params));
+            x = QueryBuilders.scriptQuery(new Script(scriptFilter.getScript(), scriptFilter.getScriptType(), null, params));
         break;
             default:
 			throw new SqlParseException("not define type " + cond.getName());
@@ -318,7 +317,7 @@ public abstract class Maker {
 
     private ShapeBuilder getShapeBuilderFromJson(String json) throws IOException {
         XContentParser parser = null;
-        parser = JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, json);
+        parser = JsonXContent.jsonXContent.createParser(json);
         parser.nextToken();
         return ShapeBuilder.parse(parser);
     }
@@ -334,28 +333,4 @@ public abstract class Maker {
 		return bqb;
 	}
 
-    private Object parseTermValue(Object termValue) {
-        if (termValue instanceof SQLNumericLiteralExpr) {
-            termValue = ((SQLNumericLiteralExpr) termValue).getNumber();
-            if (termValue instanceof BigDecimal || termValue instanceof Double) {
-                termValue = ((Number) termValue).doubleValue();
-            } else if (termValue instanceof Float) {
-                termValue = ((Number) termValue).floatValue();
-            } else if (termValue instanceof BigInteger || termValue instanceof Long) {
-                termValue = ((Number) termValue).longValue();
-            } else if (termValue instanceof Integer) {
-                termValue = ((Number) termValue).intValue();
-            } else if (termValue instanceof Short) {
-                termValue = ((Number) termValue).shortValue();
-            } else if (termValue instanceof Byte) {
-                termValue = ((Number) termValue).byteValue();
-            }
-        } else if (termValue instanceof SQLBooleanExpr) {
-            termValue = ((SQLBooleanExpr) termValue).getValue();
-        } else {
-            termValue = termValue.toString();
-        }
-
-        return termValue;
-    }
 }
