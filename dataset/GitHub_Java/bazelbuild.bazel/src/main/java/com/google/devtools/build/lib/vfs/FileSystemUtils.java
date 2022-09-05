@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.vfs;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -25,7 +26,6 @@ import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadSafe;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -583,7 +583,8 @@ public class FileSystemUtils {
 
   /**
    * Copies all dir trees under a given 'from' dir to location 'to', while overwriting
-   * all files in the potentially existing 'to'. Resolves symbolic links.
+   * all files in the potentially existing 'to'. Does not follow any symbolic links,
+   * but copies them instead.
    *
    * <p>The source and the destination must be non-overlapping, otherwise an
    * IllegalArgumentException will be thrown. This method cannot be used to copy
@@ -601,13 +602,16 @@ public class FileSystemUtils {
 
     Collection<Path> entries = from.getDirectoryEntries();
     for (Path entry : entries) {
-      if (entry.isFile()) {
-        Path newEntry = to.getChild(entry.getBaseName());
-        copyFile(entry, newEntry);
-      } else {
+      if (entry.isDirectory(Symlinks.NOFOLLOW)) {
         Path subDir = to.getChild(entry.getBaseName());
         subDir.createDirectory();
         copyTreesBelow(entry, subDir);
+      } else if (entry.isSymbolicLink()) {
+        Path newLink = to.getChild(entry.getBaseName());
+        newLink.createSymbolicLink(entry.readSymbolicLinkUnchecked());
+      } else {
+        Path newEntry = to.getChild(entry.getBaseName());
+        copyFile(entry, newEntry);
       }
     }
   }
@@ -922,20 +926,9 @@ public class FileSystemUtils {
    * @throws IOException if there was an error
    */
   public static Iterable<String> iterateLinesAsLatin1(Path inputFile) throws IOException {
-    return readLines(inputFile, ISO_8859_1);
+    return asByteSource(inputFile).asCharSource(ISO_8859_1).readLines();
   }
 
-  /**
-   * Returns an iterable that allows iterating over text file contents line by line in the given
-   * {@link Charset}. If the file ends in a line break, the iterator will return an empty string
-   * as the last element.
-   *
-   * @throws IOException if there was an error
-   */
-  public static Iterable<String> readLines(Path inputFile, Charset charset) throws IOException {
-    return asByteSource(inputFile).asCharSource(charset).readLines();
-  }
-  
   /**
    * Returns the entirety of the specified file and returns it as a byte array.
    *
