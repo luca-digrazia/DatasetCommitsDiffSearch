@@ -157,6 +157,15 @@ public class SimpleAtomikosTests {
     @Autowired
     private DynDsTest dynDsTest;
 
+    @Test
+    @Transactional
+    public void testForEach() throws InterruptedException {
+        for (int i = 0; i < 100; i++) {
+            Thread.sleep(1000);
+            test();
+        }
+    }
+
     @Autowired
     private JmsTemplate jmsTemplate;
 
