@@ -27,6 +27,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.collect.CompactHashSet;
@@ -416,8 +417,10 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
         // The graph already contains a value or exception for this target pattern, so we use it.
         TargetPatternValue value = (TargetPatternValue) graph.getValue(patternKey);
         if (value != null) {
-          result.put(
-              pattern, ImmutableSet.copyOf(makeTargetsFromLabels(value.getTargets().getTargets())));
+          ResolvedTargets.Builder<Target> targetsBuilder = ResolvedTargets.builder();
+          targetsBuilder.addAll(makeTargetsFromLabels(value.getTargets().getTargets()));
+          targetsBuilder.removeAll(makeTargetsFromLabels(value.getTargets().getFilteredTargets()));
+          result.put(pattern, targetsBuilder.build().getTargets());
         } else {
           // Because the graph was always initialized via a keep_going build, we know that the
           // exception stored here must be a TargetParsingException. Thus the comment in
