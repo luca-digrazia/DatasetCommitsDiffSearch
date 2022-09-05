@@ -6,15 +6,13 @@ import java.util.concurrent.TimeUnit;
 /**
  * Created by zhouhao on 16-5-13.
  */
-@Target({ElementType.METHOD})
+@Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface ReadLock {
-    String value() default "";
+public @interface LockName {
+    String value();
 
-    String condition() default "";
+    boolean isExpression() default false;
 
-    long waitTime() default 5;
-
-    TimeUnit timeUnit() default TimeUnit.SECONDS;
+    String expressionLanguage() default "spel";
 }
