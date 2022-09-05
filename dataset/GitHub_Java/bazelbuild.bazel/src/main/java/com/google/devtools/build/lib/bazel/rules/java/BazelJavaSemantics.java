@@ -27,14 +27,11 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.ComputedSubstitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.bazel.rules.BazelConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
@@ -44,16 +41,12 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRunfilesProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.Jvm;
-import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -62,7 +55,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /**
  * Semantics for Bazel Java rules
@@ -73,8 +65,6 @@ public class BazelJavaSemantics implements JavaSemantics {
 
   private static final Template STUB_SCRIPT =
       Template.forResource(BazelJavaSemantics.class, "java_stub_template.txt");
-  private static final Template STUB_SCRIPT_WINDOWS =
-      Template.forResource(BazelJavaSemantics.class, "java_stub_template_windows.txt");
 
   private static final String JAVABUILDER_CLASS_NAME =
       "com.google.devtools.build.buildjar.BazelJavaBuilder";
@@ -95,27 +85,16 @@ public class BazelJavaSemantics implements JavaSemantics {
   public void checkForProtoLibraryAndJavaProtoLibraryOnSameProto(
       RuleContext ruleContext, JavaCommon javaCommon) {}
 
-  private static final String JUNIT4_RUNNER = "org.junit.runner.JUnitCore";
-
   private String getMainClassInternal(RuleContext ruleContext, ImmutableList<Artifact> sources) {
     if (!ruleContext.attributes().get("create_executable", Type.BOOLEAN)) {
       return null;
     }
-    String mainClass = ruleContext.attributes().get("main_class", Type.STRING);
-
-    // Legacy behavior for java_test rules: main_class defaulted to JUnit4 runner.
-    // TODO(dmarting): remove once we drop the legacy bazel java_test behavior.
-    if (mainClass.isEmpty()
-        && useLegacyJavaTest(ruleContext)
-        && "java_test".equals(ruleContext.getRule().getRuleClass())) {
-      mainClass = JUNIT4_RUNNER;
+    if (ruleContext.attributes().get("use_testrunner", Type.BOOLEAN)
+        && !useLegacyJavaTest(ruleContext)) {
+      return "com.google.testing.junit.runner.BazelTestRunner";
     }
-
+    String mainClass = ruleContext.attributes().get("main_class", Type.STRING);
     if (mainClass.isEmpty()) {
-      if (ruleContext.attributes().get("use_testrunner", Type.BOOLEAN)
-          && !useLegacyJavaTest(ruleContext)) {
-        return "com.google.testing.junit.runner.BazelTestRunner";
-      }
       mainClass = JavaCommon.determinePrimaryClass(ruleContext, sources);
     }
     return mainClass;
@@ -166,16 +145,12 @@ public class BazelJavaSemantics implements JavaSemantics {
 
   @Override
   public void buildJavaCommandLine(Collection<Artifact> outputs, BuildConfiguration configuration,
-      Builder result, Label targetLabel) {
+      CustomCommandLine.Builder result) {
   }
 
   @Override
-  public Artifact createStubAction(
-      RuleContext ruleContext,
-      final JavaCommon javaCommon,
-      List<String> jvmFlags,
-      Artifact executable,
-      String javaStartClass,
+  public void createStubAction(RuleContext ruleContext, final JavaCommon javaCommon,
+      List<String> jvmFlags, Artifact executable, String javaStartClass,
       String javaExecutable) {
     Preconditions.checkState(ruleContext.getConfiguration().hasFragment(Jvm.class));
 
@@ -214,33 +189,6 @@ public class BazelJavaSemantics implements JavaSemantics {
 
     ruleContext.registerAction(new TemplateExpansionAction(
         ruleContext.getActionOwner(), executable, STUB_SCRIPT, arguments, true));
-    if (OS.getCurrent() == OS.WINDOWS) {
-      Artifact newExecutable =
-          ruleContext.getImplicitOutputArtifact(ruleContext.getTarget().getName() + ".cmd");
-      ruleContext.registerAction(
-          new TemplateExpansionAction(
-              ruleContext.getActionOwner(),
-              newExecutable,
-              STUB_SCRIPT_WINDOWS,
-              ImmutableList.of(
-                  Substitution.of(
-                      "%bash_exe_path%",
-                      ruleContext
-                          .getFragment(BazelConfiguration.class)
-                          .getShellExecutable()
-                          .getPathString()),
-                  Substitution.of(
-                      "%cygpath_exe_path%",
-                      ruleContext
-                          .getFragment(BazelConfiguration.class)
-                          .getShellExecutable()
-                          .replaceName("cygpath.exe")
-                          .getPathString())),
-              true));
-      return newExecutable;
-    } else {
-      return executable;
-    }
   }
 
   /**
@@ -506,25 +454,6 @@ public class BazelJavaSemantics implements JavaSemantics {
 
   @Override
   public Artifact getProtoMapping(RuleContext ruleContext) throws InterruptedException {
-    return null;
-  }
-
-  @Nullable
-  @Override
-  public GeneratedExtensionRegistryProvider createGeneratedExtensionRegistry(
-      RuleContext ruleContext,
-      JavaCommon common,
-      NestedSetBuilder<Artifact> filesBuilder,
-      JavaCompilationArtifacts.Builder javaCompilationArtifactsBuilder,
-      JavaRuleOutputJarsProvider.Builder javaRuleOutputJarsProviderBuilder,
-      JavaSourceJarsProvider.Builder javaSourceJarsProviderBuilder)
-    throws InterruptedException {
-    return null;
-  }
-
-  @Override
-  public Artifact getObfuscatedConstantStringMap(RuleContext ruleContext)
-      throws InterruptedException {
     return null;
   }
 }
