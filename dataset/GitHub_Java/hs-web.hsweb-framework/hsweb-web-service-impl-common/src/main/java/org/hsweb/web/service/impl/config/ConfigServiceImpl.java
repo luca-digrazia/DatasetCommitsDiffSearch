@@ -1,6 +1,5 @@
 package org.hsweb.web.service.impl.config;
 
-import org.hsweb.commons.StringUtils;
 import org.hsweb.web.bean.common.UpdateParam;
 import org.hsweb.web.bean.po.config.Config;
 import org.hsweb.web.core.authorize.ExpressionScopeBean;
@@ -11,11 +10,13 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
+import org.webbuilder.utils.common.StringUtils;
 
 import javax.annotation.Resource;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * 系统配置服务类
@@ -37,13 +38,13 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
 
     @Override
     @CacheEvict(value = CACHE_KEY, allEntries = true)
-    public int update(Config data) {
+    public int update(Config data) throws Exception {
         return configMapper.update(new UpdateParam<>(data).excludes("createDate").where("id",data.getId()));
     }
 
     @Override
     @CacheEvict(value = CACHE_KEY, allEntries = true)
-    public int delete(String s) {
+    public int delete(String s) throws Exception {
         return super.delete(s);
     }
 
@@ -52,11 +53,11 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      *
      * @param name 配置名称
      * @return 配置内容
-     * @异常信息
+     * @throws Exception 异常信息
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.content.'+#name")
-    public String getContent(String name) {
+    public String getContent(String name) throws Exception {
         Config config = getMapper().selectByPk(name);
         if (config == null) return null;
         return config.getContent();
@@ -67,11 +68,11 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      *
      * @param name 配置名称
      * @return 配置内容
-     * @异常信息
+     * @throws Exception 异常信息
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name")
-    public Map<Object, Object> get(String name) {
+    public Map<Object, Object> get(String name) throws Exception {
         Config config = getMapper().selectByPk(name);
         if (config == null) return new HashMap<>();
         return config.toMap();
@@ -87,7 +88,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name+'.key.'+#key")
-    public String get(String name, String key) {
+    public String get(String name, String key) throws Exception {
         Object val = get(name).get(key);
         if (val == null) return null;
         return String.valueOf(val);
@@ -124,7 +125,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name+'.key.'+#key+'.int'")
-    public int getInt(String name, String key) {
+    public int getInt(String name, String key) throws Exception {
         return StringUtils.toInt(get(name, key));
     }
 
@@ -133,7 +134,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name+'.key.'+#key+'.double'")
-    public double getDouble(String name, String key) {
+    public double getDouble(String name, String key) throws Exception {
         return StringUtils.toDouble(get(name, key));
     }
 
@@ -142,7 +143,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name+'.key.'+#key+'.long'")
-    public long getLong(String name, String key) {
+    public long getLong(String name, String key) throws Exception {
         return StringUtils.toLong(get(name, key));
     }
 
@@ -176,7 +177,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
 
 
     @Override
-    public String insert(Config data) {
+    public String insert(Config data) throws Exception {
         Config old = this.selectByPk(data.getId());
         Assert.isNull(old, "配置已存在，请勿重复添加!");
         data.setCreateDate(new Date());
