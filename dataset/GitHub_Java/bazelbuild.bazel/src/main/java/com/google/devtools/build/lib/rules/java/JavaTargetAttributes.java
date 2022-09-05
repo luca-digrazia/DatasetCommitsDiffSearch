@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,24 +16,20 @@ package com.google.devtools.build.lib.rules.java;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -75,7 +71,7 @@ public class JavaTargetAttributes {
     private final Set<Artifact> processorPath = new LinkedHashSet<>();
     private final Set<String> processorNames = new LinkedHashSet<>();
 
-    private final Map<PathFragment, Artifact> resources = new LinkedHashMap<>();
+    private final List<Artifact> resources = new ArrayList<>();
     private final List<Artifact> messages = new ArrayList<>();
     private final List<Artifact> instrumentationMetadata = new ArrayList<>();
     private final List<Artifact> sourceJars = new ArrayList<>();
@@ -112,8 +108,7 @@ public class JavaTargetAttributes {
           sourceJars.add(srcArtifact);
         } else if (JavaSemantics.PROPERTIES.matches(srcFilename)) {
           // output files of the message compiler
-          resources.put(
-              semantics.getDefaultJavaResourcePath(srcArtifact.getRootRelativePath()), srcArtifact);
+          resources.add(srcArtifact);
         } else if (JavaSemantics.JAVA_SOURCE.matches(srcFilename)) {
           sourceFiles.add(srcArtifact);
         } else {
@@ -305,9 +300,15 @@ public class JavaTargetAttributes {
       return this;
     }
 
-    public Builder addResource(PathFragment execPath, Artifact resource) {
+    public Builder addResources(Collection<Artifact> resources) {
       Preconditions.checkArgument(!built);
-      this.resources.put(execPath, resource);
+      this.resources.addAll(resources);
+      return this;
+    }
+
+    public Builder addResource(Artifact resource) {
+      Preconditions.checkArgument(!built);
+      resources.add(resource);
       return this;
     }
 
@@ -403,7 +404,7 @@ public class JavaTargetAttributes {
   private final ImmutableSet<Artifact> processorPath;
   private final ImmutableSet<String> processorNames;
 
-  private final ImmutableMap<PathFragment, Artifact> resources;
+  private final ImmutableList<Artifact> resources;
   private final ImmutableList<Artifact> messages;
   private final ImmutableList<Artifact> sourceJars;
 
@@ -430,7 +431,7 @@ public class JavaTargetAttributes {
       List<Artifact> nativeLibraries,
       Set<Artifact> processorPath,
       Set<String> processorNames,
-      Map<PathFragment, Artifact> resources,
+      List<Artifact> resources,
       List<Artifact> messages,
       List<Artifact> sourceJars,
       List<Artifact> classPathResources,
@@ -449,7 +450,7 @@ public class JavaTargetAttributes {
     this.nativeLibraries = ImmutableList.copyOf(nativeLibraries);
     this.processorPath = ImmutableSet.copyOf(processorPath);
     this.processorNames = ImmutableSet.copyOf(processorNames);
-    this.resources = ImmutableMap.copyOf(resources);
+    this.resources = ImmutableList.copyOf(resources);
     this.messages = ImmutableList.copyOf(messages);
     this.sourceJars = ImmutableList.copyOf(sourceJars);
     this.classPathResources = ImmutableList.copyOf(classPathResources);
@@ -473,7 +474,7 @@ public class JavaTargetAttributes {
     return sourceJars;
   }
 
-  public Map<PathFragment, Artifact> getResources() {
+  public Collection<Artifact> getResources() {
     return resources;
   }
 
@@ -576,7 +577,7 @@ public class JavaTargetAttributes {
     if (includeClasspath) {
       inputs.add(ImmutableList.copyOf(getRuntimeClassPathForArchive()));
     }
-    inputs.add(ImmutableList.copyOf(getResources().values()));
+    inputs.add(getResources());
     inputs.add(getClassPathResources());
     return inputs.build();
   }
