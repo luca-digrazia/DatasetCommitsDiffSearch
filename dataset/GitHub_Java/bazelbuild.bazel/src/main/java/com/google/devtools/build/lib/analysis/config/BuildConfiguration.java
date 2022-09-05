@@ -45,6 +45,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.test.TestActionBuilder;
+import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
@@ -107,7 +108,7 @@ import javax.annotation.Nullable;
 @SkylarkModule(name = "configuration",
     doc = "Data required for the analysis of a target that comes from targets that "
         + "depend on it and not targets that it depends on.")
-public final class BuildConfiguration {
+public final class BuildConfiguration implements ClassObject {
 
   /**
    * An interface for language-specific configurations.
@@ -1928,11 +1929,21 @@ public final class BuildConfiguration {
     return options.targetEnvironments;
   }
 
-  public Class<? extends Fragment> getSkylarkFragmentByName(String name) {
-    return skylarkVisibleFragments.get(name);
+  @Override
+  @Nullable
+  public Object getValue(String name) {
+    Class<? extends Fragment> fragmentClass = skylarkVisibleFragments.get(name);
+    return (fragmentClass == null) ? null : fragments.get(fragmentClass);
   }
 
-  public ImmutableCollection<String> getSkylarkFragmentNames() {
+  @Override
+  public ImmutableCollection<String> getKeys() {
     return skylarkVisibleFragments.keySet();
+  }
+
+  @Override
+  @Nullable
+  public String errorMessage(String name) {
+    return String.format("There is no configuration fragment named '%s'", name);
   }
 }
