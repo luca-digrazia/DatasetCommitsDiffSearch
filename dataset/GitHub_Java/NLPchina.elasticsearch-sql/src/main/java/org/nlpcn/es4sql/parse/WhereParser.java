@@ -142,7 +142,7 @@ public class WhereParser {
         //join is not support
         if ((bExpr.getLeft() instanceof SQLPropertyExpr || bExpr.getLeft() instanceof SQLIdentifierExpr) &&
                 (bExpr.getRight() instanceof SQLPropertyExpr || bExpr.getRight() instanceof SQLIdentifierExpr) &&
-                Sets.newHashSet("=", "<", ">", ">=", "<=").contains(bExpr.getOperator().getName()) &&
+                Sets.newHashSet("=", "<", ">", ">=", "<=","<>","!=").contains(bExpr.getOperator().getName()) &&
                 !Util.isFromJoinOrUnionTable(bExpr)
 
                 ) {
@@ -150,6 +150,9 @@ public class WhereParser {
             String operator = bExpr.getOperator().getName();
             if (operator.equals("=")) {
                 operator = "==";
+            }else
+            if (operator.equals("<>")) {
+                operator = "!=";
             }
 
             String leftProperty = Util.expr2Object(bExpr.getLeft()).toString();
@@ -218,6 +221,13 @@ public class WhereParser {
     private void explanCond(String opear, SQLExpr expr, Where where) throws SqlParseException {
         if (expr instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr soExpr = (SQLBinaryOpExpr) expr;
+
+            if (explanSpecialCondWithBothSidesAreLiterals(soExpr, where)) {
+                return;
+            }
+            if (explanSpecialCondWithBothSidesAreProperty(soExpr, where)) {
+                return;
+            }
             boolean methodAsOpear = false;
 
             boolean isNested = false;
@@ -243,17 +253,13 @@ public class WhereParser {
                     Object[] methodParametersValue = getMethodValuesWithSubQueries(method);
 
                     Condition condition = null;
-                    // fix OPEAR
-                    Condition.OPEAR oper = Condition.OPEAR.methodNameToOpear.get(methodName);
-                    if (soExpr.getOperator() == SQLBinaryOperator.LessThanOrGreater || soExpr.getOperator() == SQLBinaryOperator.NotEqual) {
-                        oper = oper.negative();
-                    }
+
                     if (isNested)
-                        condition = new Condition(Where.CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getLeft(), oper, methodParametersValue, soExpr.getRight(), nestedType);
+                        condition = new Condition(Where.CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getLeft(), Condition.OPEAR.methodNameToOpear.get(methodName), methodParametersValue, soExpr.getRight(), nestedType);
                     else if (isChildren)
-                        condition = new Condition(Where.CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getLeft(), oper, methodParametersValue, soExpr.getRight(), childrenType);
+                        condition = new Condition(Where.CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getLeft(), Condition.OPEAR.methodNameToOpear.get(methodName), methodParametersValue, soExpr.getRight(), childrenType);
                     else
-                        condition = new Condition(Where.CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getLeft(), oper, methodParametersValue, soExpr.getRight(), null);
+                        condition = new Condition(Where.CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getLeft(), Condition.OPEAR.methodNameToOpear.get(methodName), methodParametersValue, soExpr.getRight(), null);
 
                     where.addWhere(condition);
                     methodAsOpear = true;
@@ -390,7 +396,7 @@ public class WhereParser {
                     throw new SqlParseException("could not fill nested from expr:" + expr);
                 }
 
-                Condition condition = new Condition(Where.CONN.valueOf(opear), nestedType.path, null, methodName.toUpperCase(), nestedType.where, null, nestedType);
+                Condition condition = new Condition(Where.CONN.valueOf(opear), nestedType.path, null, methodName.toUpperCase(), nestedType.where, null);
 
                 where.addWhere(condition);
             } else if (methodName.toLowerCase().equals("children")) {
@@ -515,11 +521,11 @@ public class WhereParser {
 
         String operator = soExpr.getOperator().getName();
 
-        if ("=".equals(operator)) {
+        if (operator.equals("=")) {
             operator = "==";
         }
 
-        String finalStr = String.format("%s%s((Comparable)%s).compareTo(%s) %s 0", v1Dec, v2Dec, v1, v2, operator);
+        String finalStr = v1Dec + v2Dec + v1 + " " + operator + " " + v2;
 
         SQLMethodInvokeExpr scriptMethod = new SQLMethodInvokeExpr("script", null);
         scriptMethod.addParameter(new SQLCharExpr(finalStr));
