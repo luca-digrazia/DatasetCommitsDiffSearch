@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -26,13 +25,10 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
  */
 @BlazeRule(name = "ios_extension_binary",
     factoryClass = IosExtensionBinary.class,
-    ancestors = {
-        BaseRuleClasses.BaseRule.class,
-        ObjcRuleClasses.LinkingRule.class,
-        ObjcRuleClasses.XcodegenRule.class })
+    ancestors = { ObjcLibraryRule.class })
 public class IosExtensionBinaryRule implements RuleDefinition {
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
     return builder
         /*<!-- #BLAZE_RULE(ios_extension_binary).IMPLICIT_OUTPUTS -->
         <ul>
@@ -41,6 +37,7 @@ public class IosExtensionBinaryRule implements RuleDefinition {
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(XcodeSupport.PBXPROJ)
+        .removeAttribute("alwayslink")
         .build();
   }
 }

@@ -14,9 +14,10 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.BlazeRule;
@@ -30,9 +31,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
  */
 @BlazeRule(name = "objc_xcodeproj",
     factoryClass = ObjcXcodeproj.class,
-    ancestors = {
-        BaseRuleClasses.BaseRule.class,
-        ObjcRuleClasses.XcodegenRule.class })
+    ancestors = { BaseRuleClasses.RuleBase.class })
 public class ObjcXcodeprojRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -48,7 +47,7 @@ public class ObjcXcodeprojRule implements RuleDefinition {
         The list of targets to include in the combined Xcode project file.
         ${SYNOPSIS}
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("deps", LABEL_LIST)
+        .override(builder.copy("deps")
             .nonEmpty()
             .allowedRuleClasses(
                 "objc_binary",
@@ -56,11 +55,14 @@ public class ObjcXcodeprojRule implements RuleDefinition {
                 "ios_test",
                 "objc_bundle_library",
                 "objc_import",
-                "objc_library")
-            .allowedFileTypes())
+                "objc_library"))
         .override(attr("testonly", BOOLEAN)
             .nonconfigurable("Must support test deps.")
             .value(true))
+        .add(attr("$xcodegen", LABEL)
+            .cfg(HOST)
+            .exec()
+            .value(env.getLabel("//tools/objc:xcodegen")))
         .build();
   }
 }

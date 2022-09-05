@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -37,11 +38,9 @@ import java.util.Set;
  * classes should instantiate a {@code BuildingState} object or call any of its methods directly.
  * It is in a separate file solely to keep the {@link NodeEntry} class readable. In particular, the
  * caller must synchronize access to this class.
- *
- * <p>This class is not intended to be used outside of Skyframe.
  */
 @ThreadCompatible
-final class BuildingState {
+final class BuildingState implements Serializable {
   /**
    * During its life, a node can go through states as follows:
    * <ol>
