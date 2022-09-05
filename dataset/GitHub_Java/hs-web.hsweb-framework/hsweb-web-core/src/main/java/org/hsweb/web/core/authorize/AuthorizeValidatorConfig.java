@@ -18,10 +18,8 @@ public interface AuthorizeValidatorConfig {
 
     AuthorizeValidatorConfig addExpression(String expression, String language);
 
-    @Deprecated
     AuthorizeValidatorConfig setApiSupport(boolean apiSupport);
 
-    @Deprecated
     boolean isApiSupport();
 
     boolean isEmpty();
