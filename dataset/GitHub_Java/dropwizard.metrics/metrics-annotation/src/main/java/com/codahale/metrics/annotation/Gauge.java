@@ -7,28 +7,28 @@ import java.lang.annotation.Target;
 
 /**
  * An annotation for marking a method of an annotated object as a gauge.
- * <p/>
+ * <p>
  * Given a method like this:
  * <pre><code>
- *     \@Gauge(name = "queueSize")
+ *     {@literal @}Gauge(name = "queueSize")
  *     public int getQueueSize() {
  *         return queue.size;
  *     }
  * </code></pre>
- * <p/>
+ * <p>
  * A gauge for the defining class with the name {@code queueSize} will be created which uses the
  * annotated method's return value as its value.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD, ElementType.FIELD })
+@Target({ ElementType.METHOD, ElementType.FIELD, ElementType.ANNOTATION_TYPE })
 public @interface Gauge {
     /**
-     * The gauge's name.
+     * @return The gauge's name.
      */
     String name() default "";
 
     /**
-     * If {@code true}, use the given name an as absolute name. If {@code false}, use the given name
+     * @return If {@code true}, use the given name as an absolute name. If {@code false}, use the given name
      * relative to the annotated class.
      */
     boolean absolute() default false;

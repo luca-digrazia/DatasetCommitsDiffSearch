@@ -5,14 +5,14 @@ import java.util.Map;
 
 /**
  * Implementation of the {@link AbstractInstrumentedFilter} which provides a default set of response codes
- * to capture information about. <p>Use it in your servlet.xml like this:</p>
+ * to capture information about. <p>Use it in your servlet.xml like this:<p>
  * <pre>{@code
  * <filter>
- *     <filter-name>webappMetricsFilter</filter-name>
- *     <filter-class>com.codahale.metrics.servlet.DefaultWebappMetricsFilter</filter-class>
+ *     <filter-name>instrumentedFilter</filter-name>
+ *     <filter-class>com.codahale.metrics.servlet.InstrumentedFilter</filter-class>
  * </filter>
  * <filter-mapping>
- *     <filter-name>webappMetricsFilter</filter-name>
+ *     <filter-name>instrumentedFilter</filter-name>
  *     <url-pattern>/*</url-pattern>
  * </filter-mapping>
  * }</pre>
@@ -36,7 +36,7 @@ public class InstrumentedFilter extends AbstractInstrumentedFilter {
     }
 
     private static Map<Integer, String> createMeterNamesByStatusCode() {
-        final Map<Integer, String> meterNamesByStatusCode = new HashMap<Integer, String>(6);
+        final Map<Integer, String> meterNamesByStatusCode = new HashMap<>(6);
         meterNamesByStatusCode.put(OK, NAME_PREFIX + "ok");
         meterNamesByStatusCode.put(CREATED, NAME_PREFIX + "created");
         meterNamesByStatusCode.put(NO_CONTENT, NAME_PREFIX + "noContent");
