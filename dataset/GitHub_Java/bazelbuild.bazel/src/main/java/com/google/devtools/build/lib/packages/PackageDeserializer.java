@@ -122,11 +122,10 @@ public class PackageDeserializer {
 
     void deserializeRule(Build.Rule rulePb)
         throws PackageDeserializationException {
-      String ruleClassName = rulePb.getRuleClass();
-      RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(ruleClassName);
+      RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(rulePb.getRuleClass());
       if (ruleClass == null) {
         throw new PackageDeserializationException(
-            String.format("Invalid rule class '%s'", ruleClassName));
+            String.format("Invalid rule class '%s'", ruleClass));
       }
 
       Map<String, ParsedAttributeValue> attributeValues = new HashMap<>();
