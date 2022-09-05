@@ -2,13 +2,13 @@ package org.hsweb.web.service.impl.form;
 
 import com.alibaba.fastjson.JSON;
 import org.hsweb.web.bean.common.InsertParam;
+import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.common.UpdateParam;
 import org.hsweb.web.bean.po.form.Form;
 import org.hsweb.web.bean.po.history.History;
 import org.hsweb.web.dao.form.FormMapper;
 import org.hsweb.web.service.form.DynamicFormService;
-import org.hsweb.web.service.form.FormParser;
 import org.hsweb.web.service.form.FormService;
 import org.hsweb.web.service.history.HistoryService;
 import org.hsweb.web.service.impl.AbstractServiceImpl;
@@ -53,7 +53,7 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     protected DynamicFormService dynamicFormService;
 
     @Override
-    @Cacheable(value = CACHE_KEY, key = "#id")
+    @Cacheable(value = CACHE_KEY, key = "'form.'+#id")
     public Form selectByPk(String id) throws Exception {
         return super.selectByPk(id);
     }
@@ -61,7 +61,7 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     @Override
     public String createNewVersion(String oldVersionId) throws Exception {
         Form old = this.selectByPk(oldVersionId);
-        assertNotNull(old, "表单不存在!");
+        Assert.notNull(old, "表单不存在!");
         old.setId(RandomUtil.randomChar());
         old.setVersion(old.getVersion() + 1);
         old.setCreateDate(new Date());
@@ -75,7 +75,7 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
 
     @Override
     public String insert(Form data) throws Exception {
-        List<Form> old = this.select(QueryParam.build().where("name", data.getName()));
+        List<Form> old = this.select(new QueryParam().where("name", data.getName()));
         Assert.isTrue(old.isEmpty(), "表单 [" + data.getName() + "] 已存在!");
         data.setCreateDate(new Date());
         data.setVersion(1);
@@ -86,27 +86,21 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(value = {CACHE_KEY}, key = "#data.id"),
-                    @CacheEvict(value = {CACHE_KEY}, key = "#data.name+':'+#data.version")
-            }
-    )
+    @CacheEvict(value = {CACHE_KEY}, key = "'form.'+#data.id")
     public int update(Form data) throws Exception {
         Form old = this.selectByPk(data.getId());
-        assertNotNull(old, "表单不存在!");
+        Assert.notNull(old, "表单不存在!");
         data.setUpdateDate(new Date());
-        data.setVersion(old.getVersion());
         data.setRevision(old.getRevision() + 1);
-        UpdateParam<Form> param = UpdateParam.build(data).excludes("createDate", "release", "version", "using");
+        UpdateParam<Form> param = new UpdateParam<>(data).excludes("createDate", "release", "version", "using");
         return getMapper().update(param);
     }
 
     @Override
-    @CacheEvict(value = CACHE_KEY, key = "#id")
+    @CacheEvict(value = CACHE_KEY, key = "'form.'+#id")
     public int delete(String id) throws Exception {
         Form old = this.selectByPk(id);
-        assertNotNull(old, "表单不存在!");
+        Assert.notNull(old, "表单不存在!");
         Assert.isTrue(!old.isUsing(), "表单正在使用，无法删除!");
         return super.delete(id);
     }
@@ -124,9 +118,8 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     }
 
     @Override
-    @Cacheable(value = CACHE_KEY, key = "#name+':'+#version")
     public Form selectByVersion(String name, int version) throws Exception {
-        QueryParam param = QueryParam.build()
+        QueryParam param = QueryParam.newInstance()
                 .where("name", name).where("version", version);
         List<Form> formList = formMapper.selectLatestList(param);
         return formList.size() > 0 ? formList.get(0) : null;
@@ -134,8 +127,8 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
 
     @Override
     public Form selectLatest(String name) throws Exception {
-        QueryParam param = QueryParam.build()
-                .where("name", name).orderBy("version").asc();
+        QueryParam param = QueryParam.newInstance()
+                .where("name", name).orderBy("version").desc().doPaging(0, 1);
         List<Form> formList = formMapper.selectLatestList(param);
         return formList.size() > 0 ? formList.get(0) : null;
     }
@@ -143,13 +136,16 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     @Override
     @Transactional(rollbackFor = Throwable.class)
     @Caching(evict = {
-            @CacheEvict(value = {CACHE_KEY + ".deploy"}, key = "'deploy.'+target.selectByPk(#formId).getName()+'.html'"),
-            @CacheEvict(value = {CACHE_KEY + ".deploy"}, key = "'deploy.'+target.selectByPk(#formId).getName()"),
-            @CacheEvict(value = {CACHE_KEY}, key = "'using.'+target.selectByPk(#formId).getName()")
+            @CacheEvict(value = {CACHE_KEY + ".deploy"},
+                    key = "'form.deploy.'+target.selectByPk(#formId).getName()+'.html'"),
+            @CacheEvict(value = {CACHE_KEY + ".deploy"},
+                    key = "'form.deploy.'+target.selectByPk(#formId).getName()"),
+            @CacheEvict(value = {CACHE_KEY},
+                    key = "'form.using.'+target.selectByPk(#formId).getName()")
     })
     public void deploy(String formId) throws Exception {
         Form old = this.selectByPk(formId);
-        assertNotNull(old, "表单不存在");
+        Assert.notNull(old, "表单不存在");
         //先卸载正在使用的表单
         Form using = getMapper().selectUsing(old.getName());
         if (using != null) {
@@ -159,7 +155,7 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         old.setUsing(true);
         dynamicFormService.deploy(old);
         old.setRelease(old.getRevision());//发布修订版本
-        getMapper().update(UpdateParam.build(old).includes("using", "release").where("id", old.getId()));
+        getMapper().update(new UpdateParam<>(old).includes("using", "release").where("id", old.getId()));
         //加入发布历史记录
         History history = History.newInstance("form.deploy." + old.getName());
         history.setPrimaryKeyName("id");
@@ -172,13 +168,16 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     @Override
     @Transactional(rollbackFor = Throwable.class)
     @Caching(evict = {
-            @CacheEvict(value = {CACHE_KEY + ".deploy"}, key = "'deploy.'+target.selectByPk(#formId).getName()+'.html'"),
-            @CacheEvict(value = {CACHE_KEY + ".deploy"}, key = "'deploy.'+target.selectByPk(#formId).getName()"),
-            @CacheEvict(value = {CACHE_KEY}, key = "'using.'+target.selectByPk(#formId).getName()")
+            @CacheEvict(value = {CACHE_KEY + ".deploy"},
+                    key = "'form.deploy.'+target.selectByPk(#formId).getName()+'.html'"),
+            @CacheEvict(value = {CACHE_KEY + ".deploy"},
+                    key = "'form.deploy.'+target.selectByPk(#formId).getName()"),
+            @CacheEvict(value = {CACHE_KEY},
+                    key = "'form.using.'+target.selectByPk(#formId).getName()")
     })
     public void unDeploy(String formId) throws Exception {
         Form old = this.selectByPk(formId);
-        assertNotNull(old, "表单不存在");
+        Assert.notNull(old, "表单不存在");
         dynamicFormService.unDeploy(old);
         old.setUsing(false);
         UpdateParam param = new UpdateParam<>(old);
@@ -187,15 +186,15 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     }
 
     @Override
-    @Cacheable(value = CACHE_KEY + ".deploy", key = "'deploy.'+#name+'.html'")
+    @Cacheable(value = CACHE_KEY + ".deploy", key = "'form.deploy.'+#name+'.html'")
     public String createDeployHtml(String name) throws Exception {
         History history = historyService.selectLastHistoryByType("form.deploy." + name);
-        assertNotNull(history, "表单不存在");
+        Assert.notNull(history, "表单不存在");
         return formParser.parseHtml(JSON.parseObject(history.getChangeAfter(), Form.class));
     }
 
     @Override
-    @Cacheable(value = CACHE_KEY + ".deploy", key = "'deploy.'+#name")
+    @Cacheable(value = CACHE_KEY + ".deploy", key = "'form.deploy.'+#name")
     public Form selectDeployed(String name) throws Exception {
         Form using = selectUsing(name);
         assertNotNull(using, "表单不存在或未部署");
@@ -212,8 +211,10 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     }
 
     @Override
-    @Cacheable(value = CACHE_KEY, key = "'using.'+#name")
+    @Cacheable(value = CACHE_KEY, key = "'form.using.'+#name")
     public Form selectUsing(String name) throws Exception {
         return formMapper.selectUsing(name);
     }
+
+
 }
