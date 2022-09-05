@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.constraints;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -21,11 +22,11 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.syntax.Label;
 
 /**
  * Implementation for the environment rule.
@@ -54,7 +55,8 @@ public class Environment implements RuleConfiguredTargetFactory {
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .add(FileProvider.class, new FileProvider(ruleContext.getLabel(),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)))
-        .add(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
+        .add(FilesToRunProvider.class, new FilesToRunProvider(ruleContext.getLabel(),
+            ImmutableList.<Artifact>of(), null, null))
         .build();
   }
 }

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis.constraints;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -24,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection.EnvironmentWithGroup;
-import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.Rule;
@@ -518,33 +518,27 @@ public class ConstraintSemantics {
     AttributeMap attributes = ruleContext.attributes();
 
     for (String attr : attributes.getAttributeNames()) {
-      Attribute attrDef = attributes.getAttributeDefinition(attr);
       Type<?> attrType = attributes.getAttributeType(attr);
+      if ((attrType == Type.LABEL || attrType == Type.LABEL_LIST)
+          && !RuleClass.isConstraintAttribute(attr)
+          && !attr.equals("visibility")) {
 
-      // TODO(bazel-team): support a user-definable API for choosing which attributes are checked
-      if ((attrType != Type.LABEL && attrType != Type.LABEL_LIST)
-          || RuleClass.isConstraintAttribute(attr)
-          || attr.equals("visibility")
-          || attrDef.isImplicit()
-          || attrDef.isLateBound()
-          // We can't identify host deps by calling BuildConfiguration.isHostConfiguration()
-          // because --nodistinct_host_configuration subverts that call.
-          || attrDef.getConfigurationTransition() == Attribute.ConfigurationTransition.HOST) {
-        continue;
-      }
-
-      for (TransitiveInfoCollection dep :
-          ruleContext.getPrerequisites(attr, RuleConfiguredTarget.Mode.DONT_CHECK)) {
-        // Output files inherit the environment spec of their generating rule.
-        if (dep instanceof OutputFileConfiguredTarget) {
-          // Note this reassignment means constraint violation errors reference the generating
-          // rule, not the file. This makes the source of the environmental mismatch more clear.
-          dep = ((OutputFileConfiguredTarget) dep).getGeneratingRule();
-        }
-        // Input files don't support environments. We may subsequently opt them into constraint
-        // checking, but for now just pass them by.
-        if (dep.getProvider(SupportedEnvironmentsProvider.class) != null) {
-          depsToCheck.add(dep);
+        for (TransitiveInfoCollection dep :
+            ruleContext.getPrerequisites(attr, RuleConfiguredTarget.Mode.DONT_CHECK)) {
+          // Output files inherit the environment spec of their generating rule.
+          if (dep instanceof OutputFileConfiguredTarget) {
+            // Note this reassignment means constraint violation errors reference the generating
+            // rule, not the file. This makes the source of the environmental mismatch more clear.
+            dep = ((OutputFileConfiguredTarget) dep).getGeneratingRule();
+          }
+          // Input files don't support environments. We may subsequently opt them into constraint
+          // checking, but for now just pass them by. Otherwise, we opt in anything that's not
+          // a host dependency.
+          // TODO(bazel-team): support choosing which attributes are subject to constraint checking
+          if (dep.getProvider(SupportedEnvironmentsProvider.class) != null
+              && !Verify.verifyNotNull(dep.getConfiguration()).isHostConfiguration()) {
+            depsToCheck.add(dep);
+          }
         }
       }
     }
