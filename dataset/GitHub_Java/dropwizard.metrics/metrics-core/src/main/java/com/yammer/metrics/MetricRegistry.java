@@ -87,15 +87,11 @@ public class MetricRegistry {
      */
     @SuppressWarnings("unchecked")
     public <T extends Metric> T register(String name, T metric) throws IllegalArgumentException {
-        if (metric instanceof MetricSet) {
-            registerAll(name, (MetricSet) metric);
+        final Metric existing = metrics.putIfAbsent(name, metric);
+        if (existing == null) {
+            onMetricAdded(name, metric);
         } else {
-            final Metric existing = metrics.putIfAbsent(name, metric);
-            if (existing == null) {
-                onMetricAdded(name, metric);
-            } else {
-                throw new IllegalArgumentException("A metric named " + name + " already exists");
-            }
+            throw new IllegalArgumentException("A metric named " + name + " already exists");
         }
         return metric;
     }
@@ -108,6 +104,19 @@ public class MetricRegistry {
      */
     public void registerAll(MetricSet metrics) throws IllegalArgumentException {
         registerAll(null, metrics);
+    }
+
+    /**
+     * Given a metric set, registers them using a prefix.
+     *
+     * @param prefix     the prefix for all the names
+     * @param metrics    a set of metrics
+     * @throws IllegalArgumentException if any of the names are already registered
+     */
+    public void registerAll(String prefix, MetricSet metrics) throws IllegalArgumentException {
+        for (Map.Entry<String, Metric> entry : metrics.getMetrics().entrySet()) {
+            register(name(prefix, entry.getKey()), entry.getValue());
+        }
     }
 
     /**
@@ -380,16 +389,6 @@ public class MetricRegistry {
             listener.onTimerRemoved(name);
         } else {
             throw new IllegalArgumentException("Unknown metric type: " + metric.getClass());
-        }
-    }
-
-    private void registerAll(String prefix, MetricSet metrics) throws IllegalArgumentException {
-        for (Map.Entry<String, Metric> entry : metrics.getMetrics().entrySet()) {
-            if (entry.getValue() instanceof MetricSet) {
-                registerAll(name(prefix, entry.getKey()), (MetricSet) entry.getValue());
-            } else {
-                register(name(prefix, entry.getKey()), entry.getValue());
-            }
         }
     }
 
