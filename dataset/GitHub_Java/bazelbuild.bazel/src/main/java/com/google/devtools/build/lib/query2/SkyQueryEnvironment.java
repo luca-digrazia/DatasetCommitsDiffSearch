@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.query2.engine.QueryUtil.AbstractUniquifier;
 import com.google.devtools.build.lib.query2.engine.RdepsFunction;
 import com.google.devtools.build.lib.query2.engine.TargetLiteral;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
-import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesValue;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.GraphBackedRecursivePackageProvider;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
@@ -106,10 +105,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   // TODO(janakr): Unify with RecursivePackageProviderBackedTargetPatternResolver's constant.
   private static final int BATCH_CALLBACK_SIZE = 10000;
 
-  protected WalkableGraph graph;
+  private WalkableGraph graph;
 
   private ImmutableList<TargetPatternKey> universeTargetPatternKeys;
-  private ImmutableSet<PathFragment> blacklistPatterns;
 
   private final Map<String, Set<Label>> precomputedPatterns = new HashMap<>();
   private final BlazeTargetAccessor accessor = new BlazeTargetAccessor(this);
@@ -157,11 +155,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
           eventHandler);
     }
     graph = result.getWalkableGraph();
-
-    blacklistPatterns = 
-        Preconditions.checkNotNull(
-            (BlacklistedPackagePrefixesValue) graph.getValue(BlacklistedPackagePrefixesValue.key()))
-        .getPatterns();
 
     SkyKey universeKey = graphFactory.getUniverseKey(universeScope, parserPrefix);
     universeTargetPatternKeys =
@@ -227,7 +220,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
     // errors here.
     eventHandler.resetErrors();
     init();
-    return super.evaluateQuery(expr, callback);
+    QueryEvalResult result = super.evaluateQuery(expr, callback);
+    graphFactory.afterUse(graph);
+    return result;
   }
 
   private Map<Target, Collection<Target>> makeTargetsMap(Map<SkyKey, Iterable<SkyKey>> input) {
@@ -464,8 +459,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
                 TargetPatternValue.key(
                         pattern, TargetPatternEvaluator.DEFAULT_FILTERING_POLICY, parserPrefix)
                     .argument());
-        GraphBackedRecursivePackageProvider provider = new GraphBackedRecursivePackageProvider(
-            graph, universeTargetPatternKeys, pkgPath);
+        GraphBackedRecursivePackageProvider provider =
+            new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
+
         ExecutorService threadPool = Executors.newFixedThreadPool(
             Runtime.getRuntime().availableProcessors(),
             new ThreadFactoryBuilder().setNameFormat("GetPackages-%d").build());
@@ -473,11 +469,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
             new RecursivePackageProviderBackedTargetPatternResolver(
                 provider, eventHandler, targetPatternKey.getPolicy(), threadPool);
         TargetPattern parsedPattern = targetPatternKey.getParsedPattern();
-        ImmutableSet<PathFragment> subdirectoriesToExclude =
-            targetPatternKey.getAllSubdirectoriesToExclude(blacklistPatterns);
         FilteringBatchingUniquifyingCallback wrapper =
             new FilteringBatchingUniquifyingCallback(callback);
-        parsedPattern.eval(resolver, subdirectoriesToExclude, wrapper, QueryException.class);
+        parsedPattern.eval(resolver, wrapper, QueryException.class);
         wrapper.processLastPending();
       } catch (TargetParsingException e) {
         reportBuildFileError(owner, e.getMessage());
@@ -779,7 +773,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       Map<SkyKey, PathFragment> keys = new HashMap<>();
       for (PathFragment pathFragment : currentToOriginal.keySet()) {
         keys.put(
-            PackageLookupValue.key(PackageIdentifier.createInMainRepo(pathFragment)),
+            PackageLookupValue.key(PackageIdentifier.createInDefaultRepo(pathFragment)),
             pathFragment);
       }
       Map<SkyKey, SkyValue> lookupValues = graph.getSuccessfulValues(keys.keySet());
