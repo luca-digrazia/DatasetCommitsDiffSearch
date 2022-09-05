@@ -46,7 +46,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   private final String iosCpu;
   private final String xcodeOptions;
   private final boolean generateDebugSymbols;
-  private final boolean runMemleaks;
   private final List<String> copts;
   private final CompilationMode compilationMode;
 
@@ -58,7 +57,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     this.iosCpu = Preconditions.checkNotNull(objcOptions.iosCpu, "iosCpu");
     this.xcodeOptions = Preconditions.checkNotNull(objcOptions.xcodeOptions, "xcodeOptions");
     this.generateDebugSymbols = objcOptions.generateDebugSymbols;
-    this.runMemleaks = objcOptions.runMemleaks;
     this.copts = ImmutableList.copyOf(objcOptions.copts);
     this.compilationMode = Preconditions.checkNotNull(options.compilationMode, "compilationMode");
   }
@@ -94,10 +92,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
 
   public boolean generateDebugSymbols() {
     return generateDebugSymbols;
-  }
-
-  public boolean runMemleaks() {
-    return runMemleaks;
   }
 
   /**
