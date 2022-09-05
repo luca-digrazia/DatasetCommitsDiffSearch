@@ -144,11 +144,8 @@ public class PrepareDepsOfPatternValue implements SkyValue {
         TargetPatternKey laterTargetPatternKey = (TargetPatternKey) laterSkyKey.argument();
         TargetPattern laterParsedPattern = laterTargetPatternKey.getParsedPattern();
         if (laterTargetPatternKey.isNegative()
-            && laterParsedPattern.getType() == Type.TARGETS_BELOW_DIRECTORY
-            && targetPatternKey.getParsedPattern().containsDirectoryOfTBDForTBD(
-                laterParsedPattern)) {
-          excludedDirectoriesBuilder.add(
-              laterParsedPattern.getDirectoryForTargetsUnderDirectory().getPackageFragment());
+            && targetPatternKey.getParsedPattern().containsBelowDirectory(laterParsedPattern)) {
+          excludedDirectoriesBuilder.add(laterParsedPattern.getDirectory().getPackageFragment());
         }
       }
     }
@@ -209,7 +206,7 @@ public class PrepareDepsOfPatternValue implements SkyValue {
 
     @Override
     public SkyKey getSkyKey() throws TargetParsingException {
-      return SkyKey.create(SkyFunctions.PREPARE_DEPS_OF_PATTERN, targetPatternKey);
+      return new SkyKey(SkyFunctions.PREPARE_DEPS_OF_PATTERN, targetPatternKey);
     }
 
     @Override

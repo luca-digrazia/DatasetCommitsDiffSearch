@@ -49,9 +49,9 @@ public final class TargetPatternResolverUtil {
     return builder.build();
   }
 
-  public static void validatePatternPackage(
-      String originalPattern, PathFragment packageNameFragment, TargetPatternResolver<?> resolver)
-      throws TargetParsingException, InterruptedException {
+  public static void validatePatternPackage(String originalPattern,
+      PathFragment packageNameFragment, TargetPatternResolver<?> resolver)
+      throws TargetParsingException {
     String packageName = packageNameFragment.toString();
     // It's possible for this check to pass, but for
     // Label.validatePackageNameFull to report an error because the
@@ -60,7 +60,7 @@ public final class TargetPatternResolverUtil {
     if (LabelValidator.validatePackageName(packageName) != null) {
       throw new TargetParsingException("'" + packageName + "' is not a valid package name");
     }
-    if (!resolver.isPackage(PackageIdentifier.createInMainRepo(packageName))) {
+    if (!resolver.isPackage(PackageIdentifier.createInDefaultRepo(packageName))) {
       throw new TargetParsingException(
           TargetPatternResolverUtil.getParsingErrorMessage(
               "no such package '" + packageName + "': BUILD file not found on package path",
@@ -69,7 +69,7 @@ public final class TargetPatternResolverUtil {
   }
 
   public static PathFragment getPathFragment(String pathPrefix) throws TargetParsingException {
-    PathFragment directory = PathFragment.create(pathPrefix);
+    PathFragment directory = new PathFragment(pathPrefix);
     if (directory.containsUplevelReferences()) {
       throw new TargetParsingException("up-level references are not permitted: '"
           + directory.getPathString() + "'");

@@ -236,13 +236,13 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
 
       for (Path root : roots) {
         RootedPath rootedPath = RootedPath.toRootedPath(root, pathFragment);
-        env.getValues(
-            ImmutableList.of(
+        SkyValue token =
+            env.getValue(
                 PrepareDepsOfTargetsUnderDirectoryValue.key(
-                    repository, rootedPath, excludedSubdirectories, policy),
-                CollectPackagesUnderDirectoryValue.key(
-                    repository, rootedPath, excludedSubdirectories)));
-        if (env.valuesMissing()) {
+                    repository, rootedPath, excludedSubdirectories, policy));
+        if (token == null) {
+          // A null token value means there is a missing dependency, because RecursivePkgFunction
+          // never throws.
           throw new MissingDepException();
         }
       }

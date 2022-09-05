@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -55,7 +54,7 @@ public class TargetPatternFunction implements SkyFunction {
           new EnvironmentBackedRecursivePackageProvider(env);
       RecursivePackageProviderBackedTargetPatternResolver resolver =
           new RecursivePackageProviderBackedTargetPatternResolver(provider, env.getListener(),
-              patternKey.getPolicy(), MoreExecutors.newDirectExecutorService());
+              patternKey.getPolicy());
       TargetPattern parsedPattern = patternKey.getParsedPattern();
       ImmutableSet<PathFragment> excludedSubdirectories = patternKey.getExcludedSubdirectories();
       final Set<Target> results = CompactHashSet.create();
@@ -66,7 +65,7 @@ public class TargetPatternFunction implements SkyFunction {
               Iterables.addAll(results, partialResult);
             }
           };
-      parsedPattern.eval(resolver, excludedSubdirectories, callback, RuntimeException.class);
+      parsedPattern.eval(resolver, excludedSubdirectories, callback);
       resolvedTargets = ResolvedTargets.<Target>builder().addAll(results).build();
     } catch (TargetParsingException e) {
       throw new TargetPatternFunctionException(e);
