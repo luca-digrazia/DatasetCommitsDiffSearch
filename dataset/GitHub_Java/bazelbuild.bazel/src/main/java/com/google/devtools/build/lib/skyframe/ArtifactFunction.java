@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
-import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
+import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -54,8 +54,7 @@ class ArtifactFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws ArtifactFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws ArtifactFunctionException {
     OwnedArtifact ownedArtifact = (OwnedArtifact) skyKey.argument();
     Artifact artifact = ownedArtifact.getArtifact();
     if (artifact.isSourceArtifact()) {
@@ -76,7 +75,7 @@ class ArtifactFunction implements SkyFunction {
 
     // If the action is an ActionTemplate, we need to expand the ActionTemplate into concrete
     // actions, execute those actions in parallel and then aggregate the action execution results.
-    if (artifact.isTreeArtifact() && actionMetadata instanceof ActionTemplate) {
+    if (artifact.isTreeArtifact() && actionMetadata instanceof SpawnActionTemplate) {
       // Create the directory structures for the output TreeArtifact first.
       try {
         FileSystemUtils.createDirectoryAndParents(artifact.getPath());
@@ -91,7 +90,7 @@ class ArtifactFunction implements SkyFunction {
       }
 
       return createTreeArtifactValueFromActionTemplate(
-          (ActionTemplate) actionMetadata, artifact, env);
+          (SpawnActionTemplate) actionMetadata, artifact, env);
     } else {
       Preconditions.checkState(
           actionMetadata instanceof Action,
@@ -117,9 +116,9 @@ class ArtifactFunction implements SkyFunction {
     }
   }
 
-  private static TreeArtifactValue createTreeArtifactValueFromActionTemplate(
-      ActionTemplate actionTemplate, Artifact treeArtifact, Environment env)
-      throws ArtifactFunctionException, InterruptedException {
+  private TreeArtifactValue createTreeArtifactValueFromActionTemplate(
+      SpawnActionTemplate actionTemplate, Artifact treeArtifact, Environment env)
+      throws ArtifactFunctionException {
     // Request the list of expanded actions from the ActionTemplate.
     ActionTemplateExpansionValue expansionValue = (ActionTemplateExpansionValue) env.getValue(
         ActionTemplateExpansionValue.key(actionTemplate));
@@ -168,7 +167,7 @@ class ArtifactFunction implements SkyFunction {
   }
 
   private FileArtifactValue createSourceValue(Artifact artifact, boolean mandatory, Environment env)
-      throws MissingInputFileException, InterruptedException {
+      throws MissingInputFileException {
     SkyKey fileSkyKey = FileValue.key(RootedPath.toRootedPath(artifact.getRoot().getPath(),
         artifact.getPath()));
     FileValue fileValue;
@@ -254,8 +253,7 @@ class ArtifactFunction implements SkyFunction {
       Artifact artifact,
       ActionAnalysisMetadata action,
       FileArtifactValue value,
-      SkyFunction.Environment env)
-      throws InterruptedException {
+      SkyFunction.Environment env) {
     // This artifact aggregates other artifacts. Keep track of them so callers can find them.
     ImmutableList.Builder<Pair<Artifact, FileArtifactValue>> inputs = ImmutableList.builder();
     for (Map.Entry<SkyKey, SkyValue> entry :
@@ -288,8 +286,8 @@ class ArtifactFunction implements SkyFunction {
     return Label.print(((OwnedArtifact) skyKey.argument()).getArtifact().getOwner());
   }
 
-  private static ActionAnalysisMetadata extractActionFromArtifact(
-      Artifact artifact, SkyFunction.Environment env) throws InterruptedException {
+  private ActionAnalysisMetadata extractActionFromArtifact(
+      Artifact artifact, SkyFunction.Environment env) {
     ArtifactOwner artifactOwner = artifact.getArtifactOwner();
 
     Preconditions.checkState(artifactOwner instanceof ActionLookupKey, "", artifact, artifactOwner);
