@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
@@ -133,7 +132,7 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
             spawn.getArguments(),
             spawn.getEnvironment(),
             actionExecutionContext.getFileOutErr(),
-            Spawns.getTimeoutSeconds(spawn),
+            SandboxHelpers.getTimeout(spawn),
             SandboxHelpers.shouldAllowNetwork(buildRequest, spawn));
       } finally {
         symlinkedExecRoot.copyOutputs(execRoot, outputs);

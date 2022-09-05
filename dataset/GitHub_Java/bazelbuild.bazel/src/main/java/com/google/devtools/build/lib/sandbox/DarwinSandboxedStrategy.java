@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.SearchPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -154,34 +153,18 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
     SandboxHelpers.reportSubcommand(executor, spawn);
     SandboxHelpers.postActionStatusMessage(executor, spawn);
 
-    PrintWriter errWriter =
-        sandboxDebug
-            ? new PrintWriter(actionExecutionContext.getFileOutErr().getErrorStream())
-            : null;
-
     // Each invocation of "exec" gets its own sandbox.
     Path sandboxPath = SandboxHelpers.getSandboxRoot(blazeDirs, productName, uuid, execCounter);
     Path sandboxExecRoot = sandboxPath.getRelative("execroot");
-
-    if (errWriter != null) {
-      errWriter.printf("sandbox root is %s\n", sandboxPath.toString());
-      errWriter.printf("working dir is %s\n", sandboxExecRoot.toString());
-    }
 
     ImmutableMap<String, String> spawnEnvironment =
         StandaloneSpawnStrategy.locallyDeterminedEnv(execRoot, productName, spawn.getEnvironment());
 
     Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
 
-    Path runUnderPath = getRunUnderPath(spawn);
-
     try {
       HardlinkedExecRoot hardlinkedExecRoot =
-          new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot, errWriter);
-      if (errWriter != null) {
-        errWriter.flush();
-      }
-
+          new HardlinkedExecRoot(execRoot, sandboxPath, sandboxExecRoot);
       ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
       hardlinkedExecRoot.createFileSystem(
           getMounts(spawn, actionExecutionContext), outputs, writableDirs);
@@ -193,7 +176,6 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
               sandboxExecRoot,
               getWritableDirs(sandboxExecRoot, spawnEnvironment),
               getInaccessiblePaths(),
-              runUnderPath,
               verboseFailures);
 
       try {
@@ -258,6 +240,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
       mountRunfilesFromManifests(unfinalized, spawn);
       mountRunfilesFromSuppliers(unfinalized, spawn);
       mountFilesFromFilesetManifests(unfinalized, spawn, executionContext);
+      mountRunUnderCommand(unfinalized, spawn);
       mounts.putAll(finalizeLinks(unfinalized));
 
       return mounts;
@@ -307,7 +290,7 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
    * <p>If --run_under= refers to a label, it is automatically provided in the spawn's input files,
    * so mountInputs() will catch that case.
    */
-  private Path getRunUnderPath(Spawn spawn) {
+  private void mountRunUnderCommand(Map<PathFragment, Path> mounts, Spawn spawn) {
     if (spawn.getResourceOwner() instanceof TestRunnerAction) {
       TestRunnerAction testRunnerAction = ((TestRunnerAction) spawn.getResourceOwner());
       RunUnder runUnder = testRunnerAction.getExecutionSettings().getRunUnder();
@@ -326,10 +309,9 @@ public class DarwinSandboxedStrategy extends SandboxStrategy {
         // only need to hardlink when under workspace
         Path workspace = blazeDirs.getWorkspace();
         if (mount != null && mount.startsWith(workspace)) {
-          return mount;
+          mounts.put(mount.relativeTo(workspace), mount);
         }
       }
     }
-    return null;
   }
 }
