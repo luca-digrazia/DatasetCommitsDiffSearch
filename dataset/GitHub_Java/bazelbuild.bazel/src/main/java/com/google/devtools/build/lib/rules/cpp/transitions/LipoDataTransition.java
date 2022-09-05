@@ -44,7 +44,7 @@ public final class LipoDataTransition implements PatchTransition {
     }
 
     CppOptions cppOptions = options.get(CppOptions.class);
-    if (cppOptions.getLipoMode() == CrosstoolConfig.LipoMode.OFF) {
+    if (cppOptions.lipoMode == CrosstoolConfig.LipoMode.OFF) {
       return options;
     }
 
@@ -52,12 +52,12 @@ public final class LipoDataTransition implements PatchTransition {
     cppOptions = options.get(CppOptions.class);
 
     // Once autoFdoLipoData is on, it stays on (through all future transitions).
-    if (!cppOptions.getAutoFdoLipoData() && cppOptions.getFdoOptimize() != null) {
-      cppOptions.autoFdoLipoDataForBuild = FdoSupport.isAutoFdo(cppOptions.getFdoOptimize());
+    if (!cppOptions.autoFdoLipoData && cppOptions.fdoOptimize != null) {
+      cppOptions.autoFdoLipoData = FdoSupport.isAutoFdo(cppOptions.fdoOptimize);
     }
-    cppOptions.lipoModeForBuild = CrosstoolConfig.LipoMode.OFF;
-    cppOptions.fdoInstrumentForBuild = null;
-    cppOptions.fdoOptimizeForBuild = null;
+    cppOptions.lipoMode = CrosstoolConfig.LipoMode.OFF;
+    cppOptions.fdoInstrument = null;
+    cppOptions.fdoOptimize = null;
     return options;
   }
 

@@ -13,8 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -36,7 +38,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.util.BinaryPredicate;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
 
 import java.util.Collection;
@@ -230,6 +231,7 @@ public abstract class AbstractBlazeQueryEnvironment<T> implements QueryEnvironme
         resolvedTargetPatterns.putAll(preloadOrThrow(caller, ImmutableList.of(pattern)));
       } catch (TargetParsingException e) {
         // Will skip the target and keep going if -k is specified.
+        resolvedTargetPatterns.put(pattern, ImmutableSet.<Target>of());
         reportBuildFileError(caller, e.getMessage());
       }
     }

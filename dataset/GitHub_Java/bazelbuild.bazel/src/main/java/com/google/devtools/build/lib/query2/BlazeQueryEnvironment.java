@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.query2;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -45,15 +46,12 @@ import com.google.devtools.build.lib.query2.engine.QueryUtil.AbstractUniquifier;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -124,8 +122,8 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public void getTargetsMatchingPattern(
-      QueryExpression caller, String pattern, Callback<Target> callback) throws QueryException {
+  public Set<Target> getTargetsMatchingPattern(QueryExpression caller,
+      String pattern) throws QueryException {
     // We can safely ignore the boolean error flag. The evaluateQuery() method above wraps the
     // entire query computation in an error sensor.
 
@@ -180,11 +178,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         }
       }
     }
-    try {
-      callback.process(result);
-    } catch (InterruptedException e) {
-      throw new QueryException(caller, e.getMessage());
-    }
+    return result;
   }
 
   @Override
@@ -354,12 +348,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   // TODO(bazel-team): rename this to getDependentFiles when all implementations
   // of QueryEnvironment is fixed.
   @Override
-  public Set<Target> getBuildFiles(
-      final QueryExpression caller,
-      Set<Target> nodes,
-      boolean buildFiles,
-      boolean subincludes,
-      boolean loads)
+  public Set<Target> getBuildFiles(final QueryExpression caller, Set<Target> nodes)
       throws QueryException {
     Set<Target> dependentFiles = new LinkedHashSet<>();
     Set<Package> seenPackages = new HashSet<>();
@@ -372,32 +361,17 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     for (Target x : nodes) {
       Package pkg = x.getPackage();
       if (seenPackages.add(pkg)) {
-        if (buildFiles) {
-          addIfUniqueLabel(getNode(pkg.getBuildFile()), seenLabels, dependentFiles);
-        }
-
-        List<Label> extensions = new ArrayList<>();
-        if (subincludes) {
-          extensions.addAll(pkg.getSubincludeLabels());
-        }
-        if (loads) {
-          extensions.addAll(pkg.getSkylarkFileDependencies());
-        }
-
-        for (Label subinclude : extensions) {
+        addIfUniqueLabel(getNode(pkg.getBuildFile()), seenLabels, dependentFiles);
+        for (Label subinclude
+            : Iterables.concat(pkg.getSubincludeLabels(), pkg.getSkylarkFileDependencies())) {
           addIfUniqueLabel(getSubincludeTarget(subinclude, pkg), seenLabels, dependentFiles);
 
           // Also add the BUILD file of the subinclude.
-          if (buildFiles) {
-            try {
-              addIfUniqueLabel(
-                  getSubincludeTarget(subinclude.getLocalTargetLabel("BUILD"), pkg),
-                  seenLabels,
-                  dependentFiles);
-
-            } catch (LabelSyntaxException e) {
-              throw new AssertionError("BUILD should always parse as a target name", e);
-            }
+          try {
+            addIfUniqueLabel(getSubincludeTarget(
+                subinclude.getLocalTargetLabel("BUILD"), pkg), seenLabels, dependentFiles);
+          } catch (LabelSyntaxException e) {
+            throw new AssertionError("BUILD should always parse as a target name", e);
           }
         }
       }
