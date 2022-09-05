@@ -38,15 +38,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.eventbus.EventBus;
 import com.google.common.testing.GcFinalization;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.events.DelegatingEventHandler;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -84,7 +82,7 @@ public class MemoizingEvaluatorTest {
 
   protected MemoizingEvaluatorTester tester;
   private EventCollector eventCollector;
-  private ExtendedEventHandler reporter;
+  private EventHandler reporter;
   protected MemoizingEvaluator.EmittedEventState emittedEventState;
 
   // Knobs that control the size / duration of larger tests.
@@ -103,11 +101,11 @@ public class MemoizingEvaluatorTest {
     TrackingAwaiter.INSTANCE.assertNoErrors();
   }
 
-  private void initializeTester(@Nullable TrackingProgressReceiver customProgressReceiver) {
+  private void initializeTester(@Nullable TrackingInvalidationReceiver customInvalidationReceiver) {
     emittedEventState = new MemoizingEvaluator.EmittedEventState();
     tester = new MemoizingEvaluatorTester();
-    if (customProgressReceiver != null) {
-      tester.setProgressReceiver(customProgressReceiver);
+    if (customInvalidationReceiver != null) {
+      tester.setInvalidationReceiver(customInvalidationReceiver);
     }
     tester.initialize();
   }
@@ -115,9 +113,9 @@ public class MemoizingEvaluatorTest {
   protected MemoizingEvaluator getMemoizingEvaluator(
       Map<SkyFunctionName, ? extends SkyFunction> functions,
       Differencer differencer,
-      EvaluationProgressReceiver progressReceiver) {
+      EvaluationProgressReceiver invalidationReceiver) {
     return new InMemoryMemoizingEvaluator(
-        functions, differencer, progressReceiver, emittedEventState, true);
+        functions, differencer, invalidationReceiver, emittedEventState, true);
   }
 
   protected BuildDriver getBuildDriver(MemoizingEvaluator evaluator) {
@@ -138,7 +136,7 @@ public class MemoizingEvaluatorTest {
 
   private void initializeReporter() {
     eventCollector = new EventCollector();
-    reporter = new Reporter(new EventBus(), eventCollector);
+    reporter = eventCollector;
     tester.resetPlayedEvents();
   }
 
@@ -751,7 +749,7 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(mid).setHasError(true);
     tester.eval(/*keepGoing=*/false, top, mid);
     assertEquals(0L, valueSet.getCount());
-    assertThat(tester.progressReceiver.evaluated).containsExactly(mid);
+    assertThat(tester.invalidationReceiver.evaluated).containsExactly(mid);
   }
 
   @Test
@@ -763,12 +761,12 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(cycle).addDependency(cycle);
     tester.getOrCreate(top).addDependency(leaf).addDependency(cycle);
     tester.eval(/*keepGoing=*/true, top);
-    assertThat(tester.progressReceiver.evaluated).containsExactly(leaf, top, cycle);
-    tester.progressReceiver.clear();
+    assertThat(tester.invalidationReceiver.evaluated).containsExactly(leaf, top, cycle);
+    tester.invalidationReceiver.clear();
     tester.getOrCreate(leaf, /*markAsModified=*/true);
     tester.invalidate();
     tester.eval(/*keepGoing=*/true, top);
-    assertThat(tester.progressReceiver.evaluated).containsExactly(leaf, top);
+    assertThat(tester.invalidationReceiver.evaluated).containsExactly(leaf, top);
   }
 
   @Test
@@ -2562,7 +2560,7 @@ public class MemoizingEvaluatorTest {
   public void deletingDirtyNodes() throws Exception {
     final Thread thread = Thread.currentThread();
     final AtomicBoolean interruptInvalidation = new AtomicBoolean(false);
-    initializeTester(new TrackingProgressReceiver() {
+    initializeTester(new TrackingInvalidationReceiver() {
       private final AtomicBoolean firstInvalidation = new AtomicBoolean(true);
 
       @Override
@@ -3962,9 +3960,9 @@ public class MemoizingEvaluatorTest {
    */
   @Test
   public void shutDownBuildOnCachedError_Verified() throws Exception {
-    // TrackingProgressReceiver does unnecessary examination of node values.
+    // TrackingInvalidationReceiver does unnecessary examination of node values.
     initializeTester(
-        new TrackingProgressReceiver() {
+        new TrackingInvalidationReceiver() {
           @Override
           public void evaluated(
               SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
@@ -4097,9 +4095,9 @@ public class MemoizingEvaluatorTest {
    */
   @Test
   public void cachedErrorCausesRestart() throws Exception {
-    // TrackingProgressReceiver does unnecessary examination of node values.
+    // TrackingInvalidationReceiver does unnecessary examination of node values.
     initializeTester(
-        new TrackingProgressReceiver() {
+        new TrackingInvalidationReceiver() {
           @Override
           public void evaluated(
               SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
@@ -4428,23 +4426,23 @@ public class MemoizingEvaluatorTest {
     private RecordingDifferencer differencer = new RecordingDifferencer();
     private MemoizingEvaluator evaluator;
     private BuildDriver driver;
-    private TrackingProgressReceiver progressReceiver = new TrackingProgressReceiver();
+    private TrackingInvalidationReceiver invalidationReceiver = new TrackingInvalidationReceiver();
 
     public void initialize() {
       this.evaluator =
-          getMemoizingEvaluator(getSkyFunctionMap(), differencer, progressReceiver);
+          getMemoizingEvaluator(getSkyFunctionMap(), differencer, invalidationReceiver);
       this.driver = getBuildDriver(evaluator);
     }
 
-    public void setProgressReceiver(TrackingProgressReceiver customProgressReceiver) {
+    public void setInvalidationReceiver(TrackingInvalidationReceiver customInvalidationReceiver) {
       Preconditions.checkState(evaluator == null, "evaluator already initialized");
-      progressReceiver = customProgressReceiver;
+      invalidationReceiver = customInvalidationReceiver;
     }
 
     public void invalidate() {
       differencer.invalidate(getModifiedValues());
       clearModifiedValues();
-      progressReceiver.clear();
+      invalidationReceiver.clear();
     }
 
     public void invalidateTransientErrors() {
@@ -4460,15 +4458,15 @@ public class MemoizingEvaluatorTest {
     }
 
     public Set<SkyKey> getDirtyKeys() {
-      return progressReceiver.dirty;
+      return invalidationReceiver.dirty;
     }
 
     public Set<SkyKey> getDeletedKeys() {
-      return progressReceiver.deleted;
+      return invalidationReceiver.deleted;
     }
 
     public Set<SkyKey> getEnqueuedValues() {
-      return progressReceiver.enqueued;
+      return invalidationReceiver.enqueued;
     }
 
     public <T extends SkyValue> EvaluationResult<T> eval(
