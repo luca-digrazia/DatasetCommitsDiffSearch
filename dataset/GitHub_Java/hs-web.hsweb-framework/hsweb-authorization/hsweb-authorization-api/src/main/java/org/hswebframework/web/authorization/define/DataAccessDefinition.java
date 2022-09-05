@@ -1,22 +1,20 @@
 package org.hswebframework.web.authorization.define;
 
-import lombok.Getter;
-import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.io.Serializable;
 
-@Getter
-@Setter
-public class DataAccessDefinition {
+/**
+ * @author zhouhao
+ * @see org.hswebframework.web.authorization.annotation.RequiresDataAccess
+ */
+public interface DataAccessDefinition extends Serializable {
 
-    List<DataAccessTypeDefinition> dataAccessTypes=new ArrayList<>();
+    String getController();
 
-    public Optional<DataAccessTypeDefinition> getType(String typeId){
-        return dataAccessTypes
-                .stream()
-                .filter(datd->datd.getId().equalsIgnoreCase(typeId))
-                .findAny();
-    }
+    String getIdParameterName();
+
+    Class getEntityType();
+
+    Phased getPhased();
+
 }
