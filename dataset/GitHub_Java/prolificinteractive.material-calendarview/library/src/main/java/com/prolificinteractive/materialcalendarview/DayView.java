@@ -43,7 +43,6 @@ class DayView extends CheckedTextView {
     private Drawable selectionDrawable;
     private Drawable mCircleDrawable;
     private DayFormatter formatter = DayFormatter.DEFAULT;
-    private DayFormatter contentDescriptionFormatter = formatter;
 
     private boolean isInRange = true;
     private boolean isInMonth = true;
@@ -78,8 +77,6 @@ class DayView extends CheckedTextView {
      * @param formatter new label formatter
      */
     public void setDayFormatter(DayFormatter formatter) {
-        this.contentDescriptionFormatter = contentDescriptionFormatter == this.formatter ?
-                formatter : contentDescriptionFormatter;
         this.formatter = formatter == null ? DayFormatter.DEFAULT : formatter;
         CharSequence currentLabel = getText();
         Object[] spans = null;
@@ -95,24 +92,9 @@ class DayView extends CheckedTextView {
         setText(newLabel);
     }
 
-    /**
-     * Set the new content description formatter and reformat the current content description.
-     *
-     * @param formatter new content description formatter
-     */
-    public void setDayFormatterContentDescription(DayFormatter formatter) {
-        this.contentDescriptionFormatter = formatter == null ? this.formatter : formatter;
-        setContentDescription(getContentDescriptionLabel());
-    }
-
     @NonNull
     public String getLabel() {
         return formatter.format(date);
-    }
-
-    @NonNull
-    public String getContentDescriptionLabel() {
-        return contentDescriptionFormatter == null ? formatter.format(date) : contentDescriptionFormatter.format(date);
     }
 
     public void setSelectionColor(int color) {
@@ -185,7 +167,6 @@ class DayView extends CheckedTextView {
     }
 
     private final Rect tempRect = new Rect();
-    private final Rect circleDrawableRect = new Rect();
 
     @Override
     protected void onDraw(@NonNull Canvas canvas) {
@@ -195,7 +176,7 @@ class DayView extends CheckedTextView {
             customBackground.draw(canvas);
         }
 
-        mCircleDrawable.setBounds(circleDrawableRect);
+        mCircleDrawable.setBounds(tempRect);
 
         super.onDraw(canvas);
     }
@@ -204,7 +185,7 @@ class DayView extends CheckedTextView {
         if (selectionDrawable != null) {
             setBackgroundDrawable(selectionDrawable);
         } else {
-            mCircleDrawable = generateBackground(selectionColor, fadeTime, circleDrawableRect);
+            mCircleDrawable = generateBackground(selectionColor, fadeTime, tempRect);
             setBackgroundDrawable(mCircleDrawable);
         }
     }
@@ -284,17 +265,14 @@ class DayView extends CheckedTextView {
 
     private void calculateBounds(int width, int height) {
         final int radius = Math.min(height, width);
-        final int offset = Math.abs(height - width) / 2;
-
-        // Lollipop platform bug. Circle drawable offset needs to be half of normal offset
-        final int circleOffset = Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP ? offset / 2 : offset;
+        // Lollipop platform bug. Rect offset needs to be divided by 4 instead of 2
+        final int offsetDivisor = Build.VERSION.SDK_INT == Build.VERSION_CODES.LOLLIPOP ? 4 : 2;
+        final int offset = Math.abs(height - width) / offsetDivisor;
 
         if (width >= height) {
             tempRect.set(offset, 0, radius + offset, height);
-            circleDrawableRect.set(circleOffset, 0, radius + circleOffset, height);
         } else {
             tempRect.set(0, offset, width, radius + offset);
-            circleDrawableRect.set(0, circleOffset, width, radius + circleOffset);
         }
     }
 }
