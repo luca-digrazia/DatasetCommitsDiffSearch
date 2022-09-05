@@ -80,7 +80,7 @@ import javax.annotation.Nullable;
 @RunWith(JUnit4.class)
 public class MemoizingEvaluatorTest {
 
-  protected MemoizingEvaluatorTester tester;
+  private MemoizingEvaluatorTester tester;
   private EventCollector eventCollector;
   private EventHandler reporter;
   protected MemoizingEvaluator.EmittedEventState emittedEventState;
@@ -3681,8 +3681,10 @@ public class MemoizingEvaluatorTest {
     assertThat(tester.evalAndGet(/*keepGoing=*/ true, inactiveKey)).isEqualTo(val);
   }
 
-  /** A graph tester that is specific to the memoizing evaluator, with some convenience methods. */
-  protected class MemoizingEvaluatorTester extends GraphTester {
+  /**
+   * A graph tester that is specific to the memoizing evaluator, with some convenience methods.
+   */
+  private class MemoizingEvaluatorTester extends GraphTester {
     private RecordingDifferencer differencer;
     private MemoizingEvaluator evaluator;
     private BuildDriver driver;
