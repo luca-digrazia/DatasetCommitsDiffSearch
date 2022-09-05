@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
+import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -622,6 +623,12 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         ruleContext,
         "unexpected keyword 'bad_keyword' in call to runfiles(self: ctx, ",
         "ruleContext.runfiles(bad_keyword = '')");
+  }
+
+  public void testCreateCommandHelper() throws Exception {
+    SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
+    Object result = evalRuleContextCode(ruleContext, "ruleContext.command_helper([], {})");
+    assertThat(result).isInstanceOf(CommandHelper.class);
   }
 
   public void testNsetContainsList() throws Exception {
