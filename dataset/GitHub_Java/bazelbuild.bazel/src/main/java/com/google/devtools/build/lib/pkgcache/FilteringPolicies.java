@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Objects;
 
 /**
@@ -37,8 +38,10 @@ public final class FilteringPolicies {
   private FilteringPolicies() {
   }
 
-  /** Base class for singleton filtering policies. */
-  private abstract static class AbstractFilteringPolicy extends FilteringPolicy {
+  /**
+   * Base class for singleton filtering policies.
+   */
+  private abstract static class AbstractFilteringPolicy implements FilteringPolicy {
     private final int hashCode = getClass().getSimpleName().hashCode();
 
     @Override
@@ -88,7 +91,7 @@ public final class FilteringPolicies {
   }
 
   /** FilteringPolicy for combining FilteringPolicies. */
-  public static class AndFilteringPolicy extends FilteringPolicy {
+  public static class AndFilteringPolicy implements FilteringPolicy {
     private final FilteringPolicy firstPolicy;
     private final FilteringPolicy secondPolicy;
 
